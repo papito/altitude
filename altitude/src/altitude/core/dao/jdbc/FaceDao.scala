@@ -32,7 +32,8 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       checksum = row.checksum,
       quality = row.quality,
       isEnrolled = row.isEnrolled,
-      frameTimeMs = row.frameTimeMs
+      frameTimeMs = row.frameTimeMs,
+      sharpness = row.sharpness
     )
 
   override protected def makeModel(rec: Map[String, AnyRef]): Face =
@@ -49,7 +50,8 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       checksum = rec(FieldConst.Face.CHECKSUM).asInstanceOf[String],
       quality = rec(FieldConst.Face.QUALITY).asInstanceOf[Double],
       isEnrolled = getBooleanField(rec(FieldConst.Face.IS_ENROLLED)),
-      frameTimeMs = getLongField(rec(FieldConst.Face.FRAME_TIME_MS))
+      frameTimeMs = getLongField(rec(FieldConst.Face.FRAME_TIME_MS)),
+      sharpness = getDoubleField(rec(FieldConst.Face.SHARPNESS))
     )
 
   // Reads `face_02` backwards and stops at the limit: no count of the person's faces and no sort of them
@@ -68,16 +70,23 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
     Db.read(dialect)(_.run(faces)).map(toModel).toList
 
   def getAssetFaces(assetId: String): List[Face] =
-    val sql = """
+    visibleFaces("= ?", assetId)
+
+  override def getFacesOfAssets(assetIds: Set[String]): List[Face] =
+    if assetIds.isEmpty then return List.empty[Face]
+
+    visibleFaces(inIdSet, idSet(assetIds))
+
+  /** The Faces of the people on show, of the assets `assetTest` picks with its one bind value */
+  private def visibleFaces(assetTest: String, assetValue: Any): List[Face] =
+    val sql = s"""
         SELECT face.*
           FROM face, person
          WHERE face.repository_id = ?
-           AND face.asset_id = ?
+           AND face.asset_id $assetTest
            AND face.person_id = person.id
            AND person.is_hidden = FALSE
            AND person.is_bad_match = FALSE
       """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId))
-
-    recs.map(makeModel)
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetValue)).map(makeModel)

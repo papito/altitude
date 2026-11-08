@@ -1,10 +1,12 @@
+@import altitude.core.Const
 @import altitude.core.util.GroupedSearchResult
 @import altitude.core.util.SearchGroupKey
 @import altitude.core.util.Util
 @import altitude.core.FieldConst
 
-@* The grouped grid: each group's header (a capture day, or a Location as `Category › Location`), then its cells; the page's last
-   cell - by position, since a Location grouping can hold the last asset in an earlier cell too - carries the cursor of the next page
+@* The grouped grid: each group's header (a capture day, a Location as `Category › Location`, or a Sequence as its first capture's
+   day and time), then its cells; the page's last cell - by position, since a Location grouping can hold the last asset in an earlier
+   cell too - carries the cursor of the next page
    when there is one. The header is skipped for the first group when it continues the previous page's group (`continuesGroup`), so the
    new cells land after that page's last cell and read as the same group.
 
@@ -14,7 +16,11 @@
    The header's checkbox selects the group's loaded cells as a set (js/alpine/components/date-group-selectable.js). It acts on
    `change` and repaints itself afterwards rather than cancelling the click: the browser reverts a cancelled checkbox click
    once it is dispatched, after Alpine has run its effects (see `paint` there). The count is rendered as text and kept as a
-   number in `data-count`, which is what the client decrements as cells leave the grid. *@
+   number in `data-count`, which is what the client decrements as cells leave the grid.
+
+   A Sequence's header with two frames or more has a Curate button, opening Curation on that one Sequence: all its frames still out
+   of the trash, even under a search showing only some of them. The client removes it when its count falls under two, or when
+   Curation clears the Sequence (js/search-results/date-groups.js), finding it by `data-app-sequence-id`. *@
 @(results: GroupedSearchResult, isContinuousScroll: Boolean = false)
 
 @* The position (group, cell) of the page's last cell, found once: a List's size is a walk of the list *@
@@ -32,8 +38,15 @@
     case SearchGroupKey.Day(None) => {<span>No date</span>}
     case SearchGroupKey.Location(Some(_), _, name, categoryName) => {<span>@for(category <- categoryName) {<span class="category">@category</span> › }@name</span>}
     case SearchGroupKey.Location(None, _, _, _) => {<span>No location</span>}
+    case SearchGroupKey.Sequence(Some(_), Some(firstCapture)) => {<time datetime="@{firstCapture}">@{Util.humanReadableDayAndTime(firstCapture)}</time>}
+    case SearchGroupKey.Sequence(Some(_), None) => {<span>No date</span>}
+    case SearchGroupKey.Sequence(None, _) => {<span>No sequence</span>}
   }
   <span class="count" data-count="@{group.total}">@{Util.humanReadableItemCount(group.total)}</span>
+  @group.key match {
+    case SearchGroupKey.Sequence(Some(sequenceId), _) if group.total >= Const.Curation.MIN_FRAMES => {<button type="button" class="action-button small" data-app-sequence-id="@{sequenceId}" data-min-frames="@{Const.Curation.MIN_FRAMES}" @@click="$dispatch(window.Const.events.curateRequested, { sequenceId: $el.dataset.appSequenceId })">Curate</button>}
+    case _ => {}
+  }
 </div>
 }
 @for((asset, assetIdx) <- group.assets.zipWithIndex) {

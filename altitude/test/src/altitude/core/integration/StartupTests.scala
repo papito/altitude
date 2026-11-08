@@ -96,6 +96,8 @@ import altitude.core.suites.TestDatabase
       other =>
         other.importParallelism shouldBe 3
         other.importParallelism shouldBe other.settings.atStartup.importParallelism
+        other.importParallelismResolution.value shouldBe 3
+        other.importParallelismResolution.reason shouldBe "the Setting"
     }
   }
 

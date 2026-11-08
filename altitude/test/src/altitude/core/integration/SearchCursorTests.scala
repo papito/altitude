@@ -7,6 +7,7 @@ import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqua
 import scala.util.Random
 
 import altitude.core.{ Altitude, Const, FieldConst, SearchCursorException }
+import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.{ Asset, Person }
 import altitude.core.service.FaceDetectionService
 import altitude.core.util.*
@@ -244,6 +245,42 @@ import altitude.core.util.*
         traverseFlat(sort, rpp) shouldEqual assets.sorted(sortThenId(sort)).map(_.id)
       }
     }
+  }
+
+  test("Frames captured within one second keep their order by the fraction, flat and grouped, through a cursor") {
+
+    /**
+     * Setup:
+     *
+     * Four assets captured within one second of one day: the whole second, a quarter and three quarters past it, and a
+     * millisecond past it, persisted out of that order so the ID does not happen to agree with the capture time. Walked one asset
+     * a page, flat and grouped by Date Taken, sorted by capture time in both directions.
+     *
+     * Assertions:
+     *
+     * The walk is the order of the fractions, in each direction, so a cursor anchored on a fractional capture time continues
+     * exactly after it on both engines (text as stored on SQLite, a timestamp on PostgreSQL), and the grouped walk reads them as
+     * one day.
+     *
+     * Edge cases:
+     *
+     * The whole second and the millisecond past it are the nearest pair, and the anchor's fraction has fewer digits than the next
+     * asset's.
+     */
+    val second = LocalDateTime.of(2026, 9, 6, 10, 0, 0)
+    val assets =
+      List(750_000_000, 1_000_000, 250_000_000, 0).map(nanos => persistDated(second.withNano(nanos).toString, "burst.jpg"))
+    val byFraction = assets.sortBy(_.taken.get.getNano).map(_.id)
+
+    traverseFlat(SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.ASC), rpp = 1) shouldEqual byFraction
+    traverseFlat(SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.DESC), rpp = 1) shouldEqual byFraction.reverse
+
+    val grouping = SearchGrouping(GroupBy.DateTaken)
+    val sort = SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.ASC)
+    traverse(grouping, sort, rpp = 1) shouldEqual byFraction
+    val page = firstPage(grouping, sort, rpp = 1)
+    page.groups.map(_.key) shouldEqual List(SearchGroupKey.Day(Some(second.toLocalDate)))
+    page.groups.head.total shouldBe 4
   }
 
   test("A flat search under the Relevance sort continues by cursor in the order of the unpaged search") {
@@ -724,6 +761,225 @@ import altitude.core.util.*
     val columnCursor = firstPage(grouping, byFilename, 1, img).nextCursor.get
     columnCursor.secondSortValue shouldBe None
     SearchCursor.decode(columnCursor.encode) shouldBe columnCursor
+  }
+
+  /** The frames written into one Sequence directly: the fixture is not in triage, where only the DAO's own write would take them */
+  private def inSequence(frames: List[Dated]): String = {
+    val sequenceId = BaseDao.genId
+    testApp.txManager.withTransaction(
+      frames.foreach(frame => update("UPDATE asset SET sequence_id = ? WHERE id = ?", sequenceId, frame.id)))
+    sequenceId
+  }
+
+  /** Sequences by the first capture of their frames, those with none last, then the ID; each block ordered as given; then the rest */
+  private def expectedSequenceOrder(
+      groups: List[(String, List[Dated])],
+      loose: List[Dated],
+      within: Ordering[Dated]): List[String] = {
+    def firstCapture(frames: List[Dated]): Option[Long] = frames.flatMap(_.taken).map(_.toEpochSecond(ZoneOffset.UTC)).minOption
+    val ordered = groups.sortBy((id, frames) => (firstCapture(frames).isEmpty, firstCapture(frames).getOrElse(0L), id))
+    (ordered.map(_._2) :+ loose).flatMap(_.sorted(within).map(_.id))
+  }
+
+  /**
+   * The 16-asset fixture (12 assets over four capture days, 4 undated) in five Sequences: three frames on the 6th, three on the
+   * 5th, a Sequence on the 4th with one undated frame, one with only undated frames and one of a single frame on the 3rd; five
+   * are in none
+   */
+  private def sequenceFixture(assets: List[Dated]): (List[(String, List[Dated])], List[Dated]) = {
+    val frames = List(
+      assets.slice(0, 3),
+      assets.slice(3, 6),
+      List(assets(6), assets(12)),
+      List(assets(13), assets(14)),
+      List(assets(9))
+    )
+    val grouped = frames.flatten.map(_.id).toSet
+    (frames.map(group => (inSequence(group), group)), assets.filterNot(asset => grouped(asset.id)))
+  }
+
+  test("Cursor traversal grouped by Sequence crosses every group into No sequence, for every sort field and direction") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture in five Sequences, some partly or wholly undated, with five assets in none.
+     *
+     * Assertions:
+     *
+     * Walking by cursor returns the complete order for every sort field and direction and several page sizes: the Sequences by
+     * first capture, those without one after those with one on both engines, then the ID; the sort within each group; No sequence
+     * last.
+     *
+     * Edge cases:
+     *
+     * One asset a page makes every position an anchor, including every group boundary and every tie.
+     */
+    val assets = fixture()
+    val (groups, loose) = sequenceFixture(assets)
+    val grouping = SearchGrouping(GroupBy.Sequence)
+
+    for (field <- sortFields; sortDirection <- SortDirection.values.toList) {
+      val sort = SearchSort(field, sortDirection)
+      val expected = expectedSequenceOrder(groups, loose, sortThenId(sort))
+      withClue(s"$sort: ") {
+        traverse(grouping, sort, rpp = 5) shouldEqual expected
+        traverse(grouping, sort, rpp = 1) shouldEqual expected
+        traverse(grouping, sort, rpp = 6) shouldEqual expected
+      }
+    }
+  }
+
+  test("Cursor traversal grouped by Sequence under the Relevance sort matches the complete order") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture in five Sequences, the text "img" matching in three sources, so that the frames of a group differ in
+     * Relevance.
+     *
+     * Assertions:
+     *
+     * Walking by cursor keeps the groups' order, with best match first, then the newest capture, within each group and within No
+     * sequence.
+     */
+    val assets = fixture()
+    val relevance = rankByImg(assets)
+    val (groups, loose) = sequenceFixture(assets)
+    val expected = expectedSequenceOrder(groups, loose, relevanceThenId(relevance))
+
+    for (rpp <- List(1, 2, 5)) withClue(s"$rpp a page: ") {
+      traverse(SearchGrouping(GroupBy.Sequence), SearchSort.Relevance, rpp, img) shouldEqual expected
+    }
+  }
+
+  test("A Sequence cursor names the first capture and the Sequence, and its groups keep one count across pages") {
+
+    /**
+     * Setup:
+     *
+     * The 16-asset fixture in five Sequences. In order: one frame on the 3rd, two from the 4th, three from the 5th, three from
+     * the 6th, two undated, and five in no Sequence, read at page sizes that end inside a group and on a boundary.
+     *
+     * Assertions:
+     *
+     * A cursor's key is the group's first capture and its group ID the Sequence; a Sequence with no first capture has the ID
+     * alone, and No sequence has neither. A page that continues a group says so and repeats its count, the first page alone has
+     * the total.
+     *
+     * Edge cases:
+     *
+     * A cursor belongs to its grouping: another's is refused.
+     */
+    val assets = fixture()
+    val (groups, _) = sequenceFixture(assets)
+    val List(onThe6th, onThe5th, onThe4th, undated, onThe3rd) = groups.map(_._1): @unchecked
+    val grouping = SearchGrouping(GroupBy.Sequence)
+    val sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
+
+    def counts(page: GroupedSearchResult): List[(Option[String], Int)] =
+      page.groups.map(group => (group.key.cursorGroupId, group.total))
+
+    // Ends inside the group of the 4th
+    val first = firstPage(grouping, sort, rpp = 2)
+    first.total shouldBe Some(16)
+    counts(first) shouldEqual List((Some(onThe3rd), 1), (Some(onThe4th), 2))
+    first.nextCursor.map(cursor => (cursor.key, cursor.groupId)) shouldBe
+      Some((Some(LocalDateTime.parse("2026-09-04T12:00:00").toString), Some(onThe4th)))
+    val second = continue(first.nextCursor.get, grouping, sort, rpp = 2)
+    second.total shouldBe None
+    second.continuesGroup shouldBe true
+    counts(second) shouldEqual List((Some(onThe4th), 2), (Some(onThe5th), 3))
+
+    // Ends inside the undated Sequence, and continues it into No sequence
+    val inUndated = firstPage(grouping, sort, rpp = 10)
+    inUndated.nextCursor.map(cursor => (cursor.key, cursor.groupId)) shouldBe Some((None, Some(undated)))
+    counts(inUndated) shouldEqual
+      List((Some(onThe3rd), 1), (Some(onThe4th), 2), (Some(onThe5th), 3), (Some(onThe6th), 3), (Some(undated), 2))
+    val crossing = continue(inUndated.nextCursor.get, grouping, sort, rpp = 10)
+    crossing.continuesGroup shouldBe true
+    counts(crossing) shouldEqual List((Some(undated), 2), (None, 5))
+    crossing.nextCursor shouldBe None
+
+    // The last Sequence ends exactly at the page: the next page is No sequence alone, with no group to continue
+    val boundary = firstPage(grouping, sort, rpp = 11)
+    boundary.nextCursor.map(_.groupId) shouldBe Some(Some(undated))
+    val trailing = continue(boundary.nextCursor.get, grouping, sort, rpp = 2)
+    trailing.continuesGroup shouldBe false
+    counts(trailing) shouldEqual List((None, 5))
+    // Ends inside No sequence, and continues it
+    trailing.nextCursor.map(cursor => (cursor.key, cursor.groupId)) shouldBe Some((None, None))
+    val rest = continue(trailing.nextCursor.get, grouping, sort, rpp = 3)
+    rest.continuesGroup shouldBe true
+    counts(rest) shouldEqual List((None, 5))
+    rest.assets.size shouldBe 3
+    rest.nextCursor shouldBe None
+
+    // A cursor continues only the grouping it was issued for
+    intercept[SearchCursorException](continue(first.nextCursor.get, SearchGrouping(GroupBy.Location), sort, rpp = 2))
+  }
+
+  test("Recycling the frame that set a Sequence's first capture repeats nothing of its group on the next page") {
+
+    /**
+     * Setup:
+     *
+     * A Sequence of three frames, 10:00 to 12:00, one in another Sequence at 10:30 and one more Sequence of three, read one to
+     * two a page by capture time. The first frame of the anchor's group is recycled before the page is continued, as the grid's
+     * own Recycle and Curation closing both do.
+     *
+     * Assertions:
+     *
+     * The group's first capture has moved past its cursor's, and yet the frames already shown do not come back: its other frames
+     * follow, and a page opening on it says it continues the group, with its count down by one.
+     *
+     * Edge cases:
+     *
+     * Where the move puts another Sequence ahead of the anchor's, that Sequence comes first and is not lost. A Sequence the
+     * anchor's frames left altogether moves on to the groups after it, with its frames in No sequence.
+     */
+    val sort = SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.ASC)
+    val grouping = SearchGrouping(GroupBy.Sequence)
+    val moved = List(
+      persistDated("2026-09-06T10:00:00", "a.jpg"),
+      persistDated("2026-09-06T11:00:00", "b.jpg"),
+      persistDated("2026-09-06T12:00:00", "c.jpg"))
+    val overtaking = persistDated("2026-09-06T10:30:00", "d.jpg")
+    val staying = List(
+      persistDated("2026-09-07T10:00:00", "e.jpg"),
+      persistDated("2026-09-07T11:00:00", "f.jpg"),
+      persistDated("2026-09-07T12:00:00", "g.jpg"))
+    val last = persistDated("2026-09-08T10:00:00", "h.jpg")
+    val movedId = inSequence(moved)
+    val overtakingId = inSequence(List(overtaking))
+    inSequence(staying)
+    val lastId = inSequence(List(last))
+
+    val first = firstPage(grouping, sort, rpp = 2)
+    ids(first) shouldEqual moved.take(2).map(_.id)
+    testApp.service.library.recycleAssets(Set(moved.head.id))
+
+    val second = continue(first.nextCursor.get, grouping, sort, rpp = 2)
+    second.groups.map(group => (group.key.cursorGroupId, group.total)) shouldEqual
+      List((Some(overtakingId), 1), (Some(movedId), 2))
+    second.continuesGroup shouldBe false
+    ids(second) shouldEqual List(overtaking.id, moved(2).id)
+
+    // A group that was not overtaken continues under its header
+    val third = continue(second.nextCursor.get, grouping, sort, rpp = 2)
+    ids(third) shouldEqual staying.take(2).map(_.id)
+    testApp.service.library.recycleAssets(Set(staying.head.id))
+    val fourth = continue(third.nextCursor.get, grouping, sort, rpp = 1)
+    ids(fourth) shouldEqual List(staying(2).id)
+    fourth.continuesGroup shouldBe true
+    fourth.groups.map(_.total) shouldEqual List(2)
+
+    // The anchor's frames left their Sequence: the page moves on, and they read under No sequence
+    testApp.txManager.withTransaction(testApp.DAO.asset.clearSequence(staying.tail.map(_.id).toSet))
+    val fifth = continue(fourth.nextCursor.get, grouping, sort, rpp = 5)
+    fifth.continuesGroup shouldBe false
+    fifth.groups.map(_.key.cursorGroupId) shouldEqual List(Some(lastId), None)
+    ids(fifth) shouldEqual List(last.id, staying(1).id, staying(2).id)
   }
 
   test("Text of exclusions alone is traversed under the Relevance sort by the tiebreakers") {

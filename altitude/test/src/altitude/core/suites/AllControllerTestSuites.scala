@@ -6,6 +6,8 @@ import altitude.core.controller.AlbumActionControllerTests
 import altitude.core.controller.AlbumControllerTests
 import altitude.core.controller.AssetControllerTests
 import altitude.core.controller.ContentViewControllerTests
+import altitude.core.controller.CurationActionControllerTests
+import altitude.core.controller.CurationControllerTests
 import altitude.core.controller.FolderActionControllerTests
 import altitude.core.controller.FolderControllerTests
 import altitude.core.controller.HealthControllerTests
@@ -33,6 +35,8 @@ abstract class AllControllerTestSuites
     new AlbumControllerTests(),
     new LocationControllerTests(),
     new LocationActionControllerTests(),
+    new CurationActionControllerTests(),
+    new CurationControllerTests(),
     new MapControllerTests(),
     new PeopleActionControllerTests(),
     new SearchResultsControllerTests(),

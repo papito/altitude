@@ -16,6 +16,7 @@ import altitude.core.models.Face
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.service.PersonService
 
 class PeopleActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/people"
@@ -96,11 +97,12 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val personIdFromJson = jsonIn(Api.Field.ID).str
     val person: Person = App.altitude.service.person.getById(personIdFromJson)
 
-    def responseWithValidationErrors(errors: Map[String, String]): Response[String] =
+    def responseWithValidationErrors(errors: Map[String, String], conflictingPerson: Option[Person] = None): Response[String] =
       val payload = "<!doctype html>" + htmx.html.edit_person_name(
         fieldErrors = errors,
         formJson = jsonIn,
-        person = person
+        person = person,
+        conflictingPerson = conflictingPerson
       )
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
@@ -111,16 +113,25 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
     val newName = jsonIn(Api.Field.Person.NAME).str
 
-    if newName.toLowerCase == person.name.get.toLowerCase then
+    // Only the exact stored name is no change: a name that differs in case alone is a rename, and saves
+    if PersonService.normalizedName(newName) == person.name.get then
       logger.debug("Name has not changed")
       val payload = "<!doctype html>" + htmx.html.view_person_name(person = person)
       return cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
     try App.altitude.service.person.updateName(person, newName = newName)
     catch
-      case ex: DuplicateException =>
-        val message = ex.message.getOrElse("Person by that name already exists")
-        return responseWithValidationErrors(Map(Api.Field.Person.NAME -> message))
+      case _: DuplicateException =>
+        // The editor offers to merge into the person holding the name. No one holds it when the holder was merged away meanwhile,
+        // or when the constraint was not the name's: the plain error then, with nothing to merge into
+        App.altitude.service.person.getLiveByNameKey(newName) match
+          case Some(holder) =>
+            logger.debug(s"Name [$newName] is held by person [${holder.persistedId}], offering to merge into them")
+            return responseWithValidationErrors(Map.empty, conflictingPerson = Some(holder))
+          case None =>
+            return responseWithValidationErrors(Map(Api.Field.Person.NAME -> C.Msg.Err.PERSON_NAME_ALREADY_EXISTS))
+      case ex: ValidationException =>
+        return responseWithValidationErrors(Map(Api.Field.Person.NAME -> ex.message))
 
     val updatedPerson: Person = App.altitude.service.person.getById(personIdFromJson)
     val payload = "<!doctype html>" + htmx.html.view_person_name(person = updatedPerson)
@@ -135,13 +146,16 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/merge")
-  def showMergePeopleModal(repoId: String, mergeSourceId: String, mergeDestId: String)(using request: Request): Response[String] =
+  def showMergePeopleModal(repoId: String, mergeSourceId: String, mergeDestId: String, keepDirection: Boolean = false)(using
+      request: Request): Response[String] =
     val requestedSourcePerson: Person = App.altitude.service.person.getById(mergeSourceId)
     val requestedDestPerson: Person = App.altitude.service.person.getById(mergeDestId)
 
-    // if the merge is requested into a person with fewer faces, swap the source and dest
+    // A drop merges the person with fewer faces into the other, whichever was dropped on which; the name editor's offer keeps
+    // its direction (`keepDirection`), so the person already holding the name stays, and keeps its ID
     val (sourcePerson, destPerson) =
-      if requestedSourcePerson.numOfFaces < requestedDestPerson.numOfFaces then (requestedSourcePerson, requestedDestPerson)
+      if keepDirection || requestedSourcePerson.numOfFaces < requestedDestPerson.numOfFaces then
+        (requestedSourcePerson, requestedDestPerson)
       else (requestedDestPerson, requestedSourcePerson)
 
     val payload = "<!doctype html>" + htmx.html.merge_people_modal(

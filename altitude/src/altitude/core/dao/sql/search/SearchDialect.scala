@@ -2,9 +2,12 @@ package altitude.core.dao.sql.search
 
 import java.time.LocalDate
 import scalasql.core.Expr
+import scalasql.core.SqlStr
+import scalasql.core.SqlStr.SqlStringSyntax
 import scalasql.core.TypeMapper
 import scalasql.dialects.Dialect
 
+import altitude.core.dao.sql.Columns
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.util.SearchGrouping
@@ -26,10 +29,21 @@ trait SearchDialect:
   val dialect: Dialect
 
   /**
+   * What the engine wraps a timestamp column in for its calendar day, as a prefix and a suffix: the one spelling of the
+   * expression the engine's date indexes are built on, which [[day]] and [[dayOf]] both render
+   */
+  val dayWrapper: (String, String)
+
+  /**
    * The calendar day of a timestamp column, which a date grouping orders, compares and counts by; it must match the engine's date
    * index
    */
-  def day(asset: AssetRow[Expr], field: String): Expr[Option[LocalDate]]
+  def day(asset: AssetRow[Expr], field: String): Expr[Option[LocalDate]] =
+    val column = Columns.required(AssetRow, asset, field, dialect)
+    Expr[Option[LocalDate]](implicit ctx => sql"${SqlStr.raw(dayWrapper._1)}$column${SqlStr.raw(dayWrapper._2)}")
+
+  /** The same day expression over a column named in a hand-written statement (`BaseDao.dayOf` renders through it) */
+  def dayOf(column: String): String = s"${dayWrapper._1}$column${dayWrapper._2}"
 
   /**
    * The engine's full-text predicate over one search document: whether it has the words of any of the term's readings,

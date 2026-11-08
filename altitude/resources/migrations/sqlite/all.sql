@@ -30,6 +30,17 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('video.faces.max_sampled_frames', '120', '120'),
   ('video.faces.min_cluster_frames', '2', '2'),
   ('video.preview.min_luminance', '40', '40'),
+  ('sequence.max_gap_ms', '60000', '60000'),
+  ('sequence.dinov2.min_similarity', '0.80', '0.80'),
+  ('sequence.clip.min_similarity', '0.90', '0.90'),
+  ('sequence.max_hash_distance', '10', '10'),
+  ('curation.blur_ratio', '0.5', '0.5'),
+  ('curation.face_quality_gap', '2.0', '2.0'),
+  ('curation.clipped_fraction', '0.05', '0.05'),
+  ('curation.crushed_fraction', '0.05', '0.05'),
+  ('curation.dark_luminance', '0.15', '0.15'),
+  ('curation.bright_luminance', '0.75', '0.75'),
+  ('curation.luminance_gap', '0.1', '0.1'),
   ('map.tile.url', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
   ('map.tile.attribution', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'),
   ('map.geocoder.enabled', 'false', 'false'),
@@ -103,13 +114,39 @@ CREATE TABLE asset (
   longitude REAL,
   -- How long a Video or an animated GIF plays; NULL for a still image.
   duration_ms INTEGER,
+  -- Image quality (ImageQuality): the metrics and the 0 to 100 score of a still image, measured at import. The five are NULL
+  -- together for a Video, an animated image, or a still image the pipeline did not measure.
+  sharpness REAL,
+  luminance REAL,
+  clipped_highlights REAL,
+  crushed_shadows REAL,
+  image_quality INTEGER,
+  -- The DCT perceptual hash of a still image, 64 bits as a signed integer, compared by Hamming distance; NULL as the five are.
+  perceptual_hash BIGINT,
+  -- The Sequence the image is in while in triage: the id its members share. A Sequence has no table; it exists while some
+  -- asset carries its id. NULL for a sorted asset, a Video or an animated image.
+  sequence_id CHAR(36),
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
-  -- The metadata JSON is declared last: a row's columns are stored in order, and reading any column after a large value walks
-  -- that value's overflow pages
-  extracted_metadata TEXT,
+  -- The bulky columns come last, the most read of them first: a row's columns are stored in order, a row past the page size
+  -- (4 KB) spills into overflow pages, and reading a column walks the overflow pages of every large value before it. The two
+  -- metadata JSON columns every general read selects (public_metadata also decides the Sequence candidates' device model) come
+  -- before the Histogram, 1 KB a row that the read of a Curation set's Histograms alone selects, then the Scene embeddings,
+  -- about 5 KB a row that the Sequence candidates' statement alone selects, and the raw extracted metadata, the largest and the
+  -- least read, comes after everything.
   public_metadata TEXT,
   user_metadata TEXT,
+  -- The Histogram of a still image (Histogram): its luminance, red, green and blue channels, each 64 bins of the fraction of
+  -- the pixels in the bin, as 1,024 bytes of little-endian float32. NULL for a Video, an animated image, or a still image the
+  -- pipeline did not measure, as the Image quality is.
+  histogram BLOB,
+  -- The Scene embeddings of a still image, one per Scene model, each a unit vector the Sequence rule compares by cosine
+  -- similarity, stored as its raw little-endian float32 values: DINOv2 ViT-B/14's pooled CLS token (768 of them) and CLIP
+  -- ViT-B/16's projected image embedding (512). NULL for a Video, an animated image, or a still image the model could not
+  -- embed. Selected by the Sequence candidates' statement alone and transferred by no other read.
+  dinov2_embedding BLOB,
+  clip_embedding BLOB,
+  extracted_metadata TEXT,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
@@ -119,12 +156,13 @@ CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum) WHERE is_recycle
 -- Capture-day grouping for search results: the camera's calendar date followed by the raw timestamp, so a day range or a
 -- day-count probe seeks directly and a grouped, date-sorted page reads in index order. Both are camera-local wall-clock text.
 -- It carries the ID and the folder, so a pass over the library that tests text membership, a folder or a day reads the index
--- and not the table.
+-- and not the table, and the triage flag for the repository view, which leaves triaged assets out by default.
 CREATE INDEX asset_search_date_taken ON asset (
-  repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at, id, folder_id
+  repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at, id, folder_id, is_triaged
 );
 -- The default flat sort, Date Imported, as an ordered read of the page slice that needs nothing but the index: it carries the ID
-CREATE INDEX asset_search_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at, id);
+-- and the triage flag
+CREATE INDEX asset_search_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at, id, is_triaged);
 -- The triage view: only the triaged assets, in Date Imported order and by capture day, so a small triage set in a large library
 -- is read without passing over the library. They shrink as triage is sorted. A statement that binds the flag as a number
 -- matches the predicate; one that binds it as text does not.
@@ -133,12 +171,18 @@ CREATE INDEX asset_triage_created ON asset (repository_id, is_recycled, is_pipel
 CREATE INDEX asset_triage_date_taken ON asset (
   repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at, id, folder_id
 ) WHERE is_triaged = TRUE;
+-- The undated Sequence candidates: the triaged assets with no capture time, by repository and size in Date Imported order, so an
+-- undated import walks its size backwards from the newest and stops at its cap, whatever else triage holds
+CREATE INDEX asset_triage_undated ON asset (repository_id, width, height, created_at, id)
+  WHERE is_triaged = TRUE AND original_created_at IS NULL;
 -- Folder browsing and the folder source of Search text; it also lets an OR of text sources be planned as a multi-index OR
 CREATE INDEX asset_folder ON asset (folder_id);
 -- Map viewport queries: a bounding-box range over the located assets of a repository only. It carries the ID and the capture
--- time a map cell is ranked by, so a viewport's own points are read from the index alone.
-CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude, id, original_created_at)
+-- time a map cell is ranked by, and the triage flag, so a viewport's own points are read from the index alone.
+CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude, id, original_created_at, is_triaged)
   WHERE latitude IS NOT NULL;
+-- The members of a Sequence: their count, their repointing when Sequences merge, and a Curate view's listing
+CREATE INDEX asset_sequence ON asset (sequence_id) WHERE sequence_id IS NOT NULL;
 
 CREATE TABLE person_label (
   id INTEGER PRIMARY KEY AUTOINCREMENT
@@ -164,7 +208,10 @@ CREATE TABLE person (
 -- The partial person indexes cover the live people, the ones every person query reads; a merged-away person keeps its name and
 -- its cover face, which another person may take. The predicates are written as the queries write them: SQLite uses a partial
 -- index only for a query whose own terms imply it, and `is_deleted = FALSE` does not imply `is_deleted = 0`.
-CREATE UNIQUE INDEX person_01 ON person (repository_id, name)
+-- person_01 is the name-key index: a named person's name_for_sort is its name key (PersonService.nameKey, folded in Scala
+-- so both engines fold alike), and an unnamed person's is "unknown 0042", so a live person's name is unique under that fold:
+-- lowercased NFC, which is not a full Unicode case fold
+CREATE UNIQUE INDEX person_01 ON person (repository_id, name_for_sort)
     WHERE is_deleted = FALSE AND is_bad_match = FALSE;
 
 CREATE UNIQUE INDEX person_02 ON person (cover_face_id)
@@ -192,6 +239,9 @@ CREATE TABLE face (
   quality FLOAT NOT NULL,
   -- An enrolled Face can start a Person and is a candidate in the vector search; a match-only Face can only join one.
   is_enrolled BOOLEAN NOT NULL,
+  -- How much fine detail the box holds at the measurement scale (ImageMeasurement), comparable only between Faces of one Person
+  -- at a similar size; NULL for a Face in a Video, a box too small to say, or an image that could not be measured
+  sharpness REAL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
   FOREIGN KEY (person_id) REFERENCES person (id) ON DELETE CASCADE,

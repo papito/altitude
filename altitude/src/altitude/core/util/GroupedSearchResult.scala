@@ -1,29 +1,40 @@
 package altitude.core.util
 
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 import altitude.core.models.Asset
 
 /**
- * The group a grouped page row belongs to: a capture day (`None` is the "No date" group) or a Location, with what the grid needs
- * to head it (all `None` is the "No location" group). `pathKey` is the value the Location groups are ordered by.
+ * The group a grouped page row belongs to: a capture day (`None` is the "No date" group), a Location, with what the grid needs to
+ * head it (all `None` is the "No location" group), or a Sequence with the first capture of its matching frames (all `None` is the
+ * "No sequence" group; a Sequence whose matching frames have no capture time has its ID alone). `pathKey` is the value the
+ * Location groups are ordered by, and `firstCapturedAt` the Sequence groups'.
  */
 enum SearchGroupKey:
   case Day(date: Option[LocalDate])
   case Location(id: Option[String], pathKey: Option[String], name: Option[String], categoryName: Option[String])
+  case Sequence(id: Option[String], firstCapturedAt: Option[LocalDateTime])
 
-  /** The ordering key a cursor remembers for the group: the ISO day, or the Location's path key */
+  /** The ordering key a cursor remembers for the group: the ISO day, the Location's path key, or the Sequence's first capture */
   def cursorKey: Option[String] = this match
     case Day(date) => date.map(_.toString)
     case Location(_, pathKey, _, _) => pathKey
+    case Sequence(_, firstCapturedAt) => firstCapturedAt.map(_.toString)
 
-  /** The group's ID where the key alone does not name it: the Location's */
+  /** The group's ID where the key alone does not name it: the Location's or the Sequence's */
   def cursorGroupId: Option[String] = this match
     case Day(_) => None
     case Location(id, _, _, _) => id
+    case Sequence(id, _) => id
 
-  /** Whether this is the group the cursor's anchor was in */
-  def continues(cursor: SearchCursor): Boolean = cursorKey == cursor.key && cursorGroupId == cursor.groupId
+  /**
+   * Whether this is the group the cursor's anchor was in. A Sequence is its ID: its first capture moves when the frame that set
+   * it leaves, and its other frames still belong under the header already on screen.
+   */
+  def continues(cursor: SearchCursor): Boolean = this match
+    case Sequence(id, _) => id == cursor.groupId
+    case _ => cursorKey == cursor.key && cursorGroupId == cursor.groupId
 
 /**
  * One page row of a grouped search, as the DAO reads it: the asset with its group, its sort key as stored, and its group's count.
@@ -47,7 +58,8 @@ case class AssetGroup(key: SearchGroupKey, total: Int, assets: List[Asset])
 
 /**
  * A grouped page with its assets in page order: what the grouped grid renders. `total` is present on a first page only.
- * `continuesGroup` says the first group continues the previous page's last group, including the "No date" / "No location" group.
+ * `continuesGroup` says the first group continues the previous page's last group, including the "No date", "No location" and "No
+ * sequence" groups.
  */
 case class GroupedSearchResult(
     groups: List[AssetGroup],

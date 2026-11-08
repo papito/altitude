@@ -1,0 +1,811 @@
+package altitude.core.integration
+
+import altitude.test.IntegrationTestUtil
+import altitude.test.TestVideos
+import org.scalatest.DoNotDiscover
+import org.scalatest.matchers.should.Matchers.*
+
+import altitude.core.Altitude
+import altitude.core.ConstraintException
+import altitude.core.RequestContext
+import altitude.core.models.Asset
+import altitude.core.models.CaptureDateSource
+import altitude.core.models.SceneEmbeddings
+import altitude.core.models.SceneModel
+import altitude.core.models.Settings
+import altitude.core.models.Stats
+import altitude.core.service.SequenceService
+import altitude.core.util.SearchQuery
+import altitude.core.util.SequenceRule
+
+/**
+ * Sequences as the import assigns them, over the synthesized burst of `BurstFrames`. Every frame the pipeline decodes is embedded
+ * by both Scene models, so two frames no model embedded both of, which the hash decides, cannot be produced here;
+ * `SequenceRuleTests` (unit) covers that fallback.
+ */
+@DoNotDiscover class SequenceServiceTests(override val testApp: Altitude)
+  extends IntegrationTestCore
+  with SearchPlans
+  with BurstFrames {
+  import BurstFrames.*
+  import SequenceServiceTests.*
+
+  private def stored(asset: Asset): Asset = testApp.service.asset.getById(asset.persistedId)
+
+  /** The similarity of two imported frames' Scene embeddings of a model, as the import returned them */
+  private def similarity(model: SceneModel, a: Asset, b: Asset): Double =
+    a.sceneEmbeddings.of(model).value.similarity(b.sceneEmbeddings.of(model).value)
+
+  /** The least similarity two frames need under `model` at the defaults */
+  private def defaultThreshold(model: SceneModel): Double = testApp.settings.current.sequenceMinSimilarity(model)
+
+  /** A threshold of `model` no two frames of the burst clear */
+  private def strictThreshold(model: SceneModel): Double = model match
+    case SceneModel.Dinov2 => STRICT_DINOV2_SIMILARITY
+    case SceneModel.Clip => STRICT_CLIP_SIMILARITY
+
+  /** Runs `f` under thresholds no two frames of the burst clear by either model, so no pair is a Sequence by its likeness */
+  private def withStrictThresholds[T](f: => T): T =
+    withSetting(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, STRICT_DINOV2_SIMILARITY.toString) {
+      withSetting(Settings.SEQUENCE_CLIP_MIN_SIMILARITY, STRICT_CLIP_SIMILARITY.toString)(f)
+    }
+
+  test("Two frames of a burst share a Sequence, and a frame alone has none") {
+
+    /**
+     * Setup:
+     *
+     * Three imports a second apart on one camera: a frame, the next frame of its burst, and a different picture at the frames'
+     * size.
+     *
+     * Assertions:
+     *
+     * The first frame comes out of its import with no Sequence, since it is alone; the second comes out in a Sequence, and the
+     * first is read back in the same one. The different picture has none, and every one of the three has its Image quality and
+     * hash.
+     */
+    val first = importFrame(frame(0))
+    first.sequenceId shouldBe None
+
+    val second = importFrame(frame(1), taken = Some(takenAt(1)))
+    second.sequenceId should not be None
+    stored(first).sequenceId shouldBe second.sequenceId
+    stored(second).sequenceId shouldBe second.sequenceId
+
+    val other = importFrame(otherPicture, taken = Some(takenAt(2)))
+    stored(other).sequenceId shouldBe None
+
+    List(first, second, other).map(stored).foreach {
+      asset =>
+        asset.imageQuality should not be None
+        asset.perceptualHash should not be None
+    }
+  }
+
+  test("A burst across midnight pairs, and so does one under a gap longer than a day") {
+
+    /**
+     * Setup:
+     *
+     * A frame a second before midnight and the next frame a second after it, so the candidate window spans two calendar days;
+     * then, under a gap of two days, a frame thirty hours before the first, so the window spans five days and the frame's day is
+     * strictly inside it.
+     *
+     * Assertions:
+     *
+     * The two frames around midnight share a Sequence, and the frame thirty hours earlier joins it under the longer gap: every
+     * day of the window is read, not only its first and last.
+     */
+    val before = importFrame(frame(0), taken = Some("2024:06:01 23:59:59"))
+    val after = importFrame(frame(1), taken = Some("2024:06:02 00:00:01"))
+    after.sequenceId should not be None
+    stored(before).sequenceId shouldBe after.sequenceId
+
+    val thirtyHoursEarlier = withSetting(Settings.SEQUENCE_MAX_GAP_MS, (2 * 24 * 3600 * 1000).toString) {
+      importFrame(frame(2), taken = Some("2024:05:31 17:59:59"))
+    }
+    thirtyHoursEarlier.sequenceId shouldBe after.sequenceId
+  }
+
+  test("A candidate a concurrent move sorts is not stamped with a Sequence") {
+
+    /**
+     * Setup:
+     *
+     * Two frames of a burst imported under thresholds no two frames clear by either model, so they are not paired; then, at the
+     * defaults, a move of the first out of triage held open in a transaction of its own while the second is assigned its
+     * Sequence.
+     *
+     * Assertions:
+     *
+     * The assignment waits for the move (the candidates are read locked), and once the move commits the sorted frame is no
+     * candidate: neither frame is in a Sequence, and the first is sorted.
+     */
+    val (first, second) = withStrictThresholds {
+      (importFrame(frame(0)), importFrame(frame(4), taken = Some(takenAt(1))))
+    }
+    List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
+    val rootFolderId = RequestContext.getRepository.rootFolderId
+
+    contend(
+      first = testApp.service.library.moveAssetsToFolder(Set(first.persistedId), rootFolderId),
+      second = testApp.service.sequence.assign(stored(second)).sequenceId shouldBe None
+    )
+
+    stored(first).isTriaged shouldBe false
+    List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
+  }
+
+  test("The candidates are read through the triage capture-day index") {
+
+    /**
+     * Setup:
+     *
+     * A frame seeded into 5,000 copies whose capture times are spread a minute apart over days, one in ten of them in triage and
+     * the rest sorted, analyzed and rolled back once the plan is read, and the statement that reads the candidates of a frame a
+     * second after the original.
+     *
+     * Assertions:
+     *
+     * The engine's plan reads `asset_triage_date_taken` for it: over a library the planner has rows to choose by, the window's
+     * days and times are what the index leads with, and the partial index over the triage set is the smaller of the two
+     * capture-day indexes, which otherwise tie by shape (over a handful of rows every index on the repository ties).
+     */
+    val stamped = stored(importFrame(frame(0)))
+    val next = stamped.copy(originalCreatedAt = stamped.originalCreatedAt.map(_.plusSeconds(1)))
+    val (sql, values) =
+      testApp.DAO.asset.asInstanceOf[altitude.core.dao.jdbc.AssetDao].sequenceCandidatesStatement(next, 60000).get
+
+    val plan = atScale {
+      seedCopies(stamped.persistedId, copies = 5000, folders = 1)
+      // The copies take their import times, a minute apart, as capture times, and a hash, so they are candidates by shape;
+      // every copy whose zero-padded number does not end in 0 is sorted, so the triage set is a tenth of the library
+      update("UPDATE asset SET original_created_at = created_at, perceptual_hash = 1 WHERE id <> ?", stamped.persistedId)
+      update("UPDATE asset SET is_triaged = FALSE WHERE id <> ? AND substr(id, 36, 1) <> '0'", stamped.persistedId)
+    }(lookupPlanOf(sql, values))
+    withClue(plan)(plan should include("asset_triage_date_taken"))
+  }
+
+  test("The undated candidates are walked backwards through the undated triage index") {
+
+    /**
+     * Setup:
+     *
+     * An undated frame seeded into 5,000 copies, imported a minute apart, with a hash and no capture time, one in ten of them in
+     * triage and the rest sorted, analyzed and rolled back once the plan is read, and the statement that reads the undated
+     * candidates of the frame with a limit under the undated triage rows of its size, as the cap is under them when it matters.
+     *
+     * Assertions:
+     *
+     * The engine's plan reads `asset_triage_undated` for it and sorts nothing: the repository's undated triage rows of the size
+     * in import order are what the index holds, so the engine walks it backwards from the newest and stops at the limit, rather
+     * than sorting what a wider index passes (with a limit over those rows, PostgreSQL may read the same run of the index as a
+     * bitmap and sort it, which costs the same rows and nothing of the rest of triage).
+     */
+    val undated = stored(importUndated(frame(0), 1))
+    undated.originalCreatedAt shouldBe None
+    val (sql, values) =
+      testApp.DAO.asset.asInstanceOf[altitude.core.dao.jdbc.AssetDao].undatedSequenceCandidatesStatement(undated, 100)
+
+    val plan = atScale {
+      seedCopies(undated.persistedId, copies = 5000, folders = 1)
+      // The copies carry no capture time, as the template does, and take a hash, so they are candidates by shape; every copy
+      // whose zero-padded number does not end in 0 is sorted, so the triage set is a tenth of the library
+      update("UPDATE asset SET perceptual_hash = 1 WHERE id <> ?", undated.persistedId)
+      update("UPDATE asset SET is_triaged = FALSE WHERE id <> ? AND substr(id, 36, 1) <> '0'", undated.persistedId)
+    }(lookupPlanOf(sql, values))
+    withClue(plan) {
+      plan should include("asset_triage_undated")
+      (plan should not).include(if (isPostgres) "Sort" else "TEMP B-TREE")
+    }
+  }
+
+  test("The undated read returns only the matches and counts the rows it scanned") {
+
+    /**
+     * Setup:
+     *
+     * Imported with no metadata under names that carry no time, under thresholds no two frames clear by either model, so the
+     * import pairs none of them and the read is tested on its own: the different picture at the frames' size, a half-size frame,
+     * two frames of the burst, and then a new frame of the burst; its undated matches read through the DAO under the rule at the
+     * defaults, with a cap of 100, then of 1, then under a test that refuses every candidate; then a dated frame of the burst,
+     * and the read again.
+     *
+     * Assertions:
+     *
+     * None of the undated imports has a capture time or a Sequence. The read keeps the two burst frames alone, newest first, and
+     * scanned three rows: the two frames and the different picture, which are at the new frame's size, and not the half-size
+     * frame or the frame itself. Capped at 1, it keeps the newest frame alone and scanned one row; refusing everything, it keeps
+     * nothing and still scanned three. The dated frame is not scanned.
+     */
+    val (other, halfSize, first, second, newFrame) = withStrictThresholds {
+      (
+        importUndated(otherPicture, 1),
+        importUndated(frame(2, scale = 0.5), 2),
+        importUndated(frame(0), 3),
+        importUndated(frame(1), 4),
+        importUndated(frame(3), 5))
+    }
+    List(other, halfSize, first, second, newFrame).map(stored).foreach {
+      asset =>
+        asset.originalCreatedAt shouldBe None
+        asset.sequenceId shouldBe None
+    }
+    val settings = testApp.settings.current
+
+    def read(limit: Int, keep: Asset => Boolean = SequenceRule.matches(newFrame, _, settings)) =
+      testApp.txManager.withTransaction(testApp.DAO.asset.getUndatedSequenceMatches(newFrame, limit)(keep))
+
+    val matches = read(limit = 100)
+    matches.kept.map(_.persistedId) shouldBe List(second.persistedId, first.persistedId)
+    matches.scanned shouldBe 3
+
+    val capped = read(limit = 1)
+    capped.kept.map(_.persistedId) shouldBe List(second.persistedId)
+    capped.scanned shouldBe 1
+
+    val none = read(limit = 100, keep = _ => false)
+    none.kept shouldBe empty
+    none.scanned shouldBe 3
+
+    importFrame(frame(4))
+    read(limit = 100).scanned shouldBe 3
+  }
+
+  test("Undated frames of one scene share a Sequence, and a dated frame of it joins neither") {
+
+    /**
+     * Setup:
+     *
+     * Imported with no metadata under names that carry no time: a frame, the next frame of its burst, the different picture at
+     * the frames' size and a half-size frame; then a frame of the burst with the camera's clock and model.
+     *
+     * Assertions:
+     *
+     * The first frame comes out of its import with no Sequence, since it is alone; the second comes out in a Sequence, and the
+     * first is read back in the same one. Neither has a capture time, and each has its Image quality and hash. The different
+     * picture and the half-size frame have none, and so has the dated frame: the undated frames pair by their likeness among the
+     * undated frames of their size, and never with a dated one.
+     */
+    val first = importUndated(frame(0), 1)
+    first.sequenceId shouldBe None
+
+    val second = importUndated(frame(1), 2)
+    second.sequenceId should not be None
+    stored(first).sequenceId shouldBe second.sequenceId
+    stored(second).sequenceId shouldBe second.sequenceId
+    List(first, second).map(stored).foreach {
+      undated =>
+        undated.originalCreatedAt shouldBe None
+        undated.imageQuality should not be None
+        undated.perceptualHash should not be None
+    }
+
+    val other = importUndated(otherPicture, 3)
+    val halfSize = importUndated(frame(2, scale = 0.5), 4)
+    val dated = importFrame(frame(2))
+    stored(dated).originalCreatedAtSource shouldBe Some(CaptureDateSource.ExifOriginal)
+    List(other, halfSize, dated).map(stored(_).sequenceId).distinct shouldBe List(None)
+    List(first, second).map(stored(_).sequenceId).distinct shouldBe List(second.sequenceId)
+  }
+
+  test("A service built with a cap of one compares the newest undated frame only") {
+
+    /**
+     * Setup:
+     *
+     * Three undated frames of the burst imported under thresholds no two frames clear by either model, so none is paired; then,
+     * at the defaults, the third assigned again, with its embeddings as the import returned them, through a service built with a
+     * cap of one candidate.
+     *
+     * Assertions:
+     *
+     * The third frame comes out in a Sequence with the second, the newest of the two undated frames before it, which the cap
+     * admitted alone; the first, older than the cap reaches, stays out.
+     */
+    val (first, second, third) = withStrictThresholds {
+      (importUndated(frame(0), 1), importUndated(frame(1), 2), importUndated(frame(2), 3))
+    }
+    List(first, second, third).map(stored(_).sequenceId).distinct shouldBe List(None)
+
+    val assigned = new SequenceService(testApp, undatedCandidates = 1).assign(third)
+    assigned.sequenceId should not be None
+    List(second, third).map(stored(_).sequenceId).distinct shouldBe List(assigned.sequenceId)
+    stored(first).sequenceId shouldBe None
+  }
+
+  test("A concurrent move of an undated candidate leaves it out of the Sequence") {
+
+    /**
+     * Setup:
+     *
+     * Two undated frames of the burst imported under thresholds no two frames clear by either model, so they are not paired;
+     * then, at the defaults, a move of the first out of triage held open in a transaction of its own while the second, with its
+     * embeddings as the import returned them, is assigned its Sequence.
+     *
+     * Assertions:
+     *
+     * The assignment waits for the move, and once the move commits the sorted frame is no candidate: neither frame is in a
+     * Sequence, and the first is sorted. The undated candidates are read without row locks, so on PostgreSQL the first frame
+     * comes back a match before the move commits; the matches are then re-read locked, which waits on the moved row and leaves it
+     * out once the move commits, so the second frame is not stamped alone (on SQLite the assignment waits for the one write
+     * connection and finds the sorted frame no candidate).
+     */
+    val (first, second) = withStrictThresholds {
+      (importUndated(frame(0), 1), importUndated(frame(4), 2))
+    }
+    List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
+    val rootFolderId = RequestContext.getRepository.rootFolderId
+
+    contend(
+      first = testApp.service.library.moveAssetsToFolder(Set(first.persistedId), rootFolderId),
+      second = testApp.service.sequence.assign(second).sequenceId shouldBe None
+    )
+
+    stored(first).isTriaged shouldBe false
+    List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
+  }
+
+  test("A frame that bridges two Sequences merges them into the larger") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames within a second (0, .5 and 1 s) and a burst of two a minute and a half in (90 and 90.5 s), too far
+     * apart to pair, so two Sequences; then a frame at 45.5 s, within the gap of the first burst's last frame and the second
+     * burst's first.
+     *
+     * Assertions:
+     *
+     * Before the bridge, the bursts are two Sequences of three and two. After it, all six frames are in the first burst's
+     * Sequence, since it had more members, and nothing carries the second burst's any more.
+     */
+    val a1 = importFrame(frame(0))
+    val a2 = importFrame(frame(1), subSecond = Some("500"))
+    val a3 = importFrame(frame(2), taken = Some(takenAt(1)))
+    val b1 = importFrame(frame(3), taken = Some(takenAt(90)))
+    val b2 = importFrame(frame(4), taken = Some(takenAt(90)), subSecond = Some("500"))
+
+    val sequenceA = stored(a1).sequenceId.get
+    val sequenceB = stored(b1).sequenceId.get
+    sequenceA should not be sequenceB
+    List(a2, a3).map(stored(_).sequenceId) shouldBe List(Some(sequenceA), Some(sequenceA))
+    stored(b2).sequenceId shouldBe Some(sequenceB)
+
+    val bridge = importFrame(frame(5), taken = Some(takenAt(45)), subSecond = Some("500"))
+    bridge.sequenceId shouldBe Some(sequenceA)
+    List(a1, a2, a3, b1, b2, bridge).map(stored(_).sequenceId).distinct shouldBe List(Some(sequenceA))
+  }
+
+  test("A merge of Sequences of one size keeps the one captured first") {
+
+    /**
+     * Setup:
+     *
+     * A burst of two frames at 90 and 91 s imported first, then a burst of two at 0 and 1 s, then a frame at 45.5 s that bridges
+     * them.
+     *
+     * Assertions:
+     *
+     * Two Sequences of two before the bridge; after it, all five are in the Sequence of the burst captured first, although the
+     * other Sequence was made first.
+     */
+    val later1 = importFrame(frame(0), taken = Some(takenAt(90)))
+    val later2 = importFrame(frame(1), taken = Some(takenAt(91)))
+    val earlier1 = importFrame(frame(2))
+    val earlier2 = importFrame(frame(3), taken = Some(takenAt(1)))
+
+    val laterSequence = stored(later1).sequenceId.get
+    val earlierSequence = stored(earlier1).sequenceId.get
+    laterSequence should not be earlierSequence
+
+    val bridge = importFrame(frame(4), taken = Some(takenAt(45)), subSecond = Some("500"))
+    bridge.sequenceId shouldBe Some(earlierSequence)
+    List(later1, later2, earlier1, earlier2, bridge).map(stored(_).sequenceId).distinct shouldBe List(Some(earlierSequence))
+  }
+
+  test("Another camera, another size, a wide gap or a different picture does not pair") {
+
+    /**
+     * Setup:
+     *
+     * A frame, then within the gap: the next frame from another camera, a half-size copy of a frame, a different picture at the
+     * frames' size; and a frame a minute and a half later.
+     *
+     * Assertions:
+     *
+     * None of the five is in a Sequence. The different picture's similarity to the frame is checked to be under each Scene
+     * model's default threshold, so the test fails on its fixture rather than passing by accident (a DINOv2 similarity of about
+     * 0.26 against 0.80, a CLIP one of about 0.62 against 0.90); the half-size copy looks alike by either model, and only its
+     * size keeps it out.
+     */
+    val first = importFrame(frame(0))
+    val otherCamera = importFrame(frame(1), subSecond = Some("500"), model = Some("Nikon Z8"))
+    val halfSize = importFrame(frame(2, scale = 0.5), taken = Some(takenAt(1)))
+    val other = importFrame(otherPicture, taken = Some(takenAt(1)), subSecond = Some("500"))
+    val late = importFrame(frame(3), taken = Some(takenAt(90)))
+
+    SceneModel.values.foreach {
+      model =>
+        withClue(model) {
+          similarity(model, first, other) should be < defaultThreshold(model)
+          similarity(model, first, halfSize) should be >= defaultThreshold(model)
+        }
+    }
+    List(first, otherCamera, halfSize, other, late).map(stored(_).sequenceId).distinct shouldBe List(None)
+  }
+
+  test("Frames a minute apart pair, and frames over a minute apart do not") {
+
+    /**
+     * Setup:
+     *
+     * A frame, the next frame of its burst exactly a minute later, and a third a minute and a second after that.
+     *
+     * Assertions:
+     *
+     * The first two share a Sequence, the default gap being a minute inclusive; the third, 61 s from the nearest frame, has none.
+     */
+    val first = importFrame(frame(0))
+    val minuteLater = importFrame(frame(1), taken = Some(takenAt(60)))
+    minuteLater.sequenceId should not be None
+    stored(first).sequenceId shouldBe minuteLater.sequenceId
+
+    val over = importFrame(frame(2), taken = Some(takenAt(121)))
+    stored(over).sequenceId shouldBe None
+    List(first, minuteLater).map(stored(_).sequenceId).distinct shouldBe List(minuteLater.sequenceId)
+  }
+
+  test("A frame in another repository does not pair") {
+
+    /**
+     * Setup:
+     *
+     * A frame in one repository, and the next frame of the burst imported into a second repository half a second later.
+     *
+     * Assertions:
+     *
+     * Neither is in a Sequence.
+     */
+    val first = importFrame(frame(0))
+    val repo2 = testContext.persistRepository()
+    switchContextRepo(repo2)
+    val second = importFrame(frame(1), subSecond = Some("500"))
+    stored(second).sequenceId shouldBe None
+
+    switchContextRepo(testContext.repositories.head)
+    stored(first).sequenceId shouldBe None
+  }
+
+  test("Frames named by Apple's export a second apart share a Sequence, and a frame with EXIF and a camera model joins neither") {
+
+    /**
+     * Setup:
+     *
+     * A frame with no metadata at all, neither a camera model nor a clock, named as Apple's export names it; then a frame of the
+     * burst with the camera's clock and model, half a second in; then another frame with no metadata, named a second after the
+     * first; and the different picture at the frames' size, named a second after that.
+     *
+     * Assertions:
+     *
+     * The two named frames' capture times came from their file names, each has its Image quality and hash, and they share a
+     * Sequence. The different picture, named within the gap, has none. The frame with the camera's clock, within the gap of both
+     * named frames, is in no Sequence: it names a camera and they name none.
+     */
+    val first = importNamed(frame(0), "Photo Jun 1 2024, 12 00 00 PM.jpg")
+    val dated = importFrame(frame(1), subSecond = Some("500"))
+    val second = importNamed(frame(2), "Photo Jun 1 2024, 12 00 01 PM.jpg")
+    val other = importNamed(otherPicture, "Photo Jun 1 2024, 12 00 02 PM.jpg")
+
+    second.sequenceId should not be None
+    List(first, second).map(stored).foreach {
+      named =>
+        named.originalCreatedAtSource shouldBe Some(CaptureDateSource.FileName)
+        named.imageQuality should not be None
+        named.perceptualHash should not be None
+        named.sequenceId shouldBe second.sequenceId
+    }
+    stored(other).sequenceId shouldBe None
+    stored(dated).originalCreatedAtSource shouldBe Some(CaptureDateSource.ExifOriginal)
+    stored(dated).sequenceId shouldBe None
+  }
+
+  test("A move out of triage clears the moved frames' Sequence and leaves the frames that stay in it") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames in one Sequence, and a folder. One frame is moved to the folder, then the other two.
+     *
+     * Assertions:
+     *
+     * The moved frame is sorted with no Sequence, and the two in triage keep theirs. Once every frame has moved, no asset carries
+     * the id: the Sequence ended with its last member's move. A sorted frame moved again between folders stays without one.
+     */
+    val frames = List(
+      importFrame(frame(0)),
+      importFrame(frame(1), taken = Some(takenAt(1))),
+      importFrame(frame(2), taken = Some(takenAt(2))))
+    val sequenceId = frames.last.sequenceId
+    sequenceId should not be None
+    frames.map(stored(_).sequenceId).distinct shouldBe List(sequenceId)
+    val folder = testApp.service.folder.add("sorted")
+
+    testApp.service.library.moveAssetsToFolder(Set(frames.head.persistedId), folder.persistedId)
+    val moved = stored(frames.head)
+    moved.isTriaged shouldBe false
+    moved.sequenceId shouldBe None
+    frames.tail.map(stored(_).sequenceId).distinct shouldBe List(sequenceId)
+
+    testApp.service.library.moveAssetsToFolder(frames.tail.map(_.persistedId).toSet, folder.persistedId)
+    frames.map(stored(_).sequenceId).distinct shouldBe List(None)
+    frames.map(stored(_).isTriaged).distinct shouldBe List(false)
+    testApp.txManager.withTransaction(testApp.DAO.asset.countSequenceMembers(Set(sequenceId.get))) shouldBe Nil
+
+    val other = testApp.service.folder.add("other")
+    testApp.service.library.moveAssetsToFolder(Set(frames.head.persistedId), other.persistedId)
+    stored(frames.head).sequenceId shouldBe None
+  }
+
+  test("A frame recycled from triage keeps its Sequence, and a restore brings it back to it") {
+
+    /**
+     * Setup:
+     *
+     * Two frames in one Sequence. One is recycled, then restored; then recycled again and moved out of the trash into a folder.
+     *
+     * Assertions:
+     *
+     * In the trash the frame keeps its triage flag and its Sequence (a Sequence whose members are all in the trash still exists),
+     * and the restored frame is back in triage and in the Sequence. Moved out of the trash into a folder it leaves triage, so it
+     * leaves the Sequence as a move does, while the other frame keeps it.
+     */
+    val first = importFrame(frame(0))
+    val second = importFrame(frame(1), taken = Some(takenAt(1)))
+    val sequenceId = second.sequenceId
+    sequenceId should not be None
+
+    testApp.service.library.recycleAssets(Set(first.persistedId))
+    val recycled = stored(first)
+    recycled.isRecycled shouldBe true
+    recycled.isTriaged shouldBe true
+    recycled.sequenceId shouldBe sequenceId
+
+    testApp.service.library.restoreRecycledAssets(Set(first.persistedId))
+    val restored = stored(first)
+    restored.isRecycled shouldBe false
+    restored.isTriaged shouldBe true
+    restored.sequenceId shouldBe sequenceId
+
+    testApp.service.library.recycleAssets(Set(first.persistedId))
+    val folder = testApp.service.folder.add("sorted")
+    testApp.service.library.moveAssetsToFolder(Set(first.persistedId), folder.persistedId)
+    val sorted = stored(first)
+    sorted.isRecycled shouldBe false
+    sorted.isTriaged shouldBe false
+    sorted.sequenceId shouldBe None
+    stored(second).sequenceId shouldBe sequenceId
+  }
+
+  test("A frame recycled from triage is a candidate, so the next frame of its burst joins it in the trash") {
+
+    /**
+     * Setup:
+     *
+     * A frame imported and recycled while still alone; then the next frame of its burst, imported a second later; then the first
+     * restored.
+     *
+     * Assertions:
+     *
+     * The second frame comes out of its import in a Sequence with the recycled first one, which keeps its trash and triage flags;
+     * the restore brings the first back with the Sequence it took in the trash, so the pair is together.
+     */
+    val first = importFrame(frame(0))
+    testApp.service.library.recycleAssets(Set(first.persistedId))
+    stored(first).sequenceId shouldBe None
+
+    val second = importFrame(frame(1), taken = Some(takenAt(1)))
+    second.sequenceId should not be None
+    val recycled = stored(first)
+    recycled.isRecycled shouldBe true
+    recycled.isTriaged shouldBe true
+    recycled.sequenceId shouldBe second.sequenceId
+
+    testApp.service.library.restoreRecycledAssets(Set(first.persistedId))
+    val restored = stored(first)
+    restored.isRecycled shouldBe false
+    restored.sequenceId shouldBe second.sequenceId
+    stored(second).sequenceId shouldBe second.sequenceId
+  }
+
+  test("A completion that fails after the assignment leaves the Sequences as they were") {
+
+    /**
+     * Setup:
+     *
+     * A burst of three frames and a burst of two a minute and a half in, two Sequences; the repository's triage asset count row
+     * deleted behind the services' back, so counting the next completed asset fails; then a frame that would bridge the two.
+     *
+     * Assertions:
+     *
+     * The bridge's import fails on the missing stat (a `ConstraintException` naming the dimension), and since the assignment ran
+     * in the completion's transaction, the three frames are still in the first Sequence and the two in the second, with their
+     * member counts; the bridge itself is discarded, so the repository holds five assets.
+     */
+    val a =
+      List(importFrame(frame(0)), importFrame(frame(1), subSecond = Some("500")), importFrame(frame(2), taken = Some(takenAt(1))))
+    val b = List(
+      importFrame(frame(3), taken = Some(takenAt(90))),
+      importFrame(frame(4), taken = Some(takenAt(90)), subSecond = Some("500")))
+    val sequenceA = stored(a.head).sequenceId.get
+    val sequenceB = stored(b.head).sequenceId.get
+    sequenceA should not be sequenceB
+
+    testApp.txManager.withTransaction {
+      update(
+        "DELETE FROM stats WHERE repository_id = ? AND dimension = ?",
+        testContext.repository.persistedId,
+        Stats.TRIAGE_ASSETS)
+    }
+    val failure = the[ConstraintException] thrownBy importFrame(frame(5), taken = Some(takenAt(45)), subSecond = Some("500"))
+    failure.getMessage should include(Stats.TRIAGE_ASSETS)
+
+    a.map(stored(_).sequenceId).distinct shouldBe List(Some(sequenceA))
+    b.map(stored(_).sequenceId).distinct shouldBe List(Some(sequenceB))
+    val members = testApp.txManager.withTransaction(testApp.DAO.asset.countSequenceMembers(Set(sequenceA, sequenceB)))
+    members.map(sequence => sequence.sequenceId -> sequence.members).toMap shouldBe Map(sequenceA -> 3, sequenceB -> 2)
+    testApp.txManager.asReadOnly {
+      query("SELECT count(*) AS n FROM asset WHERE repository_id = ?", testContext.repository.persistedId)
+        .head("n")
+        .toString
+        .toInt
+    } shouldBe 5
+  }
+
+  test("A Video has no Image quality, no hash and no Sequence") {
+
+    /**
+     * Setup:
+     *
+     * A synthesized clip (TestVideos.portrait) imported.
+     *
+     * Assertions:
+     *
+     * It is stored with none of the three.
+     */
+    val video = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.portrait.toFile))
+    val storedVideo = stored(video)
+    storedVideo.imageQuality shouldBe None
+    storedVideo.perceptualHash shouldBe None
+    storedVideo.sequenceId shouldBe None
+  }
+
+  test("The Settings decide the gap and the likeness, and the hash distance does not where the embedding decides") {
+
+    /**
+     * Setup:
+     *
+     * Under a 500 ms gap, two frames a second apart. Under a hash distance of 0, two frames a second apart at 120 and 121 s, past
+     * the first pair's minute, whose hashes differ by a few bits. Under thresholds no two frames of the burst clear by either
+     * model, two frames at 240 and 241 s. Then, at the defaults again, a frame at 242 s.
+     *
+     * Assertions:
+     *
+     * The first pair is no Sequence under the short gap. The second pair is one although its hashes differ, since both frames
+     * carry the embeddings and the similarities decide, not the hash. The third pair is no Sequence: its similarity by each model
+     * is checked to be under that model's raised threshold and at or above its default, so it is the thresholds alone that keep
+     * them apart. The frame at 242 s pairs with the frames at 240 and 241 s once the defaults are back, so the rule is read from
+     * the Settings as saved.
+     */
+    val (first, second) = withSetting(Settings.SEQUENCE_MAX_GAP_MS, "500") {
+      (importFrame(frame(0)), importFrame(frame(1), taken = Some(takenAt(1))))
+    }
+    List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
+
+    val (third, fourth) = withSetting(Settings.SEQUENCE_MAX_HASH_DISTANCE, "0") {
+      (importFrame(frame(2), taken = Some(takenAt(120))), importFrame(frame(4), taken = Some(takenAt(121))))
+    }
+    stored(third).perceptualHash should not be stored(fourth).perceptualHash
+    fourth.sequenceId should not be None
+    List(third, fourth).map(stored(_).sequenceId).distinct shouldBe List(fourth.sequenceId)
+
+    val (fifth, sixth) = withStrictThresholds {
+      (importFrame(frame(3), taken = Some(takenAt(240))), importFrame(frame(5), taken = Some(takenAt(241))))
+    }
+    SceneModel.values.foreach {
+      model =>
+        withClue(model) {
+          similarity(model, fifth, sixth) should be < strictThreshold(model)
+          similarity(model, fifth, sixth) should be >= defaultThreshold(model)
+        }
+    }
+    List(fifth, sixth).map(stored(_).sequenceId) shouldBe List(None, None)
+
+    val seventh = importFrame(frame(6), taken = Some(takenAt(242)))
+    seventh.sequenceId should not be None
+    List(fifth, sixth, seventh).map(stored(_).sequenceId).distinct shouldBe List(seventh.sequenceId)
+    List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
+  }
+
+  test("A burst one Scene model misses is caught by the other") {
+
+    /**
+     * Setup:
+     *
+     * For each Scene model, under a threshold of that model no two frames of the burst clear while the other model's threshold
+     * stays at its default: two frames a second apart, in a window of their own (0 and 1 s for the first model, 120 and 121 s for
+     * the second). Then, under both thresholds raised, a third pair at 240 and 241 s.
+     *
+     * Assertions:
+     *
+     * Each of the first two pairs is a Sequence by the model left at its default: the frames' similarity by that model is checked
+     * to be at or above its default threshold while their similarity by the raised model is under its raised threshold, so it is
+     * the other model's likeness alone that pairs them. The third pair, alike by neither model under the raised thresholds, is no
+     * Sequence, so neither model's likeness is assumed.
+     */
+    val thresholdOf =
+      Map(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> SceneModel.Dinov2, Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> SceneModel.Clip)
+    thresholdOf.zipWithIndex.foreach {
+      case ((setting, raised), index) =>
+        val other = SceneModel.values.find(_ != raised).value
+        val start = index * 120
+        val (first, second) = withSetting(setting, strictThreshold(raised).toString) {
+          (
+            importFrame(frame(2 * index), taken = Some(takenAt(start))),
+            importFrame(frame(2 * index + 1), taken = Some(takenAt(start + 1))))
+        }
+        withClue(raised) {
+          similarity(raised, first, second) should be < strictThreshold(raised)
+          similarity(other, first, second) should be >= defaultThreshold(other)
+          second.sequenceId should not be None
+          List(first, second).map(stored(_).sequenceId).distinct shouldBe List(second.sequenceId)
+        }
+    }
+
+    val (fifth, sixth) = withStrictThresholds {
+      (importFrame(frame(4), taken = Some(takenAt(240))), importFrame(frame(5), taken = Some(takenAt(241))))
+    }
+    SceneModel.values.foreach(model => similarity(model, fifth, sixth) should be < strictThreshold(model))
+    List(fifth, sixth).map(stored(_).sequenceId) shouldBe List(None, None)
+  }
+
+  test("The candidates are read with their Scene embeddings, and a search result without them") {
+
+    /**
+     * Setup:
+     *
+     * Two frames a second apart, and the Sequence candidates of the second read through the DAO; then a search of the repository.
+     *
+     * Assertions:
+     *
+     * The candidate holds an embedding of each Scene model, of its dimensions, which is what the rule compared. Every record of
+     * the search holds neither, as a read by ID does not (`AssetImportServiceTests` proves that one, and the locking read of a
+     * library operation): the embeddings are bulky columns no general read selects.
+     */
+    val first = importFrame(frame(0))
+    val second = importFrame(frame(1), taken = Some(takenAt(1)))
+
+    // A write transaction: the candidates are locked until it ends
+    val candidates = testApp.txManager.withTransaction(testApp.DAO.asset.getSequenceCandidates(second, gapMs = 60000))
+    val candidate = candidates.find(_.id == first.id).value
+    SceneModel.values.foreach(model => candidate.sceneEmbeddings.of(model).value.values.length shouldBe model.dimensions)
+
+    val results = testApp.service.library.search(new SearchQuery(rpp = 10)).records
+    results.map(_.persistedId).toSet shouldBe Set(first.persistedId, second.persistedId)
+    results.map(_.sceneEmbeddings).distinct shouldBe List(SceneEmbeddings())
+  }
+
+}
+
+object SequenceServiceTests {
+
+  /**
+   * A threshold of each Scene model no two frames of the synthesized burst clear: by DINOv2 frames a few pixels apart measure
+   * 0.983 to 0.998, so 0.999 is above every pair with a margin, and far above the default of 0.80, which every pair clears; by
+   * CLIP they measure closer to 1, so only the cosine of identical embeddings, 1, is above every pair. A test that keeps frames
+   * apart with one asserts the observed similarity lies between it and the default, so the threshold, and nothing else, is what
+   * parts them.
+   */
+  private val STRICT_DINOV2_SIMILARITY = 0.999
+  private val STRICT_CLIP_SIMILARITY = 1.0
+}

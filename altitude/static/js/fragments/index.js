@@ -1,4 +1,5 @@
 import { findFragmentRoots } from "./helpers.js"
+import { hydrateCurationFragment } from "./curation.js"
 import { hydrateModalFragment } from "./modal.js"
 import { hydrateInlineDialogFragment } from "./inline-dialog.js"
 import { hydrateLocationEditorFragment } from "./location-editor.js"
@@ -22,6 +23,10 @@ export function hydrateAppFragments({ root, app }) {
 
     findFragmentRoots(root, "modal").forEach((fragmentEl) => {
         hydrateModalFragment({ fragmentEl })
+    })
+
+    findFragmentRoots(root, "curation").forEach(() => {
+        hydrateCurationFragment()
     })
 
     // After the modal hydrator: the editor's map is sized once its host is displayed

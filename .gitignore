@@ -64,5 +64,10 @@ test-data
 data/db/*.db
 data/repositories
 /altitude/resources/opencv/w600k_r50.onnx
+/altitude/resources/onnx/*.onnx
+# fetch-models.py's in-progress files, should a run be killed before it cleans up
+/altitude/resources/*/*.onnx.part
+/altitude/resources/*/*.onnx.unchecked
+__pycache__/
 debug/
 flow.yaml

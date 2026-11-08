@@ -7,6 +7,7 @@ import altitude.core.unit.BaseControllerTests
 import altitude.core.unit.CaptureDateResolverTests
 import altitude.core.unit.ContentSignerTests
 import altitude.core.unit.CoreModelTests
+import altitude.core.unit.CurationRuleTests
 import altitude.core.unit.DataScrubberTests
 import altitude.core.unit.DynamicFilterTests
 import altitude.core.unit.EnvironmentTests
@@ -14,18 +15,24 @@ import altitude.core.unit.FaceClusteringTests
 import altitude.core.unit.FolderModelTests
 import altitude.core.unit.GeocoderServiceTests
 import altitude.core.unit.GeoLocationResolverTests
+import altitude.core.unit.ImageMeasurementTests
 import altitude.core.unit.ImageUtilTests
+import altitude.core.unit.ImportParallelismTests
+import altitude.core.unit.NetPoolTests
 import altitude.core.unit.PersonModelTests
 import altitude.core.unit.RangeStreamingTests
 import altitude.core.unit.RowColumnTests
+import altitude.core.unit.SceneEmbedderTests
 import altitude.core.unit.SearchQueryModelTests
 import altitude.core.unit.SearchSqlTests
 import altitude.core.unit.SearchTextTests
 import altitude.core.unit.SearchWordsTests
+import altitude.core.unit.SequenceRuleTests
 import altitude.core.unit.SessionControllerTests
 import altitude.core.unit.Sha256Tests
 import altitude.core.unit.SqlDialectTests
 import altitude.core.unit.SqlExplainerTests
+import altitude.core.unit.SqliteOverridesTests
 import altitude.core.unit.StyleGuideScanTests
 import altitude.core.unit.TransactionBoundaryTests
 import altitude.core.unit.UrlServiceTests
@@ -56,11 +63,18 @@ abstract class AllUnitTestSuites
     new UtilTests,
     new EnvironmentTests,
     new Sha256Tests,
+    new NetPoolTests,
+    new ImportParallelismTests,
     new VideoServiceTests,
     new ImageUtilTests,
+    new ImageMeasurementTests,
+    new SceneEmbedderTests,
+    new SequenceRuleTests,
+    new CurationRuleTests,
     new RangeStreamingTests,
     new ContentSignerTests,
     new TransactionBoundaryTests,
     new SqlExplainerTests,
+    new SqliteOverridesTests,
     new StyleGuideScanTests
   )

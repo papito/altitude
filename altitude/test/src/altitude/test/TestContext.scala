@@ -10,6 +10,7 @@ import java.time.ZoneOffset
 import java.util.HexFormat
 import org.apache.commons.dbutils.QueryRunner
 
+import scala.collection.mutable
 import scala.util.Random
 
 import altitude.core.Altitude
@@ -24,6 +25,8 @@ import altitude.core.models.CaptureDateSource
 import altitude.core.models.Face
 import altitude.core.models.FaceImages
 import altitude.core.models.Folder
+import altitude.core.models.Histogram
+import altitude.core.models.ImageQuality
 import altitude.core.models.Person
 import altitude.core.models.Repository
 import altitude.core.models.User
@@ -177,7 +180,27 @@ class TestContext(val testApp: Altitude) {
 
     val dataAsset = makeAssetWithData(Some(asset))
 
-    val persistedAsset: Asset = testApp.service.library.addAsset(dataAsset)
+    val imported: Asset = testApp.service.library.addAsset(dataAsset)
+
+    // The random image is undated and of one size, so in triage the import may pair it, by likeness, with an earlier one as it
+    // would the frames of one scene. A persisted asset is a plain fixture: the Sequence the import gave it is cleared from every
+    // asset that took it, and a test that wants Sequences stamps them (`setAssetSequence`). An import that paired with a stamped
+    // Sequence would wipe that stamp off every member with the clear, so it fails the test instead
+    val persistedAsset = imported.sequenceId.fold(imported) {
+      sequenceId =>
+        if (stampedSequences.contains(sequenceId)) {
+          throw new IllegalStateException(
+            s"Fixture [${imported.persistedId}] paired with the stamped Sequence [$sequenceId]: persist the fixture before " +
+              "the stamp, or give it a shape the import cannot pair")
+        }
+        testApp.txManager.withTransaction {
+          new QueryRunner().update(
+            RequestContext.getConn,
+            "UPDATE asset SET sequence_id = NULL WHERE sequence_id = ?",
+            sequenceId)
+        }
+        imported.copy(sequenceId = None)
+    }
 
     assets = assets ::: persistedAsset :: Nil
 
@@ -220,8 +243,55 @@ class TestContext(val testApp: Altitude) {
     }
   }
 
+  /** The Sequences `setAssetSequence` stamped, which a fixture persisted afterwards must not pair with */
+  private val stampedSequences = mutable.Set.empty[String]
+
+  /**
+   * Puts assets still in triage in a Sequence, as assignment would for a burst, whatever their files look like. A fixture
+   * persisted after the stamp fails if the import pairs it with the Sequence, so stamps come after the fixtures
+   */
+  def setAssetSequence(assets: List[Asset], sequenceId: String): Unit = {
+    stampedSequences += sequenceId
+    testApp.txManager.withTransaction {
+      testApp.DAO.asset.setSequence(assets.map(_.persistedId).toSet, sequenceId): Unit
+    }
+  }
+
+  /** The metrics of an asset, or none, so a fixture decides what the measurement of its file would have found */
+  def setAssetImageQuality(assetId: String, quality: Option[ImageQuality]): Unit = {
+    testApp.txManager.withTransaction {
+      new QueryRunner().update(
+        RequestContext.getConn,
+        "UPDATE asset SET sharpness = ?, luminance = ?, clipped_highlights = ?, crushed_shadows = ?, image_quality = ? " +
+          "WHERE id = ?",
+        quality.map(_.sharpness.asInstanceOf[Object]).orNull,
+        quality.map(_.luminance.asInstanceOf[Object]).orNull,
+        quality.map(_.clippedHighlights.asInstanceOf[Object]).orNull,
+        quality.map(_.crushedShadows.asInstanceOf[Object]).orNull,
+        quality.map(_.score.asInstanceOf[Object]).orNull,
+        assetId
+      )
+    }
+  }
+
+  /** The Histogram of an asset, or none, as the measurement of its file would have stored it */
+  def setAssetHistogram(assetId: String, histogram: Option[Histogram]): Unit = {
+    testApp.txManager.withTransaction {
+      new QueryRunner().update(
+        RequestContext.getConn,
+        "UPDATE asset SET histogram = ? WHERE id = ?",
+        histogram.map(_.toBytes).orNull,
+        assetId)
+    }
+  }
+
   /** A Face of the person in the asset with the given embedding, so recognition can be exercised on known vectors */
-  def addTestFace(person: Person, asset: Asset, features: Array[Float], isEnrolled: Boolean = true): Face =
+  def addTestFace(
+      person: Person,
+      asset: Asset,
+      features: Array[Float],
+      isEnrolled: Boolean = true,
+      sharpness: Option[Double] = None): Face =
     testApp.service.person.addFace(
       Face(
         x1 = 1,
@@ -232,7 +302,9 @@ class TestContext(val testApp: Altitude) {
         checksum = TestContext.randomChecksum,
         features = features,
         quality = 20.0,
-        isEnrolled = isEnrolled),
+        isEnrolled = isEnrolled,
+        sharpness = sharpness
+      ),
       asset,
       person
     )

@@ -139,6 +139,13 @@ import altitude.core.dao.sql.tables._
       "original_created_at_source",
       "latitude",
       "longitude",
+      "sharpness",
+      "luminance",
+      "clipped_highlights",
+      "crushed_shadows",
+      "image_quality",
+      "perceptual_hash",
+      "sequence_id",
       "created_at",
       "updated_at"
     )

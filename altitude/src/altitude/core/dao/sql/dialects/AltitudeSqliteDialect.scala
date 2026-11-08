@@ -18,9 +18,9 @@ import altitude.core.dao.sqlite.SqliteOverrides
  * SQLite for this schema.
  *
  * ScalaSql's stock SQLite temporal mappers go through `getObject(idx, classOf[LocalDateTime])`, which is not the format this
- * schema stores: timestamps are `yyyy-MM-dd HH:mm:ss` wall-clock text (camera-local for capture times, UTC for import times) and
- * a calendar day is ISO text. They are read and written through [[SqliteOverrides]]' formatter so a value never round-trips
- * through an instant in the JVM zone.
+ * schema stores: timestamps are `yyyy-MM-dd HH:mm:ss` wall-clock text with an optional fraction of a second (camera-local for
+ * capture times, UTC for import times) and a calendar day is ISO text. They are read and written through [[SqliteOverrides]]'
+ * formatter so a value never round-trips through an instant in the JVM zone.
  */
 object AltitudeSqliteDialect extends SqliteDialect:
 
@@ -45,7 +45,7 @@ object AltitudeSqliteDialect extends SqliteDialect:
 
     def get(r: ResultSet, idx: Int): LocalDateTime =
       val text = r.getString(idx)
-      if text == null then null else LocalDateTime.parse(text, SqliteOverrides.DATETIME_PARSER)
+      if text == null then null else LocalDateTime.parse(text, SqliteOverrides.DATETIME_FORMATTER)
 
     def put(r: PreparedStatement, idx: Int, v: LocalDateTime): Unit =
       if v == null then r.setNull(idx, JDBCType.VARCHAR.getVendorTypeNumber)
@@ -58,7 +58,7 @@ object AltitudeSqliteDialect extends SqliteDialect:
     def get(r: ResultSet, idx: Int): OffsetDateTime =
       val text = r.getString(idx)
       if text == null then null
-      else LocalDateTime.parse(text, SqliteOverrides.DATETIME_PARSER).atOffset(ZoneOffset.UTC)
+      else LocalDateTime.parse(text, SqliteOverrides.DATETIME_FORMATTER).atOffset(ZoneOffset.UTC)
 
     def put(r: PreparedStatement, idx: Int, v: OffsetDateTime): Unit =
       if v == null then r.setNull(idx, JDBCType.VARCHAR.getVendorTypeNumber)

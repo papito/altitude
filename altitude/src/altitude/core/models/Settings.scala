@@ -5,12 +5,14 @@ import java.net.URI
 import scala.util.Try
 
 import altitude.core.Const
+import altitude.core.util.ImageMeasurement
 
 /** The sections of the Settings screen */
 enum SettingGroup(val label: String):
   case FaceDetection extends SettingGroup("Face detection")
   case FaceRecognition extends SettingGroup("Face recognition and quality")
   case Video extends SettingGroup("Video")
+  case Triage extends SettingGroup("Triage")
   case Maps extends SettingGroup("Map")
   case Operations extends SettingGroup("Operations")
 
@@ -22,7 +24,9 @@ enum SettingKind:
 enum SettingType:
   /** A number between the bounds, the lower one excluded when `minExclusive` */
   case Decimal(min: Double, max: Double = Double.MaxValue, minExclusive: Boolean = false)
-  case Integer(min: Int)
+
+  /** A whole number between the bounds */
+  case Integer(min: Int, max: Int = Int.MaxValue)
   case Flag
   case Text
 
@@ -33,7 +37,7 @@ enum SettingType:
   /** The text as a number, when this is a numeric type and the text is one; the one parse every reading of a number goes through */
   def number(text: String): Option[Double] = this match
     case Decimal(_, _, _) => text.toDoubleOption.filter(_.isFinite)
-    case Integer(_) => text.toIntOption.map(_.toDouble)
+    case Integer(_, _) => text.toIntOption.map(_.toDouble)
     case _ => None
 
   def error(text: String): Option[String] = this match
@@ -44,10 +48,11 @@ enum SettingType:
           Some(if minExclusive then s"Must be above ${SettingType.bound(min)}" else s"Must be at least ${SettingType.bound(min)}")
         case Some(value) if value > max => Some(s"Must be at most ${SettingType.bound(max)}")
         case _ => None
-    case Integer(min) =>
+    case Integer(min, max) =>
       number(text) match
         case None => Some("Must be a whole number")
         case Some(value) if value < min => Some(s"Must be at least $min")
+        case Some(value) if value > max => Some(s"Must be at most $max")
         case _ => None
     case Flag => Option.unless(text == "true" || text == "false")("Must be true or false")
     case Text => None
@@ -61,7 +66,7 @@ enum SettingType:
 
   /** Whether two valid texts mean the same value: a number by its value, anything else by its text */
   def same(a: String, b: String): Boolean = this match
-    case Decimal(_, _, _) | Integer(_) => number(a) == number(b)
+    case Decimal(_, _, _) | Integer(_, _) => number(a) == number(b)
     case _ => a == b
 
 object SettingType:
@@ -116,6 +121,22 @@ case class Settings(private val text: Map[String, String], private val defaults:
   val videoFacesMaxSampledFrames: Int = number(VIDEO_FACES_MAX_SAMPLED_FRAMES).toInt
   val videoFacesMinClusterFrames: Int = number(VIDEO_FACES_MIN_CLUSTER_FRAMES).toInt
   val videoPreviewMinLuminance: Double = number(VIDEO_PREVIEW_MIN_LUMINANCE)
+  val sequenceMaxGapMs: Int = number(SEQUENCE_MAX_GAP_MS).toInt
+  val sequenceDinov2MinSimilarity: Double = number(SEQUENCE_DINOV2_MIN_SIMILARITY)
+  val sequenceClipMinSimilarity: Double = number(SEQUENCE_CLIP_MIN_SIMILARITY)
+  val sequenceMaxHashDistance: Int = number(SEQUENCE_MAX_HASH_DISTANCE).toInt
+
+  /** The least cosine similarity of two frames' embeddings of `model` to look alike */
+  def sequenceMinSimilarity(model: SceneModel): Double = model match
+    case SceneModel.Dinov2 => sequenceDinov2MinSimilarity
+    case SceneModel.Clip => sequenceClipMinSimilarity
+  val curationBlurRatio: Double = number(CURATION_BLUR_RATIO)
+  val curationFaceQualityGap: Double = number(CURATION_FACE_QUALITY_GAP)
+  val curationClippedFraction: Double = number(CURATION_CLIPPED_FRACTION)
+  val curationCrushedFraction: Double = number(CURATION_CRUSHED_FRACTION)
+  val curationDarkLuminance: Double = number(CURATION_DARK_LUMINANCE)
+  val curationBrightLuminance: Double = number(CURATION_BRIGHT_LUMINANCE)
+  val curationLuminanceGap: Double = number(CURATION_LUMINANCE_GAP)
   val mapTileUrl: String = text(MAP_TILE_URL)
   val mapTileAttribution: String = text(MAP_TILE_ATTRIBUTION)
   val mapGeocoderEnabled: Boolean = text(MAP_GEOCODER_ENABLED) == "true"
@@ -127,7 +148,7 @@ case class Settings(private val text: Map[String, String], private val defaults:
   /** Seconds */
   val pipelineShutdownTimeout: Int = number(PIPELINE_SHUTDOWN_TIMEOUT).toInt
 
-  /** 0 means half the cores and never fewer than 2 */
+  /** 0 means what the machine affords, see `util.ImportParallelism` */
   val importParallelism: Int = number(IMPORT_PARALLELISM).toInt
 
 object Settings:
@@ -144,6 +165,17 @@ object Settings:
   val VIDEO_FACES_MAX_SAMPLED_FRAMES = "video.faces.max_sampled_frames"
   val VIDEO_FACES_MIN_CLUSTER_FRAMES = "video.faces.min_cluster_frames"
   val VIDEO_PREVIEW_MIN_LUMINANCE = "video.preview.min_luminance"
+  val SEQUENCE_MAX_GAP_MS = "sequence.max_gap_ms"
+  val SEQUENCE_DINOV2_MIN_SIMILARITY = "sequence.dinov2.min_similarity"
+  val SEQUENCE_CLIP_MIN_SIMILARITY = "sequence.clip.min_similarity"
+  val SEQUENCE_MAX_HASH_DISTANCE = "sequence.max_hash_distance"
+  val CURATION_BLUR_RATIO = "curation.blur_ratio"
+  val CURATION_FACE_QUALITY_GAP = "curation.face_quality_gap"
+  val CURATION_CLIPPED_FRACTION = "curation.clipped_fraction"
+  val CURATION_CRUSHED_FRACTION = "curation.crushed_fraction"
+  val CURATION_DARK_LUMINANCE = "curation.dark_luminance"
+  val CURATION_BRIGHT_LUMINANCE = "curation.bright_luminance"
+  val CURATION_LUMINANCE_GAP = "curation.luminance_gap"
   val MAP_TILE_URL = "map.tile.url"
   val MAP_TILE_ATTRIBUTION = "map.tile.attribution"
   val MAP_GEOCODER_ENABLED = "map.geocoder.enabled"
@@ -156,6 +188,9 @@ object Settings:
   import SettingType.*
 
   private val postgresOnly = Some(Const.DbEngineName.POSTGRES)
+
+  // The four absolute exposure Settings say the same thing about a problem no Pick can fix
+  private val everyFrameNotice = "When every frame of a Curation set is, that is a notice on the set and not a Bundle."
 
   val all: List[SettingDef] = List(
     SettingDef(
@@ -260,6 +295,96 @@ object Settings:
       Decimal(0, 255)
     ),
     SettingDef(
+      SEQUENCE_MAX_GAP_MS,
+      Triage,
+      "Sequence gap (milliseconds)",
+      "A Sequence is frames of one scene shot within this long of each other on one camera, looking alike: a minute, so a " +
+        "scene with its pauses to reframe is one Sequence, not only a burst of a few seconds.",
+      Integer(1)
+    ),
+    SettingDef(
+      SEQUENCE_DINOV2_MIN_SIMILARITY,
+      Triage,
+      "Sequence DINOv2 similarity",
+      "The least cosine similarity, -1 to 1, of two frames' DINOv2 Scene embeddings to look alike. Higher groups more " +
+        "strictly. Two frames are one Sequence when either Scene model finds them alike, so lowering one threshold groups more " +
+        "freely whatever the other says. DINOv2's similarities spread lower than CLIP's, so the two thresholds are on " +
+        "different scales. A starting point to calibrate on real files.",
+      Decimal(-1, 1)
+    ),
+    SettingDef(
+      SEQUENCE_CLIP_MIN_SIMILARITY,
+      Triage,
+      "Sequence CLIP similarity",
+      "The least cosine similarity, -1 to 1, of two frames' CLIP Scene embeddings to look alike. Higher groups more strictly. " +
+        "Two frames are one Sequence when either Scene model finds them alike, so lowering one threshold groups more freely " +
+        "whatever the other says. CLIP's similarities sit closer to 1 than DINOv2's, so the two thresholds are on different " +
+        "scales. A starting point to calibrate on real files.",
+      Decimal(-1, 1)
+    ),
+    SettingDef(
+      SEQUENCE_MAX_HASH_DISTANCE,
+      Triage,
+      "Sequence hash distance (bits)",
+      s"How far apart two frames' perceptual hashes may be, 0 to ${PerceptualHash.BITS} bits, to still look alike. Decides " +
+        "only two frames no Scene model embedded both of (a still image the models could not embed); otherwise the " +
+        "similarities do. Higher groups more freely.",
+      Integer(0, PerceptualHash.BITS)
+    ),
+    SettingDef(
+      CURATION_BLUR_RATIO,
+      Triage,
+      "Curation blur ratio",
+      "A frame is Blurry when a Person it shares with another frame of the Curation set, at a similar size, has under this " +
+        "fraction of that Person's best Face sharpness. A frame with no such Person, in a Sequence, is compared on its whole " +
+        "frame's sharpness against the Sequence's sharpest frame.",
+      Decimal(0, 1)
+    ),
+    SettingDef(
+      CURATION_FACE_QUALITY_GAP,
+      Triage,
+      "Curation face quality gap",
+      "A frame has Poor faces when one of its Faces' quality is at least this far below the same Person's best in the " +
+        "Curation set. On the scale of the enroll threshold.",
+      Decimal(0)
+    ),
+    SettingDef(
+      CURATION_CLIPPED_FRACTION,
+      Triage,
+      "Curation clipped highlights",
+      s"A frame is Too bright when at least this fraction of its pixels are clipped highlights. $everyFrameNotice",
+      Decimal(0, 1)
+    ),
+    SettingDef(
+      CURATION_CRUSHED_FRACTION,
+      Triage,
+      "Curation crushed shadows",
+      s"A frame is Too dark when at least this fraction of its pixels are crushed shadows. $everyFrameNotice",
+      Decimal(0, 1)
+    ),
+    SettingDef(
+      CURATION_DARK_LUMINANCE,
+      Triage,
+      "Curation dark limit",
+      s"A frame is Too dark when its mean brightness, 0 to 1, is under this. $everyFrameNotice",
+      Decimal(0, 1)
+    ),
+    SettingDef(
+      CURATION_BRIGHT_LUMINANCE,
+      Triage,
+      "Curation bright limit",
+      s"A frame is Too bright when its mean brightness, 0 to 1, is over this. $everyFrameNotice",
+      Decimal(0, 1)
+    ),
+    SettingDef(
+      CURATION_LUMINANCE_GAP,
+      Triage,
+      "Curation brightness gap",
+      "In a Sequence, a frame is Too dark or Too bright when its mean brightness, 0 to 1, is at least this much farther from " +
+        s"the target of ${ImageMeasurement.TARGET_LUMINANCE} than the Sequence's frame nearest the target.",
+      Decimal(0, 1)
+    ),
+    SettingDef(
       MAP_TILE_URL,
       Maps,
       "Tile URL",
@@ -305,9 +430,13 @@ object Settings:
       IMPORT_PARALLELISM,
       Operations,
       "Import parallelism",
-      "How many threads do the import's work: metadata, face detection and recognition, previews and the database writes, " +
-        "for every repository at once. Each holds its own face detection and recognition networks, about 200 MB of native " +
-        "memory, so this bounds memory as well as CPU. 0 means half the cores, and never fewer than 2.",
+      "How many threads do the import's work: metadata, face detection and recognition, image measurement, previews and the " +
+        "database writes, for every repository at once. Each thread takes up to about 512 MB of native memory at its worst, " +
+        "for its own face detector and the decode of a large image in flight, and the threads share one face recognition " +
+        "network of about 370 MB and the two Scene models of about 1 GB together, so this bounds memory as well as CPU. 0 " +
+        "means half the cores or as many threads as " +
+        "half the machine's memory affords, whichever is fewer, and never fewer than 2. import.parallelism.max in the server " +
+        "config caps this, whatever is set here.",
       Integer(0),
       kind = SettingKind.Restart
     )

@@ -1,6 +1,8 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import java.sql.SQLException
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -30,12 +32,27 @@ import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.DynamicAssignments
 import altitude.core.dao.sql.DynamicFilter
 import altitude.core.models.BaseModel
+import altitude.core.models.SceneEmbedding
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SortDirection
 
 object BaseDao:
   final def genId: String = UUID.randomUUID.toString
+
+  /**
+   * What a streaming read ([[BaseDao.collectBySqlQuery]]) hands back: the rows its mapper kept, in the result's order, and how
+   * many rows it scanned in all, so a caller reading up to a limit can tell when the limit was reached
+   */
+  final case class Collected[T](kept: List[T], scanned: Int)
+
+  /**
+   * How many rows a streaming read asks the driver for at a time. The PostgreSQL driver buffers a whole result unless the fetch
+   * size is positive (and autocommit off, which every transaction sets), and the rows of such a read are large (a Sequence
+   * candidate carries two Scene embeddings, about 6 KB); a few hundred of them keep the buffer around a megabyte while a round
+   * trip still brings many. SQLite's driver reads row by row whatever the size is.
+   */
+  private val STREAMING_FETCH_SIZE = 256
 
   private def incrReadQueryCount(): Unit =
     RequestContext.readQueryCount.value = RequestContext.readQueryCount.value + 1
@@ -69,11 +86,38 @@ abstract class BaseDao[Model <: BaseModel]:
 
   protected def nativeBool(value: Boolean): Any
 
+  /**
+   * The placeholder of a bound vector (a Scene embedding) in a hand-written statement: `?::vector` on PostgreSQL, whose column is
+   * pgvector's type, and a plain `?` on SQLite, whose column is a BLOB
+   */
+  protected def vectorPlaceholder: String
+
+  /**
+   * The bind value of a Scene embedding for [[vectorPlaceholder]]: the pgvector literal (`[v1,v2,...]`) on PostgreSQL, the raw
+   * little-endian float32 values as bytes on SQLite; `None` binds SQL NULL on both
+   */
+  protected def vectorBind(embedding: Option[SceneEmbedding]): Any
+
+  /**
+   * A vector column as the result row hands it back: a `PGobject` whose value is the `[v1,v2,...]` text on PostgreSQL, the BLOB's
+   * bytes on SQLite; `null` is `None`
+   */
+  protected def getVectorField(value: AnyRef): Option[SceneEmbedding]
+
   /** Bind value for a wall-clock timestamp column (no zone): stored and read back verbatim, never converted through an instant */
   protected def nativeLocalDateTime(value: LocalDateTime): Any
 
   /** Bind value for an instant column: the UTC moment, independent of the JVM or server zone */
   protected def nativeUtcTimestamp(value: OffsetDateTime): Any
+
+  /** Bind value for a calendar day compared with [[dayOf]] a wall-clock timestamp column */
+  protected def nativeLocalDate(value: LocalDate): Any
+
+  /**
+   * The calendar day of a wall-clock timestamp column, spelled as the capture-day indexes spell it, so a statement that compares
+   * it reads the index: the engine's `SearchDialect.dayOf`, the one spelling the typed searches render too
+   */
+  protected def dayOf(column: String): String
 
   /** Converts result set rows to maps; engines override it to read temporal columns without an instant round trip */
   protected def rowProcessor: RowProcessor = new BasicRowProcessor()
@@ -217,6 +261,38 @@ abstract class BaseDao[Model <: BaseModel]:
 
   def manyBySqlQuery(sql: String, values: List[Any] = List()): List[Map[String, AnyRef]] =
     executeAndGetMany(sql, values)
+
+  /**
+   * A read whose rows are judged one by one and mostly dropped: `f` sees each row as it is fetched, as [[makeModel]] would see it
+   * (the same row processor as [[manyBySqlQuery]], so the keys are spelled the same), and only what it returns is kept, so at
+   * most the kept rows are alive at once however large the result. [[BaseDao.STREAMING_FETCH_SIZE]] is what keeps the driver from
+   * buffering the whole result on PostgreSQL. A failure is rethrown with the statement and its values in the message, as
+   * `QueryRunner` reports one for the other hand-written reads.
+   */
+  def collectBySqlQuery[T](sql: String, values: List[Any] = List())(f: Map[String, AnyRef] => Option[T]): BaseDao.Collected[T] =
+    BaseDao.incrReadQueryCount()
+    logger.trace(s"STREAMING SELECT SQL: $sql with values: $values")
+    try
+      val statement = RequestContext.getConn.prepareStatement(sql)
+      try
+        statement.setFetchSize(BaseDao.STREAMING_FETCH_SIZE)
+        queryRunner.fillStatement(statement, values.map(_.asInstanceOf[Object])*)
+        val rs = statement.executeQuery()
+        try
+          val kept = List.newBuilder[T]
+          var scanned = 0
+          while rs.next() do
+            scanned += 1
+            f(rowProcessor.toMap(rs).asScala.toMap[String, AnyRef]).foreach(kept += _)
+          val collected = BaseDao.Collected(kept.result(), scanned)
+          logger.trace(s"Scanned ${collected.scanned} records, kept ${collected.kept.length}")
+          collected
+        finally rs.close()
+      finally statement.close()
+    catch
+      case e: SQLException =>
+        val message = s"${e.getMessage} Query: $sql Parameters: ${values.mkString(", ")}"
+        throw new SQLException(message, e.getSQLState, e.getErrorCode, e)
 
   def getByIds(ids: Set[String]): List[Model] =
     if ids.isEmpty then return List()

@@ -183,11 +183,124 @@ it has both a saved value and a running value.
 _Avoid_: Static setting, Boot setting.
 
 **Dock side**:
-Where the explorer sits against the results: left, right, top or bottom. The
-explorer is docked to a side; the results take the rest.
+Where a docked panel sits: left, right, top or bottom. The explorer is docked
+to a side of the results, and the Detail panel to a side of Asset detail's
+media; each has its own Dock side.
 _Avoid_: Layout (the results' Grid or Map), Position, Arrangement, Orientation.
+
+**Asset detail**:
+The dialog that shows one asset at full size, stepping to the previous or next
+asset of the results.
+_Avoid_: Lightbox, Image detail, Viewer.
+
+**Detail panel**:
+The docked panel of Asset detail, holding the asset's People, its Details and
+its Metadata as extracted from the file.
+_Avoid_: Metadata panel, Info panel, Sidebar.
+
+**Face highlight**:
+A Face's box drawn on the media, with its Person's name in a badge under it.
+_Avoid_: Bounding box, Face box, Tag in user-facing text.
 
 **View settings**:
 Which details the grid shows under each asset, chosen per browser tab in the
 ⚙ View popover. They are not Settings.
 _Avoid_: Display options, Grid options.
+
+**Sequence**:
+Still images in triage that the import found shot as one scene: within a
+minute of each other by the camera's clock or, failing that, by the time in
+the file name, on the same camera or both naming none, looking alike by
+their Scene embeddings, or by their perceptual hashes where either has none;
+or, for images with no capture time, looking alike among the recently
+imported images of their size.
+An image is in at most one Sequence, and a Sequence ends when its last image
+leaves triage or is purged. A kept frame leaves its Sequence when the
+Curation set resolved holds all of that Sequence's frames still out of the
+trash, and a Sequence also ends when its last frame leaves that way.
+_Avoid_: Batch (a user's selection), Burst, Stack, Group, Series.
+
+**Scene embedding**:
+A vector a vision model computes over a whole still image, describing its
+content and layout. Two Scene embeddings of one model compare by cosine
+similarity, 1 for the same picture; embeddings of different models never
+compare. A frame has one per Scene model.
+_Avoid_: Vector, Feature vector, Image embedding.
+
+**Scene model**:
+One of the vision models the import embeds every still image with, DINOv2 or
+CLIP. The Sequence rule reads both: two frames alike by either are one
+Sequence.
+_Avoid_: Encoder, Backbone, Vision model.
+
+**Image quality**:
+How technically good a still image is, from its sharpness and exposure, on a
+scale of 0 to 100. It is about the whole image, where Face quality is about one
+face.
+_Avoid_: Score, Rating, Quality alone where it could mean Face quality.
+
+**Face sharpness**:
+How much fine detail a Face's box holds at a fixed scale. It falls as a face fills
+more of the frame, so it compares only between Faces of one Person at a similar
+size.
+_Avoid_: Face quality (how recognizable a face is).
+
+**Curation**:
+The modal where the user keeps the best frames of a Curation set and recycles
+the rest. The button that opens it on a selection reads "Curate Selected", and
+the one that opens it on the queue reads "Curate all 3 sequences", with the count.
+_Avoid_: Culling, Review.
+
+**Curation set**:
+The frames being compared: the members of one Sequence still out of the trash,
+the first 100 when it has more, or a selection.
+_Avoid_: Batch (a user's selection before it is curated), Group.
+
+**Sequence rail**:
+The column of Curation listing the Sequences it opened to walk, the one on show
+marked and those already dealt with done. A selection or a single Sequence has
+none.
+_Avoid_: Sequence panel, Queue panel, Sidebar.
+
+**Pick**:
+A frame the user keeps. A set can have several. Its button and its mark read
+"Keep".
+_Avoid_: Winner, Best.
+
+**Pinned frame**:
+The frame held in the stage's left pane to compare the focused frame against.
+Pinning keeps nothing: Resolve keeps the Picks, or with none the one frame on
+the stage. It has nothing to do with a Location's **Pin**.
+_Avoid_: Compared frame, Reference.
+
+**Bundle**:
+The frames of a Curation set whose main problem is the same.
+_Avoid_: Stack, Group, Batch.
+
+**Contender**:
+A frame of a Curation set in no Bundle.
+_Avoid_: Candidate (a Sequence's and a face match's word).
+
+**Too close to call**:
+A Curation set with no Bundle: the measurements cannot separate its frames.
+
+**Loupe**:
+The lens that rides with the pointer over a frame on Curation's stage and shows
+the spot under it at the original's pixels, or a multiple of them. Its level is
+one value for every frame, stepped by the wheel over a pane, and kept
+for the next open. It changes nothing about the frame.
+_Avoid_: Magnifier, Magnifying glass, Zoom (the stage's zoom to a Person's
+face).
+
+**Histogram**:
+The red, green and blue shapes and the luminance line under a frame on
+Curation's stage, measured at import from the pixels the exposure measurements
+read, with the fractions of its pixels crushed and blown in its corners.
+Shown or hidden by one switch for the stage, kept for the next open.
+_Avoid_: Levels, Tone curve.
+
+**Clipping blink**:
+The flashing marks over a frame on the stage of its blown highlights and
+crushed shadows, at the levels the measurement counts them. One switch for the
+stage, the Histogram, off when Curation opens and while the Histogram is hidden.
+_Avoid_: Blinkies, Zebra, Clipping warning, Overexposure mask.

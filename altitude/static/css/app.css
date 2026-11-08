@@ -20,6 +20,9 @@
 @import "htmx/trashbin_purged.css";
 @import "htmx/view_settings_dialog.css";
 @import "htmx/view_image_detail_modal.css";
+@import "htmx/curation.css";
+@import "htmx/curation_set.css";
+@import "htmx/curation_queue.css";
 @import "htmx/add_location_dialog.css";
 @import "htmx/add_to_location_dialog.css";
 @import "htmx/add_to_album_dialog.css";

@@ -54,11 +54,26 @@ case class Asset(
     originalCreatedAtSource: Option[CaptureDateSource] = None,
     latitude: Option[Double] = None,
     longitude: Option[Double] = None,
+    // Measured at import; None for a Video, an animated image, or a still image the pipeline did not measure
+    imageQuality: Option[ImageQuality] = None,
+    // The DCT perceptual hash of a still image; None as for the Image quality
+    perceptualHash: Option[PerceptualHash] = None,
+    // The Scene embeddings of a still image, one per Scene model; None per model for a Video, an animated image, or a still
+    // image that model could not embed. Bulky, so no general read of an asset carries them: only the Sequence candidates do
+    sceneEmbeddings: SceneEmbeddings = SceneEmbeddings(),
+    // The Histogram of a still image, measured with the Image quality; None as for it. Bulky, so no general read of an asset
+    // carries it: only Curation's read of a set's frames does
+    histogram: Option[Histogram] = None,
+    // The Sequence the image is in while in triage: the id its members share; None otherwise
+    sequenceId: Option[String] = None,
     createdAt: Option[LocalDateTime] = None,
     updatedAt: Option[LocalDateTime] = None)
   extends BaseModel:
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
+
+  /** An image that is one picture: a Video is no image, and an animated image has a duration */
+  def isStillImage: Boolean = assetType.mediaType == "image" && durationMs.isEmpty
 
   override def toString: String =
     s"Asset: [$id] [$fileName] Recycled: [$isRecycled] Triaged: [$isTriaged] Type: [${assetType.mediaType}:${assetType.mediaSubtype}]"

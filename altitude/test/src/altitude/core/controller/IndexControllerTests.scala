@@ -11,7 +11,7 @@ import altitude.core.models.AccountType
 
   /*
   FIXME: This does not pass within the context of other tests (but will pass on its own) - what state is being shared across tests that is causing this to fail?
-  test("New installation goes to setup page", Focused) {
+  test("New installation goes to setup page") {
     uninitializeInstance()
 
     withServer(App) { host =>
@@ -45,7 +45,7 @@ import altitude.core.models.AccountType
     }
   }
 
-  test("The Search input is in the nav of the main page only, and a nav reload keeps it there") {
+  test("The Search input is in the nav of every page, and a nav reload keeps it there") {
 
     /**
      * Setup:
@@ -54,26 +54,23 @@ import altitude.core.models.AccountType
      *
      * Assertions:
      *
-     * The Search form is in the main page's nav but not the import page's, and a nav reload carries it only when asked with
-     * search=true, as the main page asks.
+     * The Search form is in the main page's nav and the import page's, and a nav reload carries it too.
      */
     val repoId = testContext.persistRepository().persistedId
     login()
 
     withServer(App) {
       host =>
-        def get(path: String, params: Map[String, String] = Map.empty): String = {
-          val response = requests.get(s"$host/$path", params = params, cookies = testContext.cookies, check = false)
+        def get(path: String): String = {
+          val response = requests.get(s"$host/$path", cookies = testContext.cookies, check = false)
           response.statusCode shouldBe 200
           response.text()
         }
         val searchForm = """<form id="searchForm" role="search""""
 
         get(s"r/$repoId") should include(searchForm)
-        get(s"pipeline/r/$repoId").contains(searchForm) shouldBe false
-        // The main page reloads its nav with the form, the import page's refresh without
-        get(s"htmx/nav/r/$repoId", Map("search" -> "true")) should include(searchForm)
-        get(s"htmx/nav/r/$repoId").contains(searchForm) shouldBe false
+        get(s"pipeline/r/$repoId") should include(searchForm)
+        get(s"htmx/nav/r/$repoId") should include(searchForm)
     }
   }
 

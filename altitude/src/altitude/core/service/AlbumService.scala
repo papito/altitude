@@ -95,3 +95,8 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
     txManager.asReadOnly {
       dao.getAssetIds(albumId)
     }
+
+  def getAssetsInAnyAlbum(assetIds: Set[String]): Set[String] =
+    txManager.asReadOnly {
+      dao.getAssetsInAnyAlbum(assetIds)
+    }

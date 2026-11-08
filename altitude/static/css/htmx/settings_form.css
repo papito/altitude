@@ -25,11 +25,13 @@
   align-items: center;
 }
 
-#settingsForm .control > :not(input):not(button) {
+/* The field (an input or a select) and its Reset share the first row; everything after them spans the control */
+#settingsForm .control > :not(input, select, button) {
   grid-column: 1 / -1;
 }
 
-#settingsForm .help {
+#settingsForm .help,
+#settingsForm .note {
   color: var(--theme-neutral-3);
 }
 

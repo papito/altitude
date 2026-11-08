@@ -38,13 +38,13 @@ export function viewSettings() {
         },
 
         showsTriaged() {
-            return Alpine.store(Const.state.searchParams).triaged !== "false"
+            return Alpine.store(Const.state.searchParams).triaged === "true"
         },
 
         toggleTriaged() {
-            // An empty literal clears the parameter, so the view's own rule applies again
+            // An empty literal clears the parameter, so the view's own rule, triaged assets left out, applies again
             runSearch({
-                params: { triaged: this.showsTriaged() ? "false" : "" },
+                params: { triaged: this.showsTriaged() ? "" : "true" },
             })
         },
     }

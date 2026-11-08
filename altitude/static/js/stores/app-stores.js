@@ -3,6 +3,7 @@ import { Const } from "../constants.js"
 import { totalLabel } from "../common/total-label.js"
 import { createSelectedAssetsStore } from "../search-results/selection.js"
 import { createSearchParamsStore } from "./search-params.js"
+import { createSequencesToCurateStore } from "./sequences-to-curate.js"
 import { registerHtmlCommonBindings } from "./html-common.js"
 
 export function initializeFrontendStores() {
@@ -36,6 +37,9 @@ export function initializeFrontendStores() {
 
     // The whole search parameter set; every search request is built from it (search-results/search.js)
     Alpine.store(Const.state.searchParams, createSearchParamsStore())
+
+    // The number of Sequences in Curation's queue (stores/sequences-to-curate.js)
+    Alpine.store(Const.state.sequencesToCurate, createSequencesToCurateStore())
 
     /**
      * The view as a behaviour, for `x-show` / `:class` bindings. Derived from `searchParams.view`,

@@ -23,6 +23,9 @@ object Const:
     // (`models.Settings`), not config.
     val FACE_DEBUG_ENABLED = "face.debug.enabled"
 
+    // Caps the `import.parallelism` Setting, for an operator who ships a config but never logs in. See `util.ImportParallelism`.
+    val IMPORT_PARALLELISM_MAX = "import.parallelism.max"
+
     // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
     val DEV_USER = "dev.user"
     val DEV_PASSWORD = "dev.password"
@@ -33,6 +36,22 @@ object Const:
 
   object FaceRecognition:
     val MIN_FACES_THRESHOLD = 3
+
+  object Sequence:
+    // The most undated frames one undated import is compared with, per CPU core, newest imports first (see
+    // `Altitude.undatedSequenceCandidates`): a candidate costs about 6 KB to read, its two Scene embeddings, so a core's share is
+    // about 30 MB per undated import, and the compare itself is two dot products a candidate. Undated frames have no capture time
+    // to window them by, so without the cap the cost of one import would grow with every undated frame triage holds.
+    val UNDATED_CANDIDATES_PER_CORE = 5000
+
+  object Curation:
+    // A Curation set compares: with fewer frames left there is no set, and a Sequence is not in the queue
+    val MIN_FRAMES = 2
+    // The most IDs a selection opens Curation on: every frame's Faces and memberships are read for one fragment
+    val MAX_SELECTION = 100
+    // The most frames of a Sequence a set reads, the first in capture order, for the same cost: Sequences chain transitively, so
+    // a static 1 s time-lapse is one Sequence of however many frames it has
+    val MAX_SEQUENCE_FRAMES = 100
 
   object AssetView:
     val PREVIEW_BOX_PIXELS = 200
@@ -133,6 +152,13 @@ object Const:
       val INVALID_CONTENT_TYPE = "Invalid content type"
       val PIN_REQUIRED = "Place the pin on the map"
       val SEARCH_TIMED_OUT = "The search took too long"
+      // An unnamed Person's own form of name, which no Person may be given (PersonService.updateName)
+      val RESERVED_PERSON_NAME = "Unknown N names are reserved"
+      // A rename to a name another live Person holds, named as that Person's name is stored (htmx/edit_person_name)
+      val PERSON_NAME_TAKEN = "%s already exists."
+      val PERSON_NAME_TAKEN_BY_HIDDEN = "%s already exists and is hidden."
+      // A rename a unique index refused with no live holder of the name to offer: merged away meanwhile, or another constraint
+      val PERSON_NAME_ALREADY_EXISTS = "Person by that name already exists"
 
   // Dialog titles: the folder and album rename/delete dialogs show inline in the entity's menu, the
   // people dialogs in the modal host, whose sizing is owned by CSS (`--modal-content-width` in
@@ -155,4 +181,6 @@ object Const:
     // The Add to album dialog's last option, which reveals the name field of the album it creates
     val NEW_ALBUM_OPTION = "New album…"
     val MERGE_PEOPLE_DIALOG_TITLE = "Merge people"
+    // The name editor's offer to merge the renamed Person into the one holding the name, which opens the dialog above
+    val MERGE_INTO_PERSON = "Merge into %s…"
     val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"

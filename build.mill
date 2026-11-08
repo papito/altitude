@@ -80,6 +80,10 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
 
     mvn"org.apache.pekko::pekko-actor-typed:$pekkoVersion",
     mvn"org.apache.pekko::pekko-stream-typed:$pekkoVersion",
+
+    // ONNX Runtime runs the Scene models (DINOv2 and CLIP, see SceneEmbedder). The CPU artifact bundles its natives for
+    // Linux x64 and aarch64, macOS and Windows in the one jar, so deployment does not change.
+    mvn"com.microsoft.onnxruntime:onnxruntime:1.31.1",
   )
 
   def runMvnDeps: Task.Simple[Seq[Dep]] = Seq(

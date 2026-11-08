@@ -59,11 +59,12 @@
    shows it above the clicked element, placed by CSS anchor positioning (`#tooltip` in core.css). *@
 <div id="tooltip" popover="manual" role="tooltip"></div>
 
-@* Dialog hosts: the general modal, the popover dialog and asset detail. Visibility, focus, and
+@* Dialog hosts: the general modal, the popover dialog, asset detail and Curation. Visibility, focus, and
    dismissal are owned by static/js/common/modal.js through the Alpine `modal` store; `x-trap` comes
    from the @@alpinejs/focus plugin. General dialogs ignore backdrop clicks; asset detail closes on
    them. The popover dialog is a native `<dialog popover="auto">` with no scrim and no trap: the
-   browser shows it below its anchor and dismisses it on an outside click. *@
+   browser shows it below its anchor and dismisses it on an outside click. Curation fills the window and
+   ignores backdrop clicks; its shell (htmx/curation) holds its title and Exit. *@
 
 <div id="modalContainer"
      x-data
@@ -113,11 +114,26 @@
                     aria-label="Close"
                     x-on:click="$store.modal.close()">&times;</button>
         </div>
-        <div id="imageDetailSpinner"
+        <div class="media-spinner"
             x-show="$store.imageDetailLoading.value">
             <i class="fas fa-spinner fa-spin"></i>
         </div>
         <div id="imageDetailModalContent">
+        </div>
+        @snackbarAnnouncers()
+    </div>
+</div>
+
+<div id="curationModalContainer"
+     x-data
+     x-show="$store.modal.isActive('curation')"
+     style="display: none"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="curationTitle">
+    <div class="modal-box"
+         x-trap.inert.noscroll.noreturn.noautofocus="$store.modal.isActive('curation')">
+        <div id="curationModalContent">
         </div>
         @snackbarAnnouncers()
     </div>

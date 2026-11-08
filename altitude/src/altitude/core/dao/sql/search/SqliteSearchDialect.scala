@@ -3,7 +3,6 @@ package altitude.core.dao.sql.search
 import java.sql.JDBCType
 import java.sql.PreparedStatement
 import java.sql.ResultSet
-import java.time.LocalDate
 import java.time.ZoneOffset
 import scalasql.core.Expr
 import scalasql.core.SqlStr
@@ -12,9 +11,7 @@ import scalasql.core.TypeMapper
 import scalasql.dialects.Dialect
 
 import altitude.core.FieldConst
-import altitude.core.dao.sql.Columns
 import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
-import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.dao.sqlite.SqliteOverrides
 import altitude.core.util.SearchGrouping
@@ -29,9 +26,7 @@ object SqliteSearchDialect extends SearchDialect:
   import dialect.*
 
   // The stored text is already the camera's wall-clock time: no modifier
-  override def day(asset: AssetRow[Expr], field: String): Expr[Option[LocalDate]] =
-    val column = Columns.required(AssetRow, asset, field, dialect)
-    Expr[Option[LocalDate]](implicit ctx => sql"date($column)")
+  override val dayWrapper: (String, String) = ("date(", ")")
 
   /**
    * The full-text index is `search_document_fts`, whose `rowid` is the document's declared `id`. `id` is not part of the row
@@ -49,7 +44,7 @@ object SqliteSearchDialect extends SearchDialect:
   /**
    * A sort term SQLite can match against an index tempts its planner away from the grouping day index, which then has to sort
    * every matching row; the unary plus keeps any term other than the grouping date from being matched, leaving the day index in
-   * charge. A Location grouping has no such index, and every sort term of one gets the plus.
+   * charge. A Location or a Sequence grouping has no such index, and every sort term of one gets the plus.
    */
   override def secondarySort(column: Expr[?], sort: SearchSort, grouping: SearchGrouping): Expr[?] =
     if grouping.by.dateField.contains(sort.field) then column else Expr[Any](implicit ctx => sql"+$column")

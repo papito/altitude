@@ -40,8 +40,6 @@ This project is still in its "technology preview" stage. At this point it featur
 Missing features:
 
 * Right now there is only the single-user, single-library mode.
-* Results are displayed in their default order and there are no advanced display features yet.
-* No location editing or display.
 * No metadata view (but it IS being extracted and saved).
 
 ## Development setup
@@ -51,8 +49,28 @@ You will need:
 * Java 17 or up (21 recommended)
 * Docker (if using Postgres)
 * [Mill](https://mill-build.org/mill/cli/installation-ide.html)
+* [uv](https://docs.astral.sh/uv/) (to fetch the models)
 
-Download [w600k_r50.onnx](https://huggingface.co/maze/faceX/blob/e010b5098c3685fd00b22dd2aec6f37320e3d850/w600k_r50.onnx) and place it in `./altitude/altitude/resources/opencv/`
+### Models
+
+Three model files are too large for git. Fetch them once, from the repository root:
+
+```sh
+uv run scripts/fetch-models.py
+```
+
+The first run needs the internet: it pulls the CPU build of torch and the Hugging Face checkpoints, which it caches.
+A model already in place is skipped, and `--force` fetches them all again.
+
+* `altitude/resources/opencv/w600k_r50.onnx`: the ArcFace face embedding net (InsightFace `w600k_r50`, 174 MB),
+  downloaded from a pinned revision of [maze/faceX](https://huggingface.co/maze/faceX/blob/e010b5098c3685fd00b22dd2aec6f37320e3d850/w600k_r50.onnx)
+  and checked against its SHA-256
+* `altitude/resources/onnx/dinov2_vitb14.onnx`: DINOv2 ViT-B/14 (`facebook/dinov2-base`), about 350 MB
+* `altitude/resources/onnx/clip_vitb16_image.onnx`: the CLIP ViT-B/16 image tower (`openai/clip-vit-base-patch16`),
+  about 350 MB
+
+The two Scene models are exported to ONNX from their checkpoints, and each export is checked against PyTorch before it
+is written. The application does not start without all three.
 
 ### Developer settings
 

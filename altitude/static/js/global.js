@@ -1,5 +1,6 @@
 /**
- * Document-level keyboard handling, loaded on every page.
+ * Document-level keyboard handling and the nav's theme switch, loaded on every page. The switch's
+ * click is delegated, so a nav reload needs no binding and a page without Alpine has the switch too.
  *
  * Escape closes the active modal or popover dialog and any open context menu, wherever focus is,
  * and is consumed by them, so a background inline edit (the person name editor) survives; with
@@ -13,8 +14,16 @@
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
 import { closeModal, getActiveModalHost, ModalHost } from "./common/modal.js"
+import { isTextEditingTarget } from "./common/text-editing.js"
+import { toggleTheme } from "./common/theme.js"
 import { Const } from "./constants.js"
 import { closeMapPanel } from "./map/map-panel.js"
+
+document.addEventListener("click", (event) => {
+    if (event.target.closest?.("[data-app-theme-switch]")) {
+        toggleTheme()
+    }
+})
 
 document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -89,10 +98,4 @@ function isInPlayer(target) {
 /** Focus is on the player's timeline or volume slider */
 function isPlayerSlider(target) {
     return Boolean(target?.closest?.("media-time-range, media-volume-range"))
-}
-
-function isTextEditingTarget(target) {
-    return Boolean(
-        target?.closest?.("input, textarea, select, [contenteditable]"),
-    )
 }

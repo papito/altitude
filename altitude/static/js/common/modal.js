@@ -1,11 +1,11 @@
 /**
- * Single owner of the three dialog hosts in `views/includes/html_common.scala.html`: the general
- * modal (`#modalContent`), the popover dialog (`#popoverContent`) and asset detail
- * (`#imageDetailModalContent`).
+ * Single owner of the four dialog hosts in `views/includes/html_common.scala.html`: the general
+ * modal (`#modalContent`), the popover dialog (`#popoverContent`), asset detail
+ * (`#imageDetailModalContent`) and Curation (`#curationModalContent`).
  *
  * The active host lives in the Alpine `modal` store (registered with everything else `html_common`
  * binds by `registerHtmlCommonBindings` in `stores/html-common.js`).
- * The two modal hosts bind to it declaratively: `x-show` toggles a host and
+ * The three modal hosts bind to it declaratively: `x-show` toggles a host and
  * `x-trap.inert.noscroll` from the official `@alpinejs/focus` plugin contains focus and hides the
  * rest of the page from assistive technology while a host is active. Everything the hosts must
  * agree on is decided here instead:
@@ -28,7 +28,8 @@
  * that control. Escape, its close control and a completed operation close it here and restore focus
  * as they do for a modal.
  *
- * The general modal is centered; asset detail is fitted to its asset by CSS.
+ * The general modal is centered; asset detail is fitted to its asset by CSS; Curation fills the
+ * window.
  *
  * `global.js` imports this module on every page, including pages without the hosts or the store,
  * so every entry point tolerates a missing store.
@@ -45,22 +46,29 @@ export const ModalHost = {
     general: "general",
     popover: "popover",
     assetDetail: "assetDetail",
+    curation: "curation",
 }
 
 const hostContentIds = {
     [ModalHost.general]: "modalContent",
     [ModalHost.popover]: "popoverContent",
     [ModalHost.assetDetail]: "imageDetailModalContent",
+    [ModalHost.curation]: "curationModalContent",
 }
 
 const hostContainerIds = {
     [ModalHost.general]: "modalContainer",
     [ModalHost.popover]: "popoverDialog",
     [ModalHost.assetDetail]: "imageDetailModalContainer",
+    [ModalHost.curation]: "curationModalContainer",
 }
 
 // The hosts that trap focus with `x-trap.inert`; the popover dialog has no trap
-const trappedHosts = [ModalHost.general, ModalHost.assetDetail]
+const trappedHosts = [
+    ModalHost.general,
+    ModalHost.assetDetail,
+    ModalHost.curation,
+]
 
 // Identity of each displayed open; the store mirrors the current value for reactive consumers.
 let lastOpenId = 0
@@ -117,8 +125,8 @@ export function isModalOpenActive(openId) {
 }
 
 /**
- * The container of the active host when that host traps focus (the general modal or asset
- * detail): its `x-trap.inert` hides the rest of the page from assistive technology. Null while no
+ * The container of the active host when that host traps focus (the general modal, asset detail or
+ * Curation): its `x-trap.inert` hides the rest of the page from assistive technology. Null while no
  * host, or the popover dialog, is active.
  */
 export function getActiveTrapContainer() {
@@ -126,7 +134,7 @@ export function getActiveTrapContainer() {
     return trappedHosts.includes(host) ? getContainer(host) : null
 }
 
-/** Whether `el` is inside one of the three hosts */
+/** Whether `el` is inside one of the hosts */
 export function isInModalHost(el) {
     return Object.values(ModalHost).some((host) =>
         getContainer(host)?.contains(el),

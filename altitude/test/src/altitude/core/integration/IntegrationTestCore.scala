@@ -20,6 +20,7 @@ import scala.jdk.CollectionConverters.*
 import scala.language.implicitConversions
 
 import altitude.core.*
+import altitude.core.dao.sqlite.SqliteOverrides
 import altitude.core.models.*
 
 abstract class IntegrationTestCore
@@ -50,10 +51,11 @@ abstract class IntegrationTestCore
     new QueryRunner().update(RequestContext.getConn, sql, values.map(_.asInstanceOf[Object])*)
   }
 
+  /** A timestamp in the engine's storage form; SQLite's is the canonical text every writer must produce */
   def getSqlDateTime(t: java.sql.Timestamp): Any = {
     testApp.dataSourceType match {
       case Const.DbEngineName.POSTGRES => t
-      case Const.DbEngineName.SQLITE => t.toString
+      case Const.DbEngineName.SQLITE => t.toLocalDateTime.format(SqliteOverrides.DATETIME_FORMATTER)
       case _ => throw new IllegalArgumentException("Unsupported data source type")
     }
   }

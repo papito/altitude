@@ -1,0 +1,596 @@
+/* A Curation set (htmx/curation_set): the Bundle rail in a column of its own, which scrolls by itself, and to its right the stage
+   above the face strip and the set's footer */
+#curationSetView {
+  display: grid;
+  grid-template-columns: var(--curation-rail-width) minmax(0, 1fr);
+  height: 100%;
+}
+
+#curationRail {
+  display: grid;
+  align-content: start;
+  row-gap: var(--space-6);
+  padding: var(--panel-padding);
+  overflow: auto;
+  border-right: var(--border-hairline) var(--panel-border-color);
+}
+
+/* What the set says of itself: a problem of every frame (.warning), or that it is too close to call */
+.curation-notice {
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  line-height: var(--line-height-text);
+  background-color: var(--info-background-color);
+  border-radius: var(--radius);
+}
+
+.curation-notice.warning {
+  background-color: var(--warning-background-color);
+}
+
+/* A Bundle's row in the rail, the Contenders' too: a header with its name, count and reason over its frames */
+.curation-bundle {
+  display: grid;
+  row-gap: var(--space-4);
+}
+
+.curation-bundle header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.curation-bundle h3 {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Beside the name while the Bundle holds a Pick, which the Bundle's Recycle leaves in place */
+.curation-bundle h3 .fa-check-circle {
+  color: var(--success-color);
+}
+
+.curation-bundle .count {
+  color: var(--theme-neutral-3);
+  font-weight: var(--font-weight-medium);
+}
+
+.curation-bundle .reason {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-text);
+}
+
+.curation-bundle .frames {
+  display: grid;
+  row-gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.curation-frame {
+  display: grid;
+  grid-template-columns: var(--curation-preview-size) minmax(0, 1fr);
+  column-gap: var(--space-4);
+}
+
+/* A frame's Preview, a button that focuses it, in the rail and at the head of its column of the face strip. In the rail the frame
+   focused wears the accent's edge, and a mark says it is pinned; in both a mark says it is kept */
+.curation-preview {
+  position: relative;
+  width: var(--curation-preview-size);
+  height: var(--curation-preview-size);
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--theme-secondary);
+  border: var(--border-heavy) transparent;
+  border-radius: var(--radius);
+}
+
+.curation-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.curation-frame.focused .curation-preview {
+  border-color: var(--theme-accent);
+}
+
+.curation-preview .fa-thumbtack {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  color: var(--theme-neutral-4);
+  text-shadow: var(--drop-shadow);
+}
+
+.curation-preview .fa-check-circle {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  color: var(--success-color);
+  text-shadow: var(--drop-shadow);
+}
+
+.curation-frame .about {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--font-size-small);
+}
+
+.curation-frame .file-name {
+  flex-basis: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.curation-frame .unmeasured {
+  flex-basis: 100%;
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+}
+
+.curation-frame .reasons {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0;
+  color: var(--theme-neutral-3);
+  line-height: var(--line-height-text);
+  list-style: none;
+}
+
+/* In the rail a frame's other problem, or the sole Contender's marker (.sole); on a pane's tag any of its problems, or that it is
+   kept (.keep) */
+.curation-chip {
+  padding: var(--chip-padding);
+  color: var(--warning-color);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  border: var(--border-hairline) var(--warning-color);
+  border-radius: var(--chip-border-radius);
+}
+
+.curation-chip.sole {
+  color: var(--success-color);
+  border-color: var(--success-color);
+}
+
+#curationCompare {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* One pane or two, sharing the width */
+#curationStage {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  column-gap: var(--space-4);
+  min-height: 0;
+  padding: var(--panel-padding);
+}
+
+/* The pane, the Histogram strip under it while it shows, then the caption. Only the pane's row is declared: the rows after it are
+   implicit, so a hidden strip leaves no empty row, and no gap, behind */
+#curationStage figure {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  row-gap: var(--space-3);
+  min-height: 0;
+  margin: 0;
+}
+
+#curationStage .pane {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background-color: var(--asset-detail-backdrop-color);
+  border-bottom: var(--border-hairline) transparent;
+  border-radius: var(--radius);
+}
+
+/* Both panes carry the edge, so the images stay the same height as it moves to the focused frame */
+#curationStage .pane.focused {
+  border-bottom-color: var(--theme-accent);
+}
+
+/* The zoom's transform (js/alpine/components/curation.js) works from the image's top left corner */
+#curationStage img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform-origin: 0 0;
+}
+
+/* The Clipping blink's canvas, laid out as the image is: its bitmap is the sampled size, so under `contain` it lies over the painted
+   picture pixel for pixel, and `applyZoom` writes the image's transform to it. It follows the image in the pane, so the spinner, the
+   tag and the lens paint above it. The two colors the component draws the mask with are read from here, so the script holds no
+   literal: a custom property comes back unresolved from getComputedStyle, so the component reads the computed `color` (the blown
+   pixels) and `border-color` (the crushed ones), which resolve `light-dark()`; `border-style` stays none, so nothing paints. The
+   pane is dark in either theme, so both take the dark side as the tag does. The blink is `steps(1)`, which is `steps(1, end)`:
+   each half of the second holds its starting value, 1 for the first half and 0 for the second, so the marks flash rather than fade.
+   No display here: `hidden` hides it */
+#curationStage .clipping {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform-origin: 0 0;
+  pointer-events: none;
+  color: var(--error-color);
+  border-color: var(--info-color);
+  color-scheme: dark;
+  animation: curation-clipping-blink 1s steps(1) infinite;
+}
+
+@keyframes curation-clipping-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* The marks hold steady instead of flashing */
+@media (prefers-reduced-motion: reduce) {
+  #curationStage .clipping {
+    animation: none;
+  }
+}
+
+/* A pane hides its image from the moment its frame changes until the new one has loaded. The spinner waits a moment, so a frame
+   already in the browser's cache does not flash it */
+#curationStage .pane.loading img {
+  visibility: hidden;
+}
+
+#curationStage .media-spinner {
+  visibility: hidden;
+}
+
+#curationStage .pane.loading .media-spinner {
+  visibility: visible;
+  transition: visibility 0s 150ms;
+}
+
+/* What the rail says of the frame, over the pane's corner. It follows the spinner in the pane, so it paints above both the spinner and
+   a zoomed image. The pane is dark in either theme and its image can be anything, so the tag takes the dark side of every token */
+#curationStage .pane-tag {
+  position: absolute;
+  inset: var(--space-4) var(--space-4) auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  pointer-events: none;
+  color-scheme: dark;
+}
+
+#curationStage .curation-chip {
+  background-color: var(--asset-detail-backdrop-color);
+}
+
+#curationStage .curation-chip.keep {
+  color: var(--theme-on-primary);
+  background-color: var(--success-color);
+  border-color: var(--success-color);
+}
+
+/* The Loupe, a square lens a third of the pane wide that js/common/loupe.js centers on the pointer and draws with the original as
+   its background, pixelated above 100% (the module sets image-rendering by level); the pane clips it. It is last in the pane, so
+   it paints above the image, the spinner and the tag with no z-index. The backdrop fills what the original's pixels do not reach,
+   at the image's edges, so the pane's picture never shows through the lens, and the edge takes the pane's dark side as the tag
+   does. No display here: `hidden` hides it */
+#curationStage .loupe {
+  position: absolute;
+  width: min(calc(100% / 3), var(--curation-loupe-max-size));
+  aspect-ratio: 1;
+  pointer-events: none;
+  background-color: var(--asset-detail-backdrop-color);
+  background-repeat: no-repeat;
+  border: var(--border-hairline) var(--theme-neutral-4);
+  border-radius: var(--radius);
+  color-scheme: dark;
+}
+
+/* The level the module writes, "200%", as a chip in the lens's bottom right corner */
+#curationStage .loupe::after {
+  content: attr(data-level);
+  position: absolute;
+  inset: auto var(--space-2) var(--space-2) auto;
+  padding: var(--chip-padding);
+  color: var(--theme-neutral-4);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  background-color: var(--asset-detail-backdrop-color);
+  border-radius: var(--chip-border-radius);
+}
+
+/* The lens stands in for the pointer, so the pointer never covers the detail */
+#curationStage .pane:has(> .loupe:not([hidden])) img {
+  cursor: none;
+}
+
+/* The Histogram strip, the frame's Histogram on a button the pane's width under it, which switches the Clipping blink. It takes
+   the pane's backdrop, the hairline border and the radius, so it reads as part of the pane; its color, a theme neutral at an alpha,
+   is the luminance line's and the grid lines', a muted mark over the backdrop, which is dark in either theme, so the strip takes
+   the dark side as the tag does. The hairline is there for the pressed rule below to color: while the blink is on, the strip shows
+   a success edge and a success-colored line; the channels keep their colors. Positioned for the corner labels */
+#curationStage .histogram {
+  position: relative;
+  width: 100%;
+  height: var(--curation-histogram-height);
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  color: hsl(from var(--theme-neutral-4) h s l / 0.6);
+  background-color: var(--asset-detail-backdrop-color);
+  border: var(--border-hairline) transparent;
+  border-radius: var(--radius);
+  color-scheme: dark;
+}
+
+/* A failed image leaves the strip empty, and there is nothing to press for */
+#curationStage .histogram:disabled {
+  cursor: default;
+}
+
+/* Isolated, so the channels blend among themselves alone and their sum then lies over the strip's backdrop */
+#curationStage .histogram svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  isolation: isolate;
+}
+
+/* A channel's shape in its own color at an alpha, added to the others as light (`screen`): where two overlap the strip reads
+   yellow, cyan or magenta, and where the three do, a neutral */
+#curationStage .histogram :is(.red, .green, .blue) {
+  fill-opacity: 0.6;
+  mix-blend-mode: screen;
+}
+
+#curationStage .histogram .red {
+  fill: var(--histogram-red);
+}
+
+#curationStage .histogram .green {
+  fill: var(--histogram-green);
+}
+
+#curationStage .histogram .blue {
+  fill: var(--histogram-blue);
+}
+
+/* The luminance line over the channels takes the strip's color at full alpha, so no color is written here and the pressed rule
+   colors it. It keeps its width whatever the strip stretches the viewBox to */
+#curationStage .histogram .luminance {
+  fill: none;
+  stroke: hsl(from currentColor h s l / 1);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Two faint lines at a third and two thirds of the range, so a frame's shadows, midtones and highlights are told apart at a glance */
+#curationStage .histogram .grid {
+  stroke: currentColor;
+  opacity: 0.3;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The fractions of the frame's pixels crushed (left, the shadows' side) and blown (right, the highlights' side), as the Loupe's level
+   reads in its lens's corner: a small monospace chip on the backdrop, each in the color the Clipping blink marks that side with.
+   An empty label, while the frame loads, shows no chip */
+#curationStage .histogram .crushed,
+#curationStage .histogram .blown {
+  position: absolute;
+  bottom: var(--space-1);
+  padding: 0 var(--space-2);
+  font-family: var(--font-nav);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  background-color: var(--asset-detail-backdrop-color);
+  border-radius: var(--chip-border-radius);
+  pointer-events: none;
+}
+
+#curationStage .histogram .crushed {
+  left: var(--space-2);
+  color: var(--info-color);
+}
+
+#curationStage .histogram .blown {
+  right: var(--space-2);
+  color: var(--error-color);
+}
+
+#curationStage .histogram .crushed:empty,
+#curationStage .histogram .blown:empty {
+  display: none;
+}
+
+/* The side columns share what the center leaves, so the pinned label sits at the pane's true center, under the image */
+#curationStage figcaption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--font-size-small);
+  padding-left: var(--space-8);
+}
+
+#curationStage .file-name {
+  grid-column: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What the pinned frame's caption says, below its image */
+#curationStage .pinned-label {
+  grid-column: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+#curationStage .caption-actions {
+  grid-column: 3;
+  display: flex;
+  justify-self: end;
+  gap: var(--space-4);
+}
+
+/* A small action button's span is the label after its icon; here it is the label alone */
+#curationStage .action-button.small span {
+  margin-left: 0;
+}
+
+/* A pressed button on the stage, the Keep button and the Histogram strip while the blink is on, and a Bundle's details switch
+   while they show: a success edge and a success-colored label, luminance line or icon */
+#curationStage button[aria-pressed="true"],
+.curation-bundle header button[aria-pressed="true"] {
+  border-color: var(--success-color);
+  color: var(--success-color);
+}
+
+/* The face strip, one row per Person and one column per frame; the focused and pinned frames are marked down their column */
+#curationFaces {
+  max-height: var(--curation-strip-max-height);
+  padding: 0 var(--panel-padding);
+  overflow: auto;
+}
+
+#curationFaces table {
+  border-collapse: collapse;
+}
+
+#curationFaces th, #curationFaces td {
+  padding: var(--space-1);
+  text-align: center;
+}
+
+#curationFaces th.focused, #curationFaces td.focused {
+  background-color: hsl(from var(--theme-accent) h s l / 0.2);
+}
+
+#curationFaces th.pinned, #curationFaces td.pinned {
+  background-color: hsl(from var(--theme-neutral-3) h s l / 0.2);
+}
+
+/* A column's Preview is the size of its crops */
+#curationFaces .curation-preview {
+  display: block;
+  width: var(--curation-crop-size);
+  height: var(--curation-crop-size);
+}
+
+#curationFaces .crop {
+  display: block;
+  width: var(--curation-crop-size);
+  height: var(--curation-crop-size);
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: none;
+  border: var(--border-heavy) transparent;
+  border-radius: var(--radius);
+}
+
+#curationFaces .crop[aria-pressed="true"] {
+  border-color: var(--theme-accent);
+}
+
+#curationFaces .crop img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#curationFaces .no-face {
+  color: var(--theme-neutral-3);
+}
+
+/* The side columns share what the center leaves, which holds the keep hint or Resolve at the footer's true center while the right
+   column fits its share. That column is never smaller than its buttons, so in a narrow window it takes what they need and the center
+   moves left. The note takes a row of its own above them */
+#curationCompare footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+  padding: var(--panel-padding);
+  border-top: var(--border-hairline) var(--panel-border-color);
+}
+
+/* It holds its line while empty, so a frame's Pick does not shrink the panes mid-comparison. Its text must not size the columns it
+   spans, or it would widen the right one and move the center */
+#curationCompare .note {
+  grid-column: 1 / -1;
+  contain: inline-size;
+  min-height: 1lh;
+  margin: 0;
+  color: var(--warning-color);
+  font-size: var(--font-size-small);
+}
+
+/* The keys with no button of their own, at twice the size of the footer's other small text, to be read at a glance. One line,
+   clipped in a narrow window, so that it takes no more height from the images than that line */
+#curationCompare .keys {
+  overflow: hidden;
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A key cap of that line, twice the shell's too, its padding with it */
+#curationCompare .keys kbd {
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-small);
+}
+
+#curationCompare .actions {
+  display: flex;
+  justify-self: end;
+  gap: var(--space-4);
+}
+
+#curationCompare footer button {
+  white-space: nowrap;
+}
+
+#curationCompare .keep-hint {
+  color: var(--theme-neutral-3);
+}
+
+/* What Resolve keeps, cut short so that what it recycles stays readable. The center column takes its full width before the keys' hint
+   gets any, so the name's share of the window leaves that hint room in a narrow one; Curation fills the window, so vw measures it.
+   Clipping moves an inline block's baseline to its bottom edge, so it aligns by that edge to stay level with the rest of the label */
+#curationCompare .kept {
+  display: inline-block;
+  max-width: min(var(--curation-kept-name-max-width), 20vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}

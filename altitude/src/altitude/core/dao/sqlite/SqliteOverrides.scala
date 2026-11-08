@@ -1,5 +1,8 @@
 package altitude.core.dao.sqlite
 
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -10,14 +13,20 @@ import scalasql.dialects.Dialect
 
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
+import altitude.core.dao.sql.search.SqliteSearchDialect
+import altitude.core.models.SceneEmbedding
 
 object SqliteOverrides:
-  /** The stored DATETIME text format. Timestamps are wall-clock text: camera-local for capture times, UTC for import times. */
-  val DATETIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-
-  /** Reads the stored format, tolerating a fractional second on rows written from a java.sql.Timestamp */
-  val DATETIME_PARSER: DateTimeFormatter = new DateTimeFormatterBuilder()
-    .append(DATETIME_FORMATTER)
+  /**
+   * The stored DATETIME text format, written and read. Timestamps are wall-clock text: camera-local for capture times, UTC for
+   * import times. A fraction of a second is written only when there is one (a burst frame's subsecond capture time, the clock's
+   * microseconds on an import time, as PostgreSQL's TIMESTAMPTZ keeps them), with no trailing zeros, so a whole second is
+   * `yyyy-MM-dd HH:mm:ss` as every existing row is, and `date()` reads both. Every writer, the tests' helpers included, must
+   * write this canonical form: a hand-written statement compares the stored text (`BETWEEN` on a capture-time window), which
+   * orders as the times do only while no row carries trailing zeros or a `.0`.
+   */
+  val DATETIME_FORMATTER: DateTimeFormatter = new DateTimeFormatterBuilder()
+    .appendPattern("yyyy-MM-dd HH:mm:ss")
     .optionalStart()
     .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
     .optionalEnd()
@@ -36,17 +45,43 @@ trait SqliteOverrides:
   override protected def nativeBool(value: Boolean): Any =
     if value then "1" else "0"
 
+  override protected val vectorPlaceholder: String = "?"
+
+  // The BLOB is the raw little-endian float32 values, the layout `vector_as_f32` stores a Face's features in
+  override protected def vectorBind(embedding: Option[SceneEmbedding]): Any =
+    embedding.map {
+      e =>
+        val buffer = ByteBuffer.allocate(e.values.length * java.lang.Float.BYTES).order(ByteOrder.LITTLE_ENDIAN)
+        val floats = buffer.asFloatBuffer
+        e.values.foreach(floats.put)
+        buffer.array
+    }.orNull
+
+  override protected def getVectorField(value: AnyRef): Option[SceneEmbedding] = Option(value).map {
+    case bytes: Array[Byte] =>
+      val floats = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer
+      val values = new Array[Float](floats.remaining)
+      floats.get(values)
+      SceneEmbedding(IArray.unsafeFromArray(values))
+    case other => throw IllegalArgumentException(s"Invalid type for vector field: $other")
+  }
+
   override protected def nativeLocalDateTime(value: LocalDateTime): Any =
     value.format(SqliteOverrides.DATETIME_FORMATTER)
 
   override protected def nativeUtcTimestamp(value: OffsetDateTime): Any =
     value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime.format(SqliteOverrides.DATETIME_FORMATTER)
 
+  // ISO text, which is what `date()` of a stored timestamp yields
+  override protected def nativeLocalDate(value: LocalDate): Any = value.toString
+
+  override protected def dayOf(column: String): String = SqliteSearchDialect.dayOf(column)
+
   // Parsed as the wall-clock time it spells; a JVM-zone round trip would shift a time inside the server's DST gap
   override protected def getDateTimeField(value: Option[AnyRef]): Option[LocalDateTime] =
     if value.isEmpty || value.get == null then return None
 
-    Some(LocalDateTime.parse(value.get.asInstanceOf[String], SqliteOverrides.DATETIME_PARSER))
+    Some(LocalDateTime.parse(value.get.asInstanceOf[String], SqliteOverrides.DATETIME_FORMATTER))
 
   // SQLITE does not have a BOOLEAN type, so we use an INTEGER type instead and "fix it in post"
   override protected def getBooleanField(value: AnyRef): Boolean = value match

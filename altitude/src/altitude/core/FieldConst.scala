@@ -46,6 +46,7 @@ object FieldConst:
     val QUALITY = "quality"
     val IS_ENROLLED = "is_enrolled"
     val FRAME_TIME_MS = "frame_time_ms"
+    val SHARPNESS = "sharpness"
 
   object Person:
     val NAME = "name"
@@ -79,6 +80,17 @@ object FieldConst:
     val LATITUDE = "latitude"
     val LONGITUDE = "longitude"
     val DURATION_MS = "duration_ms"
+    val SHARPNESS = "sharpness"
+    val LUMINANCE = "luminance"
+    val CLIPPED_HIGHLIGHTS = "clipped_highlights"
+    val CRUSHED_SHADOWS = "crushed_shadows"
+    val IMAGE_QUALITY = "image_quality"
+    val PERCEPTUAL_HASH = "perceptual_hash"
+    val HISTOGRAM = "histogram"
+    // The Scene embeddings, one column per Scene model (`SceneModel.column`)
+    val DINOV2_EMBEDDING = "dinov2_embedding"
+    val CLIP_EMBEDDING = "clip_embedding"
+    val SEQUENCE_ID = "sequence_id"
 
   object PublicMetadata:
     val DEVICE_MODEL = "device_model"

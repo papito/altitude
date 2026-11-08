@@ -78,6 +78,12 @@ object Api:
       val RESTORED = "restored"
       val DUPLICATES = "duplicates"
 
+    object Curation:
+      val KEEP_IDS = "keepIds"
+      val RECYCLE_IDS = "recycleIds"
+      val SEQUENCE_OF = "sequenceOf"
+      val COUNT = "count"
+
     object Folder:
       val FOLDER = "folder"
       val FOLDERS = "folders"

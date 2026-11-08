@@ -6,6 +6,7 @@ import org.scalatest.matchers.should.Matchers.{ include, not, should, shouldBe }
 
 import altitude.core.Api
 import altitude.core.App
+import altitude.core.Const
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
@@ -22,6 +23,21 @@ import altitude.core.util.Util
     val takenAt = LocalDateTime.parse(taken)
     testContext.setAssetDates(asset.persistedId, Some(takenAt), OffsetDateTime.of(takenAt, ZoneOffset.UTC))
     asset
+  }
+
+  /** A frame in triage, in the Sequences `inSequence` stamps it into */
+  private def persistFrame(taken: String, filename: String): Asset = {
+    val asset = testContext.persistAsset(isTriaged = true)
+    testApp.service.asset.rename(asset.persistedId, filename)
+    val takenAt = LocalDateTime.parse(taken)
+    testContext.setAssetDates(asset.persistedId, Some(takenAt), OffsetDateTime.of(takenAt, ZoneOffset.UTC))
+    asset
+  }
+
+  private def inSequence(frames: Asset*): String = {
+    val sequenceId = BaseDao.genId
+    testApp.txManager.withTransaction(testApp.DAO.asset.setSequence(frames.map(_.persistedId).toSet, sequenceId))
+    sequenceId
   }
 
   private def search(host: String, repoId: String, params: Map[String, String], headers: Map[String, String] = jsonHeaders) =
@@ -124,6 +140,201 @@ import altitude.core.util.Util
         ordered(next.text(), s"""id="asset-${second.persistedId}-in-${location.persistedId}"""", "No location")
         // The trailing group is the asset's only cell, so it keeps the plain ID
         ordered(next.text(), "No location", cell(unlocated))
+    }
+  }
+
+  private def curateButton(sequenceId: String): String = s"""data-app-sequence-id="$sequenceId""""
+
+  private val sequenceOption = """data-app-search-group-by="sequence""""
+
+  test("Group by Sequence heads a group with its first capture and offers Curate from two frames") {
+
+    /**
+     * Setup:
+     *
+     * In triage: a Sequence of two frames, a Sequence of one, a frame in none, read grouped by Sequence one and then all to a
+     * page.
+     *
+     * Assertions:
+     *
+     * Each header is the group's first capture's day and time beside its count, with No sequence last. The Sequence of two has a
+     * Curate button naming it and carrying `Const.Curation.MIN_FRAMES`, which the Sequence of one and No sequence do not have. A
+     * frame's cell is its plain ID. The Group menu marks the option and the grid carries the grouping for its continuations, with
+     * no direction.
+     *
+     * Edge cases:
+     *
+     * A continuation that finishes a group repeats neither its header nor its button.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val a = persistFrame("2026-09-06T10:00:05", "a.jpg")
+        val b = persistFrame("2026-09-06T10:00:07", "b.jpg")
+        val lone = persistFrame("2026-09-06T14:30:00", "c.jpg")
+        val loose = persistFrame("2026-09-05T08:00:00", "d.jpg")
+        val burst = inSequence(a, b)
+        val single = inSequence(lone)
+        val params = Map(Api.Field.Search.VIEW -> "triage", Api.Field.Search.GROUP_BY -> "sequence", "sort" -> "filename0")
+
+        val page = htmlSearch(host, repoId, params)
+        page.statusCode shouldBe 200
+        val html = page.text()
+        html should include("""<time datetime="2026-09-06T10:00:05">Sunday, September 6, 2026, 10:00:05 AM</time>""")
+        html should include("""<time datetime="2026-09-06T14:30">Sunday, September 6, 2026, 2:30:00 PM</time>""")
+        ordered(html, header(burst), header(single))
+        ordered(html, header(single), "No sequence")
+        ordered(html, "(2 items)", curateButton(burst))
+        html should include(
+          s"""${curateButton(burst)} data-min-frames="${Const.Curation.MIN_FRAMES}" @click="$$dispatch(window.Const.events.curateRequested, { sequenceId: $$el.dataset.appSequenceId })">Curate</button>""")
+        (html should not).include(curateButton(single))
+        "data-app-sequence-id=".r.findAllIn(html).size shouldBe 1
+        html should include(cell(a))
+        html should include(cell(loose))
+        (html should not).include(s"""id="asset-${a.persistedId}-in-""")
+        html should include(s"""$sequenceOption data-app-search-group-direction="" aria-checked="true"""")
+        html should include("""data-results-group-by="sequence"""")
+        html should include("""data-results-group-direction=""""")
+
+        // The page ends inside the burst: the next finishes it under the same header and opens the next group
+        val first = htmlSearch(host, repoId, params + (Api.Field.Search.RESULTS_PER_PAGE -> "1")).text()
+        first should include(curateButton(burst))
+        val next = htmlSearch(
+          host,
+          repoId,
+          params ++ Map(
+            Api.Field.Search.AFTER -> cursorOf(first).head,
+            Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true",
+            Api.Field.Search.RESULTS_PER_PAGE -> "3"
+          )
+        ).text()
+        (next should not).include(header(burst))
+        (next should not).include(curateButton(burst))
+        ordered(next, cell(b), header(single))
+        ordered(next, header(single), "No sequence")
+        ordered(next, "No sequence", cell(loose))
+    }
+  }
+
+  test(
+    "A Sequence whose frames fall under two in the search has no Curate, and one at two has it though the Sequence is larger") {
+
+    /**
+     * Setup:
+     *
+     * A Sequence of three frames, two of them in an album and one of them in another, read in triage over each album.
+     *
+     * Assertions:
+     *
+     * The button follows the count of the group's matching frames: two shown have it and the count reads two; one shown does not.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val a = persistFrame("2026-09-06T10:00:00", "a.jpg")
+        val b = persistFrame("2026-09-06T10:00:01", "b.jpg")
+        val c = persistFrame("2026-09-06T10:00:02", "c.jpg")
+        val burst = inSequence(a, b, c)
+        val two = testApp.service.album.add("Two")
+        val one = testApp.service.album.add("One")
+        testApp.service.album.addAssets(two.persistedId, Set(a.persistedId, b.persistedId))
+        testApp.service.album.addAssets(one.persistedId, Set(c.persistedId))
+        val params = Map(Api.Field.Search.VIEW -> "triage", Api.Field.Search.GROUP_BY -> "sequence")
+
+        val overTwo = htmlSearch(host, repoId, params + (Api.Field.Search.ALBUM_ID -> two.persistedId)).text()
+        overTwo should include(curateButton(burst))
+        overTwo should include("(2 items)")
+        val overOne = htmlSearch(host, repoId, params + (Api.Field.Search.ALBUM_ID -> one.persistedId)).text()
+        overOne should include(header(burst))
+        (overOne should not).include(curateButton(burst))
+    }
+  }
+
+  test("The Group menu offers Sequence in Triage alone, and a Sequence grouping elsewhere is no grouping") {
+
+    /**
+     * Setup:
+     *
+     * Two frames of one Sequence in triage and an asset in the library, read in each view with and without `groupBy=sequence`.
+     *
+     * Assertions:
+     *
+     * Triage's Group menu offers Sequence beside its other options; the other views' offer it nowhere. Outside Triage the
+     * grouping is no grouping and not a 400: no header, "No grouping" checked, the grid carrying no grouping for its
+     * continuations, while the URL keeps what was asked for, so a reload still knows it.
+     *
+     * Edge cases:
+     *
+     * A direction is refused with the grouping wherever it was asked for, as with a Location grouping. A page continued outside
+     * Triage under the asked-for grouping reads as the flat page it is.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val a = persistFrame("2026-09-06T10:00:00", "a.jpg")
+        val b = persistFrame("2026-09-06T10:00:01", "b.jpg")
+        inSequence(a, b)
+        persistDated("2026-09-06T11:00:00", "c.jpg")
+        persistDated("2026-09-06T12:00:00", "d.jpg")
+        val locationOption = """data-app-search-group-by="location""""
+
+        val triage = htmlSearch(host, repoId, Map(Api.Field.Search.VIEW -> "triage")).text()
+        triage should include(sequenceOption)
+        triage should include(locationOption)
+
+        for (view <- List("repository", "trashbin")) withClue(view) {
+          val plain = htmlSearch(host, repoId, Map(Api.Field.Search.VIEW -> view)).text()
+          (plain should not).include(sequenceOption)
+          plain should include(locationOption)
+
+          val asked = htmlSearch(
+            host,
+            repoId,
+            Map(Api.Field.Search.VIEW -> view, Api.Field.Search.GROUP_BY -> "sequence", Api.Field.Search.RESULTS_PER_PAGE -> "1"))
+          asked.statusCode shouldBe 200
+          (asked.text() should not).include("result-group")
+          (asked.text() should not).include(sequenceOption)
+          asked.text() should include(
+            """data-app-search-group-by="" data-app-search-group-direction="" aria-checked="true">No grouping""")
+          asked.text() should include("""data-results-group-by=""""")
+          asked.headers("hx-replace-url").head should include("groupBy=sequence")
+        }
+
+        val elsewhere = Map(
+          Api.Field.Search.VIEW -> "repository",
+          Api.Field.Search.GROUP_BY -> "sequence",
+          Api.Field.Search.RESULTS_PER_PAGE -> "1")
+        val next = htmlSearch(
+          host,
+          repoId,
+          elsewhere ++ Map(
+            Api.Field.Search.AFTER -> cursorOf(htmlSearch(host, repoId, elsewhere).text()).head,
+            Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")
+        )
+        next.statusCode shouldBe 200
+        (next.text() should not).include("result-group")
+
+        // The order is fixed: a direction is refused, in Triage and wherever else the grouping is asked for
+        for (view <- List("triage", "repository")) withClue(view) {
+          val refused = htmlSearch(
+            host,
+            repoId,
+            Map(
+              Api.Field.Search.VIEW -> view,
+              Api.Field.Search.GROUP_BY -> "sequence",
+              Api.Field.Search.GROUP_DIRECTION -> "asc"))
+          refused.statusCode shouldBe 400
+          refused.text() should include("groupDirection")
+        }
     }
   }
 
@@ -760,7 +971,7 @@ import altitude.core.util.Util
     }
   }
 
-  test("The triaged filter narrows the repository view and is refused with the triage view") {
+  test("The repository view leaves triaged assets out unless asked, and the triage view refuses triaged=false") {
 
     /**
      * Setup:
@@ -769,8 +980,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The repository view renders both cells. With `triaged=false` the triaged cell is left out and the bookmarkable URL carries
-     * the filter. The triage view with `triaged=false` is a plain-text 400 naming the view, as the map layout is.
+     * The repository view renders the sorted cell alone. With `triaged=true` it renders both cells and the bookmarkable URL
+     * carries the parameter. The triage view with `triaged=false` is a plain-text 400 naming the view, as the map layout is.
      *
      * Edge cases:
      *
@@ -785,15 +996,15 @@ import altitude.core.util.Util
         val sorted = testContext.persistAsset()
         val triaged = testContext.persistAsset(isTriaged = true)
 
-        val all = htmlSearch(host, repoId, Map.empty).text()
-        all should include(cell(sorted))
-        all should include(cell(triaged))
+        val byDefault = htmlSearch(host, repoId, Map.empty).text()
+        byDefault should include(cell(sorted))
+        (byDefault should not).include(cell(triaged))
 
-        val hidden = htmlSearch(host, repoId, Map(Api.Field.Search.TRIAGED -> "false"))
-        hidden.statusCode shouldBe 200
-        hidden.text() should include(cell(sorted))
-        (hidden.text() should not).include(cell(triaged))
-        hidden.headers("hx-replace-url").head should include("triaged=false")
+        val shown = htmlSearch(host, repoId, Map(Api.Field.Search.TRIAGED -> "true"))
+        shown.statusCode shouldBe 200
+        shown.text() should include(cell(sorted))
+        shown.text() should include(cell(triaged))
+        shown.headers("hx-replace-url").head should include("triaged=true")
 
         val contradiction = Map(Api.Field.Search.VIEW -> "triage", Api.Field.Search.TRIAGED -> "false")
         for (shape <- List(Map.empty[String, String], Map(Api.Field.Search.LAYOUT -> "map")))

@@ -3,7 +3,6 @@ package altitude.core.dao.sql.search
 import java.sql.JDBCType
 import java.sql.PreparedStatement
 import java.sql.ResultSet
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import scalasql.core.Expr
@@ -13,9 +12,7 @@ import scalasql.core.TypeMapper
 import scalasql.dialects.Dialect
 
 import altitude.core.FieldConst
-import altitude.core.dao.sql.Columns
 import altitude.core.dao.sql.dialects.AltitudePostgresDialect
-import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchSort
@@ -29,9 +26,7 @@ object PostgresSearchDialect extends SearchDialect:
   import dialect.*
 
   // Capture time is a wall-clock `timestamp` with no zone, so its calendar day is a plain cast
-  override def day(asset: AssetRow[Expr], field: String): Expr[Option[LocalDate]] =
-    val column = Columns.required(AssetRow, asset, field, dialect)
-    Expr[Option[LocalDate]](implicit ctx => sql"$column::date")
+  override val dayWrapper: (String, String) = ("", "::date")
 
   /**
    * `tsv` is not part of the shared row class - SQLite's table has no such column - so it is named directly. The subquery this

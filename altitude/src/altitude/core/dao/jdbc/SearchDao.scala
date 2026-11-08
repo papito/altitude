@@ -4,6 +4,7 @@ import com.typesafe.config.Config
 import java.sql.PreparedStatement
 import java.sql.Types
 import java.time.LocalDate
+import java.time.LocalDateTime
 import org.apache.commons.dbutils.QueryRunner
 import scalasql.Sc
 import scalasql.core.Queryable
@@ -141,6 +142,14 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
             val group = SearchGroupKey.Location(id = locationId, pathKey = pathKey, name = name, categoryName = categoryName)
             (GroupedSearchRow(toModel(asset), group, sortValue, secondSortValue, groupTotal), candidates, total)
         }
+      case GroupBy.Sequence =>
+        val statement = SearchQueries.groupedBySequence(searchDialect, query, repositoryId)
+        readPage[(AssetRow[Sc], Option[String], Option[LocalDateTime], SortValue, SortValue, Int, Int)](statement, isFirstPage)
+          .map {
+            case ((asset, sequenceId, firstCapturedAt, sortValue, secondSortValue, groupTotal, candidates), total) =>
+              val group = SearchGroupKey.Sequence(id = sequenceId, firstCapturedAt = firstCapturedAt)
+              (GroupedSearchRow(toModel(asset), group, sortValue, secondSortValue, groupTotal), candidates, total)
+          }
 
     // A first page carries the overall count on every row; an empty first page has no rows because nothing matches
     val total = Option.when(isFirstPage)(page.headOption.flatMap(_._3).getOrElse(0))

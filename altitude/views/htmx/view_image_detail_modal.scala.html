@@ -1,5 +1,5 @@
-@import altitude.core.RequestContext
 @import altitude.core.Const
+@import altitude.core.util.Util
 @import altitude.core.models.Asset
 @(asset: Asset)
 
@@ -9,7 +9,7 @@
    `hotkeys` turns off the player's ←/→ seeking: the arrows switch assets (js/global.js). *@
 
 <div id="imageDetailView">
-    @defining(s"/${ Const.DataStore.CONTENT }/r/${altitude.core.RequestContext.getRepository.persistedId}/${ Const.DataStore.FILE }/${ asset.persistedId }") { imgUrl =>
+    @defining(Util.contentUrl(Const.DataStore.FILE, asset.persistedId)) { imgUrl =>
         <div data-app-fragment="image-detail"
              data-app-image-detail-url="@{imgUrl}"
              data-app-image-detail-title="@{ asset.fileName }"

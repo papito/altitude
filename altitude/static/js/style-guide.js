@@ -33,6 +33,7 @@ import {
 import { asFontFamily, isFontAvailable } from "./common/font-availability.js"
 import {
     applyTheme,
+    chooseTheme,
     inTheme,
     rememberedTheme,
     resolveColor,
@@ -131,22 +132,30 @@ function styleGuide() {
         showWarningSnackBar,
         showErrorSnackBar,
 
+        init() {
+            document.body.addEventListener(
+                Const.events.themeChanged,
+                ({ detail }) => this.followTheme(detail.theme),
+            )
+        },
+
         isTheme(theme) {
             return this.theme === theme
         },
 
-        /**
-         * Shows the page in `theme` and remembers it for the next visit. The tokens are resolved
-         * again, since the color a token holds depends on the theme, and the new tokens are the one
-         * change the cards follow: a card reads nothing but its token. An alpha a slider was dragged
-         * to is by then part of its token's declaration, inline on the root element, so the new
-         * tokens' sliders start from what they resolve to, with no dragged alpha.
-         */
         setTheme(theme) {
-            this.theme = theme
-            applyTheme(theme)
-            localStorage.setItem(Const.localStore.styleGuideTheme, theme)
+            chooseTheme(theme)
+        },
 
+        /**
+         * Follows the theme chosen here or in the nav. The tokens are resolved again, since the
+         * color a token holds depends on the theme, and the new tokens are the one change the cards
+         * follow: a card reads nothing but its token. An alpha a slider was dragged to is by then
+         * part of its token's declaration, inline on the root element, so the new tokens' sliders
+         * start from what they resolve to, with no dragged alpha.
+         */
+        followTheme(theme) {
+            this.theme = theme
             this.rootTokens = resolveRootTokens(scan)
             this.literals = groupLiterals(scan.literals, this.rootTokens)
         },

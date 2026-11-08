@@ -23,5 +23,8 @@ trait LocationDao extends BaseDao[Location]:
 
   def getAssetIds(locationId: String): Set[String]
 
+  /** Those of the assets that some Location of the context repository holds */
+  def getAssetsInAnyLocation(assetIds: Set[String]): Set[String]
+
   /** Makes the category's Locations top-level; returns how many moved */
   def moveChildrenToRoot(categoryId: String): Int

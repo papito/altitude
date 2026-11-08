@@ -2,26 +2,35 @@ package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
 import altitude.test.TestContext
+import java.text.Normalizer
+import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
 import org.scalatest.matchers.must.Matchers.not
-import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe }
 import scalasql.core.SqlStr.SqlStringSyntax
 
 import scala.util.Random
 
 import altitude.core.Altitude
+import altitude.core.Const
 import altitude.core.Const.FaceRecognition
 import altitude.core.Const.PeopleBucket
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.ValidationException
+import altitude.core.dao.jdbc.PersonDao
+import altitude.core.dao.sql.Db
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
+import altitude.core.service.PersonService
 import altitude.core.util.Query
 import altitude.core.util.SearchQuery
+import altitude.core.util.SearchSource
+import altitude.core.util.SearchText
 import altitude.core.util.Util
 
 @DoNotDiscover class PersonServiceTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
@@ -72,6 +81,14 @@ import altitude.core.util.Util
     byId(enrolled.persistedId).quality shouldBe 27.25
     byId(enrolled.persistedId).isEnrolled shouldBe true
   }
+
+  // A name in either Unicode form, whichever form the source file holds the literal in
+  private def precomposed(name: String): String = Normalizer.normalize(name, Normalizer.Form.NFC)
+  private def decomposed(name: String): String = Normalizer.normalize(name, Normalizer.Form.NFD)
+
+  /** The person's stored row, for the columns the model does not carry */
+  private def personRow(id: String): Map[String, AnyRef] =
+    testApp.txManager.asReadOnly(query("SELECT * FROM person WHERE id = ?", id).head)
 
   private def makeFace(frameTimeMs: Option[Long] = None, quality: Double = 20.0, isEnrolled: Boolean = true): Face = Face(
     x1 = 1,
@@ -144,29 +161,22 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The row holds the name and its lowercase sort name, both as added and after renaming to "Jerry".
+     * The row holds the name and its name key as sort name, both as added and after renaming to "Jerry".
      */
     val name = "Ben"
     val person: Person = testApp.service.person.addPerson(Person(name = Some(name)))
     person.isNamed should be(true)
 
-    val personQuery = "select * from person where id = ?"
-
-    testApp.txManager.asReadOnly {
-      val row = this.query(personQuery, person.persistedId).head
-      row("name") should be(name)
-      row("name_for_sort") should be(name.toLowerCase)
-    }
+    val row = personRow(person.persistedId)
+    row("name") should be(name)
+    row("name_for_sort") should be("ben")
 
     val newName = "Jerry"
     testApp.service.person.updateName(person, newName)
 
-    testApp.txManager.asReadOnly {
-      val row = this.query(personQuery, person.persistedId).head
-      row("name") should be(newName)
-      row("name_for_sort") should be(newName.toLowerCase)
-    }
-
+    val renamedRow = personRow(person.persistedId)
+    renamedRow("name") should be(newName)
+    renamedRow("name_for_sort") should be("jerry")
   }
 
   test("Faces are added to a person") {
@@ -466,6 +476,281 @@ import altitude.core.util.Util
     intercept[DuplicateException](testApp.service.person.updateName(bob, "Alice"))
   }
 
+  test("A live person cannot take another live person's name in another case") {
+
+    /**
+     * Setup:
+     *
+     * Two live Persons named "Tessa" and "Bob".
+     *
+     * Assertions:
+     *
+     * Renaming Bob to "tessa" or to "TESSA" fails as a duplicate, and Bob keeps his name.
+     */
+    testApp.service.person.addPerson(Person(name = Some("Tessa")))
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+
+    intercept[DuplicateException](testApp.service.person.updateName(bob, "tessa"))
+    intercept[DuplicateException](testApp.service.person.updateName(bob, "TESSA"))
+
+    val persistedBob: Person = testApp.service.person.getById(bob.persistedId)
+    persistedBob.name shouldBe Some("Bob")
+  }
+
+  test("A live person cannot take another live person's name in another case of a non-ASCII letter") {
+
+    /**
+     * Setup:
+     *
+     * Two live Persons named "élodie" and "Bob".
+     *
+     * Assertions:
+     *
+     * Renaming Bob to "Élodie" fails as a duplicate: the name key folds beyond ASCII on both engines.
+     */
+    testApp.service.person.addPerson(Person(name = Some(precomposed("élodie"))))
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+
+    intercept[DuplicateException](testApp.service.person.updateName(bob, precomposed("Élodie")))
+  }
+
+  test("A live person cannot take another live person's name in another Unicode form") {
+
+    /**
+     * Setup:
+     *
+     * Two live Persons named "Élodie", its É precomposed (U+00C9), and "Ann".
+     *
+     * Assertions:
+     *
+     * Renaming Ann to "Élodie" decomposed (E + U+0301) fails as a duplicate. Renaming her to "Zoë" decomposed (e + U+0308) stores
+     * the precomposed name, with its name key as sort name.
+     */
+    testApp.service.person.addPerson(Person(name = Some(precomposed("Élodie"))))
+    val ann: Person = testApp.service.person.addPerson(Person(name = Some("Ann")))
+
+    intercept[DuplicateException](testApp.service.person.updateName(ann, decomposed("Élodie")))
+
+    val renamed = testApp.service.person.updateName(ann, decomposed("Zoë"))
+    renamed.name shouldBe Some(precomposed("Zoë"))
+
+    val row = personRow(ann.persistedId)
+    row("name") shouldBe precomposed("Zoë")
+    row("name_for_sort") shouldBe precomposed("zoë")
+  }
+
+  test("A person renamed to its own name in another case takes the new name") {
+
+    /**
+     * Setup:
+     *
+     * A live Person named "Tessa".
+     *
+     * Assertions:
+     *
+     * Renaming her "TESSA" saves: the row holds the new name and the name key "tessa", which it already held.
+     */
+    val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+
+    val renamed = testApp.service.person.updateName(tessa, "TESSA")
+    renamed.name shouldBe Some("TESSA")
+
+    val row = personRow(tessa.persistedId)
+    row("name") shouldBe "TESSA"
+    row("name_for_sort") shouldBe "tessa"
+  }
+
+  test("A merged-away or bad-match person does not hold its name") {
+
+    /**
+     * Setup:
+     *
+     * Persons named "London" and "Tessa" with one test Face each, Tessa merged into London; Persons named "Bob" and "Cara".
+     *
+     * Assertions:
+     *
+     * Bob can be renamed "TESSA", since the merged-away Tessa is not live. Once Bob is marked as a bad match, Cara can be renamed
+     * "tessa", since a bad match holds no name either.
+     */
+    val london: Person = testApp.service.person.addPerson(Person(name = Some("London")))
+    testContext.addTestFacesAndAssets(london)
+    val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+    testContext.addTestFacesAndAssets(tessa)
+    testApp.service.person.merge(dest = london, source = tessa)
+
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+    val renamedBob = testApp.service.person.updateName(bob, "TESSA")
+    renamedBob.name shouldBe Some("TESSA")
+
+    testApp.service.person.markAsBadMatch(renamedBob)
+
+    val cara: Person = testApp.service.person.addPerson(Person(name = Some("Cara")))
+    testApp.service.person.updateName(cara, "tessa").name shouldBe Some("tessa")
+  }
+
+  test("A person cannot be named as an unnamed person is") {
+
+    /**
+     * Setup:
+     *
+     * A live Person named "Bob".
+     *
+     * Assertions:
+     *
+     * Renaming him "unknown 42", "Unknown 42" with two spaces, "UNKNOWN 0042", or "Unknown 42" followed by a Unicode no-break
+     * space fails validation with the reserved-name error, and he keeps his name. "Unknown Soldier", with no number, is a name
+     * like any other.
+     *
+     * Edge cases:
+     *
+     * Any case, more than one space before the number, and spacing `String.strip` does not remove (U+00A0, U+2007, U+202F).
+     */
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+
+    // The spaces are built from their code points, which the formatter and the linter cannot rewrite
+    val trailingNoBreakSpaces = List(0xa0, 0x2007, 0x202f).map("Unknown 42" + _.toChar)
+
+    (List("unknown 42", "Unknown  42", "UNKNOWN 0042") ++ trailingNoBreakSpaces).foreach {
+      name =>
+        val ex = intercept[ValidationException](testApp.service.person.updateName(bob, name))
+        withClue(name)(ex.message shouldBe Const.Msg.Err.RESERVED_PERSON_NAME)
+    }
+
+    val persistedBob: Person = testApp.service.person.getById(bob.persistedId)
+    persistedBob.name shouldBe Some("Bob")
+
+    testApp.service.person.updateName(bob, "Unknown Soldier").name shouldBe Some("Unknown Soldier")
+  }
+
+  test("Adding a named person stores its name in NFC and its name key as sort name") {
+
+    /**
+     * Setup:
+     *
+     * A Person added with the name "ÉLODIE" spelled with a combining accent (E + U+0301), and an unnamed Person.
+     *
+     * Assertions:
+     *
+     * The named row holds the precomposed name and the name key "élodie" as sort name, and the returned model the precomposed
+     * name. The unnamed row's sort name keeps its zero-padded "unknown 0042" form.
+     */
+    val named: Person = testApp.service.person.addPerson(Person(name = Some(decomposed("ÉLODIE"))))
+    named.name shouldBe Some(precomposed("ÉLODIE"))
+
+    val unnamed: Person = testApp.service.person.addPerson(Person())
+
+    val namedRow = personRow(named.persistedId)
+    namedRow("name") shouldBe precomposed("ÉLODIE")
+    namedRow("name_for_sort") shouldBe precomposed("élodie")
+
+    val unnamedRow = personRow(unnamed.persistedId)
+    withClue(unnamedRow)("unknown \\d{4,}".r.matches(unnamedRow("name_for_sort").toString) shouldBe true)
+  }
+
+  test("The name key folds case the same whatever the JVM's default locale") {
+
+    /**
+     * Setup:
+     *
+     * The JVM's default locale set to Turkish, whose lowercase of "I" is a dotless ı, for the length of the test.
+     *
+     * Assertions:
+     *
+     * The name key of "INGRID" is "ingrid".
+     */
+    val defaultLocale = Locale.getDefault
+    try
+      Locale.setDefault(Locale.forLanguageTag("tr"))
+      PersonService.nameKey("INGRID") shouldBe "ingrid"
+    finally Locale.setDefault(defaultLocale)
+  }
+
+  test("The live person holding a name is found by it, hidden or not") {
+
+    /**
+     * Setup:
+     *
+     * A hidden Person named "Tessa" and a visible Person named "Bob".
+     *
+     * Assertions:
+     *
+     * Looking up "tessa" finds the hidden Tessa, and "BOB" finds Bob; a name no one holds finds no one.
+     */
+    val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+    testApp.service.person.setVisibility(tessa, isHidden = true)
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+
+    val holder = testApp.service.person.getLiveByNameKey("tessa")
+    holder.map(_.persistedId) shouldBe Some(tessa.persistedId)
+    holder.map(_.isHidden) shouldBe Some(true)
+    testApp.service.person.getLiveByNameKey("BOB").map(_.persistedId) shouldBe Some(bob.persistedId)
+    testApp.service.person.getLiveByNameKey("Cara") shouldBe None
+  }
+
+  test("A merged-away or bad-match person is not found by its name") {
+
+    /**
+     * Setup:
+     *
+     * Persons named "London" and "Tessa" with one test Face each, Tessa merged into London, and a Person named "Bob" marked as a
+     * bad match.
+     *
+     * Assertions:
+     *
+     * Looking up "Tessa" or "Bob" finds no one, while "London" finds the merged Person.
+     */
+    val london: Person = testApp.service.person.addPerson(Person(name = Some("London")))
+    testContext.addTestFacesAndAssets(london)
+    val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+    testContext.addTestFacesAndAssets(tessa)
+    testApp.service.person.merge(dest = london, source = tessa)
+
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+    testApp.service.person.markAsBadMatch(bob)
+
+    testApp.service.person.getLiveByNameKey("Tessa") shouldBe None
+    testApp.service.person.getLiveByNameKey("Bob") shouldBe None
+    testApp.service.person.getLiveByNameKey("London").map(_.persistedId) shouldBe Some(london.persistedId)
+  }
+
+  test("The live person holding a name is found by it in another case and Unicode form") {
+
+    /**
+     * Setup:
+     *
+     * A Person named "Élodie", its É precomposed (U+00C9).
+     *
+     * Assertions:
+     *
+     * Looking up "ÉLODIE" decomposed (E + U+0301) finds her, and so does "élodie" precomposed.
+     */
+    val elodie: Person = testApp.service.person.addPerson(Person(name = Some(precomposed("Élodie"))))
+
+    testApp.service.person.getLiveByNameKey(decomposed("ÉLODIE")).map(_.persistedId) shouldBe Some(elodie.persistedId)
+    testApp.service.person.getLiveByNameKey(precomposed("élodie")).map(_.persistedId) shouldBe Some(elodie.persistedId)
+  }
+
+  test("The live person holding a name is looked up through the name-key index") {
+
+    /**
+     * Setup:
+     *
+     * The statement `PersonDao.getLiveByNameKey` runs: the repository's live person by name key.
+     *
+     * Assertions:
+     *
+     * Its plan reads `person_01`, the partial unique index of the name keys. SQLite matches a partial index to a bound flag by
+     * its value, which holds for a flag bound as a number and not for one bound as text.
+     */
+    val engine = searchDialect
+    val lookup = PersonDao.liveByNameKey(engine.dialect, RequestContext.getRepository.persistedId, "tessa")
+    val statement = Db.render(lookup, engine.dialect)
+
+    val plan = lookupPlanOf(statement.withCompleteQuery(false))
+
+    withClue(plan)(plan should include("person_01"))
+  }
+
   test("A person merged away after taking the cover face of one merged into them leaves two merged-away people with one cover") {
 
     /**
@@ -571,7 +856,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * A takes B's name, since only the source was named.
+     * A takes B's name, since only the source was named, and is named in full: the returned model and the stored row are named,
+     * the row's sort name is the name key "london", and A is in the Matched bucket with its two Faces, below the face threshold,
+     * so by its name alone. A Search for "London" finds A.
      */
     val personA: Person = testApp.service.person.addPerson(Person())
     testContext.addTestFacesAndAssets(personA)
@@ -580,12 +867,163 @@ import altitude.core.util.Util
     val personB: Person = testApp.service.person.addPerson(Person(name = Some(mergedFromName)))
     testContext.addTestFacesAndAssets(personB)
 
-    testApp.service.person.merge(dest = personA, source = personB)
+    val returned: Person = testApp.service.person.merge(dest = personA, source = personB)
+    returned.name shouldBe Some(mergedFromName)
+    returned.isNamed shouldBe true
 
     val mergedPerson: Person = testApp.service.person.getById(personA.persistedId)
 
     // should inherit the known person name
     mergedPerson.name.get should be(mergedFromName)
+    mergedPerson.isNamed shouldBe true
+    mergedPerson.numOfFaces shouldBe 2
+    mergedPerson.numOfFaces should be < FaceRecognition.MIN_FACES_THRESHOLD
+
+    val row = personRow(personA.persistedId)
+    row("name_for_sort") shouldBe "london"
+
+    testApp.service.person.getInBuckets(Set(PeopleBucket.MATCHED)).map(_.persistedId) shouldBe List(personA.persistedId)
+
+    val resolved = testApp.service.search.resolveText(SearchText.parse(mergedFromName).value)
+    resolved.groups.head.alternatives.head.ids.get(SearchSource.Person) shouldBe Some(Set(personA.persistedId))
+  }
+
+  test("A named person merged into keeps its own name, name key and flag") {
+
+    /**
+     * Setup:
+     *
+     * Persons named "London" and "Phoenix" with one test Face each; Phoenix is merged into London.
+     *
+     * Assertions:
+     *
+     * The returned model and the stored row keep London's name and flag, and the row its name key "london" as sort name.
+     */
+    val london: Person = testApp.service.person.addPerson(Person(name = Some("London")))
+    testContext.addTestFacesAndAssets(london)
+    val phoenix: Person = testApp.service.person.addPerson(Person(name = Some("Phoenix")))
+    testContext.addTestFacesAndAssets(phoenix)
+
+    val returned: Person = testApp.service.person.merge(dest = london, source = phoenix)
+    returned.name shouldBe Some("London")
+    returned.isNamed shouldBe true
+
+    val row = personRow(london.persistedId)
+    row("name") shouldBe "London"
+    row("name_for_sort") shouldBe "london"
+    testApp.service.person.getById(london.persistedId).isNamed shouldBe true
+  }
+
+  test("A merge decides the merged name from the stored people, not from the models passed in") {
+
+    /**
+     * Setup:
+     *
+     * Two pairs of Persons with one test Face each, every model read while its Person was unnamed: Person B renamed "Tessa" after
+     * its model was read, merged into the unnamed A; Person C renamed "London" after its model was read, merged into by the
+     * unnamed D.
+     *
+     * Assertions:
+     *
+     * A takes the name "Tessa", which its stale source model does not carry. C keeps its name "London" and its name key, which
+     * its stale destination model does not show, and does not take D's "Unknown N" name.
+     *
+     * Edge cases:
+     *
+     * A caller's model older than the row, on either side of the merge.
+     */
+    val personA: Person = testApp.service.person.addPerson(Person())
+    val staleB: Person = testApp.service.person.addPerson(Person())
+    List(personA, staleB).foreach(testContext.addTestFacesAndAssets(_))
+    testApp.service.person.updateName(staleB, "Tessa")
+
+    val mergedA: Person = testApp.service.person.merge(dest = personA, source = staleB)
+    mergedA.name shouldBe Some("Tessa")
+    mergedA.isNamed shouldBe true
+    val rowA = personRow(personA.persistedId)
+    rowA("name") shouldBe "Tessa"
+    rowA("name_for_sort") shouldBe "tessa"
+
+    val staleC: Person = testApp.service.person.addPerson(Person())
+    val personD: Person = testApp.service.person.addPerson(Person())
+    List(staleC, personD).foreach(testContext.addTestFacesAndAssets(_))
+    testApp.service.person.updateName(staleC, "London")
+
+    val mergedC: Person = testApp.service.person.merge(dest = staleC, source = personD)
+    mergedC.name shouldBe Some("London")
+    mergedC.isNamed shouldBe true
+    val rowC = personRow(staleC.persistedId)
+    rowC("name") shouldBe "London"
+    rowC("name_for_sort") shouldBe "london"
+  }
+
+  test("A stale merge takes no name from a source that is no longer live") {
+
+    /**
+     * Setup:
+     *
+     * "Tessa", merged away into "London", and a new live "Tessa" holding the name since; "Phoenix", marked a bad match; two
+     * unnamed Persons. Each unnamed Person is the destination of a stale merge of one of the two sources.
+     *
+     * Assertions:
+     *
+     * Neither merge raises an error, and each destination stays unnamed in the returned model and on its row: its sort name keeps
+     * the unnamed form and `is_named` stays false.
+     *
+     * Edge cases:
+     *
+     * The merged-away source's name held by another live Person, which the destination could not take without breaking
+     * `person_01`.
+     */
+    val london: Person = testApp.service.person.addPerson(Person(name = Some("London")))
+    val mergedAway: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+    val badMatch: Person = testApp.service.person.addPerson(Person(name = Some("Phoenix")))
+    val intoMergedAway: Person = testApp.service.person.addPerson(Person())
+    val intoBadMatch: Person = testApp.service.person.addPerson(Person())
+    List(london, mergedAway, badMatch, intoMergedAway, intoBadMatch).foreach(testContext.addTestFacesAndAssets(_))
+
+    testApp.service.person.merge(dest = london, source = mergedAway)
+    testApp.service.person.addPerson(Person(name = Some("Tessa")))
+    testApp.service.person.markAsBadMatch(badMatch)
+
+    List(intoMergedAway -> mergedAway, intoBadMatch -> badMatch).foreach {
+      case (dest, source) =>
+        val returned: Person = testApp.service.person.merge(dest = dest, source = source)
+        withClue(source.name)(returned.isNamed shouldBe false)
+        returned.name shouldBe dest.name
+
+        val row = personRow(dest.persistedId)
+        row("name") shouldBe dest.name.get
+        withClue(row)("unknown \\d{4,}".r.matches(row("name_for_sort").toString) shouldBe true)
+        testApp.service.person.getById(dest.persistedId).isNamed shouldBe false
+    }
+  }
+
+  test("A merge waits for a concurrent merge of its source, and then takes no name from it") {
+
+    /**
+     * Setup:
+     *
+     * A Person named "Tessa" and two unnamed Persons. On PostgreSQL the second merge of Tessa is held at the first's row lock
+     * until the first commits; on SQLite the write connection serializes them.
+     *
+     * Assertions:
+     *
+     * The first destination takes the name, and the second, which merged a source already merged away by the time it read the
+     * rows, stays unnamed.
+     */
+    val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+    val firstDest: Person = testApp.service.person.addPerson(Person())
+    val secondDest: Person = testApp.service.person.addPerson(Person())
+    List(tessa, firstDest, secondDest).foreach(testContext.addTestFacesAndAssets(_))
+
+    contend(
+      testApp.service.person.merge(dest = firstDest, source = tessa),
+      testApp.service.person.merge(dest = secondDest, source = tessa)
+    )
+
+    testApp.service.person.getById(firstDest.persistedId).name shouldBe Some("Tessa")
+    testApp.service.person.getById(secondDest.persistedId).name shouldBe secondDest.name
   }
 
   test("Same person can appear in the same image more than once") {

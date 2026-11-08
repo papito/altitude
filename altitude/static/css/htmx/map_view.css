@@ -51,7 +51,8 @@
 
 /* The panel's grid is scoped by the header above it: the fragment's own title and controls are for the map */
 #mapPanel .results-title,
-#mapPanel #searchControl {
+#mapPanel #searchControl,
+#mapPanel #curateQueue {
   display: none;
 }
 

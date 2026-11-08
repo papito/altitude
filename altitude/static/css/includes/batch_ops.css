@@ -26,7 +26,8 @@
     touch-action: none;
 }
 
-.batch-ops .action-button:hover:not(:disabled) {
+/* Curate's border stays in its fill's color */
+.batch-ops .action-button:not(.curate):hover:not(:disabled) {
     border-color: var(--warning-background-color);
 }
 

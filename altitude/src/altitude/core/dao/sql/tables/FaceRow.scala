@@ -21,6 +21,7 @@ case class FaceRow[T[_]](
     quality: T[Double],
     isEnrolled: T[Boolean],
     frameTimeMs: T[Option[Long]],
+    sharpness: T[Option[Double]],
     createdAt: T[Option[OffsetDateTime]],
     updatedAt: T[Option[OffsetDateTime]])
 

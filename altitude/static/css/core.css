@@ -92,6 +92,14 @@
     --marker-size-small: 1rem;
     --marker-size: 1.25rem;
     --play-badge-size: 2.75rem;
+    --curation-rail-width: 20rem;
+    --curation-sequence-rail-width: 11rem;
+    --curation-preview-size: 5rem;
+    --curation-crop-size: 4rem;
+    --curation-strip-max-height: 16rem;
+    --curation-kept-name-max-width: 20rem;
+    --curation-loupe-max-size: 20rem;
+    --curation-histogram-height: 4.25rem;
 
     --success-color: light-dark(#297612, #87d575);
     --warning-color: light-dark(#976212, #ebb16b);
@@ -101,6 +109,11 @@
     --warning-background-color: light-dark(hsl(from var(--warning-color) h calc(s * 0.7) 90%), hsl(from var(--warning-color) h calc(s * 0.6) 35%));
     --error-background-color: light-dark(hsl(from var(--error-color) h calc(s * 0.7) 90%), hsl(from var(--error-color) h calc(s * 0.6) 35%));
     --info-background-color: light-dark(hsl(from var(--info-color) h calc(s * 0.7) 90%), hsl(from var(--info-color) h calc(s * 0.6) 35%));
+    /* The channels of the Histogram on Curation's stage, the pure primaries: drawn as light, two that overlap read yellow, cyan
+       or magenta and the three a neutral. The strip is dark in either theme, so each pair holds one color */
+    --histogram-red: light-dark(#ff0000, #ff0000);
+    --histogram-green: light-dark(#00ff00, #00ff00);
+    --histogram-blue: light-dark(#0000ff, #0000ff);
 
     --panel-padding: var(--space-5);
 
@@ -256,11 +269,11 @@ nav .menu, nav .menu a {
     gap: var(--space-6);
 }
 
-nav .menu a {
+nav .menu a, nav .theme-switch {
     transition: filter 0.25s ease;
 }
 
-nav .menu:hover a {
+nav .menu:hover a, nav .theme-switch:hover {
     filter: drop-shadow(0 0 8px hsl(from currentColor h s l / 0.8));
 }
 
@@ -295,6 +308,20 @@ nav .menu.trashbin {
 nav .menu.empty {
     color: var(--theme-neutral-3);
     cursor: default;
+}
+
+nav .theme-switch {
+    flex: 0 0 auto;
+    font-size: var(--font-size-large);
+    padding-right: var(--space-6);
+    border: none;
+    background: none;
+}
+
+/* The icon names the theme a press goes to. CSS picks it from <html>'s data-theme, since a nav reload renders the cell again */
+:root:not([data-theme="light"]) nav .theme-switch .fa-moon,
+:root[data-theme="light"] nav .theme-switch .fa-sun {
+    display: none;
 }
 
 nav .menu[aria-current="page"] {
@@ -421,7 +448,7 @@ footer {
     }
 }
 
-:where(body:not(.setup)) form input.error {
+:where(body:not(.setup)) form :is(input, select).error {
     background-color: var(--error-background-color);
     border-color: var(--error-color);
 
@@ -543,6 +570,29 @@ footer {
 
 .action-button.small span {
     margin-left: var(--space-3);
+}
+
+/* The Curate buttons. The face is clipped to the padding box, so a translucent fill does not paint twice under its border,
+   and the hover rule states it again because the base hover's `background` would lighten a flat color and reset the clip */
+.action-button.curate {
+    --curate-color: hsl(from var(--theme-primary) h s l / 0.32);
+    --button-fill: var(--curate-color);
+    --curate-face: var(--button-fill);
+    background: var(--curate-face) padding-box;
+    border-color: var(--button-fill);
+    color: light-dark(var(--theme-primary-text), var(--theme-neutral-1));
+    font-weight: normal;
+}
+
+.action-button.curate.lit {
+    --curate-color: var(--theme-primary);
+    --curate-face: linear-gradient(hsl(from var(--button-fill) h s calc(l + 6)), var(--button-fill));
+    color: var(--theme-neutral-1);
+}
+
+.action-button.curate:hover:not(:disabled) {
+    --button-fill: oklch(from var(--curate-color) calc(l + 0.04) c h);
+    background: var(--curate-face) padding-box;
 }
 
 .toggle-group {
@@ -1123,7 +1173,8 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     visibility: hidden;
 }
 
-#imageDetailSpinner {
+/* A spinner centered over the positioned box that holds it: asset detail's and a Curation pane's */
+.media-spinner {
     position: absolute;
     inset: 0;
     display: grid;

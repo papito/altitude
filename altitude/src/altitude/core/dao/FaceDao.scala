@@ -9,6 +9,9 @@ trait FaceDao extends BaseDao[Face]:
   def add(face: Face, asset: Asset, person: Person): Face
   def getAssetFaces(assetId: String): List[Face]
 
+  /** The Faces of the assets, those of hidden and bad-match people left out as `getAssetFaces` leaves them out, in no order */
+  def getFacesOfAssets(assetIds: Set[String]): List[Face]
+
   /** Every Face of an asset, whoever its person is: those of hidden and bad-match people too, which `getAssetFaces` leaves out */
   def getAllAssetFaces(assetId: String): List[Face]
 

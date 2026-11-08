@@ -3,17 +3,23 @@ package altitude.core.integration
 import altitude.test.IntegrationTestUtil.withJvmTimeZone
 import java.time.{ LocalDate, LocalDateTime, OffsetDateTime, ZoneOffset }
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ contain, empty, should, shouldBe, shouldEqual, theSameElementsAs }
+import org.scalatest.matchers.should.Matchers.{ be, contain, empty, should, shouldBe, shouldEqual, theSameElementsAs }
 
 import altitude.core.{ Altitude, Const, FieldConst, RequestContext }
+import altitude.core.dao.jdbc.BaseDao
+import altitude.core.dao.sql.search.SearchQueries
 import altitude.core.models.*
 import altitude.core.util.*
 
 /**
  * Grouped search: date groups with full-day totals, page contents, and counts that honor every search filter; Location groups in
- * path order with an asset under each of its Locations; the Location and bounding-box filters and the bare count.
+ * path order with an asset under each of its Locations; Sequence groups by the first capture of their matching frames; the
+ * Location and bounding-box filters and the bare count.
  */
-@DoNotDiscover class SearchGroupingTests(override val testApp: Altitude) extends IntegrationTestCore with TextSearchPaths {
+@DoNotDiscover class SearchGroupingTests(override val testApp: Altitude)
+  extends IntegrationTestCore
+  with TextSearchPaths
+  with SearchPlans {
 
   private val byFilename = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
 
@@ -82,6 +88,34 @@ import altitude.core.util.*
           case SearchGroupKey.Location(_, _, name, categoryName) =>
             (name, categoryName, group.total, group.assets.map(_.persistedId))
           case other => throw IllegalStateException(s"Not a Location group: $other")
+        }
+    }
+
+  private val inTriage: Map[String, Any] = Map(FieldConst.Asset.IS_TRIAGED -> true, FieldConst.Asset.IS_RECYCLED -> false)
+
+  /** A frame in triage, taken at the given camera time or at no known time */
+  private def persistFrame(taken: Option[String], filename: String): Asset = {
+    val asset = testContext.persistAsset(isTriaged = true)
+    testApp.service.asset.rename(asset.persistedId, filename)
+    testContext.setAssetDates(asset.persistedId, taken.map(LocalDateTime.parse), OffsetDateTime.parse("2026-09-06T12:00:00Z"))
+    asset
+  }
+
+  /** The frames stamped into one Sequence, whose ID is returned */
+  private def inSequence(frames: List[Asset], sequenceId: String = BaseDao.genId): String = {
+    testApp.txManager.withTransaction(testApp.DAO.asset.setSequence(frames.map(_.persistedId).toSet, sequenceId)) shouldBe
+      frames.size
+    sequenceId
+  }
+
+  /** A Sequence page as (Sequence ID, the first capture, the group's full count, the asset IDs on the page) per group */
+  private def sequenceSummary(result: GroupedSearchResult): List[(Option[String], Option[String], Int, List[String])] =
+    result.groups.map {
+      group =>
+        group.key match {
+          case SearchGroupKey.Sequence(id, firstCapturedAt) =>
+            (id, firstCapturedAt.map(_.toString), group.total, group.assets.map(_.persistedId))
+          case other => throw IllegalStateException(s"Not a Sequence group: $other")
         }
     }
 
@@ -635,6 +669,253 @@ import altitude.core.util.*
     val page6 = grouped(by = GroupBy.Location, rpp = 4)
     locationSummary(grouped(by = GroupBy.Location, rpp = 4, cursor = page6.nextCursor)) shouldEqual
       List((Some("Rome"), Some("Italy"), 3, List(a3, a4)), (None, None, 2, List(a5, a6)))
+  }
+
+  test("Sequence groups are in the order of their first capture, whatever its frames, with No sequence last") {
+
+    /**
+     * Setup:
+     *
+     * In triage: a burst whose frames run past those of a later burst, a Sequence with one undated frame, a later Sequence, a
+     * Sequence of one frame, two Sequences with the same first capture, a Sequence with no capture time at all, and two frames in
+     * no Sequence, one of them captured before all the others. One frame of the later burst is recycled.
+     *
+     * Assertions:
+     *
+     * The groups run oldest first capture first, then by the Sequence's ID, a frame in one group, whichever way the request asks
+     * for: the direction has no say. A Sequence with no capture time follows those with one on either engine, and No sequence is
+     * last whatever its frames' times. Each group's count is its own, the cursor's two values are the first capture and the
+     * Sequence, and it is all one statement.
+     *
+     * Edge cases:
+     *
+     * A recycled frame neither counts nor sets the first capture, an undated frame in a Sequence does not make its group undated,
+     * and a search matching nothing is an empty first page.
+     */
+    val spreadOldest = persistFrame(Some("2026-09-06T09:00:00"), "a.jpg")
+    val spreadNewest = persistFrame(Some("2026-09-06T13:00:00"), "b.jpg")
+    val partlyUndated = persistFrame(None, "c.jpg")
+    val partlyDated = persistFrame(Some("2026-09-06T10:00:00"), "d.jpg")
+    val recycled = persistFrame(Some("2026-09-06T07:00:00"), "e.jpg")
+    val later1 = persistFrame(Some("2026-09-06T11:00:05"), "f.jpg")
+    val later2 = persistFrame(Some("2026-09-06T11:00:06"), "g.jpg")
+    val lone = persistFrame(Some("2026-09-06T12:00:00"), "h.jpg")
+    val tie1 = persistFrame(Some("2026-09-06T14:00:00"), "i.jpg")
+    val tie2 = persistFrame(Some("2026-09-06T14:00:00"), "j.jpg")
+    val undated1 = persistFrame(None, "k.jpg")
+    val undated2 = persistFrame(None, "l.jpg")
+    val looseOldest = persistFrame(Some("2026-09-06T06:00:00"), "m.jpg")
+    val looseUndated = persistFrame(None, "n.jpg")
+
+    val spread = inSequence(List(spreadOldest, spreadNewest))
+    val partly = inSequence(List(partlyUndated, partlyDated))
+    val later = inSequence(List(recycled, later1, later2))
+    val single = inSequence(List(lone))
+    val List(lowTie, highTie) = List(BaseDao.genId, BaseDao.genId).sorted: @unchecked
+    inSequence(List(tie1), highTie)
+    inSequence(List(tie2), lowTie)
+    val undated = inSequence(List(undated1, undated2))
+    testApp.service.library.recycleAssets(Set(recycled.persistedId))
+
+    def ids(assets: Asset*): List[String] = assets.toList.map(_.persistedId)
+    def at(time: String): Option[String] = Some(LocalDateTime.parse(s"2026-09-06T$time").toString)
+
+    val before = RequestContext.readQueryCount.value
+    val page = grouped(by = GroupBy.Sequence, params = inTriage)
+    RequestContext.readQueryCount.value - before shouldBe 1
+
+    sequenceSummary(page) shouldEqual List(
+      (Some(spread), at("09:00:00"), 2, ids(spreadOldest, spreadNewest)),
+      (Some(partly), at("10:00:00"), 2, ids(partlyUndated, partlyDated)),
+      (Some(later), at("11:00:05"), 2, ids(later1, later2)),
+      (Some(single), at("12:00:00"), 1, ids(lone)),
+      (Some(lowTie), at("14:00:00"), 1, ids(tie2)),
+      (Some(highTie), at("14:00:00"), 1, ids(tie1)),
+      (Some(undated), None, 2, ids(undated1, undated2)),
+      (None, None, 2, ids(looseOldest, looseUndated))
+    )
+    page.total shouldBe Some(13)
+    page.continuesGroup shouldBe false
+    page.nextCursor shouldBe None
+    page.groups.map(_.key.cursorGroupId) shouldEqual
+      List(Some(spread), Some(partly), Some(later), Some(single), Some(lowTie), Some(highTie), Some(undated), None)
+    page.groups.head.key.cursorKey shouldBe at("09:00:00")
+
+    // The direction of the request is ignored: the order is fixed
+    sequenceSummary(grouped(by = GroupBy.Sequence, params = inTriage, direction = SortDirection.ASC)) shouldEqual
+      sequenceSummary(page)
+
+    // The sort applies within each group, and does not move the groups
+    val byNameDescending =
+      grouped(by = GroupBy.Sequence, params = inTriage, sort = SearchSort(FieldConst.Asset.FILENAME, SortDirection.DESC))
+    sequenceSummary(byNameDescending).map(group => (group._1, group._4)) shouldEqual List(
+      (Some(spread), ids(spreadNewest, spreadOldest)),
+      (Some(partly), ids(partlyDated, partlyUndated)),
+      (Some(later), ids(later2, later1)),
+      (Some(single), ids(lone)),
+      (Some(lowTie), ids(tie2)),
+      (Some(highTie), ids(tie1)),
+      (Some(undated), ids(undated2, undated1)),
+      (None, ids(looseUndated, looseOldest))
+    )
+
+    val none = grouped(by = GroupBy.Sequence, params = inTriage, text = Some("nothing"))
+    none.isEmpty shouldBe true
+    none.total shouldBe Some(0)
+  }
+
+  test("A search showing some of a Sequence's frames orders and counts its group by those frames") {
+
+    /**
+     * Setup:
+     *
+     * A Sequence of three frames, 8:00, 9:00 and 10:00, and a second of two, 8:30 and 8:40; an album holds the first Sequence's
+     * last two frames, the second's two and a frame in no Sequence.
+     *
+     * Assertions:
+     *
+     * Over the album the first Sequence's group has the first capture of its matching frames, 9:00, and comes after the second,
+     * though the whole Sequence captured first; its count is the frames shown. Over everything the order is the other way round.
+     *
+     * The Curation set of that Sequence holds all three frames, whatever a search shows of them.
+     *
+     * Edge cases:
+     *
+     * A filter leaving one frame of a Sequence gives a group of one, which is still that Sequence's and not No sequence.
+     */
+    val f1 = persistFrame(Some("2026-09-06T08:00:00"), "f1.jpg")
+    val f2 = persistFrame(Some("2026-09-06T09:00:00"), "f2.jpg")
+    val f3 = persistFrame(Some("2026-09-06T10:00:00"), "f3.jpg")
+    val g1 = persistFrame(Some("2026-09-06T08:30:00"), "g1.jpg")
+    val g2 = persistFrame(Some("2026-09-06T08:40:00"), "g2.jpg")
+    val loose = persistFrame(Some("2026-09-06T07:00:00"), "loose.jpg")
+    val first = inSequence(List(f1, f2, f3))
+    val second = inSequence(List(g1, g2))
+    val album = testApp.service.album.add("Picks")
+    testApp.service.album
+      .addAssets(album.persistedId, Set(f2.persistedId, f3.persistedId, g1.persistedId, g2.persistedId, loose.persistedId))
+    val onlyOne = testApp.service.album.add("One")
+    testApp.service.album.addAssets(onlyOne.persistedId, Set(f3.persistedId))
+
+    def at(time: String): Option[String] = Some(LocalDateTime.parse(s"2026-09-06T$time").toString)
+
+    sequenceSummary(grouped(by = GroupBy.Sequence, params = inTriage, albumIds = Set(album.persistedId))) shouldEqual List(
+      (Some(second), at("08:30:00"), 2, List(g1.persistedId, g2.persistedId)),
+      (Some(first), at("09:00:00"), 2, List(f2.persistedId, f3.persistedId)),
+      (None, None, 1, List(loose.persistedId))
+    )
+    sequenceSummary(grouped(by = GroupBy.Sequence, params = inTriage)) shouldEqual List(
+      (Some(first), at("08:00:00"), 3, List(f1.persistedId, f2.persistedId, f3.persistedId)),
+      (Some(second), at("08:30:00"), 2, List(g1.persistedId, g2.persistedId)),
+      (None, None, 1, List(loose.persistedId))
+    )
+    sequenceSummary(grouped(by = GroupBy.Sequence, params = inTriage, albumIds = Set(onlyOne.persistedId))) shouldEqual
+      List((Some(first), at("10:00:00"), 1, List(f3.persistedId)))
+
+    // The set the group's Curate opens is the whole Sequence, whatever the search shows of it
+    testApp.service.curation.sequenceSet(first).map(_.frames.map(_.asset.persistedId).toSet) shouldBe
+      Some(Set(f1.persistedId, f2.persistedId, f3.persistedId))
+  }
+
+  test("Under the Relevance sort a Sequence group reads best match first and is ordered as under any other sort") {
+
+    /**
+     * Setup:
+     *
+     * Triaged frames of two Sequences and two in none, named "beach"; an album named "Beach days" holds one frame of the first
+     * Sequence and one of those in none. The first Sequence's oldest frame has no such name, so the text leaves it out.
+     *
+     * Assertions:
+     *
+     * Groups run by the first capture of the frames the text finds, and each group's count is theirs. Within a group the frame
+     * matched in the album leads, and frames of one Relevance read newest capture first.
+     */
+    val album = testApp.service.album.add("Beach days")
+    val a1 = persistFrame(Some("2026-09-06T09:00:00"), "beach_a1.jpg")
+    val a2 = persistFrame(Some("2026-09-06T09:00:01"), "beach_a2.jpg")
+    val other = persistFrame(Some("2026-09-06T08:00:00"), "street.jpg")
+    val b1 = persistFrame(Some("2026-09-06T10:00:00"), "beach_b1.jpg")
+    val b2 = persistFrame(Some("2026-09-06T10:00:01"), "beach_b2.jpg")
+    val loose1 = persistFrame(Some("2026-09-06T07:00:00"), "beach_c1.jpg")
+    val loose2 = persistFrame(Some("2026-09-06T07:00:01"), "beach_c2.jpg")
+    val first = inSequence(List(a1, a2, other))
+    val second = inSequence(List(b1, b2))
+    testApp.service.album.addAssets(album.persistedId, Set(a1.persistedId, loose1.persistedId))
+
+    def at(time: String): Option[String] = Some(LocalDateTime.parse(s"2026-09-06T$time").toString)
+
+    sequenceSummary(
+      grouped(by = GroupBy.Sequence, params = inTriage, sort = SearchSort.Relevance, text = Some("beach"))) shouldEqual List(
+      (Some(first), at("09:00:00"), 2, List(a1.persistedId, a2.persistedId)),
+      (Some(second), at("10:00:00"), 2, List(b2.persistedId, b1.persistedId)),
+      (None, None, 2, List(loose1.persistedId, loose2.persistedId))
+    )
+  }
+
+  test("The Location and day groupings are unchanged in Triage, where frames carry a Sequence") {
+
+    /**
+     * Setup:
+     *
+     * Two frames of one Sequence in triage, one of them in a Location, and a third frame in no Sequence.
+     *
+     * Assertions:
+     *
+     * Grouped by Location, the frames are under their Location and "No location", however their Sequences lie. Grouped by day,
+     * they are under their day.
+     */
+    val rome = addLocation("Rome")
+    val frame1 = persistFrame(Some("2026-09-06T10:00:00"), "a.jpg")
+    val frame2 = persistFrame(Some("2026-09-06T10:00:01"), "b.jpg")
+    val loose = persistFrame(Some("2026-09-05T10:00:00"), "c.jpg")
+    inSequence(List(frame1, frame2))
+    testApp.service.location.addAssets(rome.persistedId, Set(frame1.persistedId))
+
+    locationSummary(grouped(by = GroupBy.Location, params = inTriage)) shouldEqual List(
+      (Some("Rome"), None, 1, List(frame1.persistedId)),
+      (None, None, 2, List(frame2.persistedId, loose.persistedId))
+    )
+    summary(grouped(params = inTriage)) shouldEqual List(
+      (day("2026-09-06"), 2, List(frame1.persistedId, frame2.persistedId)),
+      (day("2026-09-05"), 1, List(loose.persistedId))
+    )
+  }
+
+  test("A page grouped by Sequence reads its frames and counts through the Sequence index") {
+
+    /**
+     * Setup:
+     *
+     * A Sequence of two frames in triage and one frame in none, seeded into 5,000 copies with no Sequence, analyzed and rolled
+     * back once the plans are read: a library the planner has rows to choose by, in which the frames with a Sequence are few.
+     *
+     * Assertions:
+     *
+     * The plan of a first page and of a continuation inside the group each name `asset_sequence` twice: once for the candidates
+     * and once for the count of the page's group, so neither costs the library.
+     */
+    val template = persistFrame(Some("2026-09-06T09:00:00"), "loose.jpg")
+    val frame1 = persistFrame(Some("2026-09-06T10:00:00"), "a.jpg")
+    val frame2 = persistFrame(Some("2026-09-06T10:00:01"), "b.jpg")
+    inSequence(List(frame1, frame2))
+    val sort = byFilename
+
+    def query(cursor: Option[SearchCursor]): SearchQuery =
+      new SearchQuery(
+        params = inTriage,
+        rpp = 1,
+        searchSort = List(sort),
+        grouping = Some(SearchGrouping(GroupBy.Sequence)),
+        cursor = cursor)
+
+    val cursor = searchGrouped(query(None)).nextCursor
+    cursor.flatMap(_.groupId).isDefined shouldBe true
+
+    val plans = atScale(seedCopies(template.persistedId, copies = 5000, folders = 1)) {
+      List(query(None), query(cursor)).map(
+        q => planOf(SearchQueries.groupedBySequence(searchDialect, q, RequestContext.getRepository.persistedId)))
+    }
+    plans.foreach(plan => withClue(plan)("asset_sequence".r.findAllIn(plan).size should be >= 2))
   }
 
   test("Under the Relevance sort every group reads best match first, then newest capture, and continues by cursor") {

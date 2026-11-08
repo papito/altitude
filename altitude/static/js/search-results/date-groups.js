@@ -1,10 +1,16 @@
+import { Const } from "../constants.js"
+
 /**
- * The group headers of a grouped grid (`.result-group`, a day or a Location, rendered by
+ * The group headers of a grouped grid (`.result-group`, a day, a Location or a Sequence, rendered by
  * `htmx/results_grid_grouped.scala.html` with the group's full match count in `.count`, across every
  * page loaded or not). This is the one place a header changes on the client: a cell leaving the grid
  * takes one off its group, and a group with no matches left loses its header. A header whose loaded
  * cells are all gone but whose count is still positive stays - the group still has matches on pages
  * not loaded yet.
+ *
+ * A Sequence's header has a Curate button while its group has enough frames, the number the server
+ * renders on the button (`data-min-frames`), and loses it when the count falls under that or Curation
+ * clears the Sequence.
  *
  * The header's checkbox over the group's loaded cells is its own component
  * (js/alpine/components/date-group-selectable.js).
@@ -31,6 +37,26 @@ export function decrementDateGroupOf(cellEl) {
 
     countEl.dataset.count = String(count)
     countEl.textContent = itemCountText(count)
+
+    const curateEl = headerEl.querySelector(`[${Const.attributes.sequenceId}]`)
+    if (curateEl && count < Number(curateEl.dataset.minFrames)) {
+        curateEl.remove()
+    }
+}
+
+/**
+ * The headers of Sequences Curation cleared lose their Curate button; their kept frames stay under
+ * them. A Sequence can have two headers on screen: one whose first frame left the grid is overtaken
+ * by another Sequence on the next page, and opens again after it.
+ */
+export function removeCurateButtons(sequenceIds) {
+    sequenceIds.forEach((sequenceId) => {
+        document
+            .querySelectorAll(
+                `[${Const.attributes.sequenceId}="${CSS.escape(sequenceId)}"]`,
+            )
+            .forEach((buttonEl) => buttonEl.remove())
+    })
 }
 
 /**

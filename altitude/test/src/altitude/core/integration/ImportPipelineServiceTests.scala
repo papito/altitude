@@ -860,9 +860,10 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * The still GIF has a Face, so the frames hold a face that is found and recognized. The animated GIF is imported with a
-     * duration of 600 ms (a frame without a delay plays for 100 ms, as browsers show it) and a preview, and has no Face: its
-     * frames are not searched, and the Person keeps one Face.
+     * The still GIF has a Face, so the frames hold a face that is found and recognized, and, decoded through the ImageIO
+     * fallback, it is measured: it has an Image quality and a perceptual hash. The animated GIF is imported with a duration of
+     * 600 ms (a frame without a delay plays for 100 ms, as browsers show it) and a preview, and has no Face: its frames are not
+     * searched, and the Person keeps one Face. Nor is it measured: no Image quality, no hash.
      */
     val pipelineContext = PipelineContext(testContext.repository, testContext.user)
     def gif(name: String, frames: Seq[BufferedImage], delaysCs: Seq[Int]): (AssetWithData, PipelineContext) =
@@ -872,11 +873,16 @@ import altitude.core.util.Query
 
     val still = imported(runPipeline(gif("still.gif", Seq(portraitFrame()), Seq(0))))
     testApp.service.person.getAssetFacesWithPeople(still.persistedId) should have size 1
+    val storedStill: Asset = testApp.service.asset.getById(still.persistedId)
+    storedStill.imageQuality should not be None
+    storedStill.perceptualHash should not be None
 
     val animated = testApp.service.asset.getById(
       imported(
         runPipeline(gif("animated.gif", Seq(portraitFrame(), portraitFrame(1), portraitFrame(2)), Seq(0, 20, 30)))).persistedId)
     animated.durationMs shouldBe Some(600L)
+    animated.imageQuality shouldBe None
+    animated.perceptualHash shouldBe None
     testApp.service.asset.getPreview(animated.persistedId).data should not be empty
     testApp.service.person.getAssetFacesWithPeople(animated.persistedId) shouldBe empty
     testApp.service.person.getAll.map(_.numOfFaces) shouldBe List(1)

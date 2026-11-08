@@ -34,8 +34,8 @@ createTokenTweaks({
         { id: "theme", title: "Theme colors", match: /^--theme-/ },
         {
             id: "status",
-            title: "Status and shadow",
-            match: /^--(?:(?:success|warning|error|info)-.+|shadow-color)$/,
+            title: "Status, shadow and channels",
+            match: /^--(?:(?:success|warning|error|info)-.+|shadow-color|histogram-(?:red|green|blue))$/,
         },
         { id: "derived", title: "Derived", kinds: ["color"] },
         {

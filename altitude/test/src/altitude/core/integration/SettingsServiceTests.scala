@@ -13,6 +13,8 @@ import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.models.GeocoderResult
+import altitude.core.models.SceneModel
+import altitude.core.models.SettingGroup
 import altitude.core.models.SettingKind
 import altitude.core.models.Settings
 
@@ -61,6 +63,19 @@ import altitude.core.models.Settings
     current.videoFacesMaxSampledFrames shouldBe 120
     current.videoFacesMinClusterFrames shouldBe 2
     current.videoPreviewMinLuminance shouldBe 40
+    current.sequenceMaxGapMs shouldBe 60000
+    current.sequenceDinov2MinSimilarity shouldBe 0.8
+    current.sequenceClipMinSimilarity shouldBe 0.9
+    current.sequenceMinSimilarity(SceneModel.Dinov2) shouldBe 0.8
+    current.sequenceMinSimilarity(SceneModel.Clip) shouldBe 0.9
+    current.sequenceMaxHashDistance shouldBe 10
+    current.curationBlurRatio shouldBe 0.5
+    current.curationFaceQualityGap shouldBe 2.0
+    current.curationClippedFraction shouldBe 0.05
+    current.curationCrushedFraction shouldBe 0.05
+    current.curationDarkLuminance shouldBe 0.15
+    current.curationBrightLuminance shouldBe 0.75
+    current.curationLuminanceGap shouldBe 0.1
     current.mapTileUrl shouldBe "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
     current.mapTileAttribution shouldBe "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"
     current.mapGeocoderEnabled shouldBe false
@@ -103,6 +118,17 @@ import altitude.core.models.Settings
       Settings.FACE_DETECTION_MIN_FACE_SIZE -> "0", // below 1
       Settings.FACE_RECOGNITION_MATCH_COUNT -> "2.5", // not an integer
       Settings.VIDEO_PREVIEW_MIN_LUMINANCE -> "256", // above 255
+      Settings.SEQUENCE_MAX_GAP_MS -> "0", // below 1
+      Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> "1.5", // above 1
+      Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> "-1.5", // below -1
+      Settings.SEQUENCE_MAX_HASH_DISTANCE -> "65", // above 64, the bits of a hash
+      Settings.CURATION_BLUR_RATIO -> "1.5", // above 1
+      Settings.CURATION_FACE_QUALITY_GAP -> "-1", // below 0
+      Settings.CURATION_CLIPPED_FRACTION -> "1.5", // above 1
+      Settings.CURATION_CRUSHED_FRACTION -> "-0.1", // below 0
+      Settings.CURATION_DARK_LUMINANCE -> "dark", // not a number
+      Settings.CURATION_BRIGHT_LUMINANCE -> "1.1", // above 1
+      Settings.CURATION_LUMINANCE_GAP -> "-0.1", // below 0
       Settings.MAP_TILE_URL -> "https://tiles.example.org/{z}/{x}.png", // no {y}
       Settings.MAP_GEOCODER_ENABLED -> "yes", // not a boolean
       Settings.MAP_GEOCODER_URL -> "ftp://geocoder.example.org", // not http(s)
@@ -130,6 +156,123 @@ import altitude.core.models.Settings
 
     testApp.settings.validate(
       Map(Settings.FACE_DETECTION_BOUNDING_BOX_SIZE -> "200", Settings.FACE_DETECTION_MIN_FACE_SIZE -> "200")) shouldBe empty
+  }
+
+  test("The hash distance is capped at the bits of a hash, and an uncapped whole number takes any large value") {
+    testApp.settings.validate(Map(Settings.SEQUENCE_MAX_HASH_DISTANCE -> "64")) shouldBe empty
+    testApp.settings.validate(Map(Settings.SEQUENCE_MAX_HASH_DISTANCE -> "65")) shouldBe
+      Map(Settings.SEQUENCE_MAX_HASH_DISTANCE -> "Must be at most 64")
+
+    // An hour's gap: Integer(min) alone caps nothing
+    testApp.settings.validate(Map(Settings.SEQUENCE_MAX_GAP_MS -> "3600000")) shouldBe empty
+  }
+
+  test("The Sequence Settings open the Triage section, Live on both engines, in the order of the screen") {
+    val sequence = List(
+      Settings.SEQUENCE_MAX_GAP_MS,
+      Settings.SEQUENCE_DINOV2_MIN_SIMILARITY,
+      Settings.SEQUENCE_CLIP_MIN_SIMILARITY,
+      Settings.SEQUENCE_MAX_HASH_DISTANCE
+    )
+    sequence.map(Settings.byName).foreach {
+      definition =>
+        definition.group shouldBe SettingGroup.Triage
+        definition.kind shouldBe SettingKind.Live
+        definition.engine shouldBe None
+    }
+    Settings.all.filter(_.group == SettingGroup.Triage).map(_.name).take(sequence.size) shouldBe sequence
+    testApp.settings.applicable.map(_.name) should contain allElementsOf sequence
+  }
+
+  test("A similarity threshold is a cosine, inclusive of -1 and 1") {
+    List(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, Settings.SEQUENCE_CLIP_MIN_SIMILARITY).foreach {
+      name =>
+        withClue(name) {
+          testApp.settings.validate(Map(name -> "-1")) shouldBe empty
+          testApp.settings.validate(Map(name -> "0")) shouldBe empty
+          testApp.settings.validate(Map(name -> "1")) shouldBe empty
+          testApp.settings.validate(Map(name -> "-1.01")) shouldBe Map(name -> "Must be at least -1")
+          testApp.settings.validate(Map(name -> "1.01")) shouldBe Map(name -> "Must be at most 1")
+          testApp.settings.validate(Map(name -> "high")) shouldBe Map(name -> "Must be a number")
+        }
+    }
+  }
+
+  test("Saved Sequence thresholds reach their accessors at once, with no restart waiting") {
+    testApp.settings.save(
+      Map(
+        Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> "0.7",
+        Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> "0.95",
+        Settings.SEQUENCE_MAX_GAP_MS -> "120000"
+      ))
+
+    val current = testApp.settings.current
+    current.sequenceDinov2MinSimilarity shouldBe 0.7
+    current.sequenceClipMinSimilarity shouldBe 0.95
+    current.sequenceMinSimilarity(SceneModel.Dinov2) shouldBe 0.7
+    current.sequenceMinSimilarity(SceneModel.Clip) shouldBe 0.95
+    current.sequenceMaxGapMs shouldBe 120000
+    testApp.settings.pendingRestart shouldBe empty
+
+    // A reload reads the saved values back
+    testApp.settings.load()
+    testApp.settings.current.sequenceClipMinSimilarity shouldBe 0.95
+  }
+
+  test("The Curation thresholds are Live settings of the Triage section, and the fractions are inclusive of 0 and 1") {
+    val curation = List(
+      Settings.CURATION_BLUR_RATIO,
+      Settings.CURATION_FACE_QUALITY_GAP,
+      Settings.CURATION_CLIPPED_FRACTION,
+      Settings.CURATION_CRUSHED_FRACTION,
+      Settings.CURATION_DARK_LUMINANCE,
+      Settings.CURATION_BRIGHT_LUMINANCE,
+      Settings.CURATION_LUMINANCE_GAP
+    )
+    curation.map(Settings.byName).foreach {
+      definition =>
+        definition.group shouldBe SettingGroup.Triage
+        definition.kind shouldBe SettingKind.Live
+        definition.engine shouldBe None
+    }
+
+    val fractions = curation.filterNot(_ == Settings.CURATION_FACE_QUALITY_GAP)
+    fractions.foreach {
+      name =>
+        testApp.settings.validate(Map(name -> "0")) shouldBe empty
+        testApp.settings.validate(Map(name -> "1")) shouldBe empty
+        testApp.settings.validate(Map(name -> "-0.01")) shouldBe Map(name -> "Must be at least 0")
+        testApp.settings.validate(Map(name -> "1.01")) shouldBe Map(name -> "Must be at most 1")
+    }
+
+    // A gap in Face quality, which is an embedding's norm and not a fraction: no cap
+    testApp.settings.validate(Map(Settings.CURATION_FACE_QUALITY_GAP -> "0")) shouldBe empty
+    testApp.settings.validate(Map(Settings.CURATION_FACE_QUALITY_GAP -> "30")) shouldBe empty
+    testApp.settings.validate(Map(Settings.CURATION_FACE_QUALITY_GAP -> "-0.01")) shouldBe
+      Map(Settings.CURATION_FACE_QUALITY_GAP -> "Must be at least 0")
+  }
+
+  test("A saved Curation threshold reaches its accessor at once, with no restart waiting") {
+    testApp.settings.save(
+      Map(
+        Settings.CURATION_BLUR_RATIO -> "0.4",
+        Settings.CURATION_FACE_QUALITY_GAP -> "3.5",
+        Settings.CURATION_CLIPPED_FRACTION -> "0.2",
+        Settings.CURATION_CRUSHED_FRACTION -> "0.3",
+        Settings.CURATION_DARK_LUMINANCE -> "0.1",
+        Settings.CURATION_BRIGHT_LUMINANCE -> "0.9",
+        Settings.CURATION_LUMINANCE_GAP -> "0.25"
+      ))
+
+    val current = testApp.settings.current
+    current.curationBlurRatio shouldBe 0.4
+    current.curationFaceQualityGap shouldBe 3.5
+    current.curationClippedFraction shouldBe 0.2
+    current.curationCrushedFraction shouldBe 0.3
+    current.curationDarkLuminance shouldBe 0.1
+    current.curationBrightLuminance shouldBe 0.9
+    current.curationLuminanceGap shouldBe 0.25
+    testApp.settings.pendingRestart shouldBe empty
   }
 
   test("The vector index keeps at least four times the match count, a rule of PostgreSQL alone") {

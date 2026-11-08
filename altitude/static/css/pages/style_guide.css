@@ -201,6 +201,22 @@
   row-gap: var(--control-vertical-space);
 }
 
+/* A Bundle's row takes the width of Curation's rail */
+.sg-curation-bundle {
+  width: var(--curation-rail-width);
+}
+
+/* The Sequence rail's rows side by side, where the rail (#curationQueue) stacks them */
+.sg-curation-queue {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  column-gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 /* The drag count badge positions itself absolutely over the dragged thumbnail */
 .sg-badge-host {
   position: relative;

@@ -49,6 +49,11 @@ export function hydrateSearchResultsFragment({ fragmentEl }) {
         ensureViewSettingsControl(fragmentEl)
         bindStickyOffsets({ fragmentEl })
 
+        // The toolbar's Curate button shows the number of Sequences in the queue
+        if (fragmentEl.dataset.resultsView === Const.views.triage) {
+            Alpine.store(Const.state.sequencesToCurate).refresh()
+        }
+
         // Also discards the previous grid's controller, and any box it was still drawing
         bindBoxSelection({ assetsElement, contentElement })
     }

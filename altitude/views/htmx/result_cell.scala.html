@@ -15,7 +15,7 @@
    so the first viewport paints before any script runs. *@
 @(asset: Asset, isContinuousScroll: Boolean, nextCursor: Option[String] = None, showNoDate: Boolean = false, cellId: String = null)
 
-@defining(s"/${ Const.DataStore.CONTENT }/r/${RequestContext.getRepository.persistedId}/${ Const.DataStore.PREVIEW }/${ asset.persistedId }") { imgUrl =>
+@defining(Util.contentUrl(Const.DataStore.PREVIEW, asset.persistedId)) { imgUrl =>
 <div id="@{Option(cellId).getOrElse(s"asset-${asset.persistedId}")}"
      class="@if(nextCursor.isDefined) {cell last-cell} else {cell}"
      data-folder-id="@{asset.folderId}"

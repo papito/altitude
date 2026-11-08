@@ -1,5 +1,6 @@
 import { Alpine } from "../../lib/alpine.esm.min.js"
 import { contextMenu } from "./context-menu.js"
+import { curation } from "./curation.js"
 import { initDateGroupSelectable } from "./date-group-selectable.js"
 import { peopleTab } from "./people-tab.js"
 import { viewSettings } from "./view-settings.js"
@@ -15,3 +16,6 @@ Alpine.data("viewSettings", viewSettings)
 
 // Referenced as `x-data="peopleTab"` by htmx/people.scala.html
 Alpine.data("peopleTab", peopleTab)
+
+// Referenced as `x-data="curation"` by htmx/curation.scala.html
+Alpine.data("curation", curation)

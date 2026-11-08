@@ -11,7 +11,9 @@ import org.mindrot.jbcrypt.BCrypt
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import altitude.core.Const
 import altitude.core.DuplicateException
+import altitude.core.RequestContext
 
 object Util:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -47,6 +49,27 @@ object Util:
 
   /** A calendar day as a date group header reads it, "Sunday, September 6, 2026". No zone is involved: the day is the day */
   def humanReadableDate(date: LocalDate): String = date.format(dateFormatter)
+
+  /**
+   * The URL of an asset's stored content in the context repository: its Preview, its file or a Face's crop (`Const.DataStore`),
+   * as the templates link it, with no signature
+   */
+  def contentUrl(dataType: String, itemId: String): String =
+    s"/${Const.DataStore.CONTENT}/r/${RequestContext.getRepository.persistedId}/$dataType/$itemId"
+
+  private val shortDateFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
+
+  /** A calendar day as a row of Curation's Sequence rail reads it, "12 Mar 2026". The camera's wall clock, so no zone is involved */
+  def humanReadableShortDate(date: LocalDate): String = date.format(shortDateFormatter)
+
+  private val timeFormatter = DateTimeFormatter.ofPattern("h:mm:ss a", Locale.ENGLISH)
+
+  /**
+   * A moment as a Sequence's group header reads it, "Sunday, September 6, 2026, 10:00:05 AM": the seconds tell apart the bursts
+   * of one minute. The camera's wall clock, so no zone is involved.
+   */
+  def humanReadableDayAndTime(dateTime: LocalDateTime): String =
+    s"${humanReadableDate(dateTime.toLocalDate)}, ${dateTime.format(timeFormatter)}"
 
   /**
    * A date group's match count as its header reads it, "(3 items)". The client rebuilds the same text as the count falls

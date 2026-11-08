@@ -158,17 +158,17 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
     /**
      * Setup:
      *
-     * Two JPEGs with an EXIF original date, images/cactus.jpg (2011-05-16 17:46:24) and images/exif/DSCF1160.JPG (2008-04-17
-     * 11:12:02), imported through the pipeline.
+     * Two JPEGs with an EXIF original date, images/cactus.jpg (2011-05-16 17:46:24, with a Sub-Sec Time Original of 30) and
+     * images/exif/DSCF1160.JPG (2008-04-17 11:12:02, no subsecond tag), imported through the pipeline.
      *
      * Assertions:
      *
-     * The asset the import returns carries the capture time with its EXIF-original source, and the same values are read back from
-     * the model, its JSON and the raw column ("exif_original").
+     * The asset the import returns carries the capture time, to the subsecond where the camera wrote one, with its EXIF-original
+     * source, and the same values are read back from the model, its JSON and the raw column ("exif_original").
      */
     for (
       (file, expected) <- List(
-        "images/cactus.jpg" -> LocalDateTime.of(2011, 5, 16, 17, 46, 24),
+        "images/cactus.jpg" -> LocalDateTime.of(2011, 5, 16, 17, 46, 24, 300_000_000),
         "images/exif/DSCF1160.JPG" -> LocalDateTime.of(2008, 4, 17, 11, 12, 2))
     ) {
       val imported = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset(file))
@@ -244,6 +244,29 @@ import altitude.core.util.{ GroupBy, SearchGrouping, SearchGroupKey, SearchQuery
 
     val nowUtc = LocalDateTime.now(ZoneOffset.UTC)
     Duration.between(storedUtc, nowUtc).abs().getSeconds should be <= 30L
+  }
+
+  test("Import timestamp is stored to the microsecond on both engines") {
+
+    /**
+     * Setup:
+     *
+     * An asset written through the DAO, which binds the clock's reading truncated to the microsecond.
+     *
+     * Assertions:
+     *
+     * The import time read back through the model has no finer fraction than a microsecond on either engine (PostgreSQL keeps
+     * microseconds, and SQLite's text is written to the same precision, so the two engines store one value for one reading), and
+     * on SQLite the stored text spells at most six fractional digits.
+     */
+    val asset = addAssetWithCaptureTime(None)
+    asset.createdAt.get.getNano % 1000 shouldBe 0
+    if (testApp.dataSourceType == Const.DbEngineName.SQLITE) {
+      val raw = testApp.txManager.asReadOnly {
+        query("SELECT created_at FROM asset WHERE id = ?", asset.persistedId).head("created_at").toString
+      }
+      raw.matches("""\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?""") shouldBe true
+    }
   }
 
   test("A PNG creation-time chunk is resolved and persisted through the real import") {

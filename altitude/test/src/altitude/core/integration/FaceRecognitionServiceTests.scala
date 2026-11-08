@@ -22,6 +22,7 @@ import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.dao.postgres.FaceDao as PostgresFaceDao
+import altitude.core.dao.postgres.PostgresOverrides
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
 import altitude.core.models.Face
@@ -98,6 +99,28 @@ import altitude.core.service.FaceRecognitionService
       .persistedId shouldBe enrolled.persistedId
   }
 
+  test("A Face's sharpness is stored, and a Face without one reads back without one") {
+
+    /**
+     * Setup:
+     *
+     * Two people's Faces on one asset, one with a sharpness and one without.
+     *
+     * Assertions:
+     *
+     * Each reads back as it was stored, through the DAO mapping both engines share and each engine's own insert.
+     */
+    val asset = testContext.persistAsset()
+    val sharp = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(sharp, asset, unitVector(1), sharpness = Some(123.5))
+    val unmeasured = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(unmeasured, asset, unitVector(2))
+
+    val faces = testApp.service.person.getAssetFaces(asset.persistedId).map(face => face.personId.value -> face.sharpness).toMap
+    faces(sharp.persistedId) shouldBe Some(123.5)
+    faces(unmeasured.persistedId) shouldBe None
+  }
+
   test("A Face of another repository is not a match candidate") {
 
     /**
@@ -137,7 +160,7 @@ import altitude.core.service.FaceRecognitionService
        * The plan reads `face_03`, the partial HNSW index over the enrolled Faces' half-precision vectors: the statement's order
        * and predicates are the ones the index is declared with.
        */
-      val vector = PostgresFaceDao.vectorLiteral(unitVector(1))
+      val vector = PostgresOverrides.vectorLiteral(unitVector(1))
       val plan = testApp.txManager.withTransaction {
         List("seqscan", "sort").foreach(path => update(s"SET LOCAL enable_$path = off"))
         query(

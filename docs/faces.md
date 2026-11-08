@@ -15,16 +15,26 @@ registry in [Settings.scala](../altitude/src/altitude/core/models/Settings.scala
 
 Faces are two stages of the import pipeline (`service/ImportPipelineService.scala`), after the asset row exists and is
 indexed, on both engines, their work on the import dispatcher's threads (the `import.parallelism` Setting, a Restart
-setting: 0, the default, means half the cores and never fewer than 2):
+setting: 0, the default, means half the cores or what half the machine's memory affords beside the shared net and
+the two Scene models, whichever is fewer, and never fewer than 2, and `import.parallelism.max` in the server config caps it whatever the
+Setting says; see `util/ImportParallelism`):
 
 - `DetectFacesFlow` calls `FaceRecognitionService.detect`, which finds the faces without touching the database: an
   image's every detection (`extractFaces`), or a Video's clusters (see **Videos**). An animated image (an image with a
   duration, an animated GIF) is not searched for faces. The stage works on up to that many assets of a
   repository at once. The detections, a `DetectedFaces` of each Face with its crops, ride on the pipeline element
-  (`AssetWithData.detectedFaces`) to the next stage.
+  (`AssetWithData.detectedFaces`) through `MeasureImageFlow` to recognition.
 - `RecognizeFacesFlow` calls `recognizeAndStore`, which matches and stores them in a short `withFaceVector`
   transaction, so the detection never holds SQLite's one write connection. It works on one asset of a repository at a
   time, in upload order, so a face can join the Person an earlier photo of the same upload started.
+
+Between the two, `MeasureImageFlow` reads `AssetWithData.detectedFaces`, gives each detection of a still image its
+Face sharpness (the variance of the Laplacian inside its box at the measurement scale, none for a box too small to say),
+which recognition stores in the Face's one insert, and scores the image on the union of the boxes when they cover enough
+of the frame, so a sharp portrait on a flat background is not dragged down. A Face in a Video has no sharpness. Face
+sharpness is not Face quality: it compares only between Faces of one Person at a similar size. That stage and the score
+are described under **Sequences and Image quality** in [altitude/AGENTS.md](../altitude/AGENTS.md); `StripBinaryDataFlow`
+leaves the detections behind.
 
 Whatever a stage throws for one asset drops that asset and the queue goes on; a `DuplicateException` (see **Storage**)
 rolls back that asset's faces and is reported as `SamePersonDetectedTwiceException`. Each Face's files are written as it
@@ -32,8 +42,11 @@ is stored, inside that transaction, and a rollback deletes the files already wri
 database always has its files and a rolled-back one leaves none.
 
 `withFaceVector` (`transactions/TransactionManager.scala`) wraps every read or write that touches the `features`
-column: on SQLite it loads the `sqlite-vector` extension and runs `vector_init('face', 'features',
-'dimension=512,type=FLOAT32,distance=cosine')`; on Postgres the column is a pgvector `vector`.
+column. On SQLite every connection, as it is opened, loads the `sqlite-vector` extension and runs `vector_init('face',
+'features', 'dimension=512,type=FLOAT32,distance=cosine')` when the `face` table exists, and the migration of a fresh
+database has the connections opened before its schema existed replaced (`schemaCreated`), so the wrapper sets nothing
+up per transaction there; on Postgres the column is a pgvector `vector` and the wrapper sets the HNSW search parameters
+for the transaction.
 
 ## Detection
 
@@ -50,8 +63,11 @@ returns a `(Face, FaceImages)` per face it keeps.
 2. **Alignment**: the five YuNet landmarks (eyes, nose, mouth corners) are warped by a similarity transform
    (`Calib3d.estimateAffinePartial2D`) onto the ArcFace 112×112 reference template (`ARCFACE_REF_LANDMARKS_112`,
    `alignCropFaceFromDetection`).
-3. **Embedding**: ArcFace w600k_r50 (`resources/opencv/w600k_r50.onnx`, OpenCV DNN, one `Net` per thread) turns the
-   aligned crop into 512 floats (`getArcFaceEmbedding`). The result is an `Embedding`: the L2-normalized vector, which
+3. **Embedding**: ArcFace w600k_r50 (`resources/opencv/w600k_r50.onnx`, OpenCV DNN) turns the aligned crop into 512
+   floats (`getArcFaceEmbedding`). The threads share one `Net` (`arcFaceNets`, a `util/NetPool`, Winograd off: about
+   370 MB, against about 780 MB with it on). A `Net` is not thread-safe, so an embedding borrows it for its one
+   forward pass, waiting while it is out, and copies the output inside the borrow, because the output shares its
+   memory with the net. The result is an `Embedding`: the L2-normalized vector, which
    is compared by cosine distance, and the **norm** the raw output had before normalization.
 4. **Quality** is that norm (`Face.quality`). For a net trained with the ArcFace loss the norm tracks how
    recognizable a face was: it drops with blur and occlusion, and it costs nothing extra. It does not respond to low
@@ -157,12 +173,23 @@ Unmatched (fewer and unnamed), Hidden (hidden, whatever its count or name); a di
 (`PersonService.getInBuckets`, one query) is the union of the buckets switched on, Matched alone by default; Hide / Show,
 offered to a Matched person (`Person.isMatched`), moves it between buckets. Its actions:
 
-- **Name**: `updateName` sets `is_named`; a named person is listed whatever their count.
+- **Name**: `updateName` stores the name in NFC and sets `is_named`; a named person is listed whatever their count. A
+  named person's `name_for_sort` is its name key (`PersonService.nameKey`: the NFC name lowercased under `Locale.ROOT`),
+  and `person_01` keeps that unique over the live people, hidden ones included, so a name is unique regardless of case and
+  Unicode form. This is lowercasing, not a full Unicode case fold: "Weiß" and "WEISS", or a Greek name with a final sigma
+  and with a plain one ("σοφος" and "σοφοσ"), keep different keys. A merged-away or bad-match person holds no name. An unnamed person's `name_for_sort` is `unknown 0042`, so
+  a name of the form `Unknown N`, in any case and spacing, is reserved and refused with a validation error. A change of
+  case alone is a rename. A name another live person holds is refused, and the editor offers to merge into that person
+  (**Event Flow** in `views/AGENTS.md`).
 - **Cover face**: `getPersonFaces` (by detection score) offers the candidates, `setFaceAsCover` picks one.
 - **Hide / show**: display only; the person's faces still match.
 - **Bad match** (`markAsBadMatch`): the person is taken out of listings and their faces out of the match candidates.
-- **Merge** (`merge(dest, source)`): the source's faces move to the destination, the source is soft-deleted, the
-  destination takes the source's name when only the source was named, and its count is recounted from the search.
+- **Merge** (`merge(dest, source)`): the source's faces move to the destination, the source is soft-deleted, and the
+  destination's count is recounted from the search. Both people's rows are locked first (`lockAndGetLive`, in ID order).
+  The merged name is decided from the two stored rows, not the models passed in: an unnamed destination with a named,
+  live source takes the source's `name`, its name key as `name_for_sort`, and `is_named`; otherwise the destination, named
+  or not, keeps all three. A source no longer live (merged away or a bad match) gives no name; a merge of one is not
+  refused. The source is soft-deleted first, so `person_01` never sees the name on two live people.
 
 ## Settings
 

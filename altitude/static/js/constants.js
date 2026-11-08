@@ -63,6 +63,17 @@ export const Const = {
         // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
         dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",
         styleGuideSampleSubmitted: "STYLE_GUIDE_SAMPLE_SUBMITTED_EVENT",
+        // The theme shown was changed, with `detail.theme` (js/common/theme.js)
+        themeChanged: "THEME_CHANGED_EVENT",
+        // The batch ops' Curate: opens Curation on the selection unless it is over the button's `data-max-selection`
+        batchCurateRequested: "BATCH_CURATE_REQUESTED_EVENT",
+        // Opens Curation: on the queue with no detail, on one Sequence with `detail.sequenceId`, on a selection
+        // with `detail.assetIds`
+        curateRequested: "CURATE_REQUESTED_EVENT",
+        // A mutation in Curation was saved; the counts refresh
+        curationChanged: "CURATION_CHANGED_EVENT",
+        // Curation closed; `detail.recycledIds` and `detail.clearedSequenceIds` are what it leaves changed
+        curationClosed: "CURATION_CLOSED_EVENT",
     },
 
     /**
@@ -74,6 +85,8 @@ export const Const = {
     attributes: {
         expanded: "data-expanded",
         viewedScope: "data-viewed-scope",
+        // The Loupe's level on a stage pane's lens, "200%", which its stylesheet shows (js/common/loupe.js)
+        loupeLevel: "data-level",
         isRoot: "data-is-root",
         numOfChildren: "data-num-of-children",
         parentFolderId: "data-parent-folder-id",
@@ -87,6 +100,39 @@ export const Const = {
         dataSrc: "data-src",
         personId: "data-person-id",
         faceId: "data-face-id",
+        // A frame of a Curation set in the rail (`data-asset-id` finds the cells of the grid beneath), its file's
+        // name, what the stage's tag says is wrong with it, its Bundle, and whether it is in an album or Location
+        frameId: "data-frame-id",
+        fileName: "data-file-name",
+        problems: "data-problems",
+        bundleKind: "data-bundle-kind",
+        inAlbumOrLocation: "data-in-album-or-location",
+        // The Sequence a group header's Curate opens Curation on
+        sequenceId: "data-app-sequence-id",
+        // The Sequence a row of Curation's Sequence rail stands for (htmx/curation_queue); not `data-app-sequence-id`,
+        // which finds a group header's Curate
+        railSequenceId: "data-rail-sequence-id",
+        // The fewest frames a group header's Curate stays for (`Const.Curation.MIN_FRAMES`)
+        minFrames: "data-min-frames",
+        // The most images the batch ops' Curate opens Curation on (`Const.Curation.MAX_SELECTION`)
+        maxSelection: "data-max-selection",
+        // A Curation set's opening frames
+        openingPinnedId: "data-opening-pinned-id",
+        openingFocusedId: "data-opening-focused-id",
+        // The measurement's gray levels a pixel counts as blown or crushed at, and the box the image is fitted into
+        // before it is measured, which the stage's Clipping blink reads from the set's root
+        clippedLevel: "data-clipped-level",
+        crushedLevel: "data-crushed-level",
+        measurementBox: "data-measurement-box",
+        // What the stage's Histogram strip shows of a frame, on its rail item, as the import measured it: the
+        // Histogram, a byte per bin in Base64, and the fractions of its pixels crushed and blown; a frame not
+        // measured carries none
+        histogram: "data-histogram",
+        crushedShadows: "data-crushed-shadows",
+        clippedHighlights: "data-clipped-highlights",
+        // The face strip's column of a frame, and a crop's box in upright pixels: x, y, width, height
+        columnFrameId: "data-column-frame-id",
+        faceBox: "data-face-box",
         // A Setting field's default, which its Reset fills in
         settingDefault: "data-setting-default",
     },
@@ -104,6 +150,7 @@ export const Const = {
         imageDetailLoading: "imageDetailLoading",
         modal: "modal",
         snackbar: "snackbar",
+        sequencesToCurate: "sequencesToCurate",
     },
 
     localStore: {
@@ -113,8 +160,9 @@ export const Const = {
         explorerDock: "explorerDock",
         // The results layout (`grid` / `map`) last chosen, seeded into the search parameters on load
         resultsLayout: "resultsLayout",
-        // The theme (`light` / `dark`) the style guide was last shown in (js/style-guide.js)
-        styleGuideTheme: "styleGuideTheme",
+        // The theme (`light` / `dark`) last chosen, shown on every page with a nav (js/common/theme.js;
+        // the boot script tag of includes/header_common names the same key in its `data-key`)
+        theme: "theme",
         // The design tweaks panel's state (the tokentweak package, configured by js/design-tweaks.js): the
         // active tweak set, the snapshots, the theme, the panel's dock and open state and the adopted
         // sheet's text. The boot script tag of includes/header_common names the same key in its `data-key`
@@ -122,6 +170,15 @@ export const Const = {
         // The People tab's remembered state (js/alpine/components/people-tab.js): each pane's
         // People buckets, whether Split view is on and the panes' sizes on each axis
         peopleView: "peopleView",
+        // The Loupe's magnification last chosen on Curation's stage, read and saved by js/common/loupe.js
+        // through the `rememberedLoupeLevel` and `saveLoupeLevel` the Curation component hands it
+        loupeLevel: "loupeLevel",
+        // The Bundle kinds whose details Curation's rail shows, a JSON array (js/alpine/components/curation.js)
+        curationDetails: "curationDetails",
+        // Whether Curation's stage shows the Histogram strips, "true" or "false" (js/alpine/components/curation.js)
+        curationHistogram: "curationHistogram",
+        // Whether Curation shows the Sequence rail on the queue, "true" or "false" (js/alpine/components/curation.js)
+        curationSequenceRail: "curationSequenceRail",
     },
 
     sessionStore: {

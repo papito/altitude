@@ -3,21 +3,32 @@ package altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import org.apache.commons.dbutils.QueryRunner
 import scalasql.Sc
 import scalasql.Table
 
+import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.CaptureDateSource
 import altitude.core.models.ExtractedMetadata
+import altitude.core.models.Histogram
+import altitude.core.models.ImageQuality
+import altitude.core.models.PerceptualHash
 import altitude.core.models.PublicMetadata
+import altitude.core.models.QueuedSequence
+import altitude.core.models.SceneEmbeddings
+import altitude.core.models.SceneModel
+import altitude.core.models.SequenceMembers
 import altitude.core.models.UserMetadata
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
+import altitude.core.util.SequenceRule
 
 abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude.core.dao.AssetDao:
   final override val tableName = "asset"
@@ -49,6 +60,10 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       originalCreatedAtSource = row.originalCreatedAtSource.flatMap(CaptureDateSource.fromDbValue),
       latitude = row.latitude,
       longitude = row.longitude,
+      imageQuality =
+        ImageQuality.fromColumns(row.sharpness, row.luminance, row.clippedHighlights, row.crushedShadows, row.imageQuality),
+      perceptualHash = row.perceptualHash.map(PerceptualHash(_)),
+      sequenceId = row.sequenceId,
       createdAt = row.createdAt.map(toLocalDateTime),
       updatedAt = row.updatedAt.map(toLocalDateTime)
     )
@@ -70,9 +85,10 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       height = rec(FieldConst.Asset.HEIGHT).asInstanceOf[Int],
       durationMs = getLongField(rec(FieldConst.Asset.DURATION_MS)),
       sizeBytes = getLongField(rec(FieldConst.Asset.SIZE_BYTES)).get,
-      extractedMetadata = getJsonFromColumn(rec(FieldConst.Asset.EXTRACTED_METADATA)): ExtractedMetadata,
+      // The two bulky JSON columns a hand-written read may leave out of its select (`assetWithoutBulkyMetadata`) read as empty
+      extractedMetadata = getJsonFromColumn(rec.get(FieldConst.Asset.EXTRACTED_METADATA).orNull): ExtractedMetadata,
       publicMetadata = getJsonFromColumn(rec(FieldConst.Asset.PUBLIC_METADATA)): PublicMetadata,
-      userMetadata = getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA)): UserMetadata,
+      userMetadata = getJsonFromColumn(rec.get(FieldConst.Asset.USER_METADATA).orNull): UserMetadata,
       folderId = rec(FieldConst.Asset.FOLDER_ID).asInstanceOf[String].trim,
       isRecycled = getBooleanField(rec(FieldConst.Asset.IS_RECYCLED)),
       isTriaged = getBooleanField(rec(FieldConst.Asset.IS_TRIAGED)),
@@ -82,6 +98,19 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
         Option(rec(FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE)).flatMap(value => CaptureDateSource.fromDbValue(value.toString)),
       latitude = getDoubleField(rec(FieldConst.Asset.LATITUDE)),
       longitude = getDoubleField(rec(FieldConst.Asset.LONGITUDE)),
+      imageQuality = ImageQuality.fromColumns(
+        sharpness = getDoubleField(rec(FieldConst.Asset.SHARPNESS)),
+        luminance = getDoubleField(rec(FieldConst.Asset.LUMINANCE)),
+        clippedHighlights = getDoubleField(rec(FieldConst.Asset.CLIPPED_HIGHLIGHTS)),
+        crushedShadows = getDoubleField(rec(FieldConst.Asset.CRUSHED_SHADOWS)),
+        score = getLongField(rec(FieldConst.Asset.IMAGE_QUALITY)).map(_.toInt)
+      ),
+      perceptualHash = getLongField(rec(FieldConst.Asset.PERCEPTUAL_HASH)).map(PerceptualHash(_)),
+      // Only the Sequence candidates' statement (`candidateColumns`) selects the embeddings: any other row map leaves them absent
+      sceneEmbeddings = SceneEmbeddings(
+        dinov2 = rec.get(SceneModel.Dinov2.column).flatMap(getVectorField),
+        clip = rec.get(SceneModel.Clip.column).flatMap(getVectorField)),
+      sequenceId = Option(rec(FieldConst.Asset.SEQUENCE_ID)).map(_.toString),
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
     )
@@ -148,8 +177,9 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       captureSource,
       latitude,
       longitude,
-      // Bound explicitly in UTC rather than left to the engine default, whose value depends on the server zone
-      nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC)),
+      // Bound explicitly in UTC rather than left to the engine default, whose value depends on the server zone, and to the
+      // microsecond, the precision PostgreSQL keeps, so SQLite's text stores the same value
+      nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)),
       asset.width,
       asset.height,
       asset.width * asset.height,
@@ -179,44 +209,393 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
     runner.update(RequestContext.getConn, sql, updateValues*)
 
+  /**
+   * The columns of the hand-written reads that need no bulky metadata JSON (the library operations' locking read, a Sequence's
+   * frames and its live members): `AssetRow`'s labels, `asset.`-prefixed as `SearchQueries.assetColumns` builds them, so the
+   * typed row stays the one list of what a general read selects (the Scene embeddings are not on it), without `user_metadata` and
+   * `extracted_metadata`, which [[makeModel]] reads as empty when absent; `public_metadata` stays, since the Sequence rule
+   * compares the device model
+   */
+  private val assetWithoutBulkyMetadata: String =
+    Table
+      .labels(AssetRow)
+      .map(Db.config.columnNameMapper)
+      .filterNot(Set(FieldConst.Asset.USER_METADATA, FieldConst.Asset.EXTRACTED_METADATA))
+      .map(name => s"asset.$name")
+      .mkString(", ")
+
+  /**
+   * The columns of the two reads that need a frame's Scene embeddings, [[sequenceCandidatesStatement]] and
+   * [[undatedSequenceCandidatesStatement]]: [[assetWithoutBulkyMetadata]] and the two embedding columns, bulky (a few kilobytes a
+   * row, toasted out of line on PostgreSQL) and selected by no other read
+   */
+  private val candidateColumns: String =
+    s"$assetWithoutBulkyMetadata, ${SceneModel.values.map(model => s"asset.${model.column}").mkString(", ")}"
+
+  override def markAsCompleted(asset: Asset): Int =
+    SceneModel.values.foreach {
+      model =>
+        asset.sceneEmbeddings.of(model).foreach {
+          embedding =>
+            require(
+              embedding.values.length == model.dimensions,
+              s"A ${model.name} embedding has ${model.dimensions} dimensions, not ${embedding.values.length}")
+        }
+    }
+
+    val sql = s"""
+      UPDATE asset
+         SET ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE,
+             ${FieldConst.Asset.SHARPNESS} = ?,
+             ${FieldConst.Asset.LUMINANCE} = ?,
+             ${FieldConst.Asset.CLIPPED_HIGHLIGHTS} = ?,
+             ${FieldConst.Asset.CRUSHED_SHADOWS} = ?,
+             ${FieldConst.Asset.IMAGE_QUALITY} = ?,
+             ${FieldConst.Asset.PERCEPTUAL_HASH} = ?,
+             ${FieldConst.Asset.HISTOGRAM} = ?,
+             ${SceneModel.Dinov2.column} = $vectorPlaceholder,
+             ${SceneModel.Clip.column} = $vectorPlaceholder
+       WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.ID} = ?
+    """
+
+    // An absent metric, hash, Histogram or embedding is bound as SQL NULL
+    val quality = asset.imageQuality
+    val values: List[Any] = List(
+      quality.map(q => Double.box(q.sharpness)).orNull,
+      quality.map(q => Double.box(q.luminance)).orNull,
+      quality.map(q => Double.box(q.clippedHighlights)).orNull,
+      quality.map(q => Double.box(q.crushedShadows)).orNull,
+      quality.map(q => Int.box(q.score)).orNull,
+      asset.perceptualHash.map(h => Long.box(h.bits)).orNull,
+      asset.histogram.map(_.toBytes).orNull,
+      vectorBind(asset.sceneEmbeddings.dinov2),
+      vectorBind(asset.sceneEmbeddings.clip),
+      RequestContext.getRepository.persistedId,
+      asset.persistedId
+    )
+    updateByBySql(sql, values)
+
+  override def getHistograms(assetIds: Set[String]): Map[String, Histogram] =
+    if assetIds.isEmpty then return Map.empty
+
+    val sql = s"""
+      SELECT ${FieldConst.ID}, ${FieldConst.Asset.HISTOGRAM}
+        FROM asset
+       WHERE ${FieldConst.ID} $inIdSet
+         AND ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.HISTOGRAM} IS NOT NULL
+    """
+    manyBySqlQuery(sql, List(idSet(assetIds), RequestContext.getRepository.persistedId)).map {
+      rec =>
+        rec(FieldConst.ID).asInstanceOf[String] -> Histogram.fromBytes(rec(FieldConst.Asset.HISTOGRAM).asInstanceOf[Array[Byte]])
+    }.toMap
+
   override def getAssetsToRecycle(assetIds: Set[String]): List[Asset] =
-    lockForTransition(Some(assetIds), isRecycled = Some(false))
+    lockAssets(Some(assetIds), isRecycled = Some(false))
 
   override def getAssetsToMove(assetIds: Set[String]): List[Asset] =
-    lockForTransition(Some(assetIds), isRecycled = None)
+    lockAssets(Some(assetIds), isRecycled = None)
 
   override def getAssetsToRestore(assetIds: Set[String]): List[Asset] =
-    lockForTransition(Some(assetIds), isRecycled = Some(true))
+    lockAssets(Some(assetIds), isRecycled = Some(true))
 
   override def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset] =
-    lockForTransition(assetIds, isRecycled = Some(true))
+    lockAssets(assetIds, isRecycled = Some(true))
+
+  override def lockTriaged(assetIds: Set[String]): List[Asset] =
+    lockAssets(Some(assetIds), isRecycled = None, triagedOnly = true)
 
   /**
    * The context repository's completed assets that are not marked for purging, among the IDs when given, recycled or live when
-   * asked, locked until the transaction ends. The flags are literals, which each engine reads as its own boolean, so no bind
-   * value differs by engine.
+   * asked, in triage only when asked, locked in ID order until the transaction ends. The flags are literals, which each engine
+   * reads as its own boolean, so no bind value differs by engine.
    */
-  private def lockForTransition(assetIds: Option[Set[String]], isRecycled: Option[Boolean]): List[Asset] =
+  private def lockAssets(assetIds: Option[Set[String]], isRecycled: Option[Boolean], triagedOnly: Boolean = false): List[Asset] =
     if assetIds.exists(_.isEmpty) then return List.empty[Asset]
 
     val idFilter = assetIds.fold("")(_ => s"AND id $inIdSet")
     val recycledFilter = isRecycled.fold("")(flag => s"AND ${FieldConst.Asset.IS_RECYCLED} = ${if flag then "TRUE" else "FALSE"}")
+    val triagedFilter = if triagedOnly then s"AND ${FieldConst.Asset.IS_TRIAGED} = TRUE" else ""
 
     val sql = s"""
-      SELECT asset.*,
-             NULL AS ${FieldConst.Asset.USER_METADATA},
-             NULL AS ${FieldConst.Asset.EXTRACTED_METADATA}
+      SELECT $assetWithoutBulkyMetadata
         FROM asset
        WHERE ${FieldConst.REPO_ID} = ?
          AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
          AND ${FieldConst.Asset.IS_PURGED} = FALSE
          $idFilter
          $recycledFilter
+         $triagedFilter
+    ORDER BY ${FieldConst.ID}
          $forUpdate
     """
 
     val values = RequestContext.getRepository.persistedId :: assetIds.map(idSet).toList
     manyBySqlQuery(sql, values).map(makeModel)
+
+  override def getSequenceCandidates(asset: Asset, gapMs: Int): List[Asset] =
+    sequenceCandidatesStatement(asset, gapMs).fold(List.empty[Asset])((sql, values) => manyBySqlQuery(sql, values).map(makeModel))
+
+  /**
+   * The `WHERE` the two candidates statements share: the context repository's completed, triaged still images with a hash, in the
+   * trash or not but not purge-pending, the asset itself left out. The repository binds first and the asset's ID second, before
+   * either statement's own values. The predicates are a derived copy of what `SequenceRule.isDated` and `isUndated` have in
+   * common, the rule staying the authority (every candidate goes through it again in Scala); they are here to spare reading full
+   * rows, and a change to the rule is made in both places. The flags are literals, which each engine reads as its own boolean, so
+   * a partial index over the triaged assets is read. The `is_recycled` probe is not shared: the dated statement's index leads
+   * with the flag, so that statement probes it for both values, and the undated statement's index does not hold it.
+   */
+  private val sequenceCandidatesWhere: String = s"""
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
+         AND ${FieldConst.Asset.IS_TRIAGED} = TRUE
+         AND ${FieldConst.Asset.IS_PURGED} = FALSE
+         AND ${FieldConst.ID} <> ?
+         AND ${FieldConst.AssetType.MEDIA_TYPE} = 'image'
+         AND ${FieldConst.Asset.DURATION_MS} IS NULL
+         AND ${FieldConst.Asset.PERCEPTUAL_HASH} IS NOT NULL"""
+
+  /**
+   * The statement behind [[getSequenceCandidates]] with its bind values, which the plan tests explain; nothing for an asset
+   * without a capture time. The window's calendar days, every one from the first to the last, lead the triage capture-day index
+   * and the timestamp then seeks within it. A candidate may be in the trash (an asset recycled from triage keeps its flag and its
+   * Sequence, so a frame of its burst imported meanwhile joins it), so the index's `is_recycled` column is probed for both
+   * values. The rows are locked (`FOR UPDATE` on PostgreSQL): a move sorting one of them meanwhile holds it, and once the move
+   * commits the row is re-evaluated and left out. The predicate on the capture time's source is the rest of the derived copy of
+   * `SequenceRule.isDated` that [[sequenceCandidatesWhere]] begins. The metadata JSON a candidate is compared by (the device
+   * model) is the public one, and this is one of the two reads that select the Scene embeddings, which the rule compares the
+   * candidates by.
+   */
+  def sequenceCandidatesStatement(asset: Asset, gapMs: Int): Option[(String, List[Any])] =
+    asset.originalCreatedAt.map {
+      capturedAt =>
+        val from = capturedAt.minus(gapMs, ChronoUnit.MILLIS)
+        val to = capturedAt.plus(gapMs, ChronoUnit.MILLIS)
+        val days = Iterator.iterate(from.toLocalDate)(_.plusDays(1)).takeWhile(!_.isAfter(to.toLocalDate)).toList
+        val sources = SequenceRule.CameraClockSources.map(_.dbValue).toList.sorted
+        def placeholders(values: List[?]): String = values.map(_ => "?").mkString(", ")
+
+        val sql = s"""
+          SELECT $candidateColumns
+            FROM asset
+      $sequenceCandidatesWhere
+             AND ${FieldConst.Asset.IS_RECYCLED} IN (FALSE, TRUE)
+             AND ${dayOf(FieldConst.Asset.ORIGINAL_CREATED_AT)} IN (${placeholders(days)})
+             AND ${FieldConst.Asset.ORIGINAL_CREATED_AT} BETWEEN ? AND ?
+             AND ${FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE} IN (${placeholders(sources)})
+             $forUpdate
+        """
+
+        val values = RequestContext.getRepository.persistedId :: asset.persistedId :: days.map(nativeLocalDate) :::
+          List(nativeLocalDateTime(from), nativeLocalDateTime(to)) ::: sources
+        (sql, values)
+    }
+
+  override def getUndatedSequenceMatches(asset: Asset, limit: Int)(keep: Asset => Boolean): BaseDao.Collected[Asset] =
+    val (sql, values) = undatedSequenceCandidatesStatement(asset, limit)
+    collectBySqlQuery(sql, values)(rec => Some(makeModel(rec)).filter(keep))
+
+  /**
+   * The statement behind [[getUndatedSequenceMatches]] with its bind values, which the plan tests explain. The partial index
+   * `asset_triage_undated` holds the triaged rows with no capture time by repository, width, height, import time and ID, so on
+   * both engines the repository's undated triage rows of the asset's size are one run of it in the statement's order, which the
+   * engine walks backwards from the newest and stops at the limit (when those rows are fewer than the limit, PostgreSQL may read
+   * the run as a bitmap and sort it instead, which costs the same rows). The remaining predicates (completed, not purge-pending,
+   * a still image with no duration, a hash, not the asset) are heap checks over those rows alone, so the cost of an undated
+   * import is bounded by the limit and the undated triage frames of its size, whatever else triage holds; a candidate may be in
+   * the trash, since an asset recycled from triage keeps its flag and its Sequence, and only a purge-pending row is out. The
+   * predicate on the capture time and the width and height of the rule's size test in `matches` are the rest of the derived copy
+   * of `SequenceRule.isUndated` that [[sequenceCandidatesWhere]] begins. The rows are not locked: the Sequence writers take turns
+   * through [[lockSequences]], and the matches are re-read locked through [[lockTriaged]] before they are stamped, so a candidate
+   * a move sorted meanwhile is left out. Like the dated statement, this read selects the Scene embeddings, which the rule
+   * compares the candidates by; `getUndatedSequenceMatches` streams them so no more than the matches' are held.
+   */
+  def undatedSequenceCandidatesStatement(asset: Asset, limit: Int): (String, List[Any]) =
+    val sql = s"""
+      SELECT $candidateColumns
+        FROM asset
+  $sequenceCandidatesWhere
+         AND ${FieldConst.Asset.ORIGINAL_CREATED_AT} IS NULL
+         AND ${FieldConst.Asset.WIDTH} = ?
+         AND ${FieldConst.Asset.HEIGHT} = ?
+    ORDER BY ${FieldConst.CREATED_AT} DESC, ${FieldConst.ID} DESC
+       LIMIT ?
+    """
+    (sql, List(RequestContext.getRepository.persistedId, asset.persistedId, asset.width, asset.height, limit))
+
+  override def countSequenceMembers(sequenceIds: Set[String]): List[SequenceMembers] =
+    if sequenceIds.isEmpty then return List.empty[SequenceMembers]
+
+    val sql = s"""
+      SELECT ${FieldConst.Asset.SEQUENCE_ID}, COUNT(*) AS members, MIN(${FieldConst.Asset.ORIGINAL_CREATED_AT}) AS first_captured_at
+        FROM asset
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.SEQUENCE_ID} $inIdSet
+       GROUP BY ${FieldConst.Asset.SEQUENCE_ID}
+    """
+
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(sequenceIds))).map(toSequenceMembers)
+
+  private def toSequenceMembers(rec: Map[String, AnyRef]): SequenceMembers =
+    SequenceMembers(
+      sequenceId = rec(FieldConst.Asset.SEQUENCE_ID).toString,
+      members = getLongField(rec("members")).get.toInt,
+      firstCapturedAt = getDateTimeField(rec.get("first_captured_at"))
+    )
+
+  override def getSequencesToCurate(): List[QueuedSequence] =
+    val (sql, values) = sequencesToCurateStatement
+    manyBySqlQuery(sql, values).map {
+      rec =>
+        val members = toSequenceMembers(rec)
+        QueuedSequence(members.sequenceId, members.members, members.firstCapturedAt, rec("cover_id").toString)
+    }
+
+  override def countSequencesToCurate(): Int =
+    val (sql, values) = countSequencesToCurateStatement
+    getLongField(executeAndGetOne(sql, values)("sequences")).get.toInt
+
+  override def getSequenceFrames(sequenceId: String, limit: Int): List[Asset] =
+    val (sql, values) = sequenceFramesStatement(sequenceId, limit)
+    manyBySqlQuery(sql, values).map(makeModel)
+
+  override def countSequenceFrames(sequenceId: String): Int =
+    val (sql, values) = countSequenceFramesStatement(sequenceId)
+    getLongField(executeAndGetOne(sql, values)("frames")).get.toInt
+
+  /** The first capture of a Sequence's frames, which the queue is ordered by; none for an undated Sequence */
+  private val firstCapture = s"MIN(${FieldConst.Asset.ORIGINAL_CREATED_AT})"
+
+  /**
+   * The context repository's Sequences with at least two frames completed and out of the trash, counted over those frames alone.
+   * `sequence_id IS NOT NULL` is what lets `asset_sequence` answer it: that index holds only the rows that carry a Sequence, so
+   * the cost is theirs and not the library's.
+   */
+  private def sequencesToCurate: String = s"""
+      SELECT ${FieldConst.Asset.SEQUENCE_ID},
+             COUNT(*) AS members,
+             $firstCapture AS first_captured_at
+        FROM asset
+       WHERE ${FieldConst.Asset.SEQUENCE_ID} IS NOT NULL
+         AND ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
+         AND ${FieldConst.Asset.IS_RECYCLED} = FALSE
+         AND ${FieldConst.Asset.IS_PURGED} = FALSE
+       GROUP BY ${FieldConst.Asset.SEQUENCE_ID}
+      HAVING COUNT(*) >= ${C.Curation.MIN_FRAMES}
+    """
+
+  /**
+   * The statement behind [[getSequencesToCurate]] with its bind values, which the plan tests explain. The grouped rows are a
+   * derived table, so the `ORDER BY` names their columns: an undated Sequence has no first capture, and NULL sorts first on
+   * SQLite and last on PostgreSQL, so the `IS NULL` test puts it last on both. The cover is a correlated subquery over those
+   * rows: the Sequence's first live frame in [[sequenceFramesStatement]]'s capture order, read once per Sequence of the queue
+   * through `asset_sequence`. The count statement leaves it out, since the toolbar reads the count after every mutation.
+   */
+  def sequencesToCurateStatement: (String, List[Any]) =
+    val capturedAt = FieldConst.Asset.ORIGINAL_CREATED_AT
+    val cover = s"""
+      (SELECT cover.${FieldConst.ID}
+         FROM asset AS cover
+        WHERE cover.${FieldConst.Asset.SEQUENCE_ID} = to_curate.${FieldConst.Asset.SEQUENCE_ID}
+          AND cover.${FieldConst.REPO_ID} = ?
+          AND cover.${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
+          AND cover.${FieldConst.Asset.IS_RECYCLED} = FALSE
+          AND cover.${FieldConst.Asset.IS_PURGED} = FALSE
+        ORDER BY cover.$capturedAt IS NULL, cover.$capturedAt, cover.${FieldConst.CREATED_AT}, cover.${FieldConst.ID}
+        LIMIT 1) AS cover_id
+    """
+    val sql = s"""
+      SELECT to_curate.*, $cover
+        FROM ($sequencesToCurate) AS to_curate
+       ORDER BY first_captured_at IS NULL, first_captured_at, ${FieldConst.Asset.SEQUENCE_ID}
+    """
+    val repoId = RequestContext.getRepository.persistedId
+    (sql, List(repoId, repoId))
+
+  /** The statement behind [[countSequencesToCurate]] with its bind values, which the plan tests explain */
+  def countSequencesToCurateStatement: (String, List[Any]) =
+    (s"SELECT COUNT(*) AS sequences FROM ($sequencesToCurate) AS to_curate", List(RequestContext.getRepository.persistedId))
+
+  /**
+   * The `FROM` of the frames completed and out of the trash whose Sequence passes the test; its placeholder binds before the
+   * repository
+   */
+  private def liveFramesOfSequences(sequenceTest: String): String = s"""
+        FROM asset
+       WHERE ${FieldConst.Asset.SEQUENCE_ID} $sequenceTest
+         AND ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
+         AND ${FieldConst.Asset.IS_RECYCLED} = FALSE
+         AND ${FieldConst.Asset.IS_PURGED} = FALSE
+    """
+
+  /**
+   * The statement behind [[getSequenceFrames]] with its bind values, which the plan tests explain. The order is
+   * `CurationRule.captureOrder`'s: `IS NULL` puts a frame with no capture time last on both engines, and the import time breaks a
+   * tie before the ID, so an undated Sequence's frames come as they were uploaded rather than by their random IDs. The database
+   * sorts and cuts, so nothing past the window comes back.
+   */
+  def sequenceFramesStatement(sequenceId: String, limit: Int): (String, List[Any]) =
+    val capturedAt = FieldConst.Asset.ORIGINAL_CREATED_AT
+    val sql = s"""
+      SELECT $assetWithoutBulkyMetadata ${liveFramesOfSequences("= ?")}
+       ORDER BY $capturedAt IS NULL, $capturedAt, ${FieldConst.CREATED_AT}, ${FieldConst.ID}
+       LIMIT $limit
+    """
+    (sql, List(sequenceId, RequestContext.getRepository.persistedId))
+
+  /** The statement behind [[countSequenceFrames]] with its bind values, which the plan tests explain */
+  def countSequenceFramesStatement(sequenceId: String): (String, List[Any]) =
+    (s"SELECT COUNT(*) AS frames ${liveFramesOfSequences("= ?")}", List(sequenceId, RequestContext.getRepository.persistedId))
+
+  // SQLite's one write connection serializes the writers
+  override def lockSequences(): Unit = ()
+
+  override def getLiveSequenceMembers(sequenceIds: Set[String]): List[Asset] =
+    if sequenceIds.isEmpty then return List.empty[Asset]
+
+    val (sql, values) = liveSequenceMembersStatement(sequenceIds)
+    manyBySqlQuery(sql, values).map(makeModel)
+
+  /**
+   * The statement behind [[getLiveSequenceMembers]] with its bind values, which the plan tests explain. The rows are locked in ID
+   * order, the order of the library operations' locking select, so the two do not wait on each other in a cycle.
+   */
+  def liveSequenceMembersStatement(sequenceIds: Set[String]): (String, List[Any]) =
+    val sql = s"SELECT $assetWithoutBulkyMetadata ${liveFramesOfSequences(inIdSet)} ORDER BY ${FieldConst.ID} $forUpdate"
+    (sql, List(idSet(sequenceIds), RequestContext.getRepository.persistedId))
+
+  override def clearSequence(assetIds: Set[String]): Int =
+    if assetIds.isEmpty then return 0
+
+    val sql = s"""
+      UPDATE asset
+         SET ${FieldConst.Asset.SEQUENCE_ID} = NULL
+       WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.ID} $inIdSet
+    """
+    updateByBySql(sql, List(RequestContext.getRepository.persistedId, idSet(assetIds)))
+
+  override def setSequence(assetIds: Set[String], sequenceId: String): Int =
+    if assetIds.isEmpty then return 0
+
+    // Only a row still in triage takes a Sequence: a candidate a move sorted meanwhile is left as it is
+    val sql = s"""
+      UPDATE asset
+         SET ${FieldConst.Asset.SEQUENCE_ID} = ?
+       WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.ID} $inIdSet AND ${FieldConst.Asset.IS_TRIAGED} = TRUE
+    """
+    updateByBySql(sql, List(sequenceId, RequestContext.getRepository.persistedId, idSet(assetIds)))
+
+  override def repointSequences(fromIds: Set[String], toId: String): Int =
+    if fromIds.isEmpty then return 0
+
+    val sql = s"""
+      UPDATE asset
+         SET ${FieldConst.Asset.SEQUENCE_ID} = ?
+       WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.Asset.SEQUENCE_ID} $inIdSet
+    """
+    updateByBySql(sql, List(toId, RequestContext.getRepository.persistedId, idSet(fromIds)))
 
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit =
     val existingMetadata = getUserMetadata(assetId) match

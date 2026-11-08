@@ -1,7 +1,7 @@
 /**
  * The two themes of the app, as `light-dark()` pairs resolve them: which one is shown, and the
- * two colors of a pair. The style guide's theme switcher shows the page in a theme through
- * `applyTheme`; the rest of the app stays in the stylesheet's.
+ * two colors of a pair. The nav's theme switch and the style guide's switcher choose one for every
+ * page through `chooseTheme`; `js/theme-boot.js` shows the remembered one before the first paint.
  */
 import { Const } from "../constants.js"
 import { splitOutsideParentheses } from "./token-kinds.js"
@@ -18,16 +18,32 @@ export function themeOrStylesheets(theme) {
         : getComputedStyle(document.documentElement).colorScheme
 }
 
-/** The theme the style guide was shown in on an earlier visit, else the one the stylesheet declares */
+/** The theme last chosen in this browser, else the one the stylesheet declares */
 export function rememberedTheme() {
-    return themeOrStylesheets(
-        localStorage.getItem(Const.localStore.styleGuideTheme),
+    return themeOrStylesheets(localStorage.getItem(Const.localStore.theme))
+}
+
+/**
+ * Shows the page in `theme`: the root element declares the scheme every `light-dark()` color
+ * follows, and `data-theme`, which picks the nav switch's icon
+ */
+export function applyTheme(theme) {
+    document.documentElement.style.colorScheme = theme
+    document.documentElement.dataset.theme = theme
+}
+
+/** Shows `theme`, remembers it for every page and announces it */
+export function chooseTheme(theme) {
+    applyTheme(theme)
+    localStorage.setItem(Const.localStore.theme, theme)
+    document.body.dispatchEvent(
+        new CustomEvent(Const.events.themeChanged, { detail: { theme } }),
     )
 }
 
-/** Shows the page in `theme`: the root element declares the scheme every `light-dark()` color follows */
-export function applyTheme(theme) {
-    document.documentElement.style.colorScheme = theme
+/** Chooses the theme that is not shown */
+export function toggleTheme() {
+    chooseTheme(themeOrStylesheets() === "light" ? "dark" : "light")
 }
 
 /**
@@ -51,7 +67,7 @@ export function inTheme(theme, resolve) {
     const rootStyle = document.documentElement.style
     const shownScheme = rootStyle.colorScheme
 
-    applyTheme(theme)
+    rootStyle.colorScheme = theme
     const result = resolve()
     rootStyle.colorScheme = shownScheme
     return result

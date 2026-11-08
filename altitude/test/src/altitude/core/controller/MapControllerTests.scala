@@ -104,8 +104,8 @@ import altitude.core.App
      *
      * Assertions:
      *
-     * The bounds and the cells count both points without the filter and the sorted asset's alone with `triaged=false`; the triage
-     * view with `triaged=false` is a JSON 400 naming the view on both routes.
+     * The bounds and the cells hold the sorted asset's point alone without the parameter and both points with `triaged=true`; the
+     * triage view with `triaged=false` is a JSON 400 naming the view on both routes.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -120,15 +120,17 @@ import altitude.core.App
           requests.get(s"$host/api/map/r/$repoId/$endpoint", params = params, cookies = testContext.cookies, check = false)
         val world = Map("viewport" -> "-90,-180,90,180", "zoom" -> "10")
 
-        ujson.read(get("bounds", Map.empty).text())("count").num shouldBe 2
-        ujson.read(get("bounds", Map("triaged" -> "false")).text()) shouldBe ujson.Obj(
+        ujson.read(get("bounds", Map.empty).text()) shouldBe ujson.Obj(
           "south" -> 10,
           "west" -> 20,
           "north" -> 10,
           "east" -> 20,
           "count" -> 1)
-        ujson.read(get("cells", world + ("triaged" -> "false")).text())("cells").arr.map(_("assetId").str).toList shouldBe
-          List(sorted.persistedId)
+        ujson.read(get("cells", world).text())("cells").arr.map(_("assetId").str).toList shouldBe List(sorted.persistedId)
+
+        ujson.read(get("bounds", Map("triaged" -> "true")).text())("count").num shouldBe 2
+        ujson.read(get("cells", world + ("triaged" -> "true")).text())("cells").arr.map(_("assetId").str).toSet shouldBe
+          Set(sorted.persistedId, triaged.persistedId)
 
         for (endpoint <- List("bounds", "cells")) withClue(s"$endpoint: ") {
           val response = get(endpoint, world ++ Map("view" -> "triage", "triaged" -> "false"))
