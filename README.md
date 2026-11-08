@@ -49,15 +49,28 @@ You will need:
 * Java 17 or up (21 recommended)
 * Docker (if using Postgres)
 * [Mill](https://mill-build.org/mill/cli/installation-ide.html)
+* [uv](https://docs.astral.sh/uv/) (to fetch the models)
 
-Download [w600k_r50.onnx](https://huggingface.co/maze/faceX/blob/e010b5098c3685fd00b22dd2aec6f37320e3d850/w600k_r50.onnx) and place it in `./altitude/altitude/resources/opencv/`
+### Models
 
-The two Scene models go in `./altitude/resources/onnx/`, exported from their Hugging Face checkpoints by
-`scripts/export-scene-models.py` (run as `uv run scripts/export-scene-models.py`, which needs [uv](https://docs.astral.sh/uv/)
-and, on its first run, the internet, for the CPU build of torch and the checkpoints; about 350 MB each once exported):
+Three model files are too large for git. Fetch them once, from the repository root:
 
-* `dinov2_vitb14.onnx`: DINOv2 ViT-B/14 (`facebook/dinov2-base`)
-* `clip_vitb16_image.onnx`: the CLIP ViT-B/16 image tower (`openai/clip-vit-base-patch16`)
+```sh
+uv run scripts/fetch-models.py
+```
+
+The first run needs the internet: it pulls the CPU build of torch and the Hugging Face checkpoints, which it caches.
+A model already in place is skipped, and `--force` fetches them all again.
+
+* `altitude/resources/opencv/w600k_r50.onnx`: the ArcFace face embedding net (InsightFace `w600k_r50`, 174 MB),
+  downloaded from a pinned revision of [maze/faceX](https://huggingface.co/maze/faceX/blob/e010b5098c3685fd00b22dd2aec6f37320e3d850/w600k_r50.onnx)
+  and checked against its SHA-256
+* `altitude/resources/onnx/dinov2_vitb14.onnx`: DINOv2 ViT-B/14 (`facebook/dinov2-base`), about 350 MB
+* `altitude/resources/onnx/clip_vitb16_image.onnx`: the CLIP ViT-B/16 image tower (`openai/clip-vit-base-patch16`),
+  about 350 MB
+
+The two Scene models are exported to ONNX from their checkpoints, and each export is checked against PyTorch before it
+is written. The application does not start without all three.
 
 ### Developer settings
 
