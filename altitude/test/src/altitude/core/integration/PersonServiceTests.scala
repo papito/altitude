@@ -814,12 +814,13 @@ import altitude.core.util.Util
      * Setup:
      *
      * An import of `people/movies-speed.png`, which starts two People with one Face each in the same asset; the second is merged
-     * into the first.
+     * into the first. The asset is then recycled, and restored.
      *
      * Assertions:
      *
-     * The merged person's face count is one, not two: the count is recounted from a Search for the person's assets, and both
-     * Faces are in one asset.
+     * The merged person's face count is one, not two: the count is the number of assets outside the trash on which the person has
+     * a Face, and both Faces are in one asset. Recycling the asset takes the count to zero, not below it, and restoring it brings
+     * the count back to one, the two Faces still stored throughout.
      */
     val importAsset = IntegrationTestUtil.getImportAsset("people/movies-speed.png")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
@@ -844,6 +845,14 @@ import altitude.core.util.Util
     val mergedIntoPerson = testApp.service.person.getById(mergedPerson.persistedId)
     // yes, two faces in DB, but only one asset will be returned when you query for the person
     mergedIntoPerson.numOfFaces should be(1)
+
+    // The asset's two Faces are one asset of the person: recycling takes one from the count, restoring gives one back
+    testApp.service.library.recycleAssets(Set(importedAsset.persistedId))
+    testApp.service.person.getById(mergedPerson.persistedId).numOfFaces should be(0)
+
+    testApp.service.library.restoreRecycledAssets(Set(importedAsset.persistedId))
+    testApp.service.person.getById(mergedPerson.persistedId).numOfFaces should be(1)
+    testApp.service.person.getAssetFaces(importedAsset.persistedId).size should be(2)
   }
 
   test("Known person keeps the same when merged into Unknown") {
@@ -1035,14 +1044,16 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The asset has one Person with two Faces: the second face matches the first, stored just before it.
+     * The asset has one Person with two Faces: the second face matches the first, stored just before it. The person's face count
+     * is one, the one asset they are found on, not the two Faces.
      */
     val importAsset = IntegrationTestUtil.getImportAsset("people/twins.png")
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val people = testApp.service.person.getPeopleForAsset(importedAsset.persistedId)
 
     people.length should be(1)
-    people.head.numOfFaces should be(2)
+    people.head.numOfFaces should be(1)
+    testApp.service.person.getAssetFaces(importedAsset.persistedId).size should be(2)
   }
 
   test("Hidden person should not be returned with bulk retrieval") {

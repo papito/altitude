@@ -63,11 +63,18 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       faceDao.getById(faceId)
     }
 
+  /**
+   * Stores the Face as the person's in the asset, sets it as the cover when the person has none, and counts the asset toward
+   * `numOfFaces` when it is the person's first Face on it: the number counts the assets a person is found on, so a second Face of
+   * theirs on the same asset (the same person twice in one image) adds nothing
+   */
   def addFace(face: Face, asset: Asset, person: Person): Face =
     require(person.persistedId.nonEmpty, "Cannot add a face to an unsaved person object")
     require(asset.persistedId.nonEmpty, "Cannot add a face to an unsaved asset object")
 
     txManager.withFaceVector[Face] {
+      val firstOnAsset = !faceDao.hasFaceOfPerson(asset.persistedId, person.persistedId)
+
       var persistedFace: Option[Face] = None
       try persistedFace = Some(faceDao.add(face, asset, person))
       catch
@@ -78,7 +85,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
       if person.numOfFaces == 0 then setFaceAsCover(person, persistedFace.get)
 
-      increment(person.persistedId, FieldConst.Person.NUM_OF_FACES)
+      if firstOnAsset then increment(person.persistedId, FieldConst.Person.NUM_OF_FACES)
       logger.trace(
         s"Added face [${persistedFace.get.persistedId}] to person [${person.persistedId}] in asset [${asset.persistedId}]")
 
@@ -167,8 +174,8 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     }
 
   /**
-   * When an asset gets recycled, we need to decrement the number of faces for the person toward person occurrences in the data
-   * set.
+   * When an asset gets recycled, each person with a Face on it loses that asset from `numOfFaces`, however many Faces of theirs
+   * it holds: the number counts the assets a person is found on outside the trash.
    *
    * We don't do anything else, as we remove the actual faces during asset Purge.
    *

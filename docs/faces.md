@@ -160,16 +160,22 @@ The crops live in the file store (`FileSystemStoreService.addFace`) as
 ## People
 
 A `person` row carries `name`, `is_named`, `num_of_faces`, `cover_face_id`, `is_hidden`, `is_bad_match`, `is_deleted`.
-`PersonService.addFace` inserts the Face, increments `num_of_faces` and sets the cover face when it is the first.
-Recycling an asset decrements the counts of its people and restoring increments them, whether it is restored or moved out
-of the trash into a folder; only the assets a call actually recycles or takes out of the trash are counted. The faces
-themselves go with the asset on purge, and their files with them, except the cover face of its person. An import the
-pipeline drops, or one a crash cut off (pruned at startup), is undone (`LibraryService.discardImport`): the counts it
-added are given back, its faces and their files go, and a person it started, left with no face, is deleted. Moving a live asset between folders or out of triage does not touch the counts.
+`num_of_faces` is, despite its name, the number of assets outside the trash on which the person has a Face: what a search
+for the person finds. A person seen twice in one image (`twins.png`) has two Faces there and counts that asset once.
+`PersonService.addFace` inserts the Face, sets the cover face when it is the first, and increments `num_of_faces` only when
+the person had no Face on the asset yet (`FaceDao.hasFaceOfPerson`). Recycling an asset takes it from the counts of its
+people and restoring gives it back, whether it is restored or moved out of the trash into a folder, each asset once
+however many Faces of a person it holds (`PersonDao.addFacesOfAssets`, `COUNT(DISTINCT asset_id)`); only the assets a call
+actually recycles or takes out of the trash are counted. `merge` recounts the destination from a search for its assets.
+The faces themselves go with the asset on purge, and their files with them, except the cover face of its person. An
+import the pipeline drops, or one a crash cut off (pruned at startup), is undone (`LibraryService.discardImport`): the
+assets it added to the counts are given back, its faces and their files go, and a person it started, left with no face,
+is deleted. Moving a live asset between folders or out of triage does not touch the counts.
 
 The People tab (`PeopleActionController`) lists people by People bucket (`Const.PeopleBucket`; the glossary in
-`CONTEXT.md` has the terms): Matched (at least `Const.FaceRecognition.MIN_FACES_THRESHOLD`, 3, faces, or named),
-Unmatched (fewer and unnamed), Hidden (hidden, whatever its count or name); a discarded person is in none. The list
+`CONTEXT.md` has the terms): Matched (a Face on at least `Const.FaceRecognition.MIN_FACES_THRESHOLD`, 3, assets outside
+the trash, or named), Unmatched (fewer and unnamed), Hidden (hidden, whatever its count or name); a discarded person is in
+none. The list
 (`PersonService.getInBuckets`, one query) is the union of the buckets switched on, Matched alone by default; Hide / Show,
 offered to a Matched person (`Person.isMatched`), moves it between buckets. Its actions:
 

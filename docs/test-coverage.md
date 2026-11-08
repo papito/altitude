@@ -427,7 +427,7 @@ Sources: [SearchQueries](../altitude/src/altitude/core/dao/sql/search/SearchQuer
 
 Sources: [PersonService](../altitude/src/altitude/core/service/PersonService.scala), [PeopleActionController](../altitude/src/altitude/core/routes/web/partial/PeopleActionController.scala). Evidence: [PersonServiceTests](../altitude/test/src/altitude/core/integration/PersonServiceTests.scala), [PurgePipelineServiceTests](../altitude/test/src/altitude/core/integration/PurgePipelineServiceTests.scala), [PeopleActionControllerTests](../altitude/test/src/altitude/core/controller/PeopleActionControllerTests.scala).
 
-- ✅ Persist faces/people from a real import, associate faces with assets, increment face counts, and assign the first cover face.
+- ✅ Persist faces/people from a real import, associate faces with assets, count each asset a person has a Face on once (the same person twice in one image is two Faces of one Person counting one asset), and assign the first cover face.
 - ✅ Rename a person, mark it named, and update the persisted sort name; cross the minimum face-count threshold.
 - ✅ Merge people and merge chains, transfer face ownership, zero source counts, preserve/inherit the tested names, and allow reuse of a merged source's name.
 - ✅ Two live people cannot share a name on either engine, whatever its case (a non-ASCII letter's too) or Unicode form, and a merged-away or bad-match person does not hold its name; a person merged away after taking the cover face of one merged into them leaves two merged-away people with one cover face; listing the live people reads the partial `person_03`.
@@ -436,7 +436,7 @@ Sources: [PersonService](../altitude/src/altitude/core/service/PersonService.sca
 - ✅ A stale merge of a merged-away or bad-match source into an unnamed destination raises no error and leaves the destination unnamed, even when another live person holds the name since. Two concurrent merges of one source (`contend`): the second waits for the first's row lock, and its destination stays unnamed.
 - ✅ `getLiveByNameKey` finds the live holder of a name, hidden or not, across case and Unicode form, and never a merged-away or bad-match person; its statement (`PersonDao.liveByNameKey`) reads `person_01` on both engines (`SearchPlans`).
 - ✅ Controller: a taken name answers 200 with the editor, the holder's stored name in the error and a button carrying both IDs and `keepDirection`, and a hidden holder's message says so; a reserved name shows its error under the field with the name typed kept; a case-only rename answers the name view with the new name; the merge modal keeps the requested direction with `keepDirection=true` and otherwise merges the person with fewer faces.
-- ✅ Recount a merge when two people share one asset; separately recognize multiple occurrences of one person in a single image.
+- ✅ Recount a merge when two people share one asset, and then recycle and restore that asset: the count goes to zero, not below, and back to one, the two Faces stored throughout; separately recognize multiple occurrences of one person in a single image.
 - ✅ List people by People bucket (`getInBuckets`): a hidden person is in Hidden alone, a named one is Matched whatever its count, an unnamed one below the threshold is Unmatched, a discarded one is in no bucket, every bucket together equals `getAll` less the discarded, an empty set lists no one, and an unknown bucket name is refused; hide a person from per-asset retrieval; recycle/restore assets without deleting/restoring the wrong face-record set in the tested normal cases.
 - ✅ Preserve explicitly selected cover-face binaries through purge.
 - [ ] Reject self-merge, missing/deleted participants, and foreign-repository participants without changing faces or either person. [CRITICAL]
@@ -445,7 +445,6 @@ Sources: [PersonService](../altitude/src/altitude/core/service/PersonService.sca
 - [ ] Verify source deletion/exclusion explicitly after merge, including what else (faces, counts) an attempt to merge the same source again changes. [MEDIUM]
 - [ ] Cover `markAsBadMatch`'s effect on the match candidates, unhide, and the buckets with deleted, zero-face, and threshold-boundary people. [MEDIUM]
 - ✅ `getPersonFaces` returns a person's faces by descending detection score and keeps the best of them under a limit smaller than the person's face count.
-- [ ] Recycle/restore an asset containing multiple faces for a person after a merge; assert the intended distinct-asset versus raw-face count contract remains consistent. [MEDIUM]
 - [ ] Reject assigning a cover face belonging to another person/repository or a nonexistent face; preserve the previous cover. [MEDIUM]
 - [ ] Test unsaved-person/asset guards in `addFace` and the multi-face guard in `addPerson`; assert failed operations create no rows or count changes. [EDGE]
 
@@ -471,7 +470,7 @@ Sources: [FaceDetectionService](../altitude/src/altitude/core/service/FaceDetect
 Sources: [FaceRecognitionService](../altitude/src/altitude/core/service/FaceRecognitionService.scala). Evidence: [FaceRecognitionServiceTests](../altitude/test/src/altitude/core/integration/FaceRecognitionServiceTests.scala), [PersonServiceTests](../altitude/test/src/altitude/core/integration/PersonServiceTests.scala).
 
 - ✅ Two photographs of the same person resolve to the same person ID and a persisted face count of two.
-- ✅ Importing the exercised two-person image creates two people; the multi-occurrence fixture resolves to one person with two faces.
+- ✅ Importing the exercised two-person image creates two people; the multi-occurrence fixture resolves to one person with two faces on one asset, counting one.
 - ✅ With known vectors on both engines: only enrolled faces of people who are not a bad match are candidates; a tied vote goes to the closest face; without a candidate an enrolled face starts a Person and a match-only face is nobody's.
 - ✅ A match-only face of nobody (a blurred photo, a blurred clip) leaves neither a Person nor a Face; a person in one Sampled frame of a clip starts no Person but joins a known one as a match-only Face; the same person across two clips and a photo is one Person through the centroid vector.
 - ✅ Unit: the normalized mean, quality-ordered leader clustering, the highest-quality representative, and the centroid merge pass on synthetic vectors.

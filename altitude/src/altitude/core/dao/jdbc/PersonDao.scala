@@ -150,15 +150,16 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
   def restoreFacesForAssets(assetIds: Set[String]): Unit = addFacesOfAssets(assetIds, sign = "+")
 
   /**
-   * Adds to (or with `-`, takes from) each person's face count the faces they have on the assets. The people are found from the
-   * assets' faces, an uncorrelated set read once through the index that leads with the asset, rather than by testing every person
-   * for a face on one of them.
+   * Adds to (or with `-`, takes from) each person's face count the assets, among the given ones, they have a Face on: the count
+   * is of assets, so an asset holding two Faces of one person counts once. The people are found from the assets' faces, an
+   * uncorrelated set read once through the index that leads with the asset, rather than by testing every person for a face on one
+   * of them.
    */
   private def addFacesOfAssets(assetIds: Set[String], sign: String): Unit =
     val sql = s"""
       UPDATE person
          SET num_of_faces = num_of_faces $sign (
-            SELECT COUNT(*)
+            SELECT COUNT(DISTINCT f.asset_id)
               FROM face f
              WHERE f.person_id = person.id
                AND f.asset_id $inIdSet)
