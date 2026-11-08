@@ -26,7 +26,7 @@
                 <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromLocation)"><i class="fas fa-minus-circle"></i>Remove from location</button>
             </template>
             @* Opens Curation on the selection, up to the cap it carries (js/listeners/curation.js) *@
-            <button type="button" class="action-button" x-show="$store.selectedAssets.size > 1" data-max-selection="@{Const.Curation.MAX_SELECTION}" @@click="$dispatch(window.Const.events.batchCurateRequested)"><i class="fas fa-check-double"></i>Curate</button>
+            <button type="button" class="action-button curate" x-show="$store.selectedAssets.size > 1" data-max-selection="@{Const.Curation.MAX_SELECTION}" @@click="$dispatch(window.Const.events.batchCurateRequested)"><i class="fas fa-check-double"></i>Curate</button>
             <button type="button" class="action-button deselect" title="Deselect all" aria-label="Deselect all" @@click="$store.selectedAssets.reset()"><i class="fas fa-times"></i></button>
         </div>
     </template>

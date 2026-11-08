@@ -59,8 +59,8 @@ Google's models, Apache-2.0 on their model cards, converted by us so the chain o
 | File | Detail |
 |---|---|
 | Source | `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, 3,758,596 bytes, SHA-256 `64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff`, holding `face_landmarks_detector.tflite` and `face_blendshapes.tflite` |
-| Conversion | `scripts/convert-face-mesh.py`: tf2onnx 1.17.0, opset 18. tf2onnx's optimizer stays off for the Blendshape graph, because ONNX Runtime refuses the graph it produces |
-| Output | `resources/mediapipe/face_landmarks.onnx` (about 4.9 MB) and `face_blendshapes.onnx` (about 1.1 MB), committed. A conversion is not byte-reproducible, so the committed files are the pinned ones and the script records their hashes |
+| Conversion | `scripts/convert-face-mesh.py`: tf2onnx 1.17.0, opset 18. tf2onnx's optimizer stays off for the Blendshape graph, because ONNX Runtime refuses the graph it produces. A maintainer runs it only to replace the files, with TensorFlow and tf2onnx in its own PEP 723 header; `scripts/fetch-models.py` fetches only the models git does not hold, and never installs these |
+| Output | `resources/mediapipe/face_landmarks.onnx` (about 4.9 MB) and `face_blendshapes.onnx` (about 1.1 MB), committed, as YuNet's file is. A conversion is not byte-reproducible, so the committed files are the pinned ones and the script records their hashes |
 
 | Graph | Input | Outputs |
 |---|---|---|
@@ -69,12 +69,15 @@ Google's models, Apache-2.0 on their model cards, converted by us so the chain o
 
 ### The runtime
 
-ONNX Runtime's CPU artifact, `com.microsoft.onnxruntime:onnxruntime:1.31.1`, whose jar bundles the natives and adds about 51 MB
-to the assembly. `service/EyeStateService` holds one shared, thread-safe session per network, opened lazily, with one intra-op
-and one inter-op thread each.
+ONNX Runtime, which `build.mill` already carries for the Scene models, runs the kept path's networks, so the assembly does not
+grow. `util/EyeStateMeasurer` follows `util/SceneEmbedder`'s conventions: the process's `OrtEnvironment`, and one shared,
+thread-safe `OrtSession` per network, opened in its constructor with one intra-op and one inter-op thread each, so a missing model
+file fails the start and never an import. It is `AutoCloseable`, with a close that acts once. `AssetService` holds it as
+`private val eyeState` beside `sceneEmbedder`, built with the service, and `AssetService.close()` closes both, which
+`Altitude.cleanup` calls once the pipelines have shut down.
 
-`ImportParallelism` budgets the sessions as a fixed cost beside `POOL_COST`, at what task 1 measures, with the figures in its
-comment. For the score path that is 52 to 59 MB on one thread and 141 MB settled at 12 threads.
+`ImportParallelism` budgets the sessions as a new term of `FIXED_COST`, at what task 1 measures, with the figures in its doc
+comment beside the Scene models'. For the score path that is 52 to 59 MB on one thread and 141 MB settled at 12 threads.
 
 ### The crop
 
@@ -96,9 +99,11 @@ YuNet's landmarks exist only inside `extractFaces`, so `FaceImages` gains the tw
 
 ### Measurement and storage
 
-`AssetService.measureImage` asks `EyeStateService` for each measured Face's two values, before it releases the decoded image.
-A Face under the presence threshold, or any `NonFatal` failure, leaves them NULL with a WARN. The eye step has its own guard, so
-its failure keeps the asset's Image quality, its hash and its Faces' sharpness. The columns are in both `all.sql` files, written
+`AssetService.measureImage` asks `eyeState` for each measured Face's two values, after `ImageMeasurement` and the Scene models
+and before it releases the decoded image. A Face under the presence threshold, or any `NonFatal` failure, leaves them NULL with a
+WARN. The eye step is `AssetService.measureEyes`, a function of the companion over a measurer, the decoded image and the Faces,
+with its own guard, so its failure keeps the asset's Image quality, its hash, its Histogram, its Scene embeddings and its Faces'
+sharpness; `measureImage` passes it `eyeState`. The columns are in both `all.sql` files, written
 in the Face's one insert, with `Face`, `FieldConst`, `FaceRow` and both mappings following.
 
 ### The Bundle
@@ -145,18 +150,22 @@ they are calibrated further on real shoots through the Settings screen:
 so a user can see which setting to move.
 
 - **A frame's reason** reads as the others do, "Eyes closed: 0.72 against 0.08, that person's lowest", or "Eyes closed: 0.72, the
-  limit 0.50" with no comparison, beside that Face's crop.
-- **The Bundle's header** keeps its reason, the first frame's first and "and 2 more", and adds each distinct Person's crop once, so
-  the header says who.
+  limit 0.50" with no comparison, beside that Face's crop. It sits in the frame's reasons, which show while the Bundle's details
+  do (`showsDetails`), as every Bundle's do.
+- **The Bundle's header** keeps its reason, the first frame's first and "and 2 more", which follows the details switch as the
+  other Bundles' does, and adds each distinct Person's crop once beside the name and the count. The crops show whether or not the
+  details do, so a Bundle says who with its details hidden.
 - **The face strip** marks the crop of every closed Face, those of a Person closed throughout included.
-- **`face.debug.enabled`** adds the two values to each crop's label, for calibrating on one's own files.
+- **`face.debug.enabled`**, a server config the template gains, puts the two values in the `title` of each face strip crop, open
+  Faces included, for calibrating on one's own files.
 
 ### Too few frames in the queue
 
-Recycling a Bundle ends in `openSet`, whose walk passes over a Sequence answering with no content, so in the queue a set recycled
-down to one frame vanishes with its Undo out of sight. Recycling any Bundle that leaves fewer than two frames now shows
-`Phase.tooFew`, with Undo and Exit, in the queue as in a selection, and in the queue Skip goes on to the next set. A Sequence
-reached by walking the queue with too few frames is still passed over without comment.
+Recycling a Bundle (`recycleBundle`) or a frame on the stage (`recycleFrame`) goes through `recycleFrames` and ends in `openSet`,
+whose walk passes over a Sequence answering with no content, so in the queue a set recycled down to one frame vanishes with its
+Undo out of sight. Either recycling that leaves fewer than two frames now shows `Phase.tooFew`, with Undo and Exit, in the queue
+as in a selection, and in the queue Skip goes on to the next set; a selection still has no Skip. A Sequence reached by walking
+the queue with too few frames is still passed over without comment.
 
 ## Tasks
 
@@ -174,15 +183,16 @@ Each task is one reviewable change, in dependency order. Server tasks are red be
    candidates that pass, the aspect ratio wins a tie, and then the fewest passes. **If none passes, the choice goes back to the
    user**, and stopping here is a fair outcome. Rationale: without this nothing shows either measurement finds closed eyes.
 
-2. **Dependency, files and service.** `build.mill` gains onnxruntime, the conversion script and the committed files, and
-   `EyeStateService` with the kept path. Unit tests: the crop's rotation and projection and, on that path, the aspect ratio on
-   synthetic landmarks; a Face of the `people/` images gets two values in range, which makes no claim about what they mean.
-   Rationale: the path is built and tested before the pipeline uses it.
+2. **Files and measurer.** The conversion script and the committed files, `build.mill`'s onnxruntime comment naming the kept
+   path's networks beside the Scene models, and `util/EyeStateMeasurer` with the kept path, built by `AssetService` and closed by
+   its `close()`. Unit tests: the crop's rotation and projection and, on that path, the aspect ratio on synthetic landmarks; a
+   Face of the `people/` images gets two values in range, which makes no claim about what they mean. Rationale: the path is built
+   and tested before the pipeline uses it.
 
-3. **Pipeline and storage.** The columns on both engines, the eye points on `FaceImages`, `measureImage` filling the values, and
-   the sessions' cost in `ImportParallelism` with `ImportParallelismTests`. `AssetImportServiceTests` on both engines: a still
-   image's Faces have values, a Video's have none, and a service failure imports the asset with NULL values and its Image quality
-   intact. Rationale: red-green end to end.
+3. **Pipeline and storage.** The columns on both engines, the eye points on `FaceImages`, `measureImage` filling the values
+   through `measureEyes`, and the sessions' cost as a term of `FIXED_COST` in `ImportParallelism` with `ImportParallelismTests`.
+   `AssetImportServiceTests` on both engines: a still image's Faces have values and a Video's have none. A unit test gives
+   `measureEyes` a measurer that throws, and every Face comes back with NULL values. Rationale: red-green end to end.
 
 4. **The Bundle.** The definitions, their accessors, seeds in both `all.sql` files and `TestSettings.seeds`,
    `SettingsServiceTests`, and `CurationRule`. `CurationRuleTests`, on synthetic values, for each clause: both eyes and a wink; the
@@ -192,13 +202,15 @@ Each task is one reviewable change, in dependency order. Server tasks are red be
    this is the decision, tested alone.
 
 5. **The view.** `htmx/curation_set`, `curation_set.css` and the style guide: the reason with its crop, the crops in the Bundle's
-   header, the notice, and the mark in the face strip, with controller tests for the fragment. The debug label. Rationale: the
-   reason is what the user acts on.
+   header outside its details, the notice, and the mark in the face strip, with controller tests for the fragment. The debug
+   title on the face strip's crops. Rationale: the reason is what the user acts on.
 
 6. **Too few frames in the queue.** `alpine/components/curation.js` and `htmx/curation`. Rationale: it applies to every Bundle, and
    does not need the model.
 
-7. **Documentation.** `altitude/AGENTS.md` (the pipeline paragraph, the build's dependency list and the memory figures),
+7. **Documentation.** `altitude/AGENTS.md` (the architecture line on what ONNX Runtime runs, the pipeline paragraph, a paragraph
+   on `EyeStateMeasurer` beside the Scene embedding one, the memory figures, the model-files note on which models git holds, and
+   rows for `util/EyeStateMeasurer.scala` and `scripts/convert-face-mesh.py` in the file table),
    `docs/faces.md`, `docs/READINESS.md` (memory guidance), `views/AGENTS.md` (**Curation**), `CONTEXT.md`, `docs/test-coverage.md`,
    and `docs/curation-batch-detection.md`. Rationale: the Do section's no-drift rule.
 

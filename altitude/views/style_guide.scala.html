@@ -260,7 +260,12 @@
              <code>:focus</code>, so a button a dialog returns focus to is not left ringed after a mouse click. A choice
              between ways of showing the same thing is a <code>.toggle-group</code>: its buttons joined on one track, the
              current one <code>aria-pressed="true"</code>, raised on the page surface. The theme switch above the contents
-             is a live one.</p>
+             is a live one. The buttons that open Curation share <code>.curate</code>: <code>--theme-neutral-1</code> text
+             and icon, a border in the fill's own color, regular weight, always at the small size. A selection's Curate
+             is a veil of <code>--theme-primary</code> at 0.32. <code>.lit</code>, Triage's button for the whole queue,
+             is the solid primary lit from the top, a vertical gradient from the primary at +6 lightness to the primary,
+             in a centered row of its own under the toolbar, below a hairline of <code>--theme-neutral-3</code> at 0.3,
+             with <code>--space-6</code> above and below the line and below the button.</p>
           <div class="sg-row">
             <button type="button" class="action-button primary">.primary</button>
             <button type="button" class="action-button">.action-button</button>
@@ -268,6 +273,8 @@
             <button type="button" class="action-button warning">.warning</button>
             <button type="button" class="action-button error">.error</button>
             <button type="button" class="action-button small"><i class="fas fa-plus" aria-hidden="true"></i><span>.small</span></button>
+            <button type="button" class="action-button small curate"><i class="fas fa-check-double" aria-hidden="true"></i><span>.curate</span></button>
+            <button type="button" class="action-button small curate lit"><i class="fas fa-check-double" aria-hidden="true"></i><span>.curate.lit</span></button>
             <button type="button" class="action-button" disabled>Disabled</button>
             <div class="toggle-group" role="group" aria-label="Toggle group specimen">
               <button type="button" aria-pressed="true">Current</button>

@@ -9,8 +9,8 @@ function sequencesText(count) {
 
 /**
  * The number of Sequences in Curation's queue (`Const.state.sequencesToCurate`). Only the count endpoint sets it, through
- * `refresh`, so nothing adds or subtracts on the client. It is null until the first answer, which keeps the toolbar's
- * Curate button (`includes/search_results`) hidden until then. Called when the Triage results render, from `refreshCounts`
+ * `refresh`, so nothing adds or subtracts on the client. It is null until the first answer, which keeps Triage's
+ * Curate row (`includes/search_results`) hidden until then. Called when the Triage results render, from `refreshCounts`
  * (`assets/asset-actions.js`), and by Curation itself when it opens and when its queue runs out.
  */
 export function createSequencesToCurateStore() {
@@ -24,7 +24,7 @@ export function createSequencesToCurateStore() {
             return this.count > 0
         },
 
-        // The toolbar button's text
+        // The text of Triage's Curate button
         get label() {
             return `Curate ${sequencesText(this.count)}`
         },

@@ -557,6 +557,28 @@ footer {
     margin-left: var(--space-3);
 }
 
+/* The Curate buttons. The face is clipped to the padding box, so a translucent fill does not paint twice under its border,
+   and the hover rule states it again because the base hover's `background` would lighten a flat color and reset the clip */
+.action-button.curate {
+    --curate-color: hsl(from var(--theme-primary) h s l / 0.32);
+    --button-fill: var(--curate-color);
+    --curate-face: var(--button-fill);
+    background: var(--curate-face) padding-box;
+    border-color: var(--button-fill);
+    color: var(--theme-neutral-1);
+    font-weight: normal;
+}
+
+.action-button.curate.lit {
+    --curate-color: var(--theme-primary);
+    --curate-face: linear-gradient(hsl(from var(--button-fill) h s calc(l + 6)), var(--button-fill));
+}
+
+.action-button.curate:hover:not(:disabled) {
+    --button-fill: oklch(from var(--curate-color) calc(l + 0.04) c h);
+    background: var(--curate-face) padding-box;
+}
+
 .toggle-group {
     display: flex;
     padding: var(--space-1);

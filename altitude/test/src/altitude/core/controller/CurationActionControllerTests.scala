@@ -259,7 +259,7 @@ import altitude.core.service.FaceDetectionService
     }
   }
 
-  test("Triage's toolbar alone holds the button that opens Curation on the queue") {
+  test("Triage's results alone hold the button that opens Curation on the queue") {
 
     /**
      * Setup:

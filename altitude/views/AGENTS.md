@@ -108,7 +108,7 @@ before Alpine starts.
 | `Const.state.searchParams` | The complete search parameter set — the single source of truth for what is being searched (see **Search parameters** below) |
 | `Const.state.currentView` | Current view: `repository`, `triage`, or `trashbin`. Derived from `searchParams.view` and written once at page load |
 | `Const.state.resultsTotal` | The toolbar's results total: `count` and `isCapped`, set from the results fragment's `data-results-total` and `data-results-total-capped` (`js/fragments/search-results.js`). `label` reads the count followed by "+" when the server counted only up to its cap (`js/common/total-label.js`, "10000+"); `decrement` lowers an uncapped total as assets leave the grid and leaves a capped one alone, since it says only that there are more than the cap |
-| `Const.state.sequencesToCurate` | The number of Sequences in Curation's queue (`js/stores/sequences-to-curate.js`): `count`, null until the first answer, which only the count endpoint sets, through `refresh`, so nothing adds or subtracts on the client, and an older answer never replaces a newer one. `hasAny` and `label` are the toolbar button's, `remaining` Curation's header (see **Curation**) |
+| `Const.state.sequencesToCurate` | The number of Sequences in Curation's queue (`js/stores/sequences-to-curate.js`): `count`, null until the first answer, which only the count endpoint sets, through `refresh`, so nothing adds or subtracts on the client, and an older answer never replaces a newer one. `hasAny` and `label` are Triage's Curate row's, `remaining` Curation's header (see **Curation**) |
 | `Const.state.modal` | The active dialog host, its title and the identity of the displayed open (`js/common/modal.js`, see **Modals**); bound by the modal hosts and the popover title of `html_common` |
 | `Const.state.imageDetailLoading` | `value`: whether asset detail is loading its asset, which shows its spinner (`js/search-results/detail-navigator.js`) |
 | `Const.state.snackbar` | The snackbar's messages (`js/common/snackbar.js`): `items` in arrival order, read as the two stacks `errors` and `notices`, which `html_common` renders. Producers call the module's three functions, never the store (see **Snackbar** below) |
@@ -1049,9 +1049,19 @@ the grouping and the layout stay, so a person selected in Triage goes back to al
 under the title: `js/search-results/sticky-offsets.js`, run by the results hydrator, writes the title's rendered height to
 `--results-title-height` on the fragment (the toolbar's `top`; 0 without a title) and the two heights together to
 `--results-sticky-height` (the group headers' `top`, **Group headers**) through one `ResizeObserver`. The toolbar's former
-margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a wrapping flex row of three groups, `--space-9` apart: the lead (the total, then the batch ops while assets are selected, see **Batch ops**), the controls (the layout toggle and the View, Group and Sort menus) and the trail, empty but in the trash view, where the Purge button (`htmx/trashbin_header`, rendered into the toolbar) holds its right edge, and in the Triage view, where `#curateSequences` does: the small action button that opens Curation on the whole queue, whatever the search shows, reading the `sequencesToCurate` store's `label` ("Curate 3 sequences", "Curate 1 sequence") and hidden until the count arrives and while it is zero. The lead and the trail grow from the same zero basis, so they split what the controls leave evenly and the controls sit on the bar's center whatever the sides measure; neither side shrinks below its content, so the batch ops push the controls right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one, `--space-6` below, which the sticky offsets follow. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules; the template renders
+margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a wrapping flex row of three groups, `--space-9` apart: the lead (the total, then the batch ops while assets are selected, see **Batch ops**), the controls (the layout toggle and the View, Group and Sort menus) and the trail, empty but in the trash view, where the Purge button (`htmx/trashbin_header`, rendered into the toolbar) holds its right edge. The lead and the trail grow from the same zero basis, so they split what the controls leave evenly and the controls sit on the bar's center whatever the sides measure; neither side shrinks below its content, so the batch ops push the controls right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one, `--space-6` below, which the sticky offsets follow. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules; the template renders
 the first of person, folder, album, Location and text that is set. The crowded-pin panel hides
 the fragment's title with its controls (`static/css/htmx/map_view.css`).
+
+In the Triage view `#curateQueue` follows the toolbar, a centered row holding `#curateSequences`, the small action button that
+opens Curation on the whole queue, whatever the search shows, in the `.curate.lit` look (see **Style guide** and the Buttons
+section of the page). It has the `fa-check-double` icon of the batch ops' Curate at the same `--space-5` gap, then the
+`sequencesToCurate` store's `label` ("Curate 3 sequences", "Curate 1 sequence"), and `--space-9` of side padding. The row's top
+border is a hairline of `--theme-neutral-3` at 0.3, inset by the toolbar's side padding (`--space-8`). The toolbar's bottom
+padding is the `--space-6` above the line, and the row's block padding the `--space-6` from the line to the button and from the
+button to the grid. It sits outside `#searchControl`, so it is not sticky and scrolls away with the grid, and the sticky offsets
+do not count it. The row, line included, is hidden until the count arrives and while it is zero. The crowded-pin panel hides
+it with the toolbar.
 
 **Batch ops** — What the selection can do (`includes/batch_ops`): Move (a drag handle, see **Tooltip**), Recycle, Add to
 album, Remove from album while an album's results are displayed, Add to location, Remove from location while a Location's
@@ -1059,7 +1069,8 @@ are, Curate while two images or more are selected, and Deselect all (×, an icon
 view Purge, Restore and Deselect all. The
 count shows once ("3 selected"), before the buttons, which carry no count of their own; they are the small action
 button (`--space-4` × `--space-5` padding, `--font-size-small`, as the trash view's Purge button) and sit `--space-6`
-apart. The include is rendered twice, shown together while assets are selected (`x-show`): in the toolbar's lead and in
+apart. Curate is `.action-button.curate` (see the style guide's Buttons section), which the rule that turns the batch ops'
+borders `--warning-background-color` on hover leaves out. The include is rendered twice, shown together while assets are selected (`x-show`): in the toolbar's lead and in
 the footer. Both copies are drawn alike, their sizes set in `static/css/includes/batch_ops.css` rather than inherited, and
 the footer's is placed by CSS anchor positioning: the toolbar copy is `anchor-name: --batch-ops`, and the footer copy is
 `position: fixed` over the footer's row (`--footer-height`, its buttons centered in it) with `left: anchor(--batch-ops left,
@@ -1187,7 +1198,7 @@ removed from the grid drops out of navigation with it, and the search route is H
 **Curation** — The modal where the user keeps the best frames of a Curation set and recycles the rest. What sorts a set and
 what its outcome writes are under **Sequences and Image quality** in `altitude/AGENTS.md`, and the terms are the glossary's. It
 has no page or URL of its own and adds no nav entry, so the nav keeps marking the view it opened from, and a reload shows the grid.
-Three ways in open the same modal, each dispatching `Const.events.curateRequested` with its entry: the toolbar's
+Three ways in open the same modal, each dispatching `Const.events.curateRequested` with its entry: Triage's
 `#curateSequences` on the queue (no detail; see **Results title**), a Sequence's group header on that Sequence (`{ sequenceId }`;
 see **Group headers**) and the batch ops' Curate on a selection (`{ assetIds }`, which the component posts, so they never sit in
 a URL; see **Batch ops**). `js/listeners/curation.js` names the entry (`requestCuration`) and loads the shell through `htmx.ajax`
