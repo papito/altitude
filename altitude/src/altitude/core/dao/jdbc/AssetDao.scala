@@ -487,10 +487,10 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
   /**
    * The statement behind [[getSequencesToCurate]] with its bind values, which the plan tests explain. The grouped rows are a
-   * derived table, so the `ORDER BY` names their columns: an undated Sequence has no first capture, and NULL sorts first on SQLite
-   * and last on PostgreSQL, so the `IS NULL` test puts it last on both. The cover is a correlated subquery over those rows: the
-   * Sequence's first live frame in [[sequenceFramesStatement]]'s capture order, read once per Sequence of the queue through
-   * `asset_sequence`. The count statement leaves it out, since the toolbar reads the count after every mutation.
+   * derived table, so the `ORDER BY` names their columns: an undated Sequence has no first capture, and NULL sorts first on
+   * SQLite and last on PostgreSQL, so the `IS NULL` test puts it last on both. The cover is a correlated subquery over those
+   * rows: the Sequence's first live frame in [[sequenceFramesStatement]]'s capture order, read once per Sequence of the queue
+   * through `asset_sequence`. The count statement leaves it out, since the toolbar reads the count after every mutation.
    */
   def sequencesToCurateStatement: (String, List[Any]) =
     val capturedAt = FieldConst.Asset.ORIGINAL_CREATED_AT

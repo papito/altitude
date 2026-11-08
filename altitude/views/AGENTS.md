@@ -61,8 +61,9 @@ is the same shape for the Albums tab (`static/css/htmx/albums.css`): the two add
 and the empty `#locationList` host (`data-app-fragment="location-list"`) that `js/common/location-list.js`
 renders (see **Locations** below); `htmx/people.scala.html` (`static/css/htmx/people.css`) is the People tab's shell, whose
 panes' lists the `peopleTab` Alpine component loads from the server (see **People tab** below); `htmx/curation.scala.html`
-(`static/css/htmx/curation.css`) is Curation's shell, and `htmx/curation_set.scala.html` (`static/css/htmx/curation_set.css`) a
-Curation set's fragment (see **Curation** below). Partials carry no module scripts: the repository ID is set once by `index.scala.html`, and the
+(`static/css/htmx/curation.css`) is Curation's shell, `htmx/curation_set.scala.html` (`static/css/htmx/curation_set.css`) a
+Curation set's fragment, and `htmx/curation_queue.scala.html` (`static/css/htmx/curation_queue.css`) the rows of its Sequence
+rail (see **Curation** below). Partials carry no module scripts: the repository ID is set once by `index.scala.html`, and the
 explorer tab that issued a load is marked selected from `htmx:after:request`
 (`js/listeners/htmx-requests.js`). The styles the two menus share (`.menu-ctrl`, `.context-menu`,
 `.asset-count`) live in `core.css`.
@@ -124,8 +125,9 @@ and the panes' Split.js sizes on each axis as component data and remembers them 
 `curation` component reads and remembers it in `localStorage` under `Const.localStore.loupeLevel` (`rememberedLoupeLevel`,
 `saveLoupeLevel`), which nothing else reads, and the Bundle kinds whose details its rail shows under
 `Const.localStore.curationDetails` (`rememberedDetailKinds`, `saveDetailKinds`), a JSON array, and whether its stage shows the
-Histogram strips under `Const.localStore.curationHistogram` (`rememberedHistogramShown`, `saveHistogramShown`), "true" or "false"
-(see **Curation** below).
+Histogram strips under `Const.localStore.curationHistogram` (`rememberedHistogramShown`, `saveHistogramShown`), "true" or "false",
+and whether it shows the Sequence rail under `Const.localStore.curationSequenceRail` (`rememberedSequenceRailShown`,
+`saveSequenceRailShown`), "true" or "false" too (see **Curation** below).
 
 ## DOM Addressing Convention
 
@@ -145,6 +147,7 @@ Const.attributes.expanded       // "data-expanded"
 Const.attributes.viewedScope    // "data-viewed-scope" (on the folder node whose results are displayed)
 Const.attributes.dataSrc        // "data-src"  (lazy-load image URL)
 Const.attributes.sequenceId     // "data-app-sequence-id" (a group header's Curate) el.dataset.appSequenceId
+Const.attributes.railSequenceId // "data-rail-sequence-id" (a row of Curation's Sequence rail) el.dataset.railSequenceId
 Const.attributes.minFrames      // "data-min-frames"  (the fewest frames a group header's Curate stays for)
 Const.attributes.frameId        // "data-frame-id"  (a frame of a Curation set in the rail, in the rail's order)
 Const.attributes.columnFrameId  // "data-column-frame-id"  (a frame's column of the face strip)
@@ -245,7 +248,7 @@ Two-layer event bus, both on `document.body`:
 - A Curation set's fragment is **not** an HTMX request either (its shell is): the `curation` component reads it through the
   axios client and puts it in `#curationSet` itself, since it has to see the answer before anything is swapped (a 204 passes
   over a Sequence or leaves the too-few state, and a preload keeps only the opening frames) and reports a failure itself, in the
-  unread state (see **Curation**).
+  unread state (see **Curation**). The queue's rows, the Sequence rail's fragment, are read the same way, into the rail's host.
 
 Batch ops escalate a single-asset drag to a batch when the asset is among the selected ones: the
 `assetMoved`/`assetTrashed` handlers in `js/listeners/assets.js` re-dispatch
@@ -1206,10 +1209,28 @@ a URL; see **Batch ops**). `js/listeners/curation.js` names the entry (`requestC
 into the host, a new shell for every open, so each starts with no skips and no undo entry; `js/fragments/curation.js` hydrates it
 by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"` means the keys press no control by accident.
 
-- **The shell** (`htmx/curation.scala.html`) is a header with the title, `remaining` from the `sequencesToCurate` store, Undo while
-  there is one and Exit; `#curationSet`, which each set's fragment goes in; and the four states with no set, `.curation-no-set`:
-  too few frames left (the words of `curation_set(None)`, for a selection's answer and a Sequence's 204 alike), the report of a
-  resolve, the unread state, and the queue's end. The first three offer Exit, and Undo when there is one, beside what they say.
+- **The shell** (`htmx/curation.scala.html`) is a header over both columns with the title, `remaining` from the `sequencesToCurate`
+  store, the Sequence rail's switch (`Sequences Q`, the queue alone, `aria-pressed` while the rail shows, wearing the stage's
+  pressed rule), Undo while there is one and Exit; the main column, `#curationMain`, holding `#curationSet`, which each set's
+  fragment goes in, and the four states with no set, `.curation-no-set`: too few frames left (the words of `curation_set(None)`,
+  for a selection's answer and a Sequence's 204 alike), the report of a resolve, the unread state, and the queue's end; and
+  beside it the Sequence rail. The first three states offer Exit, and Undo when there is one, beside what they say.
+- **The Sequence rail** (`aside#curationSequenceRail`, the glossary's term) is a column of `--curation-sequence-rail-width` at the
+  right of the shell, on the queue alone (`x-show="isQueue && showsSequenceRail"`), outside `#curationSet`, so it outlives each
+  set's fragment and stays through the states with no set. Its header reads "Sequences" and the walk's position among the rows
+  (`railPosition`, "4 of 12"; the last row past the end, nothing with no rows), and under it `#curationQueueHost` holds the
+  queue's rows, `htmx/curation_queue.scala.html`, which `startQueue` reads through the axios client (`readQueueRows`) and takes
+  `queueIds` from, each row's `data-rail-sequence-id` (`Const.attributes.railSequenceId`; not `data-app-sequence-id`, which finds a
+  group header's Curate) in document order. A row (`li.curation-queue-row`) is the Sequence's cover Preview (its first frame in
+  capture order, in `.curation-preview`, the Bundle rail's), its frame count ("8 frames") and its first capture's day ("12 Mar
+  2026", `Util.humanReadableShortDate`, or "No date" for an undated Sequence). No binding is on a row: `paintRail`, run by a
+  `$watch` on `position` and after the rows are read, toggles `.current` with `aria-current="true"` on the row at the position,
+  scrolling it into view (`block: "nearest"`), and `.done` on the rows of `doneIds`, the closure set of the Sequences dealt with,
+  so a long queue costs nothing per move; a done row is dimmed and wears the Preview's check (`fa-check-circle`, "Dealt with"),
+  which no other row shows. One delegated click listener on the host (`onQueueRowClick`) moves the walk to an open row, through
+  `exclusively`; the current row and a done row do nothing. `toggleSequenceRail` (the Q key and the header's button) shows or
+  hides it and remembers the choice under `Const.localStore.curationSequenceRail`, as the Histogram's is; hidden, it changes
+  nothing about the walk. A selection or a single Sequence has none, and Q does nothing there.
 - **The state** is `x-data="curation"` on the shell's root (`alpine/components/curation.js`), so it outlives each fragment: the
   focused frame, the pinned frame, the Picks, the Bundle kinds whose details show, the queue's IDs and position, the one Sequence or the
   selection's IDs, and the undo entry. It reads a set's frames from their `data-*` and the fragment's bindings read its state back.
@@ -1401,6 +1422,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   | A | Keep all |
   | R | Recycle the focused frame's Bundle, leaving a Pick in it; a Contender has none |
   | H | Show or hide the Histogram strips, turning the Clipping blink off as they hide; nothing with no set on show |
+  | Q | Show or hide the Sequence rail (nothing on a selection or a single Sequence) |
   | S | Skip Sequence (nothing on a selection) |
   | Z | Undo the last action |
   | Esc | Close Curation (`global.js`) |
@@ -1430,15 +1452,16 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   `refreshCounts` (see **Nav refresh**), so the nav, folder, album and Location counts and the number of Sequences to curate are
   true. Skip Sequence changes nothing and announces nothing. The store is also read when the Triage results render
   (`js/fragments/search-results.js`), when Curation opens and when its queue runs out.
-- **The styles** are `static/css/htmx/curation.css` (the host, which fills the window, and the shell) and `curation_set.css` (the
-  set), with the sizes `--curation-rail-width`, `--curation-preview-size`, `--curation-crop-size`, `--curation-strip-max-height`,
+- **The styles** are `static/css/htmx/curation.css` (the host, which fills the window, the shell's columns and the Sequence rail's
+  frame), `curation_set.css` (the set) and `curation_queue.css` (the Sequence rail's rows), with the sizes `--curation-rail-width`,
+  `--curation-sequence-rail-width` (the Sequence rail's column), `--curation-preview-size`, `--curation-crop-size`, `--curation-strip-max-height`,
   `--curation-loupe-max-size` (the most a lens takes, a third of the pane's width under it), `--curation-histogram-height` (the
   Histogram strip under each pane) and `--curation-kept-name-max-width` of
   `core.css`. The last is the most width the file name on Resolve takes: `.kept` holds it to the
   smaller of the token and `20vw`, since the footer's center column takes its full width before the keys' hint gets any, so in a
-  narrow window the name's share leaves that hint room. The style guide's Badges & states section holds the notice, the chip and a Bundle's row
-  with its marks, and its usage note describes the pane's tag and the keep hint, whose rules apply only inside the set (see **Style
-  guide**).
+  narrow window the name's share leaves that hint room. The style guide's Badges & states section holds the notice, the chip, a Bundle's row
+  with its marks and the Sequence rail's rows, a current and a done one, and its usage note describes the pane's tag and the keep hint,
+  whose rules apply only inside the set (see **Style guide**).
 
 **Metadata field visibility** — Fields default to `display:none`. Use
 `window.ctx.addGridMetadataField(name)` / `removeGridMetadataField(name)`, which mutate the

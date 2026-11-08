@@ -20,13 +20,17 @@
   min-height: 0;
 }
 
+/* The header over both columns; below it the main column, which each set's fragment and the states with no set fill, and the
+   Sequence rail, which takes its own width on the queue and no column when hidden */
 #curation {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   height: 100%;
 }
 
 #curation > header {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: var(--space-6);
@@ -46,6 +50,12 @@
   color: var(--theme-neutral-3);
 }
 
+/* The Sequence rail's switch while the rail shows: the stage's pressed rule, a success edge and label */
+#curation > header button[aria-pressed="true"] {
+  border-color: var(--success-color);
+  color: var(--success-color);
+}
+
 #curation kbd {
   padding: 0 var(--space-2);
   border: var(--border-hairline) currentColor;
@@ -54,8 +64,47 @@
   font-size: var(--font-size-xs);
 }
 
+#curationMain {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+}
+
 #curationSet {
   min-height: 0;
+}
+
+/* The Sequence rail: its header over the queue's rows, which scroll by themselves */
+#curationSequenceRail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: var(--curation-sequence-rail-width);
+  border-left: var(--border-hairline) var(--panel-border-color);
+}
+
+#curationSequenceRail > header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: var(--panel-padding);
+  padding-bottom: 0;
+}
+
+#curationSequenceRail h3 {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+#curationSequenceRail .position {
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+}
+
+#curationQueueHost {
+  min-height: 0;
+  overflow: auto;
 }
 
 /* A state with no set to show: too few frames left, a resolved selection's report, or the queue's end */

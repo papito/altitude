@@ -20,8 +20,10 @@ import { getHttpErrorMessage, http } from "../../http/client.js"
  * `data-*`, and the fragment's bindings read the state back.
  *
  * It is opened on one of three things (`requestCuration`, from `listeners/curation.js`): the queue,
- * whose Sequence IDs it walks, requesting one set's fragment at a time; one Sequence; or a selection,
- * whose IDs it posts, so they never sit in a URL. Neither of the last two has a next set: a Keep all
+ * whose rows it reads into the Sequence rail (`htmx/curation_queue.scala.html`) and walks, requesting
+ * one set's fragment at a time and painting the rail's current and done rows itself; one Sequence; or
+ * a selection, whose IDs it posts, so they never sit in a URL. Neither of the last two has a next set
+ * or a Sequence rail: a Keep all
  * that changes nothing closes Curation, as Skip does on the one Sequence, and a Resolve or a Keep all
  * that changes something stays open on a report of what it did, with Undo and Exit. A selection is no
  * Sequence, so it has no Skip, button or key: Exit closes it.
@@ -52,7 +54,9 @@ import { getHttpErrorMessage, http } from "../../http/client.js"
  * one, costs nothing. The blink is one switch for the stage (`clippingBlink`), on for both panes
  * and through the arrows and the next sets, and off on every open: a new shell starts it off.
  * The H key shows or hides both strips (`showsHistogram`), a choice kept for the next open; the
- * strip is the blink's only switch, so hiding it turns the blink off.
+ * strip is the blink's only switch, so hiding it turns the blink off. The Q key and the header's
+ * Sequences button show or hide the Sequence rail (`showsSequenceRail`), a choice kept the same way;
+ * the rail hidden changes nothing about the walk.
  */
 
 const Phase = {
@@ -115,6 +119,14 @@ function fileUrl(frameId) {
 /** "1 frame", "3 frames" */
 function framesText(count) {
     return count === 1 ? "1 frame" : `${count} frames`
+}
+
+/** The queue's rows, the fragment the Sequence rail lists, in the order the queue is walked */
+async function readQueueRows() {
+    const response = await http.get(repoPath("htmx/curation", "/queue"), {
+        responseType: "text",
+    })
+    return response.data
 }
 
 /** A Sequence's fragment, or null when it answers with no content: fewer than two frames left */
@@ -264,6 +276,30 @@ function saveHistogramShown(shown) {
     }
 }
 
+/** Whether the Sequence rail shows, as last chosen; shown where nothing is stored or storage is blocked */
+function rememberedSequenceRailShown() {
+    try {
+        return (
+            localStorage.getItem(Const.localStore.curationSequenceRail) !==
+            "false"
+        )
+    } catch {
+        return true
+    }
+}
+
+/** Remembers whether the Sequence rail shows; a blocked storage forgets it and nothing else */
+function saveSequenceRailShown(shown) {
+    try {
+        localStorage.setItem(
+            Const.localStore.curationSequenceRail,
+            String(shown),
+        )
+    } catch {
+        // Nothing to do: the choice holds for the session
+    }
+}
+
 /** A value of the Histogram's paths, rounded to two decimals to keep the string short */
 function rounded(value) {
     return Math.round(value * 100) / 100
@@ -403,6 +439,12 @@ export function curation() {
     const histogramPathsOf = new Map()
     // The source each Clipping canvas holds the mask of, by the canvas's ID, so a mask is not drawn twice
     const drawnSrcs = new Map()
+    // The Sequences of the queue whose row is done: resolved, kept or gone under two frames. The walk
+    // passes over them, and the rail dims them with a mark. Closure state: the rows are painted, not
+    // bound. Filled and cleared by the walk's outcomes (nothing fills it yet)
+    const doneIds = new Set()
+    // The one click listener of the Sequence rail's rows
+    let onQueueClick = null
     // What the session leaves changed, net of its undos, for the grid beneath
     const recycledIds = new Set()
     const clearedSequenceIds = new Set()
@@ -475,6 +517,9 @@ export function curation() {
         // Whether the stage shows the Histogram strips: the H key switches them, and the choice holds
         // across sets and opens
         showsHistogram: rememberedHistogramShown(),
+        // Whether the Sequence rail shows on the queue: the Q key and the header's button switch it,
+        // and the choice holds across opens
+        showsSequenceRail: rememberedSequenceRailShown(),
 
         // What Curation walks: the queue's IDs and where it stands in them, or else one Sequence
         // or a selection's IDs, which have no next set
@@ -503,6 +548,12 @@ export function curation() {
                     this.onClosed()
                 }
             })
+            // The rail follows the walk: wherever the position is set, the rows are painted again
+            this.$watch("position", () => this.paintRail())
+            onQueueClick = (event) => this.onQueueRowClick(event)
+            document
+                .getElementById("curationQueueHost")
+                .addEventListener("click", onQueueClick)
 
             Alpine.store(Const.state.sequencesToCurate).refresh()
 
@@ -522,6 +573,9 @@ export function curation() {
         // Alpine calls this when the shell is removed
         destroy() {
             document.removeEventListener("keydown", onKeydown)
+            document
+                .getElementById("curationQueueHost")
+                ?.removeEventListener("click", onQueueClick)
             stageObserver.disconnect()
             detachLoupe()
         },
@@ -567,6 +621,16 @@ export function curation() {
 
         get isAllDone() {
             return !Alpine.store(Const.state.sequencesToCurate).hasAny
+        },
+
+        // The Sequence rail's header, "4 of 12": where the walk stands among the rows. Past the end, at
+        // the queue's end state, it reads the last row; with no rows it reads nothing
+        get railPosition() {
+            const count = this.queueIds.length
+            if (count === 0) {
+                return ""
+            }
+            return `${Math.min(this.position + 1, count)} of ${count}`
         },
 
         // The stage shows the pinned frame beside the focused one, or one frame when they are the same
@@ -1289,18 +1353,94 @@ export function curation() {
             }
         },
 
-        /** Calls the queue endpoint afresh and walks it from its start */
+        /**
+         * Reads the queue's rows afresh into the Sequence rail and walks them from the start. The rows
+         * are the fragment's: the walk's IDs are read from them, in their order, and nothing binds them
+         */
         startQueue() {
             return this.exclusively(() =>
                 this.reading(async () => {
-                    const response = await http.get(
-                        repoPath("api/curation", "/queue"),
-                    )
-                    this.queueIds = response.data.sequenceIds
+                    const html = await readQueueRows()
+                    if (isClosed) {
+                        return
+                    }
+
+                    const hostEl = document.getElementById("curationQueueHost")
+                    hostEl.innerHTML = html
+                    this.queueIds = [
+                        ...hostEl.querySelectorAll(
+                            `[${Const.attributes.railSequenceId}]`,
+                        ),
+                    ].map((rowEl) => rowEl.dataset.railSequenceId)
                     this.position = 0
+                    // The watch paints on a change alone, and the position may already have been 0
+                    this.paintRail()
                     await this.readSet(undefined, 0)
                 }),
             )
+        },
+
+        /**
+         * Paints the Sequence rail's rows for the walk: the row at the position is the current one,
+         * kept scrolled into view, and a row of a done Sequence is done. Direct DOM writes rather than a
+         * binding per row, so a long queue costs nothing per move
+         */
+        paintRail() {
+            const rowEls = document.querySelectorAll(
+                `#curationQueueHost [${Const.attributes.railSequenceId}]`,
+            )
+            rowEls.forEach((rowEl, index) => {
+                const isCurrent = index === this.position
+                rowEl.classList.toggle("current", isCurrent)
+                rowEl.classList.toggle(
+                    "done",
+                    doneIds.has(rowEl.dataset.railSequenceId),
+                )
+                if (isCurrent) {
+                    rowEl.setAttribute("aria-current", "true")
+                    rowEl.scrollIntoView({ block: "nearest" })
+                } else {
+                    rowEl.removeAttribute("aria-current")
+                }
+            })
+        },
+
+        /**
+         * A click on a row of the Sequence rail moves the walk to it; the current row and a done row do
+         * nothing. The move is the plain one for now: the position is set and the set read, one action
+         * at a time as any other
+         */
+        onQueueRowClick(event) {
+            const rowEl = event.target.closest(
+                `[${Const.attributes.railSequenceId}]`,
+            )
+            const sequenceId = rowEl?.dataset.railSequenceId
+            const index = this.queueIds.indexOf(sequenceId)
+            if (
+                index < 0 ||
+                index === this.position ||
+                doneIds.has(sequenceId)
+            ) {
+                return
+            }
+
+            this.exclusively(() => {
+                this.position = index
+                return this.openSet()
+            })
+        },
+
+        /**
+         * The Q key and the header's Sequences button: shows or hides the Sequence rail and remembers
+         * which. The queue alone has one, so nothing happens elsewhere
+         */
+        toggleSequenceRail() {
+            if (!this.isQueue) {
+                return
+            }
+
+            this.showsSequenceRail = !this.showsSequenceRail
+            saveSequenceRailShown(this.showsSequenceRail)
         },
 
         /**
@@ -1558,11 +1698,12 @@ export function curation() {
          * Shift+2 recycle that same frame at once. P pins
          * the focused frame and moves on, and does nothing on the pinned frame. Enter resolves,
          * which does nothing while no frame is to be kept (`keepIds`), A keeps all, R recycles the focused
-         * frame's Bundle, H shows or hides the Histogram strips, S skips and Z undoes. Esc is `global.js`'s.
+         * frame's Bundle, H shows or hides the Histogram strips, Q the Sequence rail, S skips and Z undoes.
+         * Esc is `global.js`'s.
          * A key held down repeats only the arrows, so it cannot resolve set after set, and Enter on a
          * focused control presses that control. While a set is being resolved or read an arrow moves
          * nothing, and still does not scroll the rail. With no set on show there are no frames and no
-         * focused frame, and H leaves the strips as they are, so only Z and Esc do anything.
+         * focused frame, and H leaves the strips as they are, so only Q, Z and Esc do anything.
          */
         handleKey(event) {
             if (
@@ -1597,6 +1738,7 @@ export function curation() {
                 a: () => this.keepAll(),
                 r: () => this.recycleFocusedBundle(),
                 h: () => this.toggleHistogram(),
+                q: () => this.toggleSequenceRail(),
                 s: () => this.skip(),
                 z: () => this.undo(),
             }

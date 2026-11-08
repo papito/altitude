@@ -177,6 +177,8 @@ export const Const = {
         curationDetails: "curationDetails",
         // Whether Curation's stage shows the Histogram strips, "true" or "false" (js/alpine/components/curation.js)
         curationHistogram: "curationHistogram",
+        // Whether Curation shows the Sequence rail on the queue, "true" or "false" (js/alpine/components/curation.js)
+        curationSequenceRail: "curationSequenceRail",
     },
 
     sessionStore: {

@@ -1,0 +1,36 @@
+/* The rows of Curation's Sequence rail (htmx/curation_queue), under the rail's header in the shell: each Sequence's cover
+   Preview, the Bundle rail's, with its frame count and its first capture's day beneath; the current row wears the accent's edge
+   the focused frame does, and a done row is dimmed and wears its mark, the rail's check, which no other row shows */
+#curationQueue {
+  display: grid;
+  row-gap: var(--space-5);
+  margin: 0;
+  padding: var(--panel-padding);
+  list-style: none;
+}
+
+.curation-queue-row {
+  display: grid;
+  justify-items: center;
+  row-gap: var(--space-1);
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+}
+
+.curation-queue-row.current .curation-preview {
+  border-color: var(--theme-accent);
+}
+
+.curation-queue-row .fa-check-circle {
+  display: none;
+}
+
+.curation-queue-row.done {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.curation-queue-row.done .fa-check-circle {
+  display: block;
+}

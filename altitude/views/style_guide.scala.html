@@ -517,6 +517,22 @@
               </li>
             </ul>
           </div>
+          <p>The Sequence rail lists the Sequences Curation walks on the queue, a row each (<code>.curation-queue-row</code>): the
+             Sequence's cover in the same Preview, its frame count and its first capture's day, dimmed small text under it. The
+             current row (<code>.current</code>) wears the accent's edge the focused frame does, and a row dealt with
+             (<code>.done</code>) is dimmed and wears the Preview's check, which no other row shows.</p>
+          <ul class="sg-curation-queue">
+            <li class="curation-queue-row done">
+              <span class="curation-preview"><i class="fas fa-check-circle" aria-label="Dealt with"></i></span>
+              <span class="frames">8 frames</span>
+              <span class="date">12 Mar 2026</span>
+            </li>
+            <li class="curation-queue-row current" aria-current="true">
+              <span class="curation-preview"><i class="fas fa-check-circle" aria-label="Dealt with"></i></span>
+              <span class="frames">3 frames</span>
+              <span class="date">No date</span>
+            </li>
+          </ul>
         </section>
 
         <section id="token-audit">
