@@ -1227,13 +1227,15 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   `$watch` on `position` and after the rows are read, toggles `.current` with `aria-current="true"` on the row at the position,
   scrolling it into view (`block: "nearest"`), and `.done` on the rows of `doneIds`, the closure set of the Sequences dealt with,
   so a long queue costs nothing per move; a done row is dimmed and wears the Preview's check (`fa-check-circle`, "Dealt with"),
-  which no other row shows. One delegated click listener on the host (`onQueueRowClick`) moves the walk to an open row, through
-  `exclusively`; the current row and a done row do nothing. `toggleSequenceRail` (the Q key and the header's button) shows or
+  which no other row shows. One delegated click listener on the host (`onQueueRowClick`) moves the walk to an open row (`move`,
+  see **The walk**); the current row and a done row do nothing. `toggleSequenceRail` (the Q key and the header's button) shows or
   hides it and remembers the choice under `Const.localStore.curationSequenceRail`, as the Histogram's is; hidden, it changes
   nothing about the walk. A selection or a single Sequence has none, and Q does nothing there.
 - **The state** is `x-data="curation"` on the shell's root (`alpine/components/curation.js`), so it outlives each fragment: the
-  focused frame, the pinned frame, the Picks, the Bundle kinds whose details show, the queue's IDs and position, the one Sequence or the
-  selection's IDs, and the undo entry. It reads a set's frames from their `data-*` and the fragment's bindings read its state back.
+  focused frame, the pinned frame, the Picks, the Bundle kinds whose details show, the queue's IDs, its position, its done rows
+  (`doneIds`) and the Sequence of the set on show (`shownSequenceId`, which the position runs ahead of while a move reads), the one
+  Sequence or the selection's IDs, and the undo entry. It reads a set's frames from their `data-*` and the fragment's bindings read
+  its state back.
   A set's fragment replaces the one before it in `#curationSet` after that one's Alpine tree is destroyed (`replaceSetHost`, which
   also empties the host with no set), so no loop of the old fragment runs once more on the new set's state.
   Exit and Esc close Curation through `closeModal`, and a backdrop click does not. The component notices the host going
@@ -1244,7 +1246,8 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 - **A failed read** of a set or of the queue (`reading`), whether it opens Curation or follows an outcome, goes to the snackbar too
   and shows the unread state ("This set could not be read") with Try again, which runs that read again, Undo when there is one and
   Exit. No set stays on show past it, so a set whose outcome was saved cannot be acted on again: with no frames on show the keys
-  other than Z and Esc do nothing. The walk's position and the undo entry stay as they were, so no Sequence is passed over.
+  of the set do nothing. The walk's position and the undo entry stay as they were, so no Sequence is passed over, and on the
+  queue the Sequence rail and the moves still work there, so a Sequence that will not read cannot block the rest.
 - **The Bundle rail** (`#curationRail`, `htmx/curation_set.scala.html`) is a column of its own that scrolls by itself: the notices
   (`.curation-notice`, "Showing the first 100 of 2,000 frames" with what that means for the queue when a Sequence is over the window a
   set reads, "Too close to call" or, in the warning fill, "Every frame: 8% blown highlights"), the Contenders, then
@@ -1427,17 +1430,40 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   | Z | Undo the last action |
   | Esc | Close Curation (`global.js`) |
 
-- **The walk.** On the queue, opening calls the queue endpoint and requests one set's fragment at a time, and the user never sees
-  it as a list. Resolve, Keep all and Skip Sequence open the next ID, a Sequence answering with no content is passed over without
-  comment, also when a Bundle's or a frame's recycling left too few, and the next set's opening frames are preloaded. When the IDs run out the
-  count is read again: with Sequences left, skipped or newly imported, the end state shows them with Start again, which calls the
-  endpoint afresh, and with none it reads "All done". A selection or a Sequence opened from its header has no next set: a Keep
-  all that changes nothing closes Curation, as Skip Sequence does on that one Sequence (a selection has no Skip: `skip()` returns, and Exit closes it); a Resolve, or a Keep all that changes something, stays open on a report of what was kept
-  and recycled; and a Bundle's or a frame's recycling that leaves too few frames shows the too-few state.
+- **The walk.** On the queue, opening reads the queue's rows into the Sequence rail (`startQueue`) and requests one set's
+  fragment at a time. A row is **open** or **done** (code and guide words, never shown): done once its set is resolved or kept
+  (`settle` marks it, a Keep all that changed nothing included), or once its Sequence answers with no content when reached, a
+  Sequence gone under two frames meanwhile or one a Bundle's or a frame's recycling left too few of (`markDone`); a done row stays
+  in place, dimmed with its check, and the walk passes over it. Undo of an outcome opens its row again, and Start again opens every
+  row (`doneIds` cleared), so a Sequence over the window, done for this walk, is offered again. Every move goes to an open row
+  (`openRowFrom`, `readQueueFrom`): N (`moveNext`) to the nearest open row below and P (`movePrevious`) to the nearest above, each
+  doing nothing with none (`hasNextSequence`, `hasPreviousSequence`, which the footer's buttons are disabled by); a click on an open
+  row to that row; and after a Resolve, a Keep all or a recycling that left too few frames (`nextSet`, `readSet`) to the nearest
+  open row at or below the position, else the first open row from the top, else the end state. A row that answers with no content
+  when reached becomes done and the move goes on in its direction, the move after an outcome wrapping to the top before it ends; a
+  move of N, P or a click that finds nothing further stays on the set on show and its row. The end state comes only when every row
+  is done, the count read again: with Sequences left (over the window, or imported meanwhile) it shows them with Start again, which
+  reads the rows afresh, and with none it reads "All done". The next set's opening frames are preloaded, the next open row in the
+  direction of the last move (`preloadNextSet`).
+
+  **Latest move wins.** N, P and a row click are moves (`move`): the walk stands on the target row at once, so the rail's highlight
+  moves before the read answers, and each read of the queue takes a token (`moveToken`); a read a later move has overtaken finds its
+  token stale when its answer comes and drops it, shows nothing and reports nothing, so the last move is the set that opens. The
+  writes, Resolve, Keep all, Recycle, Undo, Try again and Start again, run one at a time through `exclusively`, which also refuses
+  to start while a move is reading (`movesInFlight`), and no move starts while one runs (`isBusy`). N and P do not repeat while
+  held. **Remembered views.** Leaving a set by a move saves `currentView()` under its Sequence (`rememberedViews`), restored when
+  the walk returns to it, for as long as Curation stays open; a row going done forgets it, and Start again forgets them all.
+
+  A selection or a Sequence opened from its header has no rows and no next set: a Keep all that changes nothing closes Curation,
+  as Skip Sequence does on that one Sequence (a selection has no Skip: `skip()` returns, and Exit closes it; on the queue Skip is
+  the move N makes); a Resolve, or a Keep all that changes something, stays open on a report of what was kept and recycled; and a
+  Bundle's or a frame's recycling that leaves too few frames shows the too-few state.
 - **The outcomes.** Resolve and Keep all post to `/api/curation/.../resolve`. Recycling a Bundle or a frame is the grid's own
-  `DELETE /api/asset/.../move`, and reads the set again. Undo holds one entry, the last mutation with the Sequence of the queue it was made
-  on, and reads that set again by its own ID wherever the walk has gone (`returnToSequence`): the walk goes back to it, or, when Start
-  again has replaced the list and it is in no new one, it goes in where the walk stands, and the walk goes on from there after it. A
+  `DELETE /api/asset/.../move`, and reads the set again. Undo holds one entry, the last mutation with the Sequence of the set it was
+  made on (`shownSequenceId`), and reads that set again by its own ID wherever the walk has gone (`returnToSequence`): its row is
+  open again and the walk goes back to it, or, when Start again has replaced the rows and it is in none, the rows are read afresh
+  (`loadQueueRows`), which lists the undone Sequence with its cover, count and date, the done marks of the rows still listed stay,
+  and the walk stands on it. A
   Resolve or a Keep all goes through `/reopen`, with what `resolve` answered, and its set opens as a new one; a recycled Bundle or
   frame, which has no Pick, goes through the grid's own `PUT /api/asset/.../restore`, and its set keeps the view: as it is if the set is still on
   show, else as it was left, a recycled frame back on the stage either way. Either answers as a restore does, and `reportRestore`
