@@ -35,9 +35,10 @@ import { getHttpErrorMessage, http } from "../../http/client.js"
  * done and the move goes on in its direction; a move that finds nothing stays on the set on show.
  * The latest move wins: a move puts the walk on its row at once and a read it has overtaken is
  * dropped unseen, while the writes (Resolve, Keep all, Recycle, Undo, Try again and Start again)
- * and the moves never run at the same time. Leaving a set by a move remembers what the user made
- * of it (`rememberedViews`), restored when the walk returns, until its row is done or the queue is
- * read again.
+ * and the moves never run at the same time. Leaving a set by a move, or by an Undo that reads
+ * another set, remembers what the user made of it (`rememberedViews`), restored when the walk
+ * returns, until its row is done or the queue is read again. In the end state no row is current,
+ * and the rail's header reads the count alone.
  *
  * A set is never left on show past its outcome: a failed read of a set says so in place of any set
  * (`reading`), with Try again, so what was saved cannot be acted on a second time.
@@ -78,7 +79,7 @@ const Phase = {
     tooFew: "tooFew",
     // A selection or a Sequence opened alone was resolved: what was kept and recycled
     report: "report",
-    // The queue's IDs ran out
+    // Every row of the queue is done
     end: "end",
     // A read failed: no set is on show to act on, and Try again runs that read again
     unread: "unread",
@@ -140,14 +141,17 @@ async function readQueueRows() {
     return response.data
 }
 
-/** A Sequence's fragment, or null when it answers with no content: fewer than two frames left */
-async function readSequenceSet(sequenceId) {
+/**
+ * A Sequence's fragment, or null when it answers with no content: fewer than two frames left. A
+ * move's read passes its `signal`, so a later move can abort it instead of waiting for its answer
+ */
+async function readSequenceSet(sequenceId, signal = undefined) {
     const response = await http.get(
         repoPath(
             "htmx/curation",
             `/sequence/${encodeURIComponent(sequenceId)}`,
         ),
-        { responseType: "text" },
+        { responseType: "text", signal },
     )
     return response.status === 204 ? null : response.data
 }
@@ -456,8 +460,10 @@ export function curation() {
     // walk returns to it; dropped once its row is done, and cleared when the queue is read again
     const rememberedViews = new Map()
     // The latest read of the queue's rows takes a new token; an older read still in flight finds its
-    // token stale when its answer comes and drops it, so the last move is the set that opens
+    // token stale when its answer comes and drops it, so the last move is the set that opens. The
+    // controller aborts that older read as the token advances, so it holds nothing up
     let moveToken = 0
+    let moveAbort = null
     // The moves reading a set, so no write starts while one is
     let movesInFlight = 0
     // The direction of the last move, which the next set is preloaded in
@@ -651,14 +657,16 @@ export function curation() {
             return !Alpine.store(Const.state.sequencesToCurate).hasAny
         },
 
-        // The Sequence rail's header, "4 of 12": where the walk stands among the rows. Past the end, at
-        // the queue's end state, it reads the last row; with no rows it reads nothing
+        // The Sequence rail's header, "4 of 12": where the walk stands among the rows. In the end state
+        // no row is current (the position is -1) and it reads the count alone, "12 of 12"; with no rows
+        // it reads nothing
         get railPosition() {
             const count = this.queueIds.length
             if (count === 0) {
                 return ""
             }
-            return `${Math.min(this.position + 1, count)} of ${count}`
+            const current = this.position < 0 ? count : this.position + 1
+            return `${current} of ${count}`
         },
 
         // The stage shows the pinned frame beside the focused one, or one frame when they are the same
@@ -1327,7 +1335,8 @@ export function curation() {
          * the position, which holds for a set read again (a recycling, an Undo) as for the set after a
          * Resolve, whose row is done by then: the nearest open row at or below the position, else the
          * first open row from the top, else the end state. `options` hold for the row the read starts
-         * on; a row passed over and the row after it open as new sets.
+         * on; the row after a row passed over opens in the view remembered for it, if any, else as a
+         * new set.
          */
         async readSet(options) {
             if (this.selectionIds) {
@@ -1349,8 +1358,34 @@ export function curation() {
             await this.readQueueFrom(this.openRowFrom(this.position, 1), 1, {
                 wrap: true,
                 options,
-                token: ++moveToken,
+                ...this.nextMoveToken(),
             })
+        },
+
+        /**
+         * Starts a read of the queue: the token the read is told apart by, and the signal that aborts
+         * it once a later read starts, so an overtaken move holds nothing up while its answer is on
+         * the way. The writes and the moves never read at the same time, so the one controller is
+         * always the latest read's
+         */
+        nextMoveToken() {
+            moveAbort?.abort()
+            moveAbort = new AbortController()
+            return { token: ++moveToken, signal: moveAbort.signal }
+        },
+
+        /**
+         * Remembers what the user made of the set on show (`currentView`), for the walk's return to
+         * it; nothing with no set on show, and nothing for a done row, whose set is never returned to
+         */
+        rememberShownView() {
+            if (
+                this.showsSet &&
+                this.shownSequenceId &&
+                !this.doneIds.has(this.shownSequenceId)
+            ) {
+                rememberedViews.set(this.shownSequenceId, this.currentView())
+            }
         },
 
         /**
@@ -1375,12 +1410,14 @@ export function curation() {
          * with every row done the end state shows, the count read afresh; without it, the move of N, P
          * or a click, a direction exhausted leaves the walk on the set on show and its row, or, with no
          * set on show, where the walk stood before the move (`fromIndex`). A read whose `token` a later
-         * move has overtaken is dropped before it shows anything.
+         * move has overtaken is dropped before it shows anything, and aborted through `signal`. The set
+         * on show is remembered as the set read replaces it, so what the user made of it while the
+         * read was on its way is kept too.
          */
         async readQueueFrom(
             startIndex,
             step,
-            { wrap, options, token, fromIndex },
+            { wrap, options, token, signal, fromIndex },
         ) {
             const openedId = this.queueIds[startIndex]
             let index = startIndex
@@ -1398,7 +1435,7 @@ export function curation() {
 
                 const sequenceId = this.queueIds[index]
                 this.position = index
-                const html = await readSequenceSet(sequenceId)
+                const html = await readSequenceSet(sequenceId, signal)
                 if (token !== moveToken || isClosed) {
                     return
                 }
@@ -1408,6 +1445,9 @@ export function curation() {
                         (sequenceId === openedId ? options?.view : undefined) ??
                         rememberedViews.get(sequenceId) ??
                         null
+                    if (sequenceId !== this.shownSequenceId) {
+                        this.rememberShownView()
+                    }
                     this.shownSequenceId = sequenceId
                     this.showSet(html, { view })
                     lastDirection = step
@@ -1422,6 +1462,8 @@ export function curation() {
                 return
             }
             if (wrap) {
+                // Every row is done, so none is current
+                this.position = -1
                 await Alpine.store(Const.state.sequencesToCurate).refresh()
                 this.showNoSet(Phase.end)
                 return
@@ -1446,33 +1488,35 @@ export function curation() {
          * Moves the walk to the row at `index` (nothing for -1, as when no open row is left in the
          * direction) and reads its set, going on in the direction of `step` past a row that answers
          * with no content. The walk stands on the row at once, so the rail's highlight moves before
-         * the read answers, and the set left remembers what the user made of it. The latest move wins:
-         * the token tells a read overtaken by a later move to drop its answer, so the last move is the
-         * set that opens, and no move starts while a write runs, as no write starts while a move reads
-         * (`exclusively`). A failed read shows the unread state, as any does, and the walk still moves
-         * from there
+         * the read answers, and the set left remembers what the user made of it: here, so a failed read,
+         * which replaces the set with the unread state, loses nothing, and again as the set read
+         * replaces it (`readQueueFrom`), with whatever the user did meanwhile. The latest move wins:
+         * the token tells a read overtaken by a later move to drop its answer, and the controller
+         * aborts it, so the last move is the set that opens and no dead read holds the writes up; no
+         * move starts while a write runs, as no write starts while a move reads (`exclusively`). A
+         * failed read shows the unread state, as any does, and the walk still moves from there
          */
         move(index, step) {
             if (index < 0 || isBusy || isClosed || !this.isQueue) {
                 return
             }
 
-            if (this.showsSet && this.shownSequenceId) {
-                rememberedViews.set(this.shownSequenceId, this.currentView())
-            }
+            this.rememberShownView()
             movesInFlight++
             const fromIndex = this.position
             this.position = index
             return this.reading(async () => {
-                const token = ++moveToken
+                const { token, signal } = this.nextMoveToken()
                 try {
                     await this.readQueueFrom(index, step, {
                         wrap: false,
                         token,
+                        signal,
                         fromIndex,
                     })
                 } catch (error) {
-                    // An overtaken read fails unseen too: the later move's answer is what shows
+                    // An overtaken read fails unseen too, aborted or not: the later move's answer is
+                    // what shows
                     if (token === moveToken) {
                         throw error
                     }
@@ -1528,9 +1572,7 @@ export function curation() {
         startQueue() {
             return this.exclusively(() =>
                 this.reading(async () => {
-                    this.doneIds.clear()
-                    rememberedViews.clear()
-                    await this.loadQueueRows()
+                    await this.loadQueueRows({ reset: true })
                     if (isClosed) {
                         return
                     }
@@ -1545,14 +1587,20 @@ export function curation() {
 
         /**
          * Reads the queue's rows into the Sequence rail's host and takes the walk's IDs from them, in
-         * their order; nothing binds them. A done mark of a Sequence no longer listed goes with it
+         * their order; nothing binds them. A done mark of a Sequence no longer listed goes with it, and
+         * with `reset`, Start again's, every mark and every remembered view goes. Nothing changes until
+         * the rows are in, so a failed read leaves the state and the rows painted as they were
          */
-        async loadQueueRows() {
+        async loadQueueRows({ reset = false } = {}) {
             const html = await readQueueRows()
             if (isClosed) {
                 return
             }
 
+            if (reset) {
+                this.doneIds.clear()
+                rememberedViews.clear()
+            }
             const hostEl = document.getElementById("curationQueueHost")
             hostEl.innerHTML = html
             this.queueIds = [
@@ -1570,8 +1618,9 @@ export function curation() {
 
         /**
          * Paints the Sequence rail's rows for the walk: the row at the position is the current one,
-         * kept scrolled into view, and a row of a done Sequence is done. Direct DOM writes rather than a
-         * binding per row, so a long queue costs nothing per move
+         * kept scrolled into view (none in the end state, whose position is -1), and a row of a done
+         * Sequence is done. Direct DOM writes rather than a binding per row, so a long queue costs
+         * nothing per move
          */
         paintRail() {
             const rowEls = document.querySelectorAll(
@@ -1617,7 +1666,8 @@ export function curation() {
 
         /**
          * The Q key and the header's Sequences button: shows or hides the Sequence rail and remembers
-         * which. The queue alone has one, so nothing happens elsewhere
+         * which. The queue alone has one, so nothing happens elsewhere. A hidden row cannot be scrolled
+         * to, so the rail shown is painted again once Alpine has shown it, and the current row is in view
          */
         toggleSequenceRail() {
             if (!this.isQueue) {
@@ -1626,6 +1676,9 @@ export function curation() {
 
             this.showsSequenceRail = !this.showsSequenceRail
             saveSequenceRailShown(this.showsSequenceRail)
+            if (this.showsSequenceRail) {
+                this.$nextTick(() => this.paintRail())
+            }
         },
 
         /**
@@ -1806,7 +1859,9 @@ export function curation() {
 
         /**
          * Undoes the last mutation and reads its set again by its own ID, wherever the walk has gone
-         * since: on the queue its row is open again and the walk stands on it (`returnToSequence`). A
+         * since: on the queue its row is open again and the walk stands on it (`returnToSequence`), and
+         * another set on show is remembered as a move remembers it. The return and the read are one
+         * read (`reading`), so a failure in either shows the unread state and Try again runs both. A
          * Resolve or a Keep all goes through `reopen`, which also puts the Picks back in the
          * Sequences it cleared, and its set opens as a new one; a recycled Bundle or frame has no Pick
          * and is a plain restore, and its set keeps the view: as it is if the set is still on show, else
@@ -1850,14 +1905,19 @@ export function curation() {
                     (isOnShow
                         ? { ...this.currentView(), ...entry.stage }
                         : entry.view)
-                if (this.isQueue) {
-                    await this.returnToSequence(entry.sequenceId)
-                }
-                // A state with no set no longer holds, whatever the read answers
-                if (!this.showsSet) {
-                    this.phase = Phase.loading
-                }
-                await this.openSet({ view })
+                await this.reading(async () => {
+                    if (this.isQueue) {
+                        if (!isOnShow) {
+                            this.rememberShownView()
+                        }
+                        await this.returnToSequence(entry.sequenceId)
+                    }
+                    // A state with no set no longer holds, whatever the read answers
+                    if (!this.showsSet) {
+                        this.phase = Phase.loading
+                    }
+                    await this.readSet({ view })
+                })
             })
         },
 
@@ -1866,7 +1926,7 @@ export function curation() {
          * it was walked in, and a Sequence resolved was in no new list; undone, it is in the queue
          * again, so the rows are read afresh, which lists it with its cover, its count and its date,
          * and the done marks of the rows still listed stay. Were it still absent, the walk would stand
-         * on the first row and read from there
+         * on the first row and read from there. A failed read of the rows is its caller's to report
          */
         async returnToSequence(sequenceId) {
             this.doneIds.delete(sequenceId)

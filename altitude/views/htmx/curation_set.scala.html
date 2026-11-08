@@ -1,5 +1,4 @@
 @import altitude.core.Const
-@import altitude.core.RequestContext
 @import altitude.core.models.BundleKind
 @import altitude.core.models.CurationBundle
 @import altitude.core.models.CurationFrame
@@ -8,6 +7,7 @@
 @import altitude.core.models.CurationSet
 @import altitude.core.models.ExposureMeasure
 @import altitude.core.util.ImageMeasurement
+@import altitude.core.util.Util
 
 @* A Curation set, as CurationRule sorted it: the Bundle rail in a column of its own, what holds for every frame, then the Contenders,
    then each Bundle with what is wrong with its frames, how much, and compared to what; and to its right the stage above the face
@@ -18,8 +18,6 @@
    stage's Clipping blink, which the component reads so the client restates no constant of `ImageMeasurement`.
    With no set, too few frames were left to compare. *@
 @(set: Option[CurationSet])
-
-@repoContent(dataType: String, itemId: String) = @{ s"/${ Const.DataStore.CONTENT }/r/${ RequestContext.getRepository.persistedId }/$dataType/$itemId" }
 
 @bundleName(kind: BundleKind) = @{
   kind match {
@@ -81,7 +79,7 @@
       data-clipped-highlights="@{quality.clippedHighlights}"}
       :class="{ focused: focusedId === '@{frameId}' }">
     <button type="button" class="curation-preview" title="@{frame.asset.fileName}" x-on:click="focusFrame('@{frameId}')">
-      <img loading="lazy" src="@{repoContent(Const.DataStore.PREVIEW, frameId)}" alt="@{frame.asset.fileName}">
+      <img loading="lazy" src="@{Util.contentUrl(Const.DataStore.PREVIEW, frameId)}" alt="@{frame.asset.fileName}">
       <i class="fas fa-thumbtack" aria-label="Pinned" x-show="pinnedId === '@{frameId}'"></i>
       <i class="fas fa-check-circle" aria-label="Keep" x-show="isPick('@{frameId}')"></i>
     </button>
@@ -256,7 +254,7 @@
                               data-column-frame-id="@{frameId}"
                               title="@{frame.asset.fileName}"
                               x-on:click="focusFrame('@{frameId}')">
-                        <img loading="lazy" src="@{repoContent(Const.DataStore.PREVIEW, frameId)}" alt="@{frame.asset.fileName}">
+                        <img loading="lazy" src="@{Util.contentUrl(Const.DataStore.PREVIEW, frameId)}" alt="@{frame.asset.fileName}">
                         <i class="fas fa-check-circle" aria-label="Keep" x-show="isPick('@{frameId}')"></i>
                       </button>
                     </th>
@@ -280,7 +278,7 @@
                                     aria-label="Zoom to this person"
                                     :aria-pressed="zoomPersonId === '@{row.personId}'"
                                     x-on:click="zoomToPerson('@{row.personId}')">
-                              <img loading="lazy" src="@{repoContent(Const.DataStore.FACE, face.persistedId)}" alt="">
+                              <img loading="lazy" src="@{Util.contentUrl(Const.DataStore.FACE, face.persistedId)}" alt="">
                             </button>
                           }
                           case None => {

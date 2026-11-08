@@ -597,7 +597,8 @@ import altitude.core.service.FaceDetectionService
      * Assertions:
      *
      * The engine's plan names `asset_sequence` for all five statements, so the toolbar's count, read after every mutation, costs
-     * the rows that carry a Sequence and not the library.
+     * the rows that carry a Sequence and not the library. The queue's statement names it twice, once for the grouped rows and
+     * once for the cover its correlated subquery reads per Sequence, so no cover costs a scan of the library either.
      */
     val frames = burst(0)
     val dao = testApp.DAO.asset.asInstanceOf[AssetDao]
@@ -611,6 +612,8 @@ import altitude.core.service.FaceDetectionService
       ).map((sql, values) => lookupPlanOf(sql, values))
     }
     plans.foreach(plan => withClue(plan)(plan should include("asset_sequence")))
+    // The grouped rows alone would name the index once; the cover subquery must read it too
+    withClue(plans.head)("asset_sequence".r.findAllMatchIn(plans.head).size should be >= 2)
   }
 
   test("A resolve recycles the others, clears the Picks' Sequence and counts the stats") {

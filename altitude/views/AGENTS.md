@@ -1218,7 +1218,8 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 - **The Sequence rail** (`aside#curationSequenceRail`, the glossary's term) is a column of `--curation-sequence-rail-width` at the
   right of the shell, on the queue alone (`x-show="isQueue && showsSequenceRail"`), outside `#curationSet`, so it outlives each
   set's fragment and stays through the states with no set. Its header reads "Sequences" and the walk's position among the rows
-  (`railPosition`, "4 of 12"; the last row past the end, nothing with no rows), and under it `#curationQueueHost` holds the
+  (`railPosition`, "4 of 12"; in the end state, where no row is current, the count alone, "12 of 12"; nothing with no rows), and
+  under it `#curationQueueHost` holds the
   queue's rows, `htmx/curation_queue.scala.html`, which `startQueue` reads through the axios client (`readQueueRows`) and takes
   `queueIds` from, each row's `data-rail-sequence-id` (`Const.attributes.railSequenceId`; not `data-app-sequence-id`, which finds a
   group header's Curate) in document order. A row (`li.curation-queue-row`) is the Sequence's cover Preview (its first frame in
@@ -1443,8 +1444,9 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   open row at or below the position, else the first open row from the top, else the end state. A row that answers with no content
   when reached becomes done and the move goes on in its direction, the move after an outcome wrapping to the top before it ends; a
   move of N, P or a click that finds nothing further stays on the set on show and its row. The end state comes only when every row
-  is done, the count read again: with Sequences left (over the window, or imported meanwhile) it shows them with Start again, which
-  reads the rows afresh, and with none it reads "All done". The next set's opening frames are preloaded, the next open row in the
+  is done, the count read again and no row current (`position` -1, the rail's header reading the count alone): with Sequences
+  left (over the window, or imported meanwhile) it shows them with Start again, which reads the rows afresh, and with none it reads
+  "All done". The next set's opening frames are preloaded, the next open row in the
   direction of the last move (`preloadNextSet`).
 
   **Latest move wins.** N, P and a row click are moves (`move`): the walk stands on the target row at once, so the rail's highlight
@@ -1452,8 +1454,11 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   token stale when its answer comes and drops it, shows nothing and reports nothing, so the last move is the set that opens. The
   writes, Resolve, Keep all, Recycle, Undo, Try again and Start again, run one at a time through `exclusively`, which also refuses
   to start while a move is reading (`movesInFlight`), and no move starts while one runs (`isBusy`). N and P do not repeat while
-  held. **Remembered views.** Leaving a set by a move saves `currentView()` under its Sequence (`rememberedViews`), restored when
-  the walk returns to it, for as long as Curation stays open; a row going done forgets it, and Start again forgets them all.
+  held, and an overtaken read is aborted (`AbortController`, `nextMoveToken`), so no dead read holds a write up. **Remembered
+  views.** Leaving a set by a move, or by an Undo that reads another set, saves `currentView()` under its Sequence
+  (`rememberShownView`, `rememberedViews`): once as the move starts, so a failed read loses nothing, and again as the set read
+  replaces it, with what the user did meanwhile; restored when the walk returns to it, for as long as Curation stays open. A done
+  row's set is never remembered, a row going done forgets it, and Start again forgets them all once the rows are in.
 
   A selection or a Sequence opened from its header has no rows, no next set and no Previous or Next: a Keep all that changes
   nothing closes Curation, Exit leaves it with no outcome; a Resolve, or a Keep all that changes something, stays
@@ -1464,7 +1469,8 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   made on (`shownSequenceId`), and reads that set again by its own ID wherever the walk has gone (`returnToSequence`): its row is
   open again and the walk goes back to it, or, when Start again has replaced the rows and it is in none, the rows are read afresh
   (`loadQueueRows`), which lists the undone Sequence with its cover, count and date, the done marks of the rows still listed stay,
-  and the walk stands on it. A
+  and the walk stands on it. The return and the set's read are one read (`reading`), so a failure in either shows the unread state
+  and Try again runs both. A
   Resolve or a Keep all goes through `/reopen`, with what `resolve` answered, and its set opens as a new one; a recycled Bundle or
   frame, which has no Pick, goes through the grid's own `PUT /api/asset/.../restore`, and its set keeps the view: as it is if the set is still on
   show, else as it was left, a recycled frame back on the stage either way. Either answers as a restore does, and `reportRestore`
@@ -1934,7 +1940,8 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   token without a color is compared by its value alone.
 - **Hand-written, keep in sync:** the specimens. **A new or changed shared primitive in `core.css` or `tabs.css` (a
   class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** A feature's own
-  design conventions can have one too: Curation's notice, chip and Bundle row (`htmx/curation_set.css`) are in Badges & states,
+  design conventions can have one too: Curation's notice, chip and Bundle row (`htmx/curation_set.css`) and the Sequence rail's
+  rows (`htmx/curation_queue.css`), a done one and a current one side by side in `.sg-curation-queue`, are in Badges & states,
   where `.sg-curation-bundle` gives the row the rail's width. Specimens
   use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements
   under `body.style-guide`) only lay the page out, from the `:root` variables.

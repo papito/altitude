@@ -1,5 +1,4 @@
 @import altitude.core.Const
-@import altitude.core.RequestContext
 @import altitude.core.models.QueuedSequence
 @import altitude.core.util.Util
 
@@ -20,7 +19,7 @@
          done row alone (`.done`) *@
       <span class="curation-preview">
         <img loading="lazy"
-             src="/@{Const.DataStore.CONTENT}/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.PREVIEW}/@{sequence.coverId}"
+             src="@{Util.contentUrl(Const.DataStore.PREVIEW, sequence.coverId)}"
              alt="">
         <i class="fas fa-check-circle" aria-label="Dealt with"></i>
       </span>
