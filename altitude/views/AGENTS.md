@@ -1206,7 +1206,7 @@ Three ways in open the same modal, each dispatching `Const.events.curateRequeste
 `#curateSequences` on the queue (no detail; see **Results title**), a Sequence's group header on that Sequence (`{ sequenceId }`;
 see **Group headers**) and the batch ops' Curate on a selection (`{ assetIds }`, which the component posts, so they never sit in
 a URL; see **Batch ops**). `js/listeners/curation.js` names the entry (`requestCuration`) and loads the shell through `htmx.ajax`
-into the host, a new shell for every open, so each starts with no skips and no undo entry; `js/fragments/curation.js` hydrates it
+into the host, a new shell for every open, so each starts with every row open and no undo entry; `js/fragments/curation.js` hydrates it
 by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"` means the keys press no control by accident.
 
 - **The shell** (`htmx/curation.scala.html`) is a header over both columns with the title, `remaining` from the `sequencesToCurate`
@@ -1242,7 +1242,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   (`$watch` on the `modal` store), announces `Const.events.curationClosed` and empties the host, so the originals stop loading;
   an action still running announces when it finishes. Actions run one at a time (`exclusively`), so a key pressed during one does
   nothing. A failed write goes to the snackbar and leaves the set on show, since nothing was saved. Every action is saved as it
-  happens, so closing loses only the skips and the undo entry.
+  happens, so closing loses only the undo entry.
 - **A failed read** of a set or of the queue (`reading`), whether it opens Curation or follows an outcome, goes to the snackbar too
   and shows the unread state ("This set could not be read") with Try again, which runs that read again, Undo when there is one and
   Exit. No set stays on show past it, so a set whose outcome was saved cannot be acted on again: with no frames on show the keys
@@ -1290,10 +1290,10 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   A pane's caption holds the frame's file name, the Pin button or the pinned label, the Keep button and the Recycle button. The Keep button reads "Keep left 1" and
   "Keep right 2", or "Keep 1" with one frame on the stage, the number a `<kbd>` (`keepLabel`, `keepKey`). Pressed, it wears the success
   color (`aria-pressed`) and its label stays, since the tag says the frame is kept. The pinned frame's caption reads a pin icon and "Pinned"
-  (`.pinned-label`), centered below the image: the caption is a grid of `minmax(0, 1fr) auto minmax(max-content, 1fr)`, as the footer is. The Pin button, "Pin P", is on every other frame, so it is always on the focused frame, which is what P acts on.
-  Pinning the focused frame (`pinFocused`), by its button or P, replaces the pinned frame and moves focus to the next frame in the rail's order, or the previous one at
+  (`.pinned-label`), centered below the image: the caption is a grid of `minmax(0, 1fr) auto minmax(max-content, 1fr)`, as the footer is. The Pin button, "Pin Space", is on every other frame, so it is always on the focused frame, which is what Space acts on.
+  Pinning the focused frame (`pinFocused`), by its button or Space, replaces the pinned frame and moves focus to the next frame in the rail's order, or the previous one at
   the end, so two frames stay on the stage. There is no unpinning, since a way out with no way back to the same two frames only loses the comparison. Focusing
-  the pinned frame, by an arrow or a click, shows it alone, P does nothing there, and moving away brings the two back.
+  the pinned frame, by an arrow or a click, shows it alone, Space does nothing there, and moving away brings the two back.
 
   The Recycle button (`action-button small warning`, "Recycle Shift+1" on the left frame or the only one, "Recycle Shift+2" on the
   right, `recycleKey`) sends its pane's frame to the trash at once, a Pick or not (`recycleFrame`), for a frame that is plainly
@@ -1393,7 +1393,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   while the right column fits its share. That column is never smaller than its buttons, whose labels do not wrap, so in a narrow
   window it takes what they need, the center moves left, and the keys' hint stays on one line, clipped to the room that remains. At the left is that hint
   ("← → ↑ ↓ move, R recycle the frame's Bundle, H Histogram", `.keys`: the keys with no button of their own, at `--font-size-xl`, twice the
-  footer's other small text, its key caps at `--font-size-large` with twice the shell's padding), and at the right edge Keep all and Skip Sequence, the latter not shown on a selection (`x-show="!selectionIds"`), which is no Sequence and is left by Exit.
+  footer's other small text, its key caps at `--font-size-large` with twice the shell's padding), and at the right edge Keep all and, on the queue alone (`x-show="isQueue"`), Previous and Next, the walk's moves (`movePrevious`, `moveNext`), each disabled while no open row is left on its side (`hasPreviousSequence`, `hasNextSequence`). A selection or a Sequence opened alone has no rows to move between and is left by Exit.
   The center holds what `keepIds` answers: the Picks; with none and one frame on the stage, that frame; and with none and two on the
   stage, nothing, so a frame on the stage is never recycled on a guess. With nothing to keep it holds the hint "Press 1 or 2 to keep a
   frame" (`.keep-hint`, in `--theme-neutral-3`) and no button, and Enter does nothing, since `settle` refuses an empty list. Otherwise
@@ -1408,8 +1408,8 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   (`isTextEditingTarget`, `common/text-editing.js`) or with Ctrl, Cmd or Alt held. Shift with 1 or 2 is told by the key's
   position (`event.code`, `recycleKeyOf`), since the symbol it types differs by layout; on a layout whose digits are on the
   shifted level (AZERTY) that press types the digit and stays the Pick's key, and Recycle is the button's alone. Only the arrows repeat when held, so a held key
-  cannot resolve set after set, and `handleKey`'s `preventDefault` keeps ↑ and ↓ from scrolling the rail as well, also while a set is
-  being resolved or read, when they move nothing. Enter on a focused control presses that control, and a pointer's click hands focus back to the shell
+  cannot resolve set after set or run through the queue, and `handleKey`'s `preventDefault` keeps ↑ and ↓ from scrolling the rail as well, also while a set is
+  being resolved or read, when they move nothing. Enter or Space on a focused control presses that control, and a pointer's click hands focus back to the shell
   (`refocusAfterPointer`), so Enter resolves next.
 
   | Key | Action |
@@ -1420,13 +1420,14 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   | 2 | Toggle the right frame as a Pick; nothing when one frame is on the stage |
   | Shift+1 | Recycle the left frame at once, or the only frame when one is on the stage |
   | Shift+2 | Recycle the right frame at once; nothing when one frame is on the stage |
-  | P | Pin the focused frame and move on; nothing on the pinned frame |
+  | Space | Pin the focused frame and move on; nothing on the pinned frame |
   | Enter | Resolve with the Picks; with none, the frame on the stage when there is one, and otherwise nothing |
   | A | Keep all |
   | R | Recycle the focused frame's Bundle, leaving a Pick in it; a Contender has none |
   | H | Show or hide the Histogram strips, turning the Clipping blink off as they hide; nothing with no set on show |
   | Q | Show or hide the Sequence rail (nothing on a selection or a single Sequence) |
-  | S | Skip Sequence (nothing on a selection) |
+  | N | Move to the nearest open row below in the Sequence rail; nothing with none, and nothing on a selection or a single Sequence |
+  | P | Move to the nearest open row above; the same limits |
   | Z | Undo the last action |
   | Esc | Close Curation (`global.js`) |
 
@@ -1454,10 +1455,10 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   held. **Remembered views.** Leaving a set by a move saves `currentView()` under its Sequence (`rememberedViews`), restored when
   the walk returns to it, for as long as Curation stays open; a row going done forgets it, and Start again forgets them all.
 
-  A selection or a Sequence opened from its header has no rows and no next set: a Keep all that changes nothing closes Curation,
-  as Skip Sequence does on that one Sequence (a selection has no Skip: `skip()` returns, and Exit closes it; on the queue Skip is
-  the move N makes); a Resolve, or a Keep all that changes something, stays open on a report of what was kept and recycled; and a
-  Bundle's or a frame's recycling that leaves too few frames shows the too-few state.
+  A selection or a Sequence opened from its header has no rows, no next set and no Previous or Next: a Keep all that changes
+  nothing closes Curation, Exit leaves it with no outcome; a Resolve, or a Keep all that changes something, stays
+  open on a report of what was kept and recycled; and a Bundle's or a frame's recycling that leaves too few frames shows the
+  too-few state.
 - **The outcomes.** Resolve and Keep all post to `/api/curation/.../resolve`. Recycling a Bundle or a frame is the grid's own
   `DELETE /api/asset/.../move`, and reads the set again. Undo holds one entry, the last mutation with the Sequence of the set it was
   made on (`shownSequenceId`), and reads that set again by its own ID wherever the walk has gone (`returnToSequence`): its row is
@@ -1476,7 +1477,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   old header until the next search. The map layout has no cells, so closing there runs the search again.
 - **The counts.** `Const.events.curationChanged`, announced after each Resolve, Keep all, Recycle of a Bundle or a frame, and Undo, runs
   `refreshCounts` (see **Nav refresh**), so the nav, folder, album and Location counts and the number of Sequences to curate are
-  true. Skip Sequence changes nothing and announces nothing. The store is also read when the Triage results render
+  true. A move of the walk changes nothing and announces nothing. The store is also read when the Triage results render
   (`js/fragments/search-results.js`), when Curation opens and when its queue runs out.
 - **The styles** are `static/css/htmx/curation.css` (the host, which fills the window, the shell's columns and the Sequence rail's
   frame), `curation_set.css` (the set) and `curation_queue.css` (the Sequence rail's rows), with the sizes `--curation-rail-width`,

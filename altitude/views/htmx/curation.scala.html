@@ -1,5 +1,5 @@
-@* Curation's shell, loaded into the Curation host of includes/html_common on every open, so each open starts with no skips and no
-   undo entry: the header with the queue's count, the Sequence rail's switch, Undo and Exit; the main column holding the host each
+@* Curation's shell, loaded into the Curation host of includes/html_common on every open, so each open starts with every row of
+   the queue open and no undo entry: the header with the queue's count, the Sequence rail's switch, Undo and Exit; the main column holding the host each
    Curation set's fragment (htmx/curation_set) is put in and the states with no set; and beside it, on the queue alone, the
    Sequence rail, which lists the queue's rows (htmx/curation_queue) and so outlives each set's fragment and stays through the
    states with no set. The `curation` Alpine component (js/alpine/components/curation.js) on its root holds the state, reads the

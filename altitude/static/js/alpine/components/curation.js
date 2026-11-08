@@ -23,10 +23,9 @@ import { getHttpErrorMessage, http } from "../../http/client.js"
  * whose rows it reads into the Sequence rail (`htmx/curation_queue.scala.html`) and walks, requesting
  * one set's fragment at a time and painting the rail's current and done rows itself; one Sequence; or
  * a selection, whose IDs it posts, so they never sit in a URL. Neither of the last two has a next set
- * or a Sequence rail: a Keep all
- * that changes nothing closes Curation, as Skip does on the one Sequence, and a Resolve or a Keep all
- * that changes something stays open on a report of what it did, with Undo and Exit. A selection is no
- * Sequence, so it has no Skip, button or key: Exit closes it.
+ * or a Sequence rail: a Keep all that changes nothing closes Curation, a Resolve or a Keep all that
+ * changes something stays open on a report of what it did, with Undo and Exit, and Exit is the one
+ * way to leave either without an outcome.
  *
  * On the queue a row is open or done: done once its set is resolved or kept, or once its Sequence
  * answers with no content (`doneIds`), and open otherwise. The walk moves between open rows only
@@ -46,7 +45,7 @@ import { getHttpErrorMessage, http } from "../../http/client.js"
  * A frame on the stage can be recycled at once (`recycleFrame`), as a Bundle can: it goes to the trash
  * through the grid's own endpoint, the set is read again, and Undo brings it back onto the stage.
  *
- * Every action is saved as it happens, so closing loses only the skips and the undo entry. Exit and
+ * Every action is saved as it happens, so closing loses only the undo entry. Exit and
  * Esc close it through `closeModal` (`global.js` handles Esc for every host), and this component
  * notices the host going, then announces what the session left changed
  * (`Const.events.curationClosed`) and removes the shell. The keys it binds are document-level, so they
@@ -1700,8 +1699,8 @@ export function curation() {
          * or with no set on show, it does nothing. The server's answer says whether a set changed:
          * nothing recycled and no Sequence cleared is a Keep all on part of a Sequence, or on frames of none.
          * On the queue the set's row is done either way, changed or not, and the walk goes on to its next
-         * set. With no next set, an outcome that changed nothing closes Curation, as a Skip does, and any
-         * other stays open on its report, keeping its undo entry.
+         * set. With no next set, an outcome that changed nothing closes Curation, and any other stays open
+         * on its report, keeping its undo entry.
          */
         settle(keepIds) {
             if (keepIds.length === 0) {
@@ -1745,21 +1744,6 @@ export function curation() {
                 }
                 await this.nextSet()
             })
-        },
-
-        /**
-         * Skip changes nothing: on the queue the walk moves to the nearest open row below, as N does, and
-         * on one Sequence Curation closes. A selection has none, button or key
-         */
-        skip() {
-            if (this.frames.length === 0 || this.selectionIds) {
-                return
-            }
-
-            if (this.isQueue) {
-                return this.moveNext()
-            }
-            return this.exclusively(() => this.nextSet())
         },
 
         /** Recycles a Bundle's frames, leaving a Pick in it; the set keeps its view */
@@ -1899,15 +1883,16 @@ export function curation() {
          * The keys, bound while Curation is the active host: ← ↑ move the focused frame back through the
          * rail's order and → ↓ move it on, 1 toggles the left frame as a Pick, or the only frame when one is
          * on the stage, and 2 the right frame, with nothing to do when one is on the stage. Shift+1 and
-         * Shift+2 recycle that same frame at once. P pins
-         * the focused frame and moves on, and does nothing on the pinned frame. Enter resolves,
-         * which does nothing while no frame is to be kept (`keepIds`), A keeps all, R recycles the focused
-         * frame's Bundle, H shows or hides the Histogram strips, Q the Sequence rail, S skips and Z undoes.
-         * Esc is `global.js`'s.
-         * A key held down repeats only the arrows, so it cannot resolve set after set, and Enter on a
-         * focused control presses that control. While a set is being resolved or read an arrow moves
-         * nothing, and still does not scroll the rail. With no set on show there are no frames and no
-         * focused frame, and H leaves the strips as they are, so only Q, Z and Esc do anything.
+         * Shift+2 recycle that same frame at once. Space pins the focused frame and moves on, and does
+         * nothing on the pinned frame. Enter resolves, which does nothing while no frame is to be kept
+         * (`keepIds`), A keeps all, R recycles the focused frame's Bundle, H shows or hides the Histogram
+         * strips, Q the Sequence rail, N and P move the walk to the nearest open row below or above (the
+         * queue alone) and Z undoes. Esc is `global.js`'s. A key held down repeats only the arrows, so it
+         * cannot resolve set after set or run through the queue, and Enter or Space on a focused control
+         * presses that control. While a set is being resolved or read an arrow moves nothing, and still
+         * does not scroll the rail. With no set on show there are no frames and no focused frame, and H
+         * leaves the strips as they are, so only N, P, Q, Z and Esc do anything: the unread state is left
+         * by a move as by Undo.
          */
         handleKey(event) {
             if (
@@ -1921,7 +1906,11 @@ export function curation() {
             }
 
             const key = recycleKeyOf(event) ?? event.key.toLowerCase()
-            if (key === "enter" && event.target.closest?.("button, a")) {
+            // A focused control takes its own activation keys
+            if (
+                (key === "enter" || key === " ") &&
+                event.target.closest?.("button, a")
+            ) {
                 return
             }
 
@@ -1932,7 +1921,7 @@ export function curation() {
                 arrowdown: () => this.moveFocus(1),
             }
             const once = {
-                p: () => this.pinFocused(),
+                " ": () => this.pinFocused(),
                 1: () => this.leftFrameId && this.togglePick(this.leftFrameId),
                 2: () =>
                     this.rightFrameId && this.togglePick(this.rightFrameId),
@@ -1943,7 +1932,8 @@ export function curation() {
                 r: () => this.recycleFocusedBundle(),
                 h: () => this.toggleHistogram(),
                 q: () => this.toggleSequenceRail(),
-                s: () => this.skip(),
+                n: () => this.moveNext(),
+                p: () => this.movePrevious(),
                 z: () => this.undo(),
             }
 

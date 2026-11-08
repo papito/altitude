@@ -165,7 +165,7 @@
       <span class="file-name" x-text="fileNameOf(@frame)"></span>
       <span class="pinned-label" x-show="@frame === pinnedId"><i class="fas fa-thumbtack" aria-hidden="true"></i> Pinned</span>
       <div class="caption-actions">
-        <button type="button" class="action-button small" x-show="@frame !== pinnedId" x-on:click="pinFocused()">Pin <kbd>P</kbd></button>
+        <button type="button" class="action-button small" x-show="@frame !== pinnedId" x-on:click="pinFocused()">Pin <kbd>Space</kbd></button>
         <button type="button" class="action-button small" :aria-pressed="isPick(@frame)" x-on:click="togglePick(@frame)">
           <span x-text="keepLabel(@frame)"></span> <kbd x-text="keepKey(@frame)"></kbd>
         </button>
@@ -310,8 +310,10 @@
           </div>
           <div class="actions">
             <button type="button" class="action-button" x-on:click="keepAll()">Keep all <kbd>A</kbd></button>
-            @* A selection is no Sequence and has no next set, so there is nothing to skip: Exit closes it *@
-            <button type="button" class="action-button" x-show="!selectionIds" x-on:click="skip()">Skip Sequence <kbd>S</kbd></button>
+            @* The moves of the queue's walk, to the nearest open row of the Sequence rail above or below; each is disabled with
+               none left on its side. A selection or a Sequence opened alone has no rows to move between: Exit closes it *@
+            <button type="button" class="action-button" x-show="isQueue" :disabled="!hasPreviousSequence" x-on:click="movePrevious()">Previous <kbd>P</kbd></button>
+            <button type="button" class="action-button" x-show="isQueue" :disabled="!hasNextSequence" x-on:click="moveNext()">Next <kbd>N</kbd></button>
           </div>
         </footer>
       </section>

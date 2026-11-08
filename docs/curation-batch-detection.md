@@ -259,7 +259,7 @@ refuses a Sequence given for a frame that is no Pick.
 
 **Recycling a Bundle is not a call of this service.** The client uses the grid's own recycle endpoint, then reads the
 set again so the Bundles are recomputed against the frames left, and undoes it through the grid's restore endpoint.
-Skip Sequence reaches no server.
+A move of the queue's walk reaches no server.
 
 Two side effects of recycling reach the user: a recycled frame leaves its albums and Locations and a restore does not
 add it back (the set's footer says so with a count), and its Faces leave its Person's face count, so an unnamed Person
@@ -356,33 +356,41 @@ clears that Sequence.
 ## 2. The modal
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│ Curation                                   3 sequences left        [Undo Z] [Exit Esc]│
-├──────────────────┬──────────────────────────────────────────────────────────────────┤
-│ Showing the first│  ┌───────────────────────────┐ ┌───────────────────────────┐    │
-│ 100 of 2,000 …   │  │ Keep  Blurry              │ │ Too dark                  │    │
-│ Too close to call│  │                           │ │                           │    │
-│ Every frame: 8% …│  │      pinned frame         │ │      focused frame        │    │
-│                  │  │                           │ │                           │    │
-│ Contenders (2)   │  └───────────────────────────┘ └───────────────────────────┘    │
-│                  │    ▁▂▃▅▇▅▃▂▁  R G B + luminance  ▁▁▂▅▇▇▅▂▁  R G B + luminance  │
-│  ▣ IMG_0041.jpg  │   IMG_0041.jpg  📌 Pinned  [Keep left 1] [Recycle ⇧1]   IMG_0042.jpg [Pin P] [Keep right 2] [Recycle ⇧2]
-│    The only … ✓  │                                                                  │
-│  ▢ IMG_0042.jpg  ├──────────────────────────────────────────────────────────────────┤
-│                  │  face strip: one row per Person, one column per frame            │
-│ Poor faces (1)   │        ▣      ▢      ▢      ▢                                    │
-│  [ⓘ] [Recycle]   │  P1   [👤]   [👤]    –     [👤]                                   │
-│  Face quality …  │  P2   [👤]   [👤]   [👤]   [👤]                                   │
-│                  ├──────────────────────────────────────────────────────────────────┤
-│ Blurry (1)       │  2 frames to recycle are in an album or Location: …              │
-│  [ⓘ] [Recycle]   │  ← → ↑ ↓ move, R recycle   [Keep IMG_0041.jpg, recycle 3 ⏎]  [Keep all A] [Skip Sequence S]
-└──────────────────┴──────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Curation                        3 sequences left              [Sequences Q] [Undo Z] [Exit Esc]      │
+├──────────────────┬──────────────────────────────────────────────────────────────────┬────────────────┤
+│ Showing the first│  ┌───────────────────────────┐ ┌───────────────────────────┐    │ Sequences      │
+│ 100 of 2,000 …   │  │ Keep  Blurry              │ │ Too dark                  │    │        4 of 12 │
+│ Too close to call│  │                           │ │                           │    │                │
+│ Every frame: 8% …│  │      pinned frame         │ │      focused frame        │    │   [cover] ✓    │
+│                  │  │                           │ │                           │    │   8 frames     │
+│ Contenders (2)   │  └───────────────────────────┘ └───────────────────────────┘    │   12 Mar 2026  │
+│                  │    ▁▂▃▅▇▅▃▂▁  R G B + luminance  ▁▁▂▅▇▇▅▂▁  R G B + luminance  │                │
+│  ▣ IMG_0041.jpg  │   IMG_0041.jpg  📌 Pinned  [Keep left 1] [Recycle ⇧1]   IMG_0042.jpg [Pin Space] [Keep right 2] [Recycle ⇧2]
+│    The only … ✓  │                                                                  │  ▣[cover]      │
+│  ▢ IMG_0042.jpg  ├──────────────────────────────────────────────────────────────────┤   5 frames     │
+│                  │  face strip: one row per Person, one column per frame            │   12 Mar 2026  │
+│ Poor faces (1)   │        ▣      ▢      ▢      ▢                                    │                │
+│  [ⓘ] [Recycle]   │  P1   [👤]   [👤]    –     [👤]                                   │   [cover]      │
+│  Face quality …  │  P2   [👤]   [👤]   [👤]   [👤]                                   │   3 frames     │
+│                  ├──────────────────────────────────────────────────────────────────┤   No date      │
+│ Blurry (1)       │  2 frames to recycle are in an album or Location: …              │                │
+│  [ⓘ] [Recycle]   │  ← → ↑ ↓ move, R recycle   [Keep IMG_0041.jpg, recycle 3 ⏎]  [Keep all A] [Previous P] [Next N]
+└──────────────────┴──────────────────────────────────────────────────────────────────┴────────────────┘
 ```
 
-**The shell** is the header (title, how many Sequences are left, Undo while there is one, Exit), the host each set's
-fragment goes into, and four states with no set: too few frames left, the report of a resolve, "This set could not be
-read" with Try again, and the queue's end ("All done", or the count left with Start again). A new shell is loaded on
-every open, so each session starts with no skips and no undo entry.
+**The shell** is the header (title, how many Sequences are left, the **Sequences Q** switch of the Sequence rail on the queue,
+Undo while there is one, Exit), the main column holding the host each set's fragment goes into and four states with no set
+(too few frames left, the report of a resolve, "This set could not be read" with Try again, and the queue's end: "All done", or
+the count left with Start again), and on the queue alone the **Sequence rail** to its right. A new shell is loaded on every
+open, so each session starts with every row open and no undo entry.
+
+**The Sequence rail** is the right column, on the queue alone, listing every Sequence of the queue oldest first capture first,
+scrolling by itself. Its header reads "Sequences" and the position, "4 of 12". A row holds the Sequence's cover Preview (its
+first frame in capture order), its frame count ("8 frames") and its first capture's date ("12 Mar 2026", or "No date" for an
+undated Sequence). The current row wears the accent edge the Bundle rail's focused frame does and stays scrolled into view; a
+Sequence already dealt with stays in place, dimmed with a check. The rail is shown or hidden by Q or the header's switch, a
+choice the browser remembers for the next open; the walk works the same with it hidden.
 
 **The Bundle rail** is the left column, scrolling by itself. From the top: the notices ("Showing the first 100 of 2,000
 frames. The Sequence stays in the queue with the rest", "Too close to call", or in the warning color "Every frame: 8%
@@ -399,7 +407,7 @@ with no problem"; an unmeasured frame says "Not measured".
 pane when nothing is pinned or the pinned frame is focused. A set opens on the rail's first two frames, the first pinned
 and the second focused: its first two Contenders when it has them, else a sole Contender beside the first bundled frame, or
 the first two bundled frames. Each pane carries a tag in its corner ("Keep" in the success color on a Pick, and the frame's
-problems as chips), the file name, "Pinned" or a **Pin P** button, and a **Keep** button that reads "Keep left 1",
+problems as chips), the file name, "Pinned" or a **Pin Space** button, and a **Keep** button that reads "Keep left 1",
 "Keep right 2" or "Keep 1" with one frame on the stage, and a **Recycle** button ("Recycle Shift+1", "Recycle Shift+2")
 that sends the frame to the trash at once, for a frame that is plainly no keeper. A pane hides its image and shows a spinner from the moment its
 frame changes until the new image loads, so a frame is never shown under another's name. The focused frame's neighbours
@@ -435,7 +443,9 @@ per Person (most frames first) and one column per frame in the rail's order, fro
 where a frame has no Face of that Person. A column's head is the frame's Preview and focuses it. Clicking a crop zooms
 both panes to that Person's box, or back out; a frame with no Face of the Person shows whole.
 
-**The footer** holds the keys' hint on the left, at twice the size of the footer's other small text, Keep all and Skip Sequence on the right (a selection has no Skip Sequence), and in the center what Resolve will
+**The footer** holds the keys' hint on the left, at twice the size of the footer's other small text, Keep all and, on the
+queue, **Previous P** and **Next N** on the right (each disabled with nothing left on its side; a selection or a Sequence opened
+alone has neither), and in the center what Resolve will
 do: "Keep IMG_0042.jpg, recycle 3" with one Pick, "Keep 2, recycle 3" with several. With no Pick and one frame on the
 stage, that frame is kept; with no Pick and two on the stage, nothing is, and the center reads "Press 1 or 2 to keep a
 frame" with no button, so a frame on the stage is never recycled on a guess. A row above says how many frames to be
@@ -444,8 +454,8 @@ recycled are in an album or a Location, since recycling takes them out and a res
 ## 3. Keys
 
 Bound on the document while Curation is open, ignored in a text field or with Ctrl, Cmd or Alt held. Only the arrows
-repeat when held, so a held key cannot resolve set after set. Enter on a focused button presses that button; a pointer
-click hands focus back to the shell so Enter resolves next.
+repeat when held, so a held key cannot resolve set after set or run through the queue. Enter or Space on a focused button
+presses that button; a pointer click hands focus back to the shell so Enter resolves next.
 
 | Key | Action |
 |---|---|
@@ -455,37 +465,62 @@ click hands focus back to the shell so Enter resolves next.
 | 2 | Toggle the right frame as a Pick; nothing with one frame on the stage |
 | Shift+1 | Recycle the left frame at once (or the only frame on the stage) |
 | Shift+2 | Recycle the right frame at once; nothing with one frame on the stage |
-| P | Pin the focused frame and move on; nothing on the pinned frame |
+| Space | Pin the focused frame and move on; nothing on the pinned frame |
 | Enter | Resolve with the Picks; with none, the one frame on the stage; otherwise nothing |
 | A | Keep all |
 | R | Recycle the focused frame's Bundle, leaving any Pick in it; a Contender has none |
-| S | Skip Sequence (nothing on a selection) |
+| H | Show or hide the Histogram strips |
+| Q | Show or hide the Sequence rail (the queue alone) |
+| N | Move to the next Sequence of the rail not yet dealt with; nothing with none (the queue alone) |
+| P | Move to the previous such Sequence; nothing with none (the queue alone) |
 | Z | Undo the last action |
 | Esc | Close Curation |
 
-Actions run one at a time: a key pressed while a set is being resolved or read does nothing.
+Actions run one at a time: a key pressed while a set is being resolved or read does nothing. N, P and a click on the rail
+are moves, not actions: see **The walk of the queue**.
 
 The wheel over a stage pane steps the Loupe's level, the one pointer gesture with an
 effect of its own; the Loupe is pointer-only, and the arrows are the rail's.
 
 ## 4. The walk of the queue
 
-Opened from the toolbar, Curation reads the queue's Sequence IDs once and requests one set's fragment at a time; the
-user never sees the list. Resolve, Keep all and Skip Sequence open the next set. A Sequence that answers with no content (gone
-under two frames meanwhile) is passed over without comment. The next set's opening frames are preloaded while the
-current one is on show, so it paints at once.
+Opened from the toolbar, Curation reads the queue's rows once into the Sequence rail and requests one set's fragment at a
+time. A row is open or done (code words, never shown): done once its set is resolved or kept (a Keep all that changed
+nothing included), or once its Sequence answers with no content when reached, because too few frames are left, and open
+otherwise. A done row stays in place, dimmed with a check, and the walk passes over it; a click on it does nothing. A
+Sequence over the 100-frame window keeps its other frames and stays in the queue, but is done for this walk; Start again
+offers it again. Undo of an outcome puts its row back to open and the walk back on it.
 
-When the IDs run out, the count is read again. With Sequences left (skipped, or imported meanwhile) the end state shows
-the count with **Start again**, which reads the queue afresh; with none it reads **All done**.
+The moves:
 
-A Sequence opened from its header or a selection has no next set. A Keep all that changes nothing closes
-Curation, as Skip Sequence does on that one Sequence. A selection is no Sequence, so it has no Skip Sequence, button or key:
-Exit closes it. A Resolve, or a Keep all that changes something, stays open on a report ("Kept 1 frame, recycled 3 frames") with
-Undo and Exit. A Bundle's recycling that leaves too few frames shows the too-few state.
+| Move | Goes to |
+|---|---|
+| N | The nearest open row below. With none, nothing: the button is disabled |
+| P | The nearest open row above. With none, nothing: the button is disabled |
+| Click on an open row | That row. The current row does nothing |
+| After a Resolve, a Keep all, or a recycling that leaves too few frames | The nearest open row below, else the first open row from the top, else the end state |
+
+A row that answers with no content when reached becomes done and the move goes on in its direction. A move with nothing
+further stays on the set on show and on its row. The end state appears only when every row is done: "All done", or the
+count with **Start again**, which reads the rows afresh, for Sequences imported meanwhile or one still holding frames past
+the window. The next open row's opening frames are preloaded in the direction of the last move, so it paints at once.
+
+Leaving a set by a move remembers its Picks, pinned and focused frames and zoom, restored when the walk returns to it, for
+as long as Curation stays open; a Resolve, a Keep all or a Sequence ending forgets it.
+
+The latest move wins: N, P and a row click move the highlight at once, and a read that has been overtaken is ignored, so
+the last move is the set that opens. Resolve, Keep all, Recycle, Undo, Try again and Start again stay one at a time: none
+starts while a move is reading, and no move starts during one of them. N and P do not repeat while held. A failed read of a
+move shows the unread state as any failed read does, and the rail, N and P still work there, so a Sequence that will not
+read cannot block the rest.
+
+A Sequence opened from its header or a selection has no Sequence rail, no N and no P. A Keep all that changes nothing
+closes Curation, and so does Exit. A Resolve, or a Keep all that changes something, stays open on a report ("Kept 1 frame,
+recycled 3 frames") with Undo and Exit. A Bundle's recycling that leaves too few frames shows the too-few state.
 
 ## 5. Outcomes and Undo
 
-Every action is saved as it happens, so closing loses only the skips and the undo entry.
+Every action is saved as it happens, so closing loses only the undo entry.
 
 | Action | What happens |
 |---|---|
@@ -493,8 +528,7 @@ Every action is saved as it happens, so closing loses only the skips and the und
 | Keep all | `resolve` with nothing to recycle. On a whole Sequence this dismisses a wrongly grouped burst; on part of one it changes nothing. |
 | Recycle a Bundle | The grid's own recycle endpoint on the Bundle's frames (a Pick in it stays). The set is read again, keeping the pinned frame, the focused frame, the Picks and the zoom, and the Bundles are recomputed against the frames left. |
 | Recycle a frame | The grid's own recycle endpoint on a frame of the stage, a Pick or not. The set is read again as after a Bundle's recycling, and the next frame takes the recycled one's place: the frame left on the stage is the pinned frame and the next frame in the rail's order comes in on the right, so two stay on the stage. |
-| Skip Sequence | Nothing is saved; the walk moves on. Not offered on a selection. |
-| Undo | One entry, the last mutation. A Resolve or Keep all goes back through `reopen`; a recycled Bundle or frame through the grid's restore, the frame back on the stage beside the one it was recycled from. The set is read again by its own ID wherever the walk has gone: the walk goes back to it, or if Start again replaced the list, the Sequence is put in where the walk stands. The result is reported as a restore is (a frame imported again since stays in the trash). |
+| Undo | One entry, the last mutation. A Resolve or Keep all goes back through `reopen`; a recycled Bundle or frame through the grid's restore, the frame back on the stage beside the one it was recycled from. The set is read again by its own ID wherever the walk has gone: its row is open again and the walk goes back to it, or if Start again replaced the rows and it is in none, the rows are read afresh, which list the undone Sequence again. The result is reported as a restore is (a frame imported again since stays in the trash). |
 
 A failed write goes to the snackbar and leaves the set on show, since nothing was saved. A failed read, whether it
 opens Curation or follows an outcome, shows "This set could not be read" with Try again and never leaves a set on show
@@ -510,7 +544,7 @@ off the Sequences cleared; kept frames stay under their old header until the nex
 no cells, the search runs again.
 
 After each Resolve, Keep all, Bundle recycling and Undo, the counts refresh: the nav, folder, album and Location counts
-and the number of Sequences to curate, which the toolbar's button reads. Skip Sequence changes nothing and refreshes nothing.
+and the number of Sequences to curate, which the toolbar's button reads. A move of the walk changes nothing and refreshes nothing.
 
 ## 7. Settings screen
 
