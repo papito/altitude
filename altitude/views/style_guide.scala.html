@@ -294,7 +294,9 @@
              modal host. A one-field popover dialog shows no label, only its placeholder, and names its input with
              <code>aria-label</code>. A field in error takes the <code>error</code> class, the error fill and edge,
              which it keeps with focus, with no ring, and its message is a <code>div.error</code>
-             <code>--space-2</code> under it inside the form.</p>
+             <code>--space-2</code> under it inside the form. An error with a way out carries it after the message, an
+             <code>.action-button.small</code>, the two wrapping in one row under the field: the person name editor's
+             offer to merge, the last specimen here, at the title's size.</p>
           <div class="sg-row">
             <input type="text" placeholder="input" aria-label="Input specimen">
             <textarea rows="2" placeholder="textarea" aria-label="Textarea specimen"></textarea>
@@ -336,6 +338,20 @@
               </div>
             </div>
           </template>
+          @* The person name editor in error, inside the title it swaps into, so the rules of static/css/htmx/person.css apply *@
+          <div class="results-title">
+            <div class="text">
+              <div class="title">
+                <i class="fas fa-user kind-icon" aria-hidden="true"></i>
+                <span id="personName">
+                  <form action="#" @@submit.prevent>
+                    <input type="text" class="error" value="tessa" aria-label="Name in error with an action specimen">
+                    <div class="error">Tessa already exists. <button type="button" class="action-button small">Merge into Tessa…</button></div>
+                  </form>
+                </span>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section id="navigation-tabs">

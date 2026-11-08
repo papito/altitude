@@ -173,12 +173,23 @@ Unmatched (fewer and unnamed), Hidden (hidden, whatever its count or name); a di
 (`PersonService.getInBuckets`, one query) is the union of the buckets switched on, Matched alone by default; Hide / Show,
 offered to a Matched person (`Person.isMatched`), moves it between buckets. Its actions:
 
-- **Name**: `updateName` sets `is_named`; a named person is listed whatever their count.
+- **Name**: `updateName` stores the name in NFC and sets `is_named`; a named person is listed whatever their count. A
+  named person's `name_for_sort` is its name key (`PersonService.nameKey`: the NFC name lowercased under `Locale.ROOT`),
+  and `person_01` keeps that unique over the live people, hidden ones included, so a name is unique regardless of case and
+  Unicode form. This is lowercasing, not a full Unicode case fold: "Weiß" and "WEISS", or a Greek name with a final sigma
+  and with a plain one ("σοφος" and "σοφοσ"), keep different keys. A merged-away or bad-match person holds no name. An unnamed person's `name_for_sort` is `unknown 0042`, so
+  a name of the form `Unknown N`, in any case and spacing, is reserved and refused with a validation error. A change of
+  case alone is a rename. A name another live person holds is refused, and the editor offers to merge into that person
+  (**Event Flow** in `views/AGENTS.md`).
 - **Cover face**: `getPersonFaces` (by detection score) offers the candidates, `setFaceAsCover` picks one.
 - **Hide / show**: display only; the person's faces still match.
 - **Bad match** (`markAsBadMatch`): the person is taken out of listings and their faces out of the match candidates.
-- **Merge** (`merge(dest, source)`): the source's faces move to the destination, the source is soft-deleted, the
-  destination takes the source's name when only the source was named, and its count is recounted from the search.
+- **Merge** (`merge(dest, source)`): the source's faces move to the destination, the source is soft-deleted, and the
+  destination's count is recounted from the search. Both people's rows are locked first (`lockAndGetLive`, in ID order).
+  The merged name is decided from the two stored rows, not the models passed in: an unnamed destination with a named,
+  live source takes the source's `name`, its name key as `name_for_sort`, and `is_named`; otherwise the destination, named
+  or not, keeps all three. A source no longer live (merged away or a bad match) gives no name; a merge of one is not
+  refused. The source is soft-deleted first, so `person_01` never sees the name on two live people.
 
 ## Settings
 

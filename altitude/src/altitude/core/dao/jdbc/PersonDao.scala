@@ -3,11 +3,15 @@ package altitude.core.dao.jdbc
 import com.typesafe.config.Config
 import scalasql.Sc
 import scalasql.Table
+import scalasql.core.Expr
+import scalasql.dialects.Dialect
+import scalasql.query.Select
 
 import altitude.core.{ Const => C }
 import altitude.core.Const.FaceRecognition
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.tables.PersonRow
 import altitude.core.models.Person
 import altitude.core.service.PersonService
@@ -73,13 +77,14 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     addRecord(sql, sqlVals)
     person.copy(id = Some(id), name = Some(personName), isNamed = isNamed)
 
+  // The name in NFC, or "Unknown 42" etc
   protected def getPersonName(person: Person, sequenceNum: Long): String =
-    if person.name.isDefined then person.name.get
+    if person.name.isDefined then PersonService.normalizedName(person.name.get)
     else s"${PersonService.UNKNOWN_NAME_PREFIX} $sequenceNum"
 
-  // lowercase name or "unknown_0001" etc
+  // The name key, or "unknown 0042" etc
   protected def getPersonSortName(person: Person, sequenceNum: Long): String =
-    if person.name.isDefined then person.name.get.toLowerCase
+    if person.name.isDefined then PersonService.nameKey(person.name.get)
     else f"${PersonService.UNKNOWN_NAME_PREFIX.toLowerCase} $sequenceNum%04d"
 
   def getAll: Map[String, Person] =
@@ -135,6 +140,11 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
 
     recs.map(makeModel)
 
+  // Reads `person_01`, the unique index the name key is kept unique by
+  override def getLiveByNameKey(nameKey: String): Option[Person] =
+    val live = PersonDao.liveByNameKey(dialect, RequestContext.getRepository.persistedId, nameKey)
+    Db.read(dialect)(_.run(live)).headOption.map(toModel)
+
   def recycleFacesForAssets(assetIds: Set[String]): Unit = addFacesOfAssets(assetIds, sign = "-")
 
   def restoreFacesForAssets(assetIds: Set[String]): Unit = addFacesOfAssets(assetIds, sign = "+")
@@ -167,6 +177,23 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     """
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId))
 
+  // The dead are locked too, and left out afterwards, so that a caller waits for whatever is changing them.
+  // On PostgreSQL; SQLite's one write connection serializes the writers
+  override def lockAndGetLive(personIds: Set[String]): Set[String] =
+    val sql = s"""
+      SELECT id, is_deleted, is_bad_match
+        FROM person
+       WHERE repository_id = ?
+         AND id $inIdSet
+    ORDER BY id
+      $forUpdate
+    """
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(personIds)))
+      .filterNot(
+        rec => getBooleanField(rec(FieldConst.Person.IS_DELETED)) || getBooleanField(rec(FieldConst.Person.IS_BAD_MATCH)))
+      .map(_(FieldConst.ID).asInstanceOf[String])
+      .toSet
+
   override def deleteFaceless(personIds: Set[String]): Set[String] =
     if personIds.isEmpty then return Set.empty
 
@@ -183,3 +210,19 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
 
     if faceless.nonEmpty then updateByBySql(s"DELETE FROM person WHERE id $inIdSet", List(idSet(faceless)))
     faceless
+
+object PersonDao:
+
+  /**
+   * The live person of a repository whose sort name is the name key. The predicate is `person_01`'s, typed, so ScalaSql binds the
+   * flags as numbers: SQLite uses a partial index only for a query whose own terms imply the index's, which a flag bound as the
+   * text `nativeBool` binds on SQLite does not.
+   */
+  def liveByNameKey(dialect: Dialect, repositoryId: String, nameKey: String): Select[PersonRow[Expr], PersonRow[Sc]] =
+    import dialect.*
+
+    PersonRow.select.filter {
+      person =>
+        (person.repositoryId `=` repositoryId) && (person.nameForSort `=` nameKey) && (person.isDeleted `=` false) &&
+        (person.isBadMatch `=` false)
+    }

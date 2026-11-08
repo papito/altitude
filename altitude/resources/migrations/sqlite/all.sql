@@ -207,7 +207,10 @@ CREATE TABLE person (
 -- The partial person indexes cover the live people, the ones every person query reads; a merged-away person keeps its name and
 -- its cover face, which another person may take. The predicates are written as the queries write them: SQLite uses a partial
 -- index only for a query whose own terms imply it, and `is_deleted = FALSE` does not imply `is_deleted = 0`.
-CREATE UNIQUE INDEX person_01 ON person (repository_id, name)
+-- person_01 is the name-key index: a named person's name_for_sort is its name key (PersonService.nameKey, folded in Scala
+-- so both engines fold alike), and an unnamed person's is "unknown 0042", so a live person's name is unique under that fold:
+-- lowercased NFC, which is not a full Unicode case fold
+CREATE UNIQUE INDEX person_01 ON person (repository_id, name_for_sort)
     WHERE is_deleted = FALSE AND is_bad_match = FALSE;
 
 CREATE UNIQUE INDEX person_02 ON person (cover_face_id)

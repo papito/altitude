@@ -46,6 +46,33 @@
     field-sizing: content;
 }
 
+/* A name that cannot be saved: the error row under the field (views/AGENTS.md **Forms**), its message and, for a name another
+   person holds, the offer to merge. The title stays on one line; this row wraps instead. The icon and the × keep to the field's
+   line, and #personName stops clipping while the row shows, so the button's focus ring is whole; left to overflow it would hold
+   its content's width, hence min-width and the field's cap. */
+.title:has(#personName div.error) {
+    align-items: baseline;
+}
+
+.results-title #personName:has(div.error) {
+    min-width: 0;
+    overflow: visible;
+}
+
+#personName:has(div.error) input {
+    max-width: 100%;
+}
+
+#personName div.error {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
+    font-weight: normal;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
 #person .actions a,
 #person .actions span {
     display: inline-flex;

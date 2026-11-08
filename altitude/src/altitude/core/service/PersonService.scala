@@ -1,9 +1,13 @@
 package altitude.core.service
 
 import java.sql.SQLException
+import java.text.Normalizer
+import java.util.Locale
 
+import altitude.core.{ Const => C }
 import altitude.core.Altitude
 import altitude.core.FieldConst
+import altitude.core.ValidationException
 import altitude.core.dao.FaceDao
 import altitude.core.dao.PersonDao
 import altitude.core.models.Asset
@@ -17,6 +21,28 @@ import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
 object PersonService:
   val UNKNOWN_NAME_PREFIX = "Unknown"
+
+  // An unnamed person's form of name ("Unknown 42"), in any case and spacing, Unicode spaces and digits included. The spacing
+  // around it is in the pattern, as `String.strip` leaves the no-break spaces (U+00A0, U+2007, U+202F)
+  private val RESERVED_NAME = s"(?iU)\\s*$UNKNOWN_NAME_PREFIX\\s*\\d+\\s*".r
+
+  /** A name as stored: NFC, so a name typed with a combining accent and the same name typed precomposed are one name */
+  def normalizedName(name: String): String = Normalizer.normalize(name, Normalizer.Form.NFC)
+
+  /**
+   * The name key: the folded form of a name that `person_01` keeps unique, stored as a named person's `name_for_sort`. The fold
+   * is done here and not in SQL, since SQLite's `lower()` folds ASCII only while PostgreSQL's folds by its collation.
+   * `Locale.ROOT` keeps "I" folding to "i" whatever the JVM's default locale. This is lowercasing and not a full Unicode case
+   * fold, so "Weiß" and "WEISS", or a Greek name with a final sigma and the same name with a plain one ("σοφος" and "σοφοσ"),
+   * keep different keys.
+   */
+  def nameKey(name: String): String = normalizedName(name).toLowerCase(Locale.ROOT)
+
+  /**
+   * Whether a name has an unnamed person's form, which no person may be given: an unnamed person's sort name (`unknown 0042`)
+   * would otherwise equal a named person's key, or sit beside it under another
+   */
+  def isReservedName(name: String): Boolean = RESERVED_NAME.matches(name)
 
 class PersonService(val app: Altitude) extends BaseService[Person]:
   protected val dao: PersonDao = app.DAO.person
@@ -72,20 +98,28 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       added
     }
 
+  /**
+   * Moves the source's faces to the destination, soft-deletes the source and recounts the destination's faces. Both people are
+   * locked first, so what this merge reads is what it acts on. The merged name is decided from the stored rows, not from the
+   * models passed in, which may be stale: an unnamed destination takes the name of a named source that is still live (neither
+   * merged away nor a bad match), with its name key as sort name and the named flag, and a named destination keeps its own. The
+   * source is soft-deleted before the destination takes its name, so `person_01` never sees the name on two live people.
+   */
   def merge(dest: Person, source: Person): Person =
     if source == dest then throw IllegalArgumentException("Cannot merge a person with itself. That's perverse!")
 
-    logger.debug(s"Merging person ${source.name} into ${dest.name}")
-
     txManager.withTransaction {
+      val liveIds: Set[String] = dao.lockAndGetLive(Set(dest.persistedId, source.persistedId))
       val persistedDest: Person = dao.getById(dest.persistedId)
       val persistedSource: Person = dao.getById(source.persistedId)
 
-      logger.debug(s"Moving faces from ${source.name.get} to ${dest.name.get}")
-      val query = new Query().add(FieldConst.Face.PERSON_ID -> source.persistedId)
+      logger.debug(
+        s"Merging person [${persistedSource.persistedId}] ${persistedSource.name.get} " +
+          s"into [${persistedDest.persistedId}] ${persistedDest.name.get}")
+      val query = new Query().add(FieldConst.Face.PERSON_ID -> persistedSource.persistedId)
 
       // faces from source are moved to the new person
-      faceDao.updateByQuery(query, Map(FieldConst.Face.PERSON_ID -> dest.persistedId))
+      faceDao.updateByQuery(query, Map(FieldConst.Face.PERSON_ID -> persistedDest.persistedId))
 
       updateById(
         persistedSource.persistedId,
@@ -95,10 +129,11 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
         )
       )
 
-      // if destination is NOT named and the source IS named, use the source name
-      val mergedPersonName =
-        if !dest.isNamed && source.isNamed then source.name.get
-        else dest.name.get
+      // A source no longer live holds no name: another live person may hold it since
+      val takenName: Option[String] =
+        if !persistedDest.isNamed && persistedSource.isNamed && liveIds.contains(persistedSource.persistedId) then
+          persistedSource.name
+        else None
 
       val recountQuery = new SearchQuery(
         params = Map(FieldConst.Asset.IS_RECYCLED -> false),
@@ -107,19 +142,23 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
       val mergedFaceCount = app.service.library.count(recountQuery)
 
-      val updatedDest = persistedDest.copy(
+      val nameFields: Map[String, Any] = takenName match
+        case Some(name) =>
+          logger.debug(s"Person [${persistedDest.persistedId}] takes the name [$name] of the merged person")
+          Map(
+            FieldConst.Person.NAME -> name,
+            FieldConst.Person.NAME_FOR_SORT -> PersonService.nameKey(name),
+            FieldConst.Person.IS_NAMED -> true
+          )
+        case None => Map.empty
+
+      updateById(persistedDest.persistedId, Map(FieldConst.Person.NUM_OF_FACES -> mergedFaceCount) ++ nameFields)
+
+      persistedDest.copy(
         numOfFaces = mergedFaceCount,
-        name = Some(mergedPersonName)
+        name = takenName.orElse(persistedDest.name),
+        isNamed = persistedDest.isNamed || takenName.isDefined
       )
-
-      updateById(
-        persistedDest.persistedId,
-        Map(
-          FieldConst.Person.NUM_OF_FACES -> updatedDest.numOfFaces,
-          FieldConst.Person.NAME -> mergedPersonName
-        ))
-
-      updatedDest
     }
 
   def getPersonFaces(personId: String, limit: Int = 50): List[Face] =
@@ -227,18 +266,37 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       personForUpdate
     }
 
+  /**
+   * Names the person, the name stored in NFC and its name key as sort name. A name of an unnamed person's form is a
+   * `ValidationException`; a name another live person holds in any case or Unicode form, a `DuplicateException` (`person_01`).
+   */
   def updateName(person: Person, newName: String): Person =
+    val name = PersonService.normalizedName(newName)
+
+    if PersonService.isReservedName(name) then
+      logger.debug(s"Refusing to rename person [${person.persistedId}] to the reserved name [$name]")
+      throw ValidationException(C.Msg.Err.RESERVED_PERSON_NAME)
+
     txManager.withTransaction {
-      logger.debug(s"Renaming person [${person.persistedId}] to [$newName]")
+      logger.debug(s"Renaming person [${person.persistedId}] to [$name]")
       updateById(
         person.persistedId,
         Map(
-          FieldConst.Person.NAME -> newName,
-          FieldConst.Person.NAME_FOR_SORT -> newName.toLowerCase,
+          FieldConst.Person.NAME -> name,
+          FieldConst.Person.NAME_FOR_SORT -> PersonService.nameKey(name),
           FieldConst.Person.IS_NAMED -> true
         ))
 
-      person.copy(name = Some(newName), isNamed = true)
+      person.copy(name = Some(name), isNamed = true)
+    }
+
+  /**
+   * The live person holding a name in any case or Unicode form: the one `person_01` refuses the name for. A hidden person is
+   * live; a merged-away or bad-match one is not, and holds no name.
+   */
+  def getLiveByNameKey(name: String): Option[Person] =
+    txManager.asReadOnly {
+      dao.getLiveByNameKey(PersonService.nameKey(name))
     }
 
   def setVisibility(person: Person, isHidden: Boolean): Person =

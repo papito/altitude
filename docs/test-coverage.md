@@ -425,19 +425,24 @@ Sources: [SearchQueries](../altitude/src/altitude/core/dao/sql/search/SearchQuer
 
 ## People, face ownership, and merges
 
-Sources: [PersonService](../altitude/src/altitude/core/service/PersonService.scala). Evidence: [PersonServiceTests](../altitude/test/src/altitude/core/integration/PersonServiceTests.scala), [PurgePipelineServiceTests](../altitude/test/src/altitude/core/integration/PurgePipelineServiceTests.scala).
+Sources: [PersonService](../altitude/src/altitude/core/service/PersonService.scala), [PeopleActionController](../altitude/src/altitude/core/routes/web/partial/PeopleActionController.scala). Evidence: [PersonServiceTests](../altitude/test/src/altitude/core/integration/PersonServiceTests.scala), [PurgePipelineServiceTests](../altitude/test/src/altitude/core/integration/PurgePipelineServiceTests.scala), [PeopleActionControllerTests](../altitude/test/src/altitude/core/controller/PeopleActionControllerTests.scala).
 
 - ✅ Persist faces/people from a real import, associate faces with assets, increment face counts, and assign the first cover face.
 - ✅ Rename a person, mark it named, and update the persisted sort name; cross the minimum face-count threshold.
 - ✅ Merge people and merge chains, transfer face ownership, zero source counts, preserve/inherit the tested names, and allow reuse of a merged source's name.
-- ✅ Two live people cannot share a name on either engine; a person merged away after taking the cover face of one merged into them leaves two merged-away people with one cover face; listing the live people reads the partial `person_03`.
+- ✅ Two live people cannot share a name on either engine, whatever its case (a non-ASCII letter's too) or Unicode form, and a merged-away or bad-match person does not hold its name; a person merged away after taking the cover face of one merged into them leaves two merged-away people with one cover face; listing the live people reads the partial `person_03`.
+- ✅ On both engines: an `Unknown N` name, in any case and spacing, is refused and leaves the name as it was, while "Unknown Soldier" saves; a person renamed to its own name in another case takes the new name and key; adding a named person stores the NFC name and its name key; the name key folds alike whatever the JVM's default locale.
+- ✅ A merge decides the name from the stored rows, not the models passed in, stale on either side: an unnamed destination taking a named source's name has the `name`, the name key and `is_named` on its row, is Matched below the face threshold and is found by a Search for the name; a named destination keeps its name, key and flag.
+- ✅ A stale merge of a merged-away or bad-match source into an unnamed destination raises no error and leaves the destination unnamed, even when another live person holds the name since. Two concurrent merges of one source (`contend`): the second waits for the first's row lock, and its destination stays unnamed.
+- ✅ `getLiveByNameKey` finds the live holder of a name, hidden or not, across case and Unicode form, and never a merged-away or bad-match person; its statement (`PersonDao.liveByNameKey`) reads `person_01` on both engines (`SearchPlans`).
+- ✅ Controller: a taken name answers 200 with the editor, the holder's stored name in the error and a button carrying both IDs and `keepDirection`, and a hidden holder's message says so; a reserved name shows its error under the field with the name typed kept; a case-only rename answers the name view with the new name; the merge modal keeps the requested direction with `keepDirection=true` and otherwise merges the person with fewer faces.
 - ✅ Recount a merge when two people share one asset; separately recognize multiple occurrences of one person in a single image.
 - ✅ List people by People bucket (`getInBuckets`): a hidden person is in Hidden alone, a named one is Matched whatever its count, an unnamed one below the threshold is Unmatched, a discarded one is in no bucket, every bucket together equals `getAll` less the discarded, an empty set lists no one, and an unknown bucket name is refused; hide a person from per-asset retrieval; recycle/restore assets without deleting/restoring the wrong face-record set in the tested normal cases.
 - ✅ Preserve explicitly selected cover-face binaries through purge.
 - [ ] Reject self-merge, missing/deleted participants, and foreign-repository participants without changing faces or either person. [CRITICAL]
 - [ ] Inject a failure midway through merge and assert source status, target name/count, and face ownership roll back together. [CRITICAL]
-- [ ] Merge a named source into an unnamed target and assert `isNamed`, sort name, cover selection, and list placement as well as the inherited display name. [MEDIUM]
-- [ ] Verify source deletion/exclusion explicitly after merge, including attempts to merge the same source again. [MEDIUM]
+- [ ] Merge a named source into an unnamed target and assert cover selection. [MEDIUM]
+- [ ] Verify source deletion/exclusion explicitly after merge, including what else (faces, counts) an attempt to merge the same source again changes. [MEDIUM]
 - [ ] Cover `markAsBadMatch`'s effect on the match candidates, unhide, and the buckets with deleted, zero-face, and threshold-boundary people. [MEDIUM]
 - ✅ `getPersonFaces` returns a person's faces by descending detection score and keeps the best of them under a limit smaller than the person's face count.
 - [ ] Recycle/restore an asset containing multiple faces for a person after a merge; assert the intended distinct-asset versus raw-face count contract remains consistent. [MEDIUM]

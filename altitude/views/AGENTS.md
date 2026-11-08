@@ -222,6 +222,10 @@ Two-layer event bus, both on `document.body`:
   (dialog operations) go on `document`, not `document.body`.
   `htmx:after:settle` fires on the swap target once per swap with `detail.newContent`, the list of
   inserted nodes; `js/listeners/htmx-requests.js` hydrates `data-app-fragment` roots from there.
+- A form that swaps itself with its field focused swaps with `outerHTML settle:0` (the dialogs' validation responses, the
+  Settings form, the person name editor). htmx's settle copies each old element's attributes onto the new element with the
+  same id and restores them afterwards, skipping `value` on the element that has focus, so without `settle:0` the field
+  shows the old value and the text submitted is lost.
 - Attribute inheritance is explicit: every element that issues a request declares its own
   `hx-target` / `hx-swap`. Do not rely on a parent's attributes (add `:inherited` if you ever must).
 - Extensions activate by script inclusion, there is no `hx-ext`. Forms that post JSON carry the
@@ -248,7 +252,10 @@ Batch ops escalate a single-asset drag to a batch when the asset is among the se
 follow-up live in `js/listeners/people.js`: a merge, a hide, a show or a discard announces `peopleChanged`, which the
 People tab answers by reloading each pane with its own buckets (see **People tab**), while a rename and a cover-face
 change patch every cell of the person, found by `data-person-id` under `#people`; a purge of the recycle bin announces
-`trashPurged`, which refreshes the counts.
+`trashPurged`, which refreshes the counts. `confirmPersonMerge`'s listener sends the event's whole detail as the values of
+the Merge people modal's request, so a `keepDirection: true` reaches `showMergePeopleModal` as a query parameter: with it
+the modal keeps the requested source and destination, and without it, as for a drop, the person with fewer faces is the
+source.
 
 ### Full action flow (drag-and-drop example)
 
@@ -266,7 +273,11 @@ failed request, by `js/listeners/htmx-requests.js`; the only `htmx:before:reques
 dialog one on `document`. The person name editor's outcome is the one response the client has to
 inspect: the saved name and the re-rendered editor both arrive as HTTP 200 with no header, so
 `js/listeners/people.js` parses the response and dispatches `personNameEdited` only when it holds
-no editor.
+no editor. A name another live person holds re-renders the editor with `conflictingPerson`: the field's error row holds the
+message, naming the holder as stored and saying so if the holder is hidden, and a `Merge into X…` button dispatching
+`confirmPersonMerge` with `keepDirection: true`, so the renamed person merges into the holder, whose ID survives. The
+response still holds the editor, so no rename is announced, and the editor stays open behind the modal; closing the modal
+leaves the editor and its error.
 
 ## Alpine.js Integration
 
@@ -874,7 +885,8 @@ except in a popover dialog, whose form fills `--popover-form-width` with its act
 (`--error-background-color`) with `--theme-neutral-4` text and the `--error-color` edge, which it keeps on focus,
 with no ring. Its message is a `div.error` under the field, in `--font-size-small` and `--error-color` with no box:
 the dialogs and the person name editor (`htmx/edit_person_name`) render it directly after the field, the Settings form
-under the row of the field and its Reset button. A label above a field in a dialog of either host (Add location's fields) is in small caps: `--font-size-xs`, semibold, uppercase,
+under the row of the field and its Reset button. An error with a way out carries it after the message, an
+`.action-button.small`, the two wrapping in one row under the field: the person name editor's offer to merge. A label above a field in a dialog of either host (Add location's fields) is in small caps: `--font-size-xs`, semibold, uppercase,
 `--letter-spacing-wide`, its text color at 0.6 (`:is(#popoverContent, #modalContent) label`); the Settings rows keep
 their own labels. A one-field dialog whose title names the field (Add, Rename and the style guide's sample dialog, with a
 placeholder in the input; Move to category and Add to location, with their select) shows no label, and its field
@@ -1018,7 +1030,8 @@ does not show through it while it sticks). The scopes:
   moves the person between its panes. The cover face (`.cover.drag-drop`, a `--person-avatar-size` circle
   that opens the Choose cover face modal) comes before the text, the Hide / Show / Discard link (`.actions`) after it, and
   the subtitle is the face count. The title is `#personName`, the inline name editor's host: `htmx/view_person_name`
-  (the name, whose click swaps in `htmx/edit_person_name` at the title's size, `field-sizing: content`) with its pencil,
+  (the name, whose click swaps in `htmx/edit_person_name` at the title's size, `field-sizing: content`, its form swapping
+  `outerHTML settle:0` and its error row the one part of the title that wraps) with its pencil,
   shown by `static/css/htmx/person.css` only while the title is hovered or the name has focus
 - a **folder** as the path's breadcrumb (`.crumbs`): every ancestor short of the repository root, top-level first, each a
   search trigger for its folder (`data-app-search-folder-id`, dimmed `.crumb`), separated by a dimmed `fa-chevron-right`

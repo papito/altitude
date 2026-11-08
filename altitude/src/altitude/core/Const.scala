@@ -152,6 +152,13 @@ object Const:
       val INVALID_CONTENT_TYPE = "Invalid content type"
       val PIN_REQUIRED = "Place the pin on the map"
       val SEARCH_TIMED_OUT = "The search took too long"
+      // An unnamed Person's own form of name, which no Person may be given (PersonService.updateName)
+      val RESERVED_PERSON_NAME = "Unknown N names are reserved"
+      // A rename to a name another live Person holds, named as that Person's name is stored (htmx/edit_person_name)
+      val PERSON_NAME_TAKEN = "%s already exists."
+      val PERSON_NAME_TAKEN_BY_HIDDEN = "%s already exists and is hidden."
+      // A rename a unique index refused with no live holder of the name to offer: merged away meanwhile, or another constraint
+      val PERSON_NAME_ALREADY_EXISTS = "Person by that name already exists"
 
   // Dialog titles: the folder and album rename/delete dialogs show inline in the entity's menu, the
   // people dialogs in the modal host, whose sizing is owned by CSS (`--modal-content-width` in
@@ -174,4 +181,6 @@ object Const:
     // The Add to album dialog's last option, which reveals the name field of the album it creates
     val NEW_ALBUM_OPTION = "New album…"
     val MERGE_PEOPLE_DIALOG_TITLE = "Merge people"
+    // The name editor's offer to merge the renamed Person into the one holding the name, which opens the dialog above
+    val MERGE_INTO_PERSON = "Merge into %s…"
     val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"
