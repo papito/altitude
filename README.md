@@ -40,8 +40,6 @@ This project is still in its "technology preview" stage. At this point it featur
 Missing features:
 
 * Right now there is only the single-user, single-library mode.
-* Results are displayed in their default order and there are no advanced display features yet.
-* No location editing or display.
 * No metadata view (but it IS being extracted and saved).
 
 ## Development setup
