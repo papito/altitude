@@ -39,8 +39,8 @@ const DEFAULTS = {
  * The layout, the grouping and the sort narrow or reorder what is already in scope and survive all
  * of them; the one sort that does not outlive its search is Relevance, which goes with the text
  * (`withoutRefusedCombinations`). The triage filter (`triaged`, the toolbar's switch of the
- * repository view) narrows too, but belongs to that view: a change of view clears it, and the
- * store drops it from any other view, which the triage view refuses. This table is what the server's old `newSearch=true` flag used to express, and it is the whole
+ * repository view, off by default) survives them too, but belongs to that view: a change of view
+ * clears it, and the store drops it from any other view. This table is what the server's old `newSearch=true` flag used to express, and it is the whole
  * reason a widget can send just the one parameter it knows about.
  */
 const PLACES = ["folderId", "personId", "albumId", "locationId"]

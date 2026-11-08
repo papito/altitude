@@ -860,8 +860,8 @@ focus. It is two columns (`htmx/view_settings_dialog.scala.html`, `static/css/ht
 left the switches bound to the grid metadata set by its own Alpine component
 (`x-data="viewSettings"`, `js/alpine/components/view-settings.js`), which the mutation observer
 initializes as the fragment arrives, and on the right, behind a hairline, the scope: "Show triaged items", the
-`triaged` search parameter read from the `searchParams` store (on unless it is `false`), whose click runs `runSearch`
-with `triaged=false` or the empty literal that clears it, so the results re-render under the open panel: the View
+`triaged` search parameter read from the `searchParams` store (off unless it is `true`), whose click runs `runSearch`
+with `triaged=true` or the empty literal that clears it, so the results re-render under the open panel: the View
 control's host `#viewSettingsActions` is `hx-preserve` in `includes/search_results`, so the swap carries the built
 control and its open panel from the old fragment into the new one (htmx moves it with `moveBefore`, which keeps the
 popover showing), and `ensureViewSettingsControl` finds the host filled and builds nothing. The scope column is shown in
@@ -2108,8 +2108,8 @@ and a view, clears `q`. The whole `CLEARS` table:
 
 The layout, the grouping, `rpp` and the sort narrow or reorder what is already in scope and survive
 all of those: a chosen sort is kept from one place to the next, and with no sort chosen the server's
-default applies (Relevance with text, newest import without). The triage filter (`triaged`) narrows
-too, and survives a folder, person, album, Location or `q`, but it is the repository view's: the View
+default applies (Relevance with text, newest import without). The triage filter (`triaged`), off by default so that the repository view holds the sorted assets alone,
+survives a folder, person, album, Location or `q`, but it is the repository view's: the View
 settings dialog's "Show triaged items" switch (see **Inline dialogs**) is shown in that view alone, and a
 change of view clears it. The combinations the server refuses
 are settled by the store itself (`withoutRefusedCombinations`, on seeding from the URL and after every

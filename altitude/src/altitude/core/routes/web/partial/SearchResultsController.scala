@@ -40,8 +40,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * the parameters we were given; the client never reads it back. The one thing still taken from the browser URL is its "#tab"
    * fragment, so replacing the URL does not switch the explorer tab.
    *
-   * `triaged` overlays the view's scope (`SearchRequestParser`): `false` hides the triaged assets of the repository view. The
-   * View settings dialog offers that switch there alone, since the triage view refuses it.
+   * `triaged` changes the view's scope (`SearchRequestParser`): `true` adds the triaged assets to the repository view, which
+   * leaves them out by default. The View settings dialog offers that switch there alone.
    *
    * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
    * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.

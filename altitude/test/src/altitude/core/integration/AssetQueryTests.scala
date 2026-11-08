@@ -91,19 +91,19 @@ import altitude.core.util.Query
     viewAssetIds(Const.Search.View.TRASHBIN) shouldBe Set(recycled.persistedId)
   }
 
-  test("The triaged filter overlays the view's scope") {
+  test("The repository view leaves triaged assets out unless asked, and the trash tells them apart") {
 
     /**
      * Setup:
      *
-     * An asset in the root folder, a triaged asset, and two recycled assets, one of them recycled from triage; each view's scope
-     * parsed with and without the `triaged` filter.
+     * An asset in the root folder, a triaged asset, two recycled assets, one of them recycled from triage, and an album holding
+     * the sorted and the triaged asset; each view's scope parsed with and without the `triaged` parameter.
      *
      * Assertions:
      *
-     * The default view without the filter holds the sorted and the triaged asset; `triaged=false` leaves the triaged one out and
-     * `triaged=true` keeps it alone. The trash view with `triaged=true` holds the asset recycled from triage alone, and with
-     * `triaged=false` the other recycled asset alone.
+     * The default view without the parameter, or with `triaged=false`, holds the sorted asset alone, and with `triaged=true`
+     * holds the sorted and the triaged asset. An album scope follows the same rule. The trash view with `triaged=true` holds the
+     * asset recycled from triage alone, and with `triaged=false` the other recycled asset alone.
      *
      * Edge cases:
      *
@@ -115,10 +115,15 @@ import altitude.core.util.Query
     val recycled = testContext.persistAsset()
     val recycledFromTriage = testContext.persistAsset(isTriaged = true)
     testApp.service.library.recycleAssets(Set(recycled.persistedId, recycledFromTriage.persistedId))
+    val album = testApp.service.album.add("Trip")
+    testApp.service.album.addAssets(album.persistedId, Set(sorted.persistedId, triaged.persistedId))
 
-    viewAssetIds(Const.Search.View.DEFAULT) shouldBe Set(sorted.persistedId, triaged.persistedId)
+    viewAssetIds(Const.Search.View.DEFAULT) shouldBe Set(sorted.persistedId)
     viewAssetIds(Const.Search.View.DEFAULT, triaged = Some(false)) shouldBe Set(sorted.persistedId)
-    viewAssetIds(Const.Search.View.DEFAULT, triaged = Some(true)) shouldBe Set(triaged.persistedId)
+    viewAssetIds(Const.Search.View.DEFAULT, triaged = Some(true)) shouldBe Set(sorted.persistedId, triaged.persistedId)
+    viewAssetIds(Const.Search.View.DEFAULT, albumId = Some(album.persistedId)) shouldBe Set(sorted.persistedId)
+    viewAssetIds(Const.Search.View.DEFAULT, triaged = Some(true), albumId = Some(album.persistedId)) shouldBe
+      Set(sorted.persistedId, triaged.persistedId)
     viewAssetIds(Const.Search.View.TRASHBIN, triaged = Some(true)) shouldBe Set(recycledFromTriage.persistedId)
     viewAssetIds(Const.Search.View.TRASHBIN, triaged = Some(false)) shouldBe Set(recycled.persistedId)
     viewAssetIds(Const.Search.View.TRIAGE, triaged = Some(true)) shouldBe Set(triaged.persistedId)
@@ -185,7 +190,7 @@ import altitude.core.util.Query
   }
 
   /** The IDs of the assets a search in the view's scope returns, as the search results route parses the view */
-  private def viewAssetIds(view: String, triaged: Option[Boolean] = None): Set[String] =
-    val scope = SearchRequestParser.parse(view, None, None, None, None, None, None, triaged).toOption.value
+  private def viewAssetIds(view: String, triaged: Option[Boolean] = None, albumId: Option[String] = None): Set[String] =
+    val scope = SearchRequestParser.parse(view, None, None, None, albumId, None, None, triaged).toOption.value
     testApp.service.library.search(scope.query(rpp = 10)).records.map(_.persistedId).toSet
 }

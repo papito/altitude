@@ -16,8 +16,9 @@ import altitude.core.util.SearchText
  * text, for the filter, for the default sort and for the rules below alike. Text searches the repository outside the trash, so
  * text with the trash view is refused.
  *
- * `triaged` overlays the view's own rule on the triage flag: `false` leaves the triaged assets out of a view that holds them,
- * `true` keeps them alone. The triage view holds nothing else, so `triaged=false` with it is refused.
+ * The repository view holds the sorted assets, whatever the folder, person, album, Location, text or map area, and `triaged=true`
+ * adds the triaged ones to them. In the trash `triaged` tells the assets recycled from triage (`true`) from the rest (`false`).
+ * The triage view holds nothing but triaged assets, so `triaged=false` with it is refused.
  */
 object SearchRequestParser:
   case class Scope(
@@ -64,7 +65,11 @@ object SearchRequestParser:
       case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true, FieldConst.Asset.IS_RECYCLED -> false)
       case Const.Search.View.TRASHBIN => Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_PURGED -> false)
       case _ => Map(FieldConst.Asset.IS_RECYCLED -> false)
-    val params = viewParams ++ triaged.map(FieldConst.Asset.IS_TRIAGED -> _)
+    val triageParam = view match
+      case Const.Search.View.TRIAGE => None
+      case Const.Search.View.TRASHBIN => triaged.map(FieldConst.Asset.IS_TRIAGED -> _)
+      case _ => Option.unless(triaged.contains(true))(FieldConst.Asset.IS_TRIAGED -> false)
+    val params = viewParams ++ triageParam
 
     val text = q.filter(SearchText.parse(_).isDefined)
     if text.isDefined && view == Const.Search.View.TRASHBIN then return Left("Search text does not search the trash")

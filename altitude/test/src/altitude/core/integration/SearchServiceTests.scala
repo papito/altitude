@@ -2008,7 +2008,7 @@ import altitude.core.util.*
   private val PAGE_SIZE = 100
 
   /** The default view and sort of the grid */
-  private val browsingView = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false)
+  private val browsingView = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false)
   private val byImport = List(SearchSort(FieldConst.CREATED_AT, SortDirection.DESC))
 
   /** A flat page's statement, for its plan */

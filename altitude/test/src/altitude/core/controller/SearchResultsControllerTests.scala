@@ -971,7 +971,7 @@ import altitude.core.util.Util
     }
   }
 
-  test("The triaged filter narrows the repository view and is refused with the triage view") {
+  test("The repository view leaves triaged assets out unless asked, and the triage view refuses triaged=false") {
 
     /**
      * Setup:
@@ -980,8 +980,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The repository view renders both cells. With `triaged=false` the triaged cell is left out and the bookmarkable URL carries
-     * the filter. The triage view with `triaged=false` is a plain-text 400 naming the view, as the map layout is.
+     * The repository view renders the sorted cell alone. With `triaged=true` it renders both cells and the bookmarkable URL
+     * carries the parameter. The triage view with `triaged=false` is a plain-text 400 naming the view, as the map layout is.
      *
      * Edge cases:
      *
@@ -996,15 +996,15 @@ import altitude.core.util.Util
         val sorted = testContext.persistAsset()
         val triaged = testContext.persistAsset(isTriaged = true)
 
-        val all = htmlSearch(host, repoId, Map.empty).text()
-        all should include(cell(sorted))
-        all should include(cell(triaged))
+        val byDefault = htmlSearch(host, repoId, Map.empty).text()
+        byDefault should include(cell(sorted))
+        (byDefault should not).include(cell(triaged))
 
-        val hidden = htmlSearch(host, repoId, Map(Api.Field.Search.TRIAGED -> "false"))
-        hidden.statusCode shouldBe 200
-        hidden.text() should include(cell(sorted))
-        (hidden.text() should not).include(cell(triaged))
-        hidden.headers("hx-replace-url").head should include("triaged=false")
+        val shown = htmlSearch(host, repoId, Map(Api.Field.Search.TRIAGED -> "true"))
+        shown.statusCode shouldBe 200
+        shown.text() should include(cell(sorted))
+        shown.text() should include(cell(triaged))
+        shown.headers("hx-replace-url").head should include("triaged=true")
 
         val contradiction = Map(Api.Field.Search.VIEW -> "triage", Api.Field.Search.TRIAGED -> "false")
         for (shape <- List(Map.empty[String, String], Map(Api.Field.Search.LAYOUT -> "map")))

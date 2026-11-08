@@ -156,12 +156,13 @@ CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum) WHERE is_recycle
 -- Capture-day grouping for search results: the camera's calendar date followed by the raw timestamp, so a day range or a
 -- day-count probe seeks directly and a grouped, date-sorted page reads in index order. Both are camera-local wall-clock text.
 -- It carries the ID and the folder, so a pass over the library that tests text membership, a folder or a day reads the index
--- and not the table.
+-- and not the table, and the triage flag for the repository view, which leaves triaged assets out by default.
 CREATE INDEX asset_search_date_taken ON asset (
-  repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at, id, folder_id
+  repository_id, is_recycled, is_pipeline_processed, date(original_created_at), original_created_at, id, folder_id, is_triaged
 );
 -- The default flat sort, Date Imported, as an ordered read of the page slice that needs nothing but the index: it carries the ID
-CREATE INDEX asset_search_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at, id);
+-- and the triage flag
+CREATE INDEX asset_search_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at, id, is_triaged);
 -- The triage view: only the triaged assets, in Date Imported order and by capture day, so a small triage set in a large library
 -- is read without passing over the library. They shrink as triage is sorted. A statement that binds the flag as a number
 -- matches the predicate; one that binds it as text does not.
@@ -177,8 +178,8 @@ CREATE INDEX asset_triage_undated ON asset (repository_id, width, height, create
 -- Folder browsing and the folder source of Search text; it also lets an OR of text sources be planned as a multi-index OR
 CREATE INDEX asset_folder ON asset (folder_id);
 -- Map viewport queries: a bounding-box range over the located assets of a repository only. It carries the ID and the capture
--- time a map cell is ranked by, so a viewport's own points are read from the index alone.
-CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude, id, original_created_at)
+-- time a map cell is ranked by, and the triage flag, so a viewport's own points are read from the index alone.
+CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_processed, latitude, longitude, id, original_created_at, is_triaged)
   WHERE latitude IS NOT NULL;
 -- The members of a Sequence: their count, their repointing when Sequences merge, and a Curate view's listing
 CREATE INDEX asset_sequence ON asset (sequence_id) WHERE sequence_id IS NOT NULL;

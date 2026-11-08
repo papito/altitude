@@ -263,8 +263,11 @@ import altitude.core.util.SearchQuery
     val box = BoundingBox.parse("48,2,49,3")
     val repositoryId = RequestContext.getRepository.persistedId
 
-    val cells = SearchQueries.mapCells(searchDialect, searchQuery(), repositoryId, box, SearchService.cellDegrees(12))
-    val inBox = new SearchQuery(params = Map(FieldConst.Asset.IS_RECYCLED -> false), bbox = Some(box))
+    // The repository view's scope, the one a map opens on
+    val browsingView = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false)
+    val scope = searchQuery(params = browsingView)
+    val cells = SearchQueries.mapCells(searchDialect, scope, repositoryId, box, SearchService.cellDegrees(12))
+    val inBox = new SearchQuery(params = browsingView, bbox = Some(box))
     val grid = SearchQueries.cappedCount(searchDialect, inBox, repositoryId)
 
     val (cellsPlan, gridPlan) = atScale(seedGeotagged(template)) {
