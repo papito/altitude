@@ -82,7 +82,6 @@ object Api:
       val KEEP_IDS = "keepIds"
       val RECYCLE_IDS = "recycleIds"
       val SEQUENCE_OF = "sequenceOf"
-      val SEQUENCE_IDS = "sequenceIds"
       val COUNT = "count"
 
     object Folder:

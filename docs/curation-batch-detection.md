@@ -183,7 +183,7 @@ Curation adds no table either. Every set is read in one read-only transaction an
 
 | Read | What it returns |
 |---|---|
-| `queue()` | The repository's Sequences with at least 2 frames completed, out of the trash and not purge-pending, oldest first capture first, then by ID, the undated Sequences, which have no first capture, last on both engines (`ORDER BY first_captured_at IS NULL, first_captured_at, sequence_id`: NULL sorts first on SQLite and last on PostgreSQL, so the explicit test settles it). A lone frame never enters it; recycling can take a Sequence out or reorder it; a restore can bring it back. |
+| `queue()` | The repository's Sequences with at least 2 frames completed, out of the trash and not purge-pending, oldest first capture first, then by ID, the undated Sequences, which have no first capture, last on both engines (`ORDER BY first_captured_at IS NULL, first_captured_at, sequence_id`: NULL sorts first on SQLite and last on PostgreSQL, so the explicit test settles it). Each comes as a `QueuedSequence` with its members, its first capture and its cover, the first of those frames in capture order, which the Sequence rail shows. A lone frame never enters it; recycling can take a Sequence out or reorder it; a restore can bring it back. |
 | `countQueue()` | How many, read from the database. The toolbar reads this after every asset mutation, so it costs the rows with a Sequence (`asset_sequence`), not the library. |
 | `sequenceSet(id)` | A Sequence's frames still out of the trash, whatever a search shows of them, as a **window**: the first 100 in capture order (a frame with no capture time last, the import time and then the ID breaking a tie, so an undated Sequence's frames come as they were uploaded; `CurationRule` sorts the same way). Sequences chain transitively, so a static time-lapse can be one Sequence of thousands of frames; when the window is full the set says how many are held back. `None` under 2 frames. |
 | `selectionSet(ids)` | The still images among the IDs, in the repository, completed and not recycled. A selection may hold part of a Sequence, several Sequences, or frames of none. `None` under 2 frames. The cap of 100 IDs is the route's. |
@@ -294,9 +294,9 @@ Every route requires a login; a repository the user does not own is a 404.
 | Route | Answers |
 |---|---|
 | `GET /htmx/curation/r/:repoId` | The modal's shell (`htmx/curation`) |
+| `GET /htmx/curation/r/:repoId/queue` | The queue's rows (`htmx/curation_queue`) in the queue's order, each with its Sequence's ID (`data-rail-sequence-id`), its cover's Preview, its frame count and its first capture's day ("12 Mar 2026", or "No date") |
 | `GET /htmx/curation/r/:repoId/sequence/:sequenceId` | The set's fragment (`htmx/curation_set`), or 204 under two frames so a queue's Sequence gone meanwhile is passed over silently. A non-UUID is a plain-text 400. |
 | `POST /htmx/curation/r/:repoId/selection` | The set's fragment for `assetIds` (comma-separated, in a JSON body), or the fragment saying too few frames are left. Over 100 IDs or no valid selection is a plain-text 400. |
-| `GET /api/curation/r/:repoId/queue` | `{sequenceIds}` in the queue's order |
 | `GET /api/curation/r/:repoId/count` | `{count}` |
 | `POST /api/curation/r/:repoId/resolve` | Takes `{keepIds, recycleIds}`, answers `{sequenceOf}`: each Pick that left its Sequence |
 | `POST /api/curation/r/:repoId/reopen` | Takes `{keepIds, recycleIds, sequenceOf}`, answers `{restored, duplicates}` as the restore endpoint does |

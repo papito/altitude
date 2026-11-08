@@ -13,13 +13,22 @@ import altitude.core.Validators
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 
-/** Curation's partials: the modal's shell, and the fragment of a Curation set from one Sequence or a selection */
+/**
+ * Curation's partials: the modal's shell, the rows of its queue, and the fragment of a Curation set from one Sequence or a
+ * selection
+ */
 class CurationActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/curation"
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId")
   def shell(repoId: String)(using request: Request): Response[String] = html(htmx.html.curation())
+
+  /** The queue's rows, which the shell's Sequence rail lists, in the order Curation walks them */
+  @requireLogin()
+  @cask.get(f"/$prefix/r/:repoId/queue")
+  def queue(repoId: String)(using request: Request): Response[String] =
+    html(htmx.html.curation_queue(App.altitude.service.curation.queue()))
 
   /** No content when too few frames are left: a queue's Sequence gone meanwhile is passed over without comment */
   @requireLogin()

@@ -21,6 +21,7 @@ import altitude.core.models.Histogram
 import altitude.core.models.ImageQuality
 import altitude.core.models.PerceptualHash
 import altitude.core.models.PublicMetadata
+import altitude.core.models.QueuedSequence
 import altitude.core.models.SceneEmbeddings
 import altitude.core.models.SceneModel
 import altitude.core.models.SequenceMembers
@@ -442,9 +443,13 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       firstCapturedAt = getDateTimeField(rec.get("first_captured_at"))
     )
 
-  override def getSequencesToCurate(): List[SequenceMembers] =
+  override def getSequencesToCurate(): List[QueuedSequence] =
     val (sql, values) = sequencesToCurateStatement
-    manyBySqlQuery(sql, values).map(toSequenceMembers)
+    manyBySqlQuery(sql, values).map {
+      rec =>
+        val members = toSequenceMembers(rec)
+        QueuedSequence(members.sequenceId, members.members, members.firstCapturedAt, rec("cover_id").toString)
+    }
 
   override def countSequencesToCurate(): Int =
     val (sql, values) = countSequencesToCurateStatement
@@ -481,13 +486,32 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     """
 
   /**
-   * The statement behind [[getSequencesToCurate]] with its bind values, which the plan tests explain. An undated Sequence has no
-   * first capture, and NULL sorts first on SQLite and last on PostgreSQL, so the `IS NULL` test puts it last on both; the
-   * aggregate is spelled out there because PostgreSQL takes an output name in `ORDER BY` only on its own, not in an expression.
+   * The statement behind [[getSequencesToCurate]] with its bind values, which the plan tests explain. The grouped rows are a
+   * derived table, so the `ORDER BY` names their columns: an undated Sequence has no first capture, and NULL sorts first on SQLite
+   * and last on PostgreSQL, so the `IS NULL` test puts it last on both. The cover is a correlated subquery over those rows: the
+   * Sequence's first live frame in [[sequenceFramesStatement]]'s capture order, read once per Sequence of the queue through
+   * `asset_sequence`. The count statement leaves it out, since the toolbar reads the count after every mutation.
    */
   def sequencesToCurateStatement: (String, List[Any]) =
-    val sql = s"$sequencesToCurate ORDER BY $firstCapture IS NULL, first_captured_at, ${FieldConst.Asset.SEQUENCE_ID}"
-    (sql, List(RequestContext.getRepository.persistedId))
+    val capturedAt = FieldConst.Asset.ORIGINAL_CREATED_AT
+    val cover = s"""
+      (SELECT cover.${FieldConst.ID}
+         FROM asset AS cover
+        WHERE cover.${FieldConst.Asset.SEQUENCE_ID} = to_curate.${FieldConst.Asset.SEQUENCE_ID}
+          AND cover.${FieldConst.REPO_ID} = ?
+          AND cover.${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
+          AND cover.${FieldConst.Asset.IS_RECYCLED} = FALSE
+          AND cover.${FieldConst.Asset.IS_PURGED} = FALSE
+        ORDER BY cover.$capturedAt IS NULL, cover.$capturedAt, cover.${FieldConst.CREATED_AT}, cover.${FieldConst.ID}
+        LIMIT 1) AS cover_id
+    """
+    val sql = s"""
+      SELECT to_curate.*, $cover
+        FROM ($sequencesToCurate) AS to_curate
+       ORDER BY first_captured_at IS NULL, first_captured_at, ${FieldConst.Asset.SEQUENCE_ID}
+    """
+    val repoId = RequestContext.getRepository.persistedId
+    (sql, List(repoId, repoId))
 
   /** The statement behind [[countSequencesToCurate]] with its bind values, which the plan tests explain */
   def countSequencesToCurateStatement: (String, List[Any]) =

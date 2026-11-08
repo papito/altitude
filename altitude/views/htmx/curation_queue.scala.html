@@ -1,0 +1,27 @@
+@import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.models.QueuedSequence
+@import altitude.core.util.Util
+
+@* The rows of Curation's queue, which the shell's Sequence rail (htmx/curation) lists in the order Curation walks them: each
+   Sequence's cover Preview (its first frame in capture order), its frame count and its first capture's day, "No date" for an
+   undated Sequence. A row names its Sequence in `data-rail-sequence-id`, which the `curation` component
+   (js/alpine/components/curation.js) reads the walk from and paints the current and the done rows by; `data-app-sequence-id` is a
+   group header's Curate's, so the two are never confused. No binding is on a row: the component paints them directly, so a long
+   queue costs nothing per move. *@
+@(queue: List[QueuedSequence])
+
+@framesText(count: Int) = @{ if (count == 1) "1 frame" else s"$count frames" }
+
+<ul id="curationQueue">
+  @for(sequence <- queue) {
+    <li class="curation-queue-row" data-rail-sequence-id="@{sequence.sequenceId}">
+      <img class="curation-preview"
+           loading="lazy"
+           src="/@{Const.DataStore.CONTENT}/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.PREVIEW}/@{sequence.coverId}"
+           alt="">
+      <span class="frames">@framesText(sequence.members)</span>
+      <span class="date">@sequence.firstCapturedAt.map(taken => Util.humanReadableShortDate(taken.toLocalDate)).getOrElse("No date")</span>
+    </li>
+  }
+</ul>

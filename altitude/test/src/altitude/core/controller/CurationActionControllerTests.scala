@@ -1,5 +1,7 @@
 package altitude.core.controller
 
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.util.UUID
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
@@ -12,7 +14,10 @@ import altitude.core.models.ImageQuality
 import altitude.core.models.Person
 import altitude.core.service.FaceDetectionService
 
-/** The partials of Curation: the modal's shell and the fragment of a Curation set, from a Sequence or a selection */
+/**
+ * The partials of Curation: the modal's shell, the queue's rows and the fragment of a Curation set, from a Sequence or a
+ * selection
+ */
 @DoNotDiscover class CurationActionControllerTests extends ControllerTestCore {
   private val sequenceId = UUID.randomUUID().toString
 
@@ -43,6 +48,16 @@ import altitude.core.service.FaceDetectionService
       cookies = testContext.cookies,
       check = false
     )
+
+  private def getQueue(host: String, repoId: String) =
+    requests.get(s"$host/htmx/curation/r/$repoId/queue", cookies = testContext.cookies, check = false)
+
+  /** The Sequence IDs the queue's rows carry, in the rows' order */
+  private def railSequenceIds(html: String): List[String] =
+    """data-rail-sequence-id="([^"]+)"""".r.findAllMatchIn(html).map(_.group(1)).toList
+
+  /** The queue's rows, each from its root to the next one's */
+  private def queueRows(html: String): List[String] = html.split("<li ").toList.tail.map("<li " + _)
 
   private def frameIds(html: String): List[String] =
     """data-frame-id="([^"]+)"""".r.findAllMatchIn(html).map(_.group(1)).toList
@@ -98,6 +113,80 @@ import altitude.core.service.FaceDetectionService
             state should include("undo()")
             state should include("exit()")
         }
+    }
+  }
+
+  test("The queue's fragment lists the Sequences in order, each with its cover, its frame count and its date") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Sequence of three frames captured on 12 March 2026, imported before a Sequence of two
+     * frames captured on 1 June 2024, whose frames are persisted out of capture order; an undated Sequence of two frames, the
+     * second imported before the first; a Sequence of one frame; and a frame of no Sequence.
+     *
+     * Assertions:
+     *
+     * The fragment is an HTML partial of one row per Sequence in the queue's order: the one captured first, then the other, and
+     * the undated one last. Each row carries its Sequence's ID in `data-rail-sequence-id`, the Preview of its cover, the frame
+     * captured first, or imported first for the undated Sequence, its frame count ("2 frames") and its first capture's day ("1
+     * Jun 2024"), or "No date" for the undated Sequence.
+     *
+     * Edge cases:
+     *
+     * A Sequence of one frame and a frame of no Sequence have no row, and a repository with no Sequence answers no rows.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val none = getQueue(host, repoId)
+        none.statusCode shouldBe 200
+        none.text() should startWith("<!doctype html>")
+        railSequenceIds(none.text()) shouldBe empty
+
+        // Every fixture is persisted before any Sequence is stamped, as the test context requires
+        val List(laterFrames, earlierFrames, undatedFrames, lone) =
+          List(3, 2, 2, 1).map(frames => List.fill(frames)(testContext.persistAsset(isTriaged = true)))
+        testContext.persistAsset(isTriaged = true)
+        val imported = OffsetDateTime.parse("2026-04-01T10:00:00Z")
+        def sequence(assets: List[Asset], taken: Option[LocalDateTime]): String = {
+          val id = UUID.randomUUID().toString
+          // Later frames captured and imported before earlier ones, so the cover is told from the first persisted
+          assets.zipWithIndex.foreach {
+            (asset, index) =>
+              testContext.setAssetDates(asset.persistedId, taken.map(_.minusSeconds(index)), imported.minusSeconds(index))
+          }
+          testContext.setAssetSequence(assets, id)
+          id
+        }
+        val later = sequence(laterFrames, Some(LocalDateTime.of(2026, 3, 12, 9, 0, 10)))
+        val earlier = sequence(earlierFrames, Some(LocalDateTime.of(2024, 6, 1, 12, 0, 5)))
+        val undated = sequence(undatedFrames, None)
+        sequence(lone, Some(LocalDateTime.of(2024, 1, 1, 0, 0)))
+
+        val response = getQueue(host, repoId)
+        response.statusCode shouldBe 200
+        response.headers("content-type").head should include("text/html")
+        response.text() should startWith("<!doctype html>")
+        railSequenceIds(response.text()) shouldBe List(earlier, later, undated)
+
+        val rows = queueRows(response.text())
+        rows.size shouldBe 3
+        def previewOf(asset: Asset) = s"/content/r/$repoId/preview/${asset.persistedId}"
+        rows.zip(List(earlierFrames, laterFrames, undatedFrames)).foreach {
+          (row, frames) =>
+            // The frames were persisted latest first, so the cover is the last persisted
+            row should include(previewOf(frames.last))
+            frames.init.foreach(frame => (row should not).include(previewOf(frame)))
+        }
+        rows.head should include("2 frames")
+        rows.head should include("1 Jun 2024")
+        rows(1) should include("3 frames")
+        rows(1) should include("12 Mar 2026")
+        rows(2) should include("2 frames")
+        rows(2) should include("No date")
     }
   }
 
@@ -653,8 +742,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The shell, the Sequence's fragment and the selection's are each a 404 through the second user's repository, as for any
-     * foreign entity.
+     * The shell, the queue's fragment, the Sequence's fragment and the selection's are each a 404 through the second user's
+     * repository, as for any foreign entity.
      */
     testContext.persistRepository()
     login()
@@ -671,6 +760,7 @@ import altitude.core.service.FaceDetectionService
     withServer(App) {
       host =>
         requests.get(s"$host/htmx/curation/r/$repoId", cookies = testContext.cookies, check = false).statusCode shouldBe 404
+        getQueue(host, repoId).statusCode shouldBe 404
         getSet(host, repoId, sequenceId).statusCode shouldBe 404
         postSelection(host, repoId, foreign.map(_.persistedId)).statusCode shouldBe 404
     }
@@ -685,8 +775,8 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The shell, the Sequence's fragment and the selection's each redirect to the login page, naming where the client was going.
-     * Accepting JSON makes each a 401 instead.
+     * The shell, the queue's fragment, the Sequence's fragment and the selection's each redirect to the login page, naming where
+     * the client was going. Accepting JSON makes each a 401 instead.
      */
     testContext.persistRepository()
     val base = s"/htmx/curation/r/${testContext.repository.persistedId}"
@@ -694,6 +784,7 @@ import altitude.core.service.FaceDetectionService
       host =>
         def responses(headers: Map[String, String]) = List(
           requests.get(s"$host$base", headers = headers, maxRedirects = 0, check = false),
+          requests.get(s"$host$base/queue", headers = headers, maxRedirects = 0, check = false),
           requests.get(s"$host$base/sequence/$sequenceId", headers = headers, maxRedirects = 0, check = false),
           requests.post(s"$host$base/selection", headers = headers, maxRedirects = 0, check = false)
         )

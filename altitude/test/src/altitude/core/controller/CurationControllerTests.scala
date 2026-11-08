@@ -9,7 +9,7 @@ import org.scalatest.matchers.should.Matchers.*
 import altitude.core.App
 import altitude.core.models.Asset
 
-/** The JSON API of Curation: the queue and its count, and a Curation set's outcome and its Undo */
+/** The JSON API of Curation: the queue's count, and a Curation set's outcome and its Undo */
 @DoNotDiscover class CurationControllerTests extends ControllerTestCore {
   private def triaged(): Asset = testContext.persistAsset(isTriaged = true)
 
@@ -36,13 +36,17 @@ import altitude.core.models.Asset
     ujson.read(response.text())
   }
 
-  private def queueOf(host: String, repoId: String): List[String] =
-    getJson(host, repoId, "queue")("sequenceIds").arr.map(_.str).toList
+  /** The Sequence IDs of the queue, as the rows of its fragment (`htmx/curation_queue`) carry them, in order */
+  private def queueOf(host: String, repoId: String): List[String] = {
+    val response = requests.get(s"$host/htmx/curation/r/$repoId/queue", cookies = testContext.cookies, check = false)
+    response.statusCode shouldBe 200
+    """data-rail-sequence-id="([^"]+)"""".r.findAllMatchIn(response.text()).map(_.group(1)).toList
+  }
 
   private def countOf(host: String, repoId: String): Int =
     getJson(host, repoId, "count")("count").num.toInt
 
-  test("The queue holds the Sequence IDs in order, and the count says how many") {
+  test("The queue's rows hold the Sequence IDs in order, and the count says how many") {
 
     /**
      * Setup:
@@ -51,7 +55,7 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * The queue names the Sequence captured first, then the other, and no other, and the count says two. Each is the one field of
+     * The queue's rows name the Sequence captured first, then the other, and no other, and the count says two, the one field of
      * its object.
      *
      * Edge cases:
@@ -81,7 +85,6 @@ import altitude.core.models.Asset
         sequence(noon, frames = 1)
         triaged()
 
-        getJson(host, repoId, "queue").obj.keySet.toSet shouldBe Set("sequenceIds")
         queueOf(host, repoId) shouldBe List(earlier, later)
         getJson(host, repoId, "count").obj.keySet.toSet shouldBe Set("count")
         countOf(host, repoId) shouldBe 2
@@ -390,8 +393,7 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * The queue, the count, resolve and reopen are each a JSON 404 through the second user's repository, and its frames stay as
-     * they were.
+     * The count, resolve and reopen are each a JSON 404 through the second user's repository, and its frames stay as they were.
      */
     testContext.persistRepository()
     login()
@@ -411,7 +413,6 @@ import altitude.core.models.Asset
     withServer(App) {
       host =>
         val responses = List(
-          requests.get(s"$host/api/curation/r/$repoId/queue", cookies = testContext.cookies, check = false),
           requests.get(s"$host/api/curation/r/$repoId/count", cookies = testContext.cookies, check = false),
           post(host, repoId, "resolve", payload),
           post(host, repoId, "reopen", payload)
@@ -436,14 +437,13 @@ import altitude.core.models.Asset
      *
      * Assertions:
      *
-     * The queue, the count, resolve and reopen each answer 401 in JSON, with no redirect.
+     * The count, resolve and reopen each answer 401 in JSON, with no redirect.
      */
     testContext.persistRepository()
     val base = s"/api/curation/r/${testContext.repository.persistedId}"
     withServer(App) {
       host =>
         List(
-          requests.get(s"$host$base/queue", maxRedirects = 0, check = false),
           requests.get(s"$host$base/count", maxRedirects = 0, check = false),
           requests.post(s"$host$base/resolve", maxRedirects = 0, check = false),
           requests.post(s"$host$base/reopen", maxRedirects = 0, check = false)

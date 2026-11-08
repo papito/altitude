@@ -11,8 +11,8 @@ import altitude.core.dao.AssetDao
 import altitude.core.models.Asset
 import altitude.core.models.CurationFrame
 import altitude.core.models.CurationSet
+import altitude.core.models.QueuedSequence
 import altitude.core.models.RestoreResult
-import altitude.core.models.SequenceMembers
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.CurationRule
 import altitude.core.util.Query
@@ -29,9 +29,9 @@ class CurationService(val app: Altitude):
 
   /**
    * The context repository's Sequences with enough frames out of the trash to compare, the oldest first capture first and the
-   * undated ones, which have none, last
+   * undated ones, which have none, last, each with its cover, the first of those frames in capture order
    */
-  def queue(): List[SequenceMembers] =
+  def queue(): List[QueuedSequence] =
     txManager.asReadOnly {
       dao.getSequencesToCurate()
     }

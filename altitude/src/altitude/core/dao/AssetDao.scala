@@ -3,6 +3,7 @@ package altitude.core.dao
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.Histogram
+import altitude.core.models.QueuedSequence
 import altitude.core.models.SequenceMembers
 import altitude.core.models.UserMetadata
 import altitude.core.util.Query
@@ -89,9 +90,9 @@ trait AssetDao extends BaseDao[Asset]:
   /**
    * The queue of Curation: the context repository's Sequences with at least `Const.Curation.MIN_FRAMES` frames completed and out
    * of the trash, counted over those frames alone, the oldest first capture first, a Sequence with none (an undated one) last on
-   * both engines, and then by ID. Read through `asset_sequence`.
+   * both engines, and then by ID, each with its cover, the first of those frames in capture order. Read through `asset_sequence`.
    */
-  def getSequencesToCurate(): List[SequenceMembers]
+  def getSequencesToCurate(): List[QueuedSequence]
 
   /** How many Sequences [[getSequencesToCurate]] holds, read from the database */
   def countSequencesToCurate(): Int

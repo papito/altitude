@@ -102,6 +102,46 @@ import altitude.core.service.FaceDetectionService
     queueShouldHold(List(canon, nikon).sorted*)
   }
 
+  test("A queued Sequence's cover is its earliest frame by capture time, out of the trash") {
+
+    /**
+     * Setup:
+     *
+     * Three frames of one burst imported out of capture order: the one captured five seconds in first, then the one captured at
+     * the start, then the one captured ten seconds in. Then the frame captured at the start is recycled.
+     *
+     * Assertions:
+     *
+     * The queue names the frame captured at the start as the Sequence's cover, although it was imported second, and once that
+     * frame is recycled the cover is the frame captured five seconds in: a recycled frame is no cover, as it is no member.
+     */
+    val middle = importFrame(frame(1), taken = Some(takenAt(5)))
+    val first = importFrame(frame(0), taken = Some(takenAt(0)))
+    importFrame(frame(2), taken = Some(takenAt(10)))
+
+    curation.queue().map(_.coverId) shouldBe List(first.persistedId)
+
+    testApp.service.library.recycleAssets(Set(first.persistedId))
+    curation.queue().map(_.coverId) shouldBe List(middle.persistedId)
+  }
+
+  test("An undated Sequence's cover is its first frame imported") {
+
+    /**
+     * Setup:
+     *
+     * Two frames of the burst imported one by one with no metadata, under names that carry no time.
+     *
+     * Assertions:
+     *
+     * The queue names the frame imported first as the cover, whatever the two frames' IDs: with no capture time to go by, the
+     * frames are in import order, as the set shows them.
+     */
+    val undated = (2 to 3).toList.map(n => importUndated(frame(n), n))
+
+    curation.queue().map(_.coverId) shouldBe List(undated.head.persistedId)
+  }
+
   test("A Sequence leaves the queue under two frames out of the trash, and a restore brings it back") {
 
     /**

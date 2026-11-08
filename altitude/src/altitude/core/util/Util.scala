@@ -48,6 +48,11 @@ object Util:
   /** A calendar day as a date group header reads it, "Sunday, September 6, 2026". No zone is involved: the day is the day */
   def humanReadableDate(date: LocalDate): String = date.format(dateFormatter)
 
+  private val shortDateFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
+
+  /** A calendar day as a row of Curation's Sequence rail reads it, "12 Mar 2026". The camera's wall clock, so no zone is involved */
+  def humanReadableShortDate(date: LocalDate): String = date.format(shortDateFormatter)
+
   private val timeFormatter = DateTimeFormatter.ofPattern("h:mm:ss a", Locale.ENGLISH)
 
   /**

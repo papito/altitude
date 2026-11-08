@@ -109,6 +109,9 @@ export const Const = {
         inAlbumOrLocation: "data-in-album-or-location",
         // The Sequence a group header's Curate opens Curation on
         sequenceId: "data-app-sequence-id",
+        // The Sequence a row of Curation's Sequence rail stands for (htmx/curation_queue); not `data-app-sequence-id`,
+        // which finds a group header's Curate
+        railSequenceId: "data-rail-sequence-id",
         // The fewest frames a group header's Curate stays for (`Const.Curation.MIN_FRAMES`)
         minFrames: "data-min-frames",
         // The most images the batch ops' Curate opens Curation on (`Const.Curation.MAX_SELECTION`)

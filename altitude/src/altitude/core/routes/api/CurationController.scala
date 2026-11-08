@@ -14,16 +14,10 @@ import altitude.core.Validators
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
 
-/** Curation's JSON API: the queue the modal walks and its count, and a Curation set's outcome and the Undo of it */
+/** Curation's JSON API: the count of the queue the modal walks, and a Curation set's outcome and the Undo of it */
 class CurationController(using logger: Logger) extends BaseController:
   private val prefix = "api/curation"
   private val fields = Api.Field.Curation
-
-  /** The queue's Sequence IDs, in the order the modal walks them */
-  @requireLogin()
-  @cask.get(f"/$prefix/r/:repoId/queue")
-  def queue(repoId: String)(using request: Request): Response[String] =
-    jsonResponse(ujson.Obj(fields.SEQUENCE_IDS -> App.altitude.service.curation.queue().map(_.sequenceId)))
 
   /** The number of Sequences in the queue, read from the database: the client never adds or subtracts */
   @requireLogin()
