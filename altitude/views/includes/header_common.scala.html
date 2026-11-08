@@ -1,10 +1,15 @@
 @import altitude.core.Environment
 
-@()
+@* `themed` pages follow the theme the nav's switch remembers; the setup page, with no nav and a palette of its own, does not *@
+@(themed: Boolean = true)
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
+@* Blocking, to declare the theme before the first paint. The key is `Const.localStore.theme` *@
+@if(themed) {
+<script src="/static/js/theme-boot.js" data-key="theme"></script>
+}
 <link rel="stylesheet" href="@altitude.core.Assets.appCss">
 <link rel="stylesheet" href="/static/css/font-awesome.min.css">
 <!-- defaultTimeout: htmx 4 aborts requests after 60s by default; keep htmx 2's "no timeout" for

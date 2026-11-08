@@ -86,10 +86,11 @@ against the results, and the divider between them, is under **Explorer dock** be
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
 | `js/upload-form-page.js`, `js/settings-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`. The import page's hydrates its upload form and starts no Alpine. Settings' starts Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store, no fragments) and registers the htmx request rule with a minimal app and the page's own listeners; see **Settings screen** |
+| `js/theme-boot.js` | a plain blocking script of `includes/header_common`'s head, on every page with a nav: declares the remembered theme on `<html>` before the first paint, from the key in its `data-key`; see **Themes** |
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds and theme (the kinds, groups and themes of the tokens, for the style guide), font-availability (whether the browser has a font) |
+| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads) and `curation.js` (Curation's state, on its shell); `index.js` registers them |
@@ -1688,7 +1689,12 @@ server renders from the include's `current` parameter, a `Const.NavEntry` key: t
 (`IndexController` passes the `view` query parameter, `repository` by default, the same value the client seeds its
 search from), and `import`, `settings` and `style-guide`, which those templates pass as constants. The marked entry is
 `--theme-accent` text, bold, on the accent at 0.16 alpha. Nothing marks an entry client-side, so a reload of the nav
-passes `current` again (below); the style guide's navigation section holds the specimen.
+passes `current` again (below); the style guide's navigation section holds the specimen. The last cell, at the right edge after
+Style Guide, or after Settings where that entry is not shown, is the theme switch: a `button.menu.theme-switch`, as wide as an entry and
+its whole cell the target, icon only with the accessible name "Toggle light and dark theme". It shows `fa-sun` in the dark theme and
+`fa-moon` in the light one, the theme a press goes to, in `--theme-neutral-3`, glowing in its own color on hover. CSS picks the
+icon from `data-theme` on `<html>`, so a nav reload needs no client step, and the one delegated click in `global.js` (`[data-app-theme-switch]`)
+works on every page, those without Alpine included. See **Themes**.
 
 **Nav refresh** — After any successful asset mutation, reload the nav to update counts.
 Folder deletion also recycles assets throughout its subtree, so the `folderDeleted` listener
@@ -1732,8 +1738,12 @@ confirmation stays `.error`. The batch ops' buttons (`.batch-ops .action-button`
 variants' own edges.
 
 **Themes** — The app has a light and a dark theme and ships in the dark one: `:root` in `core.css` declares
-`color-scheme: dark`, as does the `color-scheme` meta tag of `includes/header_common`, and only the style guide's theme
-switcher and the design tweaks panel's toggle declare another scheme, on the page shown. Curation's `.pane-tag` and `.loupe`
+`color-scheme: dark`, as does the `color-scheme` meta tag of `includes/header_common`. The nav's theme switch (see **Nav**), the
+style guide's theme switcher and the design tweaks panel's toggle declare another scheme inline on the root element. The first two go
+through `chooseTheme` of `js/common/theme.js`: it declares `color-scheme` and `data-theme` on `<html>`, remembers the theme in
+`localStorage` (`Const.localStore.theme`) and announces `Const.events.themeChanged`. `js/theme-boot.js`, a plain blocking script of
+`includes/header_common`'s with the key in its `data-key`, declares the two before the first paint on every page with a nav; the setup
+page passes `themed = false`, since it has no nav and a palette of its own. Nothing remembered leaves the stylesheet's dark theme. Curation's `.pane-tag` and `.loupe`
 declare `color-scheme: dark` on themselves, because the pane beneath them is dark in either theme, so the tag's chips and the
 lens's edge and label take the dark side of every token whichever theme is shown. Every color is a `:root` token
 of `core.css`, and every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, one per
@@ -1895,12 +1905,10 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   **Modals**) opens a page-held `<template>` dialog in the general modal host, a labelled input and a labelled select,
   so its labels take the dialog's small caps; it requests and submits nothing, and the × or Escape closes it.
 - **Theme switcher:** the Light / Dark `.toggle-group` at the top of the contents column (`#styleGuideTheme`), which
-  stays on screen. `setTheme` declares `color-scheme` inline on the root element, which every `light-dark()` token
-  follows (`applyTheme` and `rememberedTheme` of `js/common/theme.js`),
-  remembers the choice in `localStorage` (`Const.localStore.styleGuideTheme`), and resolves the tokens again:
+  stays on screen. `setTheme` calls `chooseTheme` (see **Themes**), so the choice is the whole app's, and the component answers
+  `Const.events.themeChanged`, which the nav's switch announces too, by following the theme and resolving the tokens again:
   the color a token holds and its alpha are those of the theme shown, while the tokens sharing its value are compared
-  in both themes. The page opens in the remembered theme, else in the stylesheet's. Only the style guide reads the
-  choice; the rest of the app stays in the stylesheet's theme.
+  in both themes. The page opens in the remembered theme, else in the stylesheet's.
 - **Font tester:** the Typography section's right half (its left half holds the `--font` card, the type scale's
   cards, the sizes on the real components and the text colors). The typed value becomes the lorem specimen's `font-family`, and the status says whether the browser
   has that font, decided by measuring the text with the value in front of each generic family against the generic
@@ -2045,9 +2053,10 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/style_guide.scala.html` | The dev-only style guide: static specimens of the shared primitives, and the Alpine templates of the tokens, the icons and the token audit; its own layout is `static/css/pages/style_guide.css` |
 | `static/js/style-guide.js` | the `styleGuide` Alpine component (the source scan resolved in the browser: tokens, icons, token audit; the theme switcher's and the font tester's state) and the style guide's live menu and dialog specimens |
 | `static/js/common/token-kinds.js` | the kinds of token (`TOKEN_KINDS`, `kindOf`) and their groups (`groupOf`, `paletteGroupOf`), the token references of a declaration (`referencedNamesOf`), for the style guide |
-| `static/js/common/theme.js` | the two themes: `applyTheme`, `rememberedTheme`, `inTheme`, `resolveColor`, and the two colors of a `light-dark()` pair (`themeColorsOf`, `withThemeColor`) |
+| `static/js/common/theme.js` | the two themes: `applyTheme`, `chooseTheme`, `toggleTheme`, `rememberedTheme`, `inTheme`, `resolveColor`, and the two colors of a `light-dark()` pair (`themeColorsOf`, `withThemeColor`) |
 | `static/js/common/font-availability.js` | `isFontAvailable` and `asFontFamily`, the font tester's check |
 | `static/js/common/explorer-dock.js` | the main page's Dock side: `initExplorerDock(view)`, `setDockSide(side)`, `effectiveSide()`, the explorer's remembered share per axis, the divider's drag and keys, `explorerShare()` / `setExplorerShare(percent)`, which the design tweaks adapter passes as an extra control, and the `dockSideChanged` event |
+| `static/js/theme-boot.js` | the blocking boot script of `includes/header_common`: the remembered theme on `<html>` before the first paint |
 | `static/js/explorer-dock-boot.js` | the blocking boot script of the main page's head: the Dock side and the share on `<html>` before the first paint |
 | `static/js/design-tweaks.js` | the design tweaks panel's adapter: `createTokenTweaks` of the vendored tokentweak package with Altitude's storage key, host id, stylesheet, trigger, shortcut, sources URL, sections, scales, the two scoped tokens, the explorer control and the export file name |
 | `static/js/lib/tokentweak.js` | the tokentweak package (vendored, dev only): the panel, its store and adopted sheet, the controls per kind, Inspect, the exports; its options are its README's |

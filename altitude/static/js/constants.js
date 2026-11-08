@@ -63,6 +63,8 @@ export const Const = {
         // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
         dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",
         styleGuideSampleSubmitted: "STYLE_GUIDE_SAMPLE_SUBMITTED_EVENT",
+        // The theme shown was changed, with `detail.theme` (js/common/theme.js)
+        themeChanged: "THEME_CHANGED_EVENT",
         // The batch ops' Curate: opens Curation on the selection unless it is over the button's `data-max-selection`
         batchCurateRequested: "BATCH_CURATE_REQUESTED_EVENT",
         // Opens Curation: on the queue with no detail, on one Sequence with `detail.sequenceId`, on a selection
@@ -155,8 +157,9 @@ export const Const = {
         explorerDock: "explorerDock",
         // The results layout (`grid` / `map`) last chosen, seeded into the search parameters on load
         resultsLayout: "resultsLayout",
-        // The theme (`light` / `dark`) the style guide was last shown in (js/style-guide.js)
-        styleGuideTheme: "styleGuideTheme",
+        // The theme (`light` / `dark`) last chosen, shown on every page with a nav (js/common/theme.js;
+        // the boot script tag of includes/header_common names the same key in its `data-key`)
+        theme: "theme",
         // The design tweaks panel's state (the tokentweak package, configured by js/design-tweaks.js): the
         // active tweak set, the snapshots, the theme, the panel's dock and open state and the adopted
         // sheet's text. The boot script tag of includes/header_common names the same key in its `data-key`

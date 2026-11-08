@@ -268,11 +268,11 @@ nav .menu, nav .menu a {
     gap: var(--space-6);
 }
 
-nav .menu a {
+nav .menu a, nav .theme-switch {
     transition: filter 0.25s ease;
 }
 
-nav .menu:hover a {
+nav .menu:hover a, nav .theme-switch:hover {
     filter: drop-shadow(0 0 8px hsl(from currentColor h s l / 0.8));
 }
 
@@ -307,6 +307,20 @@ nav .menu.trashbin {
 nav .menu.empty {
     color: var(--theme-neutral-3);
     cursor: default;
+}
+
+nav .theme-switch {
+    flex: 0 0 auto;
+    font-size: var(--font-size-large);
+    padding-right: var(--space-6);
+    border: none;
+    background: none;
+}
+
+/* The icon names the theme a press goes to. CSS picks it from <html>'s data-theme, since a nav reload renders the cell again */
+:root:not([data-theme="light"]) nav .theme-switch .fa-moon,
+:root[data-theme="light"] nav .theme-switch .fa-sun {
+    display: none;
 }
 
 nav .menu[aria-current="page"] {
@@ -565,13 +579,14 @@ footer {
     --curate-face: var(--button-fill);
     background: var(--curate-face) padding-box;
     border-color: var(--button-fill);
-    color: var(--theme-neutral-1);
+    color: light-dark(var(--theme-primary-text), var(--theme-neutral-1));
     font-weight: normal;
 }
 
 .action-button.curate.lit {
     --curate-color: var(--theme-primary);
     --curate-face: linear-gradient(hsl(from var(--button-fill) h s calc(l + 6)), var(--button-fill));
+    color: var(--theme-neutral-1);
 }
 
 .action-button.curate:hover:not(:disabled) {

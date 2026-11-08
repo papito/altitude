@@ -63,7 +63,7 @@
       @includes.html.dock_glyphs()
 
       <div id="styleGuideToc">
-        @* The theme switcher: the page is shown in the pressed theme, which this browser remembers for the guide *@
+        @* The theme switcher: the page is shown in the pressed theme, which this browser remembers for every page, as the nav's switch does *@
         <div id="styleGuideTheme" class="toggle-group" role="group" aria-label="Theme">
           <button type="button" :aria-pressed="isTheme('light')" @@click="setTheme('light')">Light</button>
           <button type="button" :aria-pressed="isTheme('dark')" @@click="setTheme('dark')">Dark</button>
@@ -260,10 +260,10 @@
              <code>:focus</code>, so a button a dialog returns focus to is not left ringed after a mouse click. A choice
              between ways of showing the same thing is a <code>.toggle-group</code>: its buttons joined on one track, the
              current one <code>aria-pressed="true"</code>, raised on the page surface. The theme switch above the contents
-             is a live one. The buttons that open Curation share <code>.curate</code>: <code>--theme-neutral-1</code> text
-             and icon, a border in the fill's own color, regular weight, always at the small size. A selection's Curate
-             is a veil of <code>--theme-primary</code> at 0.32. <code>.lit</code>, Triage's button for the whole queue,
-             is the solid primary lit from the top, a vertical gradient from the primary at +6 lightness to the primary,
+             is a live one. The buttons that open Curation share <code>.curate</code>: a border in the fill's own color, regular weight,
+             always at the small size. A selection's Curate is a veil of <code>--theme-primary</code> at 0.32, its text
+             and icon <code>--theme-neutral-1</code> in the dark theme and <code>--theme-primary-text</code> in the light one. <code>.lit</code>, Triage's button for the whole queue,
+             is the solid primary lit from the top, a vertical gradient from the primary at +6 lightness to the primary, in <code>--theme-neutral-1</code>,
              in a centered row of its own under the toolbar, below a hairline of <code>--theme-neutral-3</code> at 0.3,
              with <code>--space-6</code> above and below the line and below the button.</p>
           <div class="sg-row">
@@ -370,7 +370,8 @@
              count is a <code>.count</code> pill inside the label, and an entry with nothing behind it is
              <code>empty</code> and not a link. The <code>.search</code> cell between Browse and Triage is as wide as an
              entry and holds the quick search form at its own width: no border, a magnifier, a clear control while
-             there is text, and an accent glow for focus. A tab is the link itself, selected through
+             there is text, and an accent glow for focus. The last cell is the theme switch, <code>.menu.theme-switch</code>, an entry's width and icon
+             only: the sun in the dark theme and the moon in the light one, the theme a press goes to, remembered for every page. The specimen is live. A tab is the link itself, selected through
              <code>aria-selected</code>.</p>
           <nav aria-label="Navigation specimen">
             <div class="brand"><a href="#navigation-tabs"><i class="fas fa-chevron-up"></i><span>Altitude</span></a></div>
@@ -385,6 +386,7 @@
             </div>
             <div class="menu triage"><a href="#navigation-tabs"><i class="fas fa-medkit"></i><span>.count<span class="count">37</span></span></a></div>
             <div class="menu triage empty"><i class="fas fa-medkit"></i><span>.menu.empty</span></div>
+            <button type="button" class="menu theme-switch" data-app-theme-switch title="Toggle light and dark theme" aria-label="Toggle light and dark theme"><i class="fas fa-sun" aria-hidden="true"></i><i class="fas fa-moon" aria-hidden="true"></i></button>
           </nav>
 
           <div role="tablist">
