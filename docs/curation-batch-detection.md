@@ -23,9 +23,9 @@ MeasureImageFlow                        asset.sequence_id                       
   Face sharpness per Face                                                          → CurationRule.assess
   Scene embeddings (DINOv2, CLIP)
         │                               Group by Sequence (grid)                       Bundles, chips, notices,
-        ▼                               "Curate N sequences" (toolbar)                 Contenders
+        ▼                               "Curate all N sequences" (Triage)              Contenders
 completeImport                          Curate (group header)                    resolve / reopen
-  stores metrics, hash, embeddings      Curate (batch ops)                         keep Picks, recycle the rest,
+  stores metrics, hash, embeddings      Curate Selected (batch ops)                keep Picks, recycle the rest,
   SequenceService.assign                                                           clear or keep the Sequence
 ```
 
@@ -346,9 +346,9 @@ Three ways in, all opening the same modal:
 
 | Way in | Where | Opens on |
 |---|---|---|
-| **Curate 3 sequences** | The right edge of Triage's results toolbar. Hidden until the count is read, and gone at zero. | The whole queue, whatever the search shows. |
+| **Curate all 3 sequences** | A centered row of its own under Triage's results toolbar. Hidden until the count is read, and gone at zero. | The whole queue, whatever the search shows. |
 | **Curate** on a group header | Each Sequence's header when the grid is grouped by Sequence and the Sequence has two frames or more. | That one Sequence: all its frames still out of the trash, even under a search showing only some. |
-| **Curate** in the batch ops | The selection's action bar (toolbar and footer copies) while two or more images are selected. | The selection. Over 100 images the snackbar says so and nothing opens; the server refuses it too, but only the client says why. |
+| **Curate Selected** in the batch ops | The selection's action bar (toolbar and footer copies) while two or more images are selected. | The selection. Over 100 images the snackbar says so and nothing opens; the server refuses it too, but only the client says why. |
 
 The group header's Curate button goes away on the client when the group's count falls under two or when Curation
 clears that Sequence.

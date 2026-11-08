@@ -1056,7 +1056,7 @@ the fragment's title with its controls (`static/css/htmx/map_view.css`).
 In the Triage view `#curateQueue` follows the toolbar, a centered row holding `#curateSequences`, the small action button that
 opens Curation on the whole queue, whatever the search shows, in the `.curate.lit` look (see **Style guide** and the Buttons
 section of the page). It has the `fa-check-double` icon of the batch ops' Curate at the same `--space-5` gap, then the
-`sequencesToCurate` store's `label` ("Curate 3 sequences", "Curate 1 sequence"), and `--space-9` of side padding. The row's top
+`sequencesToCurate` store's `label` ("Curate all 3 sequences", "Curate 1 sequence"), and `--space-9` of side padding. The row's top
 border is a hairline of `--theme-neutral-3` at 0.3, inset by the toolbar's side padding (`--space-8`). The toolbar's bottom
 padding is the `--space-6` above the line, and the row's block padding the `--space-6` from the line to the button and from the
 button to the grid. It sits outside `#searchControl`, so it is not sticky and scrolls away with the grid, and the sticky offsets
@@ -1065,9 +1065,9 @@ it with the toolbar.
 
 **Batch ops** — What the selection can do (`includes/batch_ops`): Move (a drag handle, see **Tooltip**), Recycle, Add to
 album, Remove from album while an album's results are displayed, Add to location, Remove from location while a Location's
-are, Curate while two images or more are selected, and Deselect all (×, an icon button with an accessible name); in the trash
+are, Curate Selected while two images or more are selected, and Deselect all (×, an icon button with an accessible name); in the trash
 view Purge, Restore and Deselect all. The
-count shows once ("3 selected"), before the buttons, which carry no count of their own; they are the small action
+count shows once ("3 selected"), after the actions and directly before Deselect all, which the views share; the buttons carry no count of their own, and they are the small action
 button (`--space-4` × `--space-5` padding, `--font-size-small`, as the trash view's Purge button) and sit `--space-6`
 apart. Curate is `.action-button.curate` (see the style guide's Buttons section), which the rule that turns the batch ops'
 borders `--warning-background-color` on hover leaves out. The include is rendered twice, shown together while assets are selected (`x-show`): in the toolbar's lead and in

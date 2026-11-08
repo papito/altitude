@@ -26,7 +26,9 @@ export function createSequencesToCurateStore() {
 
         // The text of Triage's Curate button
         get label() {
-            return `Curate ${sequencesText(this.count)}`
+            return this.count === 1
+                ? "Curate 1 sequence"
+                : `Curate all ${this.count} sequences`
         },
 
         // Curation's header

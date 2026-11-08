@@ -319,7 +319,7 @@ import altitude.core.service.FaceDetectionService
             val curate = outsideTrash.substring(outsideTrash.lastIndexOf("<button", outsideTrash.indexOf("batchCurateRequested")))
             curate should include("""x-show="$store.selectedAssets.size > 1"""")
             curate should include(s"""data-max-selection="${Const.Curation.MAX_SELECTION}"""")
-            curate should include("Curate</button>")
+            curate should include("Curate Selected</button>")
             (inTrash should not).include("Curate")
         }
     }

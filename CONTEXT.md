@@ -247,14 +247,20 @@ _Avoid_: Face quality (how recognizable a face is).
 
 **Curation**:
 The modal where the user keeps the best frames of a Curation set and recycles
-the rest. The button that opens it on a selection reads "Curate", and the one
-that opens it on the queue reads "Curate 3 sequences", with the count.
+the rest. The button that opens it on a selection reads "Curate Selected", and
+the one that opens it on the queue reads "Curate all 3 sequences", with the count.
 _Avoid_: Culling, Review.
 
 **Curation set**:
 The frames being compared: the members of one Sequence still out of the trash,
 the first 100 when it has more, or a selection.
 _Avoid_: Batch (a user's selection before it is curated), Group.
+
+**Sequence rail**:
+The column of Curation listing the Sequences it opened to walk, the one on show
+marked and those already dealt with done. A selection or a single Sequence has
+none.
+_Avoid_: Sequence panel, Queue panel, Sidebar.
 
 **Pick**:
 A frame the user keeps. A set can have several. Its button and its mark read
