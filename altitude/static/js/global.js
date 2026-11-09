@@ -11,8 +11,9 @@
  * While asset detail is active and no text is being edited, the arrow keys navigate between assets,
  * except on the video player's timeline and volume slider, which they step, and on the Detail
  * panel's divider, which they move; Space plays or pauses a Video and does nothing on an image,
- * except on a control in the player or in the Detail panel, which it presses; and `m` opens or
- * closes the Detail panel, wherever focus is, ignoring a held key and any modifier.
+ * except on a control in the player or in the Detail panel, which it presses; `m` opens or
+ * closes the Detail panel and `p` shows or hides the Face highlights, wherever focus is, each
+ * ignoring a held key and any modifier.
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
 import { closeModal, getActiveModalHost, ModalHost } from "./common/modal.js"
@@ -83,18 +84,23 @@ document.addEventListener("keydown", (event) => {
                 new CustomEvent(Const.events.togglePlayback),
             )
         }
-    } else if (isDetailPanelKey(event)) {
+    } else if (isPlainKey(event, "m")) {
         event.preventDefault()
         document.body.dispatchEvent(
             new CustomEvent(Const.events.toggleDetailPanel),
         )
+    } else if (isPlainKey(event, "p")) {
+        event.preventDefault()
+        document.body.dispatchEvent(
+            new CustomEvent(Const.events.toggleFaceHighlights),
+        )
     }
 })
 
-/** `m` pressed on its own, once: a held key or any modifier (Ctrl+M, Shift+M) is left to the browser */
-function isDetailPanelKey(event) {
+/** `key` pressed on its own, once: a held key or any modifier (Ctrl+P, Shift+M) is left to the browser */
+function isPlainKey(event, key) {
     return (
-        event.key.toLowerCase() === "m" &&
+        event.key.toLowerCase() === key &&
         !event.repeat &&
         !event.ctrlKey &&
         !event.altKey &&

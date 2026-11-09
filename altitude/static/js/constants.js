@@ -61,6 +61,8 @@ export const Const = {
         togglePlayback: "TOGGLE_PLAYBACK_EVENT",
         // `m` in Asset detail: opens or closes the Detail panel (js/search-results/detail-panel.js)
         toggleDetailPanel: "TOGGLE_DETAIL_PANEL_EVENT",
+        // `p` in Asset detail: shows or hides the Face highlights (js/search-results/detail-panel.js)
+        toggleFaceHighlights: "TOGGLE_FACE_HIGHLIGHTS_EVENT",
         settingsSaved: "SETTINGS_SAVED_EVENT",
         // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
         dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",
@@ -102,6 +104,11 @@ export const Const = {
         dataSrc: "data-src",
         personId: "data-person-id",
         faceId: "data-face-id",
+        // A People row of the Detail panel (htmx/detail_panel_people): its Person's name, whether the Person is Hidden, and
+        // the Frame time of a Face in a Video, which the Face highlights read with `data-face-box`
+        personName: "data-person-name",
+        personHidden: "data-person-hidden",
+        frameTimeMs: "data-frame-time-ms",
         // A frame of a Curation set in the rail (`data-asset-id` finds the cells of the grid beneath), its file's
         // name, what the stage's tag says is wrong with it, its Bundle, and whether it is in an album or Location
         frameId: "data-frame-id",
@@ -141,8 +148,11 @@ export const Const = {
         // panel's, its own since both docks listen on the body (js/search-results/detail-panel.js)
         dockSide: "data-app-dock-side",
         detailDockSide: "data-app-detail-dock-side",
-        // The Detail panel's toggle in Asset detail's toolbar (includes/html_common)
+        // The Detail panel's toggle and the Face highlights' in Asset detail's toolbar (includes/html_common)
         detailPanelToggle: "data-app-detail-panel-toggle",
+        faceHighlightsToggle: "data-app-face-highlights-toggle",
+        // The button of a People row that selects its Face (htmx/detail_panel_people)
+        faceRow: "data-app-face-row",
         // The Detail panel's dimensions row, which reads the shown element's size, and a Metadata group's directory
         // name, which the open groups are remembered by (htmx/detail_panel)
         detailDimensions: "data-app-detail-dimensions",

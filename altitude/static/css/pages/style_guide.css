@@ -205,6 +205,14 @@
   background: var(--theme-secondary);
 }
 
+/* The Face highlights' specimen: a stand-in for a photo, the layer's box, that the highlights are placed in */
+.sg-face-highlights {
+  position: relative;
+  width: var(--modal-content-width);
+  aspect-ratio: 3 / 2;
+  background: linear-gradient(in oklch 160deg, var(--theme-neutral-3), var(--theme-neutral-4));
+}
+
 /* The error form holds its message under its field; line the fields up on their tops */
 #forms .sg-row {
   align-items: start;

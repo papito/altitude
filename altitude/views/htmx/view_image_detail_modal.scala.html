@@ -10,6 +10,8 @@
    header holds its Dock side menu, a compact choice menu whose picks are `data-app-detail-dock-side`, and its content host
    takes htmx/detail_panel, loaded by js/search-results/detail-panel.js, which also writes the side, the share and whether
    the panel is open on this root; the side and the divider's orientation rendered here are the defaults until it does.
+   The Face highlights' layer (#faceHighlights) shares the stage's cell with the media, so it lies over the shown element;
+   js/search-results/face-highlights.js fills it from the panel's People rows and empties it as another asset loads.
    `hotkeys` turns off the player's ←/→ seeking and its `m` mute: the arrows switch assets and `m` toggles the panel
    (js/global.js). *@
 
@@ -41,6 +43,7 @@
                 <media-fullscreen-button></media-fullscreen-button>
             </media-control-bar>
         </media-controller>
+        <div id="faceHighlights"></div>
     </div>
 
     <div id="detailPanelDivider" class="divider vertical" role="separator" aria-controls="detailPanel" aria-label="Detail panel size" tabindex="0"></div>

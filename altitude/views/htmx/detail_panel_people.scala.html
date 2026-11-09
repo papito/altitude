@@ -10,7 +10,8 @@
    (PersonService.getAssetFacesForDetail: by x for an image, by Frame time for a Video), bad matches left out. A row
    carries what the Face highlights and the corrections read: the Face, its Person and their name, the box in the
    asset's pixels (x, y, width, height), the Frame time for a Face in a Video, and whether the Person is Hidden. The
-   section is swapped in whole by a correction's response (PUT /htmx/asset/r/:repoId/face/:faceId/person, DELETE
+   row's button (`data-app-face-row`) selects the Face, which js/search-results/detail-panel.js marks with `aria-pressed`
+   and shows as a Face highlight. The section is swapped in whole by a correction's response (PUT /htmx/asset/r/:repoId/face/:faceId/person, DELETE
    /htmx/asset/r/:repoId/face/:faceId), whose root then carries the result message for the snackbar and, for a Person
    the correction deleted, their ID and the line the snackbar adds. For an asset in the trash the root is marked
    read-only: no correction is offered, and the server refuses them. *@
@@ -34,11 +35,13 @@
             @if(person.isHidden) { data-person-hidden="true" }
             data-face-box="@{face.x1},@{face.y1},@{face.width},@{face.height}"
             @for(time <- face.frameTimeMs) { data-frame-time-ms="@time" }>
-            @for(cover <- person.coverFaceId) {
-            <img src="@{Util.contentUrl(Const.DataStore.FACE, cover)}" alt="" loading="lazy">
-            }
-            <span class="name">@{person.name.getOrElse("")}</span>
-            @if(person.isHidden) { <span class="hidden-mark">Hidden</span> }
+            <button type="button" class="face-row" aria-pressed="false" data-app-face-row>
+                @for(cover <- person.coverFaceId) {
+                <img src="@{Util.contentUrl(Const.DataStore.FACE, cover)}" alt="" loading="lazy">
+                }
+                <span class="name">@{person.name.getOrElse("")}</span>
+                @if(person.isHidden) { <span class="hidden-mark">Hidden</span> }
+            </button>
         </li>
         }
     </ul>

@@ -95,6 +95,8 @@
     --snackbar-exit-duration: 150ms;
     --person-avatar-size: 4rem;
     --detail-cover-size: 2.5rem;
+    /* The corners of a Face highlight's box over Asset detail's media (htmx/view_image_detail_modal.css) */
+    --face-highlight-radius: 0.875rem;
     --merge-arrow-column: 5rem;
     --map-panel-width: min(60%, 43.75rem);
     --location-editor-map-height: 18.75rem;

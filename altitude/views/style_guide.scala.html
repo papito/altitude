@@ -242,15 +242,17 @@
              Details and a Metadata group's rows (<code>.detail-rows</code>) are a label column in <code>--theme-neutral-3</code>
              beside values that wrap anywhere; the Folder row wears the shared crumbs, the albums and Locations are links in
              <code>--theme-primary-text</code>. A Metadata group is a closed <code>&lt;details&gt;</code> whose summary names the
-             directory and its field count. The toolbar's toggle (<code>.toolbar-toggle</code>, before a modal's ×) is an icon in
+             directory and its field count. A People row is a button (<code>.face-row</code>) that selects its Face, tinted
+             <code>--theme-neutral-4</code> at 0.08 on hover and <code>--theme-primary</code> at 0.2 while selected
+             (<code>aria-pressed</code>). The toolbar's toggles (<code>.toolbar-toggle</code>, before a modal's ×) are an icon in
              <code>--theme-neutral-3</code> that takes <code>--theme-accent</code> while pressed, as the current nav entry does.</p>
           <div class="sg-row">
             <div class="sg-detail-panel detail-panel">
               <section class="detail-section">
                 <h3>People</h3>
                 <ul class="people">
-                  <li><span class="sg-cover"></span><span class="name">Alice</span></li>
-                  <li><span class="sg-cover"></span><span class="name">Unknown 4</span><span class="hidden-mark">Hidden</span></li>
+                  <li><button type="button" class="face-row" aria-pressed="true"><span class="sg-cover"></span><span class="name">Alice</span></button></li>
+                  <li><button type="button" class="face-row" aria-pressed="false"><span class="sg-cover"></span><span class="name">Unknown 4</span><span class="hidden-mark">Hidden</span></button></li>
                 </ul>
               </section>
               <section class="detail-section">
@@ -276,6 +278,21 @@
             </div>
             <button type="button" class="toolbar-toggle" aria-pressed="true" aria-label="Detail panel" title="Detail panel (M)"><i class="fas fa-info-circle" aria-hidden="true"></i></button>
             <span>.toolbar-toggle, pressed</span>
+            <button type="button" class="toolbar-toggle" aria-pressed="false" aria-label="Face highlights" title="Face highlights (P)"><i class="fas fa-user-tag" aria-hidden="true"></i></button>
+            <span>.toolbar-toggle, at rest</span>
+          </div>
+          <p>A Face highlight (<code>.face-highlight</code>, in the <code>#faceHighlights</code> layer of
+             <code>htmx/view_image_detail_modal</code>) is a Face's box over Asset detail's media, placed by fractions of the
+             shown element's size: a <code>--border-hairline</code> outline in <code>--theme-neutral-1</code> with
+             <code>--face-highlight-radius</code> corners over a transparent box, a toggle button of its People row's selection;
+             the selected one wears <code>--border-heavy</code>. Its badge (<code>.face-highlight-badge</code>) is the Person's
+             name at <code>--font-size-base</code> in <code>--theme-neutral-1</code> on <code>--scrim-color</code>, rounded with
+             <code>--radius-small</code>, a Hidden person's mark dimmed after it and the selected one's in
+             <code>--font-weight-semibold</code>; it is anchored under the box and kept inside the media, above the box when
+             there is no room below, else inside the box's bottom edge.</p>
+          <div class="sg-face-highlights">
+            <button type="button" class="face-highlight" aria-pressed="true" aria-label="Alice" style="--face-x: 0.14; --face-y: 0.16; --face-width: 0.2; --face-height: 0.42; anchor-name: --sg-face-highlight-1"></button><span class="face-highlight-badge" style="position-anchor: --sg-face-highlight-1">Alice</span>
+            <button type="button" class="face-highlight" aria-pressed="false" aria-label="Unknown 4, hidden" style="--face-x: 0.6; --face-y: 0.54; --face-width: 0.18; --face-height: 0.42; anchor-name: --sg-face-highlight-2"></button><span class="face-highlight-badge" style="position-anchor: --sg-face-highlight-2">Unknown 4 <span class="hidden-mark">Hidden</span></span>
           </div>
         </section>
 

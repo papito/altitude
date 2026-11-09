@@ -124,9 +124,9 @@ async function playShownVideo({ videoEl, isCurrent }) {
  *
  * The box is fitted from the shown element's size (`naturalWidth`, `videoWidth`), not the stored
  * one: the stored size is the file header's, while a browser turns an image upright by its EXIF
- * orientation. The Detail panel (`detail-panel.js`) is told of each asset shown, under the same
- * request token, so it loads the asset's details while it is open and drops a superseded answer,
- * and of the shown size, which its dimensions row reads.
+ * orientation. The Detail panel (`detail-panel.js`) is told of each asset as its load starts, under
+ * the same request token, so it empties, loads the asset's details while they are wanted and drops a
+ * superseded answer, and of the shown size, which its dimensions row and the Face highlights read.
  */
 export function createSearchDetailCoordinator({ context, detailPanel }) {
     // The cell the modal shows, or is loading: where navigation starts from
@@ -325,7 +325,9 @@ export function createSearchDetailCoordinator({ context, detailPanel }) {
     /**
      * Navigates the active asset-detail modal to `assetId`, shown by `cellEl`: fetches the asset's
      * metadata, then its media. Both steps are skipped if the request is superseded or the modal
-     * goes away. A playing video is paused first.
+     * goes away. A playing video is paused first, and the Detail panel is told at once, so the last
+     * asset's details and Face highlights leave as this one starts loading and its details load
+     * alongside the metadata.
      */
     async function loadAssetDetail(assetId, cellEl) {
         const repoId = context.getRepoId()
@@ -341,6 +343,10 @@ export function createSearchDetailCoordinator({ context, detailPanel }) {
         const openId = getModalOpenId()
         const token = ++imageRequestToken
         Alpine.store(Const.state.imageDetailLoading).value = true
+        detailPanel.showAsset({
+            assetId,
+            isCurrent: () => isCurrentImageRequest({ token, openId }),
+        })
 
         let assetData
         try {

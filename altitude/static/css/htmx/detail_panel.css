@@ -21,7 +21,9 @@
     color: var(--theme-neutral-3);
 }
 
-/* The People rows: one per Face, the cover then the name, tighter than the explorer's list rows (--list-row-gap) */
+/* The People rows: one per Face, the cover then the name, tighter than the explorer's list rows (--list-row-gap). A row
+   is a button that selects its Face, tinted on hover as a menu's option is and in the selection's primary while
+   selected (`aria-pressed`, kept by js/search-results/detail-panel.js) */
 .detail-panel .people {
     margin: 0;
     padding: 0;
@@ -30,13 +32,28 @@
     row-gap: var(--space-2);
 }
 
-.detail-panel .people li {
+.detail-panel .people .face-row {
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: center;
     column-gap: var(--space-4);
+    width: 100%;
     padding: var(--space-2) var(--space-3);
+    border: 0;
     border-radius: var(--radius);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.detail-panel .people .face-row:hover {
+    background: hsl(from var(--theme-neutral-4) h s l / 0.08);
+}
+
+.detail-panel .people .face-row[aria-pressed="true"] {
+    background: hsl(from var(--theme-primary) h s l / 0.2);
 }
 
 .detail-panel .people img {
