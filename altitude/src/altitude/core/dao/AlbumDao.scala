@@ -19,3 +19,6 @@ trait AlbumDao extends BaseDao[Album]:
 
   /** Those of the assets that some album of the context repository holds */
   def getAssetsInAnyAlbum(assetIds: Set[String]): Set[String]
+
+  /** The albums of the context repository holding the asset, by name ignoring case, each without its asset count */
+  def getAlbumsOfAsset(assetId: String): List[Album]

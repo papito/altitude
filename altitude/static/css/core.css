@@ -77,6 +77,14 @@
     --explorer-min-height: 7.5rem;
     --content-min-width: 18.75rem;
     --content-min-height: 12.5rem;
+    /* The Detail panel's share of Asset detail along its Dock side's axis, and the least the panel and the media stage
+       may be squeezed to on each axis (htmx/view_image_detail_modal.css); js/search-results/detail-panel.js sets the
+       share on the fragment and reads the minimums in px to bound the divider */
+    --detail-panel-share: 30%;
+    --detail-panel-min-width: 12.5rem;
+    --detail-panel-min-height: 7.5rem;
+    --detail-stage-min-width: 12.5rem;
+    --detail-stage-min-height: 7.5rem;
     --nav-brand-width: 12.5rem;
     --nav-search-width: 11.5rem;
     --nav-search-focus-width: 15.5rem;
@@ -86,6 +94,7 @@
        message once the fade has run */
     --snackbar-exit-duration: 150ms;
     --person-avatar-size: 4rem;
+    --detail-cover-size: 2.5rem;
     --merge-arrow-column: 5rem;
     --map-panel-width: min(60%, 43.75rem);
     --location-editor-map-height: 18.75rem;
@@ -175,6 +184,36 @@
 }
 
 @property --content-min-height {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --detail-panel-share {
+    syntax: "<percentage>";
+    inherits: true;
+    initial-value: 30%;
+}
+
+@property --detail-panel-min-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --detail-panel-min-height {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --detail-stage-min-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --detail-stage-min-height {
     syntax: "<length>";
     inherits: true;
     initial-value: 0px;
@@ -701,12 +740,44 @@ footer {
     white-space: nowrap;
 }
 
+/*        */
+/* CRUMBS */
+/*        */
+
+/* A path's breadcrumb: the results title's folder path (includes/results_title_inner) and the Detail panel's Folder row
+   (htmx/detail_panel). Each ancestor is a dimmed link (.crumb) and the crumbs are parted by a faint chevron (.sep); the
+   row wraps rather than hiding an ancestor. The results title's leaf is its own (.leaf, includes/results_title.css). */
+.crumbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+}
+
+.crumb {
+    color: var(--theme-neutral-3);
+    font-weight: normal;
+    text-decoration: none;
+}
+
+.crumb:hover {
+    color: var(--theme-neutral-4);
+}
+
+.crumbs .sep {
+    font-size: var(--font-size-medium);
+    color: var(--theme-neutral-3);
+    opacity: 0.4;
+}
+
 /*         */
 /* DIVIDER */
 /*         */
 
-/* A draggable divider between two panes: the explorer's against the results (#explorerDivider, views/index.scala.html)
-   and the Split.js gutter between the People panes (js/alpine/components/people-tab.js). A transparent band,
+/* A draggable divider between two panes: the explorer's against the results (#explorerDivider, views/index.scala.html),
+   the Detail panel's against Asset detail's media (#detailPanelDivider, htmx/view_image_detail_modal) and the Split.js
+   gutter between the People panes (js/alpine/components/people-tab.js). A transparent band,
    --space-3 thick, with a short dotted grip centered on it, a tile of one dot drawn in currentColor and repeated
    along the band, so the hover and drag tint is one color change. Its orientation is its own class, .vertical (a
    column, as between a left or right dock and the results) or .horizontal (a row); a divider with neither runs across
@@ -1118,10 +1189,13 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     box-shadow: var(--drop-shadow);
 }
 
+/* The title, then whatever controls the host puts after it (asset detail's toggle), then the × */
 .modal-toolbar {
     display: grid;
     align-items: center;
-    grid-template-columns: 1fr minmax(auto, max-content);
+    grid-template-columns: 1fr;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
     background-color: var(--theme-neutral-2);
     border-bottom: var(--border-hairline) var(--panel-border-color);
 }
@@ -1136,6 +1210,26 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     line-height: 1;
     padding: 0 var(--space-4) 0 0;
     cursor: pointer;
+}
+
+/* A toggle in a modal's toolbar, before its ×: the Detail panel's in asset detail (includes/html_common), an icon alone
+   in the secondary text color that takes the accent while pressed, as the current nav entry does */
+.toolbar-toggle {
+    background: none;
+    border: 0;
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-medium);
+    line-height: 1;
+    padding: 0 var(--space-5);
+    cursor: pointer;
+}
+
+.toolbar-toggle:hover {
+    color: var(--theme-neutral-4);
+}
+
+.toolbar-toggle[aria-pressed="true"] {
+    color: var(--theme-accent);
 }
 
 .modal-title {
@@ -1157,16 +1251,31 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     background-color: var(--asset-detail-backdrop-color);
 }
 
+/* The box is fitted to the media's size as shown (--asset-width and --asset-height, set by setAssetDetailSize): its
+   content row takes what the toolbar leaves, and the fragment fills it (htmx/view_image_detail_modal.css) */
 #imageDetailModalContainer .modal-box {
     --fit-width: min(var(--asset-width) * 1px, 100dvw - 10px,
                      (100dvh - var(--modal-toolbar-height)) * var(--asset-width) / var(--asset-height));
     --fit-height: calc(var(--fit-width) * var(--asset-height) / var(--asset-width) + var(--modal-toolbar-height));
+    grid-template-rows: var(--modal-toolbar-height) minmax(0, 1fr);
     border: none;
     width: var(--fit-width, 100%);
     height: var(--fit-height, 100%);
     background-color: transparent;
     box-shadow: none;
     border-radius: 0;
+}
+
+/* With the Detail panel open the box fills the viewport, less the gap the fit leaves at the sides, and the panel and the
+   stage share it */
+#imageDetailModalContainer .modal-box:has(#imageDetailView[data-app-detail-panel-open]) {
+    width: calc(100dvw - var(--viewport-gap));
+    height: 100dvh;
+}
+
+#imageDetailModalContent {
+    display: grid;
+    min-height: 0;
 }
 
 #imageDetailModalContent img[src=""] {

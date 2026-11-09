@@ -115,6 +115,39 @@ import altitude.core.util.SearchQuery
     counts(empty.persistedId) shouldEqual 0
   }
 
+  test("An asset's albums are read by name, and an asset in none has none") {
+
+    /**
+     * Setup:
+     *
+     * Two albums, "Trip" and "alpha", and three imported assets: the first in both, the second in "Trip" alone, the third in
+     * none.
+     *
+     * Assertions:
+     *
+     * The first asset's albums come in case-insensitive name order, alpha then Trip; the second's is Trip alone; the third has
+     * none.
+     *
+     * Edge cases:
+     *
+     * An album read this way carries no asset count, which only the listing computes.
+     */
+    val trip: Album = testApp.service.album.add("Trip")
+    val alpha: Album = testApp.service.album.add("alpha")
+
+    val inBoth: Asset = testContext.persistAsset()
+    val inTrip: Asset = testContext.persistAsset()
+    val inNone: Asset = testContext.persistAsset()
+
+    testApp.service.album.addAssets(trip.persistedId, Set(inBoth.persistedId, inTrip.persistedId))
+    testApp.service.album.addAssets(alpha.persistedId, Set(inBoth.persistedId))
+
+    testApp.service.album.getAlbumsOfAsset(inBoth.persistedId).map(_.persistedId) shouldEqual
+      List(alpha.persistedId, trip.persistedId)
+    testApp.service.album.getAlbumsOfAsset(inTrip.persistedId).map(_.name) shouldEqual List("Trip")
+    testApp.service.album.getAlbumsOfAsset(inNone.persistedId) shouldBe Nil
+  }
+
   test("Rename an album") {
 
     /**

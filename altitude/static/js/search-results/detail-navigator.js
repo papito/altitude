@@ -121,8 +121,14 @@ async function playShownVideo({ videoEl, isCurrent }) {
  * the other is hidden and unloaded. The player is hidden while any asset loads. A shown Video
  * starts playing, muted when the browser refuses sound, loops when it is a short clip, and is
  * described to the OS media controls; it is paused when navigation moves on.
+ *
+ * The box is fitted from the shown element's size (`naturalWidth`, `videoWidth`), not the stored
+ * one: the stored size is the file header's, while a browser turns an image upright by its EXIF
+ * orientation. The Detail panel (`detail-panel.js`) is told of each asset shown, under the same
+ * request token, so it loads the asset's details while it is open and drops a superseded answer,
+ * and of the shown size, which its dimensions row reads.
  */
-export function createSearchDetailCoordinator({ context }) {
+export function createSearchDetailCoordinator({ context, detailPanel }) {
     // The cell the modal shows, or is loading: where navigation starts from
     let currentCell = null
     let imageRequestToken = 0
@@ -250,6 +256,8 @@ export function createSearchDetailCoordinator({ context }) {
         const shownEl = isVideo ? playerEl : imgEl
         const isCurrent = () => isCurrentImageRequest({ token, openId })
 
+        detailPanel.showAsset({ assetId, isCurrent })
+
         // The player leaves the screen until the next Video is ready, so an emptied player never
         // shows in the previous frame
         unloadVideo(videoEl)
@@ -272,7 +280,16 @@ export function createSearchDetailCoordinator({ context }) {
             }
 
             shownEl.hidden = false
-            setAssetDetailSize({ width, height })
+            // The size as shown, upright; the stored one stands in for a media element that reports none
+            const shownSize = isVideo
+                ? { width: videoEl.videoWidth, height: videoEl.videoHeight }
+                : { width: imgEl.naturalWidth, height: imgEl.naturalHeight }
+            const size =
+                shownSize.width && shownSize.height
+                    ? shownSize
+                    : { width, height }
+            setAssetDetailSize(size)
+            detailPanel.setShownSize(size)
             Alpine.store(Const.state.modal).title = title
             loading.value = false
 

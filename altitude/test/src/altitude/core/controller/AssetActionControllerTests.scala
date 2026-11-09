@@ -10,6 +10,7 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.models.Asset
+import altitude.core.models.ExtractedMetadata
 import altitude.core.models.Face
 import altitude.core.models.Person
 
@@ -219,6 +220,152 @@ import altitude.core.models.Person
           ujson.Obj(Api.Field.PERSON_ID -> java.util.UUID.randomUUID.toString)).statusCode shouldBe 404
 
         testApp.service.person.getFaceById(f.persistedId).personId shouldBe Some(owner.persistedId)
+    }
+  }
+
+  private def detailPanel(host: String, repoId: String, assetId: String): requests.Response =
+    requests.get(s"$host/htmx/asset/r/$repoId/detail-panel/$assetId", cookies = testContext.cookies, check = false)
+
+  test("The Detail panel lists the asset's Faces without bad matches, Hidden marked, with its details and its links") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the folders Trips and 2026 under it, an image in 2026 imported with EXIF metadata naming
+     * its camera, aperture and capture time, in the album Iceland and in the Location Reykjavik under the category Europe; on it
+     * a Face of Alice, a Face of the hidden Mia and a Face of a bad-match Person.
+     *
+     * Assertions:
+     *
+     * The panel answers 200 with the People section holding Alice's and Mia's rows, Mia's marked Hidden, and not the bad match's;
+     * the Details with the file name, the stored dimensions, the Date Taken with its source, the folder crumbs, the album and the
+     * Location each a link to its search opening in a new tab and the camera rows, with no Sequence row for a sorted asset; and
+     * each metadata directory as a closed group named with its field count. Nothing marks the section read-only.
+     *
+     * Edge cases:
+     *
+     * The Location's link names its category before it.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val trips = testApp.service.folder.add("Trips")
+        val year = testApp.service.folder.add("2026", Some(trips.persistedId))
+        val seeded = testContext
+          .makeAsset(folder = Some(year))
+          .copy(extractedMetadata = ExtractedMetadata(
+            Map(
+              "Exif IFD0" -> Map("Model" -> "Canon EOS R5"),
+              "Exif SubIFD" -> Map("F-Number" -> "f/2.8", "Date/Time Original" -> "2024:07:04 08:09:10"))))
+        val image: Asset = testApp.service.library.addAsset(testContext.makeAssetWithData(Some(seeded)))
+        val iceland = testApp.service.album.add("Iceland")
+        testApp.service.album.addAssets(iceland.persistedId, Set(image.persistedId))
+        val europe = testApp.service.location.addCategory("Europe")
+        val reykjavik = testApp.service.location.addLocation("Reykjavik", 64.1466, -21.9426, Some(europe.persistedId))
+        testApp.service.location.addAssets(reykjavik.persistedId, Set(image.persistedId))
+
+        val alice = testApp.service.person.addPerson(Person(name = Some("Alice")))
+        val mia = testApp.service.person.addPerson(Person(name = Some("Mia")))
+        val badMatch = testApp.service.person.addPerson(Person())
+        val alices = face(alice, image)
+        val mias = face(mia, image)
+        val bads = face(badMatch, image)
+        testApp.service.person.setVisibility(mia, isHidden = true)
+        testApp.service.person.markAsBadMatch(badMatch)
+
+        val response = detailPanel(host, repoId, image.persistedId)
+
+        response.statusCode shouldBe 200
+        val html = response.text()
+        html should include("""id="detailPanelPeople"""")
+        html should include(rowOf(alices.persistedId))
+        html should include(rowOf(mias.persistedId))
+        (html should not).include(rowOf(bads.persistedId))
+        html should include("""data-person-hidden="true"""")
+        html should include("Hidden")
+        (html should not).include("data-app-read-only")
+
+        html should include(image.fileName)
+        html should include(s"""<span data-app-detail-dimensions>${image.width} × ${image.height} px</span>""")
+        html should include("Jul 4 2024, 8:09AM")
+        html should include("EXIF original")
+        html should include(s"""href="/r/$repoId?folderId=${trips.persistedId}" target="_blank"""")
+        html should include(s"""href="/r/$repoId?folderId=${year.persistedId}" target="_blank"""")
+        html should include(s"""href="/r/$repoId?albumId=${iceland.persistedId}" target="_blank"""")
+        html should include(s"""href="/r/$repoId?locationId=${reykjavik.persistedId}" target="_blank"""")
+        html should include("""<span class="category">Europe</span>""")
+        html should include("Canon EOS R5")
+        html should include("f/2.8")
+        (html should not).include("<dt>Sequence</dt>")
+
+        html should include("""<details class="metadata-group" data-app-metadata-group="Exif SubIFD">""")
+        html should include("""<summary>Exif SubIFD <span class="count">(2)</span></summary>""")
+        (html should not).include("<details open")
+    }
+  }
+
+  test(
+    "The Detail panel of an asset in the trash is read-only, an asset with no Faces says so, and an unknown asset is not found") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a recycled image at the root folder holding no Face.
+     *
+     * Assertions:
+     *
+     * The panel answers 200 with the People section marked read-only and its empty line, and no Folder row for the root; a random
+     * asset ID answers 404.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val image = testContext.persistAsset()
+        testApp.service.library.recycleAssets(Set(image.persistedId))
+
+        val response = detailPanel(host, repoId, image.persistedId)
+
+        response.statusCode shouldBe 200
+        val html = response.text()
+        html should include("""data-app-read-only="true"""")
+        html should include("No one in this image")
+        (html should not).include("<dt>Folder</dt>")
+
+        detailPanel(host, repoId, java.util.UUID.randomUUID.toString).statusCode shouldBe 404
+    }
+  }
+
+  test("The Detail panel counts the frames of a triaged image's Sequence") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with two triaged images stamped into one Sequence.
+     *
+     * Assertions:
+     *
+     * Either image's panel has a Sequence row of 2 frames and, being in triage, no Folder row.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val first = testContext.persistAsset(isTriaged = true)
+        val second = testContext.persistAsset(isTriaged = true)
+        testContext.setAssetSequence(List(first, second), java.util.UUID.randomUUID.toString)
+
+        val html = detailPanel(host, repoId, first.persistedId).text()
+
+        html should include("<dt>Sequence</dt><dd>2 frames</dd>")
+        (html should not).include("<dt>Folder</dt>")
     }
   }
 

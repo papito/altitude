@@ -1,0 +1,126 @@
+/* The Detail panel's sections (htmx/detail_panel, views/AGENTS.md **Detail panel**): People, Details and Metadata, each
+   under a small-caps heading, in the panel of htmx/view_image_detail_modal (whose frame, header and grid are in
+   view_image_detail_modal.css). The rules are by class, so the style guide shows the rows with the same markup. */
+.detail-panel {
+    display: grid;
+    row-gap: var(--space-8);
+    font-size: var(--font-size-small);
+}
+
+.detail-panel h3 {
+    margin: 0 0 var(--space-4);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-wide);
+    color: var(--theme-neutral-3);
+}
+
+.detail-panel .empty {
+    margin: 0;
+    color: var(--theme-neutral-3);
+}
+
+/* The People rows: one per Face, the cover then the name, tighter than the explorer's list rows (--list-row-gap) */
+.detail-panel .people {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    row-gap: var(--space-2);
+}
+
+.detail-panel .people li {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    column-gap: var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius);
+}
+
+.detail-panel .people img {
+    display: block;
+    width: var(--detail-cover-size);
+    height: var(--detail-cover-size);
+    border-radius: 25%;
+}
+
+.detail-panel .people .name {
+    font-size: var(--font-size-base);
+    overflow-wrap: anywhere;
+}
+
+/* A Hidden person's mark, after the name */
+.detail-panel .people .hidden-mark {
+    color: var(--theme-neutral-3);
+}
+
+/* The Details rows and a Metadata group's: a label column as wide as its longest label, the values wrapping anywhere,
+   since a file name or a metadata value can be one long word */
+.detail-panel .detail-rows {
+    margin: 0;
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--space-3) var(--space-5);
+}
+
+.detail-panel .detail-rows .row {
+    display: contents;
+}
+
+.detail-panel .detail-rows dt {
+    color: var(--theme-neutral-3);
+}
+
+.detail-panel .detail-rows dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Where the Date Taken came from, after the date */
+.detail-panel .source {
+    color: var(--theme-neutral-3);
+}
+
+/* The albums and the Locations, one link a line */
+.detail-panel .links {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.detail-panel .links a {
+    color: var(--theme-primary-text);
+    text-decoration: none;
+}
+
+.detail-panel .links a:hover {
+    text-decoration: underline;
+}
+
+.detail-panel .links .category {
+    color: var(--theme-neutral-3);
+}
+
+/* The folder's path wears the results title's crumbs (.crumbs, core.css); the folder itself keeps the text color */
+.detail-panel .crumbs .leaf {
+    color: var(--theme-neutral-4);
+}
+
+/* A Metadata group: a closed <details> per extracted directory, its summary the directory's name and field count, its rows
+   indented under it */
+.detail-panel .metadata-group summary {
+    padding: var(--space-3) 0;
+    cursor: pointer;
+    font-weight: var(--font-weight-medium);
+}
+
+.detail-panel .metadata-group .count {
+    color: var(--theme-neutral-3);
+    font-weight: normal;
+}
+
+.detail-panel .metadata-group .detail-rows {
+    padding: var(--space-3) 0 var(--space-4) var(--space-6);
+}

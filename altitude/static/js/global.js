@@ -9,8 +9,10 @@
  * for the popover dialog and the menus from running a second time. An open select picker's Escape
  * is left to the picker, which closes itself and nothing else.
  * While asset detail is active and no text is being edited, the arrow keys navigate between assets,
- * except on the video player's timeline and volume slider, which they step, and Space plays or
- * pauses a Video and does nothing on an image.
+ * except on the video player's timeline and volume slider, which they step, and on the Detail
+ * panel's divider, which they move; Space plays or pauses a Video and does nothing on an image,
+ * except on a control in the player or in the Detail panel, which it presses; and `m` opens or
+ * closes the Detail panel, wherever focus is, ignoring a held key and any modifier.
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
 import { closeModal, getActiveModalHost, ModalHost } from "./common/modal.js"
@@ -57,23 +59,49 @@ document.addEventListener("keydown", (event) => {
         return
     }
 
-    // The player's timeline and volume slider step with the arrows themselves
-    if (event.key === "ArrowLeft" && !isPlayerSlider(event.target)) {
+    // The player's timeline and volume slider step with the arrows themselves, and the Detail
+    // panel's divider moves with them
+    const stepsWithArrows =
+        isPlayerSlider(event.target) || isDetailDivider(event.target)
+
+    if (event.key === "ArrowLeft" && !stepsWithArrows) {
         document.body.dispatchEvent(new CustomEvent(Const.events.showPrevious))
-    } else if (event.key === "ArrowRight" && !isPlayerSlider(event.target)) {
+    } else if (event.key === "ArrowRight" && !stepsWithArrows) {
         document.body.dispatchEvent(new CustomEvent(Const.events.showNext))
-    } else if (event.key === " " && !isInPlayer(event.target)) {
-        // Plays or pauses a Video, and does nothing on an image, instead of pressing the focused ×
-        // (focus is trapped in the detail, and the × is its only control outside the player).
-        // Inside the player, media-chrome plays or pauses, or the focused control presses itself.
+    } else if (
+        event.key === " " &&
+        !isInPlayer(event.target) &&
+        !isInDetailPanel(event.target)
+    ) {
+        // Plays or pauses a Video, and does nothing on an image, instead of pressing the focused
+        // toolbar control (focus is trapped in the detail). Inside the player, media-chrome plays
+        // or pauses, or the focused control presses itself, and in the Detail panel the focused
+        // control (a group's summary, a link, the divider) presses itself.
         event.preventDefault()
         if (!event.repeat) {
             document.body.dispatchEvent(
                 new CustomEvent(Const.events.togglePlayback),
             )
         }
+    } else if (isDetailPanelKey(event)) {
+        event.preventDefault()
+        document.body.dispatchEvent(
+            new CustomEvent(Const.events.toggleDetailPanel),
+        )
     }
 })
+
+/** `m` pressed on its own, once: a held key or any modifier (Ctrl+M, Shift+M) is left to the browser */
+function isDetailPanelKey(event) {
+    return (
+        event.key.toLowerCase() === "m" &&
+        !event.repeat &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        !event.shiftKey
+    )
+}
 
 // `matches` throws on `:open` in a browser that does not know the pseudo-class
 const supportsOpenPseudoClass = CSS.supports("selector(:open)")
@@ -98,4 +126,14 @@ function isInPlayer(target) {
 /** Focus is on the player's timeline or volume slider */
 function isPlayerSlider(target) {
     return Boolean(target?.closest?.("media-time-range, media-volume-range"))
+}
+
+/** Focus is in the Detail panel: on its header's menu, its divider or a control of its sections */
+function isInDetailPanel(target) {
+    return Boolean(target?.closest?.("#detailPanel, #detailPanelDivider"))
+}
+
+/** Focus is on the Detail panel's divider, which the arrow keys move */
+function isDetailDivider(target) {
+    return Boolean(target?.closest?.("#detailPanelDivider"))
 }

@@ -139,6 +139,21 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
       .map(_(FieldConst.Location.ASSET_ID).asInstanceOf[String])
       .toSet
 
+  override def getLocationsOfAsset(assetId: String): List[Location] =
+    // Through location_asset_02, which leads with the asset. Path order as `getAll` has it, less the category-first key: a
+    // member is always a Location, never a category
+    val sql = s"""
+      SELECT l.*, p.${FieldConst.Location.NAME} AS ${FieldConst.Location.CATEGORY_NAME}
+        FROM $tableName l
+             JOIN $membershipTable la ON la.${FieldConst.Location.LOCATION_ID} = l.${FieldConst.ID}
+             LEFT JOIN $tableName p ON p.${FieldConst.ID} = l.${FieldConst.Location.CATEGORY_ID}
+       WHERE la.${FieldConst.REPO_ID} = ?
+         AND la.${FieldConst.Location.ASSET_ID} = ?
+       ORDER BY COALESCE(p.${FieldConst.Location.NAME_LC}, l.${FieldConst.Location.NAME_LC}), l.${FieldConst.Location.NAME_LC}
+    """
+
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).map(makeModel)
+
   override def getAssetsInAnyLocation(assetIds: Set[String]): Set[String] =
     if assetIds.isEmpty then return Set.empty[String]
 

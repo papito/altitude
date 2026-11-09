@@ -1,35 +1,123 @@
-/* The media fill the box's width at the asset's stored ratio (the box is fitted in core.css). The height cap holds
-   for an asset without a stored size, and `vertical-align` drops the inline baseline gap below the media. A Video's
-   player is the media-chrome controller: its slotted <video> fills it and letterboxes itself (the user agent's
-   `object-fit: contain` for video), and its control bar overlays the video's bottom. */
-#imageDetailView img,
-#imageDetailView media-controller {
-    width: 100%;
-    max-height: calc(100dvh - var(--modal-toolbar-height));
+/* Asset detail's fragment: a grid of the media stage, the divider and the Detail panel, shaped by the panel's Dock side
+   (`data-detail-dock-side` and `--detail-panel-share`, written on the root by js/search-results/detail-panel.js through
+   js/common/dock.js) as pages/index.css shapes the main page by the explorer's. Closed (no `data-app-detail-panel-open`),
+   the stage is the whole grid and the panel and its divider take no room, so the box is as core.css fits it to the media;
+   open, the box fills the viewport (core.css) and the panel's track is its share of the width (left, right) or of the
+   height (top, bottom), bounded by the minimums of core.css, with the divider's track as thick as the divider */
+#imageDetailView {
+    display: grid;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "stage";
+}
+
+#imageDetailView:not([data-app-detail-panel-open]) > :is(#detailPanelDivider, #detailPanel) {
+    display: none;
+}
+
+#imageDetailView[data-app-detail-panel-open][data-detail-dock-side="left"] {
+    grid-template-columns: minmax(var(--detail-panel-min-width), var(--detail-panel-share)) auto minmax(var(--detail-stage-min-width), 1fr);
+    grid-template-areas: "panel gutter stage";
+}
+
+#imageDetailView[data-app-detail-panel-open][data-detail-dock-side="right"] {
+    grid-template-columns: minmax(var(--detail-stage-min-width), 1fr) auto minmax(var(--detail-panel-min-width), var(--detail-panel-share));
+    grid-template-areas: "stage gutter panel";
+}
+
+#imageDetailView[data-app-detail-panel-open][data-detail-dock-side="top"] {
+    grid-template-rows: minmax(var(--detail-panel-min-height), var(--detail-panel-share)) auto minmax(var(--detail-stage-min-height), 1fr);
+    grid-template-areas: "panel" "gutter" "stage";
+}
+
+#imageDetailView[data-app-detail-panel-open][data-detail-dock-side="bottom"] {
+    grid-template-rows: minmax(var(--detail-stage-min-height), 1fr) auto minmax(var(--detail-panel-min-height), var(--detail-panel-share));
+    grid-template-areas: "stage" "gutter" "panel";
+}
+
+/* The stage is a size container, so the media fits it from the asset's ratio in container units, centered */
+#imageDetailStage {
+    grid-area: stage;
+    container-type: size;
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    place-items: center;
+}
+
+/* The media take the stage's width or, when that is too tall for the stage, the width the stage's height allows at the
+   asset's ratio (`--asset-width` and `--asset-height`, set on the box by setAssetDetailSize from the shown element). The
+   caps hold for an asset without a size. A Video's player is the media-chrome controller: its slotted <video> fills it and
+   letterboxes itself (the user agent's `object-fit: contain` for video), and its control bar overlays the video's bottom */
+#imageDetailStage img,
+#imageDetailStage media-controller {
+    width: min(100cqw, 100cqh * var(--asset-width) / var(--asset-height));
+    max-width: 100cqw;
+    max-height: 100cqh;
     aspect-ratio: var(--asset-width) / var(--asset-height);
-    vertical-align: top;
 }
 
 /* `contain` keeps a picture whose decoded ratio differs from the stored one undistorted */
-#imageDetailView img {
+#imageDetailStage img {
     object-fit: contain;
 }
 
-#imageDetailView media-controller {
+#imageDetailStage media-controller {
     --media-font-family: var(--font);
 }
 
 /* The controller's own display (inline-block) outranks the user agent's [hidden] rule */
-#imageDetailView media-controller[hidden] {
+#imageDetailStage media-controller[hidden] {
     display: none;
 }
 
 /* A control the browser cannot perform is left out (picture-in-picture in Firefox, volume on iOS), as
    media-chrome's themes do, and the volume slider gives way on a player narrower than media-chrome's `sm`
    breakpoint (384 px), so the timeline keeps its room */
-#imageDetailView media-pip-button[mediapipunavailable],
-#imageDetailView media-fullscreen-button[mediafullscreenunavailable],
-#imageDetailView media-volume-range[mediavolumeunavailable],
-#imageDetailView media-controller:not([breakpointsm]) media-volume-range {
+#imageDetailStage media-pip-button[mediapipunavailable],
+#imageDetailStage media-fullscreen-button[mediafullscreenunavailable],
+#imageDetailStage media-volume-range[mediavolumeunavailable],
+#imageDetailStage media-controller:not([breakpointsm]) media-volume-range {
     display: none;
+}
+
+/* The divider between the stage and the panel, in the grid's gutter area: a .divider of core.css with its orientation
+   class, which the dock writes on each side change */
+#detailPanelDivider {
+    grid-area: gutter;
+}
+
+/* The panel: its header, holding the Dock side menu at its end, stays put while its content scrolls; a hairline on the
+   edge facing the divider, one rule per side */
+#detailPanel {
+    grid-area: panel;
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    background-color: var(--theme-neutral-2);
+    color: var(--theme-neutral-4);
+}
+
+#detailPanel > header {
+    display: flex;
+    justify-content: flex-end;
+    padding: var(--space-3) var(--panel-padding);
+    border-bottom: var(--border-hairline) var(--panel-border-color);
+}
+
+#detailPanelContent {
+    overflow-y: auto;
+    padding: var(--panel-padding);
+}
+
+#imageDetailView[data-detail-dock-side="left"] #detailPanel { border-right: var(--border-hairline) var(--panel-border-color); }
+#imageDetailView[data-detail-dock-side="right"] #detailPanel { border-left: var(--border-hairline) var(--panel-border-color); }
+#imageDetailView[data-detail-dock-side="top"] #detailPanel { border-bottom: var(--border-hairline) var(--panel-border-color); }
+#imageDetailView[data-detail-dock-side="bottom"] #detailPanel { border-top: var(--border-hairline) var(--panel-border-color); }
+
+/* Nothing in the box is selected by a drag of the divider */
+#imageDetailModalContainer .modal-box:has(.divider[data-dragging]) {
+    user-select: none;
 }

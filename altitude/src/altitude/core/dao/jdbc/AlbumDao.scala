@@ -107,6 +107,19 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
 
     manyBySqlQuery(sql, List(albumId)).map(_(FieldConst.Album.ASSET_ID).asInstanceOf[String]).toSet
 
+  override def getAlbumsOfAsset(assetId: String): List[Album] =
+    // Through album_asset_02, which leads with the asset; the count is the listing's alone
+    val sql = s"""
+      SELECT a.*
+        FROM $tableName a
+             JOIN $membershipTable aa ON aa.${FieldConst.Album.ALBUM_ID} = a.${FieldConst.ID}
+       WHERE aa.${FieldConst.REPO_ID} = ?
+         AND aa.${FieldConst.Album.ASSET_ID} = ?
+       ORDER BY a.${FieldConst.Album.NAME_LC}
+    """
+
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).map(makeModel)
+
   override def getAssetsInAnyAlbum(assetIds: Set[String]): Set[String] =
     if assetIds.isEmpty then return Set.empty[String]
 

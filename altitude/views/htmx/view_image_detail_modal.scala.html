@@ -3,33 +3,58 @@
 @import altitude.core.models.Asset
 @(asset: Asset)
 
-@* The detail of an image or of a Video: the fragment holds both an <img> and a media-chrome player (a
-   <media-controller> around the <video> and its control bar), and the coordinator
-   (js/search-results/detail-navigator.js) shows the one the media type calls for and unloads the other.
-   `hotkeys` turns off the player's ←/→ seeking: the arrows switch assets (js/global.js). *@
+@* Asset detail's fragment (views/AGENTS.md **Detail navigation**): a grid of the media stage, the divider and the Detail
+   panel, shaped by the panel's Dock side as the main page is by the explorer's. The stage holds both an <img> and a
+   media-chrome player (a <media-controller> around the <video> and its control bar), and the coordinator
+   (js/search-results/detail-navigator.js) shows the one the media type calls for and unloads the other. The panel's
+   header holds its Dock side menu, a compact choice menu whose picks are `data-app-detail-dock-side`, and its content host
+   takes htmx/detail_panel, loaded by js/search-results/detail-panel.js, which also writes the side, the share and whether
+   the panel is open on this root; the side and the divider's orientation rendered here are the defaults until it does.
+   `hotkeys` turns off the player's ←/→ seeking and its `m` mute: the arrows switch assets and `m` toggles the panel
+   (js/global.js). *@
 
-<div id="imageDetailView">
-    @defining(Util.contentUrl(Const.DataStore.FILE, asset.persistedId)) { imgUrl =>
-        <div data-app-fragment="image-detail"
-             data-app-image-detail-url="@{imgUrl}"
-             data-app-image-detail-title="@{ asset.fileName }"
-             data-app-image-detail-width="@{ asset.width }"
-             data-app-image-detail-height="@{ asset.height }"
-             data-app-image-detail-media-type="@{ asset.assetType.mediaType }"
-             data-app-image-detail-asset-id="@{ asset.persistedId }">
-            <img src="" alt="@{ asset.fileName }" hidden>
-            <media-controller hidden hotkeys="noarrowleft noarrowright">
-                <video slot="media" preload="metadata" playsinline></video>
-                <media-control-bar>
-                    <media-play-button></media-play-button>
-                    <media-mute-button></media-mute-button>
-                    <media-volume-range></media-volume-range>
-                    <media-time-range></media-time-range>
-                    <media-time-display showduration></media-time-display>
-                    <media-pip-button></media-pip-button>
-                    <media-fullscreen-button></media-fullscreen-button>
-                </media-control-bar>
-            </media-controller>
-        </div>
-    }
+@dockOption(side: String, label: String) = {
+<button type="button" data-app-detail-dock-side="@side"><svg class="glyph" width="16" height="16" aria-hidden="true"><use href="#dockGlyph-@side"/></svg><span>@label</span></button>
+}
+
+@defining(Util.contentUrl(Const.DataStore.FILE, asset.persistedId)) { imgUrl =>
+<div id="imageDetailView"
+     data-app-fragment="image-detail"
+     data-app-image-detail-url="@{imgUrl}"
+     data-app-image-detail-title="@{ asset.fileName }"
+     data-app-image-detail-width="@{ asset.width }"
+     data-app-image-detail-height="@{ asset.height }"
+     data-app-image-detail-media-type="@{ asset.assetType.mediaType }"
+     data-app-image-detail-asset-id="@{ asset.persistedId }"
+     data-detail-dock-side="right">
+    <div id="imageDetailStage">
+        <img src="" alt="@{ asset.fileName }" hidden>
+        <media-controller hidden hotkeys="noarrowleft noarrowright nom">
+            <video slot="media" preload="metadata" playsinline></video>
+            <media-control-bar>
+                <media-play-button></media-play-button>
+                <media-mute-button></media-mute-button>
+                <media-volume-range></media-volume-range>
+                <media-time-range></media-time-range>
+                <media-time-display showduration></media-time-display>
+                <media-pip-button></media-pip-button>
+                <media-fullscreen-button></media-fullscreen-button>
+            </media-control-bar>
+        </media-controller>
+    </div>
+
+    <div id="detailPanelDivider" class="divider vertical" role="separator" aria-controls="detailPanel" aria-label="Detail panel size" tabindex="0"></div>
+
+    <aside id="detailPanel" aria-label="Detail panel">
+        <header>
+            <div id="detailDockSideMenuHost" data-choice-menu="Dock side" data-choice-menu-compact>
+                @dockOption("left", "Left")
+                @dockOption("right", "Right")
+                @dockOption("top", "Top")
+                @dockOption("bottom", "Bottom")
+            </div>
+        </header>
+        <div id="detailPanelContent"></div>
+    </aside>
 </div>
+}

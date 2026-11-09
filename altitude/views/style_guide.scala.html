@@ -213,7 +213,8 @@
              Flexbox.</p>
           <div class="sg-panel">A panel surface, as the explorer and the content area use it.</div>
           <p>The main page is a grid of the explorer, the divider and the results, shaped by the Dock side the explorer
-             is on (left, right, top or bottom). The divider (<code>.divider</code>, a
+             is on (left, right, top or bottom), and Asset detail is the same shape: the media stage, the divider and
+             the Detail panel, shaped by the panel's own Dock side. The divider (<code>.divider</code>, a
              <code>role="separator"</code>) is a transparent band <code>--space-3</code> thick with a dotted grip in
              <code>--theme-neutral-3</code>, tinted <code>--theme-primary</code> on hover and while dragged; it runs
              top to bottom for a left or right dock and across for a top or bottom one.</p>
@@ -233,6 +234,48 @@
               </div>
               <div class="subtitle">A subtitle: a person's face count, an album's creation day, a Location's category</div>
             </div>
+          </div>
+          <p>The Detail panel (<code>.detail-panel</code>, <code>htmx/detail_panel</code>) stacks its sections under small-caps
+             headings in <code>--theme-neutral-3</code>, in <code>--font-size-small</code>. A People row is a Face's cover,
+             <code>--detail-cover-size</code> and rounded like the People tab's, then the name at the body size, with a Hidden
+             person's mark dimmed after it; the rows sit <code>--space-2</code> apart, tighter than the explorer's list rows. The
+             Details and a Metadata group's rows (<code>.detail-rows</code>) are a label column in <code>--theme-neutral-3</code>
+             beside values that wrap anywhere; the Folder row wears the shared crumbs, the albums and Locations are links in
+             <code>--theme-primary-text</code>. A Metadata group is a closed <code>&lt;details&gt;</code> whose summary names the
+             directory and its field count. The toolbar's toggle (<code>.toolbar-toggle</code>, before a modal's ×) is an icon in
+             <code>--theme-neutral-3</code> that takes <code>--theme-accent</code> while pressed, as the current nav entry does.</p>
+          <div class="sg-row">
+            <div class="sg-detail-panel detail-panel">
+              <section class="detail-section">
+                <h3>People</h3>
+                <ul class="people">
+                  <li><span class="sg-cover"></span><span class="name">Alice</span></li>
+                  <li><span class="sg-cover"></span><span class="name">Unknown 4</span><span class="hidden-mark">Hidden</span></li>
+                </ul>
+              </section>
+              <section class="detail-section">
+                <h3>Details</h3>
+                <dl class="detail-rows">
+                  <div class="row"><dt>File</dt><dd>IMG_0042.jpg</dd></div>
+                  <div class="row"><dt>Date Taken</dt><dd>Jul 4 2024, 8:09AM <span class="source">from EXIF original</span></dd></div>
+                  <div class="row"><dt>Folder</dt><dd><span class="crumbs"><a href="#" class="crumb">Trips</a><i class="fas fa-chevron-right sep" aria-hidden="true"></i><a href="#" class="crumb leaf">Iceland</a></span></dd></div>
+                  <div class="row"><dt>Locations</dt><dd><ul class="links"><li><a href="#"><span class="category">Europe</span> › Reykjavik</a></li></ul></dd></div>
+                </dl>
+              </section>
+              <section class="detail-section">
+                <h3>Metadata</h3>
+                <details class="metadata-group">
+                  <summary>Exif SubIFD <span class="count">(2)</span></summary>
+                  <dl class="detail-rows">
+                    <div class="row"><dt>F-Number</dt><dd>f/2.8</dd></div>
+                    <div class="row"><dt>ISO Speed Ratings</dt><dd>100</dd></div>
+                  </dl>
+                </details>
+                <details class="metadata-group"><summary>GPS <span class="count">(4)</span></summary></details>
+              </section>
+            </div>
+            <button type="button" class="toolbar-toggle" aria-pressed="true" aria-label="Detail panel" title="Detail panel (M)"><i class="fas fa-info-circle" aria-hidden="true"></i></button>
+            <span>.toolbar-toggle, pressed</span>
           </div>
         </section>
 

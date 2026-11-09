@@ -59,6 +59,8 @@ export const Const = {
         showNext: "SHOW_NEXT_EVENT",
         showPrevious: "SHOW_PREVIOUS_EVENT",
         togglePlayback: "TOGGLE_PLAYBACK_EVENT",
+        // `m` in Asset detail: opens or closes the Detail panel (js/search-results/detail-panel.js)
+        toggleDetailPanel: "TOGGLE_DETAIL_PANEL_EVENT",
         settingsSaved: "SETTINGS_SAVED_EVENT",
         // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
         dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",
@@ -135,6 +137,16 @@ export const Const = {
         faceBox: "data-face-box",
         // A Setting field's default, which its Reset fills in
         settingDefault: "data-setting-default",
+        // A pick of the explorer's Dock side (the options of its menu, js/common/explorer-dock.js), and of the Detail
+        // panel's, its own since both docks listen on the body (js/search-results/detail-panel.js)
+        dockSide: "data-app-dock-side",
+        detailDockSide: "data-app-detail-dock-side",
+        // The Detail panel's toggle in Asset detail's toolbar (includes/html_common)
+        detailPanelToggle: "data-app-detail-panel-toggle",
+        // The Detail panel's dimensions row, which reads the shown element's size, and a Metadata group's directory
+        // name, which the open groups are remembered by (htmx/detail_panel)
+        detailDimensions: "data-app-detail-dimensions",
+        metadataGroup: "data-app-metadata-group",
     },
 
     context: {
@@ -179,6 +191,10 @@ export const Const = {
         curationHistogram: "curationHistogram",
         // Whether Curation shows the Sequence rail on the queue, "true" or "false" (js/alpine/components/curation.js)
         curationSequenceRail: "curationSequenceRail",
+        // Asset detail's remembered view (js/search-results/detail-panel.js): whether the Detail panel is open, whether
+        // the Face highlights are on, the panel's dock (its side once picked and its share of each axis) and the open
+        // Metadata groups
+        assetDetailView: "assetDetailView",
     },
 
     sessionStore: {

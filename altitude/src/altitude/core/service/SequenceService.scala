@@ -46,6 +46,12 @@ class SequenceService(val app: Altitude, undatedCandidates: Int):
    * before they are stamped (`AssetDao.lockTriaged`), so on either path a candidate a move sorts meanwhile is re-evaluated once
    * the move commits and left out, and a Sequence is never stamped on the asset alone.
    */
+  /** How many assets carry the Sequence, for the Detail panel: 0 once every member has left triage or been purged */
+  def memberCount(sequenceId: String): Int =
+    txManager.asReadOnly {
+      dao.countSequenceMembers(Set(sequenceId)).headOption.fold(0)(_.members)
+    }
+
   def assign(asset: Asset): Asset =
     txManager.withTransaction {
       if !SequenceRule.isEligible(asset) then asset
