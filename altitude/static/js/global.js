@@ -7,8 +7,8 @@
  * fullscreen (and in Chrome never delivers the key), and Asset detail stays open; else the open
  * listbox of a People row's Change combobox in the Detail panel closes alone; else an open context
  * menu, with focus back on its trigger (the Detail panel's Dock side menu is the one menu that
- * opens inside a dialog, and outside a dialog no menu and dialog are open together); else the
- * active modal or popover dialog; else the map view's crowded-pin panel; and with none of those
+ * opens inside a dialog, and outside a dialog no menu and dialog are open together); else, in
+ * Asset detail, the selected People row, which clears; else the active modal or popover dialog; else the map view's crowded-pin panel; and with none of those
  * open, Escape is broadcast for such editors to cancel. Consuming it also keeps the browser's own
  * Escape handling for the popover dialog and the menus from running a second time. An open select
  * picker's Escape is left to the picker, which closes itself and nothing else.
@@ -20,7 +20,10 @@
  * fullscreen or leaves it, wherever focus is, each ignoring a held key and any modifier.
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
-import { closeOpenFaceCombobox } from "./alpine/components/face-combobox.js"
+import {
+    clearSelectedFaceRow,
+    closeOpenFaceCombobox,
+} from "./alpine/components/face-combobox.js"
 import { closeModal, getActiveModalHost, ModalHost } from "./common/modal.js"
 import { isTextEditingTarget } from "./common/text-editing.js"
 import { toggleTheme } from "./common/theme.js"
@@ -53,9 +56,12 @@ document.addEventListener("keydown", (event) => {
         }
 
         // A menu closes alone, with focus back on its trigger, so the Detail panel's Dock side menu
-        // leaves Asset detail open; a closing modal or popover dialog restores focus itself
+        // leaves Asset detail open; so does a selected Face's row in its People section, and a
+        // closing modal or popover dialog restores focus itself
         if (
             closeOpenContextMenu({ reason: "Escape", returnFocus: true }) ||
+            (getActiveModalHost() === ModalHost.assetDetail &&
+                clearSelectedFaceRow()) ||
             closeModal() ||
             closeMapPanel()
         ) {

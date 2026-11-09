@@ -377,7 +377,7 @@ a background inline edit survives: in fullscreen it is the browser's, which leav
 open (see **Detail navigation**); else the open listbox of a People row's Change combobox in the Detail panel closes
 alone (see **Detail panel**); else an open context menu closes alone, with focus back on its trigger, so the Detail
 panel's Dock side menu leaves Asset detail open (no other menu is open together with a dialog: opening a dialog closes
-the menus, and a menu's opening light-dismisses the popover dialog); else the active dialog; else the map view's
+the menus, and a menu's opening light-dismisses the popover dialog); else, in Asset detail, the selected Face clears (see **Detail panel**); else the active dialog; else the map view's
 crowded-pin panel; and with none of those it is broadcast for such an edit to cancel. An open select picker's Escape
 is left to the picker, which closes itself and not the dialog holding it. General dialogs and Curation ignore backdrop clicks, asset detail closes on them. The general
 modal is centered, 100px from the top, `--modal-content-width` wide (the Location map editor's dialog declares a wider
@@ -1370,7 +1370,7 @@ focus leaving the combobox closes the listbox and leaves the input. A pick is an
 (`faceId` with `personId` or `name`), which the corrections module answers with
 `PUT /htmx/asset/r/:repoId/face/:faceId/person`; the X announces `Const.events.faceChangeCancelled`, and the panel clears
 the selection and returns focus to the row. Escape with the listbox open closes it alone: `global.js` calls
-`closeOpenFaceCombobox` before `closeModal`, so a second Escape closes Asset detail. `m` and `p` in the input are the
+`closeOpenFaceCombobox` before `closeModal`. The next Escape clears the selected Face (`clearSelectedFaceRow`, whatever the selection's source, focus to its row), so the row's actions and its highlight go, and only then does Escape close Asset detail. `m` and `p` in the input are the
 field's, as in every text field.
 
 A correction answers the People section (`htmx/detail_panel_people`, 200), which `detail-panel.js` (`afterEdit`) swaps in

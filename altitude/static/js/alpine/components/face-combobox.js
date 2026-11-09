@@ -26,7 +26,7 @@
  * buttons; the panel dispatches `face-combobox-close` on every row as the selection changes.
  *
  * Escape with the listbox open closes the listbox alone: `global.js` calls `closeOpenFaceCombobox`
- * before it would close Asset detail. The browser reports the popover's state through `toggle`, which
+ * before it would close Asset detail, and the next Escape clears the selected row (`clearSelectedFaceRow`). The browser reports the popover's state through `toggle`, which
  * `expanded` follows. `m` and `p` are left to the input, as every text field's keys are.
  */
 import { Const } from "../../constants.js"
@@ -83,6 +83,26 @@ export function closeOpenFaceCombobox() {
     }
 
     listboxEl.hidePopover()
+    return true
+}
+
+/**
+ * Clears the selected People row, which closes its actions, and returns whether a row was selected.
+ * Escape's next job in Asset detail (`global.js`), ahead of closing the dialog. Focus goes to the row
+ * first, since the control that held it may be going. The row's own click clears the selection, as
+ * clicking the selected row does; `global.js` calls this only while Asset detail is the active host,
+ * since a closed host keeps its last fragment.
+ */
+export function clearSelectedFaceRow() {
+    const rowEl = document.querySelector(
+        `[${Const.attributes.faceRow}][aria-pressed="true"]`,
+    )
+    if (!rowEl) {
+        return false
+    }
+
+    rowEl.focus({ preventScroll: true })
+    rowEl.click()
     return true
 }
 
