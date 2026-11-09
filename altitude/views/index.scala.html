@@ -169,6 +169,9 @@
 
           // An asset's URL (/r/:repoId/asset/:assetId) opens Asset detail over those results
           app.detailUrl.openAssetInLocation()
+
+          // The Detail panel's Curation link (?curate=) opens Curation on its Sequence over those results
+          app.openCurationInLocation()
       }
 
       document.addEventListener("DOMContentLoaded", loadView)

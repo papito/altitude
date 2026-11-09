@@ -7,7 +7,8 @@
    by js/search-results/detail-panel.js: People (htmx/detail_panel_people, swapped whole by a Face correction's response) and
    Details. The File Type row is the name the extractor detected, so a file it could not read has none. The dimensions row
    holds the stored size, which the client replaces with the shown element's, since a browser turns an image upright by its EXIF orientation while the file's header may have it the other way round. The
-   folder crumbs, the albums and the Locations link to their search, each in a new tab, so Asset detail stays open. The
+   folder crumbs, the albums and the Locations link to their search, each in a new tab, so Asset detail stays open; the Curation
+   row, for a frame with a set to open, links the same way to Curation on its Sequence (js/listeners/curation.js). The
    sections are rendered from one read of the asset (AssetService.detailOf). *@
 @(detail: DetailPanelData)
 
@@ -27,6 +28,9 @@
         <h3>Details</h3>
         <dl class="detail-rows">
             @row("File") {@{asset.fileName}}
+            @for(size <- detail.curationSetSize; sequenceId <- asset.sequenceId) {
+                @row("Curation") {<ul class="links"><li><a href="/r/@repoId?view=triage&amp;curate=@{sequenceId}" target="_blank">set of @size</a></li></ul>}
+            }
             @row("Date Taken") {
                 @if(asset.originalCreatedAt.isDefined) {
                     @{Util.humanReadableDateTime(asset.originalCreatedAt)}
@@ -69,9 +73,6 @@
             }
             @for(focalLength <- asset.publicMetadata.focalLength) {
             @row("Focal length") {@focalLength}
-            }
-            @for(frames <- detail.sequenceFrames) {
-            @row("Sequence") {@if(frames == 1) {1 frame} else {@frames frames}}
             }
         </dl>
     </section>

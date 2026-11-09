@@ -5,6 +5,8 @@ import { Const } from "../constants.js"
 import { removeCurateButtons } from "../search-results/date-groups.js"
 import { runSearch } from "../search-results/search.js"
 
+const CURATE_PARAM = "curate"
+
 /**
  * Curation's events: opening it, the counts after each mutation in it, and the grid beneath when it
  * closes. A view that opens it dispatches `Const.events.curateRequested` with no detail for the queue,
@@ -12,6 +14,21 @@ import { runSearch } from "../search-results/search.js"
  * `Const.events.batchCurateRequested`, which holds a selection over the cap back. Exit and Esc close it, through
  * `closeModal` (`common/modal.js`); the `curation` component announces that.
  */
+/**
+ * Curation on the Sequence the browser's URL names (`?curate=`, the Detail panel's Curation link), over the page's first
+ * results. The first search replaces the URL without the parameter, so a reload shows the grid. An ID that is no Sequence's
+ * opens on Curation's own too-few-frames state.
+ */
+export function openCurationInLocation(app) {
+    const sequenceId = new URLSearchParams(window.location.search).get(
+        CURATE_PARAM,
+    )
+
+    if (sequenceId) {
+        app.dispatch(Const.events.curateRequested, { sequenceId })
+    }
+}
+
 export function registerCurationListeners(app) {
     document.body.addEventListener(Const.events.curateRequested, (event) => {
         requestCuration(event.detail ?? {})

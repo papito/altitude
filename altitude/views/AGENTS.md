@@ -1304,7 +1304,7 @@ a button (`.face-row`, `data-app-face-row`) holding the cover then the name, tig
 Details a `dl.detail-rows` of the file name, the MIME type, the File Type (the extractor's detected name, when it has one), dimensions, duration, size, Date Taken with its source (`CaptureDateSource.label`),
 Date Imported, the Folder as shared `.crumbs`, the albums and the Locations (`Category › Name`) each a link to its search
 (`/r/:repoId?folderId=…`, `albumId`, `locationId`) in a new tab, so Asset detail stays open, the GPS position, the camera rows,
-and the frames of a triaged image's Sequence. The dimensions row (`data-app-detail-dimensions`) is written from the shown element's size, which the
+and, right under the file name, the Curation row of a frame with a set to open ("set of 5", `CurationService.setSizeOf`: its Sequence's frames out of the trash, at least `Const.Curation.MIN_FRAMES`, and the frame not in the trash itself), a link in a new tab to Curation on that Sequence. The dimensions row (`data-app-detail-dimensions`) is written from the shown element's size, which the
 coordinator hands over, so a rotated phone photo reads as shown. What is remembered per browser, under `Const.localStore.assetDetailView`
 as `{ panelOpen, highlightsOn, dock: { side?, widthShare, heightShare } }`: whether the panel is open (closed by default),
 whether the Face highlights are on (written for `p`) and the dock (its part, written by the dock itself); a selection is never remembered. Space on a control in the panel presses
@@ -1393,8 +1393,8 @@ its listbox.
 
 **Curation** — The modal where the user keeps the best frames of a Curation set and recycles the rest. What sorts a set and
 what its outcome writes are under **Sequences and Image quality** in `altitude/AGENTS.md`, and the terms are the glossary's. It
-has no page or URL of its own and adds no nav entry, so the nav keeps marking the view it opened from, and a reload shows the grid.
-Three ways in open the same modal, each dispatching `Const.events.curateRequested` with its entry: Triage's
+has no page of its own and adds no nav entry, so the nav keeps marking the view it opened from, and a reload shows the grid.
+Four ways in open the same modal, each dispatching `Const.events.curateRequested` with its entry: the Detail panel's Curation row, a link to the Triage view with `?curate=<sequenceId>`, which `openCurationInLocation` (`js/listeners/curation.js`) answers after the page's first search, whose replaced URL drops the parameter (`{ sequenceId }`; see **Detail panel**), Triage's
 `#curateSequences` on the queue (no detail; see **Results title**), a Sequence's group header on that Sequence (`{ sequenceId }`;
 see **Group headers**) and the batch ops' Curate on a selection (`{ assetIds }`, which the component posts, so they never sit in
 a URL; see **Batch ops**). `js/listeners/curation.js` names the entry (`requestCuration`) and loads the shell through `htmx.ajax`
