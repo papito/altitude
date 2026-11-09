@@ -8,6 +8,7 @@ import { bindAppDragDrop } from "./dragdrop/index.js"
 import { hydrateAppFragments } from "./fragments/index.js"
 import { handlePeopleEscapeKeyPressed } from "./listeners/people.js"
 import { registerAppEventListeners } from "./listeners/index.js"
+import { createDetailFullscreen } from "./search-results/detail-fullscreen.js"
 import { createDetailPanel } from "./search-results/detail-panel.js"
 import { createSearchDetailCoordinator } from "./search-results/detail-navigator.js"
 import { bindSearchInput } from "./search-results/search-input.js"
@@ -37,6 +38,7 @@ export class FrontendApp {
             context,
             detailPanel: this.detailPanel,
         })
+        this.detailFullscreen = createDetailFullscreen()
     }
 
     start() {
@@ -48,6 +50,7 @@ export class FrontendApp {
         initializeFrontendStores()
         registerAppEventListeners(this)
         this.detailPanel.start()
+        this.detailFullscreen.start()
         Alpine.start()
         bindAppDragDrop(this)
         bindSearchInput()

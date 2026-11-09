@@ -110,7 +110,8 @@
         <div class="modal-toolbar">
             <div class="modal-title" id="imageDetailModalTitle" x-text="$store.modal.title"></div>
             @* The Detail panel's toggle, `m`, and the Face highlights', `p`; js/search-results/detail-panel.js keeps their
-               pressed state and takes their clicks *@
+               pressed state and takes their clicks. Then fullscreen's, `f`, which js/search-results/detail-fullscreen.js
+               takes and removes where the browser allows no fullscreen *@
             <button type="button"
                     class="toolbar-toggle"
                     aria-pressed="false"
@@ -123,6 +124,12 @@
                     aria-label="Face highlights"
                     title="Face highlights (P)"
                     data-app-face-highlights-toggle><i class="fas fa-user-tag" aria-hidden="true"></i></button>
+            <button type="button"
+                    class="toolbar-toggle"
+                    aria-pressed="false"
+                    aria-label="Fullscreen"
+                    title="Fullscreen (F)"
+                    data-app-fullscreen-toggle><i class="fas fa-expand" aria-hidden="true"></i></button>
             <button type="button"
                     class="close-modal"
                     aria-label="Close"

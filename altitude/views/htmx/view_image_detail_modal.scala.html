@@ -12,8 +12,10 @@
    the panel is open on this root; the side and the divider's orientation rendered here are the defaults until it does.
    The Face highlights' layer (#faceHighlights) shares the stage's cell with the media, so it lies over the shown element;
    js/search-results/face-highlights.js fills it from the panel's People rows and empties it as another asset loads.
-   `hotkeys` turns off the player's ←/→ seeking and its `m` mute: the arrows switch assets and `m` toggles the panel
-   (js/global.js). *@
+   `hotkeys` turns off the player's ←/→ seeking, its `f` fullscreen and its `m` mute: the arrows switch assets, `f` puts
+   the whole of Asset detail in fullscreen and `m` toggles the panel (js/global.js). The player's fullscreen button does
+   what `f` does: js/search-results/detail-fullscreen.js gives the controller the Asset detail container as its
+   `fullscreenElement`. *@
 
 @dockOption(side: String, label: String) = {
 <button type="button" data-app-detail-dock-side="@side"><svg class="glyph" width="16" height="16" aria-hidden="true"><use href="#dockGlyph-@side"/></svg><span>@label</span></button>
@@ -31,7 +33,7 @@
      data-detail-dock-side="right">
     <div id="imageDetailStage">
         <img src="" alt="@{ asset.fileName }" hidden>
-        <media-controller hidden hotkeys="noarrowleft noarrowright nom">
+        <media-controller hidden hotkeys="noarrowleft noarrowright nof nom">
             <video slot="media" preload="metadata" playsinline></video>
             <media-control-bar>
                 <media-play-button></media-play-button>

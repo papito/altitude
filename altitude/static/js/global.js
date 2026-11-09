@@ -2,19 +2,22 @@
  * Document-level keyboard handling and the nav's theme switch, loaded on every page. The switch's
  * click is delegated, so a nav reload needs no binding and a page without Alpine has the switch too.
  *
- * Escape closes the active modal or popover dialog and any open context menu, wherever focus is,
- * and is consumed by them, so a background inline edit (the person name editor) survives; with
- * neither open, it closes the map view's crowded-pin panel, and with none of those open, Escape is
- * broadcast for such editors to cancel. Consuming it also keeps the browser's own Escape handling
- * for the popover dialog and the menus from running a second time. An open select picker's Escape
- * is left to the picker, which closes itself and nothing else, and the open listbox of a People row's
- * Change combobox in the Detail panel closes alone, ahead of the dialog, as a menu does.
+ * Escape closes one thing at a time, wherever focus is, and is consumed by it, so a background
+ * inline edit (the person name editor) survives: in fullscreen it is the browser's, which leaves
+ * fullscreen (and in Chrome never delivers the key), and Asset detail stays open; else the open
+ * listbox of a People row's Change combobox in the Detail panel closes alone; else an open context
+ * menu, with focus back on its trigger (the Detail panel's Dock side menu is the one menu that
+ * opens inside a dialog, and outside a dialog no menu and dialog are open together); else the
+ * active modal or popover dialog; else the map view's crowded-pin panel; and with none of those
+ * open, Escape is broadcast for such editors to cancel. Consuming it also keeps the browser's own
+ * Escape handling for the popover dialog and the menus from running a second time. An open select
+ * picker's Escape is left to the picker, which closes itself and nothing else.
  * While asset detail is active and no text is being edited, the arrow keys navigate between assets,
  * except on the video player's timeline and volume slider, which they step, and on the Detail
  * panel's divider, which they move; Space plays or pauses a Video and does nothing on an image,
  * except on a control in the player or in the Detail panel, which it presses; `m` opens or
- * closes the Detail panel and `p` shows or hides the Face highlights, wherever focus is, each
- * ignoring a held key and any modifier.
+ * closes the Detail panel, `p` shows or hides the Face highlights and `f` puts Asset detail in
+ * fullscreen or leaves it, wherever focus is, each ignoring a held key and any modifier.
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
 import { closeOpenFaceCombobox } from "./alpine/components/face-combobox.js"
@@ -36,6 +39,12 @@ document.addEventListener("keydown", (event) => {
             return
         }
 
+        // The browser leaves fullscreen (Asset detail's `f`) on its own; the dialog stays for a
+        // second Escape
+        if (document.fullscreenElement) {
+            return
+        }
+
         // The Change combobox's listbox closes alone, before `closeModal` could take Asset detail
         // with it; focus is in its input already
         if (closeOpenFaceCombobox()) {
@@ -43,15 +52,13 @@ document.addEventListener("keydown", (event) => {
             return
         }
 
-        // A closing modal or popover dialog restores focus itself; only otherwise does the menu's
-        // trigger take it back
-        const modalClosed = closeModal()
-        const menuClosed = closeOpenContextMenu({
-            reason: "Escape",
-            returnFocus: !modalClosed,
-        })
-
-        if (modalClosed || menuClosed || closeMapPanel()) {
+        // A menu closes alone, with focus back on its trigger, so the Detail panel's Dock side menu
+        // leaves Asset detail open; a closing modal or popover dialog restores focus itself
+        if (
+            closeOpenContextMenu({ reason: "Escape", returnFocus: true }) ||
+            closeModal() ||
+            closeMapPanel()
+        ) {
             event.preventDefault()
             return
         }
@@ -102,6 +109,11 @@ document.addEventListener("keydown", (event) => {
         event.preventDefault()
         document.body.dispatchEvent(
             new CustomEvent(Const.events.toggleFaceHighlights),
+        )
+    } else if (isPlainKey(event, "f")) {
+        event.preventDefault()
+        document.body.dispatchEvent(
+            new CustomEvent(Const.events.toggleFullscreen),
         )
     }
 })

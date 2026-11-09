@@ -68,6 +68,8 @@ export const Const = {
         toggleDetailPanel: "TOGGLE_DETAIL_PANEL_EVENT",
         // `p` in Asset detail: shows or hides the Face highlights (js/search-results/detail-panel.js)
         toggleFaceHighlights: "TOGGLE_FACE_HIGHLIGHTS_EVENT",
+        // `f` in Asset detail: puts it in fullscreen or leaves it (js/search-results/detail-fullscreen.js)
+        toggleFullscreen: "TOGGLE_FULLSCREEN_EVENT",
         settingsSaved: "SETTINGS_SAVED_EVENT",
         // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
         dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",
@@ -153,9 +155,10 @@ export const Const = {
         // panel's, its own since both docks listen on the body (js/search-results/detail-panel.js)
         dockSide: "data-app-dock-side",
         detailDockSide: "data-app-detail-dock-side",
-        // The Detail panel's toggle and the Face highlights' in Asset detail's toolbar (includes/html_common)
+        // The Detail panel's toggle, the Face highlights' and fullscreen's in Asset detail's toolbar (includes/html_common)
         detailPanelToggle: "data-app-detail-panel-toggle",
         faceHighlightsToggle: "data-app-face-highlights-toggle",
+        fullscreenToggle: "data-app-fullscreen-toggle",
         // The button of a People row that selects its Face (htmx/detail_panel_people), and under a selected row its
         // corrections: Change, which opens the combobox, and Remove, whose second label (the one after the first click)
         // the button carries

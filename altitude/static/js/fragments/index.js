@@ -43,6 +43,7 @@ export function hydrateAppFragments({ root, app }) {
             fragmentEl,
             coordinator: app.searchDetailCoordinator,
             detailPanel: app.detailPanel,
+            detailFullscreen: app.detailFullscreen,
         })
     })
 
