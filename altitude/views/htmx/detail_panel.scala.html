@@ -39,13 +39,13 @@
                 } else {No date}
             }
             @if(detail.albums.nonEmpty) {
-                @row("Albums") {<ul class="links">@for(album <- detail.albums) {<li><a href="/r/@repoId?albumId=@{album.persistedId}" target="_blank" rel="noopener">@{album.name}</a></li>}</ul>}
+                @row("Albums") {<ul class="links">@for(album <- detail.albums) {<li><a href="/r/@repoId?albumId=@{album.persistedId}" target="_blank">@{album.name}</a></li>}</ul>}
             }
             @if(detail.locations.nonEmpty) {
-                @row("Locations") {<ul class="links">@for(location <- detail.locations) {<li><a href="/r/@repoId?locationId=@{location.persistedId}" target="_blank" rel="noopener">@for(category <- location.categoryName) {<span class="category">@category</span> › }@{location.name}</a></li>}</ul>}
+                @row("Locations") {<ul class="links">@for(location <- detail.locations) {<li><a href="/r/@repoId?locationId=@{location.persistedId}" target="_blank">@for(category <- location.categoryName) {<span class="category">@category</span> › }@{location.name}</a></li>}</ul>}
             }
             @if(detail.folderPath.nonEmpty) {
-                @row("Folder") {<span class="crumbs">@for((folder, index) <- detail.folderPath.zipWithIndex) {@if(index > 0) {<i class="fas fa-chevron-right sep" aria-hidden="true"></i>}<a class="crumb@if(index == detail.folderPath.size - 1) { leaf}" href="/r/@repoId?folderId=@{folder.persistedId}" target="_blank" rel="noopener">@{folder.name}</a>}</span>}
+                @row("Folder") {<span class="crumbs">@for((folder, index) <- detail.folderPath.zipWithIndex) {@if(index > 0) {<i class="fas fa-chevron-right sep" aria-hidden="true"></i>}<a class="crumb@if(index == detail.folderPath.size - 1) { leaf}" href="/r/@repoId?folderId=@{folder.persistedId}" target="_blank">@{folder.name}</a>}</span>}
             }
             @for(duration <- asset.durationMs) {
                 @row("Duration") {@{Util.humanReadableDuration(duration)}}

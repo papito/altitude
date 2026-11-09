@@ -39,7 +39,7 @@
 
 @* Search: the Person's results in a new tab, so Asset detail stays open *@
 @searchLink(person: Person) = {
-<a class="action-button small" href="/r/@{RequestContext.getRepository.persistedId}?personId=@{person.persistedId}@if(asset.isTriaged) {&amp;triaged=true}" target="_blank" rel="noopener">Search</a>
+<a class="action-button small" href="/r/@{RequestContext.getRepository.persistedId}?personId=@{person.persistedId}@if(asset.isTriaged) {&amp;triaged=true}" target="_blank">Search</a>
 }
 
 <section id="detailPanelPeople"
