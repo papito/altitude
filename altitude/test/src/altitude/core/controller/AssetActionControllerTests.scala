@@ -12,6 +12,7 @@ import altitude.core.Const
 import altitude.core.models.Asset
 import altitude.core.models.ExtractedMetadata
 import altitude.core.models.Face
+import altitude.core.models.ImageQuality
 import altitude.core.models.Person
 
 /** The Face corrections of Asset detail over HTTP: the People section they answer with, and their status codes */
@@ -239,8 +240,8 @@ import altitude.core.models.Person
      *
      * The panel answers 200 with the People section holding Alice's and Mia's rows, Mia's marked Hidden, and not the bad match's;
      * the Details with the file name, the stored dimensions, the Date Taken with its source, the folder crumbs, the album and the
-     * Location each a link to its search opening in a new tab and the camera rows, with no Sequence row for a sorted asset; and
-     * each metadata directory as a closed group named with its field count. Nothing marks the section read-only, and each row
+     * Location each a link to its search opening in a new tab, the MIME type, the extractor's File Type and the camera rows, with
+     * no Sequence row for a sorted asset, no Image quality row for a measured one and no Metadata section. Nothing marks the section read-only, and each row
      * renders its corrections: Change, Remove with its two labels, and the Change combobox's input and listbox.
      *
      * Edge cases:
@@ -262,6 +263,7 @@ import altitude.core.models.Person
               "Exif IFD0" -> Map("Model" -> "Canon EOS R5"),
               "Exif SubIFD" -> Map("F-Number" -> "f/2.8", "Date/Time Original" -> "2024:07:04 08:09:10"))))
         val image: Asset = testApp.service.library.addAsset(testContext.makeAssetWithData(Some(seeded)))
+        testContext.setAssetImageQuality(image.persistedId, Some(ImageQuality(100, 0.45, 0, 0, 50)))
         val iceland = testApp.service.album.add("Iceland")
         testApp.service.album.addAssets(iceland.persistedId, Set(image.persistedId))
         val europe = testApp.service.location.addCategory("Europe")
@@ -304,11 +306,13 @@ import altitude.core.models.Person
         html should include("""<span class="category">Europe</span>""")
         html should include("Canon EOS R5")
         html should include("f/2.8")
+        html should include(s"<dt>MIME Type</dt><dd>${image.assetType.mime}</dd>")
+        html should include("<dt>File Type</dt><dd>PNG</dd>")
         (html should not).include("<dt>Sequence</dt>")
+        (html should not).include("<dt>Image quality</dt>")
 
-        html should include("""<details class="metadata-group" data-app-metadata-group="Exif SubIFD">""")
-        html should include("""<summary>Exif SubIFD <span class="count">(2)</span></summary>""")
-        (html should not).include("<details open")
+        (html should not).include("<h3>Metadata</h3>")
+        (html should not).include("metadata-group")
     }
   }
 

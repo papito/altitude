@@ -1,17 +1,16 @@
 /**
  * The Detail panel of Asset detail (`views/htmx/view_image_detail_modal.scala.html`): the docked
- * panel holding the asset's People, its Details and its Metadata, which the server renders as
+ * panel holding the asset's People and its Details, which the server renders as
  * `htmx/detail_panel` and this module loads into `#detailPanelContent`; and the Face highlights
  * drawn from its People rows (`face-highlights.js`).
  *
  * The panel is open or closed (`m`, the toolbar's toggle), docked left, right, top or bottom of
  * the media (the Dock side menu in its header, `common/dock.js`: right until a pick, 30 % of the
- * width or 35 % of the height until a drag, never following the viewport's orientation), and its
- * Metadata groups are open or closed one by one. The Face highlights are on or off (`p`, the
- * toolbar's other toggle). All of it is remembered per browser under
- * `Const.localStore.assetDetailView` as `{ panelOpen, highlightsOn, dock: { side?, widthShare,
- * heightShare }, openGroups: [...] }`, the dock's part written by the dock itself. By default the
- * panel is closed and the highlights are off.
+ * width or 35 % of the height until a drag, never following the viewport's orientation). The Face
+ * highlights are on or off (`p`, the toolbar's other toggle). All of it is remembered per browser
+ * under `Const.localStore.assetDetailView` as `{ panelOpen, highlightsOn, dock: { side?, widthShare,
+ * heightShare } }`, the dock's part written by the dock itself. By default the panel is closed and
+ * the highlights are off.
  *
  * The fragment loads when the panel is open or the highlights are on: on open, on each step, and
  * when either is switched on with the asset's details not loaded yet. The coordinator
@@ -135,8 +134,8 @@ export function createDetailPanel({ context, assetActions }) {
     }
 
     /**
-     * Binds the page-wide controls once: the dock's, the toolbar's toggles, the People rows, the
-     * Face highlights and the Metadata groups' memory
+     * Binds the page-wide controls once: the dock's, the toolbar's toggles, the People rows and the
+     * Face highlights
      */
     function start() {
         dock.start()
@@ -179,9 +178,6 @@ export function createDetailPanel({ context, assetActions }) {
                 )
             }
         })
-
-        // A <details>' `toggle` does not bubble, so it is caught in the capture phase
-        document.addEventListener("toggle", rememberGroup, true)
 
         syncToggleButtons()
     }
@@ -329,7 +325,6 @@ export function createDetailPanel({ context, assetActions }) {
 
             hostEl.innerHTML = response.data
             htmx.process(hostEl)
-            openRememberedGroups(hostEl)
             writeDimensions()
             paintRows()
             drawHighlights()
@@ -576,39 +571,6 @@ export function createDetailPanel({ context, assetActions }) {
         })
     }
 
-    /** A Metadata group opened or closed in the panel is remembered by its directory's name */
-    function rememberGroup(event) {
-        const groupEl = event.target
-        if (
-            !(groupEl instanceof HTMLDetailsElement) ||
-            !groupEl.closest(`#${CONTENT_ID}`)
-        ) {
-            return
-        }
-
-        const name = groupEl.getAttribute(Const.attributes.metadataGroup)
-        if (!name) {
-            return
-        }
-
-        if (groupEl.open) {
-            state.openGroups.add(name)
-        } else {
-            state.openGroups.delete(name)
-        }
-        remember()
-    }
-
-    function openRememberedGroups(hostEl) {
-        hostEl
-            .querySelectorAll(`[${Const.attributes.metadataGroup}]`)
-            .forEach((groupEl) => {
-                groupEl.open = state.openGroups.has(
-                    groupEl.getAttribute(Const.attributes.metadataGroup),
-                )
-            })
-    }
-
     /** The least the panel and the stage may be squeezed to along the axis, in px: the `core.css` tokens, registered as lengths */
     function panelMinimums(vertical) {
         const styles = getComputedStyle(viewEl() ?? document.documentElement)
@@ -628,20 +590,13 @@ export function createDetailPanel({ context, assetActions }) {
         }
     }
 
-    /** The remembered settings, or the defaults where they are missing or unreadable: a closed panel, highlights off, no group open */
+    /** The remembered settings, or the defaults where they are missing or unreadable: a closed panel, highlights off */
     function rememberedState() {
         const saved = readStoredObject(Const.localStore.assetDetailView)
 
         return {
             panelOpen: saved.panelOpen === true,
             highlightsOn: saved.highlightsOn === true,
-            openGroups: new Set(
-                Array.isArray(saved.openGroups)
-                    ? saved.openGroups.filter(
-                          (name) => typeof name === "string",
-                      )
-                    : [],
-            ),
         }
     }
 
@@ -650,7 +605,6 @@ export function createDetailPanel({ context, assetActions }) {
         writeStoredFields(Const.localStore.assetDetailView, {
             panelOpen: state.panelOpen,
             highlightsOn: state.highlightsOn,
-            openGroups: [...state.openGroups],
         })
     }
 

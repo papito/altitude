@@ -196,8 +196,7 @@ asset of the results.
 _Avoid_: Lightbox, Image detail, Viewer.
 
 **Detail panel**:
-The docked panel of Asset detail, holding the asset's People, its Details and
-its Metadata as extracted from the file.
+The docked panel of Asset detail, holding the asset's People and its Details.
 _Avoid_: Metadata panel, Info panel, Sidebar.
 
 **Face highlight**:

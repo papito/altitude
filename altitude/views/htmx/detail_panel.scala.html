@@ -3,11 +3,10 @@
 @import altitude.core.util.Util
 @import altitude.core.models.DetailPanelData
 
-@* The Detail panel's three sections (views/AGENTS.md **Detail panel**), loaded into the panel of htmx/view_image_detail_modal
-   by js/search-results/detail-panel.js: People (htmx/detail_panel_people, swapped whole by a Face correction's response),
-   Details, and Metadata as one closed group per extracted directory, whose `data-app-metadata-group` the client remembers
-   the open ones by. The dimensions row holds the stored size, which the client replaces with the shown element's, since
-   a browser turns an image upright by its EXIF orientation while the file's header may have it the other way round. The
+@* The Detail panel's two sections (views/AGENTS.md **Detail panel**), loaded into the panel of htmx/view_image_detail_modal
+   by js/search-results/detail-panel.js: People (htmx/detail_panel_people, swapped whole by a Face correction's response) and
+   Details. The File Type row is the name the extractor detected, so a file it could not read has none. The dimensions row
+   holds the stored size, which the client replaces with the shown element's, since a browser turns an image upright by its EXIF orientation while the file's header may have it the other way round. The
    folder crumbs, the albums and the Locations link to their search, each in a new tab, so Asset detail stays open. The
    sections are rendered from one read of the asset (AssetService.detailOf). *@
 @(detail: DetailPanelData)
@@ -28,7 +27,10 @@
         <h3>Details</h3>
         <dl class="detail-rows">
             @row("File") {@{asset.fileName}}
-            @row("Type") {@{asset.assetType.mime}}
+            @row("MIME Type") {@{asset.assetType.mime}}
+            @for(fileType <- asset.extractedMetadata.getFieldValues("File Type").get("Detected File Type Name")) {
+            @row("File Type") {@fileType}
+            }
             @row("Dimensions") {<span data-app-detail-dimensions>@{asset.width} × @{asset.height} px</span>}
             @for(duration <- asset.durationMs) {
             @row("Duration") {@{Util.humanReadableDuration(duration)}}
@@ -68,33 +70,10 @@
             @for(focalLength <- asset.publicMetadata.focalLength) {
             @row("Focal length") {@focalLength}
             }
-            @for(quality <- asset.imageQuality) {
-            @row("Image quality") {@{quality.score} / 100}
-            }
             @for(frames <- detail.sequenceFrames) {
             @row("Sequence") {@if(frames == 1) {1 frame} else {@frames frames}}
             }
         </dl>
-    </section>
-
-    <section class="detail-section">
-        <h3>Metadata</h3>
-        @defining(asset.extractedMetadata.data.toList.sortBy(_._1)) { directories =>
-        @if(directories.isEmpty) {
-        <p class="empty">No metadata was extracted</p>
-        } else {
-        @for((directory, fields) <- directories) {
-        <details class="metadata-group" data-app-metadata-group="@directory">
-            <summary>@directory <span class="count">(@{fields.size})</span></summary>
-            <dl class="detail-rows">
-                @for((field, value) <- fields.toList.sortBy(_._1)) {
-                @row(field) {@value}
-                }
-            </dl>
-        </details>
-        }
-        }
-        }
     </section>
 </div>
 }

@@ -1,4 +1,4 @@
-/* The Detail panel's sections (htmx/detail_panel, views/AGENTS.md **Detail panel**): People, Details and Metadata, each
+/* The Detail panel's sections (htmx/detail_panel, views/AGENTS.md **Detail panel**): People and Details, each
    under a small-caps heading, in the panel of htmx/view_image_detail_modal (whose frame, header and grid are in
    view_image_detail_modal.css). The rules are by class, so the style guide shows the rows with the same markup. */
 .detail-panel {
@@ -73,8 +73,8 @@
     color: var(--theme-neutral-3);
 }
 
-/* The Details rows and a Metadata group's: a label column as wide as its longest label, the values wrapping anywhere,
-   since a file name or a metadata value can be one long word */
+/* The Details rows: a label column as wide as its longest label, the values wrapping anywhere, since a file name can be
+   one long word */
 .detail-panel .detail-rows {
     margin: 0;
     display: grid;
@@ -123,23 +123,6 @@
 /* The folder's path wears the results title's crumbs (.crumbs, core.css); the folder itself keeps the text color */
 .detail-panel .crumbs .leaf {
     color: var(--theme-neutral-4);
-}
-
-/* A Metadata group: a closed <details> per extracted directory, its summary the directory's name and field count, its rows
-   indented under it */
-.detail-panel .metadata-group summary {
-    padding: var(--space-3) 0;
-    cursor: pointer;
-    font-weight: var(--font-weight-medium);
-}
-
-.detail-panel .metadata-group .count {
-    color: var(--theme-neutral-3);
-    font-weight: normal;
-}
-
-.detail-panel .metadata-group .detail-rows {
-    padding: var(--space-3) 0 var(--space-4) var(--space-6);
 }
 
 /* The keys of Asset detail, a legend under the panel's scrolling content so that it stays in view: two lines of key caps and

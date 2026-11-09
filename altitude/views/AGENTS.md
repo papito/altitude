@@ -128,7 +128,7 @@ and the panes' Split.js sizes on each axis as component data and remembers them 
 Histogram strips under `Const.localStore.curationHistogram` (`rememberedHistogramShown`, `saveHistogramShown`), "true" or "false",
 and whether it shows the Sequence rail under `Const.localStore.curationSequenceRail` (`rememberedSequenceRailShown`,
 `saveSequenceRailShown`), "true" or "false" too (see **Curation** below). Asset detail's view is no store either: `js/search-results/detail-panel.js`
-remembers whether the Detail panel is open, whether the Face highlights are on, the panel's dock and the open Metadata groups under
+remembers whether the Detail panel is open, whether the Face highlights are on, and the panel's dock under
 `Const.localStore.assetDetailView` (see **Detail panel** below).
 
 ## DOM Addressing Convention
@@ -176,7 +176,6 @@ Const.attributes.personName        // "data-person-name"  (a People row's Person
 Const.attributes.suggested         // "data-suggested"  (an option of the assignable people fragment in its Suggested group)
 Const.attributes.frameTimeMs       // "data-frame-time-ms"  (a People row of a Face in a Video)
 Const.attributes.detailDimensions  // "data-app-detail-dimensions"  (the Detail panel's dimensions row, which reads the shown element's size)
-Const.attributes.metadataGroup     // "data-app-metadata-group"  (a Metadata group's directory name, which the open groups are remembered by)
 Const.attributes.detailPanelOpen   // "data-app-detail-panel-open"  (the Asset detail fragment while the Detail panel is open; the stylesheet lays the grid out from it)
 Const.attributes.appAssetId        // "data-app-asset-id"  (the asset of the Detail panel's fragment and of its People section; not `data-asset-id`, which finds the grid's cells)
 ```
@@ -1249,8 +1248,7 @@ stacks, outside the host, are shown again on entering (`raiseSnackbarStacks`, `c
 the messages that join them, above it; the Dock side menu and the combobox's listbox are inside the host and open after,
 and the tooltip's one caller is outside Asset detail, so nothing else moves.
 
-**Detail panel** — The docked panel of Asset detail (the glossary's term) holding the asset's People, its Details and its
-Metadata. The fragment `htmx/view_image_detail_modal` (`#imageDetailView`, styled by `static/css/htmx/view_image_detail_modal.css`)
+**Detail panel** — The docked panel of Asset detail (the glossary's term) holding the asset's People and its Details. The fragment `htmx/view_image_detail_modal` (`#imageDetailView`, styled by `static/css/htmx/view_image_detail_modal.css`)
 is a grid of three areas as the main page is: the media stage (`#imageDetailStage`, a size container the media fit from the
 asset's ratio in container units, so the player and the image resize with the panel), the divider (`#detailPanelDivider`, a
 `.divider` with its orientation class) and the panel (`aside#detailPanel`: a header holding the Dock side menu at its end,
@@ -1283,15 +1281,13 @@ asset's metadata is in, which loads the fragment, so a failed asset fetch is one
 (`static/css/htmx/detail_panel.css`, by class so the style guide shows them): People is `htmx/detail_panel_people` (one row per Face,
 a button (`.face-row`, `data-app-face-row`) holding the cover then the name, tighter than the explorer's list rows, Hidden marked,
 `aria-pressed` while its Face is selected; read-only in the trash, where no correction is offered),
-Details a `dl.detail-rows` of the file name, type, dimensions, duration, size, Date Taken with its source (`CaptureDateSource.label`),
+Details a `dl.detail-rows` of the file name, the MIME type, the File Type (the extractor's detected name, when it has one), dimensions, duration, size, Date Taken with its source (`CaptureDateSource.label`),
 Date Imported, the Folder as shared `.crumbs`, the albums and the Locations (`Category › Name`) each a link to its search
 (`/r/:repoId?folderId=…`, `albumId`, `locationId`) in a new tab, so Asset detail stays open, the GPS position, the camera rows,
-the Image quality score and the frames of a triaged image's Sequence; Metadata one closed `<details>` per extracted directory
-(`data-app-metadata-group`). The dimensions row (`data-app-detail-dimensions`) is written from the shown element's size, which the
+and the frames of a triaged image's Sequence. The dimensions row (`data-app-detail-dimensions`) is written from the shown element's size, which the
 coordinator hands over, so a rotated phone photo reads as shown. What is remembered per browser, under `Const.localStore.assetDetailView`
-as `{ panelOpen, highlightsOn, dock: { side?, widthShare, heightShare }, openGroups }`: whether the panel is open (closed by default),
-whether the Face highlights are on (written for `p`), the dock (its part, written by the dock itself) and the open Metadata groups
-by directory name, applied to every fragment that arrives; a selection is never remembered. Space on a control in the panel presses
+as `{ panelOpen, highlightsOn, dock: { side?, widthShare, heightShare } }`: whether the panel is open (closed by default),
+whether the Face highlights are on (written for `p`) and the dock (its part, written by the dock itself); a selection is never remembered. Space on a control in the panel presses
 it and the arrows on the divider move it, which `global.js` leaves to them.
 
 The **Face highlights** (the glossary's term) are drawn from the People rows' data attributes (`data-face-id`, `data-person-name`,
@@ -2123,7 +2119,7 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   rows (`htmx/curation_queue.css`), a done one and a current one side by side in `.sg-curation-queue`, are in Badges & states,
   where `.sg-curation-bundle` gives the row the rail's width, and the Detail panel's sections (`htmx/detail_panel.css`: a People
   row, selected and not, Change and Remove under a selected row, the Change combobox with its listbox and its Suggested group,
-  Details rows with the crumbs and a Metadata group), the toolbar toggles and the Face highlights
+  Details rows with the crumbs), the toolbar toggles and the Face highlights
   (`htmx/view_image_detail_modal.css`: a highlight and its badge over a stand-in for a photo, `.sg-face-highlights`) are in Panels &
   layout, in `.sg-detail-panel`. Specimens
   use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements

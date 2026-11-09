@@ -175,10 +175,8 @@ export const Const = {
         resultMessage: "data-app-result-message",
         deletedPersonId: "data-app-deleted-person-id",
         deletedPersonMessage: "data-app-deleted-person-message",
-        // The Detail panel's dimensions row, which reads the shown element's size, and a Metadata group's directory
-        // name, which the open groups are remembered by (htmx/detail_panel)
+        // The Detail panel's dimensions row, which reads the shown element's size (htmx/detail_panel)
         detailDimensions: "data-app-detail-dimensions",
-        metadataGroup: "data-app-metadata-group",
         // The Asset detail fragment while the Detail panel is open (view_image_detail_modal.css lays the grid out from it),
         // and the asset whose sections the panel's fragment and its People section hold (htmx/detail_panel,
         // htmx/detail_panel_people); not `data-asset-id`, which finds the cells of the grid
@@ -229,8 +227,7 @@ export const Const = {
         // Whether Curation shows the Sequence rail on the queue, "true" or "false" (js/alpine/components/curation.js)
         curationSequenceRail: "curationSequenceRail",
         // Asset detail's remembered view (js/search-results/detail-panel.js): whether the Detail panel is open, whether
-        // the Face highlights are on, the panel's dock (its side once picked and its share of each axis) and the open
-        // Metadata groups
+        // the Face highlights are on and the panel's dock (its side once picked and its share of each axis)
         assetDetailView: "assetDetailView",
     },
 
