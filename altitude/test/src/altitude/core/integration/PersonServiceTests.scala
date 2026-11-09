@@ -1207,6 +1207,225 @@ import altitude.core.util.Util
     intercept[IllegalArgumentException](testApp.service.person.getInBuckets(Set(PeopleBucket.MATCHED, "verified")))
   }
 
+  private def listedInBuckets(showTriaged: Boolean, buckets: Set[String] = PeopleBucket.ALL) =
+    testApp.service.person.getListedInBuckets(buckets, showTriaged)
+
+  private def listedCounts(showTriaged: Boolean): Map[String, Int] =
+    listedInBuckets(showTriaged).map(listed => listed.person.persistedId -> listed.visibleCount).toMap
+
+  /** What opening the Person from the repository view finds with triaged items hidden: the search `SearchRequestParser` builds */
+  private def foundInRepositoryView(person: Person): Int = testApp.service.library.count(
+    new SearchQuery(
+      params = Map(FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false),
+      personIds = Set(person.persistedId))
+  )
+
+  private def markAsStillImporting(asset: Asset): Unit = testApp.txManager.withTransaction {
+    update("UPDATE asset SET is_pipeline_processed = FALSE WHERE id = ?", asset.persistedId)
+  }
+
+  private def assetWithFaces(person: Person, isTriaged: Boolean, faces: Int = 1): Asset = {
+    val asset = testContext.persistAsset(isTriaged = isTriaged)
+    (1 to faces).foreach(_ => testApp.service.person.addFace(makeFace(), asset, person))
+    asset
+  }
+
+  test("With triaged items hidden, each listed count is what a search of the repository view finds") {
+
+    /**
+     * Setup:
+     *
+     * A Person with Faces on two sorted assets, one of them with two Faces of that Person, on two triaged assets, again one with
+     * two Faces, on a triaged asset that was then recycled, and on a triaged asset still being imported. A second Person with one
+     * sorted and one triaged asset.
+     *
+     * Assertions:
+     *
+     * With triaged items hidden, each Person's listed count equals `library.count` for the repository view of that Person (2 and
+     * 1). The listed Person's `numOfFaces` keeps the whole count (5), so the number never reaches what `isMatched` reads.
+     *
+     * Edge cases:
+     *
+     * Two Faces on one asset count that asset once, an asset recycled from triage is in neither number, and an asset still being
+     * imported, which `numOfFaces` holds and a search skips, is subtracted.
+     */
+    val person: Person = testApp.service.person.addPerson(Person())
+    assetWithFaces(person, isTriaged = false)
+    assetWithFaces(person, isTriaged = false, faces = 2)
+    assetWithFaces(person, isTriaged = true)
+    assetWithFaces(person, isTriaged = true, faces = 2)
+    val recycledFromTriage = assetWithFaces(person, isTriaged = true)
+    testApp.service.library.recycleAssets(Set(recycledFromTriage.persistedId))
+    markAsStillImporting(assetWithFaces(person, isTriaged = true))
+
+    val other: Person = testApp.service.person.addPerson(Person())
+    assetWithFaces(other, isTriaged = false)
+    assetWithFaces(other, isTriaged = true)
+
+    foundInRepositoryView(person) shouldBe 2
+    foundInRepositoryView(other) shouldBe 1
+
+    val listed = listedInBuckets(showTriaged = false)
+    listed.map(entry => entry.person.persistedId -> entry.visibleCount).toMap shouldBe
+      Map(person.persistedId -> 2, other.persistedId -> 1)
+    listed.find(_.person.persistedId == person.persistedId).value.person.numOfFaces shouldBe 5
+  }
+
+  test("With triaged items shown, each listed count is the whole count") {
+
+    /**
+     * Setup:
+     *
+     * A Person with one sorted and two triaged assets.
+     *
+     * Assertions:
+     *
+     * With triaged items shown, the listed count is the Person's `numOfFaces` (3).
+     */
+    val person: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(person, 1)
+    testContext.addTestFacesAndAssets(person, 2, isTriaged = true)
+
+    val listed = listedInBuckets(showTriaged = true)
+    listed.map(_.visibleCount) shouldBe List(3)
+    listed.head.person.numOfFaces shouldBe 3
+  }
+
+  test("A Person with only triaged assets is listed only with triaged items shown") {
+
+    /**
+     * Setup:
+     *
+     * A Person with Faces on two triaged assets and nothing else.
+     *
+     * Assertions:
+     *
+     * With triaged items hidden the Person is left off every bucket; with them shown the Person is listed with a count of 2.
+     */
+    val person: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(person, 2, isTriaged = true)
+
+    listedInBuckets(showTriaged = false) shouldBe empty
+    listedCounts(showTriaged = true) shouldBe Map(person.persistedId -> 2)
+  }
+
+  test("The switch moves no Person between buckets and keeps the order") {
+
+    /**
+     * Setup:
+     *
+     * An unnamed Person on three assets, two of them triaged, so Matched on the whole count and 1 below the threshold without the
+     * triaged ones. An unnamed Person on two assets, one of them triaged, so Unmatched. Two named People, Zoe and Adam, one with
+     * a triaged asset, added in that order.
+     *
+     * Assertions:
+     *
+     * Matched lists Adam, Zoe and the unnamed Person in that order, and Unmatched the other unnamed Person, with triaged items
+     * hidden and shown alike, which is also the order `getInBuckets` gives.
+     */
+    val matchedOnWholeCount: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(matchedOnWholeCount, 1)
+    testContext.addTestFacesAndAssets(matchedOnWholeCount, 2, isTriaged = true)
+
+    val unmatched: Person = testApp.service.person.addPerson(Person())
+    testContext.addTestFacesAndAssets(unmatched, 1)
+    testContext.addTestFacesAndAssets(unmatched, 1, isTriaged = true)
+
+    val zoe: Person = testApp.service.person.addPerson(Person(name = Some("Zoe")))
+    testContext.addTestFacesAndAssets(zoe, 1)
+    testContext.addTestFacesAndAssets(zoe, 1, isTriaged = true)
+
+    val adam: Person = testApp.service.person.addPerson(Person(name = Some("Adam")))
+    testContext.addTestFacesAndAssets(adam, 1)
+
+    def ids(bucket: String, showTriaged: Boolean): List[String] =
+      listedInBuckets(showTriaged, Set(bucket)).map(_.person.persistedId)
+
+    val matchedOrder = List(adam, zoe, matchedOnWholeCount).map(_.persistedId)
+    val unmatchedOrder = List(unmatched.persistedId)
+
+    testApp.service.person.getInBuckets(Set(PeopleBucket.MATCHED)).map(_.persistedId) shouldBe matchedOrder
+    List(true, false).foreach {
+      showTriaged =>
+        withClue(s"showTriaged = $showTriaged: ") {
+          ids(PeopleBucket.MATCHED, showTriaged) shouldBe matchedOrder
+          ids(PeopleBucket.UNMATCHED, showTriaged) shouldBe unmatchedOrder
+        }
+    }
+  }
+
+  test("After a merge during an import the Person is left off and no count is negative") {
+
+    /**
+     * Setup:
+     *
+     * A destination Person with one sorted asset and a source Person with two triaged assets still being imported, merged into
+     * the destination. The merge recounts through a search, which skips the assets being imported, so `numOfFaces` becomes 1
+     * while two triaged assets carry that Person's Faces.
+     *
+     * Assertions:
+     *
+     * With triaged items hidden the difference is below zero, and the Person is left off; with them shown the Person reads
+     * `numOfFaces`.
+     *
+     * Edge cases:
+     *
+     * No listed count is negative in either state.
+     */
+    val dest: Person = testApp.service.person.addPerson(Person())
+    assetWithFaces(dest, isTriaged = false)
+    val source: Person = testApp.service.person.addPerson(Person())
+    markAsStillImporting(assetWithFaces(source, isTriaged = true))
+    markAsStillImporting(assetWithFaces(source, isTriaged = true))
+
+    testApp.service.person.merge(dest = dest, source = source)
+    testApp.service.person.getById(dest.persistedId).numOfFaces shouldBe 1
+
+    val hidden = listedInBuckets(showTriaged = false)
+    hidden.map(_.person.persistedId) should not contain dest.persistedId
+    hidden.foreach(_.visibleCount should be > 0)
+
+    listedCounts(showTriaged = true) shouldBe Map(dest.persistedId -> 1)
+  }
+
+  test("The triaged assets per person are counted from a partial index over the triaged assets") {
+
+    /**
+     * Setup:
+     *
+     * A triaged asset with one Face, seeded into 5,000 copies of which one in ten stay triaged, each copy with a Face of the same
+     * Person, analyzed and rolled back once the plan is read, and the statement behind `getTriagedAssetCounts`. With only a
+     * handful of Face rows the planner would start from `face`.
+     *
+     * Assertions:
+     *
+     * The engine's plan reads one of the `asset_triage_` partial indexes, so the read follows the size of the triage set and not
+     * of the library.
+     */
+    val template = testContext.persistAsset(isTriaged = true)
+    val person: Person = testApp.service.person.addPerson(Person())
+    testApp.service.person.addFace(makeFace(), template, person)
+    val (sql, values) = testApp.DAO.person.asInstanceOf[PersonDao].triagedAssetCountsStatement
+
+    val plan = atScale {
+      seedCopies(template.persistedId, copies = 5000, folders = 1)
+      // Every copy whose zero-padded number does not end in 0 is sorted, so the triage set is a tenth of the library
+      update("UPDATE asset SET is_triaged = FALSE WHERE id <> ? AND substr(id, 36, 1) <> '0'", template.persistedId)
+      // A Face per copy, taken from the template's, none enrolled, which keeps them out of PostgreSQL's vector index
+      update(
+        """INSERT INTO face (id, repository_id, asset_id, person_id, x1, y1, width, height, detection_score, features, checksum,
+          |                  quality, is_enrolled)
+          |SELECT a.id, a.repository_id, a.id, t.person_id, t.x1, t.y1, t.width, t.height, t.detection_score, t.features, a.checksum,
+          |       t.quality, FALSE
+          |  FROM asset a CROSS JOIN face t
+          | WHERE t.asset_id = ? AND a.id <> t.asset_id""".stripMargin,
+        template.persistedId
+      )
+    }(lookupPlanOf(sql, values))
+
+    withClue(plan)(plan should include("asset_triage_"))
+  }
+
   test("Hidden person is not returned for an asset") {
 
     /**

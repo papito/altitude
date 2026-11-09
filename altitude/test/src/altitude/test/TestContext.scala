@@ -358,13 +358,16 @@ class TestContext(val testApp: Altitude) {
     displayImage = generateRandomImagBytesBgr()
   )
 
-  def addTestFacesAndAssets(people: List[Person], assetCount: Int): Unit = {
+  def addTestFacesAndAssets(people: List[Person], assetCount: Int): Unit =
+    addFacesOnNewAssets(people, assetCount, isTriaged = false)
+
+  private def addFacesOnNewAssets(people: List[Person], assetCount: Int, isTriaged: Boolean): Unit = {
     require(people.count(_.id.isEmpty) == 0, "Person must have an ID for a mock face to be added")
 
     val randomGrImage = generateRandomImagBytesGray()
 
     for (idx <- 1 to assetCount) {
-      val asset: Asset = persistAsset()
+      val asset: Asset = persistAsset(isTriaged = isTriaged)
 
       people.foreach {
         person =>
@@ -390,8 +393,8 @@ class TestContext(val testApp: Altitude) {
     }
   }
 
-  def addTestFacesAndAssets(person: Person, assetCount: Int = 1): Unit = {
-    addTestFacesAndAssets(List(person), assetCount)
+  def addTestFacesAndAssets(person: Person, assetCount: Int = 1, isTriaged: Boolean = false): Unit = {
+    addFacesOnNewAssets(List(person), assetCount, isTriaged)
   }
 
   def user: User = {
