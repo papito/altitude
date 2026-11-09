@@ -9,10 +9,15 @@
  *
  * The component root is a row's `.face-actions`, holding Change and Remove (`changing` false) or the
  * combobox in their place (`changing` true): Change calls `open()`, which loads the options once per
- * opening from the assignable route (`assignablePeopleUrl`, the one place the URL is built), parses the
- * fragment's options and filters them on the client as the user types, the first `MAX_SHOWN_OPTIONS`
- * matches rendered with lazy covers. The Face's own Person is left out of the matches. A name that no
- * Person has, within the name length rules, is offered as the Create row; an existing name, in any
+ * opening from the assignable route for the Face (`assignablePeopleUrl`, the one place the URL is
+ * built), parses the fragment's options and filters them on the client as the user types, the first
+ * `MAX_SHOWN_OPTIONS` matches rendered with lazy covers. The Face's own Person is left out of the
+ * matches. The fragment opens with the Suggested group, the people whose Faces are nearest the Face's
+ * vector (`docs/faces.md` **Corrections**), each marked and listed once: the component renders them as
+ * a labelled group above the list while nothing is typed, so the listbox announces the heading with
+ * them, and from the first character the group is left out and they are filtered with the rest, ahead
+ * of them. The server is the one source of the options, the component their one renderer. A name that
+ * no Person has, within the name length rules, is offered as the Create row; an existing name, in any
  * case or Unicode form, picks that Person instead, so a name is never created twice. Enter picks the
  * active option: before the arrows move it, the Person of the exact name, else the first match, else
  * the Create row. A pick is announced as `Const.events.facePersonPicked` with the Face and the Person
@@ -39,16 +44,18 @@ export const MAX_SHOWN_OPTIONS = 50
 export const CREATE_KEY = "create"
 
 /**
- * The URL the options load from: the one place it is built, so the Suggested group above the list
- * can pass the Face (`faceId`) to the route without the component changing.
+ * The URL the options load from: the one place it is built. With the Face (`faceId`) the route opens
+ * the options with the Suggested group of the people nearest it; without, it answers the list alone.
  */
-export function assignablePeopleUrl({ repoId }) {
-    return `/htmx/people/r/${repoId}/assignable`
+export function assignablePeopleUrl({ repoId, faceId }) {
+    const url = `/htmx/people/r/${repoId}/assignable`
+    return faceId ? `${url}?faceId=${encodeURIComponent(faceId)}` : url
 }
 
 /**
- * Reads the options out of the assignable people fragment (`htmx/assignable_people`): each option's
- * Person, their name, whether Hidden, and their cover's URL.
+ * Reads the options out of the assignable people fragment (`htmx/assignable_people`), wherever they
+ * sit in it: each option's Person, their name, whether Hidden, their cover's URL, and whether the
+ * option is in the Suggested group (`data-suggested`).
  */
 export function parseAssignablePeople(html) {
     const doc = new DOMParser().parseFromString(html, "text/html")
@@ -58,6 +65,7 @@ export function parseAssignablePeople(html) {
             personId: optionEl.dataset.personId,
             name: optionEl.dataset.personName ?? "",
             hidden: optionEl.dataset.personHidden === "true",
+            suggested: optionEl.dataset.suggested !== undefined,
             coverUrl:
                 optionEl.querySelector("img")?.getAttribute("src") ?? null,
         }),
@@ -122,7 +130,23 @@ export function faceCombobox() {
             return `faceListbox-${this.faceId}`
         },
 
-        /** The options the query leaves, in the server's order (named first, then Unknowns), the first few dozen */
+        /** The Suggested group's heading, which labels the group for the listbox */
+        get suggestedHeadingId() {
+            return `faceSuggested-${this.faceId}`
+        },
+
+        /** The Suggested group: the people nearest the Face, closest first, shown while nothing is typed */
+        get suggested() {
+            return nameKey(this.query) === ""
+                ? this.options.filter((option) => option.suggested)
+                : []
+        },
+
+        /**
+         * The options the query leaves, in the server's order (named first, then Unknowns), the first
+         * few dozen: with nothing typed, the list under the Suggested group, which holds the rest;
+         * typed, every option, the suggested people ahead of the others
+         */
         get matches() {
             const key = nameKey(this.query)
 
@@ -130,7 +154,9 @@ export function faceCombobox() {
                 .filter(
                     (option) =>
                         option.personId !== this.personId &&
-                        (key === "" || nameKey(option.name).includes(key)),
+                        (key === ""
+                            ? !option.suggested
+                            : nameKey(option.name).includes(key)),
                 )
                 .slice(0, MAX_SHOWN_OPTIONS)
         },
@@ -157,9 +183,10 @@ export function faceCombobox() {
             return `Create '${this.createName}'`
         },
 
-        /** The keys of the options shown, in order: the matches, then the Create row */
+        /** The keys of the options shown, in order: the Suggested group, the matches, then the Create row */
         get keys() {
             return [
+                ...this.suggested.map((option) => option.personId),
                 ...this.matches.map((option) => option.personId),
                 ...(this.createName ? [CREATE_KEY] : []),
             ]
@@ -353,7 +380,7 @@ export function faceCombobox() {
                 }
                 detail.name = this.createName
             } else {
-                if (!this.matches.some((option) => option.personId === key)) {
+                if (!this.keys.includes(key)) {
                     return
                 }
                 detail.personId = key

@@ -32,6 +32,7 @@ import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.models.UserMetadata
 import altitude.core.service.FaceDetectionService
+import altitude.core.service.FaceRecognitionService
 import altitude.core.util.Util
 
 object TestContext {
@@ -40,6 +41,21 @@ object TestContext {
 
   /** A checksum of the stored form, 64 lowercase hex characters of random bytes, distinct for every call */
   def randomChecksum: String = HexFormat.of().formatHex(Random.nextBytes(32))
+
+  /** A reproducible unit vector; two seeds give vectors about a cosine distance of 1 apart */
+  def unitVector(seed: Int): Array[Float] = {
+    val random = new Random(seed)
+    FaceRecognitionService.meanNormalized(
+      Seq(Array.fill(FaceDetectionService.EMBEDDING_DIMENSIONS)(random.nextGaussian().toFloat)))
+  }
+
+  /**
+   * A unit vector between two, `parts` of the first to one of the second. For two vectors a cosine distance of 1 apart, the
+   * result is about 0.29 from the first at one part, 0.11 at two, 0.05 at three, 0.03 at four and 0.02 at five, so the mixes of
+   * one pair keep their order by `parts` whatever the pair's own distance
+   */
+  def between(vector: Array[Float], other: Array[Float], parts: Int): Array[Float] =
+    FaceRecognitionService.meanNormalized(Seq.fill(parts)(vector) :+ other)
 }
 
 class TestContext(val testApp: Altitude) {

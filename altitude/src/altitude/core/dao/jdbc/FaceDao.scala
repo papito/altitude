@@ -80,6 +80,14 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       .take(1)
     Db.read(dialect)(_.run(one)).nonEmpty
 
+  // The one read of the vector column, through the engine's `getVectorField`: pgvector's literal, or the BLOB `vector_as_f32` wrote
+  override def getFeatures(faceId: String): Option[Array[Float]] =
+    val sql = s"SELECT ${FieldConst.Face.FEATURES} FROM face WHERE ${FieldConst.ID} = ? AND ${FieldConst.REPO_ID} = ?"
+
+    manyBySqlQuery(sql, List(faceId, RequestContext.getRepository.persistedId)).headOption
+      .flatMap(rec => getVectorField(rec(FieldConst.Face.FEATURES)))
+      .map(embedding => IArray.genericWrapArray(embedding.values).toArray)
+
   override def getInRepository(faceId: String): Option[Face] =
     import dialect.*
 

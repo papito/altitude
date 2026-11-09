@@ -45,13 +45,22 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   private def badRequest(message: String): Response[String] =
     cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
 
-  /** The options of the Change combobox of Asset detail's People section: the people a Face can be given to */
+  /**
+   * The options of the Change combobox of Asset detail's People section: the people a Face can be given to. Given the Face
+   * (`faceId`), the Suggested group of the people nearest it comes first, and those people are left out of the list after it, so
+   * each is one option; an unknown Face is a 404
+   */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/assignable")
-  def listAssignablePeople(repoId: String)(using request: Request): Response[String] =
-    val people: List[Person] = App.altitude.service.person.getAssignable
-    val payload = "<!doctype html>" + htmx.html.assignable_people(people = people)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+  def listAssignablePeople(repoId: String, faceId: Option[String] = None)(using request: Request): Response[String] =
+    try
+      val suggested: List[Person] = faceId.map(App.altitude.service.person.suggestedPeople).getOrElse(Nil)
+      val suggestedIds = suggested.map(_.persistedId).toSet
+      val people: List[Person] =
+        App.altitude.service.person.getAssignable.filterNot(person => suggestedIds.contains(person.persistedId))
+      val payload = "<!doctype html>" + htmx.html.assignable_people(people = people, suggested = suggested)
+      cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    catch case ex: NotFoundException => cask.Response(ex.getMessage, 404, Seq(("Content-Type", "text/plain")))
 
   /** A person's results title on its own, for the count to be refreshed after a Face correction; an unknown person is a 404 */
   @requireLogin()

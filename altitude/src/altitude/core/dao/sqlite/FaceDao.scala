@@ -59,8 +59,24 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     face.copy(id = Some(id), assetId = asset.id, personId = person.id)
 
   def searchClosestFaceMatches(features: Array[Float], matchCount: Int, distanceThreshold: Double): List[Face] =
+    nearest(features, Nil, matchCount, distanceThreshold)
+
+  override def searchNearestFacesOfOthers(
+      features: Array[Float],
+      excludedPersonId: String,
+      limit: Int,
+      distanceThreshold: Double): List[Face] =
+    nearest(features, List(excludedPersonId), limit, distanceThreshold)
+
+  /**
+   * The nearest Faces of a vector: an exact scan of every Face, filtered afterwards, the excluded Person's Faces among the rows
+   * filtered out when there is one (`excludedPersonId`, the one element of the list or none)
+   */
+  private def nearest(features: Array[Float], excludedPersonId: List[String], limit: Int, distanceThreshold: Double): List[Face] =
+    val personFilter = if excludedPersonId.nonEmpty then "AND face.person_id <> ?" else ""
+
     val sql =
-      """
+      s"""
       SELECT
         v.rowid,
         row_number() OVER (ORDER BY v.distance) AS rank_number,
@@ -72,14 +88,13 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
       WHERE face.repository_id = ?
         AND face.is_enrolled = TRUE
         AND person.is_bad_match = FALSE
+        $personFilter
         AND v.distance < ?
       ORDER BY v.distance
       LIMIT ?;
    """
 
-    val recs: List[Map[String, AnyRef]] =
-      manyBySqlQuery(
-        sql,
-        List(toVectorAsF32Arg(features), RequestContext.getRepository.persistedId, distanceThreshold, matchCount))
+    val binds = List(toVectorAsF32Arg(features), RequestContext.getRepository.persistedId) ++ excludedPersonId ++
+      List(distanceThreshold, limit)
 
-    recs.map(makeModel)
+    manyBySqlQuery(sql, binds).map(makeModel)

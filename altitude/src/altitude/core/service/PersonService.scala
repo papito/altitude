@@ -46,6 +46,15 @@ object PersonService:
    */
   def isReservedName(name: String): Boolean = RESERVED_NAME.matches(name)
 
+  /** The most people the Change combobox's Suggested group holds ([[PersonService.suggestedPeople]]) */
+  val SUGGESTED_PEOPLE = 3
+
+  /**
+   * The nearest Faces read to find them: the nearest people's Faces come several deep before the next Person's, so more than the
+   * people wanted, as many as recognition takes from the vector index by default
+   */
+  private val SUGGESTION_CANDIDATES = 20
+
   /** Whom a Face is given to by [[PersonService.moveFace]]: a live Person by ID, or by name, which may create the Person */
   enum FaceTarget:
     case ExistingPerson(personId: String)
@@ -293,6 +302,27 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     }
 
   /**
+   * The people whose Faces are nearest the Face's own vector, closest first, the first `SUGGESTED_PEOPLE` distinct ones: the
+   * Change combobox's Suggested group. The candidates are what recognition sees (enrolled Faces of people who are not a bad
+   * match, within the cosine distance threshold, in this repository) less the Face's own Person, whom the SQL leaves out so that
+   * a Person with many Faces cannot fill every candidate. Nothing is stored and nothing votes. A Face gone, or of another
+   * repository, is not found.
+   */
+  def suggestedPeople(faceId: String): List[Person] =
+    // How close a Face must be to count: recognition's Setting, read per call
+    val distanceThreshold = app.settings.current.faceRecognitionCosineDistanceThreshold
+
+    txManager.withFaceVector {
+      val face = readFace(faceId)
+      val features = faceDao.getFeatures(faceId).getOrElse(throw NotFoundException(s"Face [$faceId] not found"))
+      val nearest = faceDao.searchNearestFacesOfOthers(features, face.personId.get, SUGGESTION_CANDIDATES, distanceThreshold)
+      val personIds = nearest.map(_.personId.get).distinct.take(SUGGESTED_PEOPLE)
+      val people = peopleByIds(personIds.toSet).map(person => person.persistedId -> person).toMap
+      logger.trace(s"Face [$faceId]: ${personIds.size} suggested people among ${nearest.size} nearest Faces")
+      personIds.map(people)
+    }
+
+  /**
    * Removes a Face of an asset outside the trash: the row goes, and its Person loses the asset from `numOfFaces` if they have no
    * other Face on it, has their cover repicked (their remaining Face with the highest detection score) if it was this Face, and
    * is deleted if no Face is left. One transaction, under the Person's row lock, so a concurrent correction of the same Face
@@ -440,12 +470,13 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     if deleted then Set(person.persistedId) else Set.empty
 
   /** The people the faces belong to; to be called in the transaction the faces were read in */
-  private def peopleOf(faces: List[Face]): List[Person] =
-    val personIds = faces.map(_.personId.get)
+  private def peopleOf(faces: List[Face]): List[Person] = peopleByIds(faces.map(_.personId.get).toSet)
 
+  /** The people of the IDs, in no order */
+  private def peopleByIds(personIds: Set[String]): List[Person] =
     if personIds.isEmpty then List()
     else
-      val q = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet)))
+      val q = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet[Any])))
       val qRes: QueryResult[Person] = dao.query(q)
       qRes.records
 

@@ -111,6 +111,8 @@ export const Const = {
         dataSrc: "data-src",
         personId: "data-person-id",
         faceId: "data-face-id",
+        // An option of the Change combobox's fragment (htmx/assignable_people) in its Suggested group: a Person among the nearest
+        suggested: "data-suggested",
         // A People row of the Detail panel (htmx/detail_panel_people): its Person's name, whether the Person is Hidden, and
         // the Frame time of a Face in a Video, which the Face highlights read with `data-face-box`
         personName: "data-person-name",

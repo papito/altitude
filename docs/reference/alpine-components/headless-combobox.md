@@ -61,5 +61,7 @@ The nav search box posts to HTMX. The one combobox is the Change combobox of Ass
 `aria-controls` and `aria-activedescendant`; the options (`role="option"`, the active one `aria-selected`) live in a
 `role="listbox"` that is a manual popover anchored under the input by CSS, in the top layer so a scrolling panel never
 clips it, with `mousedown` prevented so focus stays in the input; the options load once per opening from the server's
-fragment and filter on the client; a query no option matches offers a Create row; Escape closes the listbox alone
-(`global.js`), as it does here.
+fragment and filter on the client; while nothing is typed the nearest people sit first as a labelled group, the APG
+listbox pattern's `li[role=presentation] > span#heading + ul[role=group][aria-labelledby]`, which `@alpinejs/ui` has no
+directive for; a query no option matches offers a Create row; Escape closes the listbox alone (`global.js`), as it does
+here.

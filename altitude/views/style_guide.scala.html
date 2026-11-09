@@ -252,7 +252,11 @@
              (<code>.face-listbox</code>), a popover wearing the floating surface and as wide as the field, capped at
              <code>--face-listbox-max-height</code>; its options are the People rows' shape, the active one tinted
              <code>--theme-neutral-4</code> at 0.08, and the Create row, offered for a name no Person has, is a plus in the
-             cover's place with the label in <code>--theme-primary-text</code>. The toolbar's toggles
+             cover's place with the label in <code>--theme-primary-text</code>. While nothing is typed the listbox opens with
+             the Suggested group (<code>.suggested</code>): the people nearest the Face under a heading
+             (<code>.group-heading</code>) in the section headings' style, parted from the list by a hairline in
+             <code>--popover-border-color</code>; the specimen shows it beside the Create row, which a typed name brings. The
+             toolbar's toggles
              (<code>.toolbar-toggle</code>, before a modal's ×) are an icon in <code>--theme-neutral-3</code> that takes
              <code>--theme-accent</code> while pressed, as the current nav entry does.</p>
           <div class="sg-row">
@@ -278,6 +282,12 @@
                         <button type="button" class="cancel" aria-label="Cancel" title="Cancel">&times;</button>
                       </div>
                       <ul class="face-listbox sg-face-listbox" role="listbox" aria-label="People specimen">
+                        <li role="presentation" class="suggested">
+                          <span class="group-heading" role="presentation" id="sgSuggestedHeading">Suggested</span>
+                          <ul role="group" aria-labelledby="sgSuggestedHeading">
+                            <li role="option" aria-selected="false"><span class="sg-cover no-cover"></span><span class="name">Alma</span></li>
+                          </ul>
+                        </li>
                         <li role="option" aria-selected="true"><span class="sg-cover no-cover"></span><span class="name">Alice</span></li>
                         <li role="option" aria-selected="false"><span class="sg-cover no-cover"></span><span class="name">Alan</span><span class="hidden-mark">Hidden</span></li>
                         <li role="option" class="create" aria-selected="false"><i class="fas fa-plus" aria-hidden="true"></i><span class="name">Create 'Al'</span></li>

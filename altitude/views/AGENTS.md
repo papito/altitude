@@ -172,6 +172,7 @@ Const.attributes.readOnly          // "data-app-read-only"  (the People section 
 Const.attributes.resultMessage     // "data-app-result-message"  (a correction's result on the section it answers with; a deleted Person's ID and line in `data-app-deleted-person-id` and `-message`)
 Const.attributes.faceId            // "data-face-id"  (a People row, a Face highlight and its badge)
 Const.attributes.personName        // "data-person-name"  (a People row's Person, with `data-person-hidden` when Hidden)
+Const.attributes.suggested         // "data-suggested"  (an option of the assignable people fragment in its Suggested group)
 Const.attributes.frameTimeMs       // "data-frame-time-ms"  (a People row of a Face in a Video)
 Const.attributes.detailDimensions  // "data-app-detail-dimensions"  (the Detail panel's dimensions row, which reads the shown element's size)
 Const.attributes.metadataGroup     // "data-app-metadata-group"  (a Metadata group's directory name, which the open groups are remembered by)
@@ -1320,14 +1321,21 @@ input with `role="combobox"` (`aria-expanded`, `aria-controls`, `aria-activedesc
 beside it, and a `role="listbox"` manual popover (`.face-listbox`, in the top layer so the panel's scrolling never clips it)
 anchored under the input by CSS anchor positioning with an anchor name per Face, as wide as the input, flipped above when
 there is no room below, capped at `--face-listbox-max-height` and scrolling. Opening loads the options once per opening
-from `GET /htmx/people/r/:repoId/assignable` (`assignablePeopleUrl`, the one place the URL is built, so a Suggested group
-of the nearest people can pass the Face later; a slot before the list in the template is its place), parses the fragment's
-`role="option"` rows (`parseAssignablePeople`) and filters them on the client as the user types, the first
-`MAX_SHOWN_OPTIONS` (50) matches rendered with lazy covers, the Face's own Person left out, Hidden marked. A name no Person
-has, within the server's name length rules (`Const.people.nameLength`), is offered as the Create row ("Create 'Alice'");
-an existing name in any case or Unicode form picks that Person instead. Down and Up move the active option, wrapping, and
-reopen a closed listbox; Enter picks the active one, which before the arrows move it is the Person of the exact name, else
-the first match, else the Create row, and nothing while the input is empty; the pointer over an option makes it active;
+from `GET /htmx/people/r/:repoId/assignable?faceId=…` (`assignablePeopleUrl`, the one place the URL is built), parses the
+fragment's `role="option"` rows wherever they sit (`parseAssignablePeople`) and filters them on the client as the user
+types, the first `MAX_SHOWN_OPTIONS` (50) matches rendered with lazy covers, the Face's own Person left out, Hidden marked.
+The fragment opens with the **Suggested** group (`docs/faces.md` **Corrections**: the people whose Faces are nearest the
+Face's vector, closest first, at most 3, each option marked `data-suggested` and left out of the list after it): while
+nothing is typed the component renders them (`suggested`) as the ARIA listbox group pattern above the list (`matches`, the
+rest), `li[role=presentation].suggested` holding the heading (`.group-heading`, an ID per Face) and a `ul[role=group]`
+labelled by it, so the listbox announces the heading with its options; from the first character the group is left out
+and the suggested people are filtered with the rest, ahead of them. The server is the one source of the options and the
+component their one renderer; the group is absent when nobody is near enough, and the list works as before. A name no
+Person has, within the server's name length rules (`Const.people.nameLength`), is offered as the Create row ("Create
+'Alice'"); an existing name in any case or Unicode form picks that Person instead. Down and Up move the active option,
+wrapping, through the group, the list and the Create row in that order, and reopen a closed listbox; Enter picks the
+active one, which before the arrows move it is the Person of the exact name, else the first match, else the Create row,
+and nothing while the input is empty; the pointer over an option makes it active;
 focus leaving the combobox closes the listbox and leaves the input. A pick is announced as `Const.events.facePersonPicked`
 (`faceId` with `personId` or `name`), which the corrections module answers with
 `PUT /htmx/asset/r/:repoId/face/:faceId/person`; the X announces `Const.events.faceChangeCancelled`, and the panel clears
@@ -2102,8 +2110,8 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   design conventions can have one too: Curation's notice, chip and Bundle row (`htmx/curation_set.css`) and the Sequence rail's
   rows (`htmx/curation_queue.css`), a done one and a current one side by side in `.sg-curation-queue`, are in Badges & states,
   where `.sg-curation-bundle` gives the row the rail's width, and the Detail panel's sections (`htmx/detail_panel.css`: a People
-  row, selected and not, Change and Remove under a selected row, the Change combobox with its listbox, Details rows with the
-  crumbs and a Metadata group), the toolbar toggles and the Face highlights
+  row, selected and not, Change and Remove under a selected row, the Change combobox with its listbox and its Suggested group,
+  Details rows with the crumbs and a Metadata group), the toolbar toggles and the Face highlights
   (`htmx/view_image_detail_modal.css`: a highlight and its badge over a stand-in for a photo, `.sg-face-highlights`) are in Panels &
   layout, in `.sg-detail-panel`. Specimens
   use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements
@@ -2252,7 +2260,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, dialog open) |
 | `static/js/alpine/components/people-tab.js` | Alpine component of the People tab: the remembered buckets of the Main and Duplicate panes, Split view and the panes' sizes on each axis (`Const.localStore.peopleView`), the pane loads through `htmx.ajax`, the Split.js instance along the Dock side's axis and its remake on `dockSideChanged`, the reload on `peopleChanged` |
 | `views/htmx/people.scala.html`, `people_list.scala.html` | The People tab's shell (the panes and their bucket switches, no list) and one pane's list for the buckets asked for; styled by `static/css/htmx/people.css` |
-| `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read; under each row, for a live asset, Change and Remove and the Change combobox's markup; a correction's response, its root carrying the result message and any deleted Person) and the Change combobox's options, which the combobox parses (`docs/faces.md`, **Corrections**) |
+| `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read; under each row, for a live asset, Change and Remove and the Change combobox's markup, its listbox rendering the Suggested group and then the list from one option block; a correction's response, its root carrying the result message and any deleted Person) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
 | `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu; its grid and the highlights' look are `static/css/htmx/view_image_detail_modal.css` |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
@@ -2262,7 +2270,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (`selectFace`, `selectedFace`: a row's or a highlight's click, a Video's seek to the Frame time), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing) |
 | `static/js/search-results/detail-fullscreen.js` | `createDetailFullscreen`: Asset detail in fullscreen (`toggle`, on `f` and the toolbar's toggle, which it removes where `document.fullscreenEnabled` is false), the player's `fullscreenElement` set to the host on each fragment (`attach`), the toggle's pressed state and the snackbar's stacks raised on `fullscreenchange` |
 | `static/js/search-results/face-corrections.js` | `createFaceCorrections`: Remove's two clicks and their reset, the Change pick's request, and what each answer means (the section to swap in, a message, a stale section to reload); `parsePeopleSection` |
-| `static/js/alpine/components/face-combobox.js` | the `faceCombobox` Alpine component of a People row's Change: the options loaded once per opening (`assignablePeopleUrl`, `parseAssignablePeople`), filtered as typed, the Create row, the keys, the anchored listbox popover, the pick and the X announced as events; `closeOpenFaceCombobox` for Escape |
+| `static/js/alpine/components/face-combobox.js` | the `faceCombobox` Alpine component of a People row's Change: the options loaded once per opening for the Face (`assignablePeopleUrl`, `parseAssignablePeople`), the Suggested group while nothing is typed, the rest filtered as typed, the Create row, the keys, the anchored listbox popover, the pick and the X announced as events; `closeOpenFaceCombobox` for Escape |
 | `static/js/search-results/face-highlights.js` | `createFaceHighlights`: draws the Face highlights into `#faceHighlights` (`show`: a toggle button per Face placed by fractions of the shown size, its badge anchored to it; `clear`), and `FRAME_TIME_TOLERANCE_MS`, how far from its Frame time a Video's Face counts as current |
 | `static/js/common/dock.js` | `createDock`: a docked panel's side, share, divider (drag and keys), Dock side menu upkeep and remembered state, configured by the explorer's and the Detail panel's docks; `isVerticalAxis` |
 | `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid, and its Curate button (`removeCurateButtons`) |

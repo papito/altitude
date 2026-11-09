@@ -238,8 +238,24 @@ refused correction is a plain-text 400 (the body or the target), 404 (gone or mo
 client answers by reloading the section. The controls, the Change combobox and what the client does with an answer are
 under **Detail panel** in `altitude/views/AGENTS.md`. `PeopleActionController` serves the Change combobox's options,
 `GET /htmx/people/r/:repoId/assignable` (`getAssignable`: the live people who are not a bad match, named first, then by
-`name_for_sort`, Hidden among them and marked; `htmx/assignable_people`), and a Person's results title on its own,
-`GET /htmx/people/r/:repoId/p/:personId/title` (`htmx/person_inner`), for the count to be refreshed after a correction.
+`name_for_sort`, Hidden among them and marked; `htmx/assignable_people`), with the Suggested group below when asked with
+`faceId`, and a Person's results title on its own, `GET /htmx/people/r/:repoId/p/:personId/title` (`htmx/person_inner`),
+for the count to be refreshed after a correction.
+
+- **Suggested people** (`suggestedPeople(faceId)`): the people whose Faces are nearest the Face's own vector, closest first,
+  at most `PersonService.SUGGESTED_PEOPLE` (3), so that most wrong matches take one click. The candidates are what
+  recognition sees, through the same statement with one more filter, so no new Setting: enrolled Faces of people who are
+  not a bad match, within `face.recognition.cosine_distance_threshold`, in the context repository, read inside
+  `withFaceVector` (`FaceDao.searchNearestFacesOfOthers`, beside `searchClosestFaceMatches`: on PostgreSQL
+  `CLOSEST_OF_OTHERS_SQL`, the HNSW scan carrying on past the excluded Faces, on SQLite the full scan filtered afterwards).
+  Unlike recognition it leaves out the Face's current Person, in the SQL, since a Person with thousands of Faces would
+  otherwise fill every candidate slot; the Face's vector is read from the store (`FaceDao.getFeatures`), since the model
+  never carries it. The nearest `SUGGESTION_CANDIDATES` (20) Faces are reduced to their first three distinct people.
+  Nothing is stored and nothing votes: the suggestion only orders what the user chooses from. Nobody is suggested when no
+  Face is near enough, as for a poor Face, whose vector has drifted; Hidden people are suggested and marked. The route
+  renders the group first (`htmx/assignable_people`: the ARIA listbox group pattern, `role="group"` labelled by its
+  heading, each option marked `data-suggested`) and leaves those people out of the list after it, so each Person is one
+  option; a Face gone or of another repository is a 404.
 
 ## Settings
 
@@ -270,12 +286,15 @@ cross rules (box size ≥ smallest face, `hnsw_ef_search` ≥ 4 × `match_count`
 [FaceDetectionTests](../altitude/test/src/altitude/core/integration/FaceDetectionTests.scala) covers detection on the
 `people/` fixtures and the tiers on blurred copies (`TestVideos.frameStill` at `FRAME_BLUR`, `still` at `HEAVY_BLUR`);
 [FaceRecognitionServiceTests](../altitude/test/src/altitude/core/integration/FaceRecognitionServiceTests.scala) covers
-candidate eligibility, the tie-break and the no-candidate rule on known vectors (`TestContext.addTestFace`), a stored
-Face's checksum against the SHA-256 of its stored crop, the same crop twice in one asset, and the Video rules on clips
-synthesized by [TestVideos](../altitude/test/src/altitude/test/TestVideos.scala);
+candidate eligibility, the tie-break and the no-candidate rule on known vectors (`TestContext.addTestFace`,
+`TestContext.unitVector` and `between`), a Face's vector read back and the nearest Faces of other people (the Suggested
+group's search: closest first, the Face's Person, bad matches, match-only Faces, those past the threshold and another
+repository's left out), a stored Face's checksum against the SHA-256 of its stored crop, the same crop twice in one asset,
+and the Video rules on clips synthesized by [TestVideos](../altitude/test/src/altitude/test/TestVideos.scala);
 [FaceClusteringTests](../altitude/test/src/altitude/core/unit/FaceClusteringTests.scala) covers the pure clustering;
 [FaceCorrectionTests](../altitude/test/src/altitude/core/integration/FaceCorrectionTests.scala) covers Remove and
-Change on both engines, their two races included (`contend`), and
+Change on both engines, their two races included (`contend`), and the suggested people of a Face, and
 [AssetActionControllerTests](../altitude/test/src/altitude/core/controller/AssetActionControllerTests.scala) their
-routes.
+routes, [PeopleActionControllerTests](../altitude/test/src/altitude/core/controller/PeopleActionControllerTests.scala) the
+assignable list with its Suggested group.
 Gaps are listed in [test-coverage.md](test-coverage.md).

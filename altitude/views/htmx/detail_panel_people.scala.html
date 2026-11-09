@@ -19,7 +19,21 @@
    swapped in whole by a correction's response (PUT /htmx/asset/r/:repoId/face/:faceId/person, DELETE
    /htmx/asset/r/:repoId/face/:faceId), whose root then carries the result message for the snackbar and, for a Person
    the correction deleted, their ID and the line the snackbar adds. For an asset in the trash the root is marked
-   read-only: no correction is rendered, and the server refuses them. *@
+   read-only: no correction is rendered, and the server refuses them. The listbox opens with the Suggested group, the
+   people nearest the Face (the component's `suggested`, rendered while nothing is typed, under a heading the group is
+   labelled by), then the list (`matches`); both render the same option. *@
+
+@* An option of the combobox's listbox for each Person of the component's `people` list: the cover, the name, the Hidden mark *@
+@personOptions(people: String) = {
+<template x-for="option in @people" :key="option.personId">
+    <li role="option" :id="optionId(option.personId)" :aria-selected="isActive(option.personId)" :data-option-key="option.personId">
+        <template x-if="option.coverUrl"><img :src="option.coverUrl" alt="" loading="lazy"></template>
+        <template x-if="!option.coverUrl"><span class="no-cover"></span></template>
+        <span class="name" x-text="option.name"></span>
+        <span class="hidden-mark" x-show="option.hidden">Hidden</span>
+    </li>
+</template>
+}
 
 <section id="detailPanelPeople"
          data-app-asset-id="@{asset.persistedId}"
@@ -85,20 +99,18 @@
                         x-on:mousedown.prevent
                         x-on:click="onOptionClick($event)"
                         x-on:mouseover="onOptionHover($event)">
-                        @* The Suggested group of the nearest people goes here, before the list, while the input is empty *@
-                        <template x-for="option in matches" :key="option.personId">
-                            <li role="option" :id="optionId(option.personId)" :aria-selected="isActive(option.personId)" :data-option-key="option.personId">
-                                <template x-if="option.coverUrl"><img :src="option.coverUrl" alt="" loading="lazy"></template>
-                                <template x-if="!option.coverUrl"><span class="no-cover"></span></template>
-                                <span class="name" x-text="option.name"></span>
-                                <span class="hidden-mark" x-show="option.hidden">Hidden</span>
-                            </li>
-                        </template>
+                        <li role="presentation" class="suggested" x-show="suggested.length > 0">
+                            <span class="group-heading" role="presentation" :id="suggestedHeadingId">Suggested</span>
+                            <ul role="group" :aria-labelledby="suggestedHeadingId">
+                                @personOptions("suggested")
+                            </ul>
+                        </li>
+                        @personOptions("matches")
                         <li role="option" class="create" :id="optionId(CREATE_KEY)" :aria-selected="isActive(CREATE_KEY)" :data-option-key="CREATE_KEY" x-show="createName">
                             <i class="fas fa-plus" aria-hidden="true"></i>
                             <span class="name" x-text="createLabel"></span>
                         </li>
-                        <li class="empty" x-show="matches.length === 0 && !createName">No one matches</li>
+                        <li class="empty" x-show="keys.length === 0">No one matches</li>
                     </ul>
                 </div>
             </div>

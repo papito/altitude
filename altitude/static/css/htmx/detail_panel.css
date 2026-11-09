@@ -227,6 +227,30 @@
     cursor: pointer;
 }
 
+/* The Suggested group (the people nearest the Face, shown while nothing is typed): its heading is the panel's section
+   heading, smaller, and a hairline parts the group from the list under it */
+.face-listbox [role="group"] {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.face-listbox .suggested {
+    margin-bottom: var(--space-2);
+    padding-bottom: var(--space-2);
+    border-bottom: var(--border-hairline) var(--popover-border-color);
+}
+
+.face-listbox .group-heading {
+    display: block;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-wide);
+    color: var(--theme-neutral-3);
+}
+
 /* The active option, which Enter picks, is tinted as a picker's hovered option is */
 .face-listbox [role="option"][aria-selected="true"] {
     background: hsl(from var(--theme-neutral-4) h s l / 0.08);

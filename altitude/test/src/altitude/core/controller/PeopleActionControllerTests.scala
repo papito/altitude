@@ -1,5 +1,6 @@
 package altitude.core.controller
 
+import altitude.test.TestContext
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ contain, include, not, should, shouldBe }
 
@@ -60,6 +61,66 @@ import altitude.core.models.Person
         html should include(s"""data-person-id="${mia.persistedId}"""")
         """data-person-id="[^"]+"\s+data-person-name="Mia"\s+data-person-hidden""".r.findFirstIn(html).isDefined shouldBe true
         html should include(s"/${Const.DataStore.FACE}/${testApp.service.person.getById(adam.persistedId).coverFaceId.get}")
+    }
+  }
+
+  test("With a Face, the assignable people open with the Suggested group of the people nearest it, each listed once") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Face of an unnamed Person at a synthetic embedding, Faces of "Zoe" about 0.29 away and
+     * of "adam" about 0.05 away, the Face of a hidden "Mia" about 1 away, past the threshold, and an unnamed Person with a Face
+     * at a random embedding.
+     *
+     * Assertions:
+     *
+     * Asked with the Face, the list answers 200 with the Suggested group first, adam then Zoe, each option marked suggested and
+     * under the group's heading, and then the list of the rest in its order, Mia and the two unnamed people, so no Person is
+     * listed twice. Asked without a Face, the list has no group and no suggested mark; asked with an unknown Face, it is a 404.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val vector = TestContext.unitVector(31)
+        val other = TestContext.unitVector(32)
+        val asset = testContext.persistAsset()
+        val current = testApp.service.person.addPerson(Person())
+        val face = testContext.addTestFace(current, asset, vector)
+        val zoe = testApp.service.person.addPerson(Person(name = Some("Zoe")))
+        testContext.addTestFace(zoe, asset, TestContext.between(vector, other, 1))
+        val adam = testApp.service.person.addPerson(Person(name = Some("adam")))
+        testContext.addTestFace(adam, asset, TestContext.between(vector, other, 3))
+        val mia = testApp.service.person.addPerson(Person(name = Some("Mia")))
+        testContext.addTestFace(mia, asset, other)
+        testApp.service.person.setVisibility(mia, isHidden = true)
+        val unknown = testApp.service.person.addPerson(Person())
+        testContext.addTestFacesAndAssets(unknown)
+
+        def list(params: Map[String, String]): requests.Response =
+          requests.get(s"$host/htmx/people/r/$repoId/assignable", params = params, cookies = testContext.cookies, check = false)
+
+        val response = list(Map("faceId" -> face.persistedId))
+
+        response.statusCode shouldBe 200
+        val html = response.text()
+        val optionIds = """data-person-id="([^"]+)"""".r.findAllMatchIn(html).map(_.group(1)).toList
+        optionIds shouldBe List(adam, zoe, mia, current, unknown).map(_.persistedId)
+        val suggestedIds = """data-person-id="([^"]+)"[^>]*data-suggested""".r.findAllMatchIn(html).map(_.group(1)).toList
+        suggestedIds shouldBe List(adam, zoe).map(_.persistedId)
+        html should include("""role="group" aria-labelledby="suggestedPeopleHeading"""")
+        html should include("""id="suggestedPeopleHeading"""")
+
+        val plain = list(Map.empty).text()
+        """data-person-id="([^"]+)"""".r.findAllMatchIn(plain).map(_.group(1)).toList shouldBe
+          List(adam, mia, zoe, current, unknown).map(_.persistedId)
+        (plain should not).include("data-suggested")
+        (plain should not).include("""role="group"""")
+
+        list(Map("faceId" -> java.util.UUID.randomUUID.toString)).statusCode shouldBe 404
     }
   }
 

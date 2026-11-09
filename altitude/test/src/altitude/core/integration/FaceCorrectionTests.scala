@@ -1,5 +1,6 @@
 package altitude.core.integration
 
+import altitude.test.TestContext
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ be, contain, empty, not, should, shouldBe }
 
@@ -663,5 +664,51 @@ import altitude.core.service.PersonService.FaceTarget
       List(adam, mia, zoe, unknown1, unknown2, inTrash).map(_.persistedId)
     assignable.find(_.persistedId == mia.persistedId).value.isHidden shouldBe true
     (assignable.map(_.persistedId) should not).contain(badMatch.persistedId)
+  }
+
+  test("The suggested people of a Face are the first three distinct people among its nearest Faces, closest first") {
+
+    /**
+     * Setup:
+     *
+     * A Face of a Person at a synthetic embedding, and on another asset the enrolled Faces of four other people at known
+     * distances from it: A's two Faces about 0.02 and 0.11 away, B's about 0.03, C's about 0.05 and D's about 0.29; a Face of the
+     * Person's own about 0.02 away; and one more Person's Face about 1 away from every other, past the threshold.
+     *
+     * Assertions:
+     *
+     * The suggested people are A, B and C, closest first: A once although two of their Faces come before C's, D left out by the
+     * count of three and the Person's own Faces left out however close.
+     *
+     * Edge cases:
+     *
+     * A Face whose only neighbours are past the threshold suggests nobody, and a Face that is gone is not found.
+     */
+    val vector = TestContext.unitVector(21)
+    val other = TestContext.unitVector(22)
+    val p = person()
+    val f = testContext.addTestFace(p, testContext.persistAsset(), vector)
+    val asset = testContext.persistAsset()
+    testContext.addTestFace(p, asset, TestContext.between(vector, other, 5))
+    val a = person(Some("Alice"))
+    testContext.addTestFace(a, asset, TestContext.between(vector, other, 5))
+    testContext.addTestFace(a, asset, TestContext.between(vector, other, 2))
+    val b = person()
+    testContext.addTestFace(b, asset, TestContext.between(vector, other, 4))
+    val c = person()
+    testContext.addTestFace(c, asset, TestContext.between(vector, other, 3))
+    val d = person()
+    testContext.addTestFace(d, asset, TestContext.between(vector, other, 1))
+    val far = person()
+    val farFace = testContext.addTestFace(far, asset, TestContext.unitVector(23))
+
+    val suggested = testApp.service.person.suggestedPeople(f.persistedId)
+
+    suggested.map(_.persistedId) shouldBe List(a, b, c).map(_.persistedId)
+    suggested.head.name shouldBe Some("Alice")
+
+    testApp.service.person.suggestedPeople(farFace.persistedId) shouldBe empty
+    testApp.service.person.removeFace(f.persistedId)
+    intercept[NotFoundException](testApp.service.person.suggestedPeople(f.persistedId))
   }
 }
