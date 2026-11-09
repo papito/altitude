@@ -192,6 +192,7 @@ CREATE TABLE person (
   name TEXT NOT NULL,
   name_for_sort TEXT NOT NULL,
   cover_face_id CHAR(36) COLLATE "C",
+  -- The assets outside the trash on which the person has a face (what a search for the person finds), not the face rows
   num_of_faces INT NOT NULL DEFAULT 0,
   is_named BOOLEAN NOT NULL DEFAULT FALSE,
   is_hidden BOOLEAN NOT NULL DEFAULT FALSE,

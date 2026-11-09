@@ -145,20 +145,35 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     val live = PersonDao.liveByNameKey(dialect, RequestContext.getRepository.persistedId, nameKey)
     Db.read(dialect)(_.run(live)).headOption.map(toModel)
 
+  override def lockName(nameKey: String): Unit =
+    advisoryLock(s"person-name:${RequestContext.getRepository.persistedId}:$nameKey")
+
+  // Reads the partial index over the live people
+  override def getAssignable: List[Person] =
+    val sql = """SELECT *
+                   FROM person
+                  WHERE repository_id = ?
+                    AND is_deleted = FALSE
+                    AND is_bad_match = FALSE
+               ORDER BY is_named DESC, name_for_sort
+              """
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
+
   def recycleFacesForAssets(assetIds: Set[String]): Unit = addFacesOfAssets(assetIds, sign = "-")
 
   def restoreFacesForAssets(assetIds: Set[String]): Unit = addFacesOfAssets(assetIds, sign = "+")
 
   /**
-   * Adds to (or with `-`, takes from) each person's face count the faces they have on the assets. The people are found from the
-   * assets' faces, an uncorrelated set read once through the index that leads with the asset, rather than by testing every person
-   * for a face on one of them.
+   * Adds to (or with `-`, takes from) each person's face count the assets, among the given ones, they have a Face on: the count
+   * is of assets, so an asset holding two Faces of one person counts once. The people are found from the assets' faces, an
+   * uncorrelated set read once through the index that leads with the asset, rather than by testing every person for a face on one
+   * of them.
    */
   private def addFacesOfAssets(assetIds: Set[String], sign: String): Unit =
     val sql = s"""
       UPDATE person
          SET num_of_faces = num_of_faces $sign (
-            SELECT COUNT(*)
+            SELECT COUNT(DISTINCT f.asset_id)
               FROM face f
              WHERE f.person_id = person.id
                AND f.asset_id $inIdSet)
@@ -167,15 +182,18 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     updateByBySql(sql, List(idSet(assetIds), idSet(assetIds)))
 
   // On PostgreSQL; SQLite's one write connection serializes the writers
-  override def lockAssetPeople(assetId: String): Unit =
+  override def lockAssetPeople(assetIds: Set[String]): Unit =
+    if assetIds.isEmpty then return
+
     val sql = s"""
       SELECT id
         FROM person
        WHERE repository_id = ?
-         AND id IN (SELECT person_id FROM face WHERE asset_id = ?)
+         AND id IN (SELECT person_id FROM face WHERE asset_id $inIdSet)
+    ORDER BY id
       $forUpdate
     """
-    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId))
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(assetIds)))
 
   // The dead are locked too, and left out afterwards, so that a caller waits for whatever is changing them.
   // On PostgreSQL; SQLite's one write connection serializes the writers

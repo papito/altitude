@@ -121,7 +121,10 @@ abstract class IntegrationTestCore
     }
 
     try {
-      holding.await(30, TimeUnit.SECONDS) shouldBe true
+      // A first that failed never holds: its failure is the reason, where the timeout alone would say nothing
+      val held = holding.await(30, TimeUnit.SECONDS)
+      firstFailure.get.foreach(throw _)
+      held shouldBe true
 
       val (secondThread, secondFailure) = onAnotherThread {
         testApp.txManager.withTransaction {

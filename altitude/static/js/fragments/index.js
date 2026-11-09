@@ -42,6 +42,8 @@ export function hydrateAppFragments({ root, app }) {
         hydrateImageDetailFragment({
             fragmentEl,
             coordinator: app.searchDetailCoordinator,
+            detailPanel: app.detailPanel,
+            detailFullscreen: app.detailFullscreen,
         })
     })
 

@@ -1,35 +1,196 @@
-/* The media fill the box's width at the asset's stored ratio (the box is fitted in core.css). The height cap holds
-   for an asset without a stored size, and `vertical-align` drops the inline baseline gap below the media. A Video's
-   player is the media-chrome controller: its slotted <video> fills it and letterboxes itself (the user agent's
-   `object-fit: contain` for video), and its control bar overlays the video's bottom. */
-#imageDetailView img,
-#imageDetailView media-controller {
-    width: 100%;
-    max-height: calc(100dvh - var(--modal-toolbar-height));
+/* Asset detail's fragment: a grid of the media stage, the divider and the Detail panel, shaped by the panel's Dock side
+   (`data-detail-dock-side` and `--detail-panel-share`, written on the root by js/search-results/detail-panel.js through
+   js/common/dock.js) as pages/index.css shapes the main page by the explorer's. Closed (no `data-app-detail-panel-open`),
+   the stage is the whole grid and the panel and its divider take no room, so the box is as core.css fits it to the media;
+   open, the box fills the viewport (core.css) and the panel's track is its share of the width (left, right) or of the
+   height (top, bottom), bounded by the minimums of core.css, with the divider's track as thick as the divider */
+#imageDetailView {
+    display: grid;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "stage";
+}
+
+#imageDetailView:not([data-app-detail-panel-open]) > :is(#detailPanelDivider, #detailPanel) {
+    display: none;
+}
+
+#imageDetailView[data-app-detail-panel-open][data-detail-dock-side="left"] {
+    grid-template-columns: minmax(var(--detail-panel-min-width), var(--detail-panel-share)) auto minmax(var(--detail-stage-min-width), 1fr);
+    grid-template-areas: "panel gutter stage";
+}
+
+#imageDetailView[data-app-detail-panel-open][data-detail-dock-side="right"] {
+    grid-template-columns: minmax(var(--detail-stage-min-width), 1fr) auto minmax(var(--detail-panel-min-width), var(--detail-panel-share));
+    grid-template-areas: "stage gutter panel";
+}
+
+#imageDetailView[data-app-detail-panel-open][data-detail-dock-side="top"] {
+    grid-template-rows: minmax(var(--detail-panel-min-height), var(--detail-panel-share)) auto minmax(var(--detail-stage-min-height), 1fr);
+    grid-template-areas: "panel" "gutter" "stage";
+}
+
+#imageDetailView[data-app-detail-panel-open][data-detail-dock-side="bottom"] {
+    grid-template-rows: minmax(var(--detail-stage-min-height), 1fr) auto minmax(var(--detail-panel-min-height), var(--detail-panel-share));
+    grid-template-areas: "stage" "gutter" "panel";
+}
+
+/* The stage is a size container, so the media fits it from the asset's ratio in container units, centered */
+#imageDetailStage {
+    grid-area: stage;
+    container-type: size;
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    place-items: center;
+}
+
+/* The media take the stage's width or, when that is too tall for the stage, the width the stage's height allows at the
+   asset's ratio (`--asset-width` and `--asset-height`, set on the box by setAssetDetailSize from the shown element). The
+   caps hold for an asset without a size. A Video's player is the media-chrome controller: its slotted <video> fills it and
+   letterboxes itself (the user agent's `object-fit: contain` for video), and its control bar overlays the video's bottom.
+   The Face highlights' layer takes the same box in the stage's one cell, so it lies over the shown element */
+#imageDetailStage img,
+#imageDetailStage media-controller,
+#faceHighlights {
+    grid-area: 1 / 1;
+    width: min(100cqw, 100cqh * var(--asset-width) / var(--asset-height));
+    max-width: 100cqw;
+    max-height: 100cqh;
     aspect-ratio: var(--asset-width) / var(--asset-height);
-    vertical-align: top;
+}
+
+/* The layer paints above the player and takes no pointer events itself, so the control bar under it stays usable; each
+   Face highlight's box takes them, its badge none (js/search-results/face-highlights.js). It is an inline-size container,
+   so a badge's width is capped at the layer's */
+#faceHighlights {
+    position: relative;
+    z-index: 1;
+    pointer-events: none;
+    container-type: inline-size;
+}
+
+/* A Face highlight: the Face's box as fractions of the shown element's size (`--face-x`, `--face-y`, `--face-width`,
+   `--face-height`, set on it by the script), a hairline outline in the light neutral with rounded corners over a
+   transparent box, a toggle button of its People row's selection; the selected one wears the heavy edge */
+.face-highlight {
+    position: absolute;
+    left: calc(var(--face-x) * 100%);
+    top: calc(var(--face-y) * 100%);
+    width: calc(var(--face-width) * 100%);
+    height: calc(var(--face-height) * 100%);
+    padding: 0;
+    background: none;
+    border: var(--border-hairline) var(--theme-neutral-1);
+    border-radius: var(--face-highlight-radius);
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.face-highlight[aria-pressed="true"] {
+    border: var(--border-heavy) var(--theme-neutral-1);
+}
+
+/* The badge under a Face highlight: the Person's name at the body size, light on the scrim, anchored to its box
+   (`position-anchor`, set by the script) and centered under it, kept inside the layer: above the box when there is no
+   room below, and inside the box's bottom edge when there is none above either. On one line, cut with an ellipsis at the
+   layer's width, so a long name leaves the media box as fitted; it takes no pointer events, the box being the button, so
+   the player's control bar under it stays usable */
+.face-highlight-badge {
+    position: absolute;
+    position-area: bottom;
+    position-try-fallbacks: flip-block, --face-highlight-badge-inside;
+    margin: var(--space-2) 0;
+    padding: var(--space-1) var(--space-3);
+    background: var(--scrim-color);
+    color: var(--theme-neutral-1);
+    font-size: var(--font-size-base);
+    border-radius: var(--radius-small);
+    white-space: nowrap;
+    max-width: 100cqw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+}
+
+@position-try --face-highlight-badge-inside {
+    position-area: none;
+    inset: auto;
+    bottom: anchor(bottom);
+    justify-self: anchor-center;
+    margin: 0 0 var(--space-2);
+}
+
+.face-highlight[aria-pressed="true"] + .face-highlight-badge {
+    font-weight: var(--font-weight-semibold);
+}
+
+/* A Hidden person's mark in the badge, dimmed as it is in the People row */
+.face-highlight-badge .hidden-mark {
+    color: var(--theme-neutral-3);
 }
 
 /* `contain` keeps a picture whose decoded ratio differs from the stored one undistorted */
-#imageDetailView img {
+#imageDetailStage img {
     object-fit: contain;
 }
 
-#imageDetailView media-controller {
+#imageDetailStage media-controller {
     --media-font-family: var(--font);
 }
 
 /* The controller's own display (inline-block) outranks the user agent's [hidden] rule */
-#imageDetailView media-controller[hidden] {
+#imageDetailStage media-controller[hidden] {
     display: none;
 }
 
 /* A control the browser cannot perform is left out (picture-in-picture in Firefox, volume on iOS), as
    media-chrome's themes do, and the volume slider gives way on a player narrower than media-chrome's `sm`
    breakpoint (384 px), so the timeline keeps its room */
-#imageDetailView media-pip-button[mediapipunavailable],
-#imageDetailView media-fullscreen-button[mediafullscreenunavailable],
-#imageDetailView media-volume-range[mediavolumeunavailable],
-#imageDetailView media-controller:not([breakpointsm]) media-volume-range {
+#imageDetailStage media-pip-button[mediapipunavailable],
+#imageDetailStage media-fullscreen-button[mediafullscreenunavailable],
+#imageDetailStage media-volume-range[mediavolumeunavailable],
+#imageDetailStage media-controller:not([breakpointsm]) media-volume-range {
     display: none;
+}
+
+/* The divider between the stage and the panel, in the grid's gutter area: a .divider of core.css with its orientation
+   class, which the dock writes on each side change */
+#detailPanelDivider {
+    grid-area: gutter;
+}
+
+/* The panel: its header, holding the Dock side menu at its end, stays put while its content scrolls; a hairline on the
+   edge facing the divider, one rule per side */
+#detailPanel {
+    grid-area: panel;
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    background-color: var(--theme-neutral-2);
+    color: var(--theme-neutral-4);
+}
+
+#detailPanel > header {
+    display: flex;
+    justify-content: flex-end;
+    padding: var(--space-3) var(--panel-padding);
+    border-bottom: var(--border-hairline) var(--panel-border-color);
+}
+
+#detailPanelContent {
+    overflow-y: auto;
+    padding: var(--panel-padding);
+}
+
+#imageDetailView[data-detail-dock-side="left"] #detailPanel { border-right: var(--border-hairline) var(--panel-border-color); }
+#imageDetailView[data-detail-dock-side="right"] #detailPanel { border-left: var(--border-hairline) var(--panel-border-color); }
+#imageDetailView[data-detail-dock-side="top"] #detailPanel { border-bottom: var(--border-hairline) var(--panel-border-color); }
+#imageDetailView[data-detail-dock-side="bottom"] #detailPanel { border-top: var(--border-hairline) var(--panel-border-color); }
+
+/* Nothing in the box is selected by a drag of the divider */
+#imageDetailModalContainer .modal-box:has(.divider[data-dragging]) {
+    user-select: none;
 }

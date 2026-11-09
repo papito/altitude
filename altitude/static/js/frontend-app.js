@@ -8,7 +8,10 @@ import { bindAppDragDrop } from "./dragdrop/index.js"
 import { hydrateAppFragments } from "./fragments/index.js"
 import { handlePeopleEscapeKeyPressed } from "./listeners/people.js"
 import { registerAppEventListeners } from "./listeners/index.js"
+import { createDetailFullscreen } from "./search-results/detail-fullscreen.js"
+import { createDetailPanel } from "./search-results/detail-panel.js"
 import { createSearchDetailCoordinator } from "./search-results/detail-navigator.js"
+import { createDetailUrl } from "./search-results/detail-url.js"
 import { bindSearchInput } from "./search-results/search-input.js"
 import { initializeFrontendStores } from "./stores/app-stores.js"
 
@@ -28,9 +31,17 @@ export class FrontendApp {
             reloadAlbumCounts: this.reloadAlbumCounts.bind(this),
             reloadLocationCounts: this.reloadLocationCounts.bind(this),
         })
+        this.detailUrl = createDetailUrl({ context })
+        this.detailPanel = createDetailPanel({
+            context,
+            assetActions: this.assetActions,
+            detailUrl: this.detailUrl,
+        })
         this.searchDetailCoordinator = createSearchDetailCoordinator({
             context,
+            detailPanel: this.detailPanel,
         })
+        this.detailFullscreen = createDetailFullscreen()
     }
 
     start() {
@@ -41,6 +52,9 @@ export class FrontendApp {
         this.started = true
         initializeFrontendStores()
         registerAppEventListeners(this)
+        this.detailUrl.start()
+        this.detailPanel.start()
+        this.detailFullscreen.start()
         Alpine.start()
         bindAppDragDrop(this)
         bindSearchInput()

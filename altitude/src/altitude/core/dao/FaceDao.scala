@@ -15,6 +15,12 @@ trait FaceDao extends BaseDao[Face]:
   /** Every Face of an asset, whoever its person is: those of hidden and bad-match people too, which `getAssetFaces` leaves out */
   def getAllAssetFaces(assetId: String): List[Face]
 
+  /** Whether the person has a Face on the asset, in the context repository */
+  def hasFaceOfPerson(assetId: String, personId: String): Boolean
+
+  /** The Face by ID if it is in the context repository; none for a Face gone or of another repository */
+  def getInRepository(faceId: String): Option[Face]
+
   /** A person's faces by detection score, best first and then by ID, no more than `limit` of them */
   def getTopFaces(personId: String, limit: Int): List[Face]
 
@@ -23,3 +29,20 @@ trait FaceDao extends BaseDao[Face]:
    * distance of `distanceThreshold` or more, and none of a bad-match person
    */
   def searchClosestFaceMatches(features: Array[Float], matchCount: Int, distanceThreshold: Double): List[Face]
+
+  /**
+   * The Face's vector, read from the engine's vector store since the model never carries it; none for a Face gone or of another
+   * repository
+   */
+  def getFeatures(faceId: String): Option[Array[Float]]
+
+  /**
+   * The nearest Faces as `searchClosestFaceMatches` finds them, of people other than `excludedPersonId`: closest first, no more
+   * than `limit`, none at a cosine distance of `distanceThreshold` or more, enrolled, of no bad-match person, in the context
+   * repository. The Change combobox's Suggested group reads it for a Face, whose own Person is the one left out.
+   */
+  def searchNearestFacesOfOthers(
+      features: Array[Float],
+      excludedPersonId: String,
+      limit: Int,
+      distanceThreshold: Double): List[Face]

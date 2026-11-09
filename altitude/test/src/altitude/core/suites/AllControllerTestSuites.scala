@@ -4,6 +4,7 @@ import org.scalatest.Suites
 
 import altitude.core.controller.AlbumActionControllerTests
 import altitude.core.controller.AlbumControllerTests
+import altitude.core.controller.AssetActionControllerTests
 import altitude.core.controller.AssetControllerTests
 import altitude.core.controller.ContentViewControllerTests
 import altitude.core.controller.CurationActionControllerTests
@@ -27,6 +28,7 @@ abstract class AllControllerTestSuites
     new HealthControllerTests(),
     new IndexControllerTests(),
     new AssetControllerTests(),
+    new AssetActionControllerTests(),
     new LoginControllerTests(),
     new ContentViewControllerTests(),
     new FolderActionControllerTests(),

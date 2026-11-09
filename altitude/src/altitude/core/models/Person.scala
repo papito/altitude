@@ -10,6 +10,10 @@ object Person:
   given JsonCodec.ReadWriter[Person] = JsonCodec.macroRW
   given Conversion[ujson.Value, Person] = json => JsonCodec.read[Person](json)
 
+/**
+ * `numOfFaces` is, despite its name, the number of assets outside the trash on which the person has a Face: what a search for the
+ * person finds, and what the Matched line is drawn on. A person seen twice in one image has two Faces there and counts it once.
+ */
 case class Person(
     id: Option[String] = None,
     name: Option[String] = None,
@@ -22,8 +26,8 @@ case class Person(
   with NoDates:
 
   /**
-   * The glossary's Matched person: named, or at least `MIN_FACES_THRESHOLD` faces; `PersonDao.getInBuckets` restates the rule in
-   * SQL
+   * The glossary's Matched person: named, or a Face on at least `MIN_FACES_THRESHOLD` assets outside the trash (`numOfFaces`);
+   * `PersonDao.getInBuckets` restates the rule in SQL
    */
   def isMatched: Boolean = isNamed || numOfFaces >= FaceRecognition.MIN_FACES_THRESHOLD
 

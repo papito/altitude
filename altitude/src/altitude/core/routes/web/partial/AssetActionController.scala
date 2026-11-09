@@ -4,10 +4,17 @@ import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
 
+import altitude.core.{ Const => C }
+import altitude.core.Api
 import altitude.core.App
+import altitude.core.DataScrubber
+import altitude.core.ValidationException
+import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Asset
+import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.service.PersonService.FaceTarget
 
 class AssetActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/asset"
@@ -27,5 +34,83 @@ class AssetActionController(using logger: Logger) extends BaseController:
     else
       val payload = "<!doctype html>" + htmx.html.view_image_detail_modal(asset)
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+
+  /**
+   * The Detail panel's two sections, People and Details, for the asset, read in one snapshot
+   * (`AssetService.detailOf`): its Faces with their people (bad matches left out, Hidden marked), the folder path (nothing for
+   * the root or for triage), its albums and Locations, and the frames of its Sequence. An asset in the trash gets the same panel
+   * with its People section read-only; an unknown asset, or another repository's, is a 404.
+   */
+  @requireLogin()
+  @cask.get(f"/$prefix/r/:repoId/detail-panel/:assetId")
+  def showDetailPanel(repoId: String, assetId: String)(using request: Request): Response[String] =
+    answering {
+      val payload = "<!doctype html>" + htmx.html.detail_panel(App.altitude.service.asset.detailOf(assetId))
+      cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    }
+
+  /**
+   * Change: gives the Face to the Person of the body's `personId`, or to the Person named by its `name` (found in any case, or
+   * created), and answers the asset's People section with the result in its data attributes. A body that is not a JSON object or
+   * not JSON at all, one naming both or neither, a name outside the length rules of the name editor, a reserved name or the
+   * Face's own Person is a 400; a Face gone or moved meanwhile, or an unknown or no longer live Person, a 404; a Face of an asset
+   * in the trash a 409.
+   */
+  @requireLogin()
+  @cask.put(f"/$prefix/r/:repoId/face/:faceId/person")
+  def changeFacePerson(repoId: String, faceId: String)(using request: Request): Response[String] =
+    answering {
+      val json: ujson.Obj = DataScrubber(trim = List(Api.Field.Person.NAME)).scrub(unscrubbedJson.get)
+      val personId = json.obj.get(Api.Field.PERSON_ID).flatMap(_.strOpt).filter(_.nonEmpty)
+      val name = json.obj.get(Api.Field.Person.NAME).flatMap(_.strOpt).filter(_.nonEmpty)
+
+      val target = (personId, name) match
+        case (Some(id), None) =>
+          ApiRequestValidator(uuid = List(Api.Field.PERSON_ID)).validate(json)
+          FaceTarget.ExistingPerson(id)
+        case (None, Some(personName)) =>
+          ApiRequestValidator(
+            maxLengths = Map(Api.Field.Person.NAME -> Api.Constraints.MAX_NAME_LENGTH),
+            minLengths = Map(Api.Field.Person.NAME -> Api.Constraints.MIN_NAME_LENGTH)
+          ).validate(json)
+          FaceTarget.Named(personName)
+        case _ => throw ValidationException(C.Msg.Err.FACE_TARGET_REQUIRED)
+
+      val move = App.altitude.service.person.moveFace(faceId, target)
+      logger.info(
+        s"Moved face [$faceId] of asset [${move.face.assetId.get}] from person [${move.source.persistedId}] " +
+          s"to [${move.target.persistedId}]${if move.sourceDeleted then ", deleting the source" else ""}")
+
+      peopleSection(
+        move.face.assetId.get,
+        C.Msg.FaceCorrection.MOVED.format(move.target.name.getOrElse("")),
+        Option.when(move.sourceDeleted)(move.source))
+    }
+
+  /**
+   * Remove: deletes the Face and its files, and answers the asset's People section with the result in its data attributes. A Face
+   * gone or moved meanwhile is a 404, a Face of an asset in the trash a 409.
+   */
+  @requireLogin()
+  @cask.delete(f"/$prefix/r/:repoId/face/:faceId")
+  def removeFace(repoId: String, faceId: String)(using request: Request): Response[String] =
+    answering {
+      val removal = App.altitude.service.person.removeFace(faceId)
+      logger.info(
+        s"Removed face [$faceId] of person [${removal.person.persistedId}] from asset [${removal.face.assetId.get}]" +
+          s"${if removal.personDeleted then ", deleting the person" else ""}")
+
+      peopleSection(
+        removal.face.assetId.get,
+        C.Msg.FaceCorrection.REMOVED.format(removal.person.name.getOrElse("")),
+        Option.when(removal.personDeleted)(removal.person))
+    }
+
+  /** The People section after a correction, its root carrying the message and any Person the correction deleted */
+  private def peopleSection(assetId: String, message: String, deletedPerson: Option[Person]): Response[String] =
+    val asset: Asset = App.altitude.service.asset.getById(assetId)
+    val faces = App.altitude.service.person.getAssetFacesForDetail(assetId)
+    val payload = "<!doctype html>" + htmx.html.detail_panel_people(asset, faces, Some(message), deletedPerson)
+    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   initialize()

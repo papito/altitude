@@ -44,6 +44,34 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   private def badRequest(message: String): Response[String] =
     cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
 
+  /**
+   * The options of the Change combobox of Asset detail's People section: the people a Face can be given to
+   * (`PersonService.assignablePeople`). Given the Face (`faceId`), the Suggested group of the people nearest it comes first, and
+   * those people and the Face's own Person are left out of the list after it, so each is one option and the Face's Person none;
+   * an unknown Face, or another repository's, is a 404
+   */
+  @requireLogin()
+  @cask.get(f"/$prefix/r/:repoId/assignable")
+  def listAssignablePeople(repoId: String, faceId: Option[String] = None)(using request: Request): Response[String] =
+    answering {
+      val assignable = App.altitude.service.person.assignablePeople(faceId)
+      val payload = "<!doctype html>" + htmx.html.assignable_people(people = assignable.others, suggested = assignable.suggested)
+      cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    }
+
+  /**
+   * A person's results title on its own, for the count to be refreshed after a Face correction; an unknown person, or another
+   * repository's, is a 404
+   */
+  @requireLogin()
+  @cask.get(f"/$prefix/r/:repoId/p/:personId/title")
+  def showPersonTitle(repoId: String, personId: String)(using request: Request): Response[String] =
+    answering {
+      val person: Person = App.altitude.service.person.getInRepository(personId)
+      val payload = "<!doctype html>" + htmx.html.person_inner(person = person)
+      cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    }
+
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/choose-person-cover-face")
   def showChoosePersonCoverFaceModal(repoId: String, personId: String)(using request: Request): Response[String] =

@@ -92,12 +92,14 @@ dropped when it matches nobody.
 _Avoid_: Weak face, Low-quality face in user-facing text.
 
 **Matched person**:
-A Person the library treats as established: at least three Faces, or named.
-Not about face matching: a Matched person is one whose faces have accumulated.
+A Person the library treats as established: a Face on at least three assets
+outside the trash, or named. Not about face matching: a Matched person is one
+whose faces have accumulated.
 _Avoid_: Verified, Complete, Above threshold.
 
 **Unmatched person**:
-A Person with fewer than three Faces and no name: a merge candidate or noise.
+A Person with a Face on fewer than three assets outside the trash and no name:
+a merge candidate or noise.
 _Avoid_: Unverified, Incomplete, Below threshold.
 
 **Hidden person**:
@@ -190,12 +192,13 @@ _Avoid_: Layout (the results' Grid or Map), Position, Arrangement, Orientation.
 
 **Asset detail**:
 The dialog that shows one asset at full size, stepping to the previous or next
-asset of the results.
+asset of the results. While it is open the URL names the asset and whether its
+Detail panel is open; opened from that URL it shows over the default results,
+with no previous or next.
 _Avoid_: Lightbox, Image detail, Viewer.
 
 **Detail panel**:
-The docked panel of Asset detail, holding the asset's People, its Details and
-its Metadata as extracted from the file.
+The docked panel of Asset detail, holding the asset's People and its Details.
 _Avoid_: Metadata panel, Info panel, Sidebar.
 
 **Face highlight**:

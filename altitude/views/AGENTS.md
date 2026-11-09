@@ -81,7 +81,7 @@ against the results, and the divider between them, is under **Explorer dock** be
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), Curation's shell opening its host (`curation.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), and the Settings form's save (`settings.js`, the success snackbar); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
-| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
+| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), Asset detail's URL (`detail-url.js`: the address bar names the asset and the Detail panel's state, and Back closes it), Asset detail's fullscreen (`detail-fullscreen.js`: `f`, the toolbar's toggle and the player's button on the whole of Asset detail), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
@@ -91,10 +91,10 @@ against the results, and the divider between them, is under **Explorer dock** be
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), explorer-dock (the main page's Dock side, the explorer's share and the divider), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font) |
+| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's and the Detail panel's docks are made from), stored-state (a remembered object under one localStorage key that modules share: `readStoredObject` and `writeStoredFields`, which sets some fields and keeps the rest; the Detail panel's view is read and written through it by `detail-panel.js` and `dock.js`), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads) and `curation.js` (Curation's state, on its shell); `index.js` registers them |
+| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell) and `face-combobox.js` (the Change combobox of a People row in the Detail panel); `index.js` registers them |
 
 ## Alpine.js Stores (initialized in `js/stores/app-stores.js` and `js/stores/html-common.js`)
 
@@ -127,7 +127,9 @@ and the panes' Split.js sizes on each axis as component data and remembers them 
 `Const.localStore.curationDetails` (`rememberedDetailKinds`, `saveDetailKinds`), a JSON array, and whether its stage shows the
 Histogram strips under `Const.localStore.curationHistogram` (`rememberedHistogramShown`, `saveHistogramShown`), "true" or "false",
 and whether it shows the Sequence rail under `Const.localStore.curationSequenceRail` (`rememberedSequenceRailShown`,
-`saveSequenceRailShown`), "true" or "false" too (see **Curation** below).
+`saveSequenceRailShown`), "true" or "false" too (see **Curation** below). Asset detail's view is no store either: `js/search-results/detail-panel.js`
+remembers whether the Detail panel is open, whether the Face highlights are on, and the panel's dock under
+`Const.localStore.assetDetailView` (see **Detail panel** below).
 
 ## DOM Addressing Convention
 
@@ -159,6 +161,23 @@ Const.attributes.measurementBox // "data-measurement-box"  (the box the measurem
 Const.attributes.histogram      // "data-histogram"  (a frame's Histogram for the stage's strip: a byte per bin, in Base64)
 Const.attributes.crushedShadows // "data-crushed-shadows"  (the fraction of a frame's pixels crushed, as the import measured it)
 Const.attributes.clippedHighlights // "data-clipped-highlights"  (the fraction of a frame's pixels blown)
+Const.attributes.dockSide       // "data-app-dock-side"  (a pick of the explorer's Dock side: the options of its menu)
+Const.attributes.detailDockSide // "data-app-detail-dock-side"  (a pick of the Detail panel's, its own since both docks listen on the body)
+Const.attributes.detailPanelToggle // "data-app-detail-panel-toggle"  (the Detail panel's toggle in asset detail's toolbar)
+Const.attributes.faceHighlightsToggle // "data-app-face-highlights-toggle"  (the Face highlights' toggle beside it)
+Const.attributes.fullscreenKey     // "data-app-fullscreen-key"  (the key legend's fullscreen entry, removed with the toggle where fullscreen is not allowed)
+Const.attributes.faceRow           // "data-app-face-row"  (the button of a People row that selects its Face)
+Const.attributes.faceChange        // "data-app-face-change"  (a selected row's Change, which opens the combobox)
+Const.attributes.faceRemove        // "data-app-face-remove"  (a selected row's Remove, with its second label in `data-app-face-remove-label-last`)
+Const.attributes.readOnly          // "data-app-read-only"  (the People section of an asset in the trash: no correction)
+Const.attributes.resultMessage     // "data-app-result-message"  (a correction's result on the section it answers with; a deleted Person's ID and line in `data-app-deleted-person-id` and `-message`)
+Const.attributes.faceId            // "data-face-id"  (a People row, a Face highlight and its badge)
+Const.attributes.personName        // "data-person-name"  (a People row's Person, with `data-person-hidden` when Hidden)
+Const.attributes.suggested         // "data-suggested"  (an option of the assignable people fragment in its Suggested group)
+Const.attributes.frameTimeMs       // "data-frame-time-ms"  (a People row of a Face in a Video)
+Const.attributes.detailDimensions  // "data-app-detail-dimensions"  (the Detail panel's dimensions row, which reads the shown element's size)
+Const.attributes.detailPanelOpen   // "data-app-detail-panel-open"  (the Asset detail fragment while the Detail panel is open; the stylesheet lays the grid out from it)
+Const.attributes.appAssetId        // "data-app-asset-id"  (the asset of the Detail panel's fragment and of its People section; not `data-asset-id`, which finds the grid's cells)
 ```
 
 A Curation set's root carries `data-opening-pinned-id` and `data-opening-focused-id`, and the
@@ -253,7 +272,8 @@ Two-layer event bus, both on `document.body`:
 Batch ops escalate a single-asset drag to a batch when the asset is among the selected ones: the
 `assetMoved`/`assetTrashed` handlers in `js/listeners/assets.js` re-dispatch
 `batchAssetsMoved`/`batchAssetsRecycled`. Person merge/name/cover-face events and the discard
-follow-up live in `js/listeners/people.js`: a merge, a hide, a show or a discard announces `peopleChanged`, which the
+follow-up live in `js/listeners/people.js`: a merge, a hide, a show, a discard or a Face correction in the Detail panel
+announces `peopleChanged`, which the
 People tab answers by reloading each pane with its own buckets (see **People tab**), while a rename and a cover-face
 change patch every cell of the person, found by `data-person-id` under `#people`; a purge of the recycle bin announces
 `trashPurged`, which refreshes the counts. `confirmPersonMerge`'s listener sends the event's whole detail as the values of
@@ -351,14 +371,17 @@ swaps once the user dismissed or replaced it. The three modal hosts' visibility 
 (`x-show`; `x-trap.inert.noscroll` from the vendored `@alpinejs/focus` plugin, registered by
 `registerHtmlCommonBindings()` in `js/stores/html-common.js`, contains focus and hides the page from assistive tech; its documented local patches
 cancel delayed activation when a trap is released or removed, and count controls in open shadow
-roots, the video player's sliders, as inside the trap). Escape (`global.js`) closes the
-active dialog and any open context menu and is consumed by them, which also keeps the browser's own
-Escape handling for the popover from running a second time, so a background inline edit
-survives; with neither open it closes the map view's crowded-pin panel, and with none of those it is
-broadcast for such an edit to cancel. An open select picker's Escape is left to the picker, which closes itself and
-not the dialog holding it. General dialogs and Curation ignore backdrop clicks, asset detail closes on them. The general
+roots, the video player's sliders, as inside the trap). Escape (`global.js`) closes one thing at a time and is consumed
+by it, which also keeps the browser's own Escape handling for the popover and the menus from running a second time, so
+a background inline edit survives: in fullscreen it is the browser's, which leaves fullscreen while Asset detail stays
+open (see **Detail navigation**); else the open listbox of a People row's Change combobox in the Detail panel closes
+alone (see **Detail panel**); else an open context menu closes alone, with focus back on its trigger, so the Detail
+panel's Dock side menu leaves Asset detail open (no other menu is open together with a dialog: opening a dialog closes
+the menus, and a menu's opening light-dismisses the popover dialog); else the active dialog; else the map view's
+crowded-pin panel; and with none of those it is broadcast for such an edit to cancel. An open select picker's Escape
+is left to the picker, which closes itself and not the dialog holding it. General dialogs and Curation ignore backdrop clicks, asset detail closes on them. The general
 modal is centered, 100px from the top, `--modal-content-width` wide (the Location map editor's dialog declares a wider
-one); asset detail is fitted by CSS from the stored size `setAssetDetailSize()` sets on its box, in its own host; Curation
+one); asset detail is fitted by CSS from the size as shown, which `setAssetDetailSize()` sets on its box, in its own host, and fills the viewport while its Detail panel is open (see **Detail panel**); Curation
 fills the window, over the nav, the explorer and the grid, with its title and Exit in its shell (see **Curation**).
 Switching hosts releases the active one in its own reactive flush before the next is activated, and hides the
 popover when it was the active one. Opening any dialog closes an open context menu first, so a
@@ -468,8 +491,11 @@ that issued an open's request, `getModalOpenSource()`), set before the image loa
 already steps from the newly opened cell while the spinner is showing. A detail opened from no cell
 (a map pin) has no previous or next.
 Arrow-key navigation works only while asset detail is active and no text field is focused, or the video player's
-timeline or volume slider, which the arrows step; Space plays or pauses the current Video, through media-chrome inside
-the player, and does nothing on an image.
+timeline or volume slider, which the arrows step, or the Detail panel's divider, which they move; Space plays or pauses
+the current Video, through media-chrome inside the player, and does nothing on an image, except on a control in the
+player or in the Detail panel, which it presses; `m` opens or closes the Detail panel, `p` shows or hides the Face
+highlights and `f` puts Asset detail in fullscreen or leaves it, wherever focus is, a held key or a modifier left to the
+browser (see **Detail panel**, and **Detail navigation** for fullscreen).
 
 **Context menus** — Each folder's, album's or Location row's ⋯ button (its **trigger**, `.menu-trigger`) is a real
 `button` with `popovertarget` pointing at a `popover="auto"` panel (`.context-menu`; `#menu-{id}`
@@ -1037,9 +1063,10 @@ does not show through it while it sticks). The scopes:
   (the name, whose click swaps in `htmx/edit_person_name` at the title's size, `field-sizing: content`, its form swapping
   `outerHTML settle:0` and its error row the one part of the title that wraps) with its pencil,
   shown by `static/css/htmx/person.css` only while the title is hovered or the name has focus
-- a **folder** as the path's breadcrumb (`.crumbs`): every ancestor short of the repository root, top-level first, each a
-  search trigger for its folder (`data-app-search-folder-id`, dimmed `.crumb`), separated by a dimmed `fa-chevron-right`
-  (`.sep`), and the folder itself as the `.leaf` in the title style. The path wraps rather than truncating. The
+- a **folder** as the path's breadcrumb (`.crumbs`, a shared primitive of `core.css` the Detail panel's Folder row wears too):
+  every ancestor short of the repository root, top-level first, each a search trigger for its folder
+  (`data-app-search-folder-id`, dimmed `.crumb`), separated by a dimmed `fa-chevron-right` (`.sep`), and the folder itself as
+  the `.leaf` in the title style. The path wraps rather than truncating. The
   controller builds it from `FolderService.getAncestors` (root first) and the folder; the root folder is the whole
   repository and renders no block
 - an **album** by name, with "Created *day*" (`Util.humanReadableDate` of `Album.createdAt`) as the subtitle
@@ -1176,8 +1203,10 @@ from `js/search-results/detail-navigator.js`. The detail fragment (`views/htmx/v
 holds an `<img>` and a media-chrome player (`<media-controller>` around a `<video preload="metadata">` and its
 control bar), and its dataset carries the media type; `showMedia` hides the player while any asset loads, so an emptied
 player never shows in the previous frame, shows the image or the player as the type calls for, unloads the other
-(`hidden`, `src` cleared), waits for `load` or `loadedmetadata`, and hands the stored width and height to the box, which
-CSS fits into the viewport below the toolbar and refits on resize. `showMedia` starts a shown Video with `play()`,
+(`hidden`, `src` cleared), waits for `load` or `loadedmetadata`, and hands the shown element's size (`naturalWidth`,
+`videoWidth`; the stored size when the element reports none) to the box, which CSS fits into the viewport below the
+toolbar and refits on resize: the stored size is the file header's, while a browser turns an image upright by its EXIF
+orientation. It names the asset shown to the Detail panel under the same request token, and the shown size too. `showMedia` starts a shown Video with `play()`,
 falling back to muted playback where the browser refuses sound, and interrupted plays (`AbortError`) are ignored; a clip
 shorter than ten seconds loops (`LOOP_MAX_DURATION_SECONDS`). Volume and mute are media-chrome's preferences
 (`localStorage` keys `media-chrome-pref-volume` and `media-chrome-pref-muted`), applied once per open and never written
@@ -1198,6 +1227,162 @@ loaded grid, next calls `loadNextPage` on the last cell - the same page load the
 makes, shared if already in flight - and continues into the cells it appended; at the true end, and
 at the true first cell, nothing happens. There is no shadow list and no JSON: a cell
 removed from the grid drops out of navigation with it, and the search route is HTML only.
+
+Asset detail's URL (`js/search-results/detail-url.js`, `app.detailUrl`) is `/r/:repoId/asset/:assetId`, with `?panel=open`
+while the Detail panel is open and no parameter while it is closed. It carries no search. `IndexController.assetView` answers
+it with the main page (a 404 for an asset the repository does not hold, through the scoped `AssetService.isInRepository`), and
+`index.scala.html` opens the asset through `openAssetInLocation` after the page's first search, so it shows over the default
+results and, having no cell, with no previous or next. The panel goes by that URL for an open that starts on one, and by what
+this browser remembers otherwise (`attach`); only a toggle writes the remembered state. The URL follows from the panel, which
+knows the asset and its own state: `showAsset`, once the asset's metadata is in, and `toggle` both call `show`. Opening from the
+results adds one history entry; stepping and the panel's toggle replace it once the asset has stayed for `URL_DEBOUNCE_MS` (a held arrow key costs no history calls, and closing or a traversal drops a replacement still waiting), Back closes Asset detail, closing by any other path
+(an `Alpine.effect` on the active host) goes back over the entry, and Forward opens the asset again. A page loaded on an asset's
+URL added no entry: closing replaces the URL with the results', and a Back to an entry an earlier load of the page added loads
+that URL for real, since the results on screen are not its search. A failed open goes back to the results' URL too (`openFailed`).
+While the URL names an asset the module holds the `HX-Replace-Url` of any search (`htmx:before:history:update`, cancelled) and
+applies it on closing. It also cancels `htmx:before:history:restore`, htmx's own answer to a traversal within the page, which
+would fetch the URL into the body: nothing pushes history through htmx, so every such traversal is this module's.
+
+Fullscreen (`js/search-results/detail-fullscreen.js`, `app.detailFullscreen`) is the whole of Asset detail, on an image
+as on a Video: `f` (`global.js`, dispatching `Const.events.toggleFullscreen`, wherever focus is except in a text field, a
+held key or a modifier left to the browser), the toolbar's toggle after the Face highlights' (`.toolbar-toggle`,
+`data-app-fullscreen-toggle`, its key in its title, `aria-pressed` following `document.fullscreenElement` on
+`fullscreenchange`; removed where `document.fullscreenEnabled` is false, as the player leaves its own button out) and
+the player's fullscreen button all put the host, `#imageDetailModalContainer`, in fullscreen through `requestFullscreen`,
+so the Detail panel, the Face highlights' layer and the player's control bar come along: `attach` gives each fragment's
+`<media-controller>` the host as its `fullscreenElement`, once media-chrome has defined the element (a property set
+before an element is upgraded would shadow the class's accessor), so the player's button requests fullscreen on the host
+and shows the host's state, and its `hotkeys` carries `nof`, so its own `f` is off. Under `:fullscreen` (`core.css`, by
+the box's rules) the toolbar is hidden and the box is the whole screen, panel open or not, so the stage fits the media to
+it, enlarged when it is smaller, and the panel keeps its share. Fullscreen is never remembered. Stepping stays in it;
+Escape is the browser's, which leaves fullscreen (Chrome consumes the key, and `global.js` leaves it alone while
+`document.fullscreenElement` is set), and a second Escape closes Asset detail; closing Asset detail by any path leaves
+fullscreen first (`releaseActiveHost` in `common/modal.js`, for a host containing the fullscreen element). The top layer
+stacks in order of entry, so a popover shown before fullscreen begins sits under the fullscreen element: the snackbar's
+stacks, outside the host, are shown again on entering (`raiseSnackbarStacks`, `common/snackbar.js`), which puts them, and
+the messages that join them, above it; the Dock side menu and the combobox's listbox are inside the host and open after,
+and the tooltip's one caller is outside Asset detail, so nothing else moves.
+
+**Detail panel** — The docked panel of Asset detail (the glossary's term) holding the asset's People and its Details. The fragment `htmx/view_image_detail_modal` (`#imageDetailView`, styled by `static/css/htmx/view_image_detail_modal.css`)
+is a grid of three areas as the main page is: the media stage (`#imageDetailStage`, a size container the media fit from the
+asset's ratio in container units, so the player and the image resize with the panel), the divider (`#detailPanelDivider`, a
+`.divider` with its orientation class) and the panel (`aside#detailPanel`: a header holding the Dock side menu at its end,
+`#detailPanelContent`, which scrolls, and under it the key legend, a `footer.panel-keys` of two lines that stays in view
+while the content scrolls: ← → Previous/Next, F Fullscreen, M Open/Close this panel; P Face highlights, Space Play/Pause.
+Its fullscreen entry carries `data-app-fullscreen-key` and goes with the toolbar's toggle where `document.fullscreenEnabled`
+is false; Escape is not listed, since what it does depends on what is open). Its shape is the panel's **Dock side**, `data-detail-dock-side` on the fragment with the
+share as `--detail-panel-share`, one rule per side bounded by `--detail-panel-min-*` and `--detail-stage-min-*` of `core.css`;
+closed (no `data-app-detail-panel-open`), the stage is the whole grid, the panel and the divider take no room and the box is
+fitted to the media as before, while open the box fills the viewport (`core.css`) and the panel takes its share: 30 % of the
+width for a left or right dock, 35 % of the height for top or bottom, until a drag. The panel docks right by default in every
+viewport and never follows the orientation; its picks are the options of `#detailDockSideMenuHost`, a compact choice menu whose
+options carry `data-app-detail-dock-side`, the panel's own attribute, since the explorer's dock takes its picks on the same body.
+The dock itself (the side and share written on the fragment, the divider's drag, arrow keys, Home, End and Enter, the menu's
+upkeep, the state remembered) is `js/common/dock.js`, the factory the explorer's dock is made from too (see **Explorer dock**),
+configured by `js/search-results/detail-panel.js`, which the composition root creates (`app.detailPanel`) and `fragments/image-detail.js`
+attaches to each fragment (`attach`: the menu's control built first, so the dock finds its trigger, then the layout and the divider).
+
+The panel opens and closes with `m` (`global.js`, dispatching `Const.events.toggleDetailPanel`, wherever focus is except in a text
+field, ignoring a held key or any modifier) and with the toolbar's toggle before the × (`.toolbar-toggle`, `includes/html_common`,
+`data-app-detail-panel-toggle`, its key in its title, `aria-pressed` kept by the module); the Face highlights with `p`
+(`Const.events.toggleFaceHighlights`, the same rules) and the toggle beside it (`data-app-face-highlights-toggle`). The player's
+`hotkeys` carries `nof nom`, so `f` and `m` are Asset detail's (fullscreen is under **Detail navigation**). While the panel is open or the highlights are on (`wantsFragment`, the one place that
+says so), the sections load as `htmx/detail_panel` (`GET /htmx/asset/r/:repoId/detail-panel/:assetId`, `AssetActionController`) through
+the axios client, on open, on each step and when either is switched on with the asset's details not loaded yet: the coordinator names
+the asset shown (`showAsset`) with its request's `isCurrent`, so an answer that arrives after a step or a close is dropped, as a
+superseded media load is, and the host is emptied as another asset starts loading, so no asset's details read as another's. A step
+names it twice: as it starts, with `load: false`, which empties the host and the layer and loads nothing, and from `showMedia` once the
+asset's metadata is in, which loads the fragment, so a failed asset fetch is one error snackbar and no request for the panel. The sections
+(`static/css/htmx/detail_panel.css`, by class so the style guide shows them): People is `htmx/detail_panel_people` (one row per Face,
+a button (`.face-row`, `data-app-face-row`) holding the cover then the name, tighter than the explorer's list rows, Hidden marked,
+`aria-pressed` while its Face is selected; read-only in the trash, where no correction is offered),
+Details a `dl.detail-rows` of the file name, the MIME type, the File Type (the extractor's detected name, when it has one), dimensions, duration, size, Date Taken with its source (`CaptureDateSource.label`),
+Date Imported, the Folder as shared `.crumbs`, the albums and the Locations (`Category › Name`) each a link to its search
+(`/r/:repoId?folderId=…`, `albumId`, `locationId`) in a new tab, so Asset detail stays open, the GPS position, the camera rows,
+and the frames of a triaged image's Sequence. The dimensions row (`data-app-detail-dimensions`) is written from the shown element's size, which the
+coordinator hands over, so a rotated phone photo reads as shown. What is remembered per browser, under `Const.localStore.assetDetailView`
+as `{ panelOpen, highlightsOn, dock: { side?, widthShare, heightShare } }`: whether the panel is open (closed by default),
+whether the Face highlights are on (written for `p`) and the dock (its part, written by the dock itself); a selection is never remembered. Space on a control in the panel presses
+it and the arrows on the divider move it, which `global.js` leaves to them.
+
+The **Face highlights** (the glossary's term) are drawn from the People rows' data attributes (`data-face-id`, `data-person-name`,
+`data-person-hidden`, `data-face-box` as `x,y,w,h` in the detector's pixels, `data-frame-time-ms` for a Face in a Video) into
+`#faceHighlights`, a layer in the stage that shares the media's cell and box (`view_image_detail_modal.css` gives the three the same
+width, ratio and `grid-area`), so a highlight is placed by fractions of the shown element's natural size (`--face-x`, `--face-y`,
+`--face-width`, `--face-height`), the size the coordinator hands the panel: the detector decodes an image upright by its EXIF
+orientation as a browser does, and a Video's frames are turned as its player turns them, so the two spaces are one. The layer takes
+no pointer events and paints above the player, so the control bar stays usable; a highlight (`.face-highlight`, built by
+`js/search-results/face-highlights.js`) is a `button` with `aria-pressed`, a `--border-hairline` outline in `--theme-neutral-1` with
+`--face-highlight-radius` corners (`core.css`) over a transparent box, `--border-heavy` while selected, and its badge
+(`.face-highlight-badge`, the Person's name as text at `--font-size-base`, light on `--scrim-color`, Hidden marked, semibold for the
+selected one) is anchored to it by an inline `anchor-name` per index and placed `position-area: bottom`, centered under the box, with
+`flip-block` above it when there is no room below and `@position-try --face-highlight-badge-inside` at the box's bottom edge when
+there is none above either, so a badge never leaves the media; it is cut with an ellipsis at the layer's width (an inline-size
+container) and takes no pointer events, so the player's control bar under it stays usable. The layer is emptied as soon as another asset starts loading
+(`showAsset`) and drawn again when the media is shown, when the rows arrive, on `p`, on a selection and, for a Video, on its `pause`,
+`play` and `seeked`: with `p` on every Face shows, the selected one emphasised; off, the selected one alone; on a Video a Face shows
+only while the player is paused within `FRAME_TIME_TOLERANCE_MS` (100 ms) of its Frame time, none during playback. The selection is
+one Face at most, held in `detail-panel.js` and never exported, the state the corrections act on: a click on a row's button
+or on a highlight's box (which carries `data-face-id`; the badge takes no clicks) selects the Face, a click on the selected one clears it, and a
+step, each open and `p` clear it; on a Video a row's click seeks to the Face's Frame time and pauses, and playing or scrubbing away
+takes the highlight off while the row stays selected. A highlight's click also opens the panel when it is closed, as `m` would, and
+scrolls the row into view. The style guide's Panels & layout section holds a specimen of a highlight with its badge, a selected and a
+Hidden one.
+
+The **Face corrections** (`docs/faces.md` **Corrections**) act on the selected Face: under the selected row sit Change and
+Remove (`.face-actions`, shown by the row's `aria-pressed` in `detail_panel.css`, so no script toggles them; rendered for a
+live asset only, the section of an asset in the trash carrying `data-app-read-only` and offering nothing, which the server
+refuses too). `js/search-results/face-corrections.js` owns the two clicks and the requests: Remove's first click arms the
+button and shows the label it carries ("Remove (last click)", `data-app-face-remove-label-last`), the second click on the
+same Face sends `DELETE /htmx/asset/r/:repoId/face/:faceId`, and a change of the selection disarms it; Change is the
+**Change combobox**, `x-data="faceCombobox"` on the row's `.face-actions` (`js/alpine/components/face-combobox.js`,
+hand-built with core Alpine on the ARIA combobox pattern of `docs/reference/alpine-components/headless-combobox.md`): an
+input with `role="combobox"` (`aria-expanded`, `aria-controls`, `aria-activedescendant`) that takes the buttons' place, an X
+beside it, and a `role="listbox"` manual popover (`.face-listbox`, in the top layer so the panel's scrolling never clips it)
+anchored under the input by CSS anchor positioning with an anchor name per Face, as wide as the input, flipped above when
+there is no room below, capped at `--face-listbox-max-height` and scrolling. Opening loads the options once per opening
+from `GET /htmx/people/r/:repoId/assignable?faceId=…` (`assignablePeopleUrl`, the one place the URL is built), parses the
+fragment's `role="option"` rows wherever they sit (`parseAssignablePeople`) and filters them on the client as the user
+types, the first `MAX_SHOWN_OPTIONS` (50) matches rendered with lazy covers, Hidden marked; the server leaves the Face's own Person
+out of the options (`PersonService.assignablePeople`, one read for the group and the list).
+The fragment opens with the **Suggested** group (`docs/faces.md` **Corrections**: the people whose Faces are nearest the
+Face's vector, closest first, at most 3, each option marked `data-suggested` and left out of the list after it): while
+nothing is typed the component renders them (`suggested`) as the ARIA listbox group pattern above the list (`matches`, the
+rest), `li[role=presentation].suggested` holding the heading (`.group-heading`, an ID per Face) and a `ul[role=group]`
+labelled by it, so the listbox announces the heading with its options (the "No one matches" line is `role="presentation"`
+too, so the listbox holds options alone); from the first character the group is left out
+and the suggested people are filtered with the rest, ahead of them. The server is the one source of the options and the
+component their one renderer; the group is absent when nobody is near enough, and the list works as before. A name no
+option has, within the server's name length rules (`Const.people.nameLength`), is offered as the Create row ("Create
+'Alice'"); an existing name in any case or Unicode form picks that Person instead. The Face's own Person is no option, so
+their name is offered as a Create row too, and the server refuses it as already theirs (a 400 in the error snackbar). Down and Up move the active option,
+wrapping, through the group, the list and the Create row in that order, and reopen a closed listbox; Enter picks the
+active one, which before the arrows move it is the Person of the exact name, else the first match, else the Create row,
+and nothing while the input is empty; the pointer over an option makes it active;
+focus leaving the combobox closes the listbox and leaves the input. A pick is announced as `Const.events.facePersonPicked`
+(`faceId` with `personId` or `name`), which the corrections module answers with
+`PUT /htmx/asset/r/:repoId/face/:faceId/person`; the X announces `Const.events.faceChangeCancelled`, and the panel clears
+the selection and returns focus to the row. Escape with the listbox open closes it alone: `global.js` calls
+`closeOpenFaceCombobox` before `closeModal`, so a second Escape closes Asset detail. `m` and `p` in the input are the
+field's, as in every text field.
+
+A correction answers the People section (`htmx/detail_panel_people`, 200), which `detail-panel.js` (`afterEdit`) swaps in
+whole for the shown one: the selection clears, the rows and the Face highlights are drawn again from the new rows (with
+`p` off nothing shows, with it on the remaining Faces), the result message from the root's `data-app-result-message` is a
+success snackbar, with the line of a Person the correction deleted (`data-app-deleted-person-message`) after it,
+`peopleChanged` reloads the People tab at once, and focus goes to the first row. A 400 (a reserved name) is the server's
+message in the error snackbar and nothing changes; a 404 or 409 (the Face gone or moved meanwhile, the asset recycled)
+means the section is stale: the message is shown and the panel loads the asset's details again (`reloadSection`). One
+correction at a time per Face. While viewing a Person (`searchParams.personId`), an asset they have no Face left on after
+a correction stays in Asset detail and is noted as leaving (`noteViewedPerson`; a later correction that gives them a Face
+back keeps it, unless they were deleted): on stepping away, once the step has picked its target (`showAsset` for another
+asset), or on closing (an `Alpine.effect` over the `modal` store), its cells leave the grid through
+`assetActions.removeAssetsFromGrid`, so the walk continues from the cells around them, and the results title's count is
+read again (`GET /htmx/people/r/:repoId/p/:personId/title` into `#person`), or, when the viewed Person was deleted, the
+results go back to the whole repository (`runSearch` with an empty `personId`, as the title's × does). A detail opened from
+no cell (a map pin) has no cell to remove and still refreshes the title; a Search text result stays until the next search.
+The style guide's Panels & layout section holds a specimen of the actions under a selected row and of the combobox with
+its listbox.
 
 **Curation** — The modal where the user keeps the best frames of a Curation set and recycles the rest. What sorts a set and
 what its outcome writes are under **Sequences and Image quality** in `altitude/AGENTS.md`, and the terms are the glossary's. It
@@ -1688,7 +1873,12 @@ height share top and bottom (defaults 25 and 35 %), so a switch within an axis k
 `static/js/explorer-dock-boot.js`, a plain blocking script in the page's head with the key in its `data-key`, writes
 the side and `--explorer-share` on `<html>` before the first paint, so nothing moves under the user. From
 `initExplorerDock(view)` (`js/common/explorer-dock.js`, called by the page script; it returns at once in the trash
-bin, where `hasExplorerDock()` is false) the module owns both: it re-docks on the orientation query's `change` while
+bin, where `hasExplorerDock()` is false) the module owns both. The mechanics are `js/common/dock.js`'s, a factory
+(`createDock`) taking the storage key, the pick attribute, the layout attribute and share property, the container, the
+size reference, the divider, the defaults (the side and the two shares), the minimums and whether the default side follows
+the orientation; the explorer's module is its configuration (`data-dock-side` and `--explorer-share` on `<html>`, the side
+by the viewport, 25 % and 35 %, the header's min-content as the width's floor), and the Detail panel's is the other (see
+**Detail panel**). The explorer's dock: it re-docks on the orientation query's `change` while
 nothing is picked, takes a pick from any `[data-app-dock-side]` click on the page (`setDockSide`), and dispatches
 `Const.events.dockSideChanged` on `document.body` after every side change, with the side in `detail.side`, for
 whatever lays itself out by the side: the People tab's Split view stacks its panes under a left or right dock and sets
@@ -1942,7 +2132,11 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** A feature's own
   design conventions can have one too: Curation's notice, chip and Bundle row (`htmx/curation_set.css`) and the Sequence rail's
   rows (`htmx/curation_queue.css`), a done one and a current one side by side in `.sg-curation-queue`, are in Badges & states,
-  where `.sg-curation-bundle` gives the row the rail's width. Specimens
+  where `.sg-curation-bundle` gives the row the rail's width, and the Detail panel's sections (`htmx/detail_panel.css`: a People
+  row, selected and not, Change and Remove under a selected row, the Change combobox with its listbox and its Suggested group,
+  Details rows with the crumbs), the toolbar toggles and the Face highlights
+  (`htmx/view_image_detail_modal.css`: a highlight and its badge over a stand-in for a photo, `.sg-face-highlights`) are in Panels &
+  layout, in `.sg-detail-panel`. Specimens
   use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements
   under `body.style-guide`) only lay the page out, from the `:root` variables.
   Three more things keep the page current:
@@ -2059,12 +2253,12 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/http/client.js` | shared axios client for non-HTMX requests; use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes (`Folder.find(id)`); owns branch expansion (`expand`, `expandAll`, `collapse` with descendant reset) |
 | `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
-| `static/js/common/modal.js` | owner of the four dialog hosts: `openModal`, `closeModal`, open identity (`isModalOpenActive`), the element that requested an open (`getModalOpenSource`), the popover dialog's anchor and its own dismissals (`bindPopoverHost`), `setAssetDetailSize` |
+| `static/js/common/modal.js` | owner of the four dialog hosts: `openModal`, `closeModal`, open identity (`isModalOpenActive`), the element that requested an open (`getModalOpenSource`), the popover dialog's anchor and its own dismissals (`bindPopoverHost`), `setAssetDetailSize` (the size as shown, which the box is fitted from); a closing host leaves fullscreen |
 | `static/js/common/video-playback.js` | the asset-detail Video beyond its element: `unloadVideo`, and the Media Session (`describeInMediaSession`, `clearMediaSession`) |
 | `static/js/common/anchored-panel.js` | viewport placement of the popover menus and View settings (the popover dialog is placed by CSS anchor positioning) |
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
 | `static/js/fragments/inline-dialog.js` | View settings fragment shown in its popover |
-| `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar`; the `snackbar` store (`createSnackbarStore`: the two stacks, the cap and merge, the notices' timers, focus on dismiss) and the announcer (two regions per place; `announcePolitely` lends the polite one to the tooltip) |
+| `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar`; the `snackbar` store (`createSnackbarStore`: the two stacks, the cap and merge, the notices' timers, focus on dismiss), the announcer (two regions per place; `announcePolitely` lends the polite one to the tooltip) and `raiseSnackbarStacks` (the open stacks shown again, above an element that went fullscreen after them) |
 | `static/js/common/tooltip.js` | the `$tooltip` magic (`tooltipMagic`), `showTooltip` and `hideTooltip`: the hint above a clicked element, in the `#tooltip` host, placed by CSS anchor positioning (see **Tooltip**) |
 | `static/js/stores/html-common.js` | `registerHtmlCommonBindings()`: what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic, the focus plugin), called once per page before Alpine starts: from `initializeFrontendStores()` and `settings-page.js` |
 | `static/js/search-results/selection.js` | the `selectedAssets` store (reactive set of IDs, paints the cells) and the grid's delegated click listener |
@@ -2089,11 +2283,20 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, dialog open) |
 | `static/js/alpine/components/people-tab.js` | Alpine component of the People tab: the remembered buckets of the Main and Duplicate panes, Split view and the panes' sizes on each axis (`Const.localStore.peopleView`), the pane loads through `htmx.ajax`, the Split.js instance along the Dock side's axis and its remake on `dockSideChanged`, the reload on `peopleChanged` |
 | `views/htmx/people.scala.html`, `people_list.scala.html` | The People tab's shell (the panes and their bucket switches, no list) and one pane's list for the buckets asked for; styled by `static/css/htmx/people.css` |
+| `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read; under each row, for a live asset, Change and Remove and the Change combobox's markup, its listbox rendering the Suggested group and then the list from one option block; a correction's response, its root carrying the result message and any deleted Person) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
+| `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu; its grid and the highlights' look are `static/css/htmx/view_image_detail_modal.css` |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
 | `static/js/search-results/search-input.js` | `bindSearchInput`: the nav's Search input (`#searchForm`), submitting and clearing `q` and following the store |
-| `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal, and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
+| `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal (the box fitted from the shown element's size, the Detail panel told of each asset and size shown), and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
+| `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing) |
+| `static/js/search-results/detail-url.js` | `createDetailUrl`: Asset detail's URL, its history entry and Back and Forward over it, the opening of the asset a URL names (`openAssetInLocation`), and the search URL held while it is open (see **Detail navigation**) |
+| `static/js/search-results/detail-fullscreen.js` | `createDetailFullscreen`: Asset detail in fullscreen (`toggle`, on `f` and the toolbar's toggle, which it removes where `document.fullscreenEnabled` is false), the player's `fullscreenElement` set to the host on each fragment (`attach`), the toggle's pressed state and the snackbar's stacks raised on `fullscreenchange` |
+| `static/js/search-results/face-corrections.js` | `createFaceCorrections`: Remove's two clicks and their reset, the Change pick's request, and what each answer means (the section to swap in, a message, a stale section to reload); `parsePeopleSection` |
+| `static/js/alpine/components/face-combobox.js` | the `faceCombobox` Alpine component of a People row's Change: the options loaded once per opening for the Face (`assignablePeopleUrl`, `parseAssignablePeople`), the Suggested group while nothing is typed, the rest filtered as typed, the Create row, the keys, the anchored listbox popover, the pick and the X announced as events; `closeOpenFaceCombobox` for Escape |
+| `static/js/search-results/face-highlights.js` | `createFaceHighlights`: draws the Face highlights into `#faceHighlights` (`show`: a toggle button per Face placed by fractions of the shown size, its badge anchored to it; `clear`), and `FRAME_TIME_TOLERANCE_MS`, how far from its Frame time a Video's Face counts as current |
+| `static/js/common/dock.js` | `createDock`: a docked panel's side, share, divider (drag and keys), Dock side menu upkeep and remembered state, configured by the explorer's and the Detail panel's docks; `isVerticalAxis` |
 | `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid, and its Curate button (`removeCurateButtons`) |
 | `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
@@ -2112,7 +2315,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/common/token-kinds.js` | the kinds of token (`TOKEN_KINDS`, `kindOf`) and their groups (`groupOf`, `paletteGroupOf`), the token references of a declaration (`referencedNamesOf`), for the style guide |
 | `static/js/common/theme.js` | the two themes: `applyTheme`, `chooseTheme`, `toggleTheme`, `rememberedTheme`, `inTheme`, `resolveColor`, and the two colors of a `light-dark()` pair (`themeColorsOf`, `withThemeColor`) |
 | `static/js/common/font-availability.js` | `isFontAvailable` and `asFontFamily`, the font tester's check |
-| `static/js/common/explorer-dock.js` | the main page's Dock side: `initExplorerDock(view)`, `setDockSide(side)`, `effectiveSide()`, the explorer's remembered share per axis, the divider's drag and keys, `explorerShare()` / `setExplorerShare(percent)`, which the design tweaks adapter passes as an extra control, and the `dockSideChanged` event |
+| `static/js/common/explorer-dock.js` | the main page's Dock side, the explorer's configuration of `common/dock.js`: `initExplorerDock(view)`, `setDockSide(side)`, `effectiveSide()`, `isVerticalAxis`, the explorer's remembered share per axis, `explorerShare()` / `setExplorerShare(percent)`, which the design tweaks adapter passes as an extra control, and the `dockSideChanged` event |
 | `static/js/theme-boot.js` | the blocking boot script of `includes/header_common`: the remembered theme on `<html>` before the first paint |
 | `static/js/explorer-dock-boot.js` | the blocking boot script of the main page's head: the Dock side and the share on `<html>` before the first paint |
 | `static/js/design-tweaks.js` | the design tweaks panel's adapter: `createTokenTweaks` of the vendored tokentweak package with Altitude's storage key, host id, stylesheet, trigger, shortcut, sources URL, sections, scales, the two scoped tokens, the explorer control and the export file name |
@@ -2218,7 +2421,8 @@ The browser URL is authoritative exactly once, at page load: `index.scala.html` 
 `window.location.search`, so a bookmarked or shared search still opens. After that the store is the
 source of truth and the friendly URL the server pushes back (`HX-Replace-Url`) is only a projection
 of it — never read back. The server correspondingly reads nothing but its own query parameters; it
-does not merge with `HX-Current-URL`, and there is no "new search" flag.
+does not merge with `HX-Current-URL`, and there is no "new search" flag. While Asset detail is open the address bar names
+its asset instead, and the pushed URL is held for its closing (see **Detail navigation**).
 
 Triggers are declarative and hydrated centrally by `bindSearchTriggers`, called from
 `js/fragments/index.js` (and from `reloadFolderTree`, which builds its rows after the folders tab

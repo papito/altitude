@@ -210,6 +210,30 @@ export function createSnackbarStore() {
     }
 }
 
+/**
+ * Shows the open stacks again, which moves them to the top of the top layer: a stack open before
+ * an element went fullscreen would otherwise sit under it, with the messages that join it unseen
+ * (Asset detail's `f`, `search-results/detail-fullscreen.js`). A hidden popover leaves the top
+ * layer only at the next rendering update, and one shown again before then keeps its place, so
+ * the show waits a frame past the hide.
+ */
+export function raiseSnackbarStacks() {
+    const stackEls = [
+        ...document.querySelectorAll(".snackbar-stack:popover-open"),
+    ]
+    stackEls.forEach((stackEl) => stackEl.hidePopover())
+
+    requestAnimationFrame(() =>
+        requestAnimationFrame(() =>
+            stackEls.forEach((stackEl) => {
+                if (stackEl.isConnected && !stackEl.matches(":popover-open")) {
+                    stackEl.showPopover()
+                }
+            }),
+        ),
+    )
+}
+
 function isError(type) {
     return type === "error"
 }

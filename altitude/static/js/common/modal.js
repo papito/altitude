@@ -327,10 +327,14 @@ function releaseActiveHost({ reason, keepFocus }) {
     )
     // A video keeps playing in a hidden host otherwise, and a paused one that still has its source
     // keeps the browser's media overlay, whose play button would resume it there
-    getContainer(store.activeHost)
-        ?.querySelectorAll("video")
-        .forEach(unloadVideo)
+    const containerEl = getContainer(store.activeHost)
+    containerEl?.querySelectorAll("video").forEach(unloadVideo)
     clearMediaSession()
+    // A host in fullscreen (Asset detail's `f`) leaves it on every close path, or the screen would
+    // stay on the hidden host
+    if (containerEl?.contains(document.fullscreenElement)) {
+        document.exitFullscreen().catch(() => {})
+    }
     // The title stays, so the popover keeps it while it fades out; a modal host is hidden at once
     // (`x-show`), and the next open sets its own
     store.activeHost = null

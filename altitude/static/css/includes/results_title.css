@@ -73,31 +73,8 @@
   color: var(--theme-neutral-3);
 }
 
-/* A folder's path: the ancestors dimmed, each a link to its own folder, the folder itself in the title style. The row wraps
-   rather than hiding an ancestor. */
-.results-title .crumbs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.results-title .crumb {
-  color: var(--theme-neutral-3);
-  font-weight: normal;
-  text-decoration: none;
-}
-
-.results-title .crumb:hover {
-  color: var(--theme-neutral-4);
-}
-
-.results-title .sep {
-  font-size: var(--font-size-medium);
-  color: var(--theme-neutral-3);
-  opacity: 0.4;
-}
+/* A folder's path wears the shared crumbs (.crumbs, core.css): the ancestors dimmed, each a link to its own folder, and
+   the folder itself (.leaf) in the title style */
 
 /* The Search text, in curly quotes */
 .results-title .query::before,

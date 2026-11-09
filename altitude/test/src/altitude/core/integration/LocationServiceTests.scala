@@ -65,6 +65,39 @@ import altitude.core.models.Repository
     category.longitude shouldEqual None
   }
 
+  test("An asset's Locations are read in path order with their category names, and an asset in none has none") {
+
+    /**
+     * Setup:
+     *
+     * A category "Italy" holding "Rome", the top-level Locations "Alba" and "Zurich", and two imported assets: the first in Rome,
+     * Zurich and Alba, the second in none.
+     *
+     * Assertions:
+     *
+     * The first asset's Locations come in path order, Alba, then Rome under Italy, then Zurich, Rome carrying its category's name
+     * and the others none; the second asset has no Locations.
+     *
+     * Edge cases:
+     *
+     * "Alba" sorts before "Italy › Rome" because a Location under a category sorts by the category's name.
+     */
+    val italy: Location = testApp.service.location.addCategory("Italy")
+    val rome: Location = addLocation("Rome", Some(italy.persistedId))
+    val alba: Location = addLocation("Alba")
+    val zurich: Location = addLocation("Zurich")
+
+    val inThree: Asset = testContext.persistAsset()
+    val inNone: Asset = testContext.persistAsset()
+    List(rome, zurich, alba).foreach(
+      location => testApp.service.location.addAssets(location.persistedId, Set(inThree.persistedId)))
+
+    val locations = testApp.service.location.getLocationsOfAsset(inThree.persistedId)
+    locations.map(_.persistedId) shouldEqual List(alba.persistedId, rome.persistedId, zurich.persistedId)
+    locations.map(_.categoryName) shouldEqual List(None, Some("Italy"), None)
+    testApp.service.location.getLocationsOfAsset(inNone.persistedId) shouldBe Nil
+  }
+
   test("Categories and Locations share one case-insensitive name pool per repository") {
 
     /**

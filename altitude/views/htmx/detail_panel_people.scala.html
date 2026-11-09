@@ -1,0 +1,122 @@
+@import altitude.core.Const
+@import altitude.core.util.Util
+@import altitude.core.models.Asset
+@import altitude.core.models.Face
+@import altitude.core.models.Person
+
+@(asset: Asset, faces: List[(Face, Person)], message: Option[String] = None, deletedPerson: Option[Person] = None)
+
+@* The People section of the Detail panel: one row per Face of the asset, in the order the server reads them
+   (PersonService.getAssetFacesForDetail: by x for an image, by Frame time for a Video), bad matches left out. A row
+   carries what the Face highlights and the corrections read: the Face, its Person and their name, the box in the
+   asset's pixels (x, y, width, height), the Frame time for a Face in a Video, and whether the Person is Hidden. The
+   row's button (`data-app-face-row`) selects the Face, which js/search-results/detail-panel.js marks with `aria-pressed`
+   and shows as a Face highlight. Under a selected row (detail_panel.css shows it by the button's `aria-pressed`) sit its
+   corrections: Change, which turns the actions into the combobox of the people the Face can be given to
+   (`x-data="faceCombobox"`, js/alpine/components/face-combobox.js: an input with role="combobox", an X back to the
+   buttons, and the `role="listbox"` popover its options render into, anchored to the input), and Remove, whose label
+   moves through two clicks, the second one removing (the one after the first click is on the button). The section is
+   swapped in whole by a correction's response (PUT /htmx/asset/r/:repoId/face/:faceId/person, DELETE
+   /htmx/asset/r/:repoId/face/:faceId), whose root then carries the result message for the snackbar and, for a Person
+   the correction deleted, their ID and the line the snackbar adds. For an asset in the trash the root is marked
+   read-only: no correction is rendered, and the server refuses them. The listbox opens with the Suggested group, the
+   people nearest the Face (the component's `suggested`, rendered while nothing is typed, under a heading the group is
+   labelled by), then the list (`matches`); both render the same option. *@
+
+@* An option of the combobox's listbox for each Person of the component's `people` list: the cover, the name, the Hidden mark *@
+@personOptions(people: String) = {
+<template x-for="option in @people" :key="option.personId">
+    <li role="option" :id="optionId(option.personId)" :aria-selected="isActive(option.personId)" :data-option-key="option.personId">
+        <template x-if="option.coverUrl"><img :src="option.coverUrl" alt="" loading="lazy"></template>
+        <template x-if="!option.coverUrl"><span class="no-cover"></span></template>
+        <span class="name" x-text="option.name"></span>
+        <span class="hidden-mark" x-show="option.hidden">Hidden</span>
+    </li>
+</template>
+}
+
+<section id="detailPanelPeople"
+         data-app-asset-id="@{asset.persistedId}"
+         @if(asset.isRecycled) { data-app-read-only="true" }
+         @for(text <- message) { data-app-result-message="@text" }
+         @for(person <- deletedPerson) {
+         data-app-deleted-person-id="@{person.persistedId}"
+         data-app-deleted-person-message="@{Const.Msg.FaceCorrection.PERSON_REMOVED.format(person.name.getOrElse(""))}"
+         }>
+    @if(faces.isEmpty) {
+    <p class="empty">No one in this @if(asset.assetType.mediaType == "video") {video} else {image}</p>
+    } else {
+    <ul class="people">
+        @for((face, person) <- faces) {
+        <li data-face-id="@{face.persistedId}"
+            data-person-id="@{person.persistedId}"
+            data-person-name="@{person.name.getOrElse("")}"
+            @if(person.isHidden) { data-person-hidden="true" }
+            data-face-box="@{face.x1},@{face.y1},@{face.width},@{face.height}"
+            @for(time <- face.frameTimeMs) { data-frame-time-ms="@time" }>
+            <button type="button" class="face-row" aria-pressed="false" data-app-face-row>
+                @for(cover <- person.coverFaceId) {
+                <img src="@{Util.contentUrl(Const.DataStore.FACE, cover)}" alt="" loading="lazy">
+                }
+                <span class="name">@{person.name.getOrElse("")}</span>
+                @if(person.isHidden) { <span class="hidden-mark">Hidden</span> }
+            </button>
+            @if(!asset.isRecycled) {
+            <div class="face-actions"
+                 x-data="faceCombobox"
+                 x-on:face-combobox-close="reset()"
+                 x-on:focusout="onFocusOut($event)">
+                <div class="face-buttons" x-show="!changing">
+                    <button type="button" class="action-button small" data-app-face-change x-on:click="open()">Change</button>
+                    <button type="button"
+                            class="action-button small warning"
+                            data-app-face-remove
+                            data-app-face-remove-label-last="Remove (last click)">Remove (click twice)</button>
+                </div>
+                <div class="face-combobox" x-show="changing" x-cloak>
+                    <input type="text"
+                           role="combobox"
+                           autocomplete="off"
+                           spellcheck="false"
+                           placeholder="Name"
+                           aria-label="Person"
+                           aria-autocomplete="list"
+                           aria-haspopup="listbox"
+                           x-ref="input"
+                           :aria-expanded="expanded"
+                           :aria-controls="listboxId"
+                           :aria-activedescendant="activeOptionId"
+                           x-on:input="onInput($event)"
+                           x-on:keydown="onKeydown($event)">
+                    <button type="button" class="cancel" aria-label="Cancel" title="Cancel" x-on:click="cancel()">&times;</button>
+                    <ul class="face-listbox"
+                        role="listbox"
+                        popover="manual"
+                        aria-label="People"
+                        x-ref="listbox"
+                        :id="listboxId"
+                        x-on:toggle="onToggle($event)"
+                        x-on:mousedown.prevent
+                        x-on:click="onOptionClick($event)"
+                        x-on:mouseover="onOptionHover($event)">
+                        <li role="presentation" class="suggested" x-show="suggested.length > 0">
+                            <span class="group-heading" role="presentation" :id="suggestedHeadingId">Suggested</span>
+                            <ul role="group" :aria-labelledby="suggestedHeadingId">
+                                @personOptions("suggested")
+                            </ul>
+                        </li>
+                        @personOptions("matches")
+                        <li role="option" class="create" :id="optionId(CREATE_KEY)" :aria-selected="isActive(CREATE_KEY)" :data-option-key="CREATE_KEY" x-show="createName">
+                            <i class="fas fa-plus" aria-hidden="true"></i>
+                            <span class="name" x-text="createLabel"></span>
+                        </li>
+                        <li class="empty" role="presentation" x-show="keys.length === 0">No one matches</li>
+                    </ul>
+                </div>
+            </div>
+            }
+        </li>
+        }
+    </ul>
+    }
+</section>

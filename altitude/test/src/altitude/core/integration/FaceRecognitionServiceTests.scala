@@ -16,7 +16,6 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import scala.jdk.CollectionConverters.*
-import scala.util.Random
 
 import altitude.core.Altitude
 import altitude.core.Const
@@ -27,7 +26,6 @@ import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
 import altitude.core.models.Face
 import altitude.core.models.Person
-import altitude.core.service.FaceDetectionService
 import altitude.core.service.FaceRecognitionService
 
 @DoNotDiscover class FaceRecognitionServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
@@ -146,6 +144,116 @@ import altitude.core.service.FaceRecognitionService
     recognized.persistedId should not be elsewhere.persistedId
   }
 
+  test("A Face's vector reads back as stored, and not from another repository") {
+
+    /**
+     * Setup:
+     *
+     * A Person's Face at a synthetic embedding on one asset, and a second repository.
+     *
+     * Assertions:
+     *
+     * The DAO reads the Face's vector back equal to the one stored, through the engine's vector store, since the model never
+     * carries it.
+     *
+     * Edge cases:
+     *
+     * An unknown Face has no vector, and neither has the Face from the other repository's context.
+     */
+    val asset = testContext.persistAsset()
+    val vector = unitVector(8)
+    val person = testApp.service.person.addPerson(Person())
+    val face = testContext.addTestFace(person, asset, vector)
+
+    val stored = testApp.txManager.withFaceVector(testApp.DAO.face.getFeatures(face.persistedId)).value
+    stored.length shouldBe vector.length
+    stored.zip(vector).foreach { case (read, written) => read shouldBe written +- 1e-6f }
+
+    testApp.txManager.withFaceVector(testApp.DAO.face.getFeatures("no-such-face")) shouldBe None
+
+    switchContextRepo(testContext.persistRepository())
+    testApp.txManager.withFaceVector(testApp.DAO.face.getFeatures(face.persistedId)) shouldBe None
+  }
+
+  test(
+    "The nearest Faces of other people come closest first, leaving out the Face's Person, bad matches, match-only Faces and those past the threshold") {
+
+    /**
+     * Setup:
+     *
+     * Faces at known distances from a synthetic embedding, on one asset: the current Person's at the embedding itself and about
+     * 0.05 away, an enrolled Face of a bad-match Person and a match-only Face about 0.05 away, Person A's enrolled Face about
+     * 0.11 away, Person B's about 0.29 away, and Person C's about 1 away, past the threshold.
+     *
+     * Assertions:
+     *
+     * The nearest Faces of people other than the current Person, within the recognition threshold, are A's then B's: the current
+     * Person's Faces are left out however close, as are the bad match's, the match-only Face and C's.
+     *
+     * Edge cases:
+     *
+     * A limit of one keeps A's Face alone.
+     */
+    val asset = testContext.persistAsset()
+    val vector = unitVector(9)
+    val other = unitVector(10)
+    val current = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(current, asset, vector)
+    testContext.addTestFace(current, asset, TestContext.between(vector, other, 3))
+    val badMatch = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(badMatch, asset, TestContext.between(vector, other, 3))
+    testApp.service.person.markAsBadMatch(badMatch)
+    val matchOnly = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(matchOnly, asset, TestContext.between(vector, other, 3), isEnrolled = false)
+    val personA = testApp.service.person.addPerson(Person())
+    val faceA = testContext.addTestFace(personA, asset, TestContext.between(vector, other, 2))
+    val personB = testApp.service.person.addPerson(Person())
+    val faceB = testContext.addTestFace(personB, asset, TestContext.between(vector, other, 1))
+    val personC = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(personC, asset, other)
+
+    def nearest(limit: Int): List[String] =
+      testApp.txManager
+        .withFaceVector(testApp.DAO.face.searchNearestFacesOfOthers(vector, current.persistedId, limit, 0.55))
+        .map(_.persistedId)
+
+    nearest(limit = 10) shouldBe List(faceA.persistedId, faceB.persistedId)
+    nearest(limit = 1) shouldBe List(faceA.persistedId)
+  }
+
+  test("A Face of another repository is not among the nearest Faces of other people") {
+
+    /**
+     * Setup:
+     *
+     * A second repository with a Person whose enrolled Face is at a synthetic embedding; in the first repository, the current
+     * Person's Face at that embedding and another Person's about 0.29 away.
+     *
+     * Assertions:
+     *
+     * The nearest Faces of other people, searched from the first repository, are the other Person's Face alone: the Face of the
+     * second repository, closer, is not seen.
+     */
+    val vector = unitVector(11)
+    val firstRepo = testContext.repository
+    val secondRepo = testContext.persistRepository()
+    switchContextRepo(secondRepo)
+    val elsewhere = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(elsewhere, testContext.persistAsset(repository = Some(secondRepo)), vector)
+
+    switchContextRepo(firstRepo)
+    val asset = testContext.persistAsset(repository = Some(firstRepo))
+    val current = testApp.service.person.addPerson(Person())
+    testContext.addTestFace(current, asset, vector)
+    val nearby = testApp.service.person.addPerson(Person())
+    val nearbyFace = testContext.addTestFace(nearby, asset, TestContext.between(vector, unitVector(12), 1))
+
+    val nearest =
+      testApp.txManager.withFaceVector(testApp.DAO.face.searchNearestFacesOfOthers(vector, current.persistedId, 10, 0.55))
+
+    nearest.map(_.persistedId) shouldBe List(nearbyFace.persistedId)
+  }
+
   if (testApp.dataSourceType == Const.DbEngineName.POSTGRES)
     test("On PostgreSQL the nearest Faces are found through the vector index of the enrolled Faces") {
 
@@ -157,24 +265,26 @@ import altitude.core.service.FaceRecognitionService
        *
        * Assertions:
        *
-       * The plan reads `face_03`, the partial HNSW index over the enrolled Faces' half-precision vectors: the statement's order
-       * and predicates are the ones the index is declared with.
+       * The plan reads the partial HNSW index over the enrolled Faces' half-precision vectors: the statement's order and
+       * predicates are the ones the index is declared with. So does the plan of the statement that leaves a Person out, the
+       * Suggested group's.
        */
       val vector = PostgresOverrides.vectorLiteral(unitVector(1))
-      val plan = testApp.txManager.withTransaction {
-        List("seqscan", "sort").foreach(path => update(s"SET LOCAL enable_$path = off"))
-        query(
-          s"EXPLAIN ${PostgresFaceDao.CLOSEST_MATCHES_SQL}",
-          vector,
-          testContext.repository.persistedId,
-          vector,
-          20,
-          vector,
-          0.55,
-          5).map(_.values.head.toString).mkString("\n")
-      }
 
-      withClue(plan)(plan should include("Index Scan using face_03"))
+      def plan(sql: String, filterBinds: Any*): String =
+        testApp.txManager.withTransaction {
+          List("seqscan", "sort").foreach(path => update(s"SET LOCAL enable_$path = off"))
+          query(
+            s"EXPLAIN $sql",
+            (List(vector, testContext.repository.persistedId) ++ filterBinds ++ List(vector, 20, vector, 0.55, 5))*)
+            .map(_.values.head.toString)
+            .mkString("\n")
+        }
+
+      val matchesPlan = plan(PostgresFaceDao.CLOSEST_MATCHES_SQL)
+      withClue(matchesPlan)(matchesPlan should include("Index Scan using face_03"))
+      val othersPlan = plan(PostgresFaceDao.CLOSEST_OF_OTHERS_SQL, "no-such-person")
+      withClue(othersPlan)(othersPlan should include("Index Scan using face_03"))
     }
 
   test("With no candidate, an enrolled Face starts a Person and a match-only Face is nobody's") {
@@ -481,11 +591,7 @@ import altitude.core.service.FaceRecognitionService
     if !Files.exists(facesDir) then Nil
     else Files.walk(facesDir).iterator.asScala.filter(Files.isRegularFile(_)).map(_.toFile).toList
 
-  /** A reproducible unit vector; two seeds give vectors about a cosine distance of 1 apart */
-  private def unitVector(seed: Int): Array[Float] =
-    val random = new Random(seed)
-    FaceRecognitionService.meanNormalized(
-      Seq(Array.fill(FaceDetectionService.EMBEDDING_DIMENSIONS)(random.nextGaussian().toFloat)))
+  private def unitVector(seed: Int): Array[Float] = TestContext.unitVector(seed)
 
   /** An unsaved detection with the given embedding, as recognition receives it */
   private def query(features: Array[Float], isEnrolled: Boolean): Face =

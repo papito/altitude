@@ -1,0 +1,1076 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asset detail panel playground</title>
+<style>
+/* ---------- playground chrome ---------- */
+:root {
+  color-scheme: dark;
+  --bg: #111318; --bg2: #181b22; --bg3: #20242d; --line: #2a2f3a; --fg: #e6e8ee; --fg2: #9aa1b1;
+  --acc: #3bcfce; --pri: #6f8cff; --warn: #ebb16b;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 var(--sans); height: 100vh; display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
+header.top { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--bg2); flex-wrap: wrap; }
+header.top h1 { font-size: 14px; margin: 0; font-weight: 600; }
+header.top .path { font-family: var(--mono); color: var(--fg2); font-size: 12px; }
+.presets { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.presets span { color: var(--fg2); font-size: 12px; margin-right: 4px; }
+.presets button, .btn { background: var(--bg3); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; cursor: pointer; }
+.presets button:hover, .btn:hover { border-color: var(--fg2); }
+main { display: grid; grid-template-columns: 320px 1fr; min-height: 0; }
+#controls { overflow-y: auto; border-right: 1px solid var(--line); background: var(--bg2); padding: 6px 12px 60px; }
+#controls details { border-bottom: 1px solid var(--line); padding: 4px 0 8px; }
+#controls summary { cursor: pointer; font-weight: 600; padding: 6px 0; color: var(--fg); list-style: none; display: flex; align-items: center; gap: 8px; }
+#controls summary::before { content: "▸"; color: var(--fg2); font-size: 11px; transition: rotate 120ms; }
+#controls details[open] summary::before { rotate: 90deg; }
+#controls summary small { color: var(--fg2); font-weight: 400; }
+.row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 4px 0; min-height: 28px; }
+.row > label, .row > .lab { color: var(--fg2); }
+.row .lab b { color: var(--fg); font-weight: 500; }
+.row.stack { grid-template-columns: 1fr; }
+.seg { display: inline-flex; background: var(--bg3); border: 1px solid var(--line); border-radius: 7px; padding: 2px; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
+.seg button { background: none; border: 0; color: var(--fg2); font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 5px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: hsl(180 60% 50% / 0.18); color: var(--acc); font-weight: 600; }
+.seg button:hover { color: var(--fg); }
+input[type="range"] { width: 130px; accent-color: var(--acc); }
+.val { font-family: var(--mono); font-size: 11px; color: var(--fg2); min-width: 44px; text-align: right; display: inline-block; }
+.range { display: flex; align-items: center; gap: 6px; }
+.switch { appearance: none; width: 30px; height: 17px; border-radius: 99px; background: var(--bg3); border: 1px solid var(--line); position: relative; cursor: pointer; margin: 0; }
+.switch::before { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--fg2); transition: translate 120ms, background 120ms; }
+.switch:checked { background: hsl(180 60% 50% / 0.25); border-color: var(--acc); }
+.switch:checked::before { translate: 13px 0; background: var(--acc); }
+.hint { color: var(--fg2); font-size: 11px; padding: 0 0 6px; line-height: 1.45; }
+.hint code { font-family: var(--mono); color: var(--fg); }
+kbd { font-family: var(--mono); font-size: 11px; background: var(--bg3); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--fg); }
+
+#stage { display: grid; grid-template-rows: 1fr auto; min-height: 0; min-width: 0; }
+#previewArea { position: relative; min-height: 0; min-width: 0; display: grid; place-items: center; padding: 14px; background:
+  radial-gradient(circle at 30% 20%, #171a21, #0e1014 70%); }
+#vpWrap { position: relative; box-shadow: 0 20px 60px #000a, 0 0 0 1px #000; border-radius: 8px; overflow: hidden; }
+#vp { position: absolute; top: 0; left: 0; transform-origin: top left; overflow: hidden; }
+#vpLabel { position: absolute; top: 6px; right: 14px; font-family: var(--mono); font-size: 11px; color: var(--fg2); }
+#bottom { display: grid; grid-template-columns: 1fr 1.4fr; gap: 0; border-top: 1px solid var(--line); background: var(--bg2); min-height: 150px; max-height: 32vh; }
+#bottom > div { padding: 10px 14px; min-width: 0; display: grid; grid-template-rows: auto 1fr; gap: 6px; }
+#bottom h2 { font-size: 12px; margin: 0; color: var(--fg2); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
+#bottom h2 .keys { font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+#log { border-right: 1px solid var(--line); }
+#log ol { margin: 0; padding: 0; list-style: none; font-family: var(--mono); font-size: 11.5px; overflow-y: auto; color: var(--fg2); }
+#log li { padding: 2px 0; border-bottom: 1px dashed #ffffff10; }
+#log li:first-child { color: var(--fg); }
+#promptBox { position: relative; }
+#prompt { margin: 0; font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-y: auto; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+#copy { position: absolute; top: 6px; right: 14px; }
+
+/* ---------- the mock Asset detail (Altitude's tokens, px for the scaled viewport) ---------- */
+#vp {
+  color-scheme: dark;
+  --theme-primary: light-dark(#4159d4, #005bff);
+  --theme-primary-text: light-dark(#4057c2, #a4bbfe);
+  --theme-on-primary: light-dark(#f7f8fa, #12161f);
+  --theme-secondary: light-dark(#dfe1e6, #484b52);
+  --theme-accent: light-dark(#1e7777, #3bcfce);
+  --theme-on-accent: light-dark(#f5f9f8, #0a1919);
+  --theme-neutral-1: light-dark(#fdfdfe, #f7f8fa);
+  --theme-neutral-2: light-dark(#f4f5f7, #353639);
+  --theme-neutral-3: light-dark(#565b66, #babdc5);
+  --theme-neutral-4: light-dark(#12161f, #f7f8fa);
+  --shadow-color: #000;
+  --success-color: light-dark(#297612, #87d575);
+  --warning-color: light-dark(#976212, #ebb16b);
+  --success-background-color: light-dark(hsl(from var(--success-color) h calc(s * 0.7) 90%), hsl(from var(--success-color) h calc(s * 0.6) 35%));
+  --panel-border-color: hsl(from var(--shadow-color) h s l / 0.18);
+  --popover-border-color: hsl(from var(--theme-neutral-3) h s l / 0.3);
+  --popover-background-color: hsl(from var(--theme-neutral-2) h s l / 0.84);
+  --field-background-color: hsl(from var(--shadow-color) h s l / 0.23);
+  --asset-detail-backdrop-color: hsl(from var(--shadow-color) h s l / 0.9);
+  --soft-shadow: 0 1px 2px hsl(from var(--shadow-color) h s l / 0.25), 0 2px 6px hsl(from var(--shadow-color) h s l / 0.15);
+  --float-shadow: 0 12px 32px hsl(from var(--shadow-color) h s l / 0.45);
+  --sheen-shadow: inset 0 1px 0 hsl(from var(--theme-neutral-1) h s l / 0.08);
+  --radius: 5px; --radius-small: 3px; --radius-large: 8px;
+  --s1: 2px; --s2: 4px; --s3: 6px; --s4: 8px; --s5: 10px; --s6: 16px; --s7: 20px; --s8: 24px; --s9: 36px;
+  --toolbar: 30px;
+  --fs-xs: 10px; --fs-small: 12px; --fs-base: 14px; --fs-medium: 16px; --fs-large: 20.8px; --fs-xl: 24px;
+  --hl-color: var(--theme-accent);
+  font: var(--fs-base)/1.4 var(--sans);
+  color: var(--theme-neutral-4);
+  background: var(--theme-neutral-2);
+  user-select: none;
+}
+#vp[data-theme="light"] { color-scheme: light; }
+#vp button { font: inherit; color: inherit; cursor: pointer; }
+#vp :focus-visible { outline: 2px solid var(--theme-primary); outline-offset: 2px; }
+
+/* the page behind the dialog */
+.page { position: absolute; inset: 0; display: grid; grid-template-rows: 48px 1fr; }
+.page nav { background: hsl(from var(--theme-primary) h s l / 0.1); border-bottom: 1px solid var(--panel-border-color); display: flex; align-items: center; padding: 0 16px; font-family: var(--mono); font-weight: 700; letter-spacing: .05em; font-size: var(--fs-xl); background-clip: border-box; }
+.page nav span { background: linear-gradient(90deg, var(--theme-primary), var(--theme-accent)); background-clip: text; color: transparent; }
+.page .grid { padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; align-content: start; }
+.page .cell { aspect-ratio: 1; background: hsl(from var(--theme-neutral-3) h s l / 0.15); border-radius: var(--radius); }
+.page .open { position: absolute; inset: 0; margin: auto; width: max-content; height: max-content; padding: 10px 18px; border-radius: var(--radius-large); background: var(--theme-primary); color: var(--theme-on-primary); border: 0; font-weight: 600; box-shadow: var(--float-shadow); }
+
+.backdrop { position: absolute; inset: 0; display: grid; place-items: center; background: var(--asset-detail-backdrop-color); }
+.box { position: relative; display: grid; grid-template-rows: var(--toolbar) minmax(0, 1fr); background: transparent; overflow: hidden; }
+.box.fullscreen { grid-template-rows: minmax(0, 1fr); background: #000; }
+.box.fullscreen .toolbar { display: none; }
+.toolbar { display: grid; grid-template-columns: 1fr auto; align-items: center; background: var(--theme-neutral-2); border-bottom: 1px solid var(--panel-border-color); }
+.toolbar .title { padding-left: var(--s5); font-size: var(--fs-medium); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toolbar .tools { display: flex; align-items: center; gap: var(--s2); padding-right: var(--s3); }
+.tool { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: var(--radius); background: none; color: var(--theme-neutral-3); padding: 0; }
+.tool svg { width: 15px; height: 15px; }
+.tool:hover { background: hsl(from currentColor h s l / 0.12); color: var(--theme-neutral-4); }
+.tool[aria-pressed="true"] { background: hsl(from var(--theme-accent) h s l / 0.16); color: var(--theme-accent); }
+.tool .key { position: absolute; }
+.close { background: none; border: 0; font-size: var(--fs-xl); font-weight: 700; line-height: 1; padding: 0 var(--s4) 0 var(--s3); color: var(--theme-neutral-4); }
+
+/* the fragment: stage, divider, panel laid out by the Dock side */
+.fragment { display: grid; min-height: 0; min-width: 0; height: 100%; }
+.fragment[data-side="left"]   { grid-template-columns: var(--panel-px) var(--s3) minmax(0, 1fr); }
+.fragment[data-side="right"]  { grid-template-columns: minmax(0, 1fr) var(--s3) var(--panel-px); }
+.fragment[data-side="top"]    { grid-template-rows: var(--panel-px) var(--s3) minmax(0, 1fr); }
+.fragment[data-side="bottom"] { grid-template-rows: minmax(0, 1fr) var(--s3) var(--panel-px); }
+.fragment[data-side="left"] .panel { grid-column: 1; } .fragment[data-side="left"] .divider { grid-column: 2; } .fragment[data-side="left"] .stage { grid-column: 3; }
+.fragment[data-side="right"] .stage { grid-column: 1; } .fragment[data-side="right"] .divider { grid-column: 2; } .fragment[data-side="right"] .panel { grid-column: 3; }
+.fragment[data-side="top"] .panel { grid-row: 1; } .fragment[data-side="top"] .divider { grid-row: 2; } .fragment[data-side="top"] .stage { grid-row: 3; }
+.fragment[data-side="bottom"] .stage { grid-row: 1; } .fragment[data-side="bottom"] .divider { grid-row: 2; } .fragment[data-side="bottom"] .panel { grid-row: 3; }
+.fragment[data-side="left"] > *, .fragment[data-side="right"] > * { grid-row: 1; }
+.fragment[data-side="top"] > *, .fragment[data-side="bottom"] > * { grid-column: 1; }
+.fragment:not(.open) { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.fragment:not(.open) .panel, .fragment:not(.open) .divider { display: none; }
+.fragment:not(.open) .stage { grid-area: 1 / 1; }
+.fragment[data-side="left"] .panel { border-right: 1px solid var(--panel-border-color); }
+.fragment[data-side="right"] .panel { border-left: 1px solid var(--panel-border-color); }
+.fragment[data-side="top"] .panel { border-bottom: 1px solid var(--panel-border-color); }
+.fragment[data-side="bottom"] .panel { border-top: 1px solid var(--panel-border-color); }
+
+.stage { display: grid; place-items: center; min-width: 0; min-height: 0; overflow: hidden; background: #000; position: relative; }
+.media { position: relative; overflow: visible; }
+.media svg.scene { display: block; width: 100%; height: 100%; }
+.overlay { position: absolute; inset: 0; pointer-events: none; }
+
+/* a Face highlight: a percentage box of the shown element, its badge under it */
+.hl { position: absolute; border: var(--hl-stroke) solid var(--hl-color); border-radius: var(--hl-radius); pointer-events: auto; cursor: pointer; box-shadow: 0 0 0 1px hsl(from var(--shadow-color) h s l / 0.35), inset 0 0 0 1px hsl(from var(--shadow-color) h s l / 0.35); transition: opacity 120ms; }
+.hl.dim { opacity: var(--hl-dim); }
+.hl.selected { border-width: calc(var(--hl-stroke) + 1px); box-shadow: 0 0 0 1px hsl(from var(--shadow-color) h s l / 0.5), 0 0 0 4px hsl(from var(--hl-color) h s l / 0.25); }
+.hl:hover { opacity: 1; }
+.badge { position: absolute; left: 50%; top: 100%; translate: -50% var(--s2); padding: 1px var(--s3); font-size: var(--badge-fs); line-height: 1.4; white-space: nowrap; border-radius: var(--radius-small); background: var(--popover-background-color); backdrop-filter: blur(10px) saturate(200%); border: 1px solid var(--popover-border-color); color: var(--theme-neutral-4); box-shadow: var(--soft-shadow); }
+.badge.in { top: auto; bottom: 0; translate: -50% calc(-1 * var(--s2)); }
+.badge.above { top: auto; bottom: 100%; translate: -50% calc(-1 * var(--s2)); }
+.badge.left { left: 0; translate: 0 var(--s2); } .badge.left.in, .badge.left.above { translate: 0 calc(-1 * var(--s2)); }
+.badge.right { left: auto; right: 0; translate: 0 var(--s2); } .badge.right.in, .badge.right.above { translate: 0 calc(-1 * var(--s2)); }
+.hl.selected .badge { background: var(--hl-color); color: var(--theme-on-accent); border-color: transparent; font-weight: 600; }
+.badge .hidden-mark { opacity: .7; font-style: italic; }
+
+/* the player's control bar (media-chrome stand-in) */
+.controlbar { position: absolute; left: 0; right: 0; bottom: 0; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 8px; background: linear-gradient(transparent, #000c); color: #fff; font-size: var(--fs-small); font-family: var(--sans); z-index: 2; }
+.controlbar button { background: none; border: 0; color: #fff; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 4px; padding: 0; }
+.controlbar button:hover { background: #fff3; }
+.controlbar svg { width: 14px; height: 14px; fill: currentColor; }
+.timeline { flex: 1; height: 14px; display: grid; align-items: center; position: relative; cursor: pointer; }
+.timeline::before { content: ""; height: 4px; background: #fff4; border-radius: 2px; }
+.timeline .progress { position: absolute; left: 0; top: 5px; height: 4px; background: #fff; border-radius: 2px; pointer-events: none; }
+.timeline .tick { position: absolute; top: 3px; width: 2px; height: 8px; background: var(--hl-color); translate: -1px 0; pointer-events: none; }
+.controlbar .time { font-variant-numeric: tabular-nums; }
+
+/* the divider (core.css) */
+.divider { position: relative; color: var(--theme-neutral-3); touch-action: none; background: var(--theme-neutral-2); }
+.divider::before { content: ""; position: absolute; inset: 0; margin: auto; width: var(--s3); height: var(--s9); background-image: radial-gradient(circle closest-side, currentColor 50%, transparent 60%); background-size: var(--s3) var(--s3); background-repeat: repeat-y; background-position: center; }
+.divider:hover, .divider[data-dragging] { color: var(--theme-primary); }
+.fragment[data-side="left"] .divider, .fragment[data-side="right"] .divider { cursor: col-resize; }
+.fragment[data-side="top"] .divider, .fragment[data-side="bottom"] .divider { cursor: row-resize; }
+.fragment[data-side="top"] .divider::before, .fragment[data-side="bottom"] .divider::before { width: var(--s9); height: var(--s3); background-repeat: repeat-x; }
+
+/* the Detail panel */
+.panel { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; background: var(--theme-neutral-2); }
+.panel header { display: flex; align-items: center; justify-content: space-between; padding: var(--s2) var(--s2) var(--s2) var(--s5); border-bottom: 1px solid var(--panel-border-color); position: relative; color: var(--theme-neutral-3); font-size: var(--fs-small); text-transform: uppercase; letter-spacing: .1em; }
+.panel .body { overflow-y: auto; padding: 0 var(--s5) var(--s7); }
+.panel h3 { margin: var(--s6) 0 var(--s4); font-size: var(--fs-small); text-transform: uppercase; letter-spacing: .1em; color: var(--theme-neutral-3); font-weight: 600; }
+.compact { display: inline-grid; place-items: center; padding: var(--s3); line-height: 1; border: 0; border-radius: var(--radius); background: none; color: var(--theme-neutral-4); }
+.compact:hover { background: hsl(from currentColor h s l / 0.12); }
+.compact svg, .menu .glyph { width: 15px; height: 15px; }
+.menu { position: absolute; top: 100%; right: var(--s2); z-index: 5; width: max-content; padding: var(--s2); border: 1px solid var(--popover-border-color); border-radius: var(--radius-large); background: var(--popover-background-color); backdrop-filter: blur(10px) saturate(200%); box-shadow: var(--sheen-shadow), var(--float-shadow); display: grid; text-transform: none; letter-spacing: 0; color: var(--theme-neutral-4); font-size: var(--fs-base); }
+.menu button { display: grid; grid-template-columns: var(--s6) auto 1fr; column-gap: var(--s3); align-items: center; padding: var(--s5) var(--s6) var(--s5) var(--s4); border: 0; border-radius: var(--radius-small); background: none; text-align: left; }
+.menu button::before { content: ""; font-size: var(--fs-small); }
+.menu button[aria-checked="true"] { background: hsl(from var(--theme-accent) h s l / 0.2); }
+.menu button[aria-checked="true"]::before { content: "✓"; }
+.menu button:hover { background: hsl(from var(--theme-neutral-4) h s l / 0.08); }
+.menu button + button { border-top: 1px solid hsl(from var(--theme-neutral-3) h s l / 0.3); }
+
+/* People rows */
+.face-row { display: grid; grid-template-columns: auto 1fr; column-gap: var(--s4); align-items: center; padding: var(--row-pad) var(--s3); margin: 0 calc(-1 * var(--s3)); border-radius: var(--radius); cursor: pointer; }
+.face-row:hover { background: hsl(from var(--theme-neutral-4) h s l / 0.06); }
+.face-row[aria-selected="true"] { background: hsl(from var(--theme-accent) h s l / 0.16); }
+.face-row .cover { border-radius: 50%; display: block; }
+.face-row .who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s3); min-width: 0; }
+.face-row .name { font-weight: 500; }
+.face-row .name.unknown { color: var(--theme-neutral-3); font-style: italic; }
+.face-row .mark { font-size: var(--fs-small); color: var(--warning-color); }
+.face-row .time { font-size: var(--fs-small); color: var(--theme-neutral-3); font-variant-numeric: tabular-nums; }
+.face-row .actions { grid-column: 2; display: flex; gap: var(--s3); flex-wrap: wrap; margin-top: var(--s3); }
+.abtn { --fill: var(--theme-secondary); background: var(--fill); font-weight: 600; color: var(--theme-neutral-4); border: 1px solid hsl(from var(--theme-neutral-3) h s l / 0.45); border-radius: var(--radius-large); box-shadow: var(--sheen-shadow), var(--soft-shadow); padding: var(--s2) var(--s5); font-size: var(--fs-small); position: relative; overflow: hidden; }
+.abtn:hover { background: oklch(from var(--fill) calc(l + 0.04) c h); }
+.abtn.error { --fill: light-dark(#be2229, #f88a81); color: light-dark(#fff, #12161f); }
+.abtn.armed { outline: 2px solid var(--warning-color); outline-offset: 1px; }
+.abtn .hold { position: absolute; left: 0; top: 0; bottom: 0; background: #0005; pointer-events: none; }
+.readonly-note { color: var(--theme-neutral-3); font-size: var(--fs-small); margin: var(--s2) 0 0; }
+.empty { color: var(--theme-neutral-3); font-style: italic; }
+
+/* the combobox */
+.combo { grid-column: 2; margin-top: var(--s3); position: relative; display: grid; grid-template-columns: 1fr auto; gap: var(--s3); align-items: center; }
+.combo input { min-width: 0; width: 100%; padding: var(--s3) var(--s4); border: 1px solid transparent; border-bottom-color: var(--theme-accent); border-radius: var(--radius) var(--radius) 0 0; background: var(--field-background-color); color: inherit; font: inherit; font-size: var(--fs-small); }
+.combo input:focus { outline: none; box-shadow: 0 0 0 2px hsl(from var(--theme-accent) h s l / 0.15); }
+.combo .x { border: 0; background: none; font-size: var(--fs-large); line-height: 1; font-weight: 700; padding: 0 var(--s2); color: var(--theme-neutral-3); }
+.combo .x:hover { color: var(--theme-neutral-4); }
+.listbox { position: absolute; top: 100%; left: 0; right: 0; z-index: 6; margin-top: var(--s2); max-height: 230px; overflow-y: auto; padding: var(--s2); border: 1px solid var(--popover-border-color); border-radius: var(--radius-large); background: var(--popover-background-color); backdrop-filter: blur(10px) saturate(200%); box-shadow: var(--sheen-shadow), var(--float-shadow); list-style: none; display: grid; }
+.listbox li { display: grid; grid-template-columns: auto 1fr auto; column-gap: var(--s4); align-items: center; padding: var(--s3) var(--s4); border-radius: var(--radius-small); cursor: pointer; font-size: var(--fs-small); }
+.listbox li .cover { border-radius: 50%; }
+.listbox li[aria-selected="true"] { background: hsl(from var(--theme-accent) h s l / 0.2); }
+.listbox li:hover { background: hsl(from var(--theme-neutral-4) h s l / 0.08); }
+.listbox li.group { display: block; cursor: default; color: var(--theme-neutral-3); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .1em; padding: var(--s3) var(--s4) var(--s1); }
+.listbox li.group:hover { background: none; }
+.listbox li.sep { display: block; height: 1px; padding: 0; margin: var(--s2) var(--s3); background: hsl(from var(--theme-neutral-3) h s l / 0.3); cursor: default; }
+.listbox li.create { color: var(--theme-primary-text); font-weight: 600; }
+.listbox li .plus { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1px dashed currentColor; font-size: 14px; }
+.listbox .mark { font-size: var(--fs-xs); color: var(--warning-color); }
+.listbox .dist { font-size: var(--fs-xs); color: var(--theme-neutral-3); font-family: var(--mono); }
+.listbox li.empty-row { color: var(--theme-neutral-3); font-style: italic; cursor: default; display: block; }
+
+/* Details */
+.details { display: grid; grid-template-columns: max-content 1fr; column-gap: var(--s6); row-gap: var(--s3); margin: 0; font-size: var(--fs-small); }
+.details dt { color: var(--theme-neutral-3); margin: 0; }
+.details dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.details a { color: var(--theme-primary-text); text-decoration: none; }
+.details a:hover { text-decoration: underline; }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.crumbs .sep { color: var(--theme-neutral-3); }
+.details .src { color: var(--theme-neutral-3); }
+.details .ok { color: var(--success-color); }
+
+/* Metadata */
+.mgroup { border-top: 1px solid var(--panel-border-color); }
+.mgroup summary { cursor: pointer; padding: var(--s4) 0; font-size: var(--fs-small); display: flex; align-items: center; gap: var(--s3); list-style: none; }
+.mgroup summary::before { content: "▸"; font-size: var(--fs-xs); color: var(--theme-neutral-3); }
+.mgroup[open] summary::before { content: "▾"; }
+.mgroup summary .count { color: var(--theme-neutral-3); margin-left: auto; font-size: var(--fs-xs); }
+.mgroup dl { display: grid; grid-template-columns: max-content 1fr; column-gap: var(--s6); row-gap: var(--s2); margin: 0 0 var(--s5); font-size: var(--fs-xs); font-family: var(--mono); }
+.mgroup dt { color: var(--theme-neutral-3); margin: 0; }
+.mgroup dd { margin: 0; overflow-wrap: anywhere; }
+
+/* snackbar */
+.snackbar { position: absolute; left: 10px; bottom: 10px; z-index: 9; width: min(500px, calc(100% - 20px)); display: flex; align-items: center; gap: var(--s4); padding: var(--s5) var(--s6); color: var(--theme-neutral-4); border: 1px solid var(--theme-neutral-4); border-radius: var(--radius); box-shadow: var(--soft-shadow); background: var(--success-background-color); font-size: var(--fs-base); animation: snack-in 150ms ease-out; }
+@keyframes snack-in { from { opacity: 0; translate: -10px 0; } }
+.snackbar .msg { flex: 1; }
+.snackbar .dismiss { background: none; border: 0; font-size: var(--fs-large); font-weight: 700; line-height: 1; padding: 0 var(--s2); }
+.hint-fs { position: absolute; top: 8px; right: 10px; z-index: 3; font-size: var(--fs-small); color: #fff9; background: #0008; padding: 2px 8px; border-radius: 4px; pointer-events: none; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Asset detail: Detail panel, Face highlights and Face corrections</h1>
+  <span class="path">plans/todo/asset-detail-panel.md</span>
+  <div class="presets" id="presets"><span>Presets</span></div>
+</header>
+<main>
+  <aside id="controls">
+    <p class="hint">A working mock of the plan. Click rows, Face highlights, the divider and the toolbar; type in the combobox. Keys work when the pointer is over the preview or nothing else has focus: <kbd>m</kbd> <kbd>p</kbd> <kbd>f</kbd> <kbd>←</kbd> <kbd>→</kbd> <kbd>Esc</kbd> <kbd>Space</kbd>.</p>
+
+    <details open>
+      <summary>Scene <small>not part of the prompt</small></summary>
+      <div class="row"><span class="lab">Asset</span><div class="seg" data-key="asset"><button data-v="landscape">Landscape</button><button data-v="rotated">Rotated phone</button><button data-v="video">Video</button></div></div>
+      <div class="row"><span class="lab">Viewport</span><div class="seg" data-key="viewport"><button data-v="desktop">1440×900</button><button data-v="laptop">1280×720</button><button data-v="tablet">834×1194</button><button data-v="phone">390×844</button></div></div>
+      <div class="row"><span class="lab">Theme</span><div class="seg" data-key="theme"><button data-v="dark">Dark</button><button data-v="light">Light</button></div></div>
+      <div class="row"><label for="k-trash">Viewing the trash bin</label><input class="switch" type="checkbox" id="k-trash" data-key="trash"></div>
+      <div class="row"><label for="k-mirror">A mirror: Alice twice in the image</label><input class="switch" type="checkbox" id="k-mirror" data-key="mirror"></div>
+      <div class="row"><label for="k-hidden">A Hidden person in the asset</label><input class="switch" type="checkbox" id="k-hidden" data-key="includeHidden"></div>
+    </details>
+
+    <details open>
+      <summary>State <small>m · p · f</small></summary>
+      <div class="row"><label for="k-panel">Detail panel open <kbd>m</kbd></label><input class="switch" type="checkbox" id="k-panel" data-key="panelOpen"></div>
+      <div class="row"><label for="k-hl">Face highlights on <kbd>p</kbd></label><input class="switch" type="checkbox" id="k-hl" data-key="highlights"></div>
+      <div class="row"><label for="k-fs">Fullscreen <kbd>f</kbd></label><input class="switch" type="checkbox" id="k-fs" data-key="fullscreen"></div>
+      <div class="row"><span class="lab">Remembered default</span><div class="seg" data-key="defaultPanel"><button data-v="closed">Panel closed</button><button data-v="open">Panel open</button></div></div>
+      <div class="row"><span class="lab">Remembered default</span><div class="seg" data-key="defaultHighlights"><button data-v="off">Highlights off</button><button data-v="on">Highlights on</button></div></div>
+    </details>
+
+    <details open>
+      <summary>Dock</summary>
+      <div class="row"><span class="lab">Dock side</span><div class="seg" data-key="dockSide"><button data-v="auto">Auto</button><button data-v="left">Left</button><button data-v="right">Right</button><button data-v="top">Top</button><button data-v="bottom">Bottom</button></div></div>
+      <p class="hint">Auto follows the viewport: portrait docks at the bottom, anything else on the left, until a pick. The panel's own menu picks too.</p>
+      <div class="row"><span class="lab">Width share <span class="val" data-val="widthShare"></span></span><input type="range" min="15" max="50" step="1" data-key="widthShare"></div>
+      <div class="row"><span class="lab">Height share <span class="val" data-val="heightShare"></span></span><input type="range" min="20" max="60" step="1" data-key="heightShare"></div>
+      <div class="row"><span class="lab">Panel min width <span class="val" data-val="panelMinWidth"></span></span><input type="range" min="160" max="360" step="10" data-key="panelMinWidth"></div>
+      <div class="row"><span class="lab">Box with panel open</span><div class="seg" data-key="openBox"><button data-v="fill">Fills viewport</button><button data-v="hug">Hugs media</button></div></div>
+    </details>
+
+    <details open>
+      <summary>Face highlights</summary>
+      <div class="row"><span class="lab">Color</span><div class="seg" data-key="hlColor"><button data-v="accent">Accent</button><button data-v="primary">Primary</button><button data-v="neutral">Neutral</button></div></div>
+      <div class="row"><span class="lab">Stroke <span class="val" data-val="hlStroke"></span></span><input type="range" min="1" max="5" step="1" data-key="hlStroke"></div>
+      <div class="row"><span class="lab">Corner radius <span class="val" data-val="hlRadius"></span></span><input type="range" min="0" max="16" step="1" data-key="hlRadius"></div>
+      <div class="row"><span class="lab">Others fade to <span class="val" data-val="hlDim"></span></span><input type="range" min="0" max="1" step="0.05" data-key="hlDim"></div>
+      <div class="row"><label for="k-badges">Name badges</label><input class="switch" type="checkbox" id="k-badges" data-key="showBadges"></div>
+      <div class="row"><span class="lab">Badge sits</span><div class="seg" data-key="badgePos"><button data-v="under">Under, flipped in at the edge</button><button data-v="inside">Inside the box</button><button data-v="above">Above</button></div></div>
+      <div class="row"><span class="lab">Badge text <span class="val" data-val="badgeSize"></span></span><input type="range" min="9" max="16" step="1" data-key="badgeSize"></div>
+      <div class="row"><span class="lab">Frame tolerance <span class="val" data-val="frameTolerance"></span></span><input type="range" min="0" max="500" step="50" data-key="frameTolerance"></div>
+      <div class="row"><span class="lab">Box sized from</span><div class="seg" data-key="boxFrom"><button data-v="shown">Shown element</button><button data-v="stored">Stored size (today)</button></div></div>
+      <p class="hint">Try "Stored size" on the rotated phone photo: the raw header says 4032×3024 while the browser shows it upright, so the box and the highlights land wrong. That is why the plan reads the shown element.</p>
+    </details>
+
+    <details>
+      <summary>People section</summary>
+      <div class="row"><span class="lab">Row density</span><div class="seg" data-key="rowDensity"><button data-v="comfortable">Comfortable</button><button data-v="compact">Compact</button></div></div>
+      <div class="row"><span class="lab">Cover size <span class="val" data-val="coverSize"></span></span><input type="range" min="24" max="64" step="4" data-key="coverSize"></div>
+      <div class="row"><label for="k-frametime">Show a Video Face's Frame time</label><input class="switch" type="checkbox" id="k-frametime" data-key="showFrameTime"></div>
+    </details>
+
+    <details>
+      <summary>Corrections</summary>
+      <div class="row"><span class="lab">Remove guard</span><div class="seg" data-key="removeGuard"><button data-v="two-clicks">Two clicks</button><button data-v="hold">Hold 1 s</button><button data-v="confirm">Inline confirm</button></div></div>
+      <div class="row"><label for="k-sugg">Suggested group (addendum G)</label><input class="switch" type="checkbox" id="k-sugg" data-key="suggested"></div>
+      <div class="row"><span class="lab">Suggestions at most <span class="val" data-val="suggestedCount"></span></span><input type="range" min="1" max="5" step="1" data-key="suggestedCount"></div>
+      <div class="row"><label for="k-dist">Show cosine distance beside a suggestion</label><input class="switch" type="checkbox" id="k-dist" data-key="showDistance"></div>
+      <div class="row"><span class="lab">Create row</span><div class="seg" data-key="createPos"><button data-v="first">First</button><button data-v="last">Last</button></div></div>
+    </details>
+
+    <details>
+      <summary>Details and Metadata</summary>
+      <div class="row"><label for="k-details">Details section</label><input class="switch" type="checkbox" id="k-details" data-key="showDetails"></div>
+      <div class="row"><label for="k-meta">Metadata section</label><input class="switch" type="checkbox" id="k-meta" data-key="showMetadata"></div>
+      <div class="row"><span class="lab">Groups open by default <span class="val" data-val="metadataOpen"></span></span><input type="range" min="0" max="6" step="1" data-key="metadataOpen"></div>
+      <div class="row"><span class="lab">Section order</span><div class="seg" data-key="sectionOrder"><button data-v="pdm">People · Details · Metadata</button><button data-v="dpm">Details · People · Metadata</button></div></div>
+    </details>
+
+    <p class="hint" style="margin-top:12px">Out of the mock's reach: a real `localStorage`, the browser's own fullscreen, the explorer's dock beside this one, the grid update on stepping away.</p>
+  </aside>
+
+  <section id="stage">
+    <div id="previewArea">
+      <div id="vpWrap"><div id="vp" tabindex="-1"></div></div>
+      <div id="vpLabel"></div>
+    </div>
+    <div id="bottom">
+      <div id="log"><h2>What just happened</h2><ol id="logList"></ol></div>
+      <div id="promptBox"><h2>Prompt <span class="keys"><kbd>m</kbd><kbd>p</kbd><kbd>f</kbd><kbd>←</kbd><kbd>→</kbd><kbd>Esc</kbd></span></h2><pre id="prompt"></pre><button class="btn" id="copy">Copy prompt</button></div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ============================ data ============================ */
+const PEOPLE = {
+  alice:   { name: 'Alice', hue: 20, elsewhere: 38 },
+  bob:     { name: 'Bob', hue: 210, elsewhere: 21 },
+  carol:   { name: 'Carol', hue: 120, hidden: true, elsewhere: 9 },
+  dana:    { name: 'Dana', hue: 280, elsewhere: 27 },
+  erin:    { name: 'Erin', hue: 50, elsewhere: 12 },
+  frank:   { name: 'Frank', hue: 330, elsewhere: 4 },
+  grace:   { name: 'Grace', hue: 170, elsewhere: 7 },
+  u311:    { name: null, label: 'Unknown #311', hue: 0, sat: 0 },
+  u412:    { name: null, label: 'Unknown #412', hue: 0, sat: 0 },
+  mallory: { name: 'Mallory', hue: 90, badMatch: true },
+}
+const ASSETS = [
+  { key: 'landscape', file: 'IMG_2041.jpg', type: 'image/jpeg', stored: [6000, 4000], shown: [6000, 4000], size: '8.4 MB',
+    taken: '14 Jul 2024, 18:22', takenSource: 'EXIF DateTimeOriginal', imported: '2 Mar 2025, 09:14',
+    folder: ['Photos', '2024', 'Italy', 'Amalfi'], albums: ['Summer 2024'], locations: ['Positano'], gps: '40.6281° N, 14.4850° E',
+    camera: 'Sony ILCE-7M4 · FE 35mm F1.8 · f/2.8 · 1/640 s · ISO 100', quality: 'Sharp · well exposed', sequence: '3 of 5 (burst)', scene: 'beach',
+    faces: [
+      { id: 'f1', person: 'alice', box: [16, 22, 9, 14], score: 0.93, suggest: ['dana', 'erin'] },
+      { id: 'f2', person: 'bob', box: [42, 18, 10, 15], score: 0.97, suggest: ['frank', 'alice', 'erin'] },
+      { id: 'f3', person: 'u311', box: [66, 25, 8, 13], score: 0.71, suggest: ['frank', 'bob', 'grace'] },
+      { id: 'f4', person: 'carol', box: [82, 28, 7, 11], score: 0.88, suggest: ['grace'], hiddenKnob: true },
+      { id: 'f5', person: 'mallory', box: [5, 38, 6, 9], score: 0.6, suggest: [] },
+      { id: 'f6', person: 'alice', box: [90, 56, 5, 8], score: 0.64, suggest: ['dana'], mirrorKnob: true },
+    ],
+    metadata: [
+      ['Exif IFD0', [['Make', 'SONY'], ['Model', 'ILCE-7M4'], ['Orientation', 'Top, left side'], ['Software', 'ILCE-7M4 v2.00'], ['Date/Time', '2024:07:14 18:22:41']]],
+      ['Exif SubIFD', [['Exposure Time', '1/640 sec'], ['F-Number', 'f/2.8'], ['ISO Speed Ratings', '100'], ['Focal Length', '35 mm'], ['Lens Model', 'FE 35mm F1.8'], ['White Balance', 'Auto']]],
+      ['GPS', [['GPS Latitude', '40° 37\' 41.2"'], ['GPS Longitude', '14° 29\' 6.0"'], ['GPS Altitude', '12 m']]],
+      ['ICC Profile', [['Profile Description', 'sRGB IEC61966-2.1'], ['Color space', 'RGB']]],
+      ['JPEG', [['Compression Type', 'Baseline'], ['Image Height', '4000 pixels'], ['Image Width', '6000 pixels'], ['Number of Components', '3']]],
+      ['File Type', [['Detected File Type Name', 'JPEG'], ['Detected MIME Type', 'image/jpeg'], ['Expected File Name Extension', 'jpg']]],
+    ] },
+  { key: 'rotated', file: 'IMG_7733.HEIC', type: 'image/heic', stored: [4032, 3024], shown: [3024, 4032], size: '2.1 MB',
+    taken: '3 Oct 2025, 11:05', takenSource: 'EXIF DateTimeOriginal', imported: '4 Oct 2025, 20:31',
+    folder: ['Photos', '2025', 'Phone'], albums: [], locations: ['Home'], gps: '45.5017° N, 73.5673° W',
+    camera: 'Apple iPhone 15 Pro · 24 mm · f/1.8 · 1/120 s · ISO 80', quality: 'Slightly soft · well exposed', sequence: '—', scene: 'room',
+    faces: [
+      { id: 'r1', person: 'dana', box: [28, 16, 24, 18], score: 0.95, suggest: ['alice', 'grace'] },
+      { id: 'r2', person: 'alice', box: [56, 42, 22, 16], score: 0.9, suggest: ['dana', 'erin'] },
+    ],
+    metadata: [
+      ['Exif IFD0', [['Make', 'Apple'], ['Model', 'iPhone 15 Pro'], ['Orientation', 'Right side, top (Rotate 90 CW)']]],
+      ['Exif SubIFD', [['Exposure Time', '1/120 sec'], ['F-Number', 'f/1.8'], ['ISO Speed Ratings', '80'], ['Focal Length', '6.8 mm']]],
+      ['GPS', [['GPS Latitude', '45° 30\' 6.1"'], ['GPS Longitude', '-73° 34\' 2.3"']]],
+      ['HEIF', [['Image Width', '4032 pixels'], ['Image Height', '3024 pixels'], ['Rotation', '90']]],
+      ['File Type', [['Detected File Type Name', 'HEIF'], ['Expected File Name Extension', 'heic']]],
+    ] },
+  { key: 'video', file: 'clip_0192.mp4', type: 'video/mp4', stored: [1920, 1080], shown: [1920, 1080], size: '48.2 MB', duration: 12,
+    taken: '21 Dec 2024, 19:48', takenSource: 'QuickTime creation time', imported: '2 Mar 2025, 09:20',
+    folder: ['Videos', '2024', 'Holidays'], albums: ['Family', 'Winter'], locations: [], gps: '—',
+    camera: 'Sony ILCE-7M4 · 1920×1080 · 29.97 fps · H.264', quality: '—', sequence: '—', scene: 'indoors',
+    faces: [
+      { id: 'v1', person: 'bob', box: [40, 20, 12, 21], frame: 1.2, score: 0.9, suggest: ['frank'] },
+      { id: 'v2', person: 'alice', box: [18, 28, 10, 18], frame: 4.0, score: 0.95, suggest: ['dana', 'erin'] },
+      { id: 'v3', person: 'u412', box: [64, 24, 11, 19], frame: 7.5, score: 0.62, suggest: ['bob', 'frank', 'erin'] },
+      { id: 'v4', person: 'dana', box: [48, 32, 10, 17], frame: 9.8, score: 0.8, suggest: ['alice'] },
+    ],
+    metadata: [
+      ['QuickTime Movie Header', [['Creation Time', '2024-12-21T19:48:02Z'], ['Duration', '12.01 s'], ['Preferred Rate', '1']]],
+      ['QuickTime Track Header', [['Width', '1920'], ['Height', '1080'], ['Layer', '0']]],
+      ['MP4 Video', [['Compression Type', 'H.264'], ['Width', '1920 pixels'], ['Height', '1080 pixels'], ['Frame Rate', '29.97']]],
+      ['MP4 Sound', [['Format', 'AAC'], ['Channels', '2'], ['Sample Rate', '48000']]],
+      ['File Type', [['Detected File Type Name', 'MP4'], ['Expected File Name Extension', 'mp4']]],
+    ] },
+]
+const VIEWPORTS = { desktop: [1440, 900], laptop: [1280, 720], tablet: [834, 1194], phone: [390, 844] }
+const SIDES = ['left', 'right', 'top', 'bottom']
+
+/* ============================ state ============================ */
+const DEFAULTS = {
+  asset: 'landscape', viewport: 'desktop', theme: 'dark', trash: false, mirror: false, includeHidden: true,
+  panelOpen: false, highlights: false, fullscreen: false, defaultPanel: 'closed', defaultHighlights: 'off',
+  dockSide: 'auto', widthShare: 25, heightShare: 35, panelMinWidth: 240, openBox: 'fill',
+  hlColor: 'accent', hlStroke: 2, hlRadius: 4, hlDim: 0.45, showBadges: true, badgePos: 'under', badgeSize: 12, frameTolerance: 100, boxFrom: 'shown',
+  rowDensity: 'comfortable', coverSize: 40, showFrameTime: true,
+  removeGuard: 'two-clicks', suggested: true, suggestedCount: 3, showDistance: false, createPos: 'first',
+  showDetails: true, showMetadata: true, metadataOpen: 0, sectionOrder: 'pdm',
+}
+const state = { ...DEFAULTS }
+// runtime, never in the prompt
+const rt = {
+  selected: null, combo: null, removeStage: 0, hold: null, confirm: false, dockMenu: false, closed: false,
+  time: 0, playing: false, snack: null, snackTimer: null, log: [], openGroups: {}, removed: new Set(), moves: {},
+  created: {}, focus: null, dragging: false, playTimer: null,
+}
+
+const PRESETS = {
+  'Plan defaults': {},
+  'Wide review': { panelOpen: true, highlights: true, widthShare: 30 },
+  'Phone, portrait': { viewport: 'phone', panelOpen: true, highlights: true, rowDensity: 'compact', coverSize: 32 },
+  'Rotated photo': { asset: 'rotated', panelOpen: true, highlights: true, boxFrom: 'shown' },
+  'Video review': { asset: 'video', panelOpen: true, highlights: true, dockSide: 'right' },
+  'Fullscreen with panel': { fullscreen: true, panelOpen: true, highlights: true, theme: 'dark' },
+  'Trash bin': { trash: true, panelOpen: true, highlights: true },
+}
+
+/* ============================ helpers ============================ */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const asset = () => ASSETS.find(a => a.key === state.asset)
+const isVideo = () => state.asset === 'video'
+const person = id => PEOPLE[id] || rt.created[id]
+const personName = id => { const p = person(id); return p.name ?? p.label }
+const personOf = face => rt.moves[face.id] ?? face.person
+const fmtTime = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`
+
+function facesOf(a) {
+  return a.faces.filter(f => !rt.removed.has(f.id))
+    .filter(f => !(f.hiddenKnob && !state.includeHidden))
+    .filter(f => !(f.mirrorKnob && !state.mirror))
+    .filter(f => !person(personOf(f)).badMatch)
+    .sort((x, y) => a.duration ? x.frame - y.frame : x.box[0] - y.box[0])
+}
+// Faces across the library: the ones elsewhere plus the mock assets' (a Person with none left is deleted)
+function faceCount(pid) { return (person(pid).elsewhere || 0) + ASSETS.reduce((n, a) => n + facesOf(a).filter(f => personOf(f) === pid).length, 0) }
+function effectiveSide(W, H) { return state.dockSide !== 'auto' ? state.dockSide : (H > W ? 'bottom' : 'left') }
+const vertical = side => side === 'top' || side === 'bottom'
+function log(msg) { rt.log.unshift(msg); rt.log = rt.log.slice(0, 12) }
+function snack(msg) {
+  rt.snack = msg; clearTimeout(rt.snackTimer); rt.snackTimer = setTimeout(() => { rt.snack = null; render() }, 4500)
+}
+function clearSelection() { rt.selected = null; rt.combo = null; rt.removeStage = 0; rt.confirm = false; rt.hold = null }
+
+/* ============================ geometry ============================ */
+function layout() {
+  const [W, H] = VIEWPORTS[state.viewport]
+  const a = asset()
+  const dims = state.boxFrom === 'stored' ? a.stored : a.shown
+  const r = dims[0] / dims[1]
+  const tb = state.fullscreen ? 0 : 30
+  const side = effectiveSide(W, H)
+  const open = state.panelOpen
+  const fitW = Math.min(dims[0], W - 10, (H - tb) * r)
+  const fitH = fitW / r + tb
+  let boxW, boxH
+  if (state.fullscreen || (open && state.openBox === 'fill')) { boxW = W; boxH = H }
+  else if (!open) { boxW = fitW; boxH = fitH }
+  else {
+    if (vertical(side)) { boxW = fitW; boxH = Math.min(H, fitH + 6 + Math.max(120, state.heightShare / 100 * H)) }
+    else { boxH = fitH; boxW = Math.min(W - 10, fitW + 6 + Math.max(state.panelMinWidth, state.widthShare / 100 * W)) }
+  }
+  const fragW = boxW, fragH = boxH - tb
+  let panelPx = 0, stageW = fragW, stageH = fragH
+  if (open) {
+    if (vertical(side)) { panelPx = Math.min(fragH - 160, Math.max(120, state.heightShare / 100 * fragH)); stageH = fragH - panelPx - 6 }
+    else { panelPx = Math.min(fragW - 200, Math.max(state.panelMinWidth, state.widthShare / 100 * fragW)); stageW = fragW - panelPx - 6 }
+  }
+  const mw = Math.min(stageW, stageH * r), mh = mw / r
+  return { W, H, side, boxW, boxH, fragW, fragH, panelPx, stageW, stageH, mw, mh, r, dims }
+}
+
+/* ============================ rendering ============================ */
+const vp = document.getElementById('vp'), vpWrap = document.getElementById('vpWrap')
+
+function fitScale(W, H) {
+  const area = document.getElementById('previewArea')
+  const aw = area.clientWidth - 28, ah = area.clientHeight - 28
+  const k = Math.min(aw / W, ah / H, 1)
+  vpWrap.style.width = W * k + 'px'; vpWrap.style.height = H * k + 'px'
+  vp.style.width = W + 'px'; vp.style.height = H + 'px'; vp.style.transform = `scale(${k})`
+  document.getElementById('vpLabel').textContent = `${W}×${H} at ${Math.round(k * 100)}%`
+}
+
+function render() {
+  const L = layout()
+  fitScale(L.W, L.H)
+  vp.dataset.theme = state.theme
+  const hl = { accent: 'var(--theme-accent)', primary: 'var(--theme-primary-text)', neutral: 'var(--theme-neutral-1)' }[state.hlColor]
+  vp.style.setProperty('--hl-color', hl)
+  vp.style.setProperty('--hl-stroke', state.hlStroke + 'px')
+  vp.style.setProperty('--hl-radius', state.hlRadius + 'px')
+  vp.style.setProperty('--hl-dim', state.hlDim)
+  vp.style.setProperty('--badge-fs', state.badgeSize + 'px')
+  vp.style.setProperty('--row-pad', state.rowDensity === 'compact' ? '3px' : '7px')
+  vp.innerHTML = pageMarkup() + (rt.closed ? '' : detailMarkup(L))
+  restoreFocus()
+  renderLog(); updatePrompt(); syncControls()
+}
+
+function pageMarkup() {
+  const cells = Array.from({ length: 40 }, () => '<div class="cell"></div>').join('')
+  return `<div class="page"><nav><span>altitude</span></nav><div class="grid">${cells}</div>${rt.closed ? '<button class="open" data-action="open">Open Asset detail (Enter)</button>' : ''}</div>`
+}
+
+function detailMarkup(L) {
+  const a = asset()
+  const fsHint = state.fullscreen ? '<div class="hint-fs">fullscreen · Esc leaves</div>' : ''
+  return `<div class="backdrop" data-action="backdrop">
+    <div class="box ${state.fullscreen ? 'fullscreen' : ''}" style="width:${L.boxW}px;height:${L.boxH}px" data-stop>
+      ${toolbarMarkup(a)}
+      <div class="fragment ${state.panelOpen ? 'open' : ''}" data-side="${L.side}" style="--panel-px:${L.panelPx}px">
+        <div class="stage">${mediaMarkup(a, L)}</div>
+        <div class="divider" role="separator" tabindex="0" aria-label="Detail panel size" title="Drag, arrows, double-click resets"></div>
+        ${panelMarkup(a, L)}
+      </div>
+      ${fsHint}
+    </div>
+    ${rt.snack ? `<div class="snackbar" data-stop><span>✓</span><span class="msg">${esc(rt.snack)}</span><button class="dismiss" data-action="dismiss" aria-label="Dismiss">×</button></div>` : ''}
+  </div>`
+}
+
+const ICONS = {
+  panel: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M6 2.5v11"/></svg>',
+  faces: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 5V3a1.5 1.5 0 0 1 1.5-1.5h2M14.5 5V3A1.5 1.5 0 0 0 13 1.5h-2M1.5 11v2A1.5 1.5 0 0 0 3 14.5h2M14.5 11v2a1.5 1.5 0 0 1-1.5 1.5h-2"/><circle cx="8" cy="6.5" r="2"/><path d="M4.5 12c.6-1.8 1.9-2.5 3.5-2.5s2.9.7 3.5 2.5"/></svg>',
+  full: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 1.5H1.5V6M10 1.5h4.5V6M6 14.5H1.5V10M10 14.5h4.5V10"/></svg>',
+  play: '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>',
+  pause: '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z"/></svg>',
+  mute: '<svg viewBox="0 0 16 16"><path d="M2 6h3l4-3v10l-4-3H2z"/><path d="M11 5.5a3 3 0 0 1 0 5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>',
+}
+function dockGlyph(side) {
+  const strip = { left: 'x="1.5" y="2.5" width="4" height="11"', right: 'x="10.5" y="2.5" width="4" height="11"', top: 'x="1.5" y="2.5" width="13" height="4"', bottom: 'x="1.5" y="9.5" width="13" height="4"' }[side]
+  return `<svg class="glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><rect ${strip} fill="currentColor" stroke="none" opacity=".9"/></svg>`
+}
+
+function toolbarMarkup(a) {
+  return `<div class="toolbar">
+    <div class="title">${esc(a.file)}</div>
+    <div class="tools">
+      <button class="tool" data-action="toggle-panel" aria-pressed="${state.panelOpen}" title="Detail panel (m)" aria-label="Detail panel">${ICONS.panel}</button>
+      <button class="tool" data-action="toggle-highlights" aria-pressed="${state.highlights}" title="Face highlights (p)" aria-label="Face highlights">${ICONS.faces}</button>
+      <button class="tool" data-action="toggle-fullscreen" aria-pressed="${state.fullscreen}" title="Fullscreen (f)" aria-label="Fullscreen">${ICONS.full}</button>
+      <button class="close" data-action="close" aria-label="Close" title="Close (Esc)">×</button>
+    </div></div>`
+}
+
+/* the synthetic picture, with a figure where each Face is */
+function sceneMarkup(a, faces) {
+  const [sw, sh] = a.shown
+  const bg = {
+    beach: `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fb3e6"/><stop offset=".5" stop-color="#cfe6f7"/><stop offset=".52" stop-color="#2d7fa8"/><stop offset=".75" stop-color="#3b9bc2"/><stop offset=".76" stop-color="#e6d3a3"/><stop offset="1" stop-color="#d8c08a"/></linearGradient></defs><rect width="${sw}" height="${sh}" fill="url(#g)"/><circle cx="${sw * .78}" cy="${sh * .18}" r="${sh * .06}" fill="#fff3c4" opacity=".9"/>`,
+    room: `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a4a3e"/><stop offset=".7" stop-color="#8a735e"/><stop offset=".72" stop-color="#3b2f27"/><stop offset="1" stop-color="#2a211b"/></linearGradient></defs><rect width="${sw}" height="${sh}" fill="url(#g)"/><rect x="${sw * .1}" y="${sh * .08}" width="${sw * .3}" height="${sh * .25}" fill="#cfe3f5" opacity=".8"/>`,
+    indoors: `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2f3a"/><stop offset=".75" stop-color="#4a4f5e"/><stop offset=".76" stop-color="#262a33"/><stop offset="1" stop-color="#1b1e25"/></linearGradient></defs><rect width="${sw}" height="${sh}" fill="url(#g)"/><rect x="${sw * .6}" y="${sh * .1}" width="${sw * .25}" height="${sh * .22}" fill="#fbe7a3" opacity=".5"/>`,
+  }[a.scene]
+  // the picture's content is what the camera saw, so a figure keeps its original person's colours after a Change
+  const figures = a.faces.filter(f => !(f.hiddenKnob && !state.includeHidden) && !(f.mirrorKnob && !state.mirror)).map(f => {
+    if (a.duration && Math.abs(rt.time - f.frame) > 1.0) return ''
+    const p = PEOPLE[f.person]
+    const [x, y, w, h] = f.box
+    const cx = (x + w / 2) / 100 * sw, cy = (y + h / 2) / 100 * sh, rh = h / 2 / 100 * sh * .92
+    const skin = `hsl(${p.hue} ${p.sat ?? 45}% 72%)`, shirt = `hsl(${p.hue} ${p.sat ?? 55}% 38%)`
+    const fade = a.duration ? Math.max(0, 1 - Math.abs(rt.time - f.frame) / 1.0) : 1
+    return `<g opacity="${fade.toFixed(2)}"><ellipse cx="${cx}" cy="${cy + rh * 2.3}" rx="${rh * 1.7}" ry="${rh * 1.3}" fill="${shirt}"/><circle cx="${cx}" cy="${cy}" r="${rh}" fill="${skin}"/><path d="M${cx - rh * .9} ${cy - rh * .3} a ${rh} ${rh} 0 0 1 ${rh * 1.8} 0" fill="#3a2a1e" opacity=".85"/></g>`
+  }).join('')
+  return `<svg class="scene" viewBox="0 0 ${sw} ${sh}" preserveAspectRatio="xMidYMid meet">${bg}${figures}</svg>`
+}
+
+function currentFaces(a, faces) {
+  if (!a.duration) return faces
+  if (rt.playing) return []
+  return faces.filter(f => Math.abs(rt.time - f.frame) * 1000 <= state.frameTolerance + 1e-6)
+}
+
+function mediaMarkup(a, L) {
+  const faces = facesOf(a)
+  const current = currentFaces(a, faces)
+  const shownFaces = state.highlights ? current : current.filter(f => f.id === rt.selected)
+  const boxes = shownFaces.map(f => {
+    const [x, y, w, h] = f.box
+    const pid = personOf(f), p = person(pid)
+    const sel = f.id === rt.selected
+    const dim = rt.selected && !sel && shownFaces.length > 1
+    const bottomPx = (y + h) / 100 * L.mh, badgeH = state.badgeSize * 1.4 + 8
+    let cls = state.badgePos === 'inside' ? 'in' : state.badgePos === 'above' ? 'above' : (bottomPx + badgeH + 4 > L.mh ? 'in' : '')
+    const cxp = x + w / 2
+    if (cxp < 12) cls += ' left'; else if (cxp > 88) cls += ' right'
+    const name = p.name ? esc(p.name) : `<i>${esc(p.label)}</i>`
+    const badge = state.showBadges ? `<span class="badge ${cls}">${name}${p.hidden ? ' <span class="hidden-mark">· Hidden</span>' : ''}</span>` : ''
+    return `<div class="hl ${sel ? 'selected' : ''} ${dim ? 'dim' : ''}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%" data-action="face-box" data-face="${f.id}" title="${esc(personName(pid))}">${badge}</div>`
+  }).join('')
+  let bar = ''
+  if (a.duration) {
+    const ticks = faces.map(f => `<span class="tick" style="left:${f.frame / a.duration * 100}%"></span>`).join('')
+    bar = `<div class="controlbar" data-stop>
+      <button data-action="playpause" title="${rt.playing ? 'Pause' : 'Play'} (Space)">${rt.playing ? ICONS.pause : ICONS.play}</button>
+      <button title="Mute (the player's own m is off)">${ICONS.mute}</button>
+      <div class="timeline" data-action="seek"><div class="progress" style="width:${rt.time / a.duration * 100}%"></div>${ticks}</div>
+      <span class="time">${fmtTime(rt.time)} / ${fmtTime(a.duration)}</span>
+      <button data-action="toggle-fullscreen" title="Fullscreen: the same as f">${ICONS.full}</button>
+    </div>`
+  }
+  return `<div class="media" style="width:${L.mw}px;height:${L.mh}px">${sceneMarkup(a, faces)}<div class="overlay">${boxes}</div>${bar}</div>`
+}
+
+function coverSvg(pid, size) {
+  const p = person(pid), s = p.sat ?? 45
+  return `<svg class="cover" width="${size}" height="${size}" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="hsl(${p.hue} ${s}% 30%)"/><circle cx="20" cy="16" r="7" fill="hsl(${p.hue} ${s}% 75%)"/><ellipse cx="20" cy="34" rx="11" ry="8" fill="hsl(${p.hue} ${s}% 75%)"/></svg>`
+}
+
+function panelMarkup(a, L) {
+  const menu = rt.dockMenu ? `<div class="menu" role="menu" data-stop>${SIDES.map(s => `<button role="menuitemradio" aria-checked="${s === L.side}" data-action="dock-pick" data-side="${s}">${dockGlyph(s)}<span>${s[0].toUpperCase() + s.slice(1)}</span></button>`).join('')}</div>` : ''
+  const sections = { p: peopleMarkup(a), d: state.showDetails ? detailsMarkup(a, L) : '', m: state.showMetadata ? metadataMarkup(a) : '' }
+  const order = state.sectionOrder === 'dpm' ? 'dpm' : 'pdm'
+  return `<aside class="panel" data-stop>
+    <header><span>Detail panel</span><button class="compact" data-action="dock-menu" aria-haspopup="menu" aria-expanded="${rt.dockMenu}" title="Dock side: ${L.side}">${dockGlyph(L.side)}</button>${menu}</header>
+    <div class="body">${order.split('').map(k => sections[k]).join('')}</div>
+  </aside>`
+}
+
+function peopleMarkup(a) {
+  const faces = facesOf(a)
+  if (!faces.length) return `<h3>People</h3><p class="empty">No faces in this asset</p>`
+  const rows = faces.map(f => {
+    const pid = personOf(f), p = person(pid), sel = f.id === rt.selected
+    const name = p.name ? `<span class="name">${esc(p.name)}</span>` : `<span class="name unknown">${esc(p.label)}</span>`
+    const mark = p.hidden ? '<span class="mark">Hidden</span>' : ''
+    const time = a.duration && state.showFrameTime ? `<span class="time">at ${f.frame.toFixed(1)} s</span>` : ''
+    let actions = ''
+    if (sel && !state.trash) actions = rt.combo ? comboMarkup(f) : actionsMarkup(f)
+    return `<div class="face-row" role="option" aria-selected="${sel}" data-action="select-face" data-face="${f.id}">${coverSvg(pid, state.coverSize)}<div class="who">${name}${mark}${time}</div>${actions}</div>`
+  }).join('')
+  const note = state.trash ? '<p class="readonly-note">In the trash bin: Change and Remove are off, and the server refuses them.</p>' : ''
+  return `<h3>People</h3>${rows}${note}`
+}
+
+function actionsMarkup(f) {
+  let remove
+  if (state.removeGuard === 'two-clicks') {
+    const label = ['Remove (click twice)', 'Remove (last click)'][rt.removeStage] || 'Remove'
+    remove = `<button class="abtn ${rt.removeStage ? 'error armed' : ''}" data-action="remove">${label}</button>`
+  } else if (state.removeGuard === 'hold') {
+    const pct = rt.hold ? Math.min(100, (performance.now() - rt.hold) / 10) : 0
+    remove = `<button class="abtn ${rt.hold ? 'error' : ''}" data-action="remove-hold">Remove (hold)<span class="hold" style="width:${pct}%"></span></button>`
+  } else {
+    remove = rt.confirm
+      ? `<span style="font-size:12px;align-self:center">Remove this face?</span><button class="abtn error" data-action="remove-confirmed">Remove</button><button class="abtn" data-action="remove-cancel">Cancel</button>`
+      : `<button class="abtn" data-action="remove-ask">Remove</button>`
+  }
+  return `<div class="actions" data-stop><button class="abtn" data-action="change">Change</button>${remove}</div>`
+}
+
+function assignable(f) {
+  const current = personOf(f)
+  const ids = [...Object.keys(PEOPLE), ...Object.keys(rt.created)].filter(id => id !== current && !person(id).badMatch && faceCount(id) > 0 || rt.created[id] && id !== current)
+  const named = ids.filter(id => person(id).name).sort((x, y) => person(x).name.localeCompare(person(y).name))
+  const unknown = ids.filter(id => !person(id).name)
+  return [...named, ...unknown]
+}
+
+function comboMarkup(f) {
+  const q = rt.combo.query, ql = q.trim().toLowerCase()
+  const all = assignable(f)
+  const items = []
+  const suggested = (!ql && state.suggested) ? f.suggest.filter(id => all.includes(id) && faceCount(id) > 0).slice(0, state.suggestedCount) : []
+  if (suggested.length) {
+    items.push({ kind: 'group', label: 'Suggested' })
+    suggested.forEach((id, i) => items.push({ kind: 'person', id, dist: (0.31 + i * 0.07).toFixed(2) }))
+    items.push({ kind: 'sep' })
+  }
+  const rest = all.filter(id => !suggested.includes(id)).filter(id => !ql || personName(id).toLowerCase().includes(ql))
+  const exact = all.some(id => personName(id).toLowerCase() === ql) || personName(personOf(f)).toLowerCase() === ql
+  const createRow = ql && !exact ? [{ kind: 'create', name: q.trim() }] : []
+  const people = rest.slice(0, 50).map(id => ({ kind: 'person', id }))
+  const list = state.createPos === 'first' ? [...items, ...createRow, ...people] : [...items, ...people, ...createRow]
+  if (!list.length) list.push({ kind: 'empty' })
+  rt.combo.items = list.filter(i => i.kind === 'person' || i.kind === 'create')
+  const active = rt.combo.items[rt.combo.active]
+  const lis = list.map(it => {
+    if (it.kind === 'group') return `<li class="group" role="presentation">${it.label}</li>`
+    if (it.kind === 'sep') return `<li class="sep" role="presentation"></li>`
+    if (it.kind === 'empty') return `<li class="empty-row">Nobody matches</li>`
+    if (it.kind === 'create') return `<li class="create" role="option" aria-selected="${active === it}" data-action="create-person" data-name="${esc(it.name)}"><span class="plus">+</span><span>Create '${esc(it.name)}'</span><span></span></li>`
+    const p = person(it.id)
+    const extra = p.hidden ? '<span class="mark">Hidden</span>' : (it.dist && state.showDistance ? `<span class="dist">${it.dist}</span>` : '<span></span>')
+    return `<li role="option" aria-selected="${active === it}" data-action="pick-person" data-person="${it.id}">${coverSvg(it.id, 24)}<span>${p.name ? esc(p.name) : `<i>${esc(p.label)}</i>`}</span>${extra}</li>`
+  }).join('')
+  return `<div class="combo" data-stop>
+    <input type="text" role="combobox" aria-expanded="${rt.combo.listOpen}" aria-autocomplete="list" placeholder="Who is this?" value="${esc(q)}" data-combo-input autocomplete="off" spellcheck="false">
+    <button class="x" data-action="combo-x" aria-label="Cancel" title="Back to Change and Remove">×</button>
+    ${rt.combo.listOpen ? `<ul class="listbox" role="listbox">${lis}</ul>` : ''}
+  </div>`
+}
+
+function detailsMarkup(a, L) {
+  const link = (t, kind) => `<a href="#" target="_blank" data-action="link" data-kind="${kind}" title="Opens the ${kind} search in a new tab">${esc(t)}</a>`
+  const crumbs = a.folder.map(f => link(f, 'folder')).join('<span class="sep">›</span>')
+  const dims = `${L.dims[0]} × ${L.dims[1]}${a.shown[0] !== a.stored[0] ? (state.boxFrom === 'shown' ? ' <span class="src">as shown (EXIF rotated)</span>' : ' <span class="src">from the file header</span>') : ''}`
+  const rows = [
+    ['File name', esc(a.file)], ['Type', esc(a.type)], ['Dimensions', dims],
+    a.duration ? ['Duration', fmtTime(a.duration)] : null,
+    ['Size', esc(a.size)], ['Date taken', `${esc(a.taken)} <span class="src">· ${esc(a.takenSource)}</span>`], ['Date imported', esc(a.imported)],
+    ['Folder', `<span class="crumbs">${crumbs}</span>`],
+    ['Albums', a.albums.length ? a.albums.map(x => link(x, 'album')).join(', ') : '<span class="src">—</span>'],
+    ['Locations', a.locations.length ? a.locations.map(x => link(x, 'Location')).join(', ') : '<span class="src">—</span>'],
+    ['GPS', esc(a.gps)], ['Camera', esc(a.camera)], ['Image quality', a.quality === '—' ? '<span class="src">—</span>' : `<span class="ok">${esc(a.quality)}</span>`], ['Sequence', esc(a.sequence)],
+  ].filter(Boolean)
+  return `<h3>Details</h3><dl class="details">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`
+}
+
+function metadataMarkup(a) {
+  const groups = a.metadata.map(([name, rows], i) => {
+    const key = a.key + ':' + name
+    const open = rt.openGroups[key] ?? (i < state.metadataOpen)
+    return `<details class="mgroup" ${open ? 'open' : ''} data-group="${esc(key)}"><summary>${esc(name)}<span class="count">${rows.length}</span></summary><dl>${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></details>`
+  }).join('')
+  return `<h3>Metadata</h3>${groups}`
+}
+
+function restoreFocus() {
+  if (rt.focus === 'combo') {
+    const i = vp.querySelector('[data-combo-input]')
+    if (i) { i.focus({ preventScroll: true }); const n = i.value.length; i.setSelectionRange(n, n) }
+  } else if (rt.focus === 'divider') vp.querySelector('.divider')?.focus({ preventScroll: true })
+}
+
+function renderLog() {
+  document.getElementById('logList').innerHTML = rt.log.map(l => `<li>${esc(l)}</li>`).join('') || '<li>Nothing yet. Press m, click a face, drag the divider…</li>'
+}
+
+/* ============================ actions ============================ */
+function step(dir) {
+  const i = ASSETS.findIndex(a => a.key === state.asset)
+  state.asset = ASSETS[(i + dir + ASSETS.length) % ASSETS.length].key
+  onAssetChange(`Stepped to ${asset().file}: selection cleared, panel and highlights as they were`)
+}
+function onAssetChange(msg) {
+  clearSelection(); rt.dockMenu = false
+  rt.time = 0; setPlaying(isVideo())
+  if (msg) log(msg)
+}
+function setPlaying(on) {
+  rt.playing = on
+  clearInterval(rt.playTimer)
+  if (on) rt.playTimer = setInterval(() => {
+    rt.time = Math.min(asset().duration, rt.time + 0.1)
+    if (rt.time >= asset().duration) { setPlaying(false); log('Playback ended') }
+    render()
+  }, 100)
+}
+function togglePanel(src) {
+  state.panelOpen = !state.panelOpen
+  if (!state.panelOpen) { rt.combo = null; rt.dockMenu = false }
+  log(`${src}: Detail panel ${state.panelOpen ? 'open' : 'closed'} (remembered)`)
+}
+function toggleHighlights(src) {
+  state.highlights = !state.highlights; clearSelection()
+  log(`${src}: Face highlights ${state.highlights ? 'on' : 'off'}, selection cleared (remembered)`)
+}
+function toggleFullscreen(src) {
+  state.fullscreen = !state.fullscreen
+  log(`${src}: ${state.fullscreen ? 'fullscreen, toolbar hidden' : 'left fullscreen'}`)
+}
+function selectFace(id, from) {
+  const a = asset(), f = a.faces.find(x => x.id === id)
+  if (rt.selected === id && from === 'row') { clearSelection(); log('Row clicked again: selection cleared'); return }
+  clearSelection(); rt.selected = id
+  if (a.duration) { rt.time = f.frame; setPlaying(false); log(`Row: seeked to ${f.frame.toFixed(1)} s and paused, ${personName(personOf(f))}'s highlight shown`) }
+  else log(`${from === 'row' ? 'Row' : 'Face highlight'}: ${personName(personOf(f))} selected`)
+  if (from === 'box' && !state.panelOpen) { state.panelOpen = true; log('Face highlight clicked: panel opened, as if m were pressed') }
+}
+function removeFace(f) {
+  const pid = personOf(f), name = personName(pid)
+  rt.removed.add(f.id); clearSelection()
+  const gone = faceCount(pid) === 0
+  snack(`Removed ${name}` + (gone ? `. ${name} had no other faces and was removed` : ''))
+  log(`Removed ${name}'s face${gone ? '; the Person had no other face and is deleted' : ''}`)
+}
+function moveFace(f, targetId) {
+  const a = asset(), from = personOf(f), fromName = personName(from)
+  const sourceOther = faceCount(from) > 1
+  if (a.duration) {
+    const twin = facesOf(a).find(o => o.id !== f.id && personOf(o) === targetId)
+    if (twin) {
+      const loser = twin.score >= f.score ? f : twin
+      rt.removed.add(loser.id)
+      log(`Video rule: ${personName(targetId)} already had a face here, the lower-quality one (score ${loser.score}) was deleted`)
+      if (loser === f) { clearSelection(); snack(`Moved to ${personName(targetId)}` + (!sourceOther ? `. ${fromName} had no other faces and was removed` : '')); return }
+    }
+  }
+  rt.moves[f.id] = targetId; clearSelection()
+  const target = personName(targetId)
+  snack(`Moved to ${target}` + (!sourceOther ? `. ${fromName} had no other faces and was removed` : ''))
+  log(`Changed ${fromName} → ${target}${!sourceOther ? '; ' + fromName + ' had no other face and is deleted' : ''}; the vector moved with the face`)
+}
+function createPerson(f, name) {
+  const existing = [...Object.keys(PEOPLE), ...Object.keys(rt.created)].find(id => person(id).name && person(id).name.toLowerCase() === name.toLowerCase() && !person(id).badMatch)
+  if (existing) { moveFace(f, existing); log(`'${name}' matched ${personName(existing)} case-insensitively`); return }
+  const id = 'new:' + name.toLowerCase()
+  rt.created[id] = { name, hue: (name.length * 47) % 360 }
+  moveFace(f, id)
+  log(`Created ${name}; the moved face is the new Person's cover`)
+}
+function setShare(pct, side) {
+  const L = layout()
+  if (vertical(side)) state.heightShare = Math.round(Math.max(120 / L.fragH * 100, Math.min(pct, (L.fragH - 160) / L.fragH * 100)))
+  else state.widthShare = Math.round(Math.max(state.panelMinWidth / L.fragW * 100, Math.min(pct, (L.fragW - 200) / L.fragW * 100)))
+}
+
+/* ============================ events ============================ */
+vp.addEventListener('click', e => {
+  const t = e.target.closest('[data-action]')
+  if (!t) return
+  const act = t.dataset.action
+  if (act === 'backdrop') { if (e.target === t) { rt.closed = true; log('Backdrop clicked: Asset detail closed'); render() } return }
+  if (act === 'open') { rt.closed = false; onAssetChange('Asset detail opened: panel and highlights as remembered'); render(); return }
+  if (act === 'close') { rt.closed = true; state.fullscreen = false; clearSelection(); setPlaying(false); log('×: closed; selection forgotten, panel and highlights remembered'); render(); return }
+  if (act === 'dismiss') { rt.snack = null; render(); return }
+  if (act === 'toggle-panel') togglePanel('Toolbar')
+  else if (act === 'toggle-highlights') toggleHighlights('Toolbar')
+  else if (act === 'toggle-fullscreen') toggleFullscreen('Button')
+  else if (act === 'select-face') { if (e.target.closest('[data-stop].actions, .combo')) return; selectFace(t.dataset.face, 'row') }
+  else if (act === 'face-box') { selectFace(t.dataset.face, 'box') }
+  else if (act === 'change') { rt.combo = { query: '', active: 0, listOpen: true, items: [] }; rt.removeStage = 0; rt.confirm = false; rt.focus = 'combo'; log('Change: the combobox opens with the assignable people' + (state.suggested ? ', Suggested first' : '')) }
+  else if (act === 'combo-x') { rt.combo = null; rt.focus = null; log('X: back to Change and Remove, nothing selected') }
+  else if (act === 'remove') {
+    const f = asset().faces.find(x => x.id === rt.selected)
+    if (rt.removeStage === 0) { rt.removeStage = 1; log('Remove (click twice): armed, the label reads "Remove (last click)"') }
+    else removeFace(f)
+  }
+  else if (act === 'remove-ask') { rt.confirm = true; log('Remove: asks inline') }
+  else if (act === 'remove-cancel') { rt.confirm = false; log('Remove cancelled') }
+  else if (act === 'remove-confirmed') removeFace(asset().faces.find(x => x.id === rt.selected))
+  else if (act === 'pick-person') { rt.focus = null; moveFace(asset().faces.find(x => x.id === rt.selected), t.dataset.person) }
+  else if (act === 'create-person') { rt.focus = null; createPerson(asset().faces.find(x => x.id === rt.selected), t.dataset.name) }
+  else if (act === 'dock-menu') { rt.dockMenu = !rt.dockMenu; log(rt.dockMenu ? 'Dock side menu opened' : 'Dock side menu closed') }
+  else if (act === 'dock-pick') { state.dockSide = t.dataset.side; rt.dockMenu = false; log(`Dock side picked: ${t.dataset.side} (remembered, independent of the explorer's)`) }
+  else if (act === 'playpause') { setPlaying(!rt.playing); clearSelection(); log(rt.playing ? 'Play: highlights hide during playback' : `Paused at ${rt.time.toFixed(1)} s`) }
+  else if (act === 'seek') {
+    const r = t.getBoundingClientRect(); rt.time = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * asset().duration
+    clearSelection(); log(`Seeked to ${rt.time.toFixed(1)} s: ${currentFaces(asset(), facesOf(asset())).length} face(s) within ${state.frameTolerance} ms`)
+  }
+  else if (act === 'link') { e.preventDefault(); log(`${t.dataset.kind} link: would open its search in a new tab, Asset detail stays`) }
+  render()
+})
+vp.addEventListener('dblclick', e => {
+  if (e.target.closest('.divider')) { const L = layout(); if (vertical(L.side)) state.heightShare = 35; else state.widthShare = 25; log('Divider double-clicked: share back to default'); render() }
+})
+vp.addEventListener('toggle', e => {
+  const d = e.target.closest('.mgroup'); if (!d) return
+  rt.openGroups[d.dataset.group] = d.open; log(`Metadata group ${d.open ? 'opened' : 'closed'} (remembered)`); renderLog()
+}, true)
+vp.addEventListener('focusin', e => {
+  rt.focus = e.target.matches('[data-combo-input]') ? 'combo' : e.target.matches('.divider') ? 'divider' : null
+})
+vp.addEventListener('input', e => {
+  if (!e.target.matches('[data-combo-input]')) return
+  rt.combo.query = e.target.value; rt.combo.active = 0; rt.combo.listOpen = true; rt.focus = 'combo'; render()
+})
+vp.addEventListener('keydown', e => {
+  if (e.target.matches('[data-combo-input]')) {
+    const c = rt.combo
+    if (e.key === 'ArrowDown') { e.preventDefault(); c.listOpen = true; c.active = Math.min(c.items.length - 1, c.active + 1); render() }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); c.active = Math.max(0, c.active - 1); render() }
+    else if (e.key === 'Enter') {
+      e.preventDefault(); const it = c.items[c.active]; if (!it) return
+      const f = asset().faces.find(x => x.id === rt.selected); rt.focus = null
+      if (it.kind === 'create') createPerson(f, it.name); else moveFace(f, it.id)
+      render()
+    } else if (e.key === 'Escape') {
+      e.preventDefault(); e.stopPropagation()
+      if (c.listOpen) { c.listOpen = false; log('Esc: closed only the listbox; the dialog stays') } else { rt.combo = null; rt.focus = null; log('Esc again: left the combobox') }
+      render()
+    }
+    e.stopPropagation()
+    return
+  }
+  if (e.target.matches('.divider')) {
+    const L = layout(), cur = vertical(L.side) ? state.heightShare : state.widthShare, stepPct = e.shiftKey ? 5 : 1
+    const grow = { left: 'ArrowRight', right: 'ArrowLeft', top: 'ArrowDown', bottom: 'ArrowUp' }[L.side]
+    const shrink = { left: 'ArrowLeft', right: 'ArrowRight', top: 'ArrowUp', bottom: 'ArrowDown' }[L.side]
+    if (e.key === grow || e.key === shrink) { e.preventDefault(); e.stopPropagation(); setShare(cur + (e.key === grow ? stepPct : -stepPct), L.side); log(`Divider arrow: ${vertical(L.side) ? state.heightShare : state.widthShare}%`); render(); return }
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (vertical(L.side)) state.heightShare = 35; else state.widthShare = 25; log('Divider Enter: share back to default'); render(); return }
+    if (e.key === ' ') { e.stopPropagation(); return }
+  }
+  if (e.key === ' ' && e.target.closest('.panel') && e.target.matches('button')) { e.stopPropagation(); log('Space on a panel control presses it, not the player'); return }
+})
+
+/* divider drag */
+vp.addEventListener('pointerdown', e => {
+  const d = e.target.closest('.divider')
+  if (d) {
+    e.preventDefault(); rt.dragging = true; d.dataset.dragging = ''; d.setPointerCapture?.(e.pointerId)
+    const frag = vp.querySelector('.fragment'), rect = frag.getBoundingClientRect(), L = layout()
+    const move = ev => {
+      let pct
+      if (L.side === 'left') pct = (ev.clientX - rect.left) / rect.width * 100
+      else if (L.side === 'right') pct = (rect.right - ev.clientX) / rect.width * 100
+      else if (L.side === 'top') pct = (ev.clientY - rect.top) / rect.height * 100
+      else pct = (rect.bottom - ev.clientY) / rect.height * 100
+      setShare(pct, L.side); render(); vp.querySelector('.divider')?.setAttribute('data-dragging', '')
+    }
+    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); rt.dragging = false; log(`Divider dragged: ${vertical(L.side) ? state.heightShare + '% of the height' : state.widthShare + '% of the width'} (remembered)`); render() }
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up)
+    return
+  }
+  const hold = e.target.closest('[data-action="remove-hold"]')
+  if (hold) {
+    rt.hold = performance.now()
+    const tick = setInterval(() => {
+      if (!rt.hold) { clearInterval(tick); return }
+      if (performance.now() - rt.hold >= 1000) { clearInterval(tick); rt.hold = null; removeFace(asset().faces.find(x => x.id === rt.selected)); render(); return }
+      render()
+    }, 50)
+    const up = () => { document.removeEventListener('pointerup', up); if (rt.hold) { rt.hold = null; log('Hold released early: nothing removed'); render() } }
+    document.addEventListener('pointerup', up)
+  }
+})
+
+/* global keys, as js/global.js would handle them */
+document.addEventListener('keydown', e => {
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
+  const inField = e.target.matches('input, textarea, select') || e.target.isContentEditable
+  if (inField) return
+  if (rt.closed) { if (e.key === 'Enter') { rt.closed = false; onAssetChange('Opened'); render() } return }
+  const k = e.key.toLowerCase()
+  if (k === 'm') { togglePanel('Key m'); render() }
+  else if (k === 'p') { toggleHighlights('Key p'); render() }
+  else if (k === 'f') { toggleFullscreen('Key f'); render() }
+  else if (e.key === 'ArrowLeft') { step(-1); render() }
+  else if (e.key === 'ArrowRight') { step(1); render() }
+  else if (e.key === ' ' && isVideo()) { e.preventDefault(); setPlaying(!rt.playing); clearSelection(); log(rt.playing ? 'Space: playing, highlights hidden' : `Space: paused at ${rt.time.toFixed(1)} s`); render() }
+  else if (e.key === 'Escape') {
+    if (rt.dockMenu) { rt.dockMenu = false; log('Esc: closed only the Dock side menu') }
+    else if (rt.combo) { rt.combo = null; rt.focus = null; log('Esc: left the combobox') }
+    else if (state.fullscreen) { state.fullscreen = false; log('Esc: left fullscreen; Asset detail stays open') }
+    else { rt.closed = true; clearSelection(); setPlaying(false); log('Esc: Asset detail closed') }
+    render()
+  }
+})
+
+/* ============================ controls ============================ */
+function bindControls() {
+  document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return
+    const key = seg.dataset.key; state[key] = b.dataset.v
+    if (key === 'asset') onAssetChange(`Asset: ${asset().file}`)
+    if (key === 'defaultPanel') state.panelOpen = state.defaultPanel === 'open'
+    if (key === 'defaultHighlights') { state.highlights = state.defaultHighlights === 'on'; clearSelection() }
+    if (key === 'dockSide') rt.dockMenu = false
+    render()
+  }))
+  document.querySelectorAll('input[data-key]').forEach(i => i.addEventListener('input', () => {
+    const key = i.dataset.key
+    state[key] = i.type === 'checkbox' ? i.checked : Number(i.value)
+    if (key === 'panelOpen' && !state.panelOpen) { rt.combo = null; rt.dockMenu = false }
+    if (key === 'highlights') clearSelection()
+    if (key === 'trash') { clearSelection() }
+    if (key === 'mirror' || key === 'includeHidden') clearSelection()
+    render()
+  }))
+  const pr = document.getElementById('presets')
+  Object.keys(PRESETS).forEach(name => {
+    const b = document.createElement('button'); b.textContent = name
+    b.addEventListener('click', () => { Object.assign(state, DEFAULTS, PRESETS[name]); rt.closed = false; onAssetChange(`Preset: ${name}`); render() })
+    pr.appendChild(b)
+  })
+  document.getElementById('copy').addEventListener('click', async () => {
+    const text = document.getElementById('prompt').textContent, btn = document.getElementById('copy')
+    try { await navigator.clipboard.writeText(text) } catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove() }
+    btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy prompt', 1200)
+  })
+}
+function syncControls() {
+  document.querySelectorAll('.seg').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(state[seg.dataset.key]) === b.dataset.v)))
+  document.querySelectorAll('input[data-key]').forEach(i => { if (i.type === 'checkbox') i.checked = !!state[i.dataset.key]; else i.value = state[i.dataset.key] })
+  document.querySelectorAll('[data-val]').forEach(o => {
+    const k = o.dataset.val, v = state[k]
+    o.textContent = k === 'hlDim' ? Math.round(v * 100) + '%' : /Share$/.test(k) ? v + '%' : k === 'frameTolerance' ? v + ' ms' : k === 'metadataOpen' || k === 'suggestedCount' ? v : v + 'px'
+  })
+}
+
+/* ============================ prompt ============================ */
+function updatePrompt() {
+  const p = [], d = DEFAULTS
+  if (state.defaultPanel !== d.defaultPanel) p.push('Default the Detail panel to open in a new browser, not closed.')
+  if (state.defaultHighlights !== d.defaultHighlights) p.push('Default Face highlights to on in a new browser, not off.')
+  if (state.dockSide !== d.dockSide) p.push(`Default the Detail panel's Dock side to ${state.dockSide} in every viewport, instead of following the orientation (bottom in portrait, left otherwise) until a pick.`)
+  if (state.widthShare !== d.widthShare || state.heightShare !== d.heightShare) p.push(`Default shares: ${state.widthShare}% of the width for a left or right dock and ${state.heightShare}% of the height for a top or bottom one (the explorer's are 25% and 35%).`)
+  if (state.panelMinWidth !== d.panelMinWidth) p.push(`The panel never narrows below ${state.panelMinWidth}px.`)
+  if (state.openBox !== d.openBox) p.push('With the panel open, the box hugs the fitted media plus the panel rather than filling the viewport.')
+  const hlBits = []
+  if (state.hlColor !== d.hlColor) hlBits.push(`in the ${state.hlColor === 'primary' ? 'primary color (--theme-primary-text)' : state.hlColor === 'neutral' ? 'light neutral (--theme-neutral-1)' : 'accent'}`)
+  if (state.hlStroke !== d.hlStroke) hlBits.push(`${state.hlStroke}px wide`)
+  if (state.hlRadius !== d.hlRadius) hlBits.push(state.hlRadius === 0 ? 'with square corners' : `with ${state.hlRadius}px corners`)
+  if (hlBits.length) p.push(`Draw a Face highlight as an outline ${hlBits.join(', ')}.`)
+  if (state.hlDim !== d.hlDim) p.push(state.hlDim >= 1 ? 'Do not fade the other highlights when one is selected; emphasise the selected one alone.' : `When a Face is selected, fade the other highlights to ${Math.round(state.hlDim * 100)}% opacity.`)
+  if (!state.showBadges) p.push('Draw no name badge under a Face highlight; the name shows only in the People row.')
+  else {
+    if (state.badgePos !== d.badgePos) p.push(state.badgePos === 'inside' ? 'Put the name badge inside the bottom of the box, always.' : 'Put the name badge above the box, flipped inside at the top edge.')
+    if (state.badgeSize !== d.badgeSize) p.push(`The badge's text is ${state.badgeSize}px (${state.badgeSize <= 10 ? '--font-size-xs' : state.badgeSize <= 12 ? '--font-size-small' : state.badgeSize <= 14 ? '--font-size-base' : '--font-size-medium'}).`)
+  }
+  if (state.frameTolerance !== d.frameTolerance) p.push(`A Video Face counts as current within ${state.frameTolerance} ms of its Frame time, not 100.`)
+  if (state.boxFrom !== d.boxFrom) p.push('Keep sizing the box and the highlights from the stored width and height rather than the shown element (note: this misplaces highlights on EXIF-rotated photos, as the playground shows).')
+  if (state.rowDensity !== d.rowDensity) p.push('People rows are compact: tighter padding.')
+  if (state.coverSize !== d.coverSize) p.push(`People row covers are ${state.coverSize}px.`)
+  if (!state.showFrameTime) p.push("Do not show a Video Face's Frame time on its row.")
+  if (state.removeGuard !== d.removeGuard) p.push(state.removeGuard === 'hold' ? 'Guard Remove with a one-second press-and-hold, with a fill showing progress, instead of two clicks.' : 'Guard Remove with an inline "Remove this face?" Remove/Cancel pair instead of two clicks.')
+  if (!state.suggested) p.push('Drop addendum G (the Suggested group in the combobox).')
+  else {
+    if (state.suggestedCount !== d.suggestedCount) p.push(`The Suggested group holds at most ${state.suggestedCount} people.`)
+    if (state.showDistance) p.push('Show each suggestion\'s cosine distance, dimmed, at the row\'s end.')
+  }
+  if (state.createPos !== d.createPos) p.push("Put the \"Create 'Name'\" row after the matches, not before them.")
+  if (!state.showDetails) p.push('Leave out the Details section.')
+  if (!state.showMetadata) p.push('Leave out the Metadata section.')
+  else if (state.metadataOpen !== d.metadataOpen) p.push(`Open the first ${state.metadataOpen} Metadata group${state.metadataOpen > 1 ? 's' : ''} by default instead of none.`)
+  if (state.sectionOrder !== d.sectionOrder) p.push('Order the panel Details, then People, then Metadata.')
+
+  const head = 'In plans/todo/asset-detail-panel.md (Asset detail: Detail panel, Face highlights and Face corrections), update the Decisions table and the Design section so that:'
+  const text = p.length
+    ? `${head}\n\n${p.map(x => '- ' + x).join('\n')}\n\nKeep everything else as the plan states it, and update the Verification list where these change what is checked.`
+    : 'The plan reads right as explored: no change to plans/todo/asset-detail-panel.md. (Move a knob outside the Scene and State groups to build a change request here.)'
+  document.getElementById('prompt').textContent = text
+}
+
+/* ============================ boot ============================ */
+bindControls()
+new ResizeObserver(() => { const [W, H] = VIEWPORTS[state.viewport]; fitScale(W, H) }).observe(document.getElementById('previewArea'))
+log('Loaded with the plan\'s defaults: panel closed, highlights off')
+render()
+</script>
+</body>
+</html>

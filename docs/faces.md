@@ -140,7 +140,9 @@ holds all detections of the video in memory. Then, with the pure functions of th
    Face is match-only whatever its quality, so a passer-by in one frame cannot start a Person. A clip shorter than the
    sample interval has one frame, so nobody enrolls from it.
 5. One Face per Person per Video: when two clusters resolve to the same Person (`recognizeAndStore`), the later,
-   lower-quality one is dropped, so a pose change that splits a person in two does not fail the import.
+   lower-quality one is dropped, so a pose change that splits a person in two does not fail the import. The rule holds
+   after import too: a Face correction that would give a Person a second Face on a Video keeps the better one (see
+   **Corrections** below).
 
 ## Storage
 
@@ -160,16 +162,25 @@ The crops live in the file store (`FileSystemStoreService.addFace`) as
 ## People
 
 A `person` row carries `name`, `is_named`, `num_of_faces`, `cover_face_id`, `is_hidden`, `is_bad_match`, `is_deleted`.
-`PersonService.addFace` inserts the Face, increments `num_of_faces` and sets the cover face when it is the first.
-Recycling an asset decrements the counts of its people and restoring increments them, whether it is restored or moved out
-of the trash into a folder; only the assets a call actually recycles or takes out of the trash are counted. The faces
-themselves go with the asset on purge, and their files with them, except the cover face of its person. An import the
-pipeline drops, or one a crash cut off (pruned at startup), is undone (`LibraryService.discardImport`): the counts it
-added are given back, its faces and their files go, and a person it started, left with no face, is deleted. Moving a live asset between folders or out of triage does not touch the counts.
+`num_of_faces` is, despite its name, the number of assets outside the trash on which the person has a Face: what a search
+for the person finds. A person seen twice in one image (`twins.png`) has two Faces there and counts that asset once.
+`PersonService.addFace` inserts the Face, sets the cover face when it is the first, and increments `num_of_faces` only when
+the person had no Face on the asset yet (`FaceDao.hasFaceOfPerson`). Recycling an asset takes it from the counts of its
+people and restoring gives it back, whether it is restored or moved out of the trash into a folder, each asset once
+however many Faces of a person it holds (`PersonDao.addFacesOfAssets`, `COUNT(DISTINCT asset_id)`); only the assets a call
+actually recycles or takes out of the trash are counted, and the people are locked first (`PersonDao.lockAssetPeople`, after
+the assets and in ID order), so a correction holding one of them (see **Corrections**) ends before the count is read: read
+while it held, from a snapshot in which its Face still existed, the count would take the asset from the Person twice.
+`merge` recounts the destination from a search for its assets.
+The faces themselves go with the asset on purge, and their files with them, except the cover face of its person. An
+import the pipeline drops, or one a crash cut off (pruned at startup), is undone (`LibraryService.discardImport`): the
+assets it added to the counts are given back, its faces and their files go, and a person it started, left with no face,
+is deleted. Moving a live asset between folders or out of triage does not touch the counts.
 
 The People tab (`PeopleActionController`) lists people by People bucket (`Const.PeopleBucket`; the glossary in
-`CONTEXT.md` has the terms): Matched (at least `Const.FaceRecognition.MIN_FACES_THRESHOLD`, 3, faces, or named),
-Unmatched (fewer and unnamed), Hidden (hidden, whatever its count or name); a discarded person is in none. The list
+`CONTEXT.md` has the terms): Matched (a Face on at least `Const.FaceRecognition.MIN_FACES_THRESHOLD`, 3, assets outside
+the trash, or named), Unmatched (fewer and unnamed), Hidden (hidden, whatever its count or name); a discarded person is in
+none. The list
 (`PersonService.getInBuckets`, one query) is the union of the buckets switched on, Matched alone by default; Hide / Show,
 offered to a Matched person (`Person.isMatched`), moves it between buckets. Its actions:
 
@@ -190,6 +201,68 @@ offered to a Matched person (`Person.isMatched`), moves it between buckets. Its 
   live source takes the source's `name`, its name key as `name_for_sort`, and `is_named`; otherwise the destination, named
   or not, keeps all three. A source no longer live (merged away or a bad match) gives no name; a merge of one is not
   refused. The source is soft-deleted first, so `person_01` never sees the name on two live people.
+
+### Corrections
+
+Asset detail's People section (the glossary's Detail panel) acts on one Face at a time, never on a Person as a whole: Remove
+deletes a Face, Change gives it to another Person. Each is one `PersonService` transaction followed by a file purge, and
+each follows the count rule above: a Face leaving an asset lowers its Person's `num_of_faces` only if they have no other
+Face on it, and a Face arriving raises the target's only if they had none (`FaceDao.hasFaceOfPerson`).
+
+- **Remove** (`removeFace(faceId)`): the Person is locked (`lockAndGetLive`), the Face re-read and its row deleted; the
+  cover, if it was this Face, becomes the Person's remaining Face with the highest detection score (`getTopFaces`); a
+  Person left with no Face row is deleted (`deletePeopleWithoutFaces`), named or not. Once committed the Face's files go
+  (`purgeFaceFiles`), given the Person as re-read after the repick, since a cover Face keeps its files and this one is no
+  longer the cover; a deleted Person's cover loses its files too.
+- **Change** (`moveFace(faceId, FaceTarget)`): the target is a live Person by ID (hidden or not; a merged-away or
+  bad-match Person is not found) or a name, which resolves to the live Person holding it in any case or Unicode form
+  (`getLiveByNameKey`) or creates a named Person. Creators of one name take turns under the name's lock
+  (`PersonDao.lockName`, `BaseDao.advisoryLock`: `pg_advisory_xact_lock` on PostgreSQL, nothing on SQLite, whose one
+  write connection serializes the writers), so the loser of a race finds the winner instead of failing on `person_01`.
+  Source and target are then locked in ID order, the Face re-read and its `person_id` changed, the vector going with the
+  row so later imports match it to the new Person. The source is settled first, as Remove settles a Person (count, cover
+  repick, deletion at the last Face), before the target may take the Face as cover, which `person_02` allows one Person
+  at a time; the target counts the asset if they had no Face on it and takes the Face as cover only if they have none (a
+  new Person's cover is the moved Face). On a Video where the target already has a Face, the lower-quality of the two
+  (the target's own on a tie) is deleted as Remove deletes it, and a cover that pointed at it moves to the survivor.
+- **Last Face**: a Person is deleted only when no Face row of theirs remains. Faces on assets in the trash are rows, so a
+  Person whose every live Face was removed stays, counting zero, until the trash is purged.
+- **Locks**: a correction locks the Face's people (`lockAndGetLive`, ID order) and reads its asset without a lock, while a
+  recycle or restore locks its assets first (`AssetDao.lockAssets`) and their people after (`lockAssetPeople`): assets, then
+  people, in every transaction that locks both, so none waits on another in a cycle, and a recycle counts an asset's people
+  only once a correction holding one of them has ended.
+- **Refusals**: a Face of a recycled asset is an `IllegalOperationException` (the section is read-only in the trash); a
+  Face gone, or moved by a request that held the lock first, is a `NotFoundException`; the Face's own Person a
+  `ValidationException`, as is a reserved name.
+
+The routes (`AssetActionController`, under `requireLogin`, each logging the correction on INFO):
+`PUT /htmx/asset/r/:repoId/face/:faceId/person` with a JSON body naming `personId` or `name` (one of the two; the name
+trimmed and held to the name editor's length rules), and `DELETE /htmx/asset/r/:repoId/face/:faceId`. Both answer the
+asset's People section (`htmx/detail_panel_people`: one row per Face with its Person, bad matches left out, Hidden
+marked, by `x1` for an image and by Frame time for a Video, `PersonService.getAssetFacesForDetail`), its root carrying
+the result message (`Const.Msg.FaceCorrection`) and, when a Person was deleted, their ID and the line that says so; a
+refused correction is a plain-text 400 (the body or the target), 404 (gone or moved) or 409 (in the trash), which the
+client answers by reloading the section. The controls, the Change combobox and what the client does with an answer are
+under **Detail panel** in `altitude/views/AGENTS.md`. `PeopleActionController` serves the Change combobox's options,
+`GET /htmx/people/r/:repoId/assignable` (`getAssignable`: the live people who are not a bad match, named first, then by
+`name_for_sort`, Hidden among them and marked; `htmx/assignable_people`), with the Suggested group below when asked with
+`faceId`, and a Person's results title on its own, `GET /htmx/people/r/:repoId/p/:personId/title` (`htmx/person_inner`),
+for the count to be refreshed after a correction.
+
+- **Suggested people** (`suggestedPeople(faceId)`): the people whose Faces are nearest the Face's own vector, closest first,
+  at most `PersonService.SUGGESTED_PEOPLE` (3), so that most wrong matches take one click. The candidates are what
+  recognition sees, through the same statement with one more filter, so no new Setting: enrolled Faces of people who are
+  not a bad match, within `face.recognition.cosine_distance_threshold`, in the context repository, read inside
+  `withFaceVectorReadOnly`, a read since nothing is stored (`FaceDao.searchNearestFacesOfOthers`, beside `searchClosestFaceMatches`: on PostgreSQL
+  `CLOSEST_OF_OTHERS_SQL`, the HNSW scan carrying on past the excluded Faces, on SQLite the full scan filtered afterwards).
+  Unlike recognition it leaves out the Face's current Person, in the SQL, since a Person with thousands of Faces would
+  otherwise fill every candidate slot; the Face's vector is read from the store (`FaceDao.getFeatures`), since the model
+  never carries it. The nearest `SUGGESTION_CANDIDATES` (20) Faces are reduced to their first three distinct people.
+  Nothing is stored and nothing votes: the suggestion only orders what the user chooses from. Nobody is suggested when no
+  Face is near enough, as for a poor Face, whose vector has drifted; Hidden people are suggested and marked. The route
+  renders the group first (`htmx/assignable_people`: the ARIA listbox group pattern, `role="group"` labelled by its
+  heading, each option marked `data-suggested`) and leaves those people out of the list after it, so each Person is one
+  option; a Face gone or of another repository is a 404.
 
 ## Settings
 
@@ -220,8 +293,17 @@ cross rules (box size ≥ smallest face, `hnsw_ef_search` ≥ 4 × `match_count`
 [FaceDetectionTests](../altitude/test/src/altitude/core/integration/FaceDetectionTests.scala) covers detection on the
 `people/` fixtures and the tiers on blurred copies (`TestVideos.frameStill` at `FRAME_BLUR`, `still` at `HEAVY_BLUR`);
 [FaceRecognitionServiceTests](../altitude/test/src/altitude/core/integration/FaceRecognitionServiceTests.scala) covers
-candidate eligibility, the tie-break and the no-candidate rule on known vectors (`TestContext.addTestFace`), a stored
-Face's checksum against the SHA-256 of its stored crop, the same crop twice in one asset, and the Video rules on clips
-synthesized by [TestVideos](../altitude/test/src/altitude/test/TestVideos.scala);
-[FaceClusteringTests](../altitude/test/src/altitude/core/unit/FaceClusteringTests.scala) covers the pure clustering.
+candidate eligibility, the tie-break and the no-candidate rule on known vectors (`TestContext.addTestFace`,
+`TestContext.unitVector` and `between`), a Face's vector read back and the nearest Faces of other people (the Suggested
+group's search: closest first, the Face's Person, bad matches, match-only Faces, those past the threshold and another
+repository's left out), a stored Face's checksum against the SHA-256 of its stored crop, the same crop twice in one asset,
+and the Video rules on clips synthesized by [TestVideos](../altitude/test/src/altitude/test/TestVideos.scala);
+[FaceClusteringTests](../altitude/test/src/altitude/core/unit/FaceClusteringTests.scala) covers the pure clustering;
+[FaceCorrectionTests](../altitude/test/src/altitude/core/integration/FaceCorrectionTests.scala) covers Remove and
+Change on both engines, their four races included (`contend`: two moves of one Person's Faces on an asset, a move of a Face
+a concurrent request removed, two moves to one new name, and a recycle of an asset during a removal of a Face on it), and
+the suggested people of a Face, and
+[AssetActionControllerTests](../altitude/test/src/altitude/core/controller/AssetActionControllerTests.scala) their
+routes, [PeopleActionControllerTests](../altitude/test/src/altitude/core/controller/PeopleActionControllerTests.scala) the
+assignable list with its Suggested group.
 Gaps are listed in [test-coverage.md](test-coverage.md).

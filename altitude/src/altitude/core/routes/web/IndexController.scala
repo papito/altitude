@@ -55,10 +55,22 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
     if !App.altitude.isInitialized then
       logger.warn("App is not initialized, redirecting to setup")
       Response("", 302, Seq("Location" -> "/setup"), Nil)
-    else
-      val stats = App.altitude.service.stats.getStats
-      // The nav marks the view asked for; the client reads the same parameter to seed its search
-      val payload = "<!doctype html>" + html.index(stats = stats, current = view.getOrElse(Const.Search.View.DEFAULT))
-      cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    else mainPage(view.getOrElse(Const.Search.View.DEFAULT))
+
+  /**
+   * The address of one asset: the main page, over whose default results the client opens Asset detail on the asset named by the
+   * path (js/search-results/detail-url.js, which also reads the Detail panel's `panel` parameter). An unknown asset, or another
+   * repository's, is a 404 here, before any page is rendered around it.
+   */
+  @requireLogin()
+  @cask.get("/r/:repoId/asset/:assetId")
+  def assetView(repoId: String, assetId: String, params: cask.QueryParams /* allow unknown params */ ): cask.Response[String] =
+    if App.altitude.service.asset.isInRepository(assetId) then mainPage(Const.Search.View.DEFAULT)
+    else cask.Response("Asset not found", 404, Seq(("Content-Type", "text/plain")))
+
+  /** The nav marks the view asked for; the client reads the same parameter to seed its search */
+  private def mainPage(view: String): cask.Response[String] =
+    val payload = "<!doctype html>" + html.index(stats = App.altitude.service.stats.getStats, current = view)
+    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   initialize()

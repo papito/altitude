@@ -190,6 +190,43 @@
   align-self: center;
 }
 
+/* The Detail panel's specimen at a panel's width on the panel's surface; a cover stands in for a Face's crop */
+.sg-detail-panel {
+  width: var(--modal-content-width);
+  padding: var(--panel-padding);
+  background: var(--theme-neutral-2);
+}
+
+/* The specimen's legend sits in the padded specimen, not the panel's own footer row, so it bleeds to the specimen's edges */
+.sg-detail-panel .sg-panel-keys {
+  margin: 0 calc(-1 * var(--panel-padding)) calc(-1 * var(--panel-padding));
+}
+
+.sg-detail-panel .sg-cover {
+  display: block;
+  width: var(--detail-cover-size);
+  height: var(--detail-cover-size);
+  border-radius: 25%;
+  background: var(--theme-secondary);
+}
+
+/* The combobox's listbox specimen is no popover: it sits in the flow under its field, at the field's width */
+.sg-face-listbox {
+  margin-top: var(--space-2);
+}
+
+.sg-face-listbox .sg-cover {
+  background: var(--theme-secondary);
+}
+
+/* The Face highlights' specimen: a stand-in for a photo, the layer's box, that the highlights are placed in */
+.sg-face-highlights {
+  position: relative;
+  width: var(--modal-content-width);
+  aspect-ratio: 3 / 2;
+  background: linear-gradient(in oklch 160deg, var(--theme-neutral-3), var(--theme-neutral-4));
+}
+
 /* The error form holds its message under its field; line the fields up on their tops */
 #forms .sg-row {
   align-items: start;

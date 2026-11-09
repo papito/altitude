@@ -23,15 +23,19 @@ object FaceDao:
   /**
    * The stored Faces nearest a query vector, nearest first, with their exact cosine distance, no further than a threshold.
    *
-   * The candidates come from `face_03`, the HNSW index over the enrolled Faces' vectors at half precision, which the inner order
-   * and `is_enrolled = TRUE` are written to match. The repository and the bad matches are filtered as the index is read
-   * (`TransactionManager.withFaceVector` has the scan go on until the limit is met). The threshold is applied outside, on the
-   * full-precision distance: inside, a query with nothing near enough would send the index looking for rows that are not there.
+   * The candidates come from the HNSW index over the enrolled Faces' vectors at half precision, which the inner order and
+   * `is_enrolled = TRUE` are written to match. The repository, the bad matches and, with `excludingPerson`, one Person's Faces
+   * are filtered as the index is read (`TransactionManager.withFaceVector` has the scan go on until the limit is met, past the
+   * excluded Faces however many). The threshold is applied outside, on the full-precision distance: inside, a query with nothing
+   * near enough would send the index looking for rows that are not there.
    *
-   * Binds: the vector, the repository, the vector, the number of candidates, the vector, the threshold, the number of matches.
-   * `nearest.*` rather than `*`: the join would put the person's ID and dates into the row map under the same keys.
+   * Binds: the vector, the repository, the excluded Person when there is one, the vector, the number of candidates, the vector,
+   * the threshold, the number of matches. `nearest.*` rather than `*`: the join would put the person's ID and dates into the row
+   * map under the same keys.
    */
-  val CLOSEST_MATCHES_SQL: String =
+  private def closestMatchesSql(excludingPerson: Boolean): String =
+    val personFilter = if excludingPerson then "AND face.person_id <> ?" else ""
+
     s"""
       SELECT nearest.*, nearest.features <=> ?::vector AS distance
         FROM (SELECT face.*
@@ -39,12 +43,19 @@ object FaceDao:
                WHERE face.repository_id = ?
                  AND face.is_enrolled = TRUE
                  AND person.is_bad_match = FALSE
+                 $personFilter
                ORDER BY face.features::halfvec(${FaceDetectionService.EMBEDDING_DIMENSIONS}) <=> ?::halfvec(${FaceDetectionService.EMBEDDING_DIMENSIONS})
                LIMIT ?) AS nearest
        WHERE nearest.features <=> ?::vector < ?
        ORDER BY distance
        LIMIT ?
     """
+
+  /** Recognition's statement: the nearest Faces of everyone */
+  val CLOSEST_MATCHES_SQL: String = closestMatchesSql(excludingPerson = false)
+
+  /** The Suggested group's statement: the nearest Faces of everyone but one Person */
+  val CLOSEST_OF_OTHERS_SQL: String = closestMatchesSql(excludingPerson = true)
 
 class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDao(config) with PostgresOverrides:
 
@@ -89,19 +100,24 @@ class FaceDao(override val config: Config) extends altitude.core.dao.jdbc.FaceDa
     face.copy(id = Some(id), assetId = asset.id, personId = person.id)
 
   def searchClosestFaceMatches(features: Array[Float], matchCount: Int, distanceThreshold: Double): List[Face] =
+    nearest(FaceDao.CLOSEST_MATCHES_SQL, features, Nil, matchCount, distanceThreshold)
+
+  override def searchNearestFacesOfOthers(
+      features: Array[Float],
+      excludedPersonId: String,
+      limit: Int,
+      distanceThreshold: Double): List[Face] =
+    nearest(FaceDao.CLOSEST_OF_OTHERS_SQL, features, List(excludedPersonId), limit, distanceThreshold)
+
+  /** Runs one of the two nearest-Faces statements; `filterBinds` are the binds of its filters after the repository's */
+  private def nearest(
+      sql: String,
+      features: Array[Float],
+      filterBinds: List[Any],
+      limit: Int,
+      distanceThreshold: Double): List[Face] =
     val vector = PostgresOverrides.vectorLiteral(features)
+    val binds = List(vector, RequestContext.getRepository.persistedId) ++ filterBinds ++
+      List(vector, limit * FaceDao.CANDIDATES_PER_MATCH, vector, distanceThreshold, limit)
 
-    val recs: List[Map[String, AnyRef]] =
-      manyBySqlQuery(
-        FaceDao.CLOSEST_MATCHES_SQL,
-        List(
-          vector,
-          RequestContext.getRepository.persistedId,
-          vector,
-          matchCount * FaceDao.CANDIDATES_PER_MATCH,
-          vector,
-          distanceThreshold,
-          matchCount)
-      )
-
-    recs.map(makeModel)
+    manyBySqlQuery(sql, binds).map(makeModel)

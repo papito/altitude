@@ -109,8 +109,8 @@ async function playShownVideo({ videoEl, isCurrent }) {
  *
  * What is remembered is the cell the modal was opened from or stepped to, not the asset: a Location
  * grouping holds an asset in a cell under each of its Locations, and stepping from the cell keeps
- * the walk in the group the user was looking at. A detail opened with no cell (a map pin) has
- * nowhere to step to.
+ * the walk in the group the user was looking at. A detail opened with no cell (a map pin, an
+ * asset's URL) has nowhere to step to.
  *
  * Every media request gets its own token. Only the latest request for the still-active
  * asset-detail open may change the media, box size, title, or loading state; superseded or
@@ -121,8 +121,14 @@ async function playShownVideo({ videoEl, isCurrent }) {
  * the other is hidden and unloaded. The player is hidden while any asset loads. A shown Video
  * starts playing, muted when the browser refuses sound, loops when it is a short clip, and is
  * described to the OS media controls; it is paused when navigation moves on.
+ *
+ * The box is fitted from the shown element's size (`naturalWidth`, `videoWidth`), not the stored
+ * one: the stored size is the file header's, while a browser turns an image upright by its EXIF
+ * orientation. The Detail panel (`detail-panel.js`) is told of each asset as its load starts, under
+ * the same request token, so it empties, loads the asset's details while they are wanted and drops a
+ * superseded answer, and of the shown size, which its dimensions row and the Face highlights read.
  */
-export function createSearchDetailCoordinator({ context }) {
+export function createSearchDetailCoordinator({ context, detailPanel }) {
     // The cell the modal shows, or is loading: where navigation starts from
     let currentCell = null
     let imageRequestToken = 0
@@ -250,6 +256,8 @@ export function createSearchDetailCoordinator({ context }) {
         const shownEl = isVideo ? playerEl : imgEl
         const isCurrent = () => isCurrentImageRequest({ token, openId })
 
+        detailPanel.showAsset({ assetId, isCurrent })
+
         // The player leaves the screen until the next Video is ready, so an emptied player never
         // shows in the previous frame
         unloadVideo(videoEl)
@@ -272,7 +280,16 @@ export function createSearchDetailCoordinator({ context }) {
             }
 
             shownEl.hidden = false
-            setAssetDetailSize({ width, height })
+            // The size as shown, upright; the stored one stands in for a media element that reports none
+            const shownSize = isVideo
+                ? { width: videoEl.videoWidth, height: videoEl.videoHeight }
+                : { width: imgEl.naturalWidth, height: imgEl.naturalHeight }
+            const size =
+                shownSize.width && shownSize.height
+                    ? shownSize
+                    : { width, height }
+            setAssetDetailSize(size)
+            detailPanel.setShownSize(size)
             Alpine.store(Const.state.modal).title = title
             loading.value = false
 
@@ -308,7 +325,10 @@ export function createSearchDetailCoordinator({ context }) {
     /**
      * Navigates the active asset-detail modal to `assetId`, shown by `cellEl`: fetches the asset's
      * metadata, then its media. Both steps are skipped if the request is superseded or the modal
-     * goes away. A playing video is paused first.
+     * goes away. A playing video is paused first, and the Detail panel is told at once, so the last
+     * asset's details and Face highlights leave as this one starts loading; its details load from
+     * `showMedia`, once the metadata is in, so a failed fetch is one error and no request the
+     * panel would have to drop.
      */
     async function loadAssetDetail(assetId, cellEl) {
         const repoId = context.getRepoId()
@@ -324,6 +344,11 @@ export function createSearchDetailCoordinator({ context }) {
         const openId = getModalOpenId()
         const token = ++imageRequestToken
         Alpine.store(Const.state.imageDetailLoading).value = true
+        detailPanel.showAsset({
+            assetId,
+            isCurrent: () => isCurrentImageRequest({ token, openId }),
+            load: false,
+        })
 
         let assetData
         try {

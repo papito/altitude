@@ -10,7 +10,8 @@ import { Const } from "../constants.js"
  * set by merging the request with the browser URL.
  *
  * The store is the only place the current search lives. The friendly URL the server pushes back
- * (`HX-Replace-Url`) is a projection of it for bookmarking, and is never read back.
+ * (`HX-Replace-Url`) is a projection of it for bookmarking, and is never read back; while Asset
+ * detail is open it waits for the closing (`detail-url.js`).
  *
  * `params`    are merged into the store, subject to its scope rules (see `stores/search-params.js`)
  * `transient` are serialized into this one request only and never stored (continuous scroll: the

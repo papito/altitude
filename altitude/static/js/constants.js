@@ -53,12 +53,23 @@ export const Const = {
         personNameEdited: "PERSON_NAME_EDITED_EVENT",
         personMarkedAsBadMatch: "PERSON_MARKED_AS_BAD_MATCH_EVENT",
         personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
-        // A person was merged, hidden, shown or discarded; the People tab reloads its panes
+        // A person was merged, hidden, shown, discarded or corrected on a Face; the People tab reloads its panes
         peopleChanged: "PEOPLE_CHANGED_EVENT",
+        // The Change combobox of a People row picked a Person (`detail.personId`) or a new name (`detail.name`) for
+        // `detail.faceId` (js/alpine/components/face-combobox.js); js/search-results/detail-panel.js sends the correction
+        facePersonPicked: "FACE_PERSON_PICKED_EVENT",
+        // The Change combobox's X: the row of `detail.faceId` goes back to its original state, with nothing selected
+        faceChangeCancelled: "FACE_CHANGE_CANCELLED_EVENT",
         escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
         showNext: "SHOW_NEXT_EVENT",
         showPrevious: "SHOW_PREVIOUS_EVENT",
         togglePlayback: "TOGGLE_PLAYBACK_EVENT",
+        // `m` in Asset detail: opens or closes the Detail panel (js/search-results/detail-panel.js)
+        toggleDetailPanel: "TOGGLE_DETAIL_PANEL_EVENT",
+        // `p` in Asset detail: shows or hides the Face highlights (js/search-results/detail-panel.js)
+        toggleFaceHighlights: "TOGGLE_FACE_HIGHLIGHTS_EVENT",
+        // `f` in Asset detail: puts it in fullscreen or leaves it (js/search-results/detail-fullscreen.js)
+        toggleFullscreen: "TOGGLE_FULLSCREEN_EVENT",
         settingsSaved: "SETTINGS_SAVED_EVENT",
         // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
         dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",
@@ -100,6 +111,13 @@ export const Const = {
         dataSrc: "data-src",
         personId: "data-person-id",
         faceId: "data-face-id",
+        // An option of the Change combobox's fragment (htmx/assignable_people) in its Suggested group: a Person among the nearest
+        suggested: "data-suggested",
+        // A People row of the Detail panel (htmx/detail_panel_people): its Person's name, whether the Person is Hidden, and
+        // the Frame time of a Face in a Video, which the Face highlights read with `data-face-box`
+        personName: "data-person-name",
+        personHidden: "data-person-hidden",
+        frameTimeMs: "data-frame-time-ms",
         // A frame of a Curation set in the rail (`data-asset-id` finds the cells of the grid beneath), its file's
         // name, what the stage's tag says is wrong with it, its Bundle, and whether it is in an album or Location
         frameId: "data-frame-id",
@@ -135,6 +153,35 @@ export const Const = {
         faceBox: "data-face-box",
         // A Setting field's default, which its Reset fills in
         settingDefault: "data-setting-default",
+        // A pick of the explorer's Dock side (the options of its menu, js/common/explorer-dock.js), and of the Detail
+        // panel's, its own since both docks listen on the body (js/search-results/detail-panel.js)
+        dockSide: "data-app-dock-side",
+        detailDockSide: "data-app-detail-dock-side",
+        // The Detail panel's toggle, the Face highlights' and fullscreen's in Asset detail's toolbar (includes/html_common)
+        detailPanelToggle: "data-app-detail-panel-toggle",
+        faceHighlightsToggle: "data-app-face-highlights-toggle",
+        fullscreenToggle: "data-app-fullscreen-toggle",
+        fullscreenKey: "data-app-fullscreen-key", // the key legend's fullscreen entry, gone where the toggle is
+        // The button of a People row that selects its Face (htmx/detail_panel_people), and under a selected row its
+        // corrections: Change, which opens the combobox, and Remove, whose second label (the one after the first click)
+        // the button carries
+        faceRow: "data-app-face-row",
+        faceChange: "data-app-face-change",
+        faceRemove: "data-app-face-remove",
+        faceRemoveLastLabel: "data-app-face-remove-label-last",
+        // The People section's root (htmx/detail_panel_people): read-only in the trash, and after a correction the result
+        // message for the snackbar and, when a Person was deleted, their ID and the line that says so
+        readOnly: "data-app-read-only",
+        resultMessage: "data-app-result-message",
+        deletedPersonId: "data-app-deleted-person-id",
+        deletedPersonMessage: "data-app-deleted-person-message",
+        // The Detail panel's dimensions row, which reads the shown element's size (htmx/detail_panel)
+        detailDimensions: "data-app-detail-dimensions",
+        // The Asset detail fragment while the Detail panel is open (view_image_detail_modal.css lays the grid out from it),
+        // and the asset whose sections the panel's fragment and its People section hold (htmx/detail_panel,
+        // htmx/detail_panel_people); not `data-asset-id`, which finds the cells of the grid
+        detailPanelOpen: "data-app-detail-panel-open",
+        appAssetId: "data-app-asset-id",
     },
 
     context: {
@@ -179,6 +226,9 @@ export const Const = {
         curationHistogram: "curationHistogram",
         // Whether Curation shows the Sequence rail on the queue, "true" or "false" (js/alpine/components/curation.js)
         curationSequenceRail: "curationSequenceRail",
+        // Asset detail's remembered view (js/search-results/detail-panel.js): whether the Detail panel is open, whether
+        // the Face highlights are on and the panel's dock (its side once picked and its share of each axis)
+        assetDetailView: "assetDetailView",
     },
 
     sessionStore: {
@@ -203,6 +253,12 @@ export const Const = {
     },
 
     people: {
+        // A Person's name is held to these lengths by the server (`Api.Constraints.MIN_NAME_LENGTH`, `MAX_NAME_LENGTH`);
+        // the Change combobox offers to create a name only inside them
+        nameLength: {
+            min: 2,
+            max: 80,
+        },
         // The People bucket names are the server's (`Const.PeopleBucket`), sent as the `buckets` parameter
         buckets: {
             matched: "matched",

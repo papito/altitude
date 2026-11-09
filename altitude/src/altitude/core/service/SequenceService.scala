@@ -26,6 +26,12 @@ class SequenceService(val app: Altitude, undatedCandidates: Int):
   protected val dao: AssetDao = app.DAO.asset
   protected val txManager: TransactionManager = app.txManager
 
+  /** How many assets carry the Sequence, for the Detail panel: 0 once every member has left triage or been purged */
+  def memberCount(sequenceId: String): Int =
+    txManager.asReadOnly {
+      dao.countSequenceMembers(Set(sequenceId)).headOption.fold(0)(_.members)
+    }
+
   /**
    * Assigns a just-completed asset to the Sequence of its burst, if it has one, and returns it with that Sequence. Called inside
    * the completion transaction, one asset of a repository at a time in upload order, so an earlier upload of the same burst is a

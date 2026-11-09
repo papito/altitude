@@ -1,5 +1,6 @@
 package altitude.core.controller
 
+import altitude.test.TestContext
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ contain, include, not, should, shouldBe }
 
@@ -19,6 +20,155 @@ import altitude.core.models.Person
       cookies = testContext.cookies,
       check = false
     )
+
+  test("The assignable people are the live people who are not a bad match, named first, Hidden marked") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with People named "Zoe" and "adam", a hidden "Mia", two unnamed People with a Face each, one
+     * more merged into the first of them, and a bad-match Person.
+     *
+     * Assertions:
+     *
+     * The assignable list answers 200 with one option per person in the order adam, Mia, Zoe, then the unnamed people by sort
+     * name, Mia's marked hidden and each carrying its cover; the merged-away and the bad-match people are absent.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val zoe = testApp.service.person.addPerson(Person(name = Some("Zoe")))
+        val adam = testApp.service.person.addPerson(Person(name = Some("adam")))
+        val mia = testApp.service.person.addPerson(Person(name = Some("Mia")))
+        val unknown1 = testApp.service.person.addPerson(Person())
+        val mergedAway = testApp.service.person.addPerson(Person())
+        val unknown2 = testApp.service.person.addPerson(Person())
+        val badMatch = testApp.service.person.addPerson(Person())
+        List(zoe, adam, mia, unknown1, mergedAway, unknown2, badMatch).foreach(testContext.addTestFacesAndAssets(_))
+        testApp.service.person.setVisibility(mia, isHidden = true)
+        testApp.service.person.merge(dest = unknown1, source = mergedAway)
+        testApp.service.person.markAsBadMatch(badMatch)
+
+        val response = requests.get(s"$host/htmx/people/r/$repoId/assignable", cookies = testContext.cookies, check = false)
+
+        response.statusCode shouldBe 200
+        val html = response.text()
+        val optionIds = """data-person-id="([^"]+)"""".r.findAllMatchIn(html).map(_.group(1)).toList
+        optionIds shouldBe List(adam, mia, zoe, unknown1, unknown2).map(_.persistedId)
+        html should include(s"""data-person-id="${mia.persistedId}"""")
+        """data-person-id="[^"]+"\s+data-person-name="Mia"\s+data-person-hidden""".r.findFirstIn(html).isDefined shouldBe true
+        html should include(s"/${Const.DataStore.FACE}/${testApp.service.person.getById(adam.persistedId).coverFaceId.get}")
+    }
+  }
+
+  test("With a Face, the assignable people open with the Suggested group of the people nearest it, each listed once") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Face of an unnamed Person at a synthetic embedding, Faces of "Zoe" about 0.29 away and
+     * of "adam" about 0.05 away, the Face of a hidden "Mia" about 1 away, past the threshold, and an unnamed Person with a Face
+     * at a random embedding.
+     *
+     * Assertions:
+     *
+     * Asked with the Face, the list answers 200 with the Suggested group first, adam then Zoe, each option marked suggested and
+     * under the group's heading, and then the list of the rest in its order, Mia and the other unnamed Person, so no Person is
+     * listed twice and the Face's own Person, who is no target, is no option. Asked without a Face, the list holds every live
+     * Person, the Face's own among them, with no group and no suggested mark; asked with an unknown Face, it is a 404.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val vector = TestContext.unitVector(31)
+        val other = TestContext.unitVector(32)
+        val asset = testContext.persistAsset()
+        val current = testApp.service.person.addPerson(Person())
+        val face = testContext.addTestFace(current, asset, vector)
+        val zoe = testApp.service.person.addPerson(Person(name = Some("Zoe")))
+        testContext.addTestFace(zoe, asset, TestContext.between(vector, other, 1))
+        val adam = testApp.service.person.addPerson(Person(name = Some("adam")))
+        testContext.addTestFace(adam, asset, TestContext.between(vector, other, 3))
+        val mia = testApp.service.person.addPerson(Person(name = Some("Mia")))
+        testContext.addTestFace(mia, asset, other)
+        testApp.service.person.setVisibility(mia, isHidden = true)
+        val unknown = testApp.service.person.addPerson(Person())
+        testContext.addTestFacesAndAssets(unknown)
+
+        def list(params: Map[String, String]): requests.Response =
+          requests.get(s"$host/htmx/people/r/$repoId/assignable", params = params, cookies = testContext.cookies, check = false)
+
+        val response = list(Map("faceId" -> face.persistedId))
+
+        response.statusCode shouldBe 200
+        val html = response.text()
+        val optionIds = """data-person-id="([^"]+)"""".r.findAllMatchIn(html).map(_.group(1)).toList
+        optionIds shouldBe List(adam, zoe, mia, unknown).map(_.persistedId)
+        (html should not).include(current.persistedId)
+        val suggestedIds = """data-person-id="([^"]+)"[^>]*data-suggested""".r.findAllMatchIn(html).map(_.group(1)).toList
+        suggestedIds shouldBe List(adam, zoe).map(_.persistedId)
+        html should include("""role="group" aria-labelledby="suggestedPeopleHeading"""")
+        html should include("""id="suggestedPeopleHeading"""")
+
+        val plain = list(Map.empty).text()
+        """data-person-id="([^"]+)"""".r.findAllMatchIn(plain).map(_.group(1)).toList shouldBe
+          List(adam, mia, zoe, current, unknown).map(_.persistedId)
+        (plain should not).include("data-suggested")
+        (plain should not).include("""role="group"""")
+
+        list(Map("faceId" -> java.util.UUID.randomUUID.toString)).statusCode shouldBe 404
+    }
+  }
+
+  test("A person's results title is served on its own, with the person's count") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob" with Faces on two assets, and a second repository of theirs with a
+     * Person named "Eve".
+     *
+     * Assertions:
+     *
+     * The title route answers 200 with the person's results title inner, naming Bob and his two faces; an unknown person is a
+     * 404, and so is the other repository's Eve, asked for through the first repository, whose name the answer does not carry.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        testContext.addTestFacesAndAssets(bob, assetCount = 2)
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val eve = testApp.service.person.addPerson(Person(name = Some("Eve")))
+        testApp.service.repository.switchContextToRepository(repo)
+
+        val response =
+          requests.get(s"$host/htmx/people/r/$repoId/p/${bob.persistedId}/title", cookies = testContext.cookies, check = false)
+
+        response.statusCode shouldBe 200
+        response.text() should include("""id="personName"""")
+        response.text() should include("Bob")
+        response.text() should include("2 faces")
+
+        requests
+          .get(s"$host/htmx/people/r/$repoId/p/${java.util.UUID.randomUUID}/title", cookies = testContext.cookies, check = false)
+          .statusCode shouldBe 404
+        val foreign =
+          requests.get(s"$host/htmx/people/r/$repoId/p/${eve.persistedId}/title", cookies = testContext.cookies, check = false)
+        foreign.statusCode shouldBe 404
+        (foreign.text() should not).include("Eve")
+    }
+  }
 
   test("Choose person cover face modal renders without a width parameter") {
 

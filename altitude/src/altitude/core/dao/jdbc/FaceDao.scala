@@ -69,6 +69,31 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
     val faces = FaceRow.select.filter(face => face.assetId `=` assetId && face.repositoryId `=` repositoryId)
     Db.read(dialect)(_.run(faces)).map(toModel).toList
 
+  override def hasFaceOfPerson(assetId: String, personId: String): Boolean =
+    import dialect.*
+
+    val repositoryId = RequestContext.getRepository.persistedId
+    val one = FaceRow.select
+      .filter(face => face.assetId `=` assetId && face.repositoryId `=` repositoryId && face.personId `=` personId)
+      .map(_.id)
+      .take(1)
+    Db.read(dialect)(_.run(one)).nonEmpty
+
+  // The one read of the vector column, through the engine's `getVectorField`: pgvector's literal, or the BLOB `vector_as_f32` wrote
+  override def getFeatures(faceId: String): Option[Array[Float]] =
+    val sql = s"SELECT ${FieldConst.Face.FEATURES} FROM face WHERE ${FieldConst.ID} = ? AND ${FieldConst.REPO_ID} = ?"
+
+    manyBySqlQuery(sql, List(faceId, RequestContext.getRepository.persistedId)).headOption
+      .flatMap(rec => getVectorField(rec(FieldConst.Face.FEATURES)))
+      .map(embedding => IArray.genericWrapArray(embedding.values).toArray)
+
+  override def getInRepository(faceId: String): Option[Face] =
+    import dialect.*
+
+    val repositoryId = RequestContext.getRepository.persistedId
+    val one = FaceRow.select.filter(face => face.id `=` faceId && face.repositoryId `=` repositoryId)
+    Db.read(dialect)(_.run(one)).headOption.map(toModel)
+
   def getAssetFaces(assetId: String): List[Face] =
     visibleFaces("= ?", assetId)
 

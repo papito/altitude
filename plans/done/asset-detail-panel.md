@@ -30,14 +30,15 @@ whole; a Person goes only when their last Face goes.
 | Keys | `m` Detail panel, `p` Face highlights, `f` fullscreen, on images and Videos, wherever focus is except in a text field. The player's own `m` and `f` are off; its mute and fullscreen buttons stay |
 | Toolbar | Toggle buttons for all three, before the ×, each with its key in the tooltip. Fullscreen's is left out where `document.fullscreenEnabled` is false |
 | Remembered | Per browser, in `localStorage`: panel open, highlights on, the Dock side once picked, the share of each axis and the open Metadata groups. A selection and fullscreen are never remembered. By default the panel is closed and highlights are off |
-| Dock side | Left, right, top or bottom from a compact choice menu in the panel's header, with a draggable divider. Portrait docks bottom and anything else left, following the viewport until a pick. Independent of the explorer's. Shares default as the explorer's do: 25 % of the width, 35 % of the height |
+| Dock side | Left, right, top or bottom from a compact choice menu in the panel's header, with a draggable divider. Right by default in every viewport, until a pick. Independent of the explorer's. Shares default to 30 % of the width for left or right and 35 % of the height for top or bottom; the explorer's are 25 % and 35 % |
 | Panel order | People, then Details, then Metadata. All read-only except Change and Remove |
 | Details | File name, type, dimensions, duration, size, Date Taken with its source, Date Imported, the Folder breadcrumb, albums, Locations, GPS position, camera settings, Image quality, Sequence. No checksum |
 | Links | Folder crumbs, albums and Locations are links to their search, each opening in a new browser tab. Asset detail stays open |
 | Metadata | Every extracted directory is one collapsible group, closed by default |
-| People rows | One row per Face, in one column: cover, then name, with the actions under the name when selected. In reading order for an image (by `x1`), by Frame time for a Video |
+| People rows | One row per Face, in one column: cover, then name, with the actions under the name when selected. Compact, with tighter padding than the app's list rows. In reading order for an image (by `x1`), by Frame time for a Video |
 | Who shows | Every Face of the asset except those of bad-match people. A Hidden person's row is marked "Hidden" |
 | Selection | Clicking a row selects it and shows its Face highlight; clicking it again or another row moves or clears the selection. Clicking a Face highlight selects its row, opening the panel if it is closed, and that stays open as if `m` were pressed |
+| Face highlight look | An outline in the light neutral (`--theme-neutral-1`), 1px wide, with 14px corners, over a transparent box. The badge under it is a name in `--font-size-base`, Hidden marked |
 | `p` | On shows every Face highlight, with the selected one emphasised. Off shows only the selected one. Pressing `p` flips the setting and clears the selection. Selection does not carry to the next asset |
 | Video | Clicking a row seeks to the Face's Frame time, pauses and shows its Face highlight; playing or scrubbing away removes it. With `p` on, a Face highlight shows while the player is paused on that Face's Frame time, and none during playback |
 | Remove | Deletes the Face row and its files. Not undoable. The label moves through "Remove (click twice)" and "Remove (last click)", and resets when the selection changes |
@@ -68,7 +69,7 @@ whole; a Person goes only when their last Face goes.
 
 Both refuse a Face of a recycled asset, and a Face already gone or moved by another request; the route reports the first as a
 conflict and the second as not found, and the client reloads the section. Counts use the existing atomic increment. The lock
-is a new `PersonDao.lockPeople(ids)`, `ORDER BY id` and `FOR UPDATE`. An import that matched a Person in the moment that Person
+is `PersonDao.lockAndGetLive(ids)`, `ORDER BY id` and `FOR UPDATE`, which also tells which of them are live. An import that matched a Person in the moment that Person
 is deleted fails its foreign key and that asset is dropped as any stage failure is; the window is that of one short
 transaction.
 
@@ -92,10 +93,11 @@ page seeds its search from these already.
 ### Dock
 
 The side, share, divider and remembered-state logic of `js/common/explorer-dock.js` moves to `js/common/dock.js`, a factory
-taking the storage key, the pick attribute, the container, the divider and the minimums. The explorer keeps its boot script and
-its `<html>` attributes. The Detail panel writes its side and share on the Asset detail fragment and opens long after first
-paint, so it has no boot script. Its picks use their own `data-app-detail-dock-side`, since the explorer's listener is on
-`document.body`.
+taking the storage key, the pick attribute, the container, the divider, the minimums and the defaults: the side and the two
+shares, since the explorer's (left or bottom by orientation, 25 % and 35 %) differ from the Detail panel's (right, 30 % and
+35 %). The explorer keeps its boot script and its `<html>` attributes. The Detail panel writes its side and share on the Asset
+detail fragment and opens long after first paint, so it has no boot script, and it does not follow the viewport's orientation.
+Its picks use their own `data-app-detail-dock-side`, since the explorer's listener is on `document.body`.
 
 ### Layout
 
@@ -110,7 +112,9 @@ EXIF orientation. The Details dimensions read the same element.
 ### Face highlights
 
 An overlay layer shares the media's box, positioned over it with `pointer-events: none`; each Face highlight is a percentage
-box of the shown element's natural size, taking pointer events itself, its badge under it and inside the media's edge. It sits
+box of the shown element's natural size, taking pointer events itself, its badge under it and inside the media's edge. The box
+is a 1px outline in `--theme-neutral-1` with 14px corners and no fill, and the badge's text is `--font-size-base`; the selected
+one is emphasised by the overlay's own rule, not by a change of colour token. It sits
 inside the fullscreen element, above the player, and leaves the control bar usable. The layer is built from the rows' data
 attributes (Face ID, Person name, box, Frame time), names set as text, and is emptied as soon as another asset starts loading.
 On a Video it is recomputed on `pause`, `play` and `seeked`, a Face counting as current within 100 ms of its Frame time.
@@ -147,7 +151,7 @@ test-driven with integration tests on both engines. Front-end tasks are verified
 
 ### A. Face corrections on the server
 
-1. **`PersonService.removeFace`, `PersonDao.lockPeople`, `FaceDao` delete.** Tests: the count with and without another Face on the asset, cover repick, a deleted Person
+1. **`PersonService.removeFace`, `PersonDao.lockAndGetLive`, `FaceDao.deleteById`.** Tests: the count with and without another Face on the asset, cover repick, a deleted Person
    named or not, a Person kept by a Face on a trashed asset, the files gone, a cover Face's files gone too, a recycled asset
    refused. Rationale: Remove's rules live in one transaction.
 2. **`PersonService.moveFace` to an existing Person.** Tests: both counts, with and without another Face on the asset, both covers, the source deleted at its last Face, two
@@ -211,10 +215,12 @@ test-driven with integration tests on both engines. Front-end tasks are verified
 
 - `make test-*` on SQLite and Postgres, `make lint` clean.
 - A rotated phone photo: Face highlights land on the faces, and the Details dimensions match what is shown. Also a rotated Video.
-- Each Dock side by pick and by orientation default, the divider and its keys, the settings surviving a step, a close and a
-  reload, and the explorer's dock unchanged beside it.
+- The panel opens docked right by default in a landscape and a portrait viewport, at 30 % of the width; each Dock side by pick,
+  top and bottom at 35 % of the height, the divider and its keys, the settings surviving a step, a close and a reload, and the
+  explorer's dock unchanged beside it, still following orientation with its own shares.
 - Face highlights across steps, with `p` on and off and the panel closed; a Face highlight's click opening the panel; a Video's
-  row seeking and pausing.
+  row seeking and pausing. The outline is 1px of the light neutral with 14px corners and the badge's text is the body size, on
+  a light and on a dark photo; People rows read as compact next to the Details rows.
 - Change to an existing Person, to a Hidden one, to a new name and to an existing name in another case; Remove's two clicks and
   its label resetting; a last Face deleting a named Person with the snackbar saying so; a mirror image's two rows.
 - Viewing a Person: removing them from a photo, stepping on and closing; removing their last Face; a map pin's Asset detail, which
@@ -223,7 +229,7 @@ test-driven with integration tests on both engines. Front-end tasks are verified
 - Keys: `m`, `p` and `f` with focus in the player, on a panel control and in the combobox; Space on a row; arrows on the divider;
   Escape with the listbox open, the Dock side menu open, in fullscreen and otherwise.
 - By hand, since the browser tool cannot make a gesture or resize: `f` and the player's button on an image and a Video, the panel,
-  tooltip, snackbar and combobox listbox inside fullscreen, and a rotation re-docking the panel until a pick.
+  tooltip, snackbar and combobox listbox inside fullscreen, and a rotation leaving the panel's Dock side where it is.
 
 ## Addendum
 

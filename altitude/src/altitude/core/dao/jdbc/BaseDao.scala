@@ -161,6 +161,13 @@ abstract class BaseDao[Model <: BaseModel]:
   protected val forUpdate: String
 
   /**
+   * Makes the transactions that take the same key take turns until they end, where row locks cannot: a row one of them will
+   * insert is in no row the other can lock. `pg_advisory_xact_lock` on PostgreSQL, which conflicts with nothing else any
+   * statement takes; nothing on SQLite, whose one write connection serializes the writers.
+   */
+  protected def advisoryLock(key: String): Unit
+
+  /**
    * The test of a hand-written statement for a column being one of a set of IDs, `column $inIdSet`, whose one placeholder takes
    * the whole set as [[idSet]] binds it, so a selection of any size neither grows the statement nor reaches the engine's
    * parameter limit. The typed twin is `Columns.isInSet`.
