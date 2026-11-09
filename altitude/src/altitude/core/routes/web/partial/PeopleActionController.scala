@@ -10,7 +10,6 @@ import altitude.core.App
 import altitude.core.Const
 import altitude.core.DataScrubber
 import altitude.core.DuplicateException
-import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Face
@@ -46,31 +45,32 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
 
   /**
-   * The options of the Change combobox of Asset detail's People section: the people a Face can be given to. Given the Face
-   * (`faceId`), the Suggested group of the people nearest it comes first, and those people are left out of the list after it, so
-   * each is one option; an unknown Face is a 404
+   * The options of the Change combobox of Asset detail's People section: the people a Face can be given to
+   * (`PersonService.assignablePeople`). Given the Face (`faceId`), the Suggested group of the people nearest it comes first, and
+   * those people and the Face's own Person are left out of the list after it, so each is one option and the Face's Person none;
+   * an unknown Face, or another repository's, is a 404
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/assignable")
   def listAssignablePeople(repoId: String, faceId: Option[String] = None)(using request: Request): Response[String] =
-    try
-      val suggested: List[Person] = faceId.map(App.altitude.service.person.suggestedPeople).getOrElse(Nil)
-      val suggestedIds = suggested.map(_.persistedId).toSet
-      val people: List[Person] =
-        App.altitude.service.person.getAssignable.filterNot(person => suggestedIds.contains(person.persistedId))
-      val payload = "<!doctype html>" + htmx.html.assignable_people(people = people, suggested = suggested)
+    answering {
+      val assignable = App.altitude.service.person.assignablePeople(faceId)
+      val payload = "<!doctype html>" + htmx.html.assignable_people(people = assignable.others, suggested = assignable.suggested)
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
-    catch case ex: NotFoundException => cask.Response(ex.getMessage, 404, Seq(("Content-Type", "text/plain")))
+    }
 
-  /** A person's results title on its own, for the count to be refreshed after a Face correction; an unknown person is a 404 */
+  /**
+   * A person's results title on its own, for the count to be refreshed after a Face correction; an unknown person, or another
+   * repository's, is a 404
+   */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/p/:personId/title")
   def showPersonTitle(repoId: String, personId: String)(using request: Request): Response[String] =
-    try
-      val person: Person = App.altitude.service.person.getById(personId)
+    answering {
+      val person: Person = App.altitude.service.person.getInRepository(personId)
       val payload = "<!doctype html>" + htmx.html.person_inner(person = person)
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
-    catch case ex: NotFoundException => cask.Response(ex.getMessage, 404, Seq(("Content-Type", "text/plain")))
+    }
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/choose-person-cover-face")

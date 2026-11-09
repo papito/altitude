@@ -355,6 +355,76 @@ import altitude.core.models.Person
     }
   }
 
+  test("The Detail panel of another repository's asset is not found") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, and a second repository of theirs holding an image with a Face of Alice.
+     *
+     * Assertions:
+     *
+     * The panel asked for through the first repository with the other repository's asset ID is a 404, as for an unknown asset,
+     * and shows nothing of the asset or its people.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val foreign = testContext.persistAsset(repository = Some(otherRepo))
+        face(testApp.service.person.addPerson(Person(name = Some("Alice"))), foreign)
+        testApp.service.repository.switchContextToRepository(repo)
+
+        val response = detailPanel(host, repoId, foreign.persistedId)
+
+        response.statusCode shouldBe 404
+        (response.text() should not).include(foreign.fileName)
+        (response.text() should not).include("Alice")
+    }
+  }
+
+  test("A change request whose body is not JSON, not a JSON object or not sent as JSON is a bad request") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person's Face.
+     *
+     * Assertions:
+     *
+     * A body that does not parse, a JSON array and a JSON body sent as plain text each answer 400, and the Face keeps its person.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val owner = testApp.service.person.addPerson(Person())
+        val f = face(owner, testContext.persistAsset())
+
+        def put(body: String, contentType: String): Int =
+          requests
+            .put(
+              s"$host/htmx/asset/r/$repoId/face/${f.persistedId}/person",
+              headers = Map("Content-Type" -> contentType),
+              data = body,
+              cookies = testContext.cookies,
+              check = false
+            )
+            .statusCode
+
+        put("{not json", "application/json") shouldBe 400
+        put("[]", "application/json") shouldBe 400
+        put(ujson.write(ujson.Obj(Api.Field.Person.NAME -> "Carol")), "text/plain") shouldBe 400
+        testApp.service.person.getFaceById(f.persistedId).personId shouldBe Some(owner.persistedId)
+    }
+  }
+
   test("The Detail panel counts the frames of a triaged image's Sequence") {
 
     /**

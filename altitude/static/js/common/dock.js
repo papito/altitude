@@ -8,7 +8,8 @@
  *
  * - `storage`: `{ key, field }`, the localStorage key holding `{ side?, widthShare, heightShare }`,
  *   the object itself or, with `field`, that field of it, the rest of the object being someone
- *   else's and left as it is. `side` is absent until a pick.
+ *   else's and left as it is (read and written through `common/stored-state.js`). `side` is absent
+ *   until a pick.
  * - `pickAttribute`: the data attribute of a pick, `data-app-dock-side`: a click on an element
  *   carrying it, anywhere on the page, docks the panel on the side it names. The options of a
  *   compact choice menu (`common/context-menu-markup.js`) carry it, and the factory keeps that
@@ -41,6 +42,7 @@
  * smaller window.
  */
 import { Const } from "../constants.js"
+import { readStoredObject, writeStoredFields } from "./stored-state.js"
 
 const KEY_STEP = 1
 const KEY_STEP_LARGE = 5
@@ -389,20 +391,9 @@ export function createDock({
         dividerEl.setAttribute("aria-valuenow", String(Math.round(laidOut)))
     }
 
-    /** The stored object under the key, or nothing where it is missing or unreadable */
-    function storedObject() {
-        let saved = null
-        try {
-            saved = JSON.parse(localStorage.getItem(storage.key) ?? "null")
-        } catch {
-            saved = null
-        }
-        return typeof saved === "object" && saved !== null ? saved : {}
-    }
-
     /** The remembered dock state, or nothing where it is missing or unreadable; a share counts only as a finite number */
     function rememberedState() {
-        const stored = storedObject()
+        const stored = readStoredObject(storage.key)
         const saved = storage.field ? stored[storage.field] : stored
         if (typeof saved !== "object" || saved === null) {
             return {}
@@ -431,10 +422,10 @@ export function createDock({
             saved.side = state.side
         }
 
-        const stored = storage.field
-            ? { ...storedObject(), [storage.field]: saved }
-            : saved
-        localStorage.setItem(storage.key, JSON.stringify(stored))
+        writeStoredFields(
+            storage.key,
+            storage.field ? { [storage.field]: saved } : saved,
+        )
     }
 
     return {

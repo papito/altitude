@@ -168,7 +168,10 @@ for the person finds. A person seen twice in one image (`twins.png`) has two Fac
 the person had no Face on the asset yet (`FaceDao.hasFaceOfPerson`). Recycling an asset takes it from the counts of its
 people and restoring gives it back, whether it is restored or moved out of the trash into a folder, each asset once
 however many Faces of a person it holds (`PersonDao.addFacesOfAssets`, `COUNT(DISTINCT asset_id)`); only the assets a call
-actually recycles or takes out of the trash are counted. `merge` recounts the destination from a search for its assets.
+actually recycles or takes out of the trash are counted, and the people are locked first (`PersonDao.lockAssetPeople`, after
+the assets and in ID order), so a correction holding one of them (see **Corrections**) ends before the count is read: read
+while it held, from a snapshot in which its Face still existed, the count would take the asset from the Person twice.
+`merge` recounts the destination from a search for its assets.
 The faces themselves go with the asset on purge, and their files with them, except the cover face of its person. An
 import the pipeline drops, or one a crash cut off (pruned at startup), is undone (`LibraryService.discardImport`): the
 assets it added to the counts are given back, its faces and their files go, and a person it started, left with no face,
@@ -224,6 +227,10 @@ Face on it, and a Face arriving raises the target's only if they had none (`Face
   (the target's own on a tie) is deleted as Remove deletes it, and a cover that pointed at it moves to the survivor.
 - **Last Face**: a Person is deleted only when no Face row of theirs remains. Faces on assets in the trash are rows, so a
   Person whose every live Face was removed stays, counting zero, until the trash is purged.
+- **Locks**: a correction locks the Face's people (`lockAndGetLive`, ID order) and reads its asset without a lock, while a
+  recycle or restore locks its assets first (`AssetDao.lockAssets`) and their people after (`lockAssetPeople`): assets, then
+  people, in every transaction that locks both, so none waits on another in a cycle, and a recycle counts an asset's people
+  only once a correction holding one of them has ended.
 - **Refusals**: a Face of a recycled asset is an `IllegalOperationException` (the section is read-only in the trash); a
   Face gone, or moved by a request that held the lock first, is a `NotFoundException`; the Face's own Person a
   `ValidationException`, as is a reserved name.
@@ -246,7 +253,7 @@ for the count to be refreshed after a correction.
   at most `PersonService.SUGGESTED_PEOPLE` (3), so that most wrong matches take one click. The candidates are what
   recognition sees, through the same statement with one more filter, so no new Setting: enrolled Faces of people who are
   not a bad match, within `face.recognition.cosine_distance_threshold`, in the context repository, read inside
-  `withFaceVector` (`FaceDao.searchNearestFacesOfOthers`, beside `searchClosestFaceMatches`: on PostgreSQL
+  `withFaceVectorReadOnly`, a read since nothing is stored (`FaceDao.searchNearestFacesOfOthers`, beside `searchClosestFaceMatches`: on PostgreSQL
   `CLOSEST_OF_OTHERS_SQL`, the HNSW scan carrying on past the excluded Faces, on SQLite the full scan filtered afterwards).
   Unlike recognition it leaves out the Face's current Person, in the SQL, since a Person with thousands of Faces would
   otherwise fill every candidate slot; the Face's vector is read from the store (`FaceDao.getFeatures`), since the model
@@ -293,7 +300,9 @@ repository's left out), a stored Face's checksum against the SHA-256 of its stor
 and the Video rules on clips synthesized by [TestVideos](../altitude/test/src/altitude/test/TestVideos.scala);
 [FaceClusteringTests](../altitude/test/src/altitude/core/unit/FaceClusteringTests.scala) covers the pure clustering;
 [FaceCorrectionTests](../altitude/test/src/altitude/core/integration/FaceCorrectionTests.scala) covers Remove and
-Change on both engines, their two races included (`contend`), and the suggested people of a Face, and
+Change on both engines, their four races included (`contend`: two moves of one Person's Faces on an asset, a move of a Face
+a concurrent request removed, two moves to one new name, and a recycle of an asset during a removal of a Face on it), and
+the suggested people of a Face, and
 [AssetActionControllerTests](../altitude/test/src/altitude/core/controller/AssetActionControllerTests.scala) their
 routes, [PeopleActionControllerTests](../altitude/test/src/altitude/core/controller/PeopleActionControllerTests.scala) the
 assignable list with its Suggested group.

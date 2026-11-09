@@ -150,6 +150,8 @@ object Const:
       val INCORRECT_VALUE_TYPE = "Incorrect value type"
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
       val INVALID_CONTENT_TYPE = "Invalid content type"
+      // A JSON route's body that is not JSON, or not a JSON object
+      val MALFORMED_JSON = "The request body is not a JSON object"
       val PIN_REQUIRED = "Place the pin on the map"
       val SEARCH_TIMED_OUT = "The search took too long"
       // An unnamed Person's own form of name, which no Person may be given (PersonService.updateName)

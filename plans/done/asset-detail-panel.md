@@ -69,7 +69,7 @@ whole; a Person goes only when their last Face goes.
 
 Both refuse a Face of a recycled asset, and a Face already gone or moved by another request; the route reports the first as a
 conflict and the second as not found, and the client reloads the section. Counts use the existing atomic increment. The lock
-is a new `PersonDao.lockPeople(ids)`, `ORDER BY id` and `FOR UPDATE`. An import that matched a Person in the moment that Person
+is `PersonDao.lockAndGetLive(ids)`, `ORDER BY id` and `FOR UPDATE`, which also tells which of them are live. An import that matched a Person in the moment that Person
 is deleted fails its foreign key and that asset is dropped as any stage failure is; the window is that of one short
 transaction.
 
@@ -151,7 +151,7 @@ test-driven with integration tests on both engines. Front-end tasks are verified
 
 ### A. Face corrections on the server
 
-1. **`PersonService.removeFace`, `PersonDao.lockPeople`, `FaceDao` delete.** Tests: the count with and without another Face on the asset, cover repick, a deleted Person
+1. **`PersonService.removeFace`, `PersonDao.lockAndGetLive`, `FaceDao.deleteById`.** Tests: the count with and without another Face on the asset, cover repick, a deleted Person
    named or not, a Person kept by a Face on a trashed asset, the files gone, a cover Face's files gone too, a recycled asset
    refused. Rationale: Remove's rules live in one transaction.
 2. **`PersonService.moveFace` to an existing Person.** Tests: both counts, with and without another Face on the asset, both covers, the source deleted at its last Face, two

@@ -16,7 +16,10 @@
  * The fragment loads when the panel is open or the highlights are on: on open, on each step, and
  * when either is switched on with the asset's details not loaded yet. The coordinator
  * (`detail-navigator.js`) names the asset shown through `showAsset` with its request's `isCurrent`,
- * so a response that arrives after a step or a close is dropped, as a superseded media load is. The
+ * so a response that arrives after a step or a close is dropped, as a superseded media load is; a
+ * step names it twice, first with `load: false` as it starts, which only empties what the last
+ * asset left, and again once the asset's metadata is in, which loads the fragment, so a failed
+ * asset fetch costs no request here. The
  * Details' dimensions row reads the shown element's size, which the coordinator hands over once the
  * media is shown: a browser turns an image upright by its EXIF orientation, while the stored size is
  * the header's. The Face highlights are placed in that size too, from each row's `data-face-box`.
@@ -52,6 +55,7 @@ import { ensureChoiceMenus } from "../common/choice-menus.js"
 import { createDock } from "../common/dock.js"
 import { getActiveModalHost, ModalHost } from "../common/modal.js"
 import { showErrorSnackBar, showSuccessSnackBar } from "../common/snackbar.js"
+import { readStoredObject, writeStoredFields } from "../common/stored-state.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
 import { createFaceCorrections } from "./face-corrections.js"
 import {
@@ -204,9 +208,10 @@ export function createDetailPanel({ context, assetActions }) {
      * Asset detail shows, or starts loading, `assetId`; `isCurrent` tells whether that request is
      * still the latest for the active open. The selection goes, the Face highlights are emptied
      * at once, the panel empties when the asset is another, so the last asset's details are never
-     * read as this one's, and the fragment loads if it is wanted.
+     * read as this one's, and the fragment loads if it is wanted, unless `load` is false: the
+     * coordinator's first call of a step, before the asset's own fetch has succeeded.
      */
-    function showAsset({ assetId, isCurrent }) {
+    function showAsset({ assetId, isCurrent, load = true }) {
         // The step has picked its target by now, so the cells of the asset it left may go
         if (leaving && leaving.assetId !== assetId) {
             flushLeaving()
@@ -223,7 +228,9 @@ export function createDetailPanel({ context, assetActions }) {
         } else {
             paintRows()
         }
-        loadIfWanted()
+        if (load) {
+            loadIfWanted()
+        }
     }
 
     /** The shown media element's size, which the Details' dimensions and the Face highlights read */
@@ -246,10 +253,6 @@ export function createDetailPanel({ context, assetActions }) {
         }
     }
 
-    function isOpen() {
-        return state.panelOpen
-    }
-
     /** Shows or hides the Face highlights (`p`), remembers it, clears the selection, and loads the rows when they are not in yet */
     function toggleHighlights() {
         state.highlightsOn = !state.highlightsOn
@@ -260,15 +263,6 @@ export function createDetailPanel({ context, assetActions }) {
         paintRows()
         loadIfWanted()
         drawHighlights()
-    }
-
-    function isHighlighting() {
-        return state.highlightsOn
-    }
-
-    /** The selected Face, or null */
-    function selectedFace() {
-        return selectedFaceId
     }
 
     /**
@@ -383,7 +377,8 @@ export function createDetailPanel({ context, assetActions }) {
         const shownSectionEl = sectionEl()
         if (
             !shownSectionEl ||
-            newSectionEl.dataset.appAssetId !== subject?.assetId
+            newSectionEl.getAttribute(Const.attributes.appAssetId) !==
+                subject?.assetId
         ) {
             return
         }
@@ -468,7 +463,10 @@ export function createDetailPanel({ context, assetActions }) {
 
     /** The fragment's open state, which the stylesheet lays the grid out from, and the toggles' pressed state */
     function applyOpenState() {
-        viewEl()?.toggleAttribute("data-app-detail-panel-open", state.panelOpen)
+        viewEl()?.toggleAttribute(
+            Const.attributes.detailPanelOpen,
+            state.panelOpen,
+        )
         syncToggleButtons()
     }
 
@@ -547,7 +545,7 @@ export function createDetailPanel({ context, assetActions }) {
      * Whether `face` is on the shown media now: always on an image, and on a Video only while the
      * player is paused within the tolerance of its Frame time, never during playback.
      */
-    function isCurrent(face, videoEl) {
+    function isOnShownFrame(face, videoEl) {
         if (!videoEl) {
             return true
         }
@@ -571,7 +569,7 @@ export function createDetailPanel({ context, assetActions }) {
             faces: faces().filter(
                 (face) =>
                     (state.highlightsOn || face.faceId === selectedFaceId) &&
-                    isCurrent(face, videoEl),
+                    isOnShownFrame(face, videoEl),
             ),
             selectedFaceId,
             size: shownSize,
@@ -632,18 +630,7 @@ export function createDetailPanel({ context, assetActions }) {
 
     /** The remembered settings, or the defaults where they are missing or unreadable: a closed panel, highlights off, no group open */
     function rememberedState() {
-        let saved = null
-        try {
-            saved = JSON.parse(
-                localStorage.getItem(Const.localStore.assetDetailView) ??
-                    "null",
-            )
-        } catch {
-            saved = null
-        }
-        if (typeof saved !== "object" || saved === null) {
-            saved = {}
-        }
+        const saved = readStoredObject(Const.localStore.assetDetailView)
 
         return {
             panelOpen: saved.panelOpen === true,
@@ -660,27 +647,11 @@ export function createDetailPanel({ context, assetActions }) {
 
     /** Writes the settings under the key, leaving the dock's part, which the dock writes, as it is */
     function remember() {
-        let stored = null
-        try {
-            stored = JSON.parse(
-                localStorage.getItem(Const.localStore.assetDetailView) ??
-                    "null",
-            )
-        } catch {
-            stored = null
-        }
-
-        localStorage.setItem(
-            Const.localStore.assetDetailView,
-            JSON.stringify({
-                ...(typeof stored === "object" && stored !== null
-                    ? stored
-                    : {}),
-                panelOpen: state.panelOpen,
-                highlightsOn: state.highlightsOn,
-                openGroups: [...state.openGroups],
-            }),
-        )
+        writeStoredFields(Const.localStore.assetDetailView, {
+            panelOpen: state.panelOpen,
+            highlightsOn: state.highlightsOn,
+            openGroups: [...state.openGroups],
+        })
     }
 
     return {
@@ -689,10 +660,6 @@ export function createDetailPanel({ context, assetActions }) {
         showAsset,
         setShownSize,
         toggle,
-        isOpen,
         toggleHighlights,
-        isHighlighting,
-        selectFace,
-        selectedFace,
     }
 }

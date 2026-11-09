@@ -6,11 +6,12 @@
  * shows (`naturalWidth`, `videoWidth`), the same space, since OpenCV decodes an image upright by its
  * EXIF orientation as a browser does, and a Video's frames are turned as its player turns them.
  *
- * The layer takes no pointer events; each highlight does, as a toggle button of its People row's
- * selection (`aria-pressed`), and its badge, anchored to it (CSS anchor positioning, each highlight
+ * The layer takes no pointer events; each highlight's box does, as a toggle button of its People
+ * row's selection (`aria-pressed`). Its badge, anchored to it (CSS anchor positioning, each highlight
  * named by its index), sits under the box and is kept inside the media: above the box when there is
- * no room below, and inside the box's bottom edge when there is none above either. The badge carries
- * the Face too, so a click on it selects as a click on the box does.
+ * no room below, and inside the box's bottom edge when there is none above either; it is cut with
+ * an ellipsis at the layer's width and takes no pointer events either, so the player's control bar
+ * under it stays usable.
  *
  * `detail-panel.js` owns which Faces show (the `p` setting, the selection, a Video's Frame time) and
  * calls `show` with them; `clear` empties the layer, as soon as another asset starts loading.
@@ -67,7 +68,6 @@ function highlightOf({ face, index, selectedFaceId, size }) {
 
     const badgeEl = document.createElement("span")
     badgeEl.className = "face-highlight-badge"
-    badgeEl.setAttribute(Const.attributes.faceId, face.faceId)
     badgeEl.style.setProperty("position-anchor", anchorName)
     badgeEl.append(face.name)
     if (face.hidden) {

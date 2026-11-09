@@ -27,8 +27,8 @@ import scala.meta.*
      *
      * Assertions:
      *
-     * Every DAO reference in a non-private service method sits inside a transaction wrapper (withTransaction, asReadOnly or
-     * withFaceVector) within that method; any that does not is listed by file, line and method.
+     * Every DAO reference in a non-private service method sits inside a transaction wrapper (withTransaction, asReadOnly,
+     * withFaceVector or withFaceVectorReadOnly) within that method; any that does not is listed by file, line and method.
      *
      * Edge cases:
      *
@@ -84,7 +84,7 @@ import scala.meta.*
 }
 
 object TransactionBoundaryTests {
-  private val Wrappers = Set("withTransaction", "asReadOnly", "withFaceVector")
+  private val Wrappers = Set("withTransaction", "asReadOnly", "withFaceVector", "withFaceVectorReadOnly")
   private val TransactionNames = Wrappers + "txManager"
 
   private case class SourceFile(path: String, tree: Tree)

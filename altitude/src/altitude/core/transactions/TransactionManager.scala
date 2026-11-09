@@ -104,18 +104,26 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
    * outermost call. A SQLite connection is set up for it as it is opened ([[setUpSqliteConnection]]), so there the call is a
    * plain write transaction.
    */
-  def withFaceVector[A](f: => A): A =
-    withTransaction {
-      if isFaceVectorSetUp.value then f
-      else
-        faceVectorSetup match
-          case Nil => f
-          case statements =>
-            val statement = RequestContext.getConn.createStatement()
-            try statements.foreach(statement.execute)
-            finally statement.close()
-            isFaceVectorSetUp.withValue(true)(f)
-    }
+  def withFaceVector[A](f: => A): A = withTransaction(settingUpFaceVectors(f))
+
+  /**
+   * A read transaction that can search face vectors: [[asReadOnly]], set up as [[withFaceVector]] sets a write up (`SET LOCAL` is
+   * allowed in a read-only transaction). A search that stores nothing reads one snapshot on PostgreSQL and takes none of SQLite's
+   * one write connection.
+   */
+  def withFaceVectorReadOnly[A](f: => A): A = asReadOnly(settingUpFaceVectors(f))
+
+  /** Runs `f` with the thread's transaction set up for searching face vectors, which the outermost call of the thread does */
+  private def settingUpFaceVectors[A](f: => A): A =
+    if isFaceVectorSetUp.value then f
+    else
+      faceVectorSetup match
+        case Nil => f
+        case statements =>
+          val statement = RequestContext.getConn.createStatement()
+          try statements.foreach(statement.execute)
+          finally statement.close()
+          isFaceVectorSetUp.withValue(true)(f)
 
   /**
    * What a transaction runs before it searches the face vectors. PostgreSQL sets, for the transaction, how its vector index is

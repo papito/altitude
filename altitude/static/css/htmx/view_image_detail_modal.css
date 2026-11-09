@@ -62,11 +62,13 @@
 }
 
 /* The layer paints above the player and takes no pointer events itself, so the control bar under it stays usable; each
-   Face highlight and its badge take them (js/search-results/face-highlights.js) */
+   Face highlight's box takes them, its badge none (js/search-results/face-highlights.js). It is an inline-size container,
+   so a badge's width is capped at the layer's */
 #faceHighlights {
     position: relative;
     z-index: 1;
     pointer-events: none;
+    container-type: inline-size;
 }
 
 /* A Face highlight: the Face's box as fractions of the shown element's size (`--face-x`, `--face-y`, `--face-width`,
@@ -92,7 +94,9 @@
 
 /* The badge under a Face highlight: the Person's name at the body size, light on the scrim, anchored to its box
    (`position-anchor`, set by the script) and centered under it, kept inside the layer: above the box when there is no
-   room below, and inside the box's bottom edge when there is none above either */
+   room below, and inside the box's bottom edge when there is none above either. On one line, cut with an ellipsis at the
+   layer's width, so a long name leaves the media box as fitted; it takes no pointer events, the box being the button, so
+   the player's control bar under it stays usable */
 .face-highlight-badge {
     position: absolute;
     position-area: bottom;
@@ -104,8 +108,10 @@
     font-size: var(--font-size-base);
     border-radius: var(--radius-small);
     white-space: nowrap;
-    pointer-events: auto;
-    cursor: pointer;
+    max-width: 100cqw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
 }
 
 @position-try --face-highlight-badge-inside {

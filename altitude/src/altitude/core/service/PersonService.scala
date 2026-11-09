@@ -61,6 +61,12 @@ object PersonService:
     case Named(name: String)
 
   /**
+   * The options of the Change combobox ([[PersonService.assignablePeople]]): the Suggested group, closest first, and the other
+   * people a Face can be given to, in the assignable order, neither holding the Face's own Person
+   */
+  case class AssignablePeople(suggested: List[Person], others: List[Person])
+
+  /**
    * What [[PersonService.removeFace]] did: the Face as it was, its Person as they are after the removal (the cover repicked) or,
    * when the Face was their last, as they were before they were deleted
    */
@@ -91,6 +97,12 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
   def getFaceById(faceId: String): Face =
     txManager.asReadOnly {
       faceDao.getById(faceId)
+    }
+
+  /** The Person by ID when they are in the context repository, live or not; another repository's, or none, is not found */
+  def getInRepository(personId: String): Person =
+    query(new Query().add(FieldConst.ID -> personId)).records.headOption.getOrElse {
+      throw NotFoundException(s"Person [$personId] not found")
     }
 
   /**
@@ -205,7 +217,10 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
   /**
    * When an asset gets recycled, each person with a Face on it loses that asset from `numOfFaces`, however many Faces of theirs
-   * it holds: the number counts the assets a person is found on outside the trash.
+   * it holds: the number counts the assets a person is found on outside the trash. The people are locked first
+   * ([[lockAssetPeople]]), after the caller's lock on the assets, so a correction holding one of them ([[removeFace]],
+   * [[moveFace]]) ends before the count is read: read while it held, from a snapshot in which its Face still existed, the count
+   * would take the asset from the Person twice.
    *
    * We don't do anything else, as we remove the actual faces during asset Purge.
    *
@@ -215,6 +230,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     logger.trace(s"Recycling the faces of assets [${assetIds.mkString(",")}]")
 
     txManager.withTransaction {
+      dao.lockAssetPeople(assetIds)
       dao.recycleFacesForAssets(assetIds)
     }
 
@@ -222,6 +238,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     logger.trace(s"Restoring the faces of assets [${assetIds.mkString(",")}]")
 
     txManager.withTransaction {
+      dao.lockAssetPeople(assetIds)
       dao.restoreFacesForAssets(assetIds)
     }
 
@@ -252,12 +269,13 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     }
 
   /**
-   * Locks the people of an asset's faces for the caller's transaction, so that a face another import gives one of them meanwhile
-   * waits for it to end
+   * Locks the people with a Face on any of the assets for the caller's transaction, in ID order, so that a face another import
+   * gives one of them meanwhile, or a correction of one of their Faces, waits for it to end. Taken after the assets are locked,
+   * where they are (`AssetDao.lockAssets`): assets, then people, in every transaction that locks both.
    */
-  def lockAssetPeople(assetId: String): Unit =
+  def lockAssetPeople(assetIds: Set[String]): Unit =
     txManager.withTransaction {
-      dao.lockAssetPeople(assetId)
+      dao.lockAssetPeople(assetIds)
     }
 
   /**
@@ -305,21 +323,39 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    * The people whose Faces are nearest the Face's own vector, closest first, the first `SUGGESTED_PEOPLE` distinct ones: the
    * Change combobox's Suggested group. The candidates are what recognition sees (enrolled Faces of people who are not a bad
    * match, within the cosine distance threshold, in this repository) less the Face's own Person, whom the SQL leaves out so that
-   * a Person with many Faces cannot fill every candidate. Nothing is stored and nothing votes. A Face gone, or of another
-   * repository, is not found.
+   * a Person with many Faces cannot fill every candidate. Nothing is stored and nothing votes, so the search is a read
+   * (`withFaceVectorReadOnly`). A Face gone, or of another repository, is not found.
    */
   def suggestedPeople(faceId: String): List[Person] =
+    txManager.withFaceVectorReadOnly {
+      suggestedFor(readFace(faceId))
+    }
+
+  /** [[suggestedPeople]] for a Face read in the caller's transaction, which is set up for searching face vectors */
+  private def suggestedFor(face: Face): List[Person] =
     // How close a Face must be to count: recognition's Setting, read per call
     val distanceThreshold = app.settings.current.faceRecognitionCosineDistanceThreshold
+    val faceId = face.persistedId
 
-    txManager.withFaceVector {
-      val face = readFace(faceId)
-      val features = faceDao.getFeatures(faceId).getOrElse(throw NotFoundException(s"Face [$faceId] not found"))
-      val nearest = faceDao.searchNearestFacesOfOthers(features, face.personId.get, SUGGESTION_CANDIDATES, distanceThreshold)
-      val personIds = nearest.map(_.personId.get).distinct.take(SUGGESTED_PEOPLE)
-      val people = peopleByIds(personIds.toSet).map(person => person.persistedId -> person).toMap
-      logger.trace(s"Face [$faceId]: ${personIds.size} suggested people among ${nearest.size} nearest Faces")
-      personIds.map(people)
+    val features = faceDao.getFeatures(faceId).getOrElse(throw NotFoundException(s"Face [$faceId] not found"))
+    val nearest = faceDao.searchNearestFacesOfOthers(features, face.personId.get, SUGGESTION_CANDIDATES, distanceThreshold)
+    val personIds = nearest.map(_.personId.get).distinct.take(SUGGESTED_PEOPLE)
+    val people = peopleByIds(personIds.toSet).map(person => person.persistedId -> person).toMap
+    logger.trace(s"Face [$faceId]: ${personIds.size} suggested people among ${nearest.size} nearest Faces")
+    personIds.map(people)
+
+  /**
+   * The options of the Change combobox, read in one snapshot: given the Face, its Suggested group ([[suggestedPeople]]) and then
+   * the assignable people ([[getAssignable]]) less the suggested ones and the Face's own Person, so each Person is one option and
+   * the Face's own, who is no target, is none; without a Face, the assignable people alone. A Face gone, or of another
+   * repository, is not found.
+   */
+  def assignablePeople(faceId: Option[String]): AssignablePeople =
+    txManager.withFaceVectorReadOnly {
+      val face = faceId.map(readFace)
+      val suggested = face.fold(List.empty[Person])(suggestedFor)
+      val leftOut = suggested.map(_.persistedId).toSet ++ face.map(_.personId.get)
+      AssignablePeople(suggested, getAssignable.filterNot(person => leftOut.contains(person.persistedId)))
     }
 
   /**

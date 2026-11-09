@@ -8,12 +8,9 @@ import altitude.core.{ Const => C }
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.DataScrubber
-import altitude.core.IllegalOperationException
-import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Asset
-import altitude.core.models.Folder
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
@@ -39,42 +36,34 @@ class AssetActionController(using logger: Logger) extends BaseController:
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   /**
-   * The Detail panel's three sections, People, Details and Metadata, for the asset: its Faces with their people (bad matches left
-   * out, Hidden marked), the folder path (nothing for the root or for triage), its albums and Locations, and the frames of its
-   * Sequence. An asset in the trash gets the same panel with its People section read-only; an unknown asset is a 404.
+   * The Detail panel's three sections, People, Details and Metadata, for the asset, read in one snapshot
+   * (`AssetService.detailOf`): its Faces with their people (bad matches left out, Hidden marked), the folder path (nothing for
+   * the root or for triage), its albums and Locations, and the frames of its Sequence. An asset in the trash gets the same panel
+   * with its People section read-only; an unknown asset, or another repository's, is a 404.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/detail-panel/:assetId")
   def showDetailPanel(repoId: String, assetId: String)(using request: Request): Response[String] =
     answering {
-      val service = App.altitude.service
-      val asset: Asset = service.asset.getById(assetId)
-      val faces = service.person.getAssetFacesForDetail(assetId)
-      val folderPath =
-        if asset.folderId.isEmpty || service.folder.isRootFolder(asset.folderId) then Nil
-        else service.folder.getAncestors(asset.folderId) :+ (service.folder.getById(asset.folderId): Folder)
-      val albums = service.album.getAlbumsOfAsset(assetId)
-      val locations = service.location.getLocationsOfAsset(assetId)
-      val sequenceFrames = asset.sequenceId.map(service.sequence.memberCount)
-
-      val payload = "<!doctype html>" + htmx.html.detail_panel(asset, faces, folderPath, albums, locations, sequenceFrames)
+      val payload = "<!doctype html>" + htmx.html.detail_panel(App.altitude.service.asset.detailOf(assetId))
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
     }
 
   /**
    * Change: gives the Face to the Person of the body's `personId`, or to the Person named by its `name` (found in any case, or
-   * created), and answers the asset's People section with the result in its data attributes. A body naming both or neither, a
-   * name outside the length rules of the name editor, a reserved name or the Face's own Person is a 400; a Face gone or moved
-   * meanwhile, or an unknown or no longer live Person, a 404; a Face of an asset in the trash a 409.
+   * created), and answers the asset's People section with the result in its data attributes. A body that is not a JSON object or
+   * not JSON at all, one naming both or neither, a name outside the length rules of the name editor, a reserved name or the
+   * Face's own Person is a 400; a Face gone or moved meanwhile, or an unknown or no longer live Person, a 404; a Face of an asset
+   * in the trash a 409.
    */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/face/:faceId/person")
   def changeFacePerson(repoId: String, faceId: String)(using request: Request): Response[String] =
-    val json: ujson.Obj = DataScrubber(trim = List(Api.Field.Person.NAME)).scrub(unscrubbedJson.get)
-    val personId = json.obj.get(Api.Field.PERSON_ID).flatMap(_.strOpt).filter(_.nonEmpty)
-    val name = json.obj.get(Api.Field.Person.NAME).flatMap(_.strOpt).filter(_.nonEmpty)
-
     answering {
+      val json: ujson.Obj = DataScrubber(trim = List(Api.Field.Person.NAME)).scrub(unscrubbedJson.get)
+      val personId = json.obj.get(Api.Field.PERSON_ID).flatMap(_.strOpt).filter(_.nonEmpty)
+      val name = json.obj.get(Api.Field.Person.NAME).flatMap(_.strOpt).filter(_.nonEmpty)
+
       val target = (personId, name) match
         case (Some(id), None) =>
           ApiRequestValidator(uuid = List(Api.Field.PERSON_ID)).validate(json)
@@ -123,17 +112,5 @@ class AssetActionController(using logger: Logger) extends BaseController:
     val faces = App.altitude.service.person.getAssetFacesForDetail(assetId)
     val payload = "<!doctype html>" + htmx.html.detail_panel_people(asset, faces, Some(message), deletedPerson)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
-
-  /** The status a refusal answers with, as plain text the snackbar reports: a bad request, something not found, or a conflict */
-  private def answering(f: => Response[String]): Response[String] =
-    def refused(message: String, status: Int): Response[String] =
-      cask.Response(message, status, Seq(("Content-Type", "text/plain")))
-
-    try f
-    catch
-      case ex: ValidationException =>
-        refused(if ex.message.nonEmpty then ex.message else ex.errors.values.mkString(", "), 400)
-      case ex: NotFoundException => refused(ex.getMessage, 404)
-      case ex: IllegalOperationException => refused(ex.getMessage, 409)
 
   initialize()

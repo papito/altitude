@@ -1,30 +1,27 @@
 @import java.util.Locale
 @import altitude.core.RequestContext
 @import altitude.core.util.Util
-@import altitude.core.models.Album
-@import altitude.core.models.Asset
-@import altitude.core.models.Face
-@import altitude.core.models.Folder
-@import altitude.core.models.Location
-@import altitude.core.models.Person
+@import altitude.core.models.DetailPanelData
 
 @* The Detail panel's three sections (views/AGENTS.md **Detail panel**), loaded into the panel of htmx/view_image_detail_modal
    by js/search-results/detail-panel.js: People (htmx/detail_panel_people, swapped whole by a Face correction's response),
    Details, and Metadata as one closed group per extracted directory, whose `data-app-metadata-group` the client remembers
    the open ones by. The dimensions row holds the stored size, which the client replaces with the shown element's, since
    a browser turns an image upright by its EXIF orientation while the file's header may have it the other way round. The
-   folder crumbs, the albums and the Locations link to their search, each in a new tab, so Asset detail stays open. *@
-@(asset: Asset, faces: List[(Face, Person)], folderPath: List[Folder], albums: List[Album], locations: List[Location], sequenceFrames: Option[Int])
+   folder crumbs, the albums and the Locations link to their search, each in a new tab, so Asset detail stays open. The
+   sections are rendered from one read of the asset (AssetService.detailOf). *@
+@(detail: DetailPanelData)
 
 @row(label: String)(value: Html) = {
 <div class="row"><dt>@label</dt><dd>@value</dd></div>
 }
 
 @defining(RequestContext.getRepository.persistedId) { repoId =>
+@defining(detail.asset) { asset =>
 <div id="detailPanelSections" class="detail-panel" data-app-asset-id="@{asset.persistedId}">
     <section class="detail-section">
         <h3>People</h3>
-        @htmx.html.detail_panel_people(asset, faces)
+        @htmx.html.detail_panel_people(asset, detail.faces)
     </section>
 
     <section class="detail-section">
@@ -44,14 +41,14 @@
                 } else {No date}
             }
             @row("Date Imported") {@{Util.humanReadableDateTime(asset.createdAt)}}
-            @if(folderPath.nonEmpty) {
-            @row("Folder") {<span class="crumbs">@for((folder, index) <- folderPath.zipWithIndex) {@if(index > 0) {<i class="fas fa-chevron-right sep" aria-hidden="true"></i>}<a class="crumb@if(index == folderPath.size - 1) { leaf}" href="/r/@repoId?folderId=@{folder.persistedId}" target="_blank" rel="noopener">@{folder.name}</a>}</span>}
+            @if(detail.folderPath.nonEmpty) {
+            @row("Folder") {<span class="crumbs">@for((folder, index) <- detail.folderPath.zipWithIndex) {@if(index > 0) {<i class="fas fa-chevron-right sep" aria-hidden="true"></i>}<a class="crumb@if(index == detail.folderPath.size - 1) { leaf}" href="/r/@repoId?folderId=@{folder.persistedId}" target="_blank" rel="noopener">@{folder.name}</a>}</span>}
             }
-            @if(albums.nonEmpty) {
-            @row("Albums") {<ul class="links">@for(album <- albums) {<li><a href="/r/@repoId?albumId=@{album.persistedId}" target="_blank" rel="noopener">@{album.name}</a></li>}</ul>}
+            @if(detail.albums.nonEmpty) {
+            @row("Albums") {<ul class="links">@for(album <- detail.albums) {<li><a href="/r/@repoId?albumId=@{album.persistedId}" target="_blank" rel="noopener">@{album.name}</a></li>}</ul>}
             }
-            @if(locations.nonEmpty) {
-            @row("Locations") {<ul class="links">@for(location <- locations) {<li><a href="/r/@repoId?locationId=@{location.persistedId}" target="_blank" rel="noopener">@for(category <- location.categoryName) {<span class="category">@category</span> › }@{location.name}</a></li>}</ul>}
+            @if(detail.locations.nonEmpty) {
+            @row("Locations") {<ul class="links">@for(location <- detail.locations) {<li><a href="/r/@repoId?locationId=@{location.persistedId}" target="_blank" rel="noopener">@for(category <- location.categoryName) {<span class="category">@category</span> › }@{location.name}</a></li>}</ul>}
             }
             @for(latitude <- asset.latitude; longitude <- asset.longitude) {
             @row("Position") {@{"%.5f, %.5f".formatLocal(Locale.ROOT, latitude, longitude)}}
@@ -74,7 +71,7 @@
             @for(quality <- asset.imageQuality) {
             @row("Image quality") {@{quality.score} / 100}
             }
-            @for(frames <- sequenceFrames) {
+            @for(frames <- detail.sequenceFrames) {
             @row("Sequence") {@if(frames == 1) {1 frame} else {@frames frames}}
             }
         </dl>
@@ -100,4 +97,5 @@
         }
     </section>
 </div>
+}
 }

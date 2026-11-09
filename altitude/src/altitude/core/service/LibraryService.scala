@@ -124,7 +124,7 @@ class LibraryService(val app: Altitude):
 
         val discarded = txManager.withTransaction {
           Option.when(app.service.asset.queryAll(unfinished).nonEmpty) {
-            app.service.person.lockAssetPeople(assetId)
+            app.service.person.lockAssetPeople(Set(assetId))
             val facesWithPeople = app.service.person.getAssetFacesWithPeople(assetId)
             app.service.person.recycleFacesForAssets(Set(assetId))
             app.service.asset.deleteByQuery(unfinished)

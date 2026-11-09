@@ -178,6 +178,11 @@ export const Const = {
         // name, which the open groups are remembered by (htmx/detail_panel)
         detailDimensions: "data-app-detail-dimensions",
         metadataGroup: "data-app-metadata-group",
+        // The Asset detail fragment while the Detail panel is open (view_image_detail_modal.css lays the grid out from it),
+        // and the asset whose sections the panel's fragment and its People section hold (htmx/detail_panel,
+        // htmx/detail_panel_people); not `data-asset-id`, which finds the cells of the grid
+        detailPanelOpen: "data-app-detail-panel-open",
+        appAssetId: "data-app-asset-id",
     },
 
     context: {

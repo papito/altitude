@@ -6,6 +6,8 @@ import org.slf4j.Logger
 
 import altitude.core.{ Const => C }
 import altitude.core.Api
+import altitude.core.IllegalOperationException
+import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.RestoreResult
@@ -14,13 +16,23 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
 
   /**
    * Get the unscrubbed JSON from the request body. This validates that the content type is application/json if specified. Returns
-   * an empty JSON object if the request body is empty.
+   * an empty JSON object if the request body is empty. A body that is not JSON, or not a JSON object, is a `ValidationException`
+   * as a wrong content type is: the client's mistake, not the route's failure.
    */
   def unscrubbedJson(using request: Request): Option[ujson.Obj] =
-    if request.httpContentType.isDefined && request.httpContentType.get != "application/json" then
-      throw ValidationException(C.Msg.Err.INVALID_CONTENT_TYPE)
+    // The header's media type, its parameters (a charset) left off; `Request.httpContentType` is geny's and always empty
+    val mediaType = request.headers.get("content-type").flatMap(_.headOption).map(_.split(";")(0).trim.toLowerCase)
+    if mediaType.exists(_ != "application/json") then throw ValidationException(C.Msg.Err.INVALID_CONTENT_TYPE)
 
-    Some(if request.text().isEmpty then ujson.Obj() else ujson.read(request.text()).asInstanceOf[ujson.Obj])
+    val text = request.text()
+    if text.isEmpty then return Some(ujson.Obj())
+
+    val parsed =
+      try ujson.read(text)
+      catch case _: ujson.ParsingFailedException => throw ValidationException(C.Msg.Err.MALFORMED_JSON)
+    parsed match
+      case obj: ujson.Obj => Some(obj)
+      case _ => throw ValidationException(C.Msg.Err.MALFORMED_JSON)
 
   /** A JSON API response; `jsonError` is the `{"error": ...}` shape every JSON route uses for a client or upstream failure */
   def jsonResponse(value: ujson.Value, status: Int = 200): Response[String] =
@@ -56,6 +68,22 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
       errors.errors += Api.Field.ASSET_IDS -> C.Msg.Err.VALUE_REQUIRED
       errors.trigger()
     ids
+
+  /**
+   * The answer of a route whose refusals are plain text the snackbar reports: a bad request (`ValidationException`, its message
+   * or its field errors) is a 400, something not found a 404 and a conflict (`IllegalOperationException`) a 409; any other
+   * failure is the route's own.
+   */
+  def answering(f: => Response[String]): Response[String] =
+    def refused(message: String, status: Int): Response[String] =
+      cask.Response(message, status, Seq(("Content-Type", "text/plain")))
+
+    try f
+    catch
+      case ex: ValidationException =>
+        refused(if ex.message.nonEmpty then ex.message else ex.errors.values.mkString(", "), 400)
+      case ex: NotFoundException => refused(ex.getMessage, 404)
+      case ex: IllegalOperationException => refused(ex.getMessage, 409)
 
   /**
    * Response for a dialog form that failed validation: the rendered form (with errors and the submitted values) replaces the

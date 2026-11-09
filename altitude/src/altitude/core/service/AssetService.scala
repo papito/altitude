@@ -10,9 +10,11 @@ import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
 import altitude.core.ImageException
+import altitude.core.NotFoundException
 import altitude.core.dao.AssetDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
+import altitude.core.models.DetailPanelData
 import altitude.core.models.DetectedFaces
 import altitude.core.models.MimedPreviewData
 import altitude.core.models.SceneModel
@@ -205,6 +207,31 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
     app.service.fileStore.getPreviewById(assetId)
 
   // The rows a library operation may change, locked for the caller's transaction, so each is a write: see `AssetDao`
+
+  /**
+   * What the Detail panel shows of an asset, read in one snapshot: the asset, in the trash or not (another repository's, or one
+   * gone, is not found), its Faces with their people as the panel lists them, the path of its folder (nothing for the root or for
+   * triage), its albums and Locations, and how many frames its Sequence has
+   */
+  def detailOf(assetId: String): DetailPanelData =
+    txManager.asReadOnly {
+      val asset: Asset = dao.queryAll(new Query().add(FieldConst.ID -> assetId)).records.headOption.getOrElse {
+        throw NotFoundException(s"Asset [$assetId] not found")
+      }
+      val folders = app.service.folder
+      val folderPath =
+        if asset.folderId.isEmpty || folders.isRootFolder(asset.folderId) then Nil
+        else folders.getAncestors(asset.folderId) :+ folders.getById(asset.folderId)
+
+      DetailPanelData(
+        asset = asset,
+        faces = app.service.person.getAssetFacesForDetail(assetId),
+        folderPath = folderPath,
+        albums = app.service.album.getAlbumsOfAsset(assetId),
+        locations = app.service.location.getLocationsOfAsset(assetId),
+        sequenceFrames = asset.sequenceId.map(app.service.sequence.memberCount)
+      )
+    }
 
   def getAssetsToRecycle(assetIds: Set[String]): List[Asset] =
     txManager.withTransaction {

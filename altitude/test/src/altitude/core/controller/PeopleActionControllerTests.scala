@@ -76,8 +76,9 @@ import altitude.core.models.Person
      * Assertions:
      *
      * Asked with the Face, the list answers 200 with the Suggested group first, adam then Zoe, each option marked suggested and
-     * under the group's heading, and then the list of the rest in its order, Mia and the two unnamed people, so no Person is
-     * listed twice. Asked without a Face, the list has no group and no suggested mark; asked with an unknown Face, it is a 404.
+     * under the group's heading, and then the list of the rest in its order, Mia and the other unnamed Person, so no Person is
+     * listed twice and the Face's own Person, who is no target, is no option. Asked without a Face, the list holds every live
+     * Person, the Face's own among them, with no group and no suggested mark; asked with an unknown Face, it is a 404.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -108,7 +109,8 @@ import altitude.core.models.Person
         response.statusCode shouldBe 200
         val html = response.text()
         val optionIds = """data-person-id="([^"]+)"""".r.findAllMatchIn(html).map(_.group(1)).toList
-        optionIds shouldBe List(adam, zoe, mia, current, unknown).map(_.persistedId)
+        optionIds shouldBe List(adam, zoe, mia, unknown).map(_.persistedId)
+        (html should not).include(current.persistedId)
         val suggestedIds = """data-person-id="([^"]+)"[^>]*data-suggested""".r.findAllMatchIn(html).map(_.group(1)).toList
         suggestedIds shouldBe List(adam, zoe).map(_.persistedId)
         html should include("""role="group" aria-labelledby="suggestedPeopleHeading"""")
@@ -129,21 +131,26 @@ import altitude.core.models.Person
     /**
      * Setup:
      *
-     * A logged-in user's repository with a Person named "Bob" with Faces on two assets.
+     * A logged-in user's repository with a Person named "Bob" with Faces on two assets, and a second repository of theirs with a
+     * Person named "Eve".
      *
      * Assertions:
      *
      * The title route answers 200 with the person's results title inner, naming Bob and his two faces; an unknown person is a
-     * 404.
+     * 404, and so is the other repository's Eve, asked for through the first repository, whose name the answer does not carry.
      */
-    testContext.persistRepository()
-    val repoId = testContext.repository.persistedId
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
     login()
 
     withServer(App) {
       host =>
         val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
         testContext.addTestFacesAndAssets(bob, assetCount = 2)
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val eve = testApp.service.person.addPerson(Person(name = Some("Eve")))
+        testApp.service.repository.switchContextToRepository(repo)
 
         val response =
           requests.get(s"$host/htmx/people/r/$repoId/p/${bob.persistedId}/title", cookies = testContext.cookies, check = false)
@@ -156,6 +163,10 @@ import altitude.core.models.Person
         requests
           .get(s"$host/htmx/people/r/$repoId/p/${java.util.UUID.randomUUID}/title", cookies = testContext.cookies, check = false)
           .statusCode shouldBe 404
+        val foreign =
+          requests.get(s"$host/htmx/people/r/$repoId/p/${eve.persistedId}/title", cookies = testContext.cookies, check = false)
+        foreign.statusCode shouldBe 404
+        (foreign.text() should not).include("Eve")
     }
   }
 

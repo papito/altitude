@@ -477,6 +477,39 @@ import altitude.core.service.PersonService.FaceTarget
     getPerson(source.persistedId).numOfFaces shouldBe 1
   }
 
+  test("Recycling an asset while a removal of a Face on it holds its person counts the asset once") {
+
+    /**
+     * Setup:
+     *
+     * A Person with a Face on each of two images. A removal of the Face on the first image holds its transaction, the Person's
+     * row locked, until a recycle of that image waits for it.
+     *
+     * Assertions:
+     *
+     * Once both are done the Person counts one asset: the removal took the first image from the count, and the recycle, finding
+     * no Face of theirs left on it, takes nothing more.
+     *
+     * Edge cases:
+     *
+     * Were the recycle not to lock the asset's people before it counts, its count would read a snapshot in which the removed Face
+     * still exists, and the asset would leave the count twice.
+     */
+    val p = person()
+    val first = testContext.persistAsset()
+    val f = face(p, first)
+    face(p, testContext.persistAsset())
+    getPerson(p.persistedId).numOfFaces shouldBe 2
+
+    contend(
+      testApp.service.person.removeFace(f.persistedId): Unit,
+      testApp.service.library.recycleAssets(Set(first.persistedId))
+    )
+
+    getPerson(p.persistedId).numOfFaces shouldBe 1
+    faceExists(f.persistedId) shouldBe false
+  }
+
   test("A Face is not moved onto its own person, a merged-away person or a bad match") {
 
     /**

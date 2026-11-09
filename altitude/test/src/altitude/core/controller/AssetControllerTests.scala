@@ -43,6 +43,7 @@ import altitude.core.models.Asset
         val response = requests.put(
           s"$host/api/asset/r/$repoId/move",
           cookies = testContext.cookies,
+          headers = Map("Content-Type" -> "application/json"),
           data = ujson.write(payload)
         )
 
@@ -89,6 +90,7 @@ import altitude.core.models.Asset
         val response = requests.delete(
           s"$host/api/asset/r/$repoId/move",
           cookies = testContext.cookies,
+          headers = Map("Content-Type" -> "application/json"),
           data = ujson.write(payload)
         )
 
@@ -138,6 +140,7 @@ import altitude.core.models.Asset
         val response = requests.put(
           s"$host/api/asset/r/$repoId/move",
           cookies = testContext.cookies,
+          headers = Map("Content-Type" -> "application/json"),
           data = ujson.write(payload)
         )
 
@@ -187,6 +190,7 @@ import altitude.core.models.Asset
         val response = requests.put(
           s"$host/api/asset/r/$repoId/restore",
           cookies = testContext.cookies,
+          headers = Map("Content-Type" -> "application/json"),
           data = ujson.write(payload)
         )
 

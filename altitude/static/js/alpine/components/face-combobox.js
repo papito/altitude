@@ -11,8 +11,8 @@
  * combobox in their place (`changing` true): Change calls `open()`, which loads the options once per
  * opening from the assignable route for the Face (`assignablePeopleUrl`, the one place the URL is
  * built), parses the fragment's options and filters them on the client as the user types, the first
- * `MAX_SHOWN_OPTIONS` matches rendered with lazy covers. The Face's own Person is left out of the
- * matches. The fragment opens with the Suggested group, the people whose Faces are nearest the Face's
+ * `MAX_SHOWN_OPTIONS` matches rendered with lazy covers; the server leaves the Face's own Person,
+ * who is no target, out of them. The fragment opens with the Suggested group, the people whose Faces are nearest the Face's
  * vector (`docs/faces.md` **Corrections**), each marked and listed once: the component renders them as
  * a labelled group above the list while nothing is typed, so the listbox announces the heading with
  * them, and from the first character the group is left out and they are filtered with the rest, ahead
@@ -121,11 +121,6 @@ export function faceCombobox() {
             return this.rowEl()?.getAttribute(Const.attributes.faceId) ?? ""
         },
 
-        /** The Face's own Person, who is no option */
-        get personId() {
-            return this.rowEl()?.getAttribute(Const.attributes.personId) ?? ""
-        },
-
         get listboxId() {
             return `faceListbox-${this.faceId}`
         },
@@ -151,19 +146,18 @@ export function faceCombobox() {
             const key = nameKey(this.query)
 
             return this.options
-                .filter(
-                    (option) =>
-                        option.personId !== this.personId &&
-                        (key === ""
-                            ? !option.suggested
-                            : nameKey(option.name).includes(key)),
+                .filter((option) =>
+                    key === ""
+                        ? !option.suggested
+                        : nameKey(option.name).includes(key),
                 )
                 .slice(0, MAX_SHOWN_OPTIONS)
         },
 
         /**
-         * The name the Create row offers: what was typed, trimmed, when it is a name no Person has (in
-         * any case, the Face's own Person included) and the server would accept its length; else null.
+         * The name the Create row offers: what was typed, trimmed, when it is a name no option has (in
+         * any case) and the server would accept its length; else null. The Face's own Person is no
+         * option, so their name is offered too, and the server refuses it as already theirs.
          */
         get createName() {
             const name = this.query.trim()

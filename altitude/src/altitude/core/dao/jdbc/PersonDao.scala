@@ -182,15 +182,18 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     updateByBySql(sql, List(idSet(assetIds), idSet(assetIds)))
 
   // On PostgreSQL; SQLite's one write connection serializes the writers
-  override def lockAssetPeople(assetId: String): Unit =
+  override def lockAssetPeople(assetIds: Set[String]): Unit =
+    if assetIds.isEmpty then return
+
     val sql = s"""
       SELECT id
         FROM person
        WHERE repository_id = ?
-         AND id IN (SELECT person_id FROM face WHERE asset_id = ?)
+         AND id IN (SELECT person_id FROM face WHERE asset_id $inIdSet)
+    ORDER BY id
       $forUpdate
     """
-    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId))
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, idSet(assetIds)))
 
   // The dead are locked too, and left out afterwards, so that a caller waits for whatever is changing them.
   // On PostgreSQL; SQLite's one write connection serializes the writers

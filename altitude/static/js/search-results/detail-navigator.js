@@ -326,8 +326,9 @@ export function createSearchDetailCoordinator({ context, detailPanel }) {
      * Navigates the active asset-detail modal to `assetId`, shown by `cellEl`: fetches the asset's
      * metadata, then its media. Both steps are skipped if the request is superseded or the modal
      * goes away. A playing video is paused first, and the Detail panel is told at once, so the last
-     * asset's details and Face highlights leave as this one starts loading and its details load
-     * alongside the metadata.
+     * asset's details and Face highlights leave as this one starts loading; its details load from
+     * `showMedia`, once the metadata is in, so a failed fetch is one error and no request the
+     * panel would have to drop.
      */
     async function loadAssetDetail(assetId, cellEl) {
         const repoId = context.getRepoId()
@@ -346,6 +347,7 @@ export function createSearchDetailCoordinator({ context, detailPanel }) {
         detailPanel.showAsset({
             assetId,
             isCurrent: () => isCurrentImageRequest({ token, openId }),
+            load: false,
         })
 
         let assetData
