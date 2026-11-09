@@ -107,7 +107,6 @@ export const Const = {
         categoryId: "data-category-id",
         kind: "data-kind",
         assetId: "data-asset-id",
-        originalWidth: "data-og-width",
         dataSrc: "data-src",
         personId: "data-person-id",
         faceId: "data-face-id",

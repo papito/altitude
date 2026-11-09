@@ -1170,7 +1170,10 @@ box selection for `data-app-fragment="search-results"`, and sets the viewed fold
 fragment's `data-results-*` metadata. When a loaded image is more than a viewport away and is swapped for the
 transparent 1x1 placeholder, its rendered size is kept as inline `width`/`height`, so the thumbnail
 box a box selection hit-tests against stays where the image was (the cell's row is fixed, so the
-layout is the same either way).
+layout is the same either way). The size stays once the image is back, so a thumbnail drag
+(`js/dragdrop/assets.js`), which shrinks the image under the pointer, sets both its dimensions and restores the inline
+size as it was: with the height left standing the ghost would be a sliver as tall as the thumbnail, too tall for a
+folder row to cover a drop zone's share of it.
 
 **Box selection** — Dragging a rectangle over the grid selects the thumbnails it touches
 (`js/search-results/box-selection.js`, one controller per displayed grid, created and replaced by the
@@ -1192,8 +1195,10 @@ after a cancellation, is swallowed through `click-suppression.js`, the same help
 Viselect only re-evaluates the rectangle, and starts its scroll loop, from a `mousemove`; the
 controller therefore replays the last pointer position as a synthetic `mousemove` when a page is
 appended, an image loads, the panel resizes, or a frame finds the pointer resting in an edge band
-with room left to scroll. That adapter is version-bound (3.9.0) and commented in place; the library
-file stays unchanged. Candidates are snapshotted on release, so a page arriving afterwards changes
+with room left to scroll. The position replayed is the pointer's, read from the document's own `mousemove`: Viselect's
+`move` event is not the source, since while its scroll loop runs it repeats, on every frame, the event that started the
+loop, and a replay of that stale position would keep the pane scrolling with the mouse resting mid-pane. That adapter is
+version-bound (3.9.0) and commented in place; the library file stays unchanged. Candidates are snapshotted on release, so a page arriving afterwards changes
 nothing; a failed page is reported by the snackbar and what was loaded remains selectable. Viselect
 decides once, when the drag starts, whether the container can scroll, so a box begun while the first
 page fits without a scrollbar does not autoscroll in that gesture.

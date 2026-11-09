@@ -1,5 +1,3 @@
-import { Const } from "../constants.js"
-
 export function dragged(event) {
     let target = event.target
     target.style.position = "relative"
@@ -15,13 +13,6 @@ export function dragged(event) {
     const placeholder = document.querySelector(".drag-placeholder")
     if (placeholder) {
         placeholder.remove()
-    }
-
-    let imgElement = target.querySelector("img")
-    if (imgElement) {
-        imgElement.style.width =
-            imgElement.getAttribute(Const.attributes.originalWidth) + "px"
-        imgElement.removeAttribute(Const.attributes.originalWidth)
     }
 }
 

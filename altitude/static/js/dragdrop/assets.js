@@ -14,6 +14,13 @@ import {
  * among the selected ones drags the whole selection with it (its listeners escalate to a batch).
  * The `#trash` nav item is a drop zone for a thumbnail or the batch mover.
  */
+
+// The dragged thumbnail's image, shrunk under the pointer, is this wide
+const GHOST_IMAGE_WIDTH_PX = 45
+
+// The inline size each dragged image had before its drag, restored when the drag ends
+const ghostImageInlineSizes = new WeakMap()
+
 export function bindAssetDragDrop({ dispatch }) {
     const assetDraggable = interact("#assets .drag-drop")
 
@@ -86,16 +93,20 @@ function onDragStart(event) {
     clone.style.opacity = "30%"
     document.body.appendChild(clone)
 
-    // remember the original width so we can restore it later
+    // The image shrinks under the pointer, in both dimensions. lazy-images.js may have fixed its
+    // rendered size inline (a released image keeps it, and it stays once the image is back), so
+    // with only the width set the ghost would be a sliver as tall as the thumbnail, too tall for
+    // a folder row to ever cover a drop zone's share of it. The inline size is restored as it was.
     const originalWidth = imgElement.clientWidth
-    imgElement.setAttribute(Const.attributes.originalWidth, originalWidth)
+    ghostImageInlineSizes.set(imgElement, {
+        width: imgElement.style.width,
+        height: imgElement.style.height,
+    })
+    imgElement.style.width = `${GHOST_IMAGE_WIDTH_PX}px`
+    imgElement.style.height = "auto"
 
-    // Calculate the offset needed to center the resized image at cursor
-    const newWidth = 45
-    const widthDifference = originalWidth - newWidth
-    const offsetX = widthDifference / 2
-
-    imgElement.style.width = newWidth + "px"
+    // The offset that centers the shrunk image on the pointer
+    const offsetX = (originalWidth - GHOST_IMAGE_WIDTH_PX) / 2
 
     // Adjust the target position to center the resized image at cursor
     const yOffset = event.clientY - position.top
@@ -164,13 +175,10 @@ function onDragEnd(event) {
         clone.parentNode.removeChild(clone)
     }
 
-    const originalWidth = imgElement.getAttribute(
-        Const.attributes.originalWidth,
-    )
-
-    imgElement.style.width = originalWidth + "px"
-    imgElement.style.height = "auto"
-    imgElement.removeAttribute(Const.attributes.originalWidth)
+    const inlineSize = ghostImageInlineSizes.get(imgElement)
+    imgElement.style.width = inlineSize?.width ?? ""
+    imgElement.style.height = inlineSize?.height ?? ""
+    ghostImageInlineSizes.delete(imgElement)
 
     const checkmark = target.querySelector(".checkmark")
     if (checkmark) {

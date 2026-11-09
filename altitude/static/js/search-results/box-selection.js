@@ -36,6 +36,10 @@ const START_THRESHOLD_PX = 10
 
 let current = null
 
+// Set while the controller dispatches a replayed `mousemove` (see `replayPointer`), so
+// `trackPointer` tells it from a real move
+let replaying = false
+
 export function bindBoxSelection({ assetsElement, contentElement }) {
     current?.destroy()
     current = null
@@ -93,10 +97,9 @@ function createBoxSelection({ assetsElement, contentElement }) {
 
     selection.on("start", () => startDragging())
 
-    selection.on("move", ({ event }) => {
-        rememberPointer(event)
-        resumeAutoscrollAtEdge()
-    })
+    // The event this carries is not read: while Viselect's scroll loop runs, it is the stale one
+    // that started the loop (see `trackPointer`)
+    selection.on("move", () => resumeAutoscrollAtEdge())
 
     selection.on("stop", ({ event, store }) => {
         if (!gesture) {
@@ -130,6 +133,8 @@ function createBoxSelection({ assetsElement, contentElement }) {
             detach: [],
         }
         rememberPointer(event)
+
+        listen(document, "mousemove", trackPointer)
 
         // The button is down: block native text selection until it is released
         listen(document, "selectstart", preventDefault)
@@ -201,6 +206,22 @@ function createBoxSelection({ assetsElement, contentElement }) {
     }
 
     /**
+     * Keeps the pointer's real position, from the document's own `mousemove`, for the replays
+     * below.
+     *
+     * Viselect's `move` event cannot be the source: while its scroll loop runs, Viselect 3.9.0
+     * emits `move` on every frame with the event that started the loop, so a pointer that has
+     * since left the edge band would still read as resting in it. Replaying that stale position
+     * would pin the box's edge in the band and keep the pane scrolling with the mouse mid-pane.
+     * The replays themselves carry no new position and are skipped.
+     */
+    function trackPointer(event) {
+        if (!replaying) {
+            rememberPointer(event)
+        }
+    }
+
+    /**
      * Makes Viselect re-evaluate the rectangle against the current layout while the pointer is
      * still.
      *
@@ -258,14 +279,19 @@ function createBoxSelection({ assetsElement, contentElement }) {
         }
 
         const { x, y } = gesture.pointer
-        document.dispatchEvent(
-            new MouseEvent("mousemove", {
-                clientX: x,
-                clientY: y,
-                bubbles: true,
-                cancelable: true,
-            }),
-        )
+        replaying = true
+        try {
+            document.dispatchEvent(
+                new MouseEvent("mousemove", {
+                    clientX: x,
+                    clientY: y,
+                    bubbles: true,
+                    cancelable: true,
+                }),
+            )
+        } finally {
+            replaying = false
+        }
     }
 
     function commit({ candidates, additive }) {
