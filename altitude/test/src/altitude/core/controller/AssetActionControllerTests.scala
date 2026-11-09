@@ -441,8 +441,8 @@ import altitude.core.models.Person
      * Assertions:
      *
      * With all three out of the trash, a frame's panel has a Curation row linking to Curation on that Sequence in the Triage
-     * view, carrying the Sequence for a plain click, reading "set of 3", right under the File row, no Sequence row and, being in
-     * triage, no Folder row.
+     * view, carrying the Sequence for a plain click, reading "View set of 3", right under the File row, no Sequence row and,
+     * being in triage, no Folder row.
      *
      * Edge cases:
      *
@@ -466,7 +466,7 @@ import altitude.core.models.Person
 
         html should include(curationRow)
         html should include(
-          s"""<a href="/r/$repoId?view=triage&amp;curate=$sequenceId" target="_blank" data-app-curate-sequence="$sequenceId">set of 3</a>""")
+          s"""<a href="/r/$repoId?view=triage&amp;curate=$sequenceId" target="_blank" data-app-curate-sequence="$sequenceId">View set of 3</a>""")
         (html.indexOf("<dt>File</dt>") < html.indexOf(curationRow)) shouldBe true
         (html.indexOf(curationRow) < html.indexOf("<dt>Date Taken</dt>")) shouldBe true
         (html should not).include("<dt>Sequence</dt>")
@@ -474,7 +474,7 @@ import altitude.core.models.Person
 
         testApp.service.library.recycleAssets(Set(third.persistedId))
 
-        detailPanel(host, repoId, first.persistedId).text() should include(">set of 2</a>")
+        detailPanel(host, repoId, first.persistedId).text() should include(">View set of 2</a>")
         (detailPanel(host, repoId, third.persistedId).text() should not).include(curationRow)
 
         testApp.service.library.recycleAssets(Set(second.persistedId))
