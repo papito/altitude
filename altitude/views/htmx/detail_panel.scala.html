@@ -27,31 +27,31 @@
         <h3>Details</h3>
         <dl class="detail-rows">
             @row("File") {@{asset.fileName}}
+            @row("Date Taken") {
+                @if(asset.originalCreatedAt.isDefined) {
+                    @{Util.humanReadableDateTime(asset.originalCreatedAt)}
+                    @for(source <- asset.originalCreatedAtSource) {<span class="source">from @{source.label}</span>}
+                } else {No date}
+            }
+            @if(detail.albums.nonEmpty) {
+                @row("Albums") {<ul class="links">@for(album <- detail.albums) {<li><a href="/r/@repoId?albumId=@{album.persistedId}" target="_blank" rel="noopener">@{album.name}</a></li>}</ul>}
+            }
+            @if(detail.locations.nonEmpty) {
+                @row("Locations") {<ul class="links">@for(location <- detail.locations) {<li><a href="/r/@repoId?locationId=@{location.persistedId}" target="_blank" rel="noopener">@for(category <- location.categoryName) {<span class="category">@category</span> › }@{location.name}</a></li>}</ul>}
+            }
+            @if(detail.folderPath.nonEmpty) {
+                @row("Folder") {<span class="crumbs">@for((folder, index) <- detail.folderPath.zipWithIndex) {@if(index > 0) {<i class="fas fa-chevron-right sep" aria-hidden="true"></i>}<a class="crumb@if(index == detail.folderPath.size - 1) { leaf}" href="/r/@repoId?folderId=@{folder.persistedId}" target="_blank" rel="noopener">@{folder.name}</a>}</span>}
+            }
+            @for(duration <- asset.durationMs) {
+                @row("Duration") {@{Util.humanReadableDuration(duration)}}
+            }
+            @row("Dimensions") {<span data-app-detail-dimensions>@{asset.width} × @{asset.height} px</span>}
             @row("MIME Type") {@{asset.assetType.mime}}
             @for(fileType <- asset.extractedMetadata.getFieldValues("File Type").get("Detected File Type Name")) {
             @row("File Type") {@fileType}
             }
-            @row("Dimensions") {<span data-app-detail-dimensions>@{asset.width} × @{asset.height} px</span>}
-            @for(duration <- asset.durationMs) {
-            @row("Duration") {@{Util.humanReadableDuration(duration)}}
-            }
             @row("Size") {@{Util.humanReadableByteCount(asset.sizeBytes)}}
-            @row("Date Taken") {
-                @if(asset.originalCreatedAt.isDefined) {
-                @{Util.humanReadableDateTime(asset.originalCreatedAt)}
-                @for(source <- asset.originalCreatedAtSource) {<span class="source">from @{source.label}</span>}
-                } else {No date}
-            }
             @row("Date Imported") {@{Util.humanReadableDateTime(asset.createdAt)}}
-            @if(detail.folderPath.nonEmpty) {
-            @row("Folder") {<span class="crumbs">@for((folder, index) <- detail.folderPath.zipWithIndex) {@if(index > 0) {<i class="fas fa-chevron-right sep" aria-hidden="true"></i>}<a class="crumb@if(index == detail.folderPath.size - 1) { leaf}" href="/r/@repoId?folderId=@{folder.persistedId}" target="_blank" rel="noopener">@{folder.name}</a>}</span>}
-            }
-            @if(detail.albums.nonEmpty) {
-            @row("Albums") {<ul class="links">@for(album <- detail.albums) {<li><a href="/r/@repoId?albumId=@{album.persistedId}" target="_blank" rel="noopener">@{album.name}</a></li>}</ul>}
-            }
-            @if(detail.locations.nonEmpty) {
-            @row("Locations") {<ul class="links">@for(location <- detail.locations) {<li><a href="/r/@repoId?locationId=@{location.persistedId}" target="_blank" rel="noopener">@for(category <- location.categoryName) {<span class="category">@category</span> › }@{location.name}</a></li>}</ul>}
-            }
             @for(latitude <- asset.latitude; longitude <- asset.longitude) {
             @row("Position") {@{"%.5f, %.5f".formatLocal(Locale.ROOT, latitude, longitude)}}
             }
