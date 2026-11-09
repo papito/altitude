@@ -64,6 +64,13 @@ export function createDetailFullscreen() {
      * is left alone.
      */
     function attach(fragmentEl) {
+        // The key legend's fullscreen entry goes where the toolbar's toggle went; the legend comes with each fragment
+        if (!document.fullscreenEnabled) {
+            fragmentEl
+                .querySelectorAll(`[${Const.attributes.fullscreenKey}]`)
+                .forEach((keyEl) => keyEl.remove())
+        }
+
         const playerEl = fragmentEl.querySelector("media-controller")
         if (!playerEl) {
             return

@@ -161,6 +161,7 @@ export const Const = {
         detailPanelToggle: "data-app-detail-panel-toggle",
         faceHighlightsToggle: "data-app-face-highlights-toggle",
         fullscreenToggle: "data-app-fullscreen-toggle",
+        fullscreenKey: "data-app-fullscreen-key", // the key legend's fullscreen entry, gone where the toggle is
         // The button of a People row that selects its Face (htmx/detail_panel_people), and under a selected row its
         // corrections: Change, which opens the combobox, and Remove, whose second label (the one after the first click)
         // the button carries

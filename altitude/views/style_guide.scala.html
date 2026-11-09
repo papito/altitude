@@ -255,7 +255,9 @@
              cover's place with the label in <code>--theme-primary-text</code>. While nothing is typed the listbox opens with
              the Suggested group (<code>.suggested</code>): the people nearest the Face under a heading
              (<code>.group-heading</code>) in the section headings' style, parted from the list by a hairline in
-             <code>--popover-border-color</code>; the specimen shows it beside the Create row, which a typed name brings. The
+             <code>--popover-border-color</code>; the specimen shows it beside the Create row, which a typed name brings. Under the panel's scrolling content the
+             key legend (<code>.panel-keys</code>) keeps Asset detail's keys in view: two lines of key caps, Curation's hairline
+             box, and their meanings in the footnote's color. The
              toolbar's toggles
              (<code>.toolbar-toggle</code>, before a modal's ×) are an icon in <code>--theme-neutral-3</code> that takes
              <code>--theme-accent</code> while pressed, as the current nav entry does.</p>
@@ -316,6 +318,10 @@
                 </details>
                 <details class="metadata-group"><summary>GPS <span class="count">(4)</span></summary></details>
               </section>
+              <footer class="panel-keys sg-panel-keys" aria-label="Keys specimen">
+                <p><span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> Previous/Next</span><span><kbd>F</kbd> Fullscreen</span><span><kbd>M</kbd> Open/Close this panel</span></p>
+                <p><span><kbd>P</kbd> Face highlights</span><span><kbd>Space</kbd> Play/Pause</span></p>
+              </footer>
             </div>
             <button type="button" class="toolbar-toggle" aria-pressed="true" aria-label="Detail panel" title="Detail panel (M)"><i class="fas fa-info-circle" aria-hidden="true"></i></button>
             <span>.toolbar-toggle, pressed</span>

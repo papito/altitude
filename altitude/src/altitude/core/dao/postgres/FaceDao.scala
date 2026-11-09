@@ -23,11 +23,11 @@ object FaceDao:
   /**
    * The stored Faces nearest a query vector, nearest first, with their exact cosine distance, no further than a threshold.
    *
-   * The candidates come from the HNSW index over the enrolled Faces' vectors at half precision, which the inner order
-   * and `is_enrolled = TRUE` are written to match. The repository, the bad matches and, with `excludingPerson`, one Person's
-   * Faces are filtered as the index is read (`TransactionManager.withFaceVector` has the scan go on until the limit is met, past
-   * the excluded Faces however many). The threshold is applied outside, on the full-precision distance: inside, a query with
-   * nothing near enough would send the index looking for rows that are not there.
+   * The candidates come from the HNSW index over the enrolled Faces' vectors at half precision, which the inner order and
+   * `is_enrolled = TRUE` are written to match. The repository, the bad matches and, with `excludingPerson`, one Person's Faces
+   * are filtered as the index is read (`TransactionManager.withFaceVector` has the scan go on until the limit is met, past the
+   * excluded Faces however many). The threshold is applied outside, on the full-precision distance: inside, a query with nothing
+   * near enough would send the index looking for rows that are not there.
    *
    * Binds: the vector, the repository, the excluded Person when there is one, the vector, the number of candidates, the vector,
    * the threshold, the number of matches. `nearest.*` rather than `*`: the join would put the person's ID and dates into the row

@@ -142,6 +142,40 @@
     padding: var(--space-3) 0 var(--space-4) var(--space-6);
 }
 
+/* The keys of Asset detail, a legend under the panel's scrolling content so that it stays in view: two lines of key caps and
+   their meanings, in the faint text of a footnote, each line's entries spaced rather than punctuated so that one can go
+   (the fullscreen entry, where the browser allows none). The key cap is Curation's: a hairline box in the text's color */
+.panel-keys {
+    padding: var(--space-3) var(--panel-padding);
+    border-top: var(--border-hairline) var(--panel-border-color);
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-small);
+}
+
+.panel-keys p {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--space-5);
+    row-gap: var(--space-2);
+    margin: 0;
+}
+
+.panel-keys p + p {
+    margin-top: var(--space-2);
+}
+
+.panel-keys span {
+    white-space: nowrap;
+}
+
+.panel-keys kbd {
+    padding: 0 var(--space-2);
+    border: var(--border-hairline) currentColor;
+    border-radius: var(--radius-small);
+    font-family: inherit;
+    font-size: var(--font-size-xs);
+}
+
 /* A selected row's corrections (htmx/detail_panel_people), under the name: Change and Remove, or in their place the Change
    combobox. Shown by the row's own state, so no script toggles them; the trash renders none */
 .detail-panel .people .face-actions {

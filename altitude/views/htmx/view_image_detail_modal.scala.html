@@ -60,6 +60,12 @@
             </div>
         </header>
         <div id="detailPanelContent"></div>
+        @* The keys, under the scrolling content so they stay in view (views/AGENTS.md **Detail panel**); the fullscreen entry
+           goes with the toolbar's toggle where the browser allows no fullscreen (js/search-results/detail-fullscreen.js) *@
+        <footer class="panel-keys" aria-label="Keys">
+            <p><span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> Previous/Next</span><span data-app-fullscreen-key><kbd>F</kbd> Fullscreen</span><span><kbd>M</kbd> Open/Close this panel</span></p>
+            <p><span><kbd>P</kbd> Face highlights</span><span><kbd>Space</kbd> Play/Pause</span></p>
+        </footer>
     </aside>
 </div>
 }

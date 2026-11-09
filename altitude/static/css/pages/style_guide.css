@@ -197,6 +197,11 @@
   background: var(--theme-neutral-2);
 }
 
+/* The specimen's legend sits in the padded specimen, not the panel's own footer row, so it bleeds to the specimen's edges */
+.sg-detail-panel .sg-panel-keys {
+  margin: 0 calc(-1 * var(--panel-padding)) calc(-1 * var(--panel-padding));
+}
+
 .sg-detail-panel .sg-cover {
   display: block;
   width: var(--detail-cover-size);

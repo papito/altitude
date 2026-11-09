@@ -265,8 +265,8 @@ import altitude.core.service.FaceRecognitionService
        *
        * Assertions:
        *
-       * The plan reads the partial HNSW index over the enrolled Faces' half-precision vectors: the statement's order
-       * and predicates are the ones the index is declared with. So does the plan of the statement that leaves a Person out, the
+       * The plan reads the partial HNSW index over the enrolled Faces' half-precision vectors: the statement's order and
+       * predicates are the ones the index is declared with. So does the plan of the statement that leaves a Person out, the
        * Suggested group's.
        */
       val vector = PostgresOverrides.vectorLiteral(unitVector(1))

@@ -165,6 +165,7 @@ Const.attributes.dockSide       // "data-app-dock-side"  (a pick of the explorer
 Const.attributes.detailDockSide // "data-app-detail-dock-side"  (a pick of the Detail panel's, its own since both docks listen on the body)
 Const.attributes.detailPanelToggle // "data-app-detail-panel-toggle"  (the Detail panel's toggle in asset detail's toolbar)
 Const.attributes.faceHighlightsToggle // "data-app-face-highlights-toggle"  (the Face highlights' toggle beside it)
+Const.attributes.fullscreenKey     // "data-app-fullscreen-key"  (the key legend's fullscreen entry, removed with the toggle where fullscreen is not allowed)
 Const.attributes.faceRow           // "data-app-face-row"  (the button of a People row that selects its Face)
 Const.attributes.faceChange        // "data-app-face-change"  (a selected row's Change, which opens the combobox)
 Const.attributes.faceRemove        // "data-app-face-remove"  (a selected row's Remove, with its second label in `data-app-face-remove-label-last`)
@@ -1252,8 +1253,11 @@ and the tooltip's one caller is outside Asset detail, so nothing else moves.
 Metadata. The fragment `htmx/view_image_detail_modal` (`#imageDetailView`, styled by `static/css/htmx/view_image_detail_modal.css`)
 is a grid of three areas as the main page is: the media stage (`#imageDetailStage`, a size container the media fit from the
 asset's ratio in container units, so the player and the image resize with the panel), the divider (`#detailPanelDivider`, a
-`.divider` with its orientation class) and the panel (`aside#detailPanel`: a header holding the Dock side menu at its end, and
-`#detailPanelContent`, which scrolls). Its shape is the panel's **Dock side**, `data-detail-dock-side` on the fragment with the
+`.divider` with its orientation class) and the panel (`aside#detailPanel`: a header holding the Dock side menu at its end,
+`#detailPanelContent`, which scrolls, and under it the key legend, a `footer.panel-keys` of two lines that stays in view
+while the content scrolls: ← → Previous/Next, F Fullscreen, M Open/Close this panel; P Face highlights, Space Play/Pause.
+Its fullscreen entry carries `data-app-fullscreen-key` and goes with the toolbar's toggle where `document.fullscreenEnabled`
+is false; Escape is not listed, since what it does depends on what is open). Its shape is the panel's **Dock side**, `data-detail-dock-side` on the fragment with the
 share as `--detail-panel-share`, one rule per side bounded by `--detail-panel-min-*` and `--detail-stage-min-*` of `core.css`;
 closed (no `data-app-detail-panel-open`), the stage is the whole grid, the panel and the divider take no room and the box is
 fitted to the media as before, while open the box fills the viewport (`core.css`) and the panel takes its share: 30 % of the
