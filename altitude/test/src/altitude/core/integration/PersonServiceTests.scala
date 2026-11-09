@@ -26,6 +26,7 @@ import altitude.core.dao.sql.Db
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
+import altitude.core.routes.SearchRequestParser
 import altitude.core.service.PersonService
 import altitude.core.util.Query
 import altitude.core.util.SearchQuery
@@ -1208,17 +1209,18 @@ import altitude.core.util.Util
   }
 
   private def listedInBuckets(showTriaged: Boolean, buckets: Set[String] = PeopleBucket.ALL) =
-    testApp.service.person.getListedInBuckets(buckets, showTriaged)
+    testApp.service.person.getListedInBuckets(buckets, showTriaged).people
 
   private def listedCounts(showTriaged: Boolean): Map[String, Int] =
     listedInBuckets(showTriaged).map(listed => listed.person.persistedId -> listed.visibleCount).toMap
 
   /** What opening the Person from the repository view finds with triaged items hidden: the search `SearchRequestParser` builds */
-  private def foundInRepositoryView(person: Person): Int = testApp.service.library.count(
-    new SearchQuery(
-      params = Map(FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false),
-      personIds = Set(person.persistedId))
-  )
+  private def foundInRepositoryView(person: Person): Int = {
+    val scope = SearchRequestParser
+      .parse(Const.Search.View.DEFAULT, None, None, Some(person.persistedId), None, None, None)
+      .getOrElse(fail("The repository view of a Person is a valid scope"))
+    testApp.service.library.count(scope.query())
+  }
 
   private def markAsStillImporting(asset: Asset): Unit = testApp.txManager.withTransaction {
     update("UPDATE asset SET is_pipeline_processed = FALSE WHERE id = ?", asset.persistedId)

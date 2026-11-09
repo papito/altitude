@@ -1,21 +1,25 @@
 @import altitude.core.RequestContext
+@import altitude.core.models.ListedPeople
 @import altitude.core.models.ListedPerson
 @import altitude.core.Const
 
-@(people: List[ListedPerson])
+@(listed: ListedPeople)
 
 @* The list of one pane of the People tab (htmx/people): the people in the People buckets the pane asked for
    (GET /htmx/people/r/:repoId/list?buckets=..., with &triaged=true while triaged items are shown), one `.cell` each, found
    by `data-person-id` wherever one is looked up, since a person may be in both panes. A cell's number is the visible count,
    what opening the person from the repository view finds, and never `Person.numOfFaces` directly. A hidden person's cell carries the eye-slash badge, and its name link says
    so to assistive tech; an Unmatched person is told apart by its orange "Unknown N" name. With no one listed, one line
-   of text and no grid. *@
+   of text and no grid: that everyone is only in triaged items when the buckets hold people the triage switch left off
+   (`leftOffByTriage`), and otherwise that no one is in the buckets. *@
 
-@if(people.isEmpty) {
+@if(listed.leftOffByTriage) {
+<p class="empty">Everyone here is only in triaged items. Turn on Show triaged items to see them.</p>
+} else if(listed.people.isEmpty) {
 <p class="empty">No one in the buckets switched on</p>
 } else {
 <div class="grid">
-    @for(ListedPerson(person, visibleCount) <- people) {
+    @for(ListedPerson(person, visibleCount) <- listed.people) {
     <div class="cell drag-drop dropzone"
          data-person-id="@{person.persistedId}">
         <div class="image">

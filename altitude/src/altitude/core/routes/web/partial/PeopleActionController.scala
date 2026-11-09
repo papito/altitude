@@ -30,8 +30,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   /**
    * The list of the people in the People buckets named, comma-separated, by `buckets`, each with the number the tab shows; a name
-   * that is no bucket is a 400. Only `triaged=true` shows triaged items, the repository view's rule (`SearchRequestParser`), and a
-   * value that is no boolean is a 400.
+   * that is no bucket is a 400. Only `triaged=true` shows triaged items, the repository view's rule (`SearchRequestParser`), and
+   * a value that is no boolean is a 400.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/list")
@@ -41,8 +41,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val unknown = requested -- Const.PeopleBucket.ALL
     if unknown.nonEmpty then return badRequest(s"Unknown People bucket: ${unknown.mkString(", ")}")
 
-    val people = App.altitude.service.person.getListedInBuckets(requested, showTriaged = triaged.contains(true))
-    val payload = "<!doctype html>" + htmx.html.people_list(people = people)
+    val listed = App.altitude.service.person.getListedInBuckets(requested, showTriaged = triaged.contains(true))
+    val payload = "<!doctype html>" + htmx.html.people_list(listed = listed)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   /** A plain-text 400; the snackbar reports the status */

@@ -147,8 +147,9 @@ export function peopleTab() {
             }
 
             // Sent only when on: the store's null would go out as `triaged=null`, which the server refuses
-            const showsTriaged =
-                Alpine.store(Const.state.searchParams).triaged === "true"
+            const showsTriaged = Alpine.store(
+                Const.state.searchParams,
+            ).showsTriaged()
 
             htmx.ajax("GET", `/htmx/people/r/${context.getRepoId()}/list`, {
                 target: listEl,

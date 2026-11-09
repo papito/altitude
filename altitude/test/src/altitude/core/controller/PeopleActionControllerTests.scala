@@ -271,6 +271,53 @@ import altitude.core.models.Person
     }
   }
 
+  test("A People list the triage switch emptied says so, and a list with no one to show does not") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, first with no people at all and then with one Person, "Eve", who has only triaged assets.
+     *
+     * Assertions:
+     *
+     * With no people the list says no one is in the buckets. With Eve, the list by default says everyone is only in triaged
+     * items, and not that no one is there; with `triaged=true` it lists Eve and says neither.
+     *
+     * Edge cases:
+     *
+     * The Hidden bucket, which Eve is not in, holds no one with her there, so it says no one is there and nothing of triage.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    val noOne = "No one in the buckets switched on"
+    val onlyTriaged = "Everyone here is only in triaged items. Turn on Show triaged items to see them."
+
+    withServer(App) {
+      host =>
+        val noPeople = listPeople(host, repoId, Const.PeopleBucket.MATCHED).text()
+        noPeople should include(noOne)
+        (noPeople should not).include(onlyTriaged)
+
+        val eve = testApp.service.person.addPerson(Person(name = Some("Eve")))
+        testContext.addTestFacesAndAssets(eve, assetCount = 2, isTriaged = true)
+
+        val leftOff = listPeople(host, repoId, Const.PeopleBucket.MATCHED).text()
+        leftOff should include(onlyTriaged)
+        (leftOff should not).include(noOne)
+
+        val shown = listPeople(host, repoId, Const.PeopleBucket.MATCHED, Map("triaged" -> "true")).text()
+        listedCount(shown, eve) shouldBe Some(2)
+        (shown should not).include(onlyTriaged)
+        (shown should not).include(noOne)
+
+        val emptyBucket = listPeople(host, repoId, Const.PeopleBucket.HIDDEN).text()
+        emptyBucket should include(noOne)
+        (emptyBucket should not).include(onlyTriaged)
+    }
+  }
+
   test("A triaged parameter that is not a boolean is a 400 on the People list") {
 
     /**

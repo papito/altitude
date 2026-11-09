@@ -765,8 +765,10 @@ a `button[role="switch"]` and a `<label for>` whose click flips it with no scrip
 labels stay unique; a pane offers Matched, Hidden and Unmatched, the Main pane also Split view, labelled "Duplicate Split
 View" with a faint `small.legend` after the label, "(for quick drag-and-drop)", that the switch is `aria-describedby`. The switches are the
 **People buckets** (the glossary in `CONTEXT.md`: Matched person, Unmatched person, Hidden person), three disjoint sets,
-and a pane lists the union of the buckets switched on, Matched alone on a first visit; with none on it shows one `.empty`
-line and no grid. The server renders no switch state, as with View settings: the component asks
+and a pane lists the union of the buckets switched on, Matched alone on a first visit; with no one listed it shows one `.empty`
+line and no grid: "No one in the buckets switched on" with none on or no one in them, and, when the buckets hold people and
+every one of them has only triaged assets with triaged items hidden (the server's `ListedPeople.leftOffByTriage`),
+"Everyone here is only in triaged items. Turn on Show triaged items to see them." The server renders no switch state, as with View settings: the component asks
 `GET /htmx/people/r/:repoId/list?buckets=matched,hidden` (comma-separated bucket names; a name that is no bucket is a 400),
 with `triaged=true` added only when the `searchParams` store's `triaged` is exactly `"true"`, read on every load (the store's
 null would go out as `triaged=null`, a 400),

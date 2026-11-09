@@ -42,8 +42,8 @@
  * A stale section (a 404 or 409) is reloaded with the server's message shown. When the viewed Person
  * (`searchParams.personId`) has no Face left on the asset, Asset detail stays on it and the grid
  * waits: on stepping away, once the step has picked its target, or on closing, the asset's cells
- * leave the grid and the results title's count is read again, or, when the viewed Person was
- * deleted, the results go back to the whole repository.
+ * leave the grid and the results title is read again, as its Hide and Discard links depend on the
+ * count, or, when the viewed Person was deleted, the results go back to the whole repository.
  *
  * The side and share are written on the fragment (`data-detail-dock-side`, `--detail-panel-share`)
  * and whether the panel is open as `data-app-detail-panel-open`; `view_image_detail_modal.css`
@@ -447,7 +447,8 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
     /**
      * The asset the viewed Person left leaves the grid, and the walk goes on from the cells around
      * it; the results title is read again, as its Hide and Discard links depend on the count, or
-     * the results go back to the whole repository when the Person was deleted. A detail opened from a map pin has no cell, so only the title.
+     * the results go back to the whole repository when the Person was deleted. A detail opened from
+     * a map pin has no cell, so only the title.
      */
     function flushLeaving() {
         if (!leaving) {

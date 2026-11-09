@@ -39,7 +39,7 @@ export function viewSettings() {
         },
 
         showsTriaged() {
-            return Alpine.store(Const.state.searchParams).triaged === "true"
+            return Alpine.store(Const.state.searchParams).showsTriaged()
         },
 
         toggleTriaged() {

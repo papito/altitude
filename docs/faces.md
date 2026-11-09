@@ -190,7 +190,9 @@ The number on a person's cell is what opening them from the repository view find
 view does (`SearchRequestParser`): only `true` shows triaged items. With them shown the number is `num_of_faces`, and the
 triaged assets are not read. With them hidden it is `num_of_faces` less the person's triaged assets outside the trash
 (`PersonDao.getTriagedAssetCounts`, each asset once, those still being imported among them), and a person left with 0 or
-less is left off the list. Only the number follows the switch: the buckets and the order are those of the whole
+less is left off the list. A list that comes out empty with someone in the buckets (`ListedPeople.leftOffByTriage`; the
+buckets read only people with a count above zero, so the subtraction is what dropped them) says "Everyone here is only in
+triaged items. Turn on Show triaged items to see them." in place of "No one in the buckets switched on". Only the number follows the switch: the buckets and the order are those of the whole
 `num_of_faces`, so the switch moves no one between buckets, and the Discard link, `Person.isMatched`, the merge modal's
 "instances" and the merge direction read `num_of_faces` as well, since a merge moves every Face.
 
