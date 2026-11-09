@@ -148,7 +148,7 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
   override def lockName(nameKey: String): Unit =
     advisoryLock(s"person-name:${RequestContext.getRepository.persistedId}:$nameKey")
 
-  // Reads the partial `person_03` over the live people
+  // Reads the partial index over the live people
   override def getAssignable: List[Person] =
     val sql = """SELECT *
                    FROM person

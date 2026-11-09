@@ -140,7 +140,7 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
       .toSet
 
   override def getLocationsOfAsset(assetId: String): List[Location] =
-    // Through location_asset_02, which leads with the asset. Path order as `getAll` has it, less the category-first key: a
+    // Through the index that leads with the asset. Path order as `getAll` has it, less the category-first key: a
     // member is always a Location, never a category
     val sql = s"""
       SELECT l.*, p.${FieldConst.Location.NAME} AS ${FieldConst.Location.CATEGORY_NAME}

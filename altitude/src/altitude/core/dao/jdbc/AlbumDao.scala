@@ -108,7 +108,6 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
     manyBySqlQuery(sql, List(albumId)).map(_(FieldConst.Album.ASSET_ID).asInstanceOf[String]).toSet
 
   override def getAlbumsOfAsset(assetId: String): List[Album] =
-    // Through album_asset_02, which leads with the asset; the count is the listing's alone
     val sql = s"""
       SELECT a.*
         FROM $tableName a

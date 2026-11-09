@@ -425,7 +425,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
           faceDao.updateById(face.persistedId, Map(FieldConst.Face.PERSON_ID -> targetId))
 
           // The source first: a cover of theirs that was this Face is repicked, or the source deleted, before the target may take
-          // the Face as cover, which `person_02` allows one person at a time
+          // the Face as cover, which the unique index over live people's covers allows one person at a time
           val (sourceAfter, sourceDeleted) = settleAfterFaceLeft(face, source)
 
           // The target's worse Face goes, the moved Face taking its place as cover if it was the cover

@@ -17,7 +17,7 @@ trait PersonDao extends BaseDao[Person]:
 
   /**
    * Makes the transactions that may create the repository's person of a name key take turns until they end, so the second finds
-   * the person the first created instead of failing on `person_01`; see `BaseDao.advisoryLock`
+   * the person the first created instead of failing on the unique index over live people's name keys; see `BaseDao.advisoryLock`
    */
   def lockName(nameKey: String): Unit
 
