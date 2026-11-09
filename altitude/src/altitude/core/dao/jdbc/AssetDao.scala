@@ -549,8 +549,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   def countSequenceFramesStatement(sequenceId: String): (String, List[Any]) =
     (s"SELECT COUNT(*) AS frames ${liveFramesOfSequences("= ?")}", List(sequenceId, RequestContext.getRepository.persistedId))
 
-  // SQLite's one write connection serializes the writers
-  override def lockSequences(): Unit = ()
+  // The advisory lock of the repository's Sequences; see `BaseDao.advisoryLock`
+  override def lockSequences(): Unit = advisoryLock(s"sequences:${RequestContext.getRepository.persistedId}")
 
   override def getLiveSequenceMembers(sequenceIds: Set[String]): List[Asset] =
     if sequenceIds.isEmpty then return List.empty[Asset]

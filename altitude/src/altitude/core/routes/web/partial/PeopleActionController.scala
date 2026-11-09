@@ -10,6 +10,7 @@ import altitude.core.App
 import altitude.core.Const
 import altitude.core.DataScrubber
 import altitude.core.DuplicateException
+import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Face
@@ -43,6 +44,24 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   /** A plain-text 400; the snackbar reports the status */
   private def badRequest(message: String): Response[String] =
     cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
+
+  /** The options of the Change combobox of Asset detail's People section: the people a Face can be given to */
+  @requireLogin()
+  @cask.get(f"/$prefix/r/:repoId/assignable")
+  def listAssignablePeople(repoId: String)(using request: Request): Response[String] =
+    val people: List[Person] = App.altitude.service.person.getAssignable
+    val payload = "<!doctype html>" + htmx.html.assignable_people(people = people)
+    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+
+  /** A person's results title on its own, for the count to be refreshed after a Face correction; an unknown person is a 404 */
+  @requireLogin()
+  @cask.get(f"/$prefix/r/:repoId/p/:personId/title")
+  def showPersonTitle(repoId: String, personId: String)(using request: Request): Response[String] =
+    try
+      val person: Person = App.altitude.service.person.getById(personId)
+      val payload = "<!doctype html>" + htmx.html.person_inner(person = person)
+      cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    catch case ex: NotFoundException => cask.Response(ex.getMessage, 404, Seq(("Content-Type", "text/plain")))
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/choose-person-cover-face")

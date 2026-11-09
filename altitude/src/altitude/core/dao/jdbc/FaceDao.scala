@@ -80,6 +80,13 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       .take(1)
     Db.read(dialect)(_.run(one)).nonEmpty
 
+  override def getInRepository(faceId: String): Option[Face] =
+    import dialect.*
+
+    val repositoryId = RequestContext.getRepository.persistedId
+    val one = FaceRow.select.filter(face => face.id `=` faceId && face.repositoryId `=` repositoryId)
+    Db.read(dialect)(_.run(one)).headOption.map(toModel)
+
   def getAssetFaces(assetId: String): List[Face] =
     visibleFaces("= ?", assetId)
 

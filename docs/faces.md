@@ -140,7 +140,9 @@ holds all detections of the video in memory. Then, with the pure functions of th
    Face is match-only whatever its quality, so a passer-by in one frame cannot start a Person. A clip shorter than the
    sample interval has one frame, so nobody enrolls from it.
 5. One Face per Person per Video: when two clusters resolve to the same Person (`recognizeAndStore`), the later,
-   lower-quality one is dropped, so a pose change that splits a person in two does not fail the import.
+   lower-quality one is dropped, so a pose change that splits a person in two does not fail the import. The rule holds
+   after import too: a Face correction that would give a Person a second Face on a Video keeps the better one (see
+   **Corrections** below).
 
 ## Storage
 
@@ -197,6 +199,47 @@ offered to a Matched person (`Person.isMatched`), moves it between buckets. Its 
   or not, keeps all three. A source no longer live (merged away or a bad match) gives no name; a merge of one is not
   refused. The source is soft-deleted first, so `person_01` never sees the name on two live people.
 
+### Corrections
+
+Asset detail's People section (the glossary's Detail panel) acts on one Face at a time, never on a Person as a whole: Remove
+deletes a Face, Change gives it to another Person. Each is one `PersonService` transaction followed by a file purge, and
+each follows the count rule above: a Face leaving an asset lowers its Person's `num_of_faces` only if they have no other
+Face on it, and a Face arriving raises the target's only if they had none (`FaceDao.hasFaceOfPerson`).
+
+- **Remove** (`removeFace(faceId)`): the Person is locked (`lockAndGetLive`), the Face re-read and its row deleted; the
+  cover, if it was this Face, becomes the Person's remaining Face with the highest detection score (`getTopFaces`); a
+  Person left with no Face row is deleted (`deletePeopleWithoutFaces`), named or not. Once committed the Face's files go
+  (`purgeFaceFiles`), given the Person as re-read after the repick, since a cover Face keeps its files and this one is no
+  longer the cover; a deleted Person's cover loses its files too.
+- **Change** (`moveFace(faceId, FaceTarget)`): the target is a live Person by ID (hidden or not; a merged-away or
+  bad-match Person is not found) or a name, which resolves to the live Person holding it in any case or Unicode form
+  (`getLiveByNameKey`) or creates a named Person. Creators of one name take turns under the name's lock
+  (`PersonDao.lockName`, `BaseDao.advisoryLock`: `pg_advisory_xact_lock` on PostgreSQL, nothing on SQLite, whose one
+  write connection serializes the writers), so the loser of a race finds the winner instead of failing on `person_01`.
+  Source and target are then locked in ID order, the Face re-read and its `person_id` changed, the vector going with the
+  row so later imports match it to the new Person. The source is settled first, as Remove settles a Person (count, cover
+  repick, deletion at the last Face), before the target may take the Face as cover, which `person_02` allows one Person
+  at a time; the target counts the asset if they had no Face on it and takes the Face as cover only if they have none (a
+  new Person's cover is the moved Face). On a Video where the target already has a Face, the lower-quality of the two
+  (the target's own on a tie) is deleted as Remove deletes it, and a cover that pointed at it moves to the survivor.
+- **Last Face**: a Person is deleted only when no Face row of theirs remains. Faces on assets in the trash are rows, so a
+  Person whose every live Face was removed stays, counting zero, until the trash is purged.
+- **Refusals**: a Face of a recycled asset is an `IllegalOperationException` (the section is read-only in the trash); a
+  Face gone, or moved by a request that held the lock first, is a `NotFoundException`; the Face's own Person a
+  `ValidationException`, as is a reserved name.
+
+The routes (`AssetActionController`, under `requireLogin`, each logging the correction on INFO):
+`PUT /htmx/asset/r/:repoId/face/:faceId/person` with a JSON body naming `personId` or `name` (one of the two; the name
+trimmed and held to the name editor's length rules), and `DELETE /htmx/asset/r/:repoId/face/:faceId`. Both answer the
+asset's People section (`htmx/detail_panel_people`: one row per Face with its Person, bad matches left out, Hidden
+marked, by `x1` for an image and by Frame time for a Video, `PersonService.getAssetFacesForDetail`), its root carrying
+the result message (`Const.Msg.FaceCorrection`) and, when a Person was deleted, their ID and the line that says so; a
+refused correction is a plain-text 400 (the body or the target), 404 (gone or moved) or 409 (in the trash), which the
+client answers by reloading the section. `PeopleActionController` serves the Change combobox's options,
+`GET /htmx/people/r/:repoId/assignable` (`getAssignable`: the live people who are not a bad match, named first, then by
+`name_for_sort`, Hidden among them and marked; `htmx/assignable_people`), and a Person's results title on its own,
+`GET /htmx/people/r/:repoId/p/:personId/title` (`htmx/person_inner`), for the count to be refreshed after a correction.
+
 ## Settings
 
 All but `face.debug.enabled` are Live settings: an Admin edits them on the Settings screen (`/settings/r/:repoId`), they
@@ -229,5 +272,9 @@ cross rules (box size ≥ smallest face, `hnsw_ef_search` ≥ 4 × `match_count`
 candidate eligibility, the tie-break and the no-candidate rule on known vectors (`TestContext.addTestFace`), a stored
 Face's checksum against the SHA-256 of its stored crop, the same crop twice in one asset, and the Video rules on clips
 synthesized by [TestVideos](../altitude/test/src/altitude/test/TestVideos.scala);
-[FaceClusteringTests](../altitude/test/src/altitude/core/unit/FaceClusteringTests.scala) covers the pure clustering.
+[FaceClusteringTests](../altitude/test/src/altitude/core/unit/FaceClusteringTests.scala) covers the pure clustering;
+[FaceCorrectionTests](../altitude/test/src/altitude/core/integration/FaceCorrectionTests.scala) covers Remove and
+Change on both engines, their two races included (`contend`), and
+[AssetActionControllerTests](../altitude/test/src/altitude/core/controller/AssetActionControllerTests.scala) their
+routes.
 Gaps are listed in [test-coverage.md](test-coverage.md).

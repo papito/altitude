@@ -39,6 +39,7 @@ abstract class AllIntegrationTestSuites(val testApp: Altitude)
     new FaceDetectionTests(testApp),
     new FaceRecognitionServiceTests(testApp),
     new PersonServiceTests(testApp),
+    new FaceCorrectionTests(testApp),
     new ImportPipelineServiceTests(testApp),
     new PurgePipelineServiceTests(testApp)
   )

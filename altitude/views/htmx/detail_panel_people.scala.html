@@ -1,0 +1,46 @@
+@import altitude.core.Const
+@import altitude.core.util.Util
+@import altitude.core.models.Asset
+@import altitude.core.models.Face
+@import altitude.core.models.Person
+
+@(asset: Asset, faces: List[(Face, Person)], message: Option[String] = None, deletedPerson: Option[Person] = None)
+
+@* The People section of the Detail panel: one row per Face of the asset, in the order the server reads them
+   (PersonService.getAssetFacesForDetail: by x for an image, by Frame time for a Video), bad matches left out. A row
+   carries what the Face highlights and the corrections read: the Face, its Person and their name, the box in the
+   asset's pixels (x, y, width, height), the Frame time for a Face in a Video, and whether the Person is Hidden. The
+   section is swapped in whole by a correction's response (PUT /htmx/asset/r/:repoId/face/:faceId/person, DELETE
+   /htmx/asset/r/:repoId/face/:faceId), whose root then carries the result message for the snackbar and, for a Person
+   the correction deleted, their ID and the line the snackbar adds. For an asset in the trash the root is marked
+   read-only: no correction is offered, and the server refuses them. *@
+
+<section id="detailPanelPeople"
+         data-app-asset-id="@{asset.persistedId}"
+         @if(asset.isRecycled) { data-app-read-only="true" }
+         @for(text <- message) { data-app-result-message="@text" }
+         @for(person <- deletedPerson) {
+         data-app-deleted-person-id="@{person.persistedId}"
+         data-app-deleted-person-message="@{Const.Msg.FaceCorrection.PERSON_REMOVED.format(person.name.getOrElse(""))}"
+         }>
+    @if(faces.isEmpty) {
+    <p class="empty">No one in this @if(asset.assetType.mediaType == "video") {video} else {image}</p>
+    } else {
+    <ul class="people">
+        @for((face, person) <- faces) {
+        <li data-face-id="@{face.persistedId}"
+            data-person-id="@{person.persistedId}"
+            data-person-name="@{person.name.getOrElse("")}"
+            @if(person.isHidden) { data-person-hidden="true" }
+            data-face-box="@{face.x1},@{face.y1},@{face.width},@{face.height}"
+            @for(time <- face.frameTimeMs) { data-frame-time-ms="@time" }>
+            @for(cover <- person.coverFaceId) {
+            <img src="@{Util.contentUrl(Const.DataStore.FACE, cover)}" alt="" loading="lazy">
+            }
+            <span class="name">@{person.name.getOrElse("")}</span>
+            @if(person.isHidden) { <span class="hidden-mark">Hidden</span> }
+        </li>
+        }
+    </ul>
+    }
+</section>

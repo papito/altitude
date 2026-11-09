@@ -1,0 +1,25 @@
+@import altitude.core.Const
+@import altitude.core.util.Util
+@import altitude.core.models.Person
+
+@(people: List[Person])
+
+@* The options of the Change combobox (GET /htmx/people/r/:repoId/assignable): the people a Face can be given to
+   (PersonService.getAssignable: live, not a bad match, named first and then by sort name, Hidden people among them),
+   one option each with the Person's ID and name, the Hidden mark, their cover and their name. The combobox filters
+   them on the client and leaves out the Face's own Person itself. *@
+
+<ul id="assignablePeople" role="listbox">
+    @for(person <- people) {
+    <li role="option"
+        data-person-id="@{person.persistedId}"
+        data-person-name="@{person.name.getOrElse("")}"
+        @if(person.isHidden) { data-person-hidden="true" }>
+        @for(cover <- person.coverFaceId) {
+        <img src="@{Util.contentUrl(Const.DataStore.FACE, cover)}" alt="" loading="lazy">
+        }
+        <span class="name">@{person.name.getOrElse("")}</span>
+        @if(person.isHidden) { <span class="hidden-mark">Hidden</span> }
+    </li>
+    }
+</ul>

@@ -230,6 +230,20 @@ class TestContext(val testApp: Altitude) {
     }
   }
 
+  /** The type of an asset, so a persisted image fixture can stand for a Video without a file to decode */
+  def setAssetType(assetId: String, assetType: AssetType): Unit = {
+    testApp.txManager.withTransaction {
+      new QueryRunner().update(
+        RequestContext.getConn,
+        "UPDATE asset SET media_type = ?, media_subtype = ?, mime_type = ? WHERE id = ?",
+        assetType.mediaType,
+        assetType.mediaSubtype,
+        assetType.mime,
+        assetId
+      )
+    }
+  }
+
   /** Coordinates are parsed on import only, so a fixture writes them directly, as an import of a geotagged file would have */
   def setAssetCoordinates(assetId: String, latitude: Double, longitude: Double): Unit = {
     testApp.txManager.withTransaction {
@@ -285,29 +299,48 @@ class TestContext(val testApp: Altitude) {
     }
   }
 
-  /** A Face of the person in the asset with the given embedding, so recognition can be exercised on known vectors */
+  /**
+   * A Face of the person in the asset with the given embedding, so recognition can be exercised on known vectors; `withFiles`
+   * writes its four images to the file store, as an import would, for a test of what becomes of them
+   */
   def addTestFace(
       person: Person,
       asset: Asset,
       features: Array[Float],
       isEnrolled: Boolean = true,
-      sharpness: Option[Double] = None): Face =
-    testApp.service.person.addFace(
+      sharpness: Option[Double] = None,
+      detectionScore: Double = 0.9,
+      quality: Double = 20.0,
+      x1: Int = 1,
+      frameTimeMs: Option[Long] = None,
+      withFiles: Boolean = false): Face = {
+    val face = testApp.service.person.addFace(
       Face(
-        x1 = 1,
+        x1 = x1,
         y1 = 1,
         width = 10,
         height = 10,
-        detectionScore = 0.9,
+        detectionScore = detectionScore,
         checksum = TestContext.randomChecksum,
         features = features,
-        quality = 20.0,
+        quality = quality,
         isEnrolled = isEnrolled,
+        frameTimeMs = frameTimeMs,
         sharpness = sharpness
       ),
       asset,
       person
     )
+    if (withFiles) testApp.service.fileStore.addFace(face, randomFaceImages(generateRandomImagBytesGray()))
+    face
+  }
+
+  private def randomFaceImages(alignedImageGs: Array[Byte]): FaceImages = FaceImages(
+    image = generateRandomImagBytesBgr(),
+    alignedImageGs = alignedImageGs,
+    alignedImage = generateRandomImagBytesBgr(),
+    displayImage = generateRandomImagBytesBgr()
+  )
 
   def addTestFacesAndAssets(people: List[Person], assetCount: Int): Unit = {
     require(people.count(_.id.isEmpty) == 0, "Person must have an ID for a mock face to be added")
@@ -336,14 +369,7 @@ class TestContext(val testApp: Altitude) {
           )
 
           val persistedFace = testApp.service.person.addFace(face, asset, person)
-
-          val faceImages = FaceImages(
-            image = generateRandomImagBytesBgr(),
-            alignedImageGs = randomGrImage,
-            alignedImage = generateRandomImagBytesBgr(),
-            displayImage = generateRandomImagBytesBgr()
-          )
-          testApp.service.fileStore.addFace(persistedFace, faceImages)
+          testApp.service.fileStore.addFace(persistedFace, randomFaceImages(randomGrImage))
       }
     }
   }

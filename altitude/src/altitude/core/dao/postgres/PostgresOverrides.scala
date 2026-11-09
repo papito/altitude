@@ -98,6 +98,9 @@ trait PostgresOverrides:
 
   override val forUpdate: String = "FOR UPDATE"
 
+  override protected def advisoryLock(key: String): Unit =
+    manyBySqlQuery("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", List(key)): Unit
+
   override protected val inIdSet: String = "= ANY(?)"
 
   // varchar[] rather than text[]: against a CHAR(36) column it is the array that is cast, and the column's index is used

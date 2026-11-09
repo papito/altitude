@@ -18,6 +18,9 @@ trait FaceDao extends BaseDao[Face]:
   /** Whether the person has a Face on the asset, in the context repository */
   def hasFaceOfPerson(assetId: String, personId: String): Boolean
 
+  /** The Face by ID if it is in the context repository; none for a Face gone or of another repository */
+  def getInRepository(faceId: String): Option[Face]
+
   /** A person's faces by detection score, best first and then by ID, no more than `limit` of them */
   def getTopFaces(personId: String, limit: Int): List[Face]
 

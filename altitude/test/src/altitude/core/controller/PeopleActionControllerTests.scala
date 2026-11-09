@@ -20,6 +20,84 @@ import altitude.core.models.Person
       check = false
     )
 
+  test("The assignable people are the live people who are not a bad match, named first, Hidden marked") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with People named "Zoe" and "adam", a hidden "Mia", two unnamed People with a Face each, one
+     * more merged into the first of them, and a bad-match Person.
+     *
+     * Assertions:
+     *
+     * The assignable list answers 200 with one option per person in the order adam, Mia, Zoe, then the unnamed people by sort
+     * name, Mia's marked hidden and each carrying its cover; the merged-away and the bad-match people are absent.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val zoe = testApp.service.person.addPerson(Person(name = Some("Zoe")))
+        val adam = testApp.service.person.addPerson(Person(name = Some("adam")))
+        val mia = testApp.service.person.addPerson(Person(name = Some("Mia")))
+        val unknown1 = testApp.service.person.addPerson(Person())
+        val mergedAway = testApp.service.person.addPerson(Person())
+        val unknown2 = testApp.service.person.addPerson(Person())
+        val badMatch = testApp.service.person.addPerson(Person())
+        List(zoe, adam, mia, unknown1, mergedAway, unknown2, badMatch).foreach(testContext.addTestFacesAndAssets(_))
+        testApp.service.person.setVisibility(mia, isHidden = true)
+        testApp.service.person.merge(dest = unknown1, source = mergedAway)
+        testApp.service.person.markAsBadMatch(badMatch)
+
+        val response = requests.get(s"$host/htmx/people/r/$repoId/assignable", cookies = testContext.cookies, check = false)
+
+        response.statusCode shouldBe 200
+        val html = response.text()
+        val optionIds = """data-person-id="([^"]+)"""".r.findAllMatchIn(html).map(_.group(1)).toList
+        optionIds shouldBe List(adam, mia, zoe, unknown1, unknown2).map(_.persistedId)
+        html should include(s"""data-person-id="${mia.persistedId}"""")
+        """data-person-id="[^"]+"\s+data-person-name="Mia"\s+data-person-hidden""".r.findFirstIn(html).isDefined shouldBe true
+        html should include(s"/${Const.DataStore.FACE}/${testApp.service.person.getById(adam.persistedId).coverFaceId.get}")
+    }
+  }
+
+  test("A person's results title is served on its own, with the person's count") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob" with Faces on two assets.
+     *
+     * Assertions:
+     *
+     * The title route answers 200 with the person's results title inner, naming Bob and his two faces; an unknown person is a
+     * 404.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        testContext.addTestFacesAndAssets(bob, assetCount = 2)
+
+        val response =
+          requests.get(s"$host/htmx/people/r/$repoId/p/${bob.persistedId}/title", cookies = testContext.cookies, check = false)
+
+        response.statusCode shouldBe 200
+        response.text() should include("""id="personName"""")
+        response.text() should include("Bob")
+        response.text() should include("2 faces")
+
+        requests
+          .get(s"$host/htmx/people/r/$repoId/p/${java.util.UUID.randomUUID}/title", cookies = testContext.cookies, check = false)
+          .statusCode shouldBe 404
+    }
+  }
+
   test("Choose person cover face modal renders without a width parameter") {
 
     /**

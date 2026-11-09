@@ -100,6 +100,8 @@ trait SqliteOverrides:
 
   override val forUpdate: String = "" // SQLITE does not support row-level locking, so no need for "FOR UPDATE"
 
+  override protected def advisoryLock(key: String): Unit = () // The one write connection serializes the writers
+
   override protected val inIdSet: String = "IN (SELECT value FROM json_each(?))"
 
   override protected def idSet(ids: Set[String]): Any = ujson.write(ids)

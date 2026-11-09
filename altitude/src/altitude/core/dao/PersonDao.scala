@@ -15,6 +15,18 @@ trait PersonDao extends BaseDao[Person]:
   /** The live person of the repository (neither merged away nor a bad match, hidden or not) whose sort name is the name key */
   def getLiveByNameKey(nameKey: String): Option[Person]
 
+  /**
+   * Makes the transactions that may create the repository's person of a name key take turns until they end, so the second finds
+   * the person the first created instead of failing on `person_01`; see `BaseDao.advisoryLock`
+   */
+  def lockName(nameKey: String): Unit
+
+  /**
+   * The people a Face can be given to: the live people of the repository (neither merged away nor a bad match, hidden or not,
+   * with or without an asset outside the trash), named first and then by sort name
+   */
+  def getAssignable: List[Person]
+
   def recycleFacesForAssets(assetIds: Set[String]): Unit
   def restoreFacesForAssets(assetIds: Set[String]): Unit
 

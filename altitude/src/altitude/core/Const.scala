@@ -159,6 +159,18 @@ object Const:
       val PERSON_NAME_TAKEN_BY_HIDDEN = "%s already exists and is hidden."
       // A rename a unique index refused with no live holder of the name to offer: merged away meanwhile, or another constraint
       val PERSON_NAME_ALREADY_EXISTS = "Person by that name already exists"
+      // A Face correction (PersonService.moveFace) onto the Face's own Person
+      val FACE_ALREADY_THEIRS = "The face is already this person's"
+      // A Face correction's body naming neither a person nor a name, or both
+      val FACE_TARGET_REQUIRED = "Name one person, by ID or by name"
+      // A Face correction of a Face on an asset in the trash, which the panel shows read-only
+      val FACE_OF_RECYCLED_ASSET = "The faces of an asset in the trash cannot be changed"
+
+    // What a Face correction did, named for the snackbar in the People section's data attributes (htmx/detail_panel_people)
+    object FaceCorrection:
+      val MOVED = "Moved to %s"
+      val REMOVED = "Removed %s"
+      val PERSON_REMOVED = "%s had no other faces and was removed"
 
   // Dialog titles: the folder and album rename/delete dialogs show inline in the entity's menu, the
   // people dialogs in the modal host, whose sizing is owned by CSS (`--modal-content-width` in

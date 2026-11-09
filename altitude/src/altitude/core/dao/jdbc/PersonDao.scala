@@ -145,6 +145,20 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     val live = PersonDao.liveByNameKey(dialect, RequestContext.getRepository.persistedId, nameKey)
     Db.read(dialect)(_.run(live)).headOption.map(toModel)
 
+  override def lockName(nameKey: String): Unit =
+    advisoryLock(s"person-name:${RequestContext.getRepository.persistedId}:$nameKey")
+
+  // Reads the partial `person_03` over the live people
+  override def getAssignable: List[Person] =
+    val sql = """SELECT *
+                   FROM person
+                  WHERE repository_id = ?
+                    AND is_deleted = FALSE
+                    AND is_bad_match = FALSE
+               ORDER BY is_named DESC, name_for_sort
+              """
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
+
   def recycleFacesForAssets(assetIds: Set[String]): Unit = addFacesOfAssets(assetIds, sign = "-")
 
   def restoreFacesForAssets(assetIds: Set[String]): Unit = addFacesOfAssets(assetIds, sign = "+")
