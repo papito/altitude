@@ -439,7 +439,7 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * With all three out of the trash, a frame's panel has a Curation row linking to Curation on that Sequence in the Triage view,
+     * With all three out of the trash, a frame's panel has a Curation row linking to Curation on that Sequence in the Triage view, carrying the Sequence for a plain click,
      * reading "set of 3", right under the File row, no Sequence row and, being in triage, no Folder row.
      *
      * Edge cases:
@@ -463,7 +463,7 @@ import altitude.core.models.Person
         val html = detailPanel(host, repoId, first.persistedId).text()
 
         html should include(curationRow)
-        html should include(s"""<a href="/r/$repoId?view=triage&amp;curate=$sequenceId" target="_blank">set of 3</a>""")
+        html should include(s"""<a href="/r/$repoId?view=triage&amp;curate=$sequenceId" target="_blank" data-app-curate-sequence="$sequenceId">set of 3</a>""")
         (html.indexOf("<dt>File</dt>") < html.indexOf(curationRow)) shouldBe true
         (html.indexOf(curationRow) < html.indexOf("<dt>Date Taken</dt>")) shouldBe true
         (html should not).include("<dt>Sequence</dt>")
