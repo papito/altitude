@@ -750,7 +750,8 @@ footer {
 
 /* A path's breadcrumb: the results title's folder path (includes/results_title_inner) and the Detail panel's Folder row
    (htmx/detail_panel). Each ancestor is a dimmed link (.crumb) and the crumbs are parted by a faint chevron (.sep); the
-   row wraps rather than hiding an ancestor. The results title's leaf is its own (.leaf, includes/results_title.css). */
+   row wraps rather than hiding an ancestor. The results title's leaf is its own (.leaf, includes/results_title.css), and the
+   Detail panel colors its crumbs as its other links (htmx/detail_panel.css). */
 .crumbs {
     display: flex;
     flex-wrap: wrap;
@@ -770,7 +771,7 @@ footer {
 }
 
 .crumbs .sep {
-    font-size: var(--font-size-medium);
+    font-size: var(--font-size-small);
     color: var(--theme-neutral-3);
     opacity: 0.4;
 }

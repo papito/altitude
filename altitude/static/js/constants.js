@@ -126,6 +126,8 @@ export const Const = {
         inAlbumOrLocation: "data-in-album-or-location",
         // The Sequence a group header's Curate opens Curation on
         sequenceId: "data-app-sequence-id",
+        // The Sequence the Detail panel's Curation link opens Curation on, over Asset detail
+        curateSequence: "data-app-curate-sequence",
         // The Sequence a row of Curation's Sequence rail stands for (htmx/curation_queue); not `data-app-sequence-id`,
         // which finds a group header's Curate
         railSequenceId: "data-rail-sequence-id",

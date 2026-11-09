@@ -107,22 +107,20 @@
     list-style: none;
 }
 
-.detail-panel .links a {
+/* Every link of the Details rows: those lines and the Folder row's crumbs (.crumbs, core.css), each a search */
+.detail-panel .links a,
+.detail-panel .crumbs a {
     color: var(--theme-primary-text);
     text-decoration: none;
 }
 
-.detail-panel .links a:hover {
+.detail-panel .links a:hover,
+.detail-panel .crumbs a:hover {
     text-decoration: underline;
 }
 
 .detail-panel .links .category {
     color: var(--theme-neutral-3);
-}
-
-/* The folder's path wears the results title's crumbs (.crumbs, core.css); the folder itself keeps the text color */
-.detail-panel .crumbs .leaf {
-    color: var(--theme-neutral-4);
 }
 
 /* The keys of Asset detail, a legend under the panel's scrolling content so that it stays in view: two lines of key caps and
@@ -159,14 +157,16 @@
     font-size: var(--font-size-xs);
 }
 
-/* A selected row's corrections (htmx/detail_panel_people), under the name: Change and Remove, or in their place the Change
-   combobox. Shown by the row's own state, so no script toggles them; the trash renders none */
+/* A selected row's actions (htmx/detail_panel_people), under the row at the panel's full width: Search, Change and Remove,
+   or in their place the Change combobox. Shown by the row's own state, so no script toggles them; the trash renders
+   Search alone. An inline-size container, so the buttons below answer to the room the panel gives them */
 .detail-panel .people .face-actions {
     display: none;
-    padding: var(--space-2) var(--space-3) var(--space-3) calc(var(--space-3) + var(--detail-cover-size) + var(--space-4));
+    container-type: inline-size;
+    padding: var(--space-2) 0 var(--space-3);
 }
 
-.detail-panel .people li:has(> .face-row[aria-pressed="true"]) > .face-actions {
+.detail-panel .people .face-row[aria-pressed="true"] + .face-actions {
     display: block;
 }
 
@@ -174,6 +174,21 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-3);
+}
+
+/* Search and Change on the left, the destructive Remove apart from them on the right */
+.detail-panel .people .face-buttons .warning {
+    margin-inline-start: auto;
+}
+
+/* Too narrow for the three on one line: each takes the panel's whole width, stacked, rather than Remove wrapping alone. A
+   container query takes no custom property, so the width is written here: what the three need on one line, at the longer of
+   Remove's two labels */
+@container (width < 17.6rem) {
+    .detail-panel .people .face-buttons > * {
+        flex-basis: 100%;
+        text-align: center;
+    }
 }
 
 /* The combobox (js/alpine/components/face-combobox.js): the input at the panel's size, with the X beside it that returns

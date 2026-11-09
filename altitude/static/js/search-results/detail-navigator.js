@@ -414,6 +414,7 @@ export function createSearchDetailCoordinator({ context, detailPanel }) {
     }
 
     return {
+        currentCellEl,
         handleShowNext,
         handleShowPrevious,
         showMedia,

@@ -236,7 +236,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
         folderPath = folderPath,
         albums = app.service.album.getAlbumsOfAsset(assetId),
         locations = app.service.location.getLocationsOfAsset(assetId),
-        sequenceFrames = asset.sequenceId.map(app.service.sequence.memberCount)
+        curationSetSize = app.service.curation.setSizeOf(asset)
       )
     }
 

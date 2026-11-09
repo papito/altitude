@@ -6,6 +6,7 @@ import { refreshFolderCounts } from "./common/folder-tree.js"
 import { createAssetActions } from "./assets/asset-actions.js"
 import { bindAppDragDrop } from "./dragdrop/index.js"
 import { hydrateAppFragments } from "./fragments/index.js"
+import { openCurationInLocation } from "./listeners/curation.js"
 import { handlePeopleEscapeKeyPressed } from "./listeners/people.js"
 import { registerAppEventListeners } from "./listeners/index.js"
 import { createDetailFullscreen } from "./search-results/detail-fullscreen.js"
@@ -74,6 +75,10 @@ export class FrontendApp {
         this.hydrateFragments(document)
 
         return this
+    }
+
+    openCurationInLocation() {
+        openCurationInLocation(this)
     }
 
     handleEscapeKeyPressed() {

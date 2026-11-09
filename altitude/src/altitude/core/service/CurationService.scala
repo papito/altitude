@@ -47,6 +47,16 @@ class CurationService(val app: Altitude):
    * reads a window, the first `MAX_SEQUENCE_FRAMES` in capture order, and says how many it holds back: a set that holds part of a
    * Sequence, as a selection can, whose Picks stay in it and which stays in the queue ([[resolve]] decides by all its frames).
    */
+  /**
+   * How many frames Curation would compare for the asset's Sequence, for the Detail panel's link to it: the Sequence's whole live
+   * size, past the window a set reads. None for an asset in no Sequence, one in the trash, which Curation does not show, and a
+   * Sequence with too few frames left to compare.
+   */
+  def setSizeOf(asset: Asset): Option[Int] =
+    txManager.asReadOnly {
+      asset.sequenceId.filterNot(_ => asset.isRecycled).map(dao.countSequenceFrames).filter(_ >= C.Curation.MIN_FRAMES)
+    }
+
   def sequenceSet(sequenceId: String): Option[CurationSet] =
     txManager.asReadOnly {
       val window = dao.getSequenceFrames(sequenceId, C.Curation.MAX_SEQUENCE_FRAMES)

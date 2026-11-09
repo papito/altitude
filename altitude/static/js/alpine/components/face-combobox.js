@@ -7,7 +7,7 @@
  * the input throughout. The listbox is a manual popover in the top layer, so the panel's scrolling never
  * clips it, placed by CSS anchor positioning under the input (the anchor named per Face in `init`).
  *
- * The component root is a row's `.face-actions`, holding Change and Remove (`changing` false) or the
+ * The component root is a row's `.face-actions`, holding Search, Change and Remove (`changing` false) or the
  * combobox in their place (`changing` true): Change calls `open()`, which loads the options once per
  * opening from the assignable route for the Face (`assignablePeopleUrl`, the one place the URL is
  * built), parses the fragment's options and filters them on the client as the user types, the first
@@ -26,7 +26,7 @@
  * buttons; the panel dispatches `face-combobox-close` on every row as the selection changes.
  *
  * Escape with the listbox open closes the listbox alone: `global.js` calls `closeOpenFaceCombobox`
- * before it would close Asset detail. The browser reports the popover's state through `toggle`, which
+ * before it would close Asset detail, and the next Escape clears the selected row (`clearSelectedFaceRow`). The browser reports the popover's state through `toggle`, which
  * `expanded` follows. `m` and `p` are left to the input, as every text field's keys are.
  */
 import { Const } from "../../constants.js"
@@ -86,6 +86,26 @@ export function closeOpenFaceCombobox() {
     return true
 }
 
+/**
+ * Clears the selected People row, which closes its actions, and returns whether a row was selected.
+ * Escape's next job in Asset detail (`global.js`), ahead of closing the dialog. Focus goes to the row
+ * first, since the control that held it may be going. The row's own click clears the selection, as
+ * clicking the selected row does; `global.js` calls this only while Asset detail is the active host,
+ * since a closed host keeps its last fragment.
+ */
+export function clearSelectedFaceRow() {
+    const rowEl = document.querySelector(
+        `[${Const.attributes.faceRow}][aria-pressed="true"]`,
+    )
+    if (!rowEl) {
+        return false
+    }
+
+    rowEl.focus({ preventScroll: true })
+    rowEl.click()
+    return true
+}
+
 /** A name as the server compares names: trimmed, in NFC, lowercased (`PersonService.nameKey`) */
 function nameKey(text) {
     return text.trim().normalize("NFC").toLowerCase()
@@ -98,7 +118,7 @@ export function faceCombobox() {
     return {
         CREATE_KEY,
 
-        // The combobox shows in place of Change and Remove
+        // The combobox shows in place of Search, Change and Remove
         changing: false,
         // The listbox popover is open (the browser's state, followed through `toggle`)
         expanded: false,
@@ -397,7 +417,7 @@ export function faceCombobox() {
             )
         },
 
-        /** The row's original state: Change and Remove, no listbox, nothing typed; a load in flight is dropped */
+        /** The row's original state: Search, Change and Remove, no listbox, nothing typed; a load in flight is dropped */
         reset() {
             loadToken++
             this.hideListbox()

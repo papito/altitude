@@ -241,7 +241,7 @@ import altitude.core.models.Person
      * The panel answers 200 with the People section holding Alice's and Mia's rows, Mia's marked Hidden, and not the bad match's;
      * the Details with the file name, the stored dimensions, the Date Taken with its source, the folder crumbs, the album and the
      * Location each a link to its search opening in a new tab, the MIME type, the extractor's File Type and the camera rows, with
-     * no Sequence row for a sorted asset, no Image quality row for a measured one and no Metadata section. Nothing marks the section read-only, and each row
+     * no Curation row for a sorted asset, no Image quality row for a measured one and no Metadata section. Nothing marks the section read-only, and each row
      * renders its corrections: Change, Remove with its two labels, and the Change combobox's input and listbox.
      *
      * Edge cases:
@@ -308,7 +308,7 @@ import altitude.core.models.Person
         html should include("f/2.8")
         html should include(s"<dt>MIME Type</dt><dd>${image.assetType.mime}</dd>")
         html should include("<dt>File Type</dt><dd>PNG</dd>")
-        (html should not).include("<dt>Sequence</dt>")
+        (html should not).include("<dt>Curation</dt>")
         (html should not).include("<dt>Image quality</dt>")
 
         (html should not).include("<h3>Metadata</h3>")
@@ -429,16 +429,23 @@ import altitude.core.models.Person
     }
   }
 
-  test("The Detail panel counts the frames of a triaged image's Sequence") {
+  test("A triaged image's panel links to the Curation set of its Sequence") {
 
     /**
      * Setup:
      *
-     * A logged-in user's repository with two triaged images stamped into one Sequence.
+     * A logged-in user's repository with three triaged images stamped into one Sequence, of which one and then a second go to the
+     * trash.
      *
      * Assertions:
      *
-     * Either image's panel has a Sequence row of 2 frames and, being in triage, no Folder row.
+     * With all three out of the trash, a frame's panel has a Curation row linking to Curation on that Sequence in the Triage view, carrying the Sequence for a plain click,
+     * reading "set of 3", right under the File row, no Sequence row and, being in triage, no Folder row.
+     *
+     * Edge cases:
+     *
+     * A frame in the trash is not counted, and its own panel has no Curation row, since Curation would not show it. With one frame
+     * left out of the trash there is nothing to curate and no row.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -448,12 +455,28 @@ import altitude.core.models.Person
       host =>
         val first = testContext.persistAsset(isTriaged = true)
         val second = testContext.persistAsset(isTriaged = true)
-        testContext.setAssetSequence(List(first, second), java.util.UUID.randomUUID.toString)
+        val third = testContext.persistAsset(isTriaged = true)
+        val sequenceId = java.util.UUID.randomUUID.toString
+        testContext.setAssetSequence(List(first, second, third), sequenceId)
+        val curationRow = "<dt>Curation</dt>"
 
         val html = detailPanel(host, repoId, first.persistedId).text()
 
-        html should include("<dt>Sequence</dt><dd>2 frames</dd>")
+        html should include(curationRow)
+        html should include(s"""<a href="/r/$repoId?view=triage&amp;curate=$sequenceId" target="_blank" data-app-curate-sequence="$sequenceId">set of 3</a>""")
+        (html.indexOf("<dt>File</dt>") < html.indexOf(curationRow)) shouldBe true
+        (html.indexOf(curationRow) < html.indexOf("<dt>Date Taken</dt>")) shouldBe true
+        (html should not).include("<dt>Sequence</dt>")
         (html should not).include("<dt>Folder</dt>")
+
+        testApp.service.library.recycleAssets(Set(third.persistedId))
+
+        detailPanel(host, repoId, first.persistedId).text() should include(">set of 2</a>")
+        (detailPanel(host, repoId, third.persistedId).text() should not).include(curationRow)
+
+        testApp.service.library.recycleAssets(Set(second.persistedId))
+
+        (detailPanel(host, repoId, first.persistedId).text() should not).include(curationRow)
     }
   }
 
