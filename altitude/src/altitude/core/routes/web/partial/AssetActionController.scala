@@ -36,10 +36,10 @@ class AssetActionController(using logger: Logger) extends BaseController:
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   /**
-   * The Detail panel's two sections, People and Details, for the asset, read in one snapshot
-   * (`AssetService.detailOf`): its Faces with their people (bad matches left out, Hidden marked), the folder path (nothing for
-   * the root or for triage), its albums and Locations, and the frames of its Sequence. An asset in the trash gets the same panel
-   * with its People section read-only; an unknown asset, or another repository's, is a 404.
+   * The Detail panel's two sections, People and Details, for the asset, read in one snapshot (`AssetService.detailOf`): its Faces
+   * with their people (bad matches left out, Hidden marked), the folder path (nothing for the root or for triage), its albums and
+   * Locations, and the frames of its Sequence. An asset in the trash gets the same panel with its People section read-only; an
+   * unknown asset, or another repository's, is a 404.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/detail-panel/:assetId")

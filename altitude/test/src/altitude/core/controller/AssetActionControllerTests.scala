@@ -241,8 +241,9 @@ import altitude.core.models.Person
      * The panel answers 200 with the People section holding Alice's and Mia's rows, Mia's marked Hidden, and not the bad match's;
      * the Details with the file name, the stored dimensions, the Date Taken with its source, the folder crumbs, the album and the
      * Location each a link to its search opening in a new tab, the MIME type, the extractor's File Type and the camera rows, with
-     * no Curation row for a sorted asset, no Image quality row for a measured one and no Metadata section. Nothing marks the section read-only, and each row
-     * renders its corrections: Change, Remove with its two labels, and the Change combobox's input and listbox.
+     * no Curation row for a sorted asset, no Image quality row for a measured one and no Metadata section. Nothing marks the
+     * section read-only, and each row renders its corrections: Change, Remove with its two labels, and the Change combobox's
+     * input and listbox.
      *
      * Edge cases:
      *
@@ -439,13 +440,14 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * With all three out of the trash, a frame's panel has a Curation row linking to Curation on that Sequence in the Triage view, carrying the Sequence for a plain click,
-     * reading "set of 3", right under the File row, no Sequence row and, being in triage, no Folder row.
+     * With all three out of the trash, a frame's panel has a Curation row linking to Curation on that Sequence in the Triage
+     * view, carrying the Sequence for a plain click, reading "set of 3", right under the File row, no Sequence row and, being in
+     * triage, no Folder row.
      *
      * Edge cases:
      *
-     * A frame in the trash is not counted, and its own panel has no Curation row, since Curation would not show it. With one frame
-     * left out of the trash there is nothing to curate and no row.
+     * A frame in the trash is not counted, and its own panel has no Curation row, since Curation would not show it. With one
+     * frame left out of the trash there is nothing to curate and no row.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -463,7 +465,8 @@ import altitude.core.models.Person
         val html = detailPanel(host, repoId, first.persistedId).text()
 
         html should include(curationRow)
-        html should include(s"""<a href="/r/$repoId?view=triage&amp;curate=$sequenceId" target="_blank" data-app-curate-sequence="$sequenceId">set of 3</a>""")
+        html should include(
+          s"""<a href="/r/$repoId?view=triage&amp;curate=$sequenceId" target="_blank" data-app-curate-sequence="$sequenceId">set of 3</a>""")
         (html.indexOf("<dt>File</dt>") < html.indexOf(curationRow)) shouldBe true
         (html.indexOf(curationRow) < html.indexOf("<dt>Date Taken</dt>")) shouldBe true
         (html should not).include("<dt>Sequence</dt>")

@@ -209,8 +209,8 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
   // The rows a library operation may change, locked for the caller's transaction, so each is a write: see `AssetDao`
 
   /**
-   * Whether the request's repository holds the asset, in the trash or not: `queryAll` adds the repository in the DAO, while `getById`
-   * would find any repository's and `query` leaves out the trash
+   * Whether the request's repository holds the asset, in the trash or not: `queryAll` adds the repository in the DAO, while
+   * `getById` would find any repository's and `query` leaves out the trash
    */
   def isInRepository(assetId: String): Boolean =
     queryAll(new Query().add(FieldConst.ID -> assetId)).records.nonEmpty
