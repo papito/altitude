@@ -42,8 +42,9 @@ export function createAssetActions({
     const selectedAssets = () => Alpine.store(Const.state.selectedAssets)
 
     // Every successful mutation refreshes the nav counts, the folder tree counts, the album and
-    // Location counts (recycling drops an asset from its albums and Locations), and the number of
-    // Sequences to curate
+    // Location counts (recycling drops an asset from its albums and Locations), the number of
+    // Sequences to curate, and each person's number on the People tab (`peopleChanged`, which
+    // nothing hears while the tab is not mounted)
     function refreshCounts() {
         reloadNav()
         reloadFolderCounts()

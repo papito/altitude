@@ -446,8 +446,8 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
 
     /**
      * The asset the viewed Person left leaves the grid, and the walk goes on from the cells around
-     * it; the results title's count is read again, or the results go back to the whole repository
-     * when the Person was deleted. A detail opened from a map pin has no cell, so only the title.
+     * it; the results title is read again, as its Hide and Discard links depend on the count, or
+     * the results go back to the whole repository when the Person was deleted. A detail opened from a map pin has no cell, so only the title.
      */
     function flushLeaving() {
         if (!leaving) {

@@ -28,7 +28,11 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.people()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-  /** The list of the people in the People buckets named, comma-separated, by `buckets`; a name that is no bucket is a 400 */
+  /**
+   * The list of the people in the People buckets named, comma-separated, by `buckets`, each with the number the tab shows; a name
+   * that is no bucket is a 400. Only `triaged=true` shows triaged items, the repository view's rule (`SearchRequestParser`), and a
+   * value that is no boolean is a 400.
+   */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/list")
   def listPeople(repoId: String, buckets: String = Const.PeopleBucket.MATCHED, triaged: Option[Boolean] = None)(using
@@ -61,8 +65,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     }
 
   /**
-   * A person's results title on its own, for the count to be refreshed after a Face correction; an unknown person, or another
-   * repository's, is a 404
+   * A person's results title on its own, read again after a Face correction because the title's Hide and Discard links depend on
+   * the count; an unknown person, or another repository's, is a 404
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/p/:personId/title")

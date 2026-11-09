@@ -273,8 +273,9 @@ Batch ops escalate a single-asset drag to a batch when the asset is among the se
 `assetMoved`/`assetTrashed` handlers in `js/listeners/assets.js` re-dispatch
 `batchAssetsMoved`/`batchAssetsRecycled`. Person merge/name/cover-face events and the discard
 follow-up live in `js/listeners/people.js`: a merge, a hide, a show, a discard or a Face correction in the Detail panel
-announces `peopleChanged`, which the
-People tab answers by reloading each pane with its own buckets (see **People tab**), while a rename and a cover-face
+announces `peopleChanged`, as does every asset mutation that goes through `refreshCounts()` in `js/assets/asset-actions.js`
+(a move, a recycle, a purge, a restore, a Curation change), since a person's number follows their assets. The
+People tab, its only listener, answers by reloading each pane with its own buckets (see **People tab**) and reads no detail, while a rename and a cover-face
 change patch every cell of the person, found by `data-person-id` under `#people`; a purge of the recycle bin announces
 `trashPurged`, which refreshes the counts. `confirmPersonMerge`'s listener sends the event's whole detail as the values of
 the Merge people modal's request, so a `keepDirection: true` reaches `showMergePeopleModal` as a query parameter: with it
@@ -766,12 +767,17 @@ View" with a faint `small.legend` after the label, "(for quick drag-and-drop)", 
 **People buckets** (the glossary in `CONTEXT.md`: Matched person, Unmatched person, Hidden person), three disjoint sets,
 and a pane lists the union of the buckets switched on, Matched alone on a first visit; with none on it shows one `.empty`
 line and no grid. The server renders no switch state, as with View settings: the component asks
-`GET /htmx/people/r/:repoId/list?buckets=matched,hidden` (comma-separated bucket names; a name that is no bucket is a 400)
-through `htmx.ajax` into the pane's `.list`, on init, when a switch flips and when a person changes (the host's
+`GET /htmx/people/r/:repoId/list?buckets=matched,hidden` (comma-separated bucket names; a name that is no bucket is a 400),
+with `triaged=true` added only when the `searchParams` store's `triaged` is exactly `"true"`, read on every load (the store's
+null would go out as `triaged=null`, a 400),
+through `htmx.ajax` into the pane's `.list`, on init, when a switch flips, when a person changes and when "Show triaged
+items" flips, through a `$watch` on the store's `triaged` set up in `init()` (the host's
 `hx-sync="replace"` aborts a load of the pane still in flight, so the latest bucket set lands), and the response is
 `htmx/people_list`: the `.grid` of `.cell.drag-drop.dropzone` cells, each with `data-person-id` and no id, since a person
 may be in both panes, a hidden person's with an `fa-eye-slash` `.hidden-badge` in the image's corner and an `aria-label`
-("…, hidden") on its name link, an Unmatched person told apart by its orange "Unknown N" name. The remembered state is
+("…, hidden") on its name link, an Unmatched person told apart by its orange "Unknown N" name. A cell's number, in the name link and a hidden person's
+`aria-label`, is the `ListedPerson`'s `visibleCount`, what opening the person from the repository view finds, and a person
+with nothing to find with triaged items hidden is left off (**People** in `docs/faces.md`). The remembered state is
 `localStorage` `Const.localStore.peopleView`, `{ split, buckets: { main: [...], duplicate?: [...] }, paneSizes: { stacked,
 sideBySide } }`, written on every flip and drag and read once in `init()`, which falls back to the first visit's when it
 is missing or unreadable, keeps only the bucket names the tab knows, reads a pane's buckets remembered under the older
@@ -779,7 +785,7 @@ names `top` and `bottom` as its own, and takes an axis's sizes only as two perce
 for `Const.events.peopleChanged` on `document.body` from `init()` to `destroy()` (the events are dispatched on the body,
 an ancestor of the shell, which a listener on the shell cannot see whatever their bubbling) and reloads each displayed
 pane with its own buckets; a merge, a
-hide, a show and a discard announce it (**Event flow**). Lookups inside the component start from `this.$root`, the shell
+hide, a show, a discard, a Face correction and an asset mutation through `refreshCounts()` announce it (**Event flow**). Lookups inside the component start from `this.$root`, the shell
 (in a `@click` handler `$el` is the button). **Split view** renders the Duplicate pane under `<template x-if="split">` and
 divides the two pane elements, found from `this.$root`, with a Split.js instance (`minSize` 120) along the axis the
 **Dock side** calls for (`effectiveSide()` of `js/common/explorer-dock.js`): stacked, `direction: "vertical"`, under a
@@ -1047,7 +1053,7 @@ exported for tooling.
 **Results title** — The results fragment opens with the scope of the results, when it has one, as one block
 every scope renders the same way: `includes/results_title.scala.html` (styled by `static/css/includes/results_title.css`)
 wraps `includes/results_title_inner`, which lays out the kind's Font Awesome icon (`fa-user`, `fa-folder`, `fa-images`,
-`fa-map-marker-alt`, `fa-search`), the title the caller renders and the way back, then a subtitle. The results total stays in
+`fa-map-marker-alt`, `fa-search`), the title the caller renders and the way back, then a subtitle when the scope has one. The results total stays in
 the toolbar. The title is `--font-size-display`, `--font-weight-semibold`, `--theme-primary-text`, and
 truncates with an ellipsis; the block has no fill of its own, only a hairline below in `--panel-border-color`, and is
 padded `--space-8` by `--space-6` (it paints the pane's background, `--theme-neutral-2` under the pane's tint, so the grid
@@ -1058,8 +1064,10 @@ does not show through it while it sticks). The scopes:
   `data-app-success-event="PEOPLE_CHANGED_EVENT"` (the person id as the detail) as the Discard link declares
   `PERSON_MARKED_AS_BAD_MATCH_EVENT`, so `js/listeners/htmx-requests.js` announces a successful one and the People tab
   moves the person between its panes. The cover face (`.cover.drag-drop`, a `--person-avatar-size` circle
-  that opens the Choose cover face modal) comes before the text, the Hide / Show / Discard link (`.actions`) after it, and
-  the subtitle is the face count. The title is `#personName`, the inline name editor's host: `htmx/view_person_name`
+  that opens the Choose cover face modal) comes before the text and the Hide / Show / Discard link (`.actions`) after it.
+  Which link shows depends on the person's whole count (`num_of_faces`), which is why the Detail panel reads the block's
+  inside again after a Face correction (`GET /htmx/people/r/:repoId/p/:personId/title`). A person has no subtitle: the
+  toolbar's Total says how many results there are. The title is `#personName`, the inline name editor's host: `htmx/view_person_name`
   (the name, whose click swaps in `htmx/edit_person_name` at the title's size, `field-sizing: content`, its form swapping
   `outerHTML settle:0` and its error row the one part of the title that wraps) with its pencil,
   shown by `static/css/htmx/person.css` only while the title is hovered or the name has focus
@@ -1385,8 +1393,8 @@ correction at a time per Face. While viewing a Person (`searchParams.personId`),
 a correction stays in Asset detail and is noted as leaving (`noteViewedPerson`; a later correction that gives them a Face
 back keeps it, unless they were deleted): on stepping away, once the step has picked its target (`showAsset` for another
 asset), or on closing (an `Alpine.effect` over the `modal` store), its cells leave the grid through
-`assetActions.removeAssetsFromGrid`, so the walk continues from the cells around them, and the results title's count is
-read again (`GET /htmx/people/r/:repoId/p/:personId/title` into `#person`), or, when the viewed Person was deleted, the
+`assetActions.removeAssetsFromGrid`, so the walk continues from the cells around them, and the results title is
+read again, as its Hide and Discard links depend on the count (`GET /htmx/people/r/:repoId/p/:personId/title` into `#person`), or, when the viewed Person was deleted, the
 results go back to the whole repository (`runSearch` with an empty `personId`, as the title's × does). A detail opened from
 no cell (a map pin) has no cell to remove and still refreshes the title; a Search text result stays until the next search.
 The style guide's Panels & layout section holds a specimen of the actions under a selected row and of the combobox with
@@ -2289,7 +2297,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the general modal host |
 | `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
 | `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, dialog open) |
-| `static/js/alpine/components/people-tab.js` | Alpine component of the People tab: the remembered buckets of the Main and Duplicate panes, Split view and the panes' sizes on each axis (`Const.localStore.peopleView`), the pane loads through `htmx.ajax`, the Split.js instance along the Dock side's axis and its remake on `dockSideChanged`, the reload on `peopleChanged` |
+| `static/js/alpine/components/people-tab.js` | Alpine component of the People tab: the remembered buckets of the Main and Duplicate panes, Split view and the panes' sizes on each axis (`Const.localStore.peopleView`), the pane loads through `htmx.ajax`, the Split.js instance along the Dock side's axis and its remake on `dockSideChanged`, the reload on `peopleChanged` and when the `searchParams` store's `triaged` changes, which each load reads |
 | `views/htmx/people.scala.html`, `people_list.scala.html` | The People tab's shell (the panes and their bucket switches, no list) and one pane's list for the buckets asked for; styled by `static/css/htmx/people.css` |
 | `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read; under each row, for a live asset, Change and Remove and the Change combobox's markup, its listbox rendering the Suggested group and then the list from one option block; a correction's response, its root carrying the result message and any deleted Person) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
 | `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu; its grid and the highlights' look are `static/css/htmx/view_image_detail_modal.css` |
@@ -2379,7 +2387,8 @@ all of those: a chosen sort is kept from one place to the next, and with no sort
 default applies (Relevance with text, newest import without). The triage filter (`triaged`), off by default so that the repository view holds the sorted assets alone,
 survives a folder, person, album, Location or `q`, but it is the repository view's: the View
 settings dialog's "Show triaged items" switch (see **Inline dialogs**) is shown in that view alone, and a
-change of view clears it. The combinations the server refuses
+change of view clears it. The People tab reads it too, on every load of a pane, and reloads its panes when it changes, so each
+Person's number follows the switch (see **People tab**). The combinations the server refuses
 are settled by the store itself (`withoutRefusedCombinations`, on seeding from the URL and after every
 change): `q` with the trash view becomes the repository view, `sort=relevance`
 (`Const.search.sortRelevance`) without `q` drops the sort, so Relevance is the one sort that ends with
