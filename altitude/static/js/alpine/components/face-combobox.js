@@ -7,7 +7,7 @@
  * the input throughout. The listbox is a manual popover in the top layer, so the panel's scrolling never
  * clips it, placed by CSS anchor positioning under the input (the anchor named per Face in `init`).
  *
- * The component root is a row's `.face-actions`, holding Change and Remove (`changing` false) or the
+ * The component root is a row's `.face-actions`, holding Search, Change and Remove (`changing` false) or the
  * combobox in their place (`changing` true): Change calls `open()`, which loads the options once per
  * opening from the assignable route for the Face (`assignablePeopleUrl`, the one place the URL is
  * built), parses the fragment's options and filters them on the client as the user types, the first
@@ -98,7 +98,7 @@ export function faceCombobox() {
     return {
         CREATE_KEY,
 
-        // The combobox shows in place of Change and Remove
+        // The combobox shows in place of Search, Change and Remove
         changing: false,
         // The listbox popover is open (the browser's state, followed through `toggle`)
         expanded: false,
@@ -397,7 +397,7 @@ export function faceCombobox() {
             )
         },
 
-        /** The row's original state: Change and Remove, no listbox, nothing typed; a load in flight is dropped */
+        /** The row's original state: Search, Change and Remove, no listbox, nothing typed; a load in flight is dropped */
         reset() {
             loadToken++
             this.hideListbox()

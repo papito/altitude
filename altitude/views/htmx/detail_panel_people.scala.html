@@ -1,4 +1,5 @@
 @import altitude.core.Const
+@import altitude.core.RequestContext
 @import altitude.core.util.Util
 @import altitude.core.models.Asset
 @import altitude.core.models.Face
@@ -11,15 +12,16 @@
    carries what the Face highlights and the corrections read: the Face, its Person and their name, the box in the
    asset's pixels (x, y, width, height), the Frame time for a Face in a Video, and whether the Person is Hidden. The
    row's button (`data-app-face-row`) selects the Face, which js/search-results/detail-panel.js marks with `aria-pressed`
-   and shows as a Face highlight. Under a selected row (detail_panel.css shows it by the button's `aria-pressed`) sit its
-   corrections: Change, which turns the actions into the combobox of the people the Face can be given to
+   and shows as a Face highlight. Under a selected row (detail_panel.css shows it by the button's `aria-pressed`) sit Search,
+   the link to the Person's results in a new tab, which adds the triaged assets for an image in triage so that it is among them,
+   and the corrections: Change, which turns the actions into the combobox of the people the Face can be given to
    (`x-data="faceCombobox"`, js/alpine/components/face-combobox.js: an input with role="combobox", an X back to the
    buttons, and the `role="listbox"` popover its options render into, anchored to the input), and Remove, whose label
    moves through two clicks, the second one removing (the one after the first click is on the button). The section is
    swapped in whole by a correction's response (PUT /htmx/asset/r/:repoId/face/:faceId/person, DELETE
    /htmx/asset/r/:repoId/face/:faceId), whose root then carries the result message for the snackbar and, for a Person
    the correction deleted, their ID and the line the snackbar adds. For an asset in the trash the root is marked
-   read-only: no correction is rendered, and the server refuses them. The listbox opens with the Suggested group, the
+   read-only: Search alone is rendered, and the server refuses the corrections. The listbox opens with the Suggested group, the
    people nearest the Face (the component's `suggested`, rendered while nothing is typed, under a heading the group is
    labelled by), then the list (`matches`); both render the same option. *@
 
@@ -33,6 +35,11 @@
         <span class="hidden-mark" x-show="option.hidden">Hidden</span>
     </li>
 </template>
+}
+
+@* Search: the Person's results in a new tab, so Asset detail stays open *@
+@searchLink(person: Person) = {
+<a class="action-button small" href="/r/@{RequestContext.getRepository.persistedId}?personId=@{person.persistedId}@if(asset.isTriaged) {&amp;triaged=true}" target="_blank" rel="noopener">Search</a>
 }
 
 <section id="detailPanelPeople"
@@ -61,12 +68,17 @@
                 <span class="name">@{person.name.getOrElse("")}</span>
                 @if(person.isHidden) { <span class="hidden-mark">Hidden</span> }
             </button>
-            @if(!asset.isRecycled) {
+            @if(asset.isRecycled) {
+            <div class="face-actions">
+                <div class="face-buttons">@searchLink(person)</div>
+            </div>
+            } else {
             <div class="face-actions"
                  x-data="faceCombobox"
                  x-on:face-combobox-close="reset()"
                  x-on:focusout="onFocusOut($event)">
                 <div class="face-buttons" x-show="!changing">
+                    @searchLink(person)
                     <button type="button" class="action-button small" data-app-face-change x-on:click="open()">Change</button>
                     <button type="button"
                             class="action-button small warning"

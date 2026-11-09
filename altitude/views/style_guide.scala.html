@@ -243,9 +243,9 @@
              beside values that wrap anywhere; the Folder row wears the shared crumbs, the albums and Locations are links in
              <code>--theme-primary-text</code>. A People row is a button (<code>.face-row</code>) that selects its Face, tinted
              <code>--theme-neutral-4</code> at 0.08 on hover and <code>--theme-primary</code> at 0.2 while selected
-             (<code>aria-pressed</code>). Under the selected row sit its corrections (<code>.face-actions</code>, indented to the
-             name): Change, a small action button, and Remove, the small warning button, whose label reads "Remove (click twice)"
-             and then "Remove (last click)". Change turns the two into the Change combobox (<code>.face-combobox</code>,
+             (<code>aria-pressed</code>). Under the selected row sit Search and its corrections (<code>.face-actions</code>, indented to the
+             name): Search and Change, small action buttons, and apart on the right Remove, the small warning button, whose label reads "Remove (click twice)"
+             and then "Remove (last click)". Change turns the three into the Change combobox (<code>.face-combobox</code>,
              <code>js/alpine/components/face-combobox.js</code>): a field at <code>--font-size-small</code> with
              <code>role="combobox"</code> and a quiet × beside it in <code>--theme-neutral-3</code>, and under it the listbox
              (<code>.face-listbox</code>), a popover wearing the floating surface and as wide as the field, capped at
@@ -269,6 +269,7 @@
                     <button type="button" class="face-row" aria-pressed="true"><span class="sg-cover"></span><span class="name">Alice</span></button>
                     <div class="face-actions">
                       <div class="face-buttons">
+                        <a class="action-button small" href="#">Search</a>
                         <button type="button" class="action-button small">Change</button>
                         <button type="button" class="action-button small warning">Remove (click twice)</button>
                       </div>

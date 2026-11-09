@@ -176,6 +176,11 @@
     gap: var(--space-3);
 }
 
+/* Search and Change on the left, the destructive Remove apart from them on the right */
+.detail-panel .people .face-buttons .warning {
+    margin-inline-start: auto;
+}
+
 /* The combobox (js/alpine/components/face-combobox.js): the input at the panel's size, with the X beside it that returns
    the row to its buttons */
 .detail-panel .people .face-combobox {

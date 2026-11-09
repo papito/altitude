@@ -1334,10 +1334,12 @@ takes the highlight off while the row stays selected. A highlight's click also o
 scrolls the row into view. The style guide's Panels & layout section holds a specimen of a highlight with its badge, a selected and a
 Hidden one.
 
-The **Face corrections** (`docs/faces.md` **Corrections**) act on the selected Face: under the selected row sit Change and
-Remove (`.face-actions`, shown by the row's `aria-pressed` in `detail_panel.css`, so no script toggles them; rendered for a
-live asset only, the section of an asset in the trash carrying `data-app-read-only` and offering nothing, which the server
-refuses too). `js/search-results/face-corrections.js` owns the two clicks and the requests: Remove's first click arms the
+The **Face corrections** (`docs/faces.md` **Corrections**) act on the selected Face: under the selected row sit Search, Change and
+Remove (`.face-actions`, shown by the row's `aria-pressed` in `detail_panel.css`, so no script toggles them), Remove apart on the
+right. Search is a link to the Person's results (`/r/:repoId?personId=…`, with `triaged=true` for an image in triage, so that it
+is among them) in a new tab, so Asset detail stays open, like the Details' links. Change and Remove are rendered for a
+live asset only: the section of an asset in the trash carries `data-app-read-only` and offers Search alone, and the server
+refuses the corrections too. `js/search-results/face-corrections.js` owns the two clicks and the requests: Remove's first click arms the
 button and shows the label it carries ("Remove (last click)", `data-app-face-remove-label-last`), the second click on the
 same Face sends `DELETE /htmx/asset/r/:repoId/face/:faceId`, and a change of the selection disarms it; Change is the
 **Change combobox**, `x-data="faceCombobox"` on the row's `.face-actions` (`js/alpine/components/face-combobox.js`,
