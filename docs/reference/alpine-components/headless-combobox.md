@@ -55,4 +55,11 @@ A text input that filters a list of options as you type, with single or multiple
 
 ## Notes for Altitude
 
-The nav search box posts to HTMX; a combobox would only apply if the app grows client-side suggestions (people names, folders).
+The nav search box posts to HTMX. The one combobox is the Change combobox of Asset detail's People rows
+(`static/js/alpine/components/face-combobox.js`, views/AGENTS.md **Detail panel**), hand-built with core Alpine since
+`@alpinejs/ui` is not vendored: the input carries `role="combobox"`, `aria-autocomplete="list"`, `aria-expanded`,
+`aria-controls` and `aria-activedescendant`; the options (`role="option"`, the active one `aria-selected`) live in a
+`role="listbox"` that is a manual popover anchored under the input by CSS, in the top layer so a scrolling panel never
+clips it, with `mousedown` prevented so focus stays in the input; the options load once per opening from the server's
+fragment and filter on the client; a query no option matches offers a Create row; Escape closes the listbox alone
+(`global.js`), as it does here.

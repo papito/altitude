@@ -235,7 +235,8 @@ asset's People section (`htmx/detail_panel_people`: one row per Face with its Pe
 marked, by `x1` for an image and by Frame time for a Video, `PersonService.getAssetFacesForDetail`), its root carrying
 the result message (`Const.Msg.FaceCorrection`) and, when a Person was deleted, their ID and the line that says so; a
 refused correction is a plain-text 400 (the body or the target), 404 (gone or moved) or 409 (in the trash), which the
-client answers by reloading the section. `PeopleActionController` serves the Change combobox's options,
+client answers by reloading the section. The controls, the Change combobox and what the client does with an answer are
+under **Detail panel** in `altitude/views/AGENTS.md`. `PeopleActionController` serves the Change combobox's options,
 `GET /htmx/people/r/:repoId/assignable` (`getAssignable`: the live people who are not a bad match, named first, then by
 `name_for_sort`, Hidden among them and marked; `htmx/assignable_people`), and a Person's results title on its own,
 `GET /htmx/people/r/:repoId/p/:personId/title` (`htmx/person_inner`), for the count to be refreshed after a correction.

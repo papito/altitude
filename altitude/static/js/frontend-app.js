@@ -29,7 +29,10 @@ export class FrontendApp {
             reloadAlbumCounts: this.reloadAlbumCounts.bind(this),
             reloadLocationCounts: this.reloadLocationCounts.bind(this),
         })
-        this.detailPanel = createDetailPanel({ context })
+        this.detailPanel = createDetailPanel({
+            context,
+            assetActions: this.assetActions,
+        })
         this.searchDetailCoordinator = createSearchDetailCoordinator({
             context,
             detailPanel: this.detailPanel,

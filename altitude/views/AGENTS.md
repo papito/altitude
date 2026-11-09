@@ -81,7 +81,7 @@ against the results, and the divider between them, is under **Explorer dock** be
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), Curation's shell opening its host (`curation.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), and the Settings form's save (`settings.js`, the success snackbar); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
-| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state) and the Face highlights' layer it draws (`face-highlights.js`), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
+| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
@@ -94,7 +94,7 @@ against the results, and the divider between them, is under **Explorer dock** be
 | `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's and the Detail panel's docks are made from), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads) and `curation.js` (Curation's state, on its shell); `index.js` registers them |
+| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell) and `face-combobox.js` (the Change combobox of a People row in the Detail panel); `index.js` registers them |
 
 ## Alpine.js Stores (initialized in `js/stores/app-stores.js` and `js/stores/html-common.js`)
 
@@ -166,6 +166,10 @@ Const.attributes.detailDockSide // "data-app-detail-dock-side"  (a pick of the D
 Const.attributes.detailPanelToggle // "data-app-detail-panel-toggle"  (the Detail panel's toggle in asset detail's toolbar)
 Const.attributes.faceHighlightsToggle // "data-app-face-highlights-toggle"  (the Face highlights' toggle beside it)
 Const.attributes.faceRow           // "data-app-face-row"  (the button of a People row that selects its Face)
+Const.attributes.faceChange        // "data-app-face-change"  (a selected row's Change, which opens the combobox)
+Const.attributes.faceRemove        // "data-app-face-remove"  (a selected row's Remove, with its second label in `data-app-face-remove-label-last`)
+Const.attributes.readOnly          // "data-app-read-only"  (the People section of an asset in the trash: no correction)
+Const.attributes.resultMessage     // "data-app-result-message"  (a correction's result on the section it answers with; a deleted Person's ID and line in `data-app-deleted-person-id` and `-message`)
 Const.attributes.faceId            // "data-face-id"  (a People row, a Face highlight and its badge)
 Const.attributes.personName        // "data-person-name"  (a People row's Person, with `data-person-hidden` when Hidden)
 Const.attributes.frameTimeMs       // "data-frame-time-ms"  (a People row of a Face in a Video)
@@ -265,7 +269,8 @@ Two-layer event bus, both on `document.body`:
 Batch ops escalate a single-asset drag to a batch when the asset is among the selected ones: the
 `assetMoved`/`assetTrashed` handlers in `js/listeners/assets.js` re-dispatch
 `batchAssetsMoved`/`batchAssetsRecycled`. Person merge/name/cover-face events and the discard
-follow-up live in `js/listeners/people.js`: a merge, a hide, a show or a discard announces `peopleChanged`, which the
+follow-up live in `js/listeners/people.js`: a merge, a hide, a show, a discard or a Face correction in the Detail panel
+announces `peopleChanged`, which the
 People tab answers by reloading each pane with its own buckets (see **People tab**), while a rename and a cover-face
 change patch every cell of the person, found by `data-person-id` under `#people`; a purge of the recycle bin announces
 `trashPurged`, which refreshes the counts. `confirmPersonMerge`'s listener sends the event's whole detail as the values of
@@ -366,7 +371,8 @@ cancel delayed activation when a trap is released or removed, and count controls
 roots, the video player's sliders, as inside the trap). Escape (`global.js`) closes the
 active dialog and any open context menu and is consumed by them, which also keeps the browser's own
 Escape handling for the popover from running a second time, so a background inline edit
-survives; with neither open it closes the map view's crowded-pin panel, and with none of those it is
+survives; the open listbox of a People row's Change combobox in the Detail panel closes alone, ahead of the dialog (see
+**Detail panel**); with neither open it closes the map view's crowded-pin panel, and with none of those it is
 broadcast for such an edit to cancel. An open select picker's Escape is left to the picker, which closes itself and
 not the dialog holding it. General dialogs and Curation ignore backdrop clicks, asset detail closes on them. The general
 modal is centered, 100px from the top, `--modal-content-width` wide (the Location map editor's dialog declares a wider
@@ -1279,6 +1285,51 @@ takes the highlight off while the row stays selected. A highlight's click also o
 scrolls the row into view. The style guide's Panels & layout section holds a specimen of a highlight with its badge, a selected and a
 Hidden one.
 
+The **Face corrections** (`docs/faces.md` **Corrections**) act on the selected Face: under the selected row sit Change and
+Remove (`.face-actions`, shown by the row's `aria-pressed` in `detail_panel.css`, so no script toggles them; rendered for a
+live asset only, the section of an asset in the trash carrying `data-app-read-only` and offering nothing, which the server
+refuses too). `js/search-results/face-corrections.js` owns the two clicks and the requests: Remove's first click arms the
+button and shows the label it carries ("Remove (last click)", `data-app-face-remove-label-last`), the second click on the
+same Face sends `DELETE /htmx/asset/r/:repoId/face/:faceId`, and a change of the selection disarms it; Change is the
+**Change combobox**, `x-data="faceCombobox"` on the row's `.face-actions` (`js/alpine/components/face-combobox.js`,
+hand-built with core Alpine on the ARIA combobox pattern of `docs/reference/alpine-components/headless-combobox.md`): an
+input with `role="combobox"` (`aria-expanded`, `aria-controls`, `aria-activedescendant`) that takes the buttons' place, an X
+beside it, and a `role="listbox"` manual popover (`.face-listbox`, in the top layer so the panel's scrolling never clips it)
+anchored under the input by CSS anchor positioning with an anchor name per Face, as wide as the input, flipped above when
+there is no room below, capped at `--face-listbox-max-height` and scrolling. Opening loads the options once per opening
+from `GET /htmx/people/r/:repoId/assignable` (`assignablePeopleUrl`, the one place the URL is built, so a Suggested group
+of the nearest people can pass the Face later; a slot before the list in the template is its place), parses the fragment's
+`role="option"` rows (`parseAssignablePeople`) and filters them on the client as the user types, the first
+`MAX_SHOWN_OPTIONS` (50) matches rendered with lazy covers, the Face's own Person left out, Hidden marked. A name no Person
+has, within the server's name length rules (`Const.people.nameLength`), is offered as the Create row ("Create 'Alice'");
+an existing name in any case or Unicode form picks that Person instead. Down and Up move the active option, wrapping, and
+reopen a closed listbox; Enter picks the active one, which before the arrows move it is the Person of the exact name, else
+the first match, else the Create row, and nothing while the input is empty; the pointer over an option makes it active;
+focus leaving the combobox closes the listbox and leaves the input. A pick is announced as `Const.events.facePersonPicked`
+(`faceId` with `personId` or `name`), which the corrections module answers with
+`PUT /htmx/asset/r/:repoId/face/:faceId/person`; the X announces `Const.events.faceChangeCancelled`, and the panel clears
+the selection and returns focus to the row. Escape with the listbox open closes it alone: `global.js` calls
+`closeOpenFaceCombobox` before `closeModal`, so a second Escape closes Asset detail. `m` and `p` in the input are the
+field's, as in every text field.
+
+A correction answers the People section (`htmx/detail_panel_people`, 200), which `detail-panel.js` (`afterEdit`) swaps in
+whole for the shown one: the selection clears, the rows and the Face highlights are drawn again from the new rows (with
+`p` off nothing shows, with it on the remaining Faces), the result message from the root's `data-app-result-message` is a
+success snackbar, with the line of a Person the correction deleted (`data-app-deleted-person-message`) after it,
+`peopleChanged` reloads the People tab at once, and focus goes to the first row. A 400 (a reserved name) is the server's
+message in the error snackbar and nothing changes; a 404 or 409 (the Face gone or moved meanwhile, the asset recycled)
+means the section is stale: the message is shown and the panel loads the asset's details again (`reloadSection`). One
+correction at a time per Face. While viewing a Person (`searchParams.personId`), an asset they have no Face left on after
+a correction stays in Asset detail and is noted as leaving (`noteViewedPerson`; a later correction that gives them a Face
+back keeps it, unless they were deleted): on stepping away, once the step has picked its target (`showAsset` for another
+asset), or on closing (an `Alpine.effect` over the `modal` store), its cells leave the grid through
+`assetActions.removeAssetsFromGrid`, so the walk continues from the cells around them, and the results title's count is
+read again (`GET /htmx/people/r/:repoId/p/:personId/title` into `#person`), or, when the viewed Person was deleted, the
+results go back to the whole repository (`runSearch` with an empty `personId`, as the title's × does). A detail opened from
+no cell (a map pin) has no cell to remove and still refreshes the title; a Search text result stays until the next search.
+The style guide's Panels & layout section holds a specimen of the actions under a selected row and of the combobox with
+its listbox.
+
 **Curation** — The modal where the user keeps the best frames of a Curation set and recycles the rest. What sorts a set and
 what its outcome writes are under **Sequences and Image quality** in `altitude/AGENTS.md`, and the terms are the glossary's. It
 has no page or URL of its own and adds no nav entry, so the nav keeps marking the view it opened from, and a reload shows the grid.
@@ -2028,7 +2079,8 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   design conventions can have one too: Curation's notice, chip and Bundle row (`htmx/curation_set.css`) and the Sequence rail's
   rows (`htmx/curation_queue.css`), a done one and a current one side by side in `.sg-curation-queue`, are in Badges & states,
   where `.sg-curation-bundle` gives the row the rail's width, and the Detail panel's sections (`htmx/detail_panel.css`: a People
-  row, selected and not, Details rows with the crumbs and a Metadata group), the toolbar toggles and the Face highlights
+  row, selected and not, Change and Remove under a selected row, the Change combobox with its listbox, Details rows with the
+  crumbs and a Metadata group), the toolbar toggles and the Face highlights
   (`htmx/view_image_detail_modal.css`: a highlight and its badge over a stand-in for a photo, `.sg-face-highlights`) are in Panels &
   layout, in `.sg-detail-panel`. Specimens
   use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements
@@ -2177,14 +2229,16 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, dialog open) |
 | `static/js/alpine/components/people-tab.js` | Alpine component of the People tab: the remembered buckets of the Main and Duplicate panes, Split view and the panes' sizes on each axis (`Const.localStore.peopleView`), the pane loads through `htmx.ajax`, the Split.js instance along the Dock side's axis and its remake on `dockSideChanged`, the reload on `peopleChanged` |
 | `views/htmx/people.scala.html`, `people_list.scala.html` | The People tab's shell (the panes and their bucket switches, no list) and one pane's list for the buckets asked for; styled by `static/css/htmx/people.css` |
-| `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read; a correction's response, its root carrying the result message and any deleted Person) and the Change combobox's options; the server side of the Face corrections (`docs/faces.md`, **Corrections**), whose controls and combobox nothing renders yet |
+| `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read; under each row, for a live asset, Change and Remove and the Change combobox's markup; a correction's response, its root carrying the result message and any deleted Person) and the Change combobox's options, which the combobox parses (`docs/faces.md`, **Corrections**) |
 | `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu; its grid and the highlights' look are `static/css/htmx/view_image_detail_modal.css` |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
 | `static/js/search-results/search-input.js` | `bindSearchInput`: the nav's Search input (`#searchForm`), submitting and clearing `q` and following the store |
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal (the box fitted from the shown element's size, the Detail panel told of each asset and size shown), and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
-| `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (`selectFace`, `selectedFace`: a row's or a highlight's click, a Video's seek to the Frame time), the toolbar toggles and the remembered view (`Const.localStore.assetDetailView`) |
+| `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (`selectFace`, `selectedFace`: a row's or a highlight's click, a Video's seek to the Frame time), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing) |
+| `static/js/search-results/face-corrections.js` | `createFaceCorrections`: Remove's two clicks and their reset, the Change pick's request, and what each answer means (the section to swap in, a message, a stale section to reload); `parsePeopleSection` |
+| `static/js/alpine/components/face-combobox.js` | the `faceCombobox` Alpine component of a People row's Change: the options loaded once per opening (`assignablePeopleUrl`, `parseAssignablePeople`), filtered as typed, the Create row, the keys, the anchored listbox popover, the pick and the X announced as events; `closeOpenFaceCombobox` for Escape |
 | `static/js/search-results/face-highlights.js` | `createFaceHighlights`: draws the Face highlights into `#faceHighlights` (`show`: a toggle button per Face placed by fractions of the shown size, its badge anchored to it; `clear`), and `FRAME_TIME_TOLERANCE_MS`, how far from its Frame time a Video's Face counts as current |
 | `static/js/common/dock.js` | `createDock`: a docked panel's side, share, divider (drag and keys), Dock side menu upkeep and remembered state, configured by the explorer's and the Detail panel's docks; `isVerticalAxis` |
 | `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid, and its Curate button (`removeCurateButtons`) |

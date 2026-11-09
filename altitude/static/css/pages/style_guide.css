@@ -205,6 +205,15 @@
   background: var(--theme-secondary);
 }
 
+/* The combobox's listbox specimen is no popover: it sits in the flow under its field, at the field's width */
+.sg-face-listbox {
+  margin-top: var(--space-2);
+}
+
+.sg-face-listbox .sg-cover {
+  background: var(--theme-secondary);
+}
+
 /* The Face highlights' specimen: a stand-in for a photo, the layer's box, that the highlights are placed in */
 .sg-face-highlights {
   position: relative;

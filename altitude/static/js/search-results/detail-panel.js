@@ -30,21 +30,36 @@
  * player is paused within `FRAME_TIME_TOLERANCE_MS` of its Frame time, so the layer is drawn again
  * on `pause`, `play` and `seeked`, and holds nothing during playback.
  *
+ * The corrections, Change and Remove under the selected row, are `face-corrections.js`'s (the two
+ * clicks, the requests) and the combobox's (`alpine/components/face-combobox.js`); this module takes
+ * their outcome: the People section a correction answers with replaces the one shown, the selection
+ * clears, the Face highlights are drawn again from the new rows, the result is a success snackbar
+ * (with the line about a Person the correction deleted) and `peopleChanged` reloads the People tab.
+ * A stale section (a 404 or 409) is reloaded with the server's message shown. When the viewed Person
+ * (`searchParams.personId`) has no Face left on the asset, Asset detail stays on it and the grid
+ * waits: on stepping away, once the step has picked its target, or on closing, the asset's cells
+ * leave the grid and the results title's count is read again, or, when the viewed Person was
+ * deleted, the results go back to the whole repository.
+ *
  * The side and share are written on the fragment (`data-detail-dock-side`, `--detail-panel-share`)
  * and whether the panel is open as `data-app-detail-panel-open`; `view_image_detail_modal.css`
  * lays the grid out from them. The picks are `[data-app-detail-dock-side]`, the panel's own, since
  * the explorer's dock listens for its picks on the same body.
  */
+import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import { ensureChoiceMenus } from "../common/choice-menus.js"
 import { createDock } from "../common/dock.js"
-import { showErrorSnackBar } from "../common/snackbar.js"
+import { getActiveModalHost, ModalHost } from "../common/modal.js"
+import { showErrorSnackBar, showSuccessSnackBar } from "../common/snackbar.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
+import { createFaceCorrections } from "./face-corrections.js"
 import {
     createFaceHighlights,
     FRAME_TIME_TOLERANCE_MS,
     LAYER_ID,
 } from "./face-highlights.js"
+import { runSearch } from "./search.js"
 
 export const DEFAULT_WIDTH_SHARE = 30
 export const DEFAULT_HEIGHT_SHARE = 35
@@ -55,7 +70,7 @@ const CONTENT_ID = "detailPanelContent"
 const PEOPLE_ID = "detailPanelPeople"
 const DIVIDER_ID = "detailPanelDivider"
 
-export function createDetailPanel({ context }) {
+export function createDetailPanel({ context, assetActions }) {
     // The remembered settings but the dock's, which the dock keeps
     const state = rememberedState()
 
@@ -67,8 +82,18 @@ export function createDetailPanel({ context }) {
     let loadedAssetId = null
     // The selected Face, or null; the one state the corrections act on, never remembered
     let selectedFaceId = null
+    // An asset the viewed Person has no Face left on after a correction: its cells leave the grid
+    // on stepping away or closing, with whether the Person was deleted
+    let leaving = null
 
     const highlights = createFaceHighlights()
+    const corrections = createFaceCorrections({
+        context,
+        sectionEl,
+        afterEdit,
+        reloadSection,
+        cancelChange,
+    })
 
     const dock = createDock({
         storage: { key: Const.localStore.assetDetailView, field: "dock" },
@@ -111,6 +136,16 @@ export function createDetailPanel({ context }) {
      */
     function start() {
         dock.start()
+        corrections.bind()
+
+        // Closing Asset detail is when an asset the viewed Person left leaves the grid. The flush
+        // runs in a microtask, outside the effect's tracking, so the effect follows the active host
+        // alone and not the stores the removal writes
+        Alpine.effect(() => {
+            if (getActiveModalHost() !== ModalHost.assetDetail) {
+                queueMicrotask(flushLeaving)
+            }
+        })
 
         document.addEventListener("click", (event) => {
             const target = event.target
@@ -172,9 +207,15 @@ export function createDetailPanel({ context }) {
      * read as this one's, and the fragment loads if it is wanted.
      */
     function showAsset({ assetId, isCurrent }) {
+        // The step has picked its target by now, so the cells of the asset it left may go
+        if (leaving && leaving.assetId !== assetId) {
+            flushLeaving()
+        }
+
         subject = { assetId, isCurrent }
         shownSize = null
         selectedFaceId = null
+        corrections.selectionChanged()
         highlights.clear()
         if (loadedAssetId !== assetId) {
             loadedAssetId = null
@@ -213,6 +254,7 @@ export function createDetailPanel({ context }) {
     function toggleHighlights() {
         state.highlightsOn = !state.highlightsOn
         selectedFaceId = null
+        corrections.selectionChanged()
         remember()
         syncToggleButtons()
         paintRows()
@@ -235,6 +277,7 @@ export function createDetailPanel({ context }) {
      */
     function selectFace(faceId) {
         selectedFaceId = selectedFaceId === faceId ? null : faceId
+        corrections.selectionChanged()
         paintRows()
 
         const face = selectedFaceId && faces().find((f) => f.faceId === faceId)
@@ -306,6 +349,120 @@ export function createDetailPanel({ context }) {
                 `Error loading the Detail panel: ${getHttpErrorMessage(error)}`,
             )
             showErrorSnackBar("Could not load the asset's details")
+        }
+    }
+
+    /** The People section in the panel, or null */
+    function sectionEl() {
+        return contentEl()?.querySelector(`#${PEOPLE_ID}`) ?? null
+    }
+
+    /**
+     * A correction answered: the new People section takes the shown one's place, the selection
+     * clears and the Face highlights follow the new rows, the result is reported, the People tab
+     * reloads, and the asset is noted as leaving the grid when the viewed Person has no Face left
+     * on it. An answer for an asset no longer shown changes nothing on screen but is still reported.
+     */
+    function afterEdit({
+        sectionEl: newSectionEl,
+        message,
+        deletedPersonId,
+        deletedPersonMessage,
+    }) {
+        showSuccessSnackBar(
+            deletedPersonMessage
+                ? `${message}. ${deletedPersonMessage}`
+                : message,
+        )
+        document.body.dispatchEvent(
+            new CustomEvent(Const.events.peopleChanged, {
+                detail: { personId: deletedPersonId },
+            }),
+        )
+
+        const shownSectionEl = sectionEl()
+        if (
+            !shownSectionEl ||
+            newSectionEl.dataset.appAssetId !== subject?.assetId
+        ) {
+            return
+        }
+
+        shownSectionEl.replaceWith(newSectionEl)
+        selectedFaceId = null
+        corrections.selectionChanged()
+        paintRows()
+        drawHighlights()
+        noteViewedPerson(newSectionEl, deletedPersonId)
+        newSectionEl
+            .querySelector(`[${Const.attributes.faceRow}]`)
+            ?.focus({ preventScroll: true })
+    }
+
+    /** A correction found the section stale: the server's message is shown and the panel loads the asset's details again */
+    function reloadSection(message) {
+        showErrorSnackBar(message)
+        selectedFaceId = null
+        corrections.selectionChanged()
+        loadedAssetId = null
+        loadIfWanted()
+    }
+
+    /** The combobox's X: the row's original state, with nothing selected, and focus back on the row */
+    function cancelChange(faceId) {
+        if (selectedFaceId === faceId) {
+            selectFace(faceId)
+        }
+        rowOf(faceId)
+            ?.querySelector(`[${Const.attributes.faceRow}]`)
+            ?.focus({ preventScroll: true })
+    }
+
+    /**
+     * Whether the asset still belongs in the grid, the viewed Person's results: when they have no
+     * Face left on it, or were deleted by the correction, its cells leave on stepping away or
+     * closing; a later correction that gives them a Face back keeps it, unless they were deleted.
+     */
+    function noteViewedPerson(newSectionEl, deletedPersonId) {
+        const personId = Alpine.store(Const.state.searchParams).personId
+        if (!personId) {
+            leaving = null
+            return
+        }
+
+        const deleted = leaving?.deleted || deletedPersonId === personId
+        const hasFace = newSectionEl.querySelector(
+            `[${Const.attributes.faceId}][${Const.attributes.personId}="${CSS.escape(personId)}"]`,
+        )
+
+        leaving =
+            deleted || !hasFace
+                ? { assetId: subject.assetId, personId, deleted }
+                : null
+    }
+
+    /**
+     * The asset the viewed Person left leaves the grid, and the walk goes on from the cells around
+     * it; the results title's count is read again, or the results go back to the whole repository
+     * when the Person was deleted. A detail opened from a map pin has no cell, so only the title.
+     */
+    function flushLeaving() {
+        if (!leaving) {
+            return
+        }
+
+        const { assetId, personId, deleted } = leaving
+        leaving = null
+        assetActions.removeAssetsFromGrid([assetId])
+
+        if (deleted) {
+            runSearch({ params: { personId: "" } })
+        } else if (document.getElementById("person")) {
+            htmx.ajax(
+                "GET",
+                `/htmx/people/r/${context.getRepoId()}/p/${personId}/title`,
+                { target: "#person", swap: "innerHTML" },
+            )
         }
     }
 

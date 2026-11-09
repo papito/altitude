@@ -240,7 +240,8 @@ import altitude.core.models.Person
      * The panel answers 200 with the People section holding Alice's and Mia's rows, Mia's marked Hidden, and not the bad match's;
      * the Details with the file name, the stored dimensions, the Date Taken with its source, the folder crumbs, the album and the
      * Location each a link to its search opening in a new tab and the camera rows, with no Sequence row for a sorted asset; and
-     * each metadata directory as a closed group named with its field count. Nothing marks the section read-only.
+     * each metadata directory as a closed group named with its field count. Nothing marks the section read-only, and each row
+     * renders its corrections: Change, Remove with its two labels, and the Change combobox's input and listbox.
      *
      * Edge cases:
      *
@@ -287,6 +288,10 @@ import altitude.core.models.Person
         html should include("""data-person-hidden="true"""")
         html should include("Hidden")
         (html should not).include("data-app-read-only")
+        html should include("data-app-face-change")
+        html should include("""data-app-face-remove-label-last="Remove (last click)">Remove (click twice)</button>""")
+        html should include("""role="combobox"""")
+        html should include("""role="listbox"""")
 
         html should include(image.fileName)
         html should include(s"""<span data-app-detail-dimensions>${image.width} × ${image.height} px</span>""")
@@ -318,7 +323,7 @@ import altitude.core.models.Person
      * Assertions:
      *
      * The panel answers 200 with the People section marked read-only and its empty line, and no Folder row for the root; a random
-     * asset ID answers 404.
+     * asset ID answers 404. A recycled image with a Face renders its row without Change or Remove.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -338,6 +343,15 @@ import altitude.core.models.Person
         (html should not).include("<dt>Folder</dt>")
 
         detailPanel(host, repoId, java.util.UUID.randomUUID.toString).statusCode shouldBe 404
+
+        val withFace = testContext.persistAsset()
+        val alices = face(testApp.service.person.addPerson(Person(name = Some("Alice"))), withFace)
+        testApp.service.library.recycleAssets(Set(withFace.persistedId))
+        val readOnly = detailPanel(host, repoId, withFace.persistedId).text()
+        readOnly should include(rowOf(alices.persistedId))
+        readOnly should include("""data-app-read-only="true"""")
+        (readOnly should not).include("data-app-face-change")
+        (readOnly should not).include("data-app-face-remove")
     }
   }
 

@@ -68,3 +68,6 @@ libraries below are not vendored.
   see its Altitude notes.
 - The View settings dialog's switches (`static/js/alpine/components/view-settings.js`, `.switch` in
   `static/css/core.css`) follow the [Toggle](toggle.md) lesson; see its Altitude notes.
+- The Change combobox of Asset detail's People rows (`static/js/alpine/components/face-combobox.js`) follows the
+  [Combobox](headless-combobox.md) pattern with core Alpine: `@alpinejs/ui` is not vendored, so its roles, keys and
+  `aria-activedescendant` are hand-written over a native popover listbox anchored by CSS; see its Altitude notes.

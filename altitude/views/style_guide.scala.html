@@ -244,15 +244,46 @@
              <code>--theme-primary-text</code>. A Metadata group is a closed <code>&lt;details&gt;</code> whose summary names the
              directory and its field count. A People row is a button (<code>.face-row</code>) that selects its Face, tinted
              <code>--theme-neutral-4</code> at 0.08 on hover and <code>--theme-primary</code> at 0.2 while selected
-             (<code>aria-pressed</code>). The toolbar's toggles (<code>.toolbar-toggle</code>, before a modal's ×) are an icon in
-             <code>--theme-neutral-3</code> that takes <code>--theme-accent</code> while pressed, as the current nav entry does.</p>
+             (<code>aria-pressed</code>). Under the selected row sit its corrections (<code>.face-actions</code>, indented to the
+             name): Change, a small action button, and Remove, the small warning button, whose label reads "Remove (click twice)"
+             and then "Remove (last click)". Change turns the two into the Change combobox (<code>.face-combobox</code>,
+             <code>js/alpine/components/face-combobox.js</code>): a field at <code>--font-size-small</code> with
+             <code>role="combobox"</code> and a quiet × beside it in <code>--theme-neutral-3</code>, and under it the listbox
+             (<code>.face-listbox</code>), a popover wearing the floating surface and as wide as the field, capped at
+             <code>--face-listbox-max-height</code>; its options are the People rows' shape, the active one tinted
+             <code>--theme-neutral-4</code> at 0.08, and the Create row, offered for a name no Person has, is a plus in the
+             cover's place with the label in <code>--theme-primary-text</code>. The toolbar's toggles
+             (<code>.toolbar-toggle</code>, before a modal's ×) are an icon in <code>--theme-neutral-3</code> that takes
+             <code>--theme-accent</code> while pressed, as the current nav entry does.</p>
           <div class="sg-row">
             <div class="sg-detail-panel detail-panel">
               <section class="detail-section">
                 <h3>People</h3>
                 <ul class="people">
-                  <li><button type="button" class="face-row" aria-pressed="true"><span class="sg-cover"></span><span class="name">Alice</span></button></li>
+                  <li>
+                    <button type="button" class="face-row" aria-pressed="true"><span class="sg-cover"></span><span class="name">Alice</span></button>
+                    <div class="face-actions">
+                      <div class="face-buttons">
+                        <button type="button" class="action-button small">Change</button>
+                        <button type="button" class="action-button small warning">Remove (click twice)</button>
+                      </div>
+                    </div>
+                  </li>
                   <li><button type="button" class="face-row" aria-pressed="false"><span class="sg-cover"></span><span class="name">Unknown 4</span><span class="hidden-mark">Hidden</span></button></li>
+                  <li>
+                    <button type="button" class="face-row" aria-pressed="true"><span class="sg-cover"></span><span class="name">Bob</span></button>
+                    <div class="face-actions">
+                      <div class="face-combobox">
+                        <input type="text" role="combobox" aria-label="Person" aria-expanded="true" aria-autocomplete="list" value="Al" readonly>
+                        <button type="button" class="cancel" aria-label="Cancel" title="Cancel">&times;</button>
+                      </div>
+                      <ul class="face-listbox sg-face-listbox" role="listbox" aria-label="People specimen">
+                        <li role="option" aria-selected="true"><span class="sg-cover no-cover"></span><span class="name">Alice</span></li>
+                        <li role="option" aria-selected="false"><span class="sg-cover no-cover"></span><span class="name">Alan</span><span class="hidden-mark">Hidden</span></li>
+                        <li role="option" class="create" aria-selected="false"><i class="fas fa-plus" aria-hidden="true"></i><span class="name">Create 'Al'</span></li>
+                      </ul>
+                    </div>
+                  </li>
                 </ul>
               </section>
               <section class="detail-section">

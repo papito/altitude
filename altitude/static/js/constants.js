@@ -53,8 +53,13 @@ export const Const = {
         personNameEdited: "PERSON_NAME_EDITED_EVENT",
         personMarkedAsBadMatch: "PERSON_MARKED_AS_BAD_MATCH_EVENT",
         personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
-        // A person was merged, hidden, shown or discarded; the People tab reloads its panes
+        // A person was merged, hidden, shown, discarded or corrected on a Face; the People tab reloads its panes
         peopleChanged: "PEOPLE_CHANGED_EVENT",
+        // The Change combobox of a People row picked a Person (`detail.personId`) or a new name (`detail.name`) for
+        // `detail.faceId` (js/alpine/components/face-combobox.js); js/search-results/detail-panel.js sends the correction
+        facePersonPicked: "FACE_PERSON_PICKED_EVENT",
+        // The Change combobox's X: the row of `detail.faceId` goes back to its original state, with nothing selected
+        faceChangeCancelled: "FACE_CHANGE_CANCELLED_EVENT",
         escapeKeyPressed: "ESCAPE_KEY_PRESSED_EVENT",
         showNext: "SHOW_NEXT_EVENT",
         showPrevious: "SHOW_PREVIOUS_EVENT",
@@ -151,8 +156,19 @@ export const Const = {
         // The Detail panel's toggle and the Face highlights' in Asset detail's toolbar (includes/html_common)
         detailPanelToggle: "data-app-detail-panel-toggle",
         faceHighlightsToggle: "data-app-face-highlights-toggle",
-        // The button of a People row that selects its Face (htmx/detail_panel_people)
+        // The button of a People row that selects its Face (htmx/detail_panel_people), and under a selected row its
+        // corrections: Change, which opens the combobox, and Remove, whose second label (the one after the first click)
+        // the button carries
         faceRow: "data-app-face-row",
+        faceChange: "data-app-face-change",
+        faceRemove: "data-app-face-remove",
+        faceRemoveLastLabel: "data-app-face-remove-label-last",
+        // The People section's root (htmx/detail_panel_people): read-only in the trash, and after a correction the result
+        // message for the snackbar and, when a Person was deleted, their ID and the line that says so
+        readOnly: "data-app-read-only",
+        resultMessage: "data-app-result-message",
+        deletedPersonId: "data-app-deleted-person-id",
+        deletedPersonMessage: "data-app-deleted-person-message",
         // The Detail panel's dimensions row, which reads the shown element's size, and a Metadata group's directory
         // name, which the open groups are remembered by (htmx/detail_panel)
         detailDimensions: "data-app-detail-dimensions",
@@ -229,6 +245,12 @@ export const Const = {
     },
 
     people: {
+        // A Person's name is held to these lengths by the server (`Api.Constraints.MIN_NAME_LENGTH`, `MAX_NAME_LENGTH`);
+        // the Change combobox offers to create a name only inside them
+        nameLength: {
+            min: 2,
+            max: 80,
+        },
         // The People bucket names are the server's (`Const.PeopleBucket`), sent as the `buckets` parameter
         buckets: {
             matched: "matched",

@@ -7,7 +7,8 @@
  * neither open, it closes the map view's crowded-pin panel, and with none of those open, Escape is
  * broadcast for such editors to cancel. Consuming it also keeps the browser's own Escape handling
  * for the popover dialog and the menus from running a second time. An open select picker's Escape
- * is left to the picker, which closes itself and nothing else.
+ * is left to the picker, which closes itself and nothing else, and the open listbox of a People row's
+ * Change combobox in the Detail panel closes alone, ahead of the dialog, as a menu does.
  * While asset detail is active and no text is being edited, the arrow keys navigate between assets,
  * except on the video player's timeline and volume slider, which they step, and on the Detail
  * panel's divider, which they move; Space plays or pauses a Video and does nothing on an image,
@@ -16,6 +17,7 @@
  * ignoring a held key and any modifier.
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
+import { closeOpenFaceCombobox } from "./alpine/components/face-combobox.js"
 import { closeModal, getActiveModalHost, ModalHost } from "./common/modal.js"
 import { isTextEditingTarget } from "./common/text-editing.js"
 import { toggleTheme } from "./common/theme.js"
@@ -31,6 +33,13 @@ document.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
         if (isInOpenSelectPicker(event.target)) {
+            return
+        }
+
+        // The Change combobox's listbox closes alone, before `closeModal` could take Asset detail
+        // with it; focus is in its input already
+        if (closeOpenFaceCombobox()) {
+            event.preventDefault()
             return
         }
 
