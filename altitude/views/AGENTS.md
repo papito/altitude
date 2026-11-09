@@ -1063,7 +1063,7 @@ does not show through it while it sticks). The scopes:
   (the name, whose click swaps in `htmx/edit_person_name` at the title's size, `field-sizing: content`, its form swapping
   `outerHTML settle:0` and its error row the one part of the title that wraps) with its pencil,
   shown by `static/css/htmx/person.css` only while the title is hovered or the name has focus
-- a **folder** as the path's breadcrumb (`.crumbs`, a shared primitive of `core.css` the Detail panel's Folder row wears too):
+- a **folder** as the path's breadcrumb (`.crumbs`, a shared primitive of `core.css` the Detail panel's Folder row wears too, in its own link color):
   every ancestor short of the repository root, top-level first, each a search trigger for its folder
   (`data-app-search-folder-id`, dimmed `.crumb`), separated by a dimmed `fa-chevron-right` (`.sep`), and the folder itself as
   the `.leaf` in the title style. The path wraps rather than truncating. The
@@ -1302,7 +1302,7 @@ asset's metadata is in, which loads the fragment, so a failed asset fetch is one
 a button (`.face-row`, `data-app-face-row`) holding the cover then the name, tighter than the explorer's list rows, Hidden marked,
 `aria-pressed` while its Face is selected; read-only in the trash, where no correction is offered),
 Details a `dl.detail-rows` of the file name, the MIME type, the File Type (the extractor's detected name, when it has one), dimensions, duration, size, Date Taken with its source (`CaptureDateSource.label`),
-Date Imported, the Folder as shared `.crumbs`, the albums and the Locations (`Category › Name`) each a link to its search
+Date Imported, the Folder as shared `.crumbs` in the link color, the albums and the Locations (`Category › Name`) each a link to its search
 (`/r/:repoId?folderId=…`, `albumId`, `locationId`) in a new tab, so Asset detail stays open, the GPS position, the camera rows,
 and, right under the file name, the Curation row of a frame with a set to open ("set of 5", `CurationService.setSizeOf`: its Sequence's frames out of the trash, at least `Const.Curation.MIN_FRAMES`, and the frame not in the trash itself), a link to Curation on that Sequence: a plain click opens it over Asset detail, and closing it comes back (see **Curation**); a click with a modifier or a middle click opens it in a new tab. The dimensions row (`data-app-detail-dimensions`) is written from the shown element's size, which the
 coordinator hands over, so a rotated phone photo reads as shown. What is remembered per browser, under `Const.localStore.assetDetailView`
@@ -1335,8 +1335,9 @@ scrolls the row into view. The style guide's Panels & layout section holds a spe
 Hidden one.
 
 The **Face corrections** (`docs/faces.md` **Corrections**) act on the selected Face: under the selected row sit Search, Change and
-Remove (`.face-actions`, shown by the row's `aria-pressed` in `detail_panel.css`, so no script toggles them), Remove apart on the
-right. Search is a link to the Person's results (`/r/:repoId?personId=…`, with `triaged=true` for an image in triage, so that it
+Remove (`.face-actions`, shown by the row's `aria-pressed` in `detail_panel.css`, so no script toggles them) at the panel's full
+width, Search and Change on the left and Remove apart on the right; a panel too narrow for the three on one line (a container query
+on `.face-actions`) stacks them, each as wide as the panel. Search is a link to the Person's results (`/r/:repoId?personId=…`, with `triaged=true` for an image in triage, so that it
 is among them) in a new tab, so Asset detail stays open, like the Details' links. Change and Remove are rendered for a
 live asset only: the section of an asset in the trash carries `data-app-read-only` and offers Search alone, and the server
 refuses the corrections too. `js/search-results/face-corrections.js` owns the two clicks and the requests: Remove's first click arms the

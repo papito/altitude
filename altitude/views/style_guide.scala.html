@@ -240,12 +240,12 @@
              <code>--detail-cover-size</code> and rounded like the People tab's, then the name at the body size, with a Hidden
              person's mark dimmed after it; the rows sit <code>--space-2</code> apart, tighter than the explorer's list rows. The
              Details rows (<code>.detail-rows</code>) are a label column in <code>--theme-neutral-3</code>
-             beside values that wrap anywhere; the Folder row wears the shared crumbs, the albums and Locations are links in
-             <code>--theme-primary-text</code>. A People row is a button (<code>.face-row</code>) that selects its Face, tinted
+             beside values that wrap anywhere; the Folder row wears the shared crumbs, which like the albums and Locations are links in
+             <code>--theme-primary-text</code>, underlined on hover. A People row is a button (<code>.face-row</code>) that selects its Face, tinted
              <code>--theme-neutral-4</code> at 0.08 on hover and <code>--theme-primary</code> at 0.2 while selected
-             (<code>aria-pressed</code>). Under the selected row sit Search and its corrections (<code>.face-actions</code>, indented to the
-             name): Search and Change, small action buttons, and apart on the right Remove, the small warning button, whose label reads "Remove (click twice)"
-             and then "Remove (last click)". Change turns the three into the Change combobox (<code>.face-combobox</code>,
+             (<code>aria-pressed</code>). Under the selected row sit Search and its corrections (<code>.face-actions</code>, at the panel's full
+             width): Search and Change, small action buttons, and apart on the right Remove, the small warning button, whose label reads "Remove (click twice)"
+             and then "Remove (last click)"; a panel too narrow for the three on one line stacks them, each as wide as the panel. Change turns the three into the Change combobox (<code>.face-combobox</code>,
              <code>js/alpine/components/face-combobox.js</code>): a field at <code>--font-size-small</code> with
              <code>role="combobox"</code> and a quiet × beside it in <code>--theme-neutral-3</code>, and under it the listbox
              (<code>.face-listbox</code>), a popover wearing the floating surface and as wide as the field, capped at
@@ -264,8 +264,8 @@
             <div class="sg-detail-panel detail-panel">
               <section class="detail-section">
                 <h3>People</h3>
-                <ul class="people">
-                  <li>
+                <div class="people">
+                  <div>
                     <button type="button" class="face-row" aria-pressed="true"><span class="sg-cover"></span><span class="name">Alice</span></button>
                     <div class="face-actions">
                       <div class="face-buttons">
@@ -274,9 +274,9 @@
                         <button type="button" class="action-button small warning">Remove (click twice)</button>
                       </div>
                     </div>
-                  </li>
-                  <li><button type="button" class="face-row" aria-pressed="false"><span class="sg-cover"></span><span class="name">Unknown 4</span><span class="hidden-mark">Hidden</span></button></li>
-                  <li>
+                  </div>
+                  <div><button type="button" class="face-row" aria-pressed="false"><span class="sg-cover"></span><span class="name">Unknown 4</span><span class="hidden-mark">Hidden</span></button></div>
+                  <div>
                     <button type="button" class="face-row" aria-pressed="true"><span class="sg-cover"></span><span class="name">Bob</span></button>
                     <div class="face-actions">
                       <div class="face-combobox">
@@ -295,15 +295,15 @@
                         <li role="option" class="create" aria-selected="false"><i class="fas fa-plus" aria-hidden="true"></i><span class="name">Create 'Al'</span></li>
                       </ul>
                     </div>
-                  </li>
-                </ul>
+                  </div>
+                </div>
               </section>
               <section class="detail-section">
                 <h3>Details</h3>
                 <dl class="detail-rows">
                   <div class="row"><dt>File</dt><dd>IMG_0042.jpg</dd></div>
                   <div class="row"><dt>Date Taken</dt><dd>Jul 4 2024, 8:09AM <span class="source">from EXIF original</span></dd></div>
-                  <div class="row"><dt>Folder</dt><dd><span class="crumbs"><a href="#" class="crumb">Trips</a><i class="fas fa-chevron-right sep" aria-hidden="true"></i><a href="#" class="crumb leaf">Iceland</a></span></dd></div>
+                  <div class="row"><dt>Folder</dt><dd><span class="crumbs"><a href="#" class="crumb">Trips</a><i class="fas fa-chevron-right sep" aria-hidden="true"></i><a href="#" class="crumb">Iceland</a></span></dd></div>
                   <div class="row"><dt>Locations</dt><dd><ul class="links"><li><a href="#"><span class="category">Europe</span> › Reykjavik</a></li></ul></dd></div>
                 </dl>
               </section>

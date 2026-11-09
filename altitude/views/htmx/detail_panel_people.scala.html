@@ -53,14 +53,14 @@
     @if(faces.isEmpty) {
     <p class="empty">No one in this @if(asset.assetType.mediaType == "video") {video} else {image}</p>
     } else {
-    <ul class="people">
+    <div class="people">
         @for((face, person) <- faces) {
-        <li data-face-id="@{face.persistedId}"
-            data-person-id="@{person.persistedId}"
-            data-person-name="@{person.name.getOrElse("")}"
-            @if(person.isHidden) { data-person-hidden="true" }
-            data-face-box="@{face.x1},@{face.y1},@{face.width},@{face.height}"
-            @for(time <- face.frameTimeMs) { data-frame-time-ms="@time" }>
+        <div data-face-id="@{face.persistedId}"
+             data-person-id="@{person.persistedId}"
+             data-person-name="@{person.name.getOrElse("")}"
+             @if(person.isHidden) { data-person-hidden="true" }
+             data-face-box="@{face.x1},@{face.y1},@{face.width},@{face.height}"
+             @for(time <- face.frameTimeMs) { data-frame-time-ms="@time" }>
             <button type="button" class="face-row" aria-pressed="false" data-app-face-row>
                 @for(cover <- person.coverFaceId) {
                 <img src="@{Util.contentUrl(Const.DataStore.FACE, cover)}" alt="" loading="lazy">
@@ -127,8 +127,8 @@
                 </div>
             </div>
             }
-        </li>
+        </div>
         }
-    </ul>
+    </div>
     }
 </section>
