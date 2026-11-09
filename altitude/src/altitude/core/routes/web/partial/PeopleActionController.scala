@@ -31,12 +31,13 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   /** The list of the people in the People buckets named, comma-separated, by `buckets`; a name that is no bucket is a 400 */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/list")
-  def listPeople(repoId: String, buckets: String = Const.PeopleBucket.MATCHED)(using request: Request): Response[String] =
+  def listPeople(repoId: String, buckets: String = Const.PeopleBucket.MATCHED, triaged: Option[Boolean] = None)(using
+      request: Request): Response[String] =
     val requested: Set[String] = App.altitude.service.person.parseBuckets(buckets)
     val unknown = requested -- Const.PeopleBucket.ALL
     if unknown.nonEmpty then return badRequest(s"Unknown People bucket: ${unknown.mkString(", ")}")
 
-    val people: List[Person] = App.altitude.service.person.getInBuckets(requested)
+    val people = App.altitude.service.person.getListedInBuckets(requested, showTriaged = triaged.contains(true))
     val payload = "<!doctype html>" + htmx.html.people_list(people = people)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 

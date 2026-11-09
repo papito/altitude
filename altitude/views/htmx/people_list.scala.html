@@ -1,8 +1,8 @@
 @import altitude.core.RequestContext
-@import altitude.core.models.Person
+@import altitude.core.models.ListedPerson
 @import altitude.core.Const
 
-@(people: List[Person])
+@(people: List[ListedPerson])
 
 @* The list of one pane of the People tab (htmx/people): the people in the People buckets the pane asked for
    (GET /htmx/people/r/:repoId/list?buckets=...), one `.cell` each, found by `data-person-id` wherever one is looked
@@ -14,7 +14,7 @@
 <p class="empty">No one in the buckets switched on</p>
 } else {
 <div class="grid">
-    @for(person <- people) {
+    @for(ListedPerson(person, visibleCount) <- people) {
     <div class="cell drag-drop dropzone"
          data-person-id="@{person.persistedId}">
         <div class="image">
@@ -34,11 +34,11 @@
                    class="unknown"
                    }
                    @if(person.isHidden) {
-                   aria-label="@{person.name.getOrElse("Unknown")} (@{person.numOfFaces}), hidden"
+                   aria-label="@{person.name.getOrElse("Unknown")} (@{visibleCount}), hidden"
                    }
                    data-app-search="click"
                    data-app-search-person-id="@{person.persistedId}">
-                    @{person.name.getOrElse("")} <span>(@{person.numOfFaces})</span>
+                    @{person.name.getOrElse("")} <span>(@{visibleCount})</span>
                 </a>
             </span>
         </div>
