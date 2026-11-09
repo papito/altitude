@@ -50,6 +50,7 @@ export function createAssetActions({
         reloadAlbumCounts()
         reloadLocationCounts()
         Alpine.store(Const.state.sequencesToCurate).refresh()
+        document.body.dispatchEvent(new CustomEvent(Const.events.peopleChanged))
     }
 
     // An asset can have several cells (a Location grouping shows it under each of its Locations)

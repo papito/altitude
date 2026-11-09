@@ -1,3 +1,4 @@
+import { Alpine } from "../../lib/alpine.esm.min.js"
 import { Const } from "../../constants.js"
 import { context } from "../../context.js"
 import Split from "../../lib/split.es.js"
@@ -78,6 +79,9 @@ export function peopleTab() {
                 onDockSideChanged,
             )
 
+            // Each Person's number follows "Show triaged items"
+            this.$watch("$store.searchParams.triaged", () => this.reloadPanes())
+
             this.loadPane(MAIN)
             if (this.split) {
                 // The Duplicate pane exists once Alpine has rendered the `x-if`
@@ -140,10 +144,17 @@ export function peopleTab() {
                 return
             }
 
+            // Sent only when on: the store's null would go out as `triaged=null`, which the server refuses
+            const showsTriaged =
+                Alpine.store(Const.state.searchParams).triaged === "true"
+
             htmx.ajax("GET", `/htmx/people/r/${context.getRepoId()}/list`, {
                 target: listEl,
                 swap: "innerHTML",
-                values: { buckets: this.bucketsOf(pane).join(",") },
+                values: {
+                    buckets: this.bucketsOf(pane).join(","),
+                    ...(showsTriaged ? { triaged: "true" } : {}),
+                },
             })
         },
 
