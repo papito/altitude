@@ -109,8 +109,8 @@ async function playShownVideo({ videoEl, isCurrent }) {
  *
  * What is remembered is the cell the modal was opened from or stepped to, not the asset: a Location
  * grouping holds an asset in a cell under each of its Locations, and stepping from the cell keeps
- * the walk in the group the user was looking at. A detail opened with no cell (a map pin) has
- * nowhere to step to.
+ * the walk in the group the user was looking at. A detail opened with no cell (a map pin, an
+ * asset's URL) has nowhere to step to.
  *
  * Every media request gets its own token. Only the latest request for the still-active
  * asset-detail open may change the media, box size, title, or loading state; superseded or

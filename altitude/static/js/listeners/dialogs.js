@@ -40,6 +40,7 @@ export function registerDialogListeners(app) {
                 showErrorSnackBar(
                     `Could not open dialog: HTTP ${ctx.response.status}`,
                 )
+                app.detailUrl.openFailed()
             },
         })
 

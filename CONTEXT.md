@@ -192,7 +192,9 @@ _Avoid_: Layout (the results' Grid or Map), Position, Arrangement, Orientation.
 
 **Asset detail**:
 The dialog that shows one asset at full size, stepping to the previous or next
-asset of the results.
+asset of the results. While it is open the URL names the asset and whether its
+Detail panel is open; opened from that URL it shows over the default results,
+with no previous or next.
 _Avoid_: Lightbox, Image detail, Viewer.
 
 **Detail panel**:

@@ -120,7 +120,7 @@
       import { runSearch } from "/static/js/search-results/search.js"
 
       function loadView() {
-          initApp()
+          const app = initApp()
 
           // Set once: the repository cannot change without a full page load
           window.ctx.setRepoId("@{ RequestContext.getRepository.persistedId }")
@@ -166,6 +166,9 @@
            * Perform search on load - the default one, or the one the URL asked for
            */
           runSearch()
+
+          // An asset's URL (/r/:repoId/asset/:assetId) opens Asset detail over those results
+          app.detailUrl.openAssetInLocation()
       }
 
       document.addEventListener("DOMContentLoaded", loadView)

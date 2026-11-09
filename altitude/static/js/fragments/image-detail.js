@@ -12,7 +12,8 @@ import { getModalOpenSource, ModalHost, openModal } from "../common/modal.js"
  *
  * Navigation starts from the cell whose thumbnail requested the detail, when it was one: a grid can
  * hold an asset in several cells (a Location grouping), so the cell itself is remembered, not the
- * asset. A detail opened from elsewhere (a map pin) has no cell, and no previous or next.
+ * asset. A detail opened from elsewhere (a map pin, an asset's URL) has no cell, and no previous
+ * or next.
  */
 export function hydrateImageDetailFragment({
     fragmentEl,

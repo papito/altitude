@@ -45,6 +45,124 @@ import altitude.core.models.AccountType
     }
   }
 
+  test("An asset's page is the main page, with or without the Detail panel in its URL") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository holding an image.
+     *
+     * Assertions:
+     *
+     * The asset's URL answers with the main page: the Asset detail host the client opens the asset in and the nav with Browse
+     * marked, with no parameter and with the Detail panel's.
+     */
+    val repoId = testContext.persistRepository().persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val asset = testContext.persistAsset()
+
+        def page(params: Map[String, String]): String = {
+          val response = requests.get(
+            s"$host/r/$repoId/asset/${asset.persistedId}",
+            params = params,
+            cookies = testContext.cookies,
+            check = false)
+          response.statusCode shouldBe 200
+          response.text()
+        }
+
+        for (params <- Seq(Map.empty[String, String], Map("panel" -> "open"))) {
+          val text = page(params)
+          text should include("""id="imageDetailModalContent"""")
+          text should include("""class="menu repository" aria-current="page"""")
+        }
+    }
+  }
+
+  test("An asset's page opens for an asset in the trash") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository holding a recycled image, which Asset detail opens from the trash view.
+     *
+     * Assertions:
+     *
+     * The asset's URL answers with the main page, so reloading a detail opened from the trash does not lose it.
+     */
+    val repoId = testContext.persistRepository().persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val asset = testContext.persistAsset()
+        testApp.service.library.recycleAssets(Set(asset.persistedId))
+
+        val response = requests.get(s"$host/r/$repoId/asset/${asset.persistedId}", cookies = testContext.cookies, check = false)
+
+        response.statusCode shouldBe 200
+        response.text() should include("""id="imageDetailModalContent"""")
+    }
+  }
+
+  test("An asset's page is not found for an unknown asset or another repository's") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, and a second repository of theirs holding an image.
+     *
+     * Assertions:
+     *
+     * The page asked for through the first repository is a 404 for an ID that names no asset, and for the other repository's
+     * asset too, which it does not name.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val foreign = testContext.persistAsset(repository = Some(otherRepo))
+        testApp.service.repository.switchContextToRepository(repo)
+
+        def status(assetId: String): Int =
+          requests.get(s"$host/r/$repoId/asset/$assetId", cookies = testContext.cookies, check = false).statusCode
+
+        status(java.util.UUID.randomUUID().toString) shouldBe 404
+        status(foreign.persistedId) shouldBe 404
+    }
+  }
+
+  test("An asset's page sends a client that has not logged in to the login page and back") {
+
+    /**
+     * Setup:
+     *
+     * An initialized instance with a user's repository, and a client that has not logged in.
+     *
+     * Assertions:
+     *
+     * The asset's URL redirects to the login page, carrying the whole address to return to, the Detail panel's parameter
+     * included.
+     */
+    val repoId = testContext.persistRepository().persistedId
+
+    withServer(App) {
+      host =>
+        val assetPath = s"/r/$repoId/asset/${java.util.UUID.randomUUID()}?panel=open"
+        val response = requests.get(s"$host$assetPath", maxRedirects = 0, check = false)
+
+        response.statusCode shouldBe 302
+        response.headers("location") shouldBe Seq(s"/login?redirect=${URLEncoder.encode(assetPath, "UTF-8")}")
+    }
+  }
+
   test("The Search input is in the nav of every page, and a nav reload keeps it there") {
 
     /**

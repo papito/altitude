@@ -10,7 +10,9 @@
  * highlights are on or off (`p`, the toolbar's other toggle). All of it is remembered per browser
  * under `Const.localStore.assetDetailView` as `{ panelOpen, highlightsOn, dock: { side?, widthShare,
  * heightShare } }`, the dock's part written by the dock itself. By default the panel is closed and
- * the highlights are off.
+ * the highlights are off. The address bar follows the panel and the asset (`detail-url.js`), and
+ * when an open starts on an asset's URL, that URL says whether the panel is open, for that open
+ * alone: only a toggle is remembered.
  *
  * The fragment loads when the panel is open or the highlights are on: on open, on each step, and
  * when either is switched on with the asset's details not loaded yet. The coordinator
@@ -73,7 +75,7 @@ const CONTENT_ID = "detailPanelContent"
 const PEOPLE_ID = "detailPanelPeople"
 const DIVIDER_ID = "detailPanelDivider"
 
-export function createDetailPanel({ context, assetActions }) {
+export function createDetailPanel({ context, assetActions, detailUrl }) {
     // The remembered settings but the dock's, which the dock keeps
     const state = rememberedState()
 
@@ -184,12 +186,15 @@ export function createDetailPanel({ context, assetActions }) {
 
     /**
      * A new Asset detail fragment arrived: its Dock side menu is built so the dock finds its
-     * trigger, the panel is laid out as remembered and its divider bound, and its player's state
-     * changes redraw the Face highlights. Nothing of the previous fragment is loaded in it.
+     * trigger, the panel is open as the URL says when it names an asset and as remembered when it
+     * does not, the panel is laid out and its divider bound, and its player's state changes redraw
+     * the Face highlights. Nothing of the previous fragment is loaded in it.
      */
     function attach(fragmentEl) {
         ensureChoiceMenus(fragmentEl)
         loadedAssetId = null
+        state.panelOpen =
+            detailUrl.panelOpenInLocation() ?? rememberedState().panelOpen
         applyOpenState()
         dock.layOut()
         dock.bindDivider(fragmentEl.querySelector(`#${DIVIDER_ID}`))
@@ -205,7 +210,8 @@ export function createDetailPanel({ context, assetActions }) {
      * still the latest for the active open. The selection goes, the Face highlights are emptied
      * at once, the panel empties when the asset is another, so the last asset's details are never
      * read as this one's, and the fragment loads if it is wanted, unless `load` is false: the
-     * coordinator's first call of a step, before the asset's own fetch has succeeded.
+     * coordinator's first call of a step, before the asset's own fetch has succeeded. The URL
+     * moves to the asset at that same point, so it never names one that could not be read.
      */
     function showAsset({ assetId, isCurrent, load = true }) {
         // The step has picked its target by now, so the cells of the asset it left may go
@@ -225,6 +231,7 @@ export function createDetailPanel({ context, assetActions }) {
             paintRows()
         }
         if (load) {
+            detailUrl.show({ assetId, panelOpen: state.panelOpen })
             loadIfWanted()
         }
     }
@@ -236,11 +243,17 @@ export function createDetailPanel({ context, assetActions }) {
         drawHighlights()
     }
 
-    /** Opens or closes the panel, remembers it, and loads the shown asset's details when opening on them unread */
+    /** Opens or closes the panel, remembers it, puts it in the URL, and loads the shown asset's details when opening on them unread */
     function toggle() {
         state.panelOpen = !state.panelOpen
-        remember()
+        remember({ panelOpen: state.panelOpen })
         applyOpenState()
+        if (subject) {
+            detailUrl.show({
+                assetId: subject.assetId,
+                panelOpen: state.panelOpen,
+            })
+        }
 
         if (state.panelOpen) {
             // The divider's bounds change with the panel shown
@@ -254,7 +267,7 @@ export function createDetailPanel({ context, assetActions }) {
         state.highlightsOn = !state.highlightsOn
         selectedFaceId = null
         corrections.selectionChanged()
-        remember()
+        remember({ highlightsOn: state.highlightsOn })
         syncToggleButtons()
         paintRows()
         loadIfWanted()
@@ -600,12 +613,12 @@ export function createDetailPanel({ context, assetActions }) {
         }
     }
 
-    /** Writes the settings under the key, leaving the dock's part, which the dock writes, as it is */
-    function remember() {
-        writeStoredFields(Const.localStore.assetDetailView, {
-            panelOpen: state.panelOpen,
-            highlightsOn: state.highlightsOn,
-        })
+    /**
+     * Writes the changed setting under the key, leaving the rest as it is: the dock's part, which
+     * the dock writes, and a remembered panel state that an asset's URL is overriding
+     */
+    function remember(fields) {
+        writeStoredFields(Const.localStore.assetDetailView, fields)
     }
 
     return {
