@@ -6,8 +6,10 @@
  *
  * Opening from the results adds one history entry; stepping and the panel's toggle replace it, so
  * Back closes Asset detail whatever was walked through, and closing any other way goes back over
- * that entry. A page that was loaded on an asset's URL added no entry: closing replaces the URL with
- * the results', and Back leaves the page as it would any other.
+ * that entry. A replacement waits until the asset has stayed for `URL_DEBOUNCE_MS`, so walking
+ * through assets with a held arrow key costs no history calls, which browsers limit. A page that was
+ * loaded on an asset's URL added no entry: closing replaces the URL with the results', and Back
+ * leaves the page as it would any other.
  *
  * While the URL names an asset, the search URL the server pushes back (`HX-Replace-Url`) is held
  * here, not applied, and becomes the URL on closing: the first search of a page loaded on an
@@ -23,6 +25,7 @@ import { closeModal, getActiveModalHost, ModalHost } from "../common/modal.js"
 const ASSET_PATH = /^\/r\/([^/]+)\/asset\/([^/]+)\/?$/
 const PANEL_PARAM = "panel"
 const PANEL_OPEN = "open"
+const URL_DEBOUNCE_MS = 300
 
 /** The repository and asset the browser's URL names, or null on any other URL */
 function assetInLocation() {
@@ -43,6 +46,8 @@ export function createDetailUrl({ context }) {
     // The results' URL, as the server last pushed it while the URL named an asset
     let heldSearchUrl = null
     let wasActive = false
+    // The replacement waiting for the asset to stay; never outlives the entry it was meant for
+    let replaceTimer = null
 
     function start() {
         // Before any response can arrive: the page's first search must not rewrite this URL
@@ -103,7 +108,8 @@ export function createDetailUrl({ context }) {
         const url = `/r/${context.getRepoId()}/asset/${assetId}${query}`
 
         if (following) {
-            replaceUrl(url)
+            clearTimeout(replaceTimer)
+            replaceTimer = setTimeout(() => replaceUrl(url), URL_DEBOUNCE_MS)
             return
         }
 
@@ -113,16 +119,8 @@ export function createDetailUrl({ context }) {
         history.pushState(null, "", url)
     }
 
-    /**
-     * Safari throws on more than 100 replacements in 10 seconds, which a held arrow key can reach.
-     * The URL then lags until the next step, which must not stop the step itself.
-     */
     function replaceUrl(url) {
-        try {
-            history.replaceState(history.state, "", url)
-        } catch (error) {
-            console.debug(`The URL was not updated: ${error.message}`)
-        }
+        history.replaceState(history.state, "", url)
     }
 
     /** Asset detail closed, or could not open: the URL goes back to the results */
@@ -132,6 +130,7 @@ export function createDetailUrl({ context }) {
         }
 
         following = false
+        clearTimeout(replaceTimer)
 
         if (ownsEntry) {
             // Lands in `handleTraversal`, which applies a held URL
@@ -158,6 +157,8 @@ export function createDetailUrl({ context }) {
      * they are loaded for real.
      */
     function handleTraversal() {
+        clearTimeout(replaceTimer)
+
         if (assetInLocation()) {
             if (!isAssetDetailActive()) {
                 following = true

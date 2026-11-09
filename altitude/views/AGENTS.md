@@ -1235,7 +1235,7 @@ it with the main page (a 404 for an asset the repository does not hold, through 
 results and, having no cell, with no previous or next. The panel goes by that URL for an open that starts on one, and by what
 this browser remembers otherwise (`attach`); only a toggle writes the remembered state. The URL follows from the panel, which
 knows the asset and its own state: `showAsset`, once the asset's metadata is in, and `toggle` both call `show`. Opening from the
-results adds one history entry; stepping and the panel's toggle replace it, Back closes Asset detail, closing by any other path
+results adds one history entry; stepping and the panel's toggle replace it once the asset has stayed for `URL_DEBOUNCE_MS` (a held arrow key costs no history calls, and closing or a traversal drops a replacement still waiting), Back closes Asset detail, closing by any other path
 (an `Alpine.effect` on the active host) goes back over the entry, and Forward opens the asset again. A page loaded on an asset's
 URL added no entry: closing replaces the URL with the results', and a Back to an entry an earlier load of the page added loads
 that URL for real, since the results on screen are not its search. A failed open goes back to the results' URL too (`openFailed`).
