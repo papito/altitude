@@ -1,9 +1,11 @@
 package altitude.core.controller
 
+import altitude.test.TestContext
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.App
+import altitude.core.models.Person
 
 @DoNotDiscover class MapControllerTests extends ControllerTestCore {
   test("Map cells and bounds share the grid scope and count plotted points") {
@@ -137,6 +139,57 @@ import altitude.core.App
           response.statusCode shouldBe 400
           response.headers("content-type").head should include("application/json")
           ujson.read(response.text())("error").str should include("triage")
+        }
+    }
+  }
+
+  test("The map follows the subset, and an unknown subset is a JSON 400") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with two triaged assets, each plotted at a point of its own: one in the Location "Beach" and
+     * one with a Face of an unnamed person.
+     *
+     * Assertions:
+     *
+     * In the triage view the bounds and the cells hold both points without a subset, the asset in no Location alone with
+     * `subset=noLocation`, and the asset with the unknown person alone with `subset=unknownPeople`.
+     *
+     * Edge cases:
+     *
+     * A subset that is not one of the two is a JSON 400 on both routes.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val located = testContext.persistAsset(isTriaged = true)
+        testContext.setAssetCoordinates(located.persistedId, 10, 20)
+        val beach = testApp.service.location.addLocation("Beach", 10, 20)
+        testApp.service.location.addAssets(beach.persistedId, Set(located.persistedId))
+        val withUnknown = testContext.persistAsset(isTriaged = true)
+        testContext.setAssetCoordinates(withUnknown.persistedId, 30, 40)
+        testContext.addTestFace(testApp.service.person.addPerson(Person()), withUnknown, TestContext.unitVector(1))
+        def get(endpoint: String, params: Map[String, String]) =
+          requests.get(s"$host/api/map/r/$repoId/$endpoint", params = params, cookies = testContext.cookies, check = false)
+        val triage = Map("view" -> "triage", "viewport" -> "-90,-180,90,180", "zoom" -> "10")
+        def plotted(params: Map[String, String]): Set[String] =
+          ujson.read(get("cells", triage ++ params).text())("cells").arr.map(_("assetId").str).toSet
+        def count(params: Map[String, String]): Double = ujson.read(get("bounds", triage ++ params).text())("count").num
+
+        plotted(Map.empty) shouldBe Set(located.persistedId, withUnknown.persistedId)
+        count(Map.empty) shouldBe 2
+        plotted(Map("subset" -> "noLocation")) shouldBe Set(withUnknown.persistedId)
+        count(Map("subset" -> "noLocation")) shouldBe 1
+        plotted(Map("subset" -> "unknownPeople")) shouldBe Set(withUnknown.persistedId)
+        count(Map("subset" -> "unknownPeople")) shouldBe 1
+
+        for (endpoint <- List("bounds", "cells")) withClue(s"$endpoint: ") {
+          val response = get(endpoint, triage + ("subset" -> "everyone"))
+          response.statusCode shouldBe 400
+          response.headers("content-type").head should include("application/json")
         }
     }
   }

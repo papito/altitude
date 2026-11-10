@@ -1,5 +1,6 @@
 package altitude.core.routes
 
+import altitude.core.Api
 import altitude.core.Const
 import altitude.core.FieldConst
 import altitude.core.util.BoundingBox
@@ -8,6 +9,7 @@ import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSort
 import altitude.core.util.SearchText
+import altitude.core.util.TriageSubset
 
 /**
  * The grid, map cells and map bounds interpret search scope identically; each caller owns its presentation and paging.
@@ -19,6 +21,10 @@ import altitude.core.util.SearchText
  * The repository view holds the sorted assets, whatever the folder, person, album, Location, text or map area, and `triaged=true`
  * adds the triaged ones to them. In the trash `triaged` tells the assets recycled from triage (`true`) from the rest (`false`).
  * The triage view holds nothing but triaged assets, so `triaged=false` with it is refused.
+ *
+ * `subset` narrows any view to a tally of the Triage summary (`TriageSubset`): `unknownPeople`, the assets with a Face of an
+ * Unknown person, or `noLocation`, those no Location points at, whatever their own GPS position. Only Triage offers it, but every
+ * view takes it. Any other value, empty included, is refused.
  */
 object SearchRequestParser:
   case class Scope(
@@ -28,7 +34,8 @@ object SearchRequestParser:
       personIds: Set[String],
       albumIds: Set[String],
       locationIds: Set[String],
-      bbox: Option[BoundingBox]):
+      bbox: Option[BoundingBox],
+      subset: Option[TriageSubset]):
     def query(
         rpp: Int = 0,
         searchSort: List[SearchSort] = Nil,
@@ -42,6 +49,7 @@ object SearchRequestParser:
         albumIds = albumIds,
         locationIds = locationIds,
         bbox = bbox,
+        subset = subset,
         rpp = rpp,
         searchSort = searchSort,
         grouping = grouping,
@@ -56,7 +64,8 @@ object SearchRequestParser:
       albumId: Option[String],
       locationId: Option[String],
       bbox: Option[String],
-      triaged: Option[Boolean] = None): Either[String, Scope] =
+      triaged: Option[Boolean] = None,
+      subset: Option[String] = None): Either[String, Scope] =
     if view == Const.Search.View.TRIAGE && triaged.contains(false) then
       return Left(s"The ${Const.Search.View.TRIAGE} view holds only triaged assets")
 
@@ -78,4 +87,9 @@ object SearchRequestParser:
       try bbox.map(BoundingBox.parse)
       catch case ex: IllegalArgumentException => return Left(s"Invalid bbox: ${ex.getMessage}")
 
-    Right(Scope(params, text, folderId.toSet, personId.toSet, albumId.toSet, locationId.toSet, box))
+    val tally = subset.map(TriageSubset.fromApiValue) match
+      case None => None
+      case Some(None) => return Left(s"Unknown ${Api.Field.Search.SUBSET} value")
+      case Some(found) => found
+
+    Right(Scope(params, text, folderId.toSet, personId.toSet, albumId.toSet, locationId.toSet, box, tally))

@@ -38,6 +38,20 @@
   font-size: var(--font-size-xl);
 }
 
+/* A kind's icon struck through (No Location): Font Awesome 5 Free has no slashed marker, so its own slash glyph (fa-slash,
+   made to be laid over another icon) is centered over the marker */
+.results-title .kind-icon.slashed {
+  position: relative;
+}
+
+.results-title .kind-icon.slashed::after {
+  content: "\f715";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  translate: -50% 0;
+}
+
 /* A long title truncates rather than wrapping; the folder path is the exception (`.crumbs` below) */
 .results-title .name,
 .results-title .query,

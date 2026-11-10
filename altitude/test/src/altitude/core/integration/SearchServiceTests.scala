@@ -216,6 +216,123 @@ import altitude.core.util.*
     results.total shouldBe Some(f.assetsPerPersonCount * f.people.length)
   }
 
+  test("The Unknown people subset matches the assets with a Face of an unnamed, visible, live person, in Triage and Browse") {
+
+    /**
+     * Setup:
+     *
+     * Triaged assets: one with Faces of an unnamed person and of a named one, one with a Face of the named person alone, one with
+     * a Face of an unnamed hidden person, one with a Face of an unnamed person discarded as a bad match, one with a Face of an
+     * unnamed person since merged into the named one, and one with no Face. Two sorted assets, one with a Face of the first
+     * unnamed person and one with a Face of the named person.
+     *
+     * Assertions:
+     *
+     * In the triage view the subset matches the triaged asset with the visible, live unnamed person alone, and in the repository
+     * view the sorted one, by the flat page, the page grouped by Location, the exact count and the capped count alike.
+     *
+     * Edge cases:
+     *
+     * A named person beside the unknown one does not keep the asset out; Faces of named, hidden, discarded or merged-away people
+     * alone, or no Face at all, are no match.
+     */
+    val unknown = testApp.service.person.addPerson(Person())
+    val named = addPerson("Alice")
+    val hidden = testApp.service.person.addPerson(Person())
+    val discarded = testApp.service.person.addPerson(Person())
+    val mergedAway = testApp.service.person.addPerson(Person())
+
+    def triagedWithFacesOf(people: Person*): Asset = {
+      val asset = testContext.persistAsset(isTriaged = true)
+      people.foreach(addFace(_, asset))
+      asset
+    }
+
+    val withUnknown = triagedWithFacesOf(unknown, named)
+    triagedWithFacesOf(named)
+    triagedWithFacesOf(hidden)
+    triagedWithFacesOf(discarded)
+    triagedWithFacesOf(mergedAway)
+    triagedWithFacesOf()
+    val sortedWithUnknown = testContext.persistAsset()
+    addFace(unknown, sortedWithUnknown)
+    addFace(named, testContext.persistAsset())
+
+    testApp.service.person.setVisibility(hidden, isHidden = true)
+    testApp.service.person.markAsBadMatch(discarded)
+    testApp.service.person.merge(named, mergedAway)
+
+    withClue("triage: ")(subsetMatches(triageView, TriageSubset.UnknownPeople) shouldBe Set(withUnknown.persistedId))
+    withClue("browse: ")(subsetMatches(browsingView, TriageSubset.UnknownPeople) shouldBe Set(sortedWithUnknown.persistedId))
+  }
+
+  test("The No Location subset matches the assets no Location points at, whatever their own position, in Triage and Browse") {
+
+    /**
+     * Setup:
+     *
+     * A Location, Beach, holding a triaged asset and a sorted one. A triaged asset with a GPS position of its own and in no
+     * Location, a triaged asset with neither, and a sorted asset in no Location.
+     *
+     * Assertions:
+     *
+     * In the triage view the subset matches the two triaged assets outside every Location, by the flat page, the page grouped by
+     * Location (one trailing No location group), the exact count and the capped count alike; in the repository view it matches
+     * the sorted asset outside the Location. The map plots the positioned asset alone.
+     *
+     * Edge cases:
+     *
+     * A GPS position of its own does not count as a Location.
+     */
+    val beach = testApp.service.location.addLocation("Beach", 1, 2)
+    val triagedInBeach = testContext.persistAsset(isTriaged = true)
+    val sortedInBeach = testContext.persistAsset()
+    testApp.service.location.addAssets(beach.persistedId, Set(triagedInBeach.persistedId, sortedInBeach.persistedId))
+    val positioned = testContext.persistAsset(isTriaged = true)
+    testContext.setAssetCoordinates(positioned.persistedId, latitude = 10, longitude = 20)
+    val nowhere = testContext.persistAsset(isTriaged = true)
+    val sortedNowhere = testContext.persistAsset()
+
+    withClue("triage: ")(
+      subsetMatches(triageView, TriageSubset.NoLocation) shouldBe Set(positioned.persistedId, nowhere.persistedId))
+    withClue("browse: ")(subsetMatches(browsingView, TriageSubset.NoLocation) shouldBe Set(sortedNowhere.persistedId))
+
+    val byLocation = searchGrouped(
+      new SearchQuery(
+        params = triageView,
+        subset = Some(TriageSubset.NoLocation),
+        rpp = PAGE_SIZE,
+        searchSort = byImport,
+        grouping = Some(SearchGrouping(GroupBy.Location))))
+    byLocation.groups.map(_.key) shouldBe List(SearchGroupKey.Location(None, None, None, None))
+
+    val bounds = testApp.service.library.mapBounds(new SearchQuery(params = triageView, subset = Some(TriageSubset.NoLocation)))
+    bounds.map(_.count) shouldBe Some(1)
+  }
+
+  /**
+   * The IDs a subset of the view matches, by the flat page; the page grouped by Location, the exact count and the capped count
+   * must agree with it
+   */
+  private def subsetMatches(view: Map[String, Any], subset: TriageSubset): Set[String] = {
+    val query = new SearchQuery(params = view, subset = Some(subset), rpp = PAGE_SIZE)
+    val ids = search(query).records.map(_.persistedId).toSet
+    val grouped = searchGrouped(
+      new SearchQuery(
+        params = view,
+        subset = Some(subset),
+        rpp = PAGE_SIZE,
+        searchSort = byImport,
+        grouping = Some(SearchGrouping(GroupBy.Location))))
+    withClue("grouped: ")(grouped.assets.map(_.persistedId).toSet shouldBe ids)
+    withClue("count: ")(count(query) shouldBe ids.size)
+    withClue("capped count: ")(testApp.service.library.cappedCount(query) shouldBe ids.size)
+    ids
+  }
+
+  /** The triage view's flags, as `SearchRequestParser` sets them */
+  private val triageView = Map[String, Any](FieldConst.Asset.IS_TRIAGED -> true, FieldConst.Asset.IS_RECYCLED -> false)
+
   test("Pagination") {
 
     /**

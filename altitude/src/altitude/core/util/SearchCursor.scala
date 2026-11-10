@@ -94,6 +94,7 @@ object SearchCursor:
       query.albumIds.toList.sorted.mkString(","),
       query.locationIds.toList.sorted.mkString(","),
       query.bbox.map(_.toString).getOrElse(""),
+      query.subset.fold("")(_.apiValue),
       query.grouping.fold("")(_.by.apiValue),
       query.grouping.fold("")(_.direction.id.toString),
       query.searchSort.headOption.fold("")(_.field),

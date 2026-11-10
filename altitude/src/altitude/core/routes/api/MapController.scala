@@ -40,8 +40,9 @@ class MapController(using logger: Logger) extends BaseController:
       albumId: Option[String] = None,
       locationId: Option[String] = None,
       triaged: Option[Boolean] = None,
+      subset: Option[String] = None,
       params: cask.QueryParams /* allow unknown params */ )(using request: Request): Response[String] =
-    val scope = mapScope(view, q, folderId, personId, albumId, locationId, triaged) match
+    val scope = mapScope(view, q, folderId, personId, albumId, locationId, triaged, subset) match
       case Left(message) => return jsonError(message, 400)
       case Right(scope) => scope
     val box = viewport match
@@ -91,8 +92,9 @@ class MapController(using logger: Logger) extends BaseController:
       albumId: Option[String] = None,
       locationId: Option[String] = None,
       triaged: Option[Boolean] = None,
+      subset: Option[String] = None,
       params: cask.QueryParams /* allow unknown params */ )(using request: Request): Response[String] =
-    val scope = mapScope(view, q, folderId, personId, albumId, locationId, triaged) match
+    val scope = mapScope(view, q, folderId, personId, albumId, locationId, triaged, subset) match
       case Left(message) => return jsonError(message, 400)
       case Right(scope) => scope
     val result =
@@ -124,7 +126,7 @@ class MapController(using logger: Logger) extends BaseController:
 
   /**
    * The search scope without the `bbox` filter: the map plots the whole search, only the panel and the grid apply `bbox`. A scope
-   * the parser refuses (Search text with the trash view) is the message of a JSON 400.
+   * the parser refuses (Search text with the trash view, an unknown `subset`) is the message of a JSON 400.
    */
   private def mapScope(
       view: String,
@@ -133,7 +135,8 @@ class MapController(using logger: Logger) extends BaseController:
       personId: Option[String],
       albumId: Option[String],
       locationId: Option[String],
-      triaged: Option[Boolean]): Either[String, SearchRequestParser.Scope] =
-    SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox = None, triaged)
+      triaged: Option[Boolean],
+      subset: Option[String]): Either[String, SearchRequestParser.Scope] =
+    SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox = None, triaged, subset)
 
   initialize()

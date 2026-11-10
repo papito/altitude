@@ -438,8 +438,8 @@ import altitude.core.util.*
      * Assertions:
      *
      * The cursor is refused when the text, the sort field or direction, the group direction or the grouping, the folder, the
-     * Location or the bounding box differ, and decoding refuses an older version, garbage, an empty object and an empty string.
-     * The same search still continues.
+     * Location, the bounding box or the subset differ, and decoding refuses an older version, garbage, an empty object and an
+     * empty string. The same search still continues.
      *
      * Edge cases:
      *
@@ -462,13 +462,18 @@ import altitude.core.util.*
 
     val folder = testApp.service.folder.add("scoped")
     val location = testApp.service.location.addLocation("Rome", 41.9, 12.5, None)
-    def scoped(folderIds: Set[String] = Set(), locationIds: Set[String] = Set(), bbox: Option[BoundingBox] = None) =
+    def scoped(
+        folderIds: Set[String] = Set(),
+        locationIds: Set[String] = Set(),
+        bbox: Option[BoundingBox] = None,
+        subset: Option[TriageSubset] = None) =
       searchGrouped(
         new SearchQuery(
           params = Map(FieldConst.Asset.IS_RECYCLED -> false),
           folderIds = folderIds,
           locationIds = locationIds,
           bbox = bbox,
+          subset = subset,
           rpp = 5,
           searchSort = List(sort),
           grouping = Some(grouping),
@@ -477,6 +482,7 @@ import altitude.core.util.*
     intercept[SearchCursorException](scoped(folderIds = Set(folder.persistedId)))
     intercept[SearchCursorException](scoped(locationIds = Set(location.persistedId)))
     intercept[SearchCursorException](scoped(bbox = Some(BoundingBox(41.0, 12.0, 42.0, 13.0))))
+    intercept[SearchCursorException](scoped(subset = Some(TriageSubset.NoLocation)))
     // A cursor from a day grouping does not continue a Location grouping of the same search
     intercept[SearchCursorException](continue(cursor, SearchGrouping(GroupBy.Location), sort, rpp = 5))
 

@@ -130,6 +130,7 @@ object Api:
       val PERSON_ID = "personId"
       val ALBUM_ID = "albumId"
       val LOCATION_ID = "locationId"
+      val SUBSET = "subset"
       val BBOX = "bbox"
       val LAYOUT = "layout"
       val VIEW = "view"

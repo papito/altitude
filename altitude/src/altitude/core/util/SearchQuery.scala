@@ -28,6 +28,8 @@ class SearchQuery(
     val albumIds: Set[String] = Set(),
     val locationIds: Set[String] = Set(),
     val bbox: Option[BoundingBox] = None,
+    // The assets of a Triage summary tally: with a Face of an Unknown person, or in no Location
+    val subset: Option[TriageSubset] = None,
     rpp: Int = 0,
     val searchSort: List[SearchSort] = List(),
     val grouping: Option[SearchGrouping] = None,
@@ -73,7 +75,7 @@ class SearchQuery(
   override val isSorted: Boolean = searchSort.nonEmpty
 
   override def toString: String =
-    s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, grouping=$grouping, cursor=${cursor.isDefined}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, albumIds=$albumIds, locationIds=$locationIds, bbox=$bbox, rpp=$rpp)"
+    s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, grouping=$grouping, cursor=${cursor.isDefined}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, albumIds=$albumIds, locationIds=$locationIds, subset=$subset, bbox=$bbox, rpp=$rpp)"
 
   def add_metadata_filter(_filters: (String, Any)*): SearchQuery =
     copyWith(metadataFilters = metadataFilters ++ _filters)
@@ -106,6 +108,7 @@ class SearchQuery(
       albumIds = albumIds,
       locationIds = locationIds,
       bbox = bbox,
+      subset = subset,
       rpp = rpp,
       searchSort = searchSort,
       grouping = grouping,

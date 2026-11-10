@@ -38,6 +38,7 @@ import altitude.core.util.SearchSort
 import altitude.core.util.SearchSource
 import altitude.core.util.SortDirection
 import altitude.core.util.SortValue
+import altitude.core.util.TriageSubset
 
 /**
  * A search as typed relations, rendered into hand-written statements.
@@ -74,6 +75,8 @@ object SearchQueries:
       .filterIf(query.personIds.nonEmpty)(asset => personFilter(engine, asset, query.personIds))
       .filterIf(query.albumIds.nonEmpty)(asset => albumFilter(engine, asset, query.albumIds))
       .filterIf(query.locationIds.nonEmpty)(asset => locationFilter(engine, asset, query.locationIds))
+      .filterIf(query.subset.contains(TriageSubset.UnknownPeople))(asset => unknownPeopleFilter(engine, asset))
+      .filterIf(query.subset.contains(TriageSubset.NoLocation))(asset => noLocationFilter(engine, asset.id))
       .filterIf(query.bbox.isDefined)(asset => bboxFilter(engine, asset, query, repositoryId, query.bbox.get))
 
   /** The people a Search text resolves names against, as (ID, name): named, visible, live and not a bad match */
@@ -386,8 +389,6 @@ object SearchQueries:
     val inLocatedPart = query.cursor.forall(_.key.isDefined)
 
     def assetPosition(row: AssetRow[Expr]): Position = assetPositionIn(engine, query, row)
-    def inNoLocation(id: Expr[String]): Expr[Boolean] =
-      LocationAssetRow.select.filter(link => link.assetId `=` id).map(_.assetId).isEmpty
     def nullText: Expr[Option[String]] = Expr[Option[String]](implicit ctx => sql"NULL")
 
     /** The located slice: each match under each of its Locations, in path order, after the cursor's anchor when it has one */
@@ -459,10 +460,10 @@ object SearchQueries:
 
     val unlocated =
       if sort.isRelevance then
-        val relation = scored.filter(row => inNoLocation(row.id))
+        val relation = scored.filter(row => noLocationFilter(engine, row.id))
         unlocatedSlice(relation, scoredPosition(WithSqlExpr.get(relation)))
       else
-        val relation = base.filter(row => inNoLocation(row.id))
+        val relation = base.filter(row => noLocationFilter(engine, row.id))
         unlocatedSlice(relation, assetPosition(WithSqlExpr.get(relation)))
 
     val candidatesCte =
@@ -505,7 +506,7 @@ object SearchQueries:
           FROM (SELECT DISTINCT location_id FROM page WHERE location_id IS NOT NULL) AS p
         UNION ALL
         SELECT p.location_id AS location_id,
-               (SELECT count(*) FROM (${matchingIds(engine, base, Some(row => inNoLocation(row.id)))}) AS m) AS n
+               (SELECT count(*) FROM (${matchingIds(engine, base, Some(row => noLocationFilter(engine, row.id)))}) AS m) AS n
           FROM (SELECT DISTINCT location_id FROM page WHERE location_id IS NULL) AS p
       )"""
     ) ++ total.cte
@@ -1268,6 +1269,29 @@ object SearchQueries:
       .filter(link => Columns.isInSet(link.locationId, locationIds, engine.dialect))
       .map(_.assetId)
       .contains(asset.id)
+
+  /**
+   * Assets with a Face of an Unknown person: one with no name who is neither hidden, merged away (`is_deleted`) nor discarded as
+   * a bad match, whatever their bucket
+   */
+  private def unknownPeopleFilter(engine: SearchDialect, asset: AssetRow[Expr]): Expr[Boolean] =
+    import engine.dialect.*
+
+    FaceRow.select
+      .join(PersonRow)((face, person) => face.personId `=` person.id)
+      .filter {
+        (_, person) =>
+          (person.isNamed `=` false) && (person.isHidden `=` false) && (person.isDeleted `=` false) &&
+          (person.isBadMatch `=` false)
+      }
+      .map((face, _) => face.assetId)
+      .contains(asset.id)
+
+  /** Assets no Location points at; a GPS position of their own does not count */
+  private def noLocationFilter(engine: SearchDialect, id: Expr[String]): Expr[Boolean] =
+    import engine.dialect.*
+
+    LocationAssetRow.select.filter(link => link.assetId `=` id).map(_.assetId).isEmpty
 
   /**
    * Assets plotted inside the box: by their own point or, without one of their own, by the pin of a Location they are in - the

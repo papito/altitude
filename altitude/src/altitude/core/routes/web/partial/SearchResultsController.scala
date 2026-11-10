@@ -43,6 +43,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * `triaged` changes the view's scope (`SearchRequestParser`): `true` adds the triaged assets to the repository view, which
    * leaves them out by default. The View settings dialog offers that switch there alone.
    *
+   * `subset` narrows the view to a tally of the Triage summary, `unknownPeople` or `noLocation` (`SearchRequestParser`), in every
+   * layout and view; any other value is a 400. The results title names it, and the browser URL keeps it.
+   *
    * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
    * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
    *
@@ -73,6 +76,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       locationId: Option[String] = None,
       bbox: Option[String] = None,
       triaged: Option[Boolean] = None,
+      subset: Option[String] = None,
       layout: String = Const.Search.Layout.GRID,
       isContinuousScroll: Boolean = false,
       groupBy: Option[String] = None,
@@ -92,7 +96,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         400,
         Seq(("Content-Type", "application/json")))
 
-    val scope = SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox, triaged) match
+    val scope = SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox, triaged, subset) match
       case Left(message) => return badRequest(message)
       case Right(scope) => scope
 
@@ -110,7 +114,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       return badRequest(
         s"${Api.Field.Search.SORT}=${Const.Search.SORT_RELEVANCE} needs Search text (${Api.Field.Search.QUERY_TEXT})")
 
-    // What the results title names: the person, the folder's path, the album or the Location the results are scoped to
+    // What the results title names: the person, the folder's path, the album, the Location or the subset the results are
+    // scoped to
     val person = personOf(personId)
     val folderPath = folderPathOf(folderId)
     val album: Option[Album] = albumId.map(App.altitude.service.album.getById)
@@ -126,6 +131,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       locationId,
       bbox,
       triaged,
+      subset,
       layout,
       if layout == Const.Search.Layout.MAP then None else groupBy,
       if layout == Const.Search.Layout.MAP then None else groupDirection,
@@ -152,6 +158,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           folderPath = folderPath,
           album = album,
           location = location,
+          subset = scope.subset,
           view = view,
           folderId = folderId,
           albumId = albumId,
@@ -203,6 +210,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           folderPath = folderPath,
           album = album,
           location = location,
+          subset = scope.subset,
           view = view,
           folderId = folderId,
           albumId = albumId,
@@ -246,6 +254,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         folderPath = folderPath,
         album = album,
         location = location,
+        subset = scope.subset,
         view = view,
         folderId = folderId,
         albumId = albumId,
@@ -362,6 +371,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       locationId: Option[String],
       bbox: Option[String],
       triaged: Option[Boolean],
+      subset: Option[String],
       layout: String,
       groupBy: Option[String],
       groupDirection: Option[String],
@@ -372,6 +382,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       personId.map(Api.Field.Search.PERSON_ID -> _),
       albumId.map(Api.Field.Search.ALBUM_ID -> _),
       locationId.map(Api.Field.Search.LOCATION_ID -> _),
+      subset.map(Api.Field.Search.SUBSET -> _),
       bbox.map(Api.Field.Search.BBOX -> _),
       triaged.map(Api.Field.Search.TRIAGED -> _.toString),
       Option.when(layout != Const.Search.Layout.GRID)(Api.Field.Search.LAYOUT -> layout),
