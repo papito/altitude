@@ -215,6 +215,11 @@ export function createSearchParamsStore() {
         toQueryString(overrides = {}) {
             return serializeSearchParams(this.snapshot(), overrides)
         },
+
+        /** Whether triaged items are shown: only `triaged=true` shows them, the server's rule as well */
+        showsTriaged() {
+            return this.triaged === "true"
+        },
     }
 }
 

@@ -12,6 +12,13 @@ trait PersonDao extends BaseDao[Person]:
    */
   def getInBuckets(buckets: Set[String]): List[Person]
 
+  /**
+   * How many triaged assets outside the trash each person has a Face on, for the people who have any: the part of
+   * `Person.numOfFaces` a search leaves out while triaged items are hidden. An asset still being imported counts, as its Faces
+   * are in `numOfFaces` and it is triaged.
+   */
+  def getTriagedAssetCounts: Map[String, Int]
+
   /** The live person of the repository (neither merged away nor a bad match, hidden or not) whose sort name is the name key */
   def getLiveByNameKey(nameKey: String): Option[Person]
 

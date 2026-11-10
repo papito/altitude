@@ -15,7 +15,9 @@ const NAME_EDITOR_SELECTOR = '[data-app-fragment="person-name-editor"]'
  * person's cell may be in both of the tab's panes, so a rename and a cover face change patch
  * every cell of the person, found by `data-person-id` under `#people`. A merge and a discard
  * move people between the People buckets instead, so they announce `peopleChanged`, which the
- * tab's `peopleTab` component answers by reloading each pane with its own buckets.
+ * tab's `peopleTab` component answers by reloading each pane with its own buckets. An asset
+ * mutation announces it as well (`refreshCounts` in `assets/asset-actions.js`), since a person's
+ * number follows their assets.
  */
 export function registerPeopleListeners(app) {
     document.body.addEventListener(Const.events.confirmPersonMerge, (event) => {

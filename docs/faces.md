@@ -162,8 +162,9 @@ The crops live in the file store (`FileSystemStoreService.addFace`) as
 ## People
 
 A `person` row carries `name`, `is_named`, `num_of_faces`, `cover_face_id`, `is_hidden`, `is_bad_match`, `is_deleted`.
-`num_of_faces` is, despite its name, the number of assets outside the trash on which the person has a Face: what a search
-for the person finds. A person seen twice in one image (`twins.png`) has two Faces there and counts that asset once.
+`num_of_faces` is, despite its name, the number of assets outside the trash on which the person has a Face, triaged assets
+included: what a search for the person finds with "Show triaged items" on, once none of those assets is still being
+imported. A person seen twice in one image (`twins.png`) has two Faces there and counts that asset once.
 `PersonService.addFace` inserts the Face, sets the cover face when it is the first, and increments `num_of_faces` only when
 the person had no Face on the asset yet (`FaceDao.hasFaceOfPerson`). Recycling an asset takes it from the counts of its
 people and restoring gives it back, whether it is restored or moved out of the trash into a folder, each asset once
@@ -182,9 +183,28 @@ The People tab (`PeopleActionController`) lists people by People bucket (`Const.
 the trash, or named), Unmatched (fewer and unnamed), Hidden (hidden, whatever its count or name); a discarded person is in
 none. The list
 (`PersonService.getInBuckets`, one query) is the union of the buckets switched on, Matched alone by default; Hide / Show,
-offered to a Matched person (`Person.isMatched`), moves it between buckets. Its actions:
+offered to a Matched person (`Person.isMatched`), moves it between buckets.
 
-- **Name**: `updateName` stores the name in NFC and sets `is_named`; a named person is listed whatever their count. A
+The number on a person's cell is what opening them from the repository view finds (`PersonService.getListedInBuckets`, a
+`ListedPerson`'s `visibleCount`, read in one snapshot). `GET /htmx/people/r/:repoId/list` takes `triaged` as the repository
+view does (`SearchRequestParser`): only `true` shows triaged items. With them shown the number is `num_of_faces`, and the
+triaged assets are not read. With them hidden it is `num_of_faces` less the person's triaged assets outside the trash
+(`PersonDao.getTriagedAssetCounts`, each asset once, those still being imported among them), and a person left with 0 or
+less is left off the list. A list that comes out empty with someone in the buckets (`ListedPeople.leftOffByTriage`; the
+buckets read only people with a count above zero, so the subtraction is what dropped them) says "Everyone here is only in
+triaged items. Turn on Show triaged items to see them." in place of "No one in the buckets switched on". Only the number follows the switch: the buckets and the order are those of the whole
+`num_of_faces`, so the switch moves no one between buckets, and the Discard link, `Person.isMatched`, the merge modal's
+"instances" and the merge direction read `num_of_faces` as well, since a merge moves every Face.
+
+While assets are being imported the number and a search can differ, as a search skips those assets and `num_of_faces` holds
+their Faces. With triaged items shown, the number runs ahead of the search by those assets until they complete. With them
+hidden the subtraction takes them out again, except after a merge: its recount goes through a search, so they are not in
+`num_of_faces`, while the subtraction still includes them. One sorted asset and two still being imported give 1 − 2. No
+negative number is shown: such a person is left off the list until the next recount.
+
+The tab's actions:
+
+- **Name**: `updateName` stores the name in NFC and sets `is_named`; a named person is Matched whatever their count. A
   named person's `name_for_sort` is its name key (`PersonService.nameKey`: the NFC name lowercased under `Locale.ROOT`),
   and `person_01` keeps that unique over the live people, hidden ones included, so a name is unique regardless of case and
   Unicode form. This is lowercasing, not a full Unicode case fold: "Weiß" and "WEISS", or a Greek name with a final sigma
@@ -247,7 +267,7 @@ under **Detail panel** in `altitude/views/AGENTS.md`. `PeopleActionController` s
 `GET /htmx/people/r/:repoId/assignable` (`getAssignable`: the live people who are not a bad match, named first, then by
 `name_for_sort`, Hidden among them and marked; `htmx/assignable_people`), with the Suggested group below when asked with
 `faceId`, and a Person's results title on its own, `GET /htmx/people/r/:repoId/p/:personId/title` (`htmx/person_inner`),
-for the count to be refreshed after a correction.
+read again after a correction because the title's Hide and Discard links depend on the count.
 
 - **Suggested people** (`suggestedPeople(faceId)`): the people whose Faces are nearest the Face's own vector, closest first,
   at most `PersonService.SUGGESTED_PEOPLE` (3), so that most wrong matches take one click. The candidates are what

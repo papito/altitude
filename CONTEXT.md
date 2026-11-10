@@ -210,6 +210,16 @@ Which details the grid shows under each asset, chosen per browser tab in the
 ⚙ View popover. They are not Settings.
 _Avoid_: Display options, Grid options.
 
+**Browse**:
+The view of the sorted library, where the explorer finds assets by folder,
+album, Person or Location. It can also show triaged assets on request.
+_Avoid_: Browse mode, Repository view in user-facing text.
+
+**Triage**:
+The view of imported assets not yet sorted into a folder. The explorer there
+manages folders, Locations and People but does not search them.
+_Avoid_: Triage mode, Inbox, Unsorted.
+
 **Sequence**:
 Still images in triage that the import found shot as one scene: within a
 minute of each other by the camera's clock or, failing that, by the time in

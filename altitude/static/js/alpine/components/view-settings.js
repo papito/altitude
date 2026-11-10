@@ -12,9 +12,10 @@ import { runSearch } from "../../search-results/search.js"
  *
  * The scope switch is different in kind: "Show triaged items" reads the `triaged` search parameter
  * from the `searchParams` store, and flipping it runs a search through the one funnel, so the
- * results are rendered again; the View control's host is `hx-preserve`d, so this panel outlives the
- * swap and stays open. It is offered in the repository view alone, the view the parameter belongs
- * to (`stores/search-params.js`).
+ * results are rendered again, and the People tab, which watches the parameter, reloads its panes;
+ * the View control's host is `hx-preserve`d, so this panel outlives the swap and stays open. It
+ * is offered in the repository view alone, the view the parameter belongs to
+ * (`stores/search-params.js`).
  *
  * The server knows nothing of the settings: the fragment arrives unbound and reads the set and the
  * store as Alpine initializes it, so the hydrator (`fragments/inline-dialog.js`) only places focus.
@@ -38,7 +39,7 @@ export function viewSettings() {
         },
 
         showsTriaged() {
-            return Alpine.store(Const.state.searchParams).triaged === "true"
+            return Alpine.store(Const.state.searchParams).showsTriaged()
         },
 
         toggleTriaged() {

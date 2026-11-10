@@ -14,6 +14,8 @@ import altitude.core.dao.FaceDao
 import altitude.core.dao.PersonDao
 import altitude.core.models.Asset
 import altitude.core.models.Face
+import altitude.core.models.ListedPeople
+import altitude.core.models.ListedPerson
 import altitude.core.models.Person
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.Query
@@ -582,6 +584,25 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
   def getInBuckets(buckets: Set[String]): List[Person] =
     txManager.asReadOnly {
       dao.getInBuckets(buckets)
+    }
+
+  /**
+   * The people of `getInBuckets`, in its order, each with the count the People tab shows: `numOfFaces`, less the Person's triaged
+   * assets when triaged items are hidden, read in one snapshot. A Person with nothing left to find is left off, and the buckets
+   * stay those of the whole count, so the switch moves no one between them. The difference can go below zero while assets are
+   * still being imported: a merge recounts through a search, which skips them, and the triaged count holds them.
+   *
+   * `leftOffByTriage` is whether the list came out empty with someone in the buckets: `getInBuckets` reads only people with a
+   * count above zero, so whoever is dropped here is dropped by the subtraction.
+   */
+  def getListedInBuckets(buckets: Set[String], showTriaged: Boolean): ListedPeople =
+    txManager.asReadOnly {
+      val people = dao.getInBuckets(buckets)
+      val triagedCounts = if showTriaged then Map.empty[String, Int] else dao.getTriagedAssetCounts
+      val listed = people
+        .map(person => ListedPerson(person, person.numOfFaces - triagedCounts.getOrElse(person.persistedId, 0)))
+        .filter(_.visibleCount > 0)
+      ListedPeople(listed, leftOffByTriage = people.nonEmpty && listed.isEmpty)
     }
 
   /**

@@ -140,6 +140,33 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
 
     recs.map(makeModel)
 
+  // The count column of `triagedAssetCountsStatement`; a Long on PostgreSQL and an Int on SQLite, so it is read through `Number`
+  private val TRIAGED_ASSETS = "triaged_assets"
+
+  override def getTriagedAssetCounts: Map[String, Int] =
+    val (sql, values) = triagedAssetCountsStatement
+    manyBySqlQuery(sql, values)
+      .map(rec => rec(FieldConst.Face.PERSON_ID).asInstanceOf[String] -> rec(TRIAGED_ASSETS).asInstanceOf[Number].intValue)
+      .toMap
+
+  /**
+   * The statement behind [[getTriagedAssetCounts]] with its bind values, which the plan test explains. The flags are literals:
+   * SQLite uses the partial `asset_triage_*` indexes only for a predicate matching theirs, which a flag bound as text does not.
+   * `is_pipeline_processed` is not filtered: the Faces of an import still in flight are in `num_of_faces`, and its assets are
+   * triaged.
+   */
+  def triagedAssetCountsStatement: (String, List[Any]) =
+    val sql = s"""
+      SELECT f.${FieldConst.Face.PERSON_ID}, COUNT(DISTINCT f.${FieldConst.Face.ASSET_ID}) AS $TRIAGED_ASSETS
+        FROM asset a
+        JOIN face f ON f.${FieldConst.Face.ASSET_ID} = a.${FieldConst.ID}
+       WHERE a.${FieldConst.REPO_ID} = ?
+         AND a.${FieldConst.Asset.IS_TRIAGED} = TRUE
+         AND a.${FieldConst.Asset.IS_RECYCLED} = FALSE
+    GROUP BY f.${FieldConst.Face.PERSON_ID}
+    """
+    (sql, List(RequestContext.getRepository.persistedId))
+
   // Reads `person_01`, the unique index the name key is kept unique by
   override def getLiveByNameKey(nameKey: String): Option[Person] =
     val live = PersonDao.liveByNameKey(dialect, RequestContext.getRepository.persistedId, nameKey)

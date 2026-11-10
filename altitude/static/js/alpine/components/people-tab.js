@@ -1,3 +1,4 @@
+import { Alpine } from "../../lib/alpine.esm.min.js"
 import { Const } from "../../constants.js"
 import { context } from "../../context.js"
 import Split from "../../lib/split.es.js"
@@ -14,9 +15,11 @@ import { effectiveSide, isVerticalAxis } from "../../common/explorer-dock.js"
  * any, and the two panes' Split.js sizes on each axis. A first visit shows Matched alone, with no
  * split. The server knows nothing of it: it renders a pane's list (`htmx/people_list`) for the
  * buckets the pane asks for, and this component loads each pane's list into its `.list` host
- * itself, on init, when a switch flips, and when a person changes (`Const.events.peopleChanged`: a
- * merge, a hide, a show or a discard moves people between buckets, so every pane reloads with its
- * own).
+ * itself, on init, when a switch flips, when a person changes (`Const.events.peopleChanged`: a
+ * merge, a hide, a show or a discard moves people between buckets, and an asset mutation or a Face
+ * correction can change a person's number, so every pane reloads with its own) and when "Show
+ * triaged items" flips. Each load reads `triaged` from the `searchParams` store, so each person's
+ * number is what opening them from the repository view finds.
  *
  * Split view adds the Duplicate pane under the shell's `x-if` and divides the two panes with
  * Split.js along the axis the Dock side calls for (`js/common/explorer-dock.js`): stacked, a
@@ -77,6 +80,9 @@ export function peopleTab() {
                 Const.events.dockSideChanged,
                 onDockSideChanged,
             )
+
+            // Each Person's number follows "Show triaged items"
+            this.$watch("$store.searchParams.triaged", () => this.reloadPanes())
 
             this.loadPane(MAIN)
             if (this.split) {
@@ -140,10 +146,18 @@ export function peopleTab() {
                 return
             }
 
+            // Sent only when on: the store's null would go out as `triaged=null`, which the server refuses
+            const showsTriaged = Alpine.store(
+                Const.state.searchParams,
+            ).showsTriaged()
+
             htmx.ajax("GET", `/htmx/people/r/${context.getRepoId()}/list`, {
                 target: listEl,
                 swap: "innerHTML",
-                values: { buckets: this.bucketsOf(pane).join(",") },
+                values: {
+                    buckets: this.bucketsOf(pane).join(","),
+                    ...(showsTriaged ? { triaged: "true" } : {}),
+                },
             })
         },
 

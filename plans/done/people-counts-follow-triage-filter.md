@@ -42,7 +42,7 @@ Server groups are red-green with integration tests on both engines, each test op
    - With triaged items shown, the count is `numOfFaces`.
    - A Person with only triaged assets is left off when hidden and listed when shown.
    - A Person's bucket and the order do not change with the switch.
-   - After a merge during an import (one sorted, two in-flight), the Person is left off and no count is negative.
+   - After a merge during an import (one sorted, two in-flight), the Person is left o1and no count is negative.
 2. **Plan test.** `atScale` from `SearchPlans` with assets and Face rows seeded (`seedCopies` copies assets only, so the seed adds
    Faces; with few Face rows the planner starts from `face`), through `lookupPlanOf`, asserting an `asset_triage_` index on both
    engines.

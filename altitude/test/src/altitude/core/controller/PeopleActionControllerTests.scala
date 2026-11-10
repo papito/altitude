@@ -21,6 +21,22 @@ import altitude.core.models.Person
       check = false
     )
 
+  /** The People tab's list for the buckets, with the query parameters given */
+  private def listPeople(
+      host: String,
+      repoId: String,
+      buckets: String,
+      params: Map[String, String] = Map.empty): requests.Response =
+    requests.get(
+      s"$host/htmx/people/r/$repoId/list",
+      params = params + ("buckets" -> buckets),
+      cookies = testContext.cookies,
+      check = false)
+
+  /** The number the list shows on the Person's cell, when the Person is listed */
+  private def listedCount(html: String, person: Person): Option[Int] =
+    s"""(?s)data-person-id="${person.persistedId}".*?<span>\\((-?\\d+)\\)</span>""".r.findFirstMatchIn(html).map(_.group(1).toInt)
+
   test("The assignable people are the live people who are not a bad match, named first, Hidden marked") {
 
     /**
@@ -126,7 +142,7 @@ import altitude.core.models.Person
     }
   }
 
-  test("A person's results title is served on its own, with the person's count") {
+  test("A person's results title is served on its own, with no face count") {
 
     /**
      * Setup:
@@ -136,8 +152,9 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * The title route answers 200 with the person's results title inner, naming Bob and his two faces; an unknown person is a
-     * 404, and so is the other repository's Eve, asked for through the first repository, whose name the answer does not carry.
+     * The title route answers 200 with the person's results title inner, naming Bob with no subtitle and no face count, which the
+     * toolbar's Total says; an unknown person is a 404, and so is the other repository's Eve, asked for through the first
+     * repository, whose name the answer does not carry.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -158,7 +175,8 @@ import altitude.core.models.Person
         response.statusCode shouldBe 200
         response.text() should include("""id="personName"""")
         response.text() should include("Bob")
-        response.text() should include("2 faces")
+        (response.text() should not).include("faces")
+        (response.text() should not).include("""class="subtitle"""")
 
         requests
           .get(s"$host/htmx/people/r/$repoId/p/${java.util.UUID.randomUUID}/title", cookies = testContext.cookies, check = false)
@@ -167,6 +185,162 @@ import altitude.core.models.Person
           requests.get(s"$host/htmx/people/r/$repoId/p/${eve.persistedId}/title", cookies = testContext.cookies, check = false)
         foreign.statusCode shouldBe 404
         (foreign.text() should not).include("Eve")
+    }
+  }
+
+  test("A Person's count on the People list is what a search finds, with triaged items hidden or shown") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob" with one sorted and two triaged assets, and a hidden Person named
+     * "Mia" with one sorted and one triaged asset.
+     *
+     * Assertions:
+     *
+     * With no `triaged` parameter Bob reads (1), and with `triaged=true` he reads (3). Mia's name link says the same number to
+     * assistive tech: "Mia (1), hidden" by default, "Mia (2), hidden" with `triaged=true`.
+     *
+     * Edge cases:
+     *
+     * Only `true` shows triaged items: `triaged=false` reads as the default does.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        testContext.addTestFacesAndAssets(bob)
+        testContext.addTestFacesAndAssets(bob, assetCount = 2, isTriaged = true)
+        val mia = testApp.service.person.addPerson(Person(name = Some("Mia")))
+        testContext.addTestFacesAndAssets(mia)
+        testContext.addTestFacesAndAssets(mia, isTriaged = true)
+        testApp.service.person.setVisibility(mia, isHidden = true)
+        val buckets = s"${Const.PeopleBucket.MATCHED},${Const.PeopleBucket.HIDDEN}"
+
+        val hidden = listPeople(host, repoId, buckets)
+        hidden.statusCode shouldBe 200
+        listedCount(hidden.text(), bob) shouldBe Some(1)
+        hidden.text() should include("""aria-label="Mia (1), hidden"""")
+
+        val shown = listPeople(host, repoId, buckets, Map("triaged" -> "true"))
+        shown.statusCode shouldBe 200
+        listedCount(shown.text(), bob) shouldBe Some(3)
+        shown.text() should include("""aria-label="Mia (2), hidden"""")
+
+        val notShown = listPeople(host, repoId, buckets, Map("triaged" -> "false"))
+        notShown.statusCode shouldBe 200
+        listedCount(notShown.text(), bob) shouldBe Some(1)
+    }
+  }
+
+  test("A Person with only triaged assets is left off the People list until triaged items are shown") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Ann" with a sorted asset and a Person named "Eve" with two triaged
+     * assets only.
+     *
+     * Assertions:
+     *
+     * By default the list holds Ann and not Eve; with `triaged=true` it holds both, Eve reading (2).
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val ann = testApp.service.person.addPerson(Person(name = Some("Ann")))
+        testContext.addTestFacesAndAssets(ann)
+        val eve = testApp.service.person.addPerson(Person(name = Some("Eve")))
+        testContext.addTestFacesAndAssets(eve, assetCount = 2, isTriaged = true)
+
+        val hidden = listPeople(host, repoId, Const.PeopleBucket.MATCHED)
+        hidden.statusCode shouldBe 200
+        listedCount(hidden.text(), ann) shouldBe Some(1)
+        (hidden.text() should not).include(eve.persistedId)
+
+        val shown = listPeople(host, repoId, Const.PeopleBucket.MATCHED, Map("triaged" -> "true"))
+        shown.statusCode shouldBe 200
+        listedCount(shown.text(), ann) shouldBe Some(1)
+        listedCount(shown.text(), eve) shouldBe Some(2)
+    }
+  }
+
+  test("A People list the triage switch emptied says so, and a list with no one to show does not") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, first with no people at all and then with one Person, "Eve", who has only triaged assets.
+     *
+     * Assertions:
+     *
+     * With no people the list says no one is in the buckets. With Eve, the list by default says everyone is only in triaged
+     * items, and not that no one is there; with `triaged=true` it lists Eve and says neither.
+     *
+     * Edge cases:
+     *
+     * The Hidden bucket, which Eve is not in, holds no one with her there, so it says no one is there and nothing of triage.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    val noOne = "No one in the buckets switched on"
+    val onlyTriaged = "Everyone here is only in triaged items. Turn on Show triaged items to see them."
+
+    withServer(App) {
+      host =>
+        val noPeople = listPeople(host, repoId, Const.PeopleBucket.MATCHED).text()
+        noPeople should include(noOne)
+        (noPeople should not).include(onlyTriaged)
+
+        val eve = testApp.service.person.addPerson(Person(name = Some("Eve")))
+        testContext.addTestFacesAndAssets(eve, assetCount = 2, isTriaged = true)
+
+        val leftOff = listPeople(host, repoId, Const.PeopleBucket.MATCHED).text()
+        leftOff should include(onlyTriaged)
+        (leftOff should not).include(noOne)
+
+        val shown = listPeople(host, repoId, Const.PeopleBucket.MATCHED, Map("triaged" -> "true")).text()
+        listedCount(shown, eve) shouldBe Some(2)
+        (shown should not).include(onlyTriaged)
+        (shown should not).include(noOne)
+
+        val emptyBucket = listPeople(host, repoId, Const.PeopleBucket.HIDDEN).text()
+        emptyBucket should include(noOne)
+        (emptyBucket should not).include(onlyTriaged)
+    }
+  }
+
+  test("A triaged parameter that is not a boolean is a 400 on the People list") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository.
+     *
+     * Assertions:
+     *
+     * The list answers `triaged=nope` with a 400 for the value, not for a parameter it does not know, and the same request
+     * without it with a 200.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val refused = listPeople(host, repoId, Const.PeopleBucket.MATCHED, Map("triaged" -> "nope"))
+        refused.statusCode shouldBe 400
+        // Cask also answers 400 for a parameter the route does not declare
+        (refused.text() should not).include("Unknown argument")
+        listPeople(host, repoId, Const.PeopleBucket.MATCHED).statusCode shouldBe 200
     }
   }
 

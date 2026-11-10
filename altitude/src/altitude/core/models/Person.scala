@@ -11,8 +11,9 @@ object Person:
   given Conversion[ujson.Value, Person] = json => JsonCodec.read[Person](json)
 
 /**
- * `numOfFaces` is, despite its name, the number of assets outside the trash on which the person has a Face: what a search for the
- * person finds, and what the Matched line is drawn on. A person seen twice in one image has two Faces there and counts it once.
+ * `numOfFaces` is, despite its name, the number of assets outside the trash on which the person has a Face, triaged ones
+ * included: what a search for the person finds with triaged items shown, and what the Matched line is drawn on. A person seen
+ * twice in one image has two Faces there and counts it once. The number the People tab shows is `ListedPerson.visibleCount`.
  */
 case class Person(
     id: Option[String] = None,
