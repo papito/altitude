@@ -96,12 +96,13 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
 
   /**
    * The asset with its Image quality, perceptual hash, Histogram and Scene embeddings, and its detected faces each with its
-   * sharpness, measured over the staged file: one decode, upright, that `ImageMeasurement` measures and the Scene models
-   * (`SceneEmbedder`) then embed. Only a still image is measured: a Video, an animated image (one with a duration) and any other
-   * type come back as they are. The metrics are derived data and NULL is a state every reader handles, so a measurement that
-   * fails (a file OpenCV decodes for detection but not here, an image of a channel count it does not take) is logged at WARN and
-   * leaves the asset and its faces unmeasured, with no embedding, rather than dropping the import; the embedder handles its own
-   * failures the same way, a model at a time, so an image can carry one embedding and not the other. Touches no database.
+   * sharpness, measured over the staged file: one decode, upright, that `ImageMeasurement` measures and the instance's Scene
+   * embedder (`app.sceneEmbedder`: the ONNX Runtime one, or in a test the switchable one, which embeds nothing unless the suite
+   * turns the models on) then embeds. Only a still image is measured: a Video, an animated image (one with a duration) and any
+   * other type come back as they are. The metrics are derived data and NULL is a state every reader handles, so a measurement
+   * that fails (a file OpenCV decodes for detection but not here, an image of a channel count it does not take) is logged at WARN
+   * and leaves the asset and its faces unmeasured, with no embedding, rather than dropping the import; the ONNX embedder handles
+   * its own failures the same way, a model at a time, so an image can carry one embedding and not the other. Touches no database.
    */
   def measureImage(dataAsset: AssetWithData): AssetWithData =
     val asset = dataAsset.asset

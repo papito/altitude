@@ -25,9 +25,9 @@ models, exported from their Hugging Face checkpoints to ONNX.
     altitude/resources/opencv/w600k_r50.onnx       ArcFace, InsightFace w600k_r50 (non-commercial research licence), for
                                                    `FaceDetectionService`: a 512-float face embedding
     altitude/resources/onnx/dinov2_vitb14.onnx     DINOv2 ViT-B/14, facebook/dinov2-base (Apache 2.0), for
-                                                   `SceneEmbedder`: the pooled CLS token, 768 floats
+                                                   `OnnxSceneEmbedder`: the pooled CLS token, 768 floats
     altitude/resources/onnx/clip_vitb16_image.onnx CLIP ViT-B/16 image tower, openai/clip-vit-base-patch16 (MIT), for
-                                                   `SceneEmbedder`: the projected image embedding, 512 floats
+                                                   `OnnxSceneEmbedder`: the projected image embedding, 512 floats
 
 The ArcFace net is downloaded from a pinned revision of a Hugging Face repository and checked against its pinned SHA-256;
 a mismatch fails the run and writes nothing.
@@ -193,7 +193,7 @@ MODELS = [
 def preprocess(sample: Path, spec: SceneModelSpec) -> np.ndarray:
     """The sample as the model's input: short side fitted to 224, center crop, RGB, normalized, NCHW float32.
 
-    This is the preprocessing `SceneEmbedder` does, so the check runs the models on an input shaped as the application
+    This is the preprocessing `OnnxSceneEmbedder` does, so the check runs the models on an input shaped as the application
     shapes one; the resize filter differs (Pillow here, OpenCV there), which the check tolerates since both sides of it
     see the same tensor.
     """

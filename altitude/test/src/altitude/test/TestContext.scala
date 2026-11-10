@@ -198,10 +198,11 @@ class TestContext(val testApp: Altitude) {
 
     val imported: Asset = testApp.service.library.addAsset(dataAsset)
 
-    // The random image is undated and of one size, so in triage the import may pair it, by likeness, with an earlier one as it
-    // would the frames of one scene. A persisted asset is a plain fixture: the Sequence the import gave it is cleared from every
-    // asset that took it, and a test that wants Sequences stamps them (`setAssetSequence`). An import that paired with a stamped
-    // Sequence would wipe that stamp off every member with the clear, so it fails the test instead
+    // The random image is undated and of one size, so in triage, in a suite that turns the Scene models on, the import may pair
+    // it by likeness with an earlier one as it would the frames of one scene; with the models off it pairs by the hash alone, and
+    // two random images' hashes never come near. A persisted asset is a plain fixture: the Sequence the import gave it is cleared
+    // from every asset that took it, and a test that wants Sequences stamps them (`setAssetSequence`). An import that paired with
+    // a stamped Sequence would wipe that stamp off every member with the clear, so it fails the test instead
     val persistedAsset = imported.sequenceId.fold(imported) {
       sequenceId =>
         if (stampedSequences.contains(sequenceId)) {

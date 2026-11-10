@@ -63,8 +63,9 @@ abstract class IntegrationTestCore
 
   /**
    * Whether the suite's tests run the real Scene models. Off, a fixture import is measured and hashed but carries no Scene
-   * embedding, which spares each import about 0.7 s of model passes; a suite whose subject is the embeddings turns them on for
-   * all its tests here, or for one test with `withSceneModels`.
+   * embedding, so its frames pair by the hash alone, which spares each import about 0.7 s of model passes; a suite whose subject
+   * is the embeddings turns them on for all its tests here, or for one test with `withSceneModels`. The real models are opened
+   * the first time the test instance embeds an image with them on, and stay open until it is cleaned up.
    */
   protected def usesSceneModels: Boolean = false
 
@@ -88,7 +89,7 @@ abstract class IntegrationTestCore
     finally sceneModels.on = false
   }
 
-  /** Runs `f` with the real Scene models on, and puts the switch back as it was */
+  /** Runs `f` with the real Scene models on, for one test of a suite that leaves them off, and puts the switch back as it was */
   def withSceneModels[T](f: => T): T = {
     val switch = sceneModels
     val was = switch.on
