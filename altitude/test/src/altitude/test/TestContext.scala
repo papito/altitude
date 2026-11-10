@@ -8,6 +8,7 @@ import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.HexFormat
+import java.util.concurrent.atomic.AtomicInteger
 import org.apache.commons.dbutils.QueryRunner
 
 import scala.collection.mutable
@@ -37,6 +38,14 @@ import altitude.core.util.Util
 
 object TestContext {
   val ASSET_SIZE = 652084
+
+  /**
+   * Numbers the fixture Libraries of the test JVM, "Test Repository 1", "Test Repository 2", ...: a Library name is unique
+   * instance-wide (`repository_01`), and an integration bundle's database keeps every test's Libraries
+   */
+  private val repositoryNumber = new AtomicInteger(0)
+
+  def nextRepositoryName(): String = s"Test Repository ${repositoryNumber.incrementAndGet()}"
   val USER_PASSWORD = "password123"
 
   /** A checksum of the stored form, 64 lowercase hex characters of random bytes, distinct for every call */
@@ -105,7 +114,7 @@ class TestContext(val testApp: Altitude) {
     val persistedUser = user.getOrElse(users.headOption.getOrElse(makeUser()))
 
     val persistedRepo: Repository = testApp.service.repository.addRepository(
-      name = "Test Repository 1",
+      name = TestContext.nextRepositoryName(),
       fileStoreType = C.StorageEngineName.FS,
       owner = persistedUser)
     repositories = repositories ::: persistedRepo :: Nil

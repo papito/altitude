@@ -21,6 +21,7 @@ object FieldConst:
 
   object Repository:
     val NAME = "name"
+    val NAME_LC = "name_lc"
     val OWNER_ACCOUNT_ID = "owner_account_id"
     val ROOT_FOLDER_ID = "root_folder_id"
     val FILE_STORE_TYPE = "file_store_type"

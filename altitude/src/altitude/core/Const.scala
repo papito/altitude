@@ -170,6 +170,14 @@ object Const:
       val PERSON_NAME_TAKEN_BY_HIDDEN = "%s already exists and is hidden."
       // A rename a unique index refused with no live holder of the name to offer: merged away meanwhile, or another constraint
       val PERSON_NAME_ALREADY_EXISTS = "Person by that name already exists"
+      // The Library name rule (Repository.validName), shared by setup and the New library dialog; the bounds are
+      // Api.Constraints.MIN_/MAX_REPOSITORY_NAME_LENGTH
+      val LIBRARY_NAME_REQUIRED = "Enter a name for the library"
+      val LIBRARY_NAME_TOO_SHORT = "Use at least %s characters"
+      val LIBRARY_NAME_TOO_LONG = "Use at most %s characters"
+      val LIBRARY_NAME_CONTROL_CHARACTERS = "Remove the control characters"
+      // A Library name whose name key another Library holds (repository_01), named as it was submitted, once normalized
+      val LIBRARY_NAME_TAKEN = "A library named “%s” already exists"
       // A Face correction (PersonService.moveFace) onto the Face's own Person
       val FACE_ALREADY_THEIRS = "The face is already this person's"
       // A Face correction's body naming neither a person nor a name, or both

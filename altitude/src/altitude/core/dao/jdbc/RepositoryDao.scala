@@ -45,20 +45,29 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao[Reposi
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
     )
 
+  /** A name key `repository_01` already holds fails with the engine's unique violation, which the service reports */
   override def add(repo: Repository): Repository =
     val sql = s"""
         INSERT INTO repository (
-             ${FieldConst.ID}, ${FieldConst.Repository.NAME}, ${FieldConst.Repository.OWNER_ACCOUNT_ID}, ${FieldConst.Repository.FILE_STORE_TYPE},
+             ${FieldConst.ID}, ${FieldConst.Repository.NAME}, ${FieldConst.Repository.NAME_LC},
+             ${FieldConst.Repository.OWNER_ACCOUNT_ID}, ${FieldConst.Repository.FILE_STORE_TYPE},
              ${FieldConst.Repository.ROOT_FOLDER_ID},
              ${FieldConst.Repository.FILES_STORE_CONFIG})
-            VALUES (?, ?, ?, ?, ?,$jsonFunc)
+            VALUES (?, ?, ?, ?, ?, ?, $jsonFunc)
     """
 
     val id = repo.id.getOrElse(BaseDao.genId)
     val fileStoreConfigJson = ujson.Obj()
     repo.fileStoreConfig.foreach { case (k, v) => fileStoreConfigJson(k) = v }
     val sqlVals: List[Any] =
-      List(id, repo.name, repo.ownerAccountId, repo.fileStoreType, repo.rootFolderId, ujson.write(fileStoreConfigJson))
+      List(
+        id,
+        repo.name,
+        repo.nameLowercase,
+        repo.ownerAccountId,
+        repo.fileStoreType,
+        repo.rootFolderId,
+        ujson.write(fileStoreConfigJson))
 
     addRecord(sql, sqlVals)
     repo.copy(id = Some(id))
