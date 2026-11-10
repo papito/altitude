@@ -7,8 +7,8 @@ import { Const } from "../constants.js"
  * The results fragment is re-swapped on every search, the map with it. A change of sort, a panel
  * opening or closing, a switch to the grid and back, or a reload of the page should not throw the
  * user's viewport away, so the last center and zoom are kept, keyed by the scope they were looked at
- * in: the repository, and the view, folder, person, album, Location and text of the search (the
- * parameters that change *what* is plotted). The sort, layout, grouping, paging and the map area
+ * in: the repository, and the view, folder, person, album, Location, Triage subset and text of the
+ * search (the parameters that change *what* is plotted). The sort, layout, grouping, paging and the map area
  * (`bbox`, the panel's scope, which the map ignores) do not key it. A scope not looked at yet starts
  * from the server's bounds.
  *
@@ -28,6 +28,7 @@ const SCOPE_PARAMS = [
     "personId",
     "albumId",
     "locationId",
+    "subset",
     "q",
 ]
 

@@ -84,17 +84,26 @@ html[data-dock-side="top"] #content { border-top: var(--border-hairline) var(--p
 html[data-dock-side="bottom"] #explorer { border-top: var(--border-hairline) var(--panel-border-color); }
 html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) var(--panel-border-color); }
 
-/* The explorer's header: the tab list, growing, and whatever sits at its end. The tab list's own bottom edge (tabs.css)
-   moves up to the header so it spans the whole row; the selected tab's primary edge still sits right above it */
+/* The explorer's header: the tab list, growing, and whatever sits at its end, under the Triage summary in Triage, which
+   spans both columns. The tab list's own bottom edge (tabs.css) moves up to the header so it spans the whole row; the
+   selected tab's primary edge still sits right above it. The summary's sentences wrap, so the header's min-content, the
+   explorer's minimum width (#explorer), is still the tabs and the Dock side control in full */
 #explorerHeader {
-  display: flex;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
   border-bottom: var(--border-hairline) var(--panel-border-color);
 }
 
 #explorerHeader [role="tablist"] {
-  flex: 1;
   border-bottom: 0;
+}
+
+/* The Triage summary's host (htmx/triage_summary), inset as the tab list is, so its callout's icon lines up with the
+   first tab's */
+#triageSummary {
+  grid-column: 1 / -1;
+  margin: 0 var(--panel-padding) var(--space-4);
 }
 
 /* The Dock side menu at the header's end, after the growing tab list: centered on the tab row, inset as the tab list

@@ -36,9 +36,22 @@
 
       <div id="explorer">
         <div id="explorerViews">
-          @* The header: the tab list and the row's end. Each tab is the link itself. A successful tab load marks its
-             tab selected (js/listeners/htmx-requests.js); the initial tab is loaded the same way below *@
+          @* The header: in Triage the Triage summary across its width, then the tab list and the row's end. Each tab is
+             the link itself. A successful tab load marks its tab selected (js/listeners/htmx-requests.js); the initial
+             tab is loaded the same way below *@
           <div id="explorerHeader">
+            @* Triage alone: the Triage summary (htmx/triage_summary), a row of its own above the tabs, loaded once with
+               the page and kept across tab loads; js/listeners/triage.js reloads it after every change it counts, issued
+               from this host so the reloads take turns (htmx's default queue). Its links are search triggers, bound when
+               the swap is hydrated (js/listeners/htmx-requests.js) *@
+            @if(current == Const.NavEntry.TRIAGE) {
+            <div id="triageSummary"
+                 hx-get="/htmx/triage/r/@{RequestContext.getRepository.persistedId}/summary"
+                 hx-trigger="load"
+                 hx-target="this"
+                 hx-swap="innerHTML"></div>
+            }
+
             <div role="tablist">
               <a id="foldersTab"
                  role="tab"
