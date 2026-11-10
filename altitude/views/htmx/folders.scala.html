@@ -1,15 +1,7 @@
 @()
 
-<div id="folderNavWarning"
-     x-data
-     x-show="$store.currentView.isTriageView() || $store.currentView.isTrashBinView()">
-    <i class="fas fa-exclamation-triangle"></i>
-    <span>Navigation in this view is disabled. You can only drag-and-drop assets and folders.</span>
-</div>
-
 @* Host for the "Add folder" control (adds into the root), built by js/common/folder-tree.js; hidden
-   until the tree has loaded. It follows the navigation warning, so in triage and trash the warning
-   stays the first thing in the tab *@
+   until the tree has loaded *@
 <div id="folderActions" hidden></div>
 
 @* Rendered client-side by js/common/folder-tree.js once the tab has settled (js/fragments/explorer.js) *@

@@ -3,13 +3,28 @@
 @import altitude.core.models.ListedPerson
 @import altitude.core.Const
 
-@(listed: ListedPeople)
+@(listed: ListedPeople, pane: String)
 
 @* The list of one pane of the People tab (htmx/people): the people in the People buckets the pane asked for
-   (GET /htmx/people/r/:repoId/list?buckets=..., with &triaged=true while triaged items are shown), one `.cell` each, found
-   by `data-person-id` wherever one is looked up, since a person may be in both panes. A cell's number is the visible count,
-   what opening the person from the repository view finds, and never `Person.numOfFaces` directly. A hidden person's cell carries the eye-slash badge, and its name link says
-   so to assistive tech; an Unmatched person is told apart by its orange "Unknown N" name. With no one listed, one line
+   (GET /htmx/people/r/:repoId/list?pane=...&buckets=..., with &triaged=true while triaged items are shown and on every
+   load in Triage), one `.cell` each, found
+   by `data-person-id` wherever one is looked up, since a person may be in both panes. A cell's number (`.count`, not
+   displayed in Triage: pages/index.css) is the visible count, what opening the person from the repository view finds,
+   and never `Person.numOfFaces` directly. A hidden person's cell carries the eye-slash badge, and its name link says
+   so to assistive tech in a `.visually-hidden` ", hidden" after the number: the link is named by its content, the name,
+   the number, which is not displayed in Triage and so is no part of the name there, and then "hidden". An Unmatched
+   person is told apart by its
+   orange "Unknown N" name. The face's link and the name link are search triggers for the person; in Triage a person with no
+   triaged assets gets the scope dialog instead (js/search-results/search-triggers.js), a popover dialog anchored to the
+   name link whichever of the two was clicked: the name link is `personLink-<pane>-<id>` with that `anchor-name`, the pane
+   in the ID for the reason the pencil's has it, and both links name it in `data-app-dialog-anchor`, so the dialog sits
+   under the tile's name rather than over it. After the name link, and outside it so that it is no search trigger, the
+   rename pencil
+   (`.rename`, shown while the cell is hovered or holds keyboard focus, and always on a touch screen: htmx/people.css)
+   requests the rename dialog
+   (htmx/rename_person_dialog) into the popover host, anchored to itself: its ID carries `pane`, the pane the list is for,
+   so the pencils of a person listed in both panes are two anchors, and the dialog's return-focus selector finds the copy
+   a reload renders. With no one listed, one line
    of text and no grid: that everyone is only in triaged items when the buckets hold people the triage switch left off
    (`leftOffByTriage`), and otherwise that no one is in the buckets. *@
 
@@ -20,12 +35,14 @@
 } else {
 <div class="grid">
     @for(ListedPerson(person, visibleCount) <- listed.people) {
+    @defining(s"personLink-$pane-${person.persistedId}") { linkId =>
     <div class="cell drag-drop dropzone"
          data-person-id="@{person.persistedId}">
         <div class="image">
             <a href="#"
                data-app-search="click"
-               data-app-search-person-id="@{person.persistedId}">
+               data-app-search-person-id="@{person.persistedId}"
+               data-app-dialog-anchor="@{linkId}">
             <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{person.coverFaceId}">
             </a>
             @if(person.isHidden) {
@@ -35,19 +52,33 @@
         <div class="name">
             <span>
                 <a href="#"
+                   id="@{linkId}"
+                   style="anchor-name: --@{linkId}"
                    @if(!person.isNamed) {
                    class="unknown"
                    }
-                   @if(person.isHidden) {
-                   aria-label="@{person.name.getOrElse("Unknown")} (@{visibleCount}), hidden"
-                   }
                    data-app-search="click"
-                   data-app-search-person-id="@{person.persistedId}">
-                    @{person.name.getOrElse("")} <span>(@{visibleCount})</span>
+                   data-app-search-person-id="@{person.persistedId}"
+                   data-app-dialog-anchor="@{linkId}">
+                    @{person.name.getOrElse("")}<span class="count"> (@{visibleCount})</span>@if(person.isHidden) {<span class="visually-hidden">, hidden</span>}
                 </a>
+                @defining(s"personRenameCtrl-$pane-${person.persistedId}") { renameCtrlId =>
+                <button type="button"
+                        class="rename"
+                        id="@{renameCtrlId}"
+                        style="anchor-name: --@{renameCtrlId}"
+                        aria-label="Rename @{person.name.getOrElse("")}"
+                        hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/dialogs/rename-person"
+                        hx-target="#popoverContent"
+                        hx-swap="innerHTML"
+                        hx-trigger="click"
+                        hx-vals='{"personId": "@{person.persistedId}", "pane": "@{pane}"}'
+                        data-app-dialog-anchor="@{renameCtrlId}"><i class="fas fa-edit" aria-hidden="true"></i></button>
+                }
             </span>
         </div>
     </div>
+    }
     }
 </div>
 }

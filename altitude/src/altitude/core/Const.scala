@@ -90,6 +90,9 @@ object Const:
     // with no direction digit.
     val SORT_RELEVANCE = "relevance"
 
+    // Quick view (htmx/quick_view_modal) shows a folder's first this many assets, by newest import
+    val QUICK_VIEW_SIZE = 100
+
     object Layout:
       val GRID = "grid"
       val MAP = "map"
@@ -132,6 +135,12 @@ object Const:
     val UNMATCHED = "unmatched"
     val HIDDEN = "hidden"
     val ALL: Set[String] = Set(MATCHED, UNMATCHED, HIDDEN)
+
+  /** The two panes of the People tab, as the browser names them (`Const.people.panes` in constants.js): Main and Duplicate */
+  object PeoplePane:
+    val MAIN = "main"
+    val DUPLICATE = "duplicate"
+    val ALL: Set[String] = Set(MAIN, DUPLICATE)
 
   /** MESSAGES */
   object Msg:
@@ -178,7 +187,8 @@ object Const:
   // people dialogs in the modal host, whose sizing is owned by CSS (`--modal-content-width` in
   // core.css). The add dialogs have no title: their one field's placeholder says what they do, and
   // the inline view-settings dialog has none either: its checkbox labels are the whole content.
-  // The Location dialogs are titled by kind: the controller picks the Category or Location constant.
+  // The Location dialogs are titled by kind: the controller picks the Category or Location constant. The scope dialog of
+  // Triage's explorer is titled by the name of the folder, Person or Location it describes.
   object UI:
     val RENAME_FOLDER_DIALOG_TITLE = "Rename folder"
     val DELETE_FOLDER_DIALOG_TITLE = "Delete folder"
@@ -194,7 +204,10 @@ object Const:
     val ADD_TO_ALBUM_DIALOG_TITLE = "Add to album"
     // The Add to album dialog's last option, which reveals the name field of the album it creates
     val NEW_ALBUM_OPTION = "New album…"
+    val RENAME_PERSON_DIALOG_TITLE = "Rename person"
     val MERGE_PEOPLE_DIALOG_TITLE = "Merge people"
-    // The name editor's offer to merge the renamed Person into the one holding the name, which opens the dialog above
+    // The offer of the name editor and of the rename dialog to merge the renamed Person into the one holding the name, which
+    // opens the dialog above
     val MERGE_INTO_PERSON = "Merge into %s…"
     val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"
+    val QUICK_VIEW_DIALOG_TITLE = "Quick view"

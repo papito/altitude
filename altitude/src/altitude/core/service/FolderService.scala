@@ -70,6 +70,12 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       numOfChildren = children.length,
       numOfAssets = directCounts.getOrElse(folder.persistedId, 0) + children.map(_.numOfAssets).sum)
 
+  /** The folder by ID when it is in the context repository; another repository's, or none, is not found */
+  def getInRepository(folderId: String): Folder =
+    query(new Query().add(FieldConst.ID -> folderId)).records.headOption.getOrElse {
+      throw NotFoundException(s"Folder [$folderId] not found")
+    }
+
   def isRootFolder(id: String): Boolean =
     id == contextRepo.rootFolderId
 

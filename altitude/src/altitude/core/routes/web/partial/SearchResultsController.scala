@@ -3,7 +3,6 @@ package altitude.core.routes.web.partial
 import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
-import play.twirl.api.Html
 
 import scala.util.Try
 
@@ -43,6 +42,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * `triaged` changes the view's scope (`SearchRequestParser`): `true` adds the triaged assets to the repository view, which
    * leaves them out by default. The View settings dialog offers that switch there alone.
    *
+   * `subset` narrows the view to a Triage subset, `unknownPeople` or `noLocation` (`SearchRequestParser`), in every layout and
+   * view; any other value is a 400. The results title names it, and the browser URL keeps it.
+   *
    * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
    * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
    *
@@ -73,6 +75,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       locationId: Option[String] = None,
       bbox: Option[String] = None,
       triaged: Option[Boolean] = None,
+      subset: Option[String] = None,
       layout: String = Const.Search.Layout.GRID,
       isContinuousScroll: Boolean = false,
       groupBy: Option[String] = None,
@@ -92,25 +95,27 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         400,
         Seq(("Content-Type", "application/json")))
 
-    val scope = SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox, triaged) match
-      case Left(message) => return badRequest(message)
+    val scope = SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox, triaged, subset) match
+      case Left(message) => return textError(message, 400)
       case Right(scope) => scope
 
-    if layout != Const.Search.Layout.GRID && layout != Const.Search.Layout.MAP then return badRequest("Unknown layout")
+    if layout != Const.Search.Layout.GRID && layout != Const.Search.Layout.MAP then return textError("Unknown layout", 400)
 
     val effectiveSort = sort.getOrElse(
       if scope.text.isDefined then Const.Search.SORT_RELEVANCE
       else s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}")
 
     val searchSort = parseSort(effectiveSort) match
-      case None => return badRequest("Unknown sort")
+      case None => return textError("Unknown sort", 400)
       case Some(searchSort) => searchSort
 
     if searchSort.isRelevance && scope.text.isEmpty then
-      return badRequest(
-        s"${Api.Field.Search.SORT}=${Const.Search.SORT_RELEVANCE} needs Search text (${Api.Field.Search.QUERY_TEXT})")
+      return textError(
+        s"${Api.Field.Search.SORT}=${Const.Search.SORT_RELEVANCE} needs Search text (${Api.Field.Search.QUERY_TEXT})",
+        400)
 
-    // What the results title names: the person, the folder's path, the album or the Location the results are scoped to
+    // What the results title names: the person, the folder's path, the album, the Location or the subset the results are
+    // scoped to
     val person = personOf(personId)
     val folderPath = folderPathOf(folderId)
     val album: Option[Album] = albumId.map(App.altitude.service.album.getById)
@@ -126,6 +131,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       locationId,
       bbox,
       triaged,
+      subset,
       layout,
       if layout == Const.Search.Layout.MAP then None else groupBy,
       if layout == Const.Search.Layout.MAP then None else groupDirection,
@@ -141,7 +147,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         try (library.cappedCount(query), library.mapBounds(query))
         catch case _: QueryTimeoutException => return timedOut
       val settings = App.altitude.settings.current
-      return html(
+      return htmlResponse(
         includes.html.search_results(
           total = total,
           totalCap = query.totalCap,
@@ -152,6 +158,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           folderPath = folderPath,
           album = album,
           location = location,
+          subset = scope.subset,
           view = view,
           folderId = folderId,
           albumId = albumId,
@@ -165,14 +172,14 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     // Every grid page is bounded; zero is refused too, since to a flat search it means no limit, every match
     if rpp < 1 || rpp > Const.Search.MAX_RPP then
-      return badRequest(s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_RPP}")
+      return textError(s"${Api.Field.Search.RESULTS_PER_PAGE} must be between 1 and ${Const.Search.MAX_RPP}", 400)
 
     val cursor = parseCursor(after, isContinuousScroll) match
-      case Left(message) => return badRequest(message)
+      case Left(message) => return textError(message, 400)
       case Right(cursor) => cursor
 
     val grouping = parseGrouping(view, groupBy, groupDirection) match
-      case Left(message) => return badRequest(message)
+      case Left(message) => return textError(message, 400)
       case Right(grouping) => grouping
 
     if grouping.isDefined then
@@ -183,16 +190,16 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       val results: GroupedSearchResult =
         try App.altitude.service.library.searchGrouped(searchQuery)
         catch
-          case ex: SearchCursorException => return badRequest(ex.getMessage)
+          case ex: SearchCursorException => return textError(ex.getMessage, 400)
           case _: QueryTimeoutException => return timedOut
 
       if isContinuousScroll then
         // The continuation ran dry: results are live, and the images past the cursor may be gone by now
-        if results.isEmpty then return noContent
+        if results.isEmpty then return noContentResponse
 
-        return html(htmx.html.results_grid_grouped(results = results, isContinuousScroll = true))
+        return htmlResponse(htmx.html.results_grid_grouped(results = results, isContinuousScroll = true))
 
-      return html(
+      return htmlResponse(
         includes.html.search_results(
           total = results.total.getOrElse(0),
           totalCap = searchQuery.totalCap,
@@ -203,6 +210,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           folderPath = folderPath,
           album = album,
           location = location,
+          subset = scope.subset,
           view = view,
           folderId = folderId,
           albumId = albumId,
@@ -220,22 +228,22 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     val results =
       try App.altitude.service.library.search(searchQuery)
       catch
-        case ex: SearchCursorException => return badRequest(ex.getMessage)
+        case ex: SearchCursorException => return textError(ex.getMessage, 400)
         case _: QueryTimeoutException => return timedOut
 
     if isContinuousScroll then
       // The continuation ran dry: results are live, and the images past the cursor may be gone by now
-      if results.isEmpty then return noContent
+      if results.isEmpty then return noContentResponse
 
       /** This is a request for another page of search results for continuous scroll. */
-      return html(htmx.html.results_grid(results = results, isContinuousScroll = true))
+      return htmlResponse(htmx.html.results_grid(results = results, isContinuousScroll = true))
 
     /**
      * This is a new request (first page) for search results.
      *
      * We may need to add more entities, depending on what is needed, for example if it's a person view.
      */
-    html(
+    htmlResponse(
       includes.html.search_results(
         total = results.total.getOrElse(0),
         totalCap = searchQuery.totalCap,
@@ -246,6 +254,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         folderPath = folderPath,
         album = album,
         location = location,
+        subset = scope.subset,
         view = view,
         folderId = folderId,
         albumId = albumId,
@@ -314,18 +323,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       .filter(_ => Const.Search.SORT_FIELDS.contains(field))
       .map(direction => SearchSort(field = field, direction = direction))
 
-  /** A plain-text 400; the snackbar reports the status, since no visible control is behind a continuation */
-  private def badRequest(message: String): Response[String] =
-    cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
-
   /** A plain-text 503 for a search that ran past the engine's time limit for reads */
   private def timedOut: Response[String] =
-    cask.Response(Const.Msg.Err.SEARCH_TIMED_OUT, 503, Seq(("Content-Type", "text/plain")))
-
-  private def html(payload: Html, headers: (String, String)*): Response[String] =
-    cask.Response("<!doctype html>" + payload, 200, ("Content-Type", "text/html") +: headers)
-
-  private def noContent: Response[String] = cask.Response("", 204, Seq(("Content-Type", "text/html")))
+    textError(Const.Msg.Err.SEARCH_TIMED_OUT, 503)
 
   private def personOf(personId: Option[String]): Person =
     personId.map(id => App.altitude.service.person.getById(id): Person).orNull
@@ -362,6 +362,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       locationId: Option[String],
       bbox: Option[String],
       triaged: Option[Boolean],
+      subset: Option[String],
       layout: String,
       groupBy: Option[String],
       groupDirection: Option[String],
@@ -372,6 +373,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       personId.map(Api.Field.Search.PERSON_ID -> _),
       albumId.map(Api.Field.Search.ALBUM_ID -> _),
       locationId.map(Api.Field.Search.LOCATION_ID -> _),
+      subset.map(Api.Field.Search.SUBSET -> _),
       bbox.map(Api.Field.Search.BBOX -> _),
       triaged.map(Api.Field.Search.TRIAGED -> _.toString),
       Option.when(layout != Const.Search.Layout.GRID)(Api.Field.Search.LAYOUT -> layout),

@@ -70,14 +70,14 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     import dialect.*
     given TypeMapper[SortValue] = searchDialect.sortValueMapper
 
-    val isFirstPage = query.cursor.isEmpty
-    if matchesNothing(query) then return SearchPage(Nil, Option.when(isFirstPage)(0), hasMore = false)
+    val isTotalCounted = query.isTotalCounted
+    if matchesNothing(query) then return SearchPage(Nil, Option.when(isTotalCounted)(0), hasMore = false)
 
     val statement = SearchQueries.flat(searchDialect, query, RequestContext.getRepository.persistedId)
     // Each row is the asset, its day and two sort keys, then the count of the candidates, which are one row past the page
-    val page = readPage[(AssetRow[Sc], Option[LocalDate], SortValue, SortValue, Int)](statement, isFirstPage)
-    // A first page carries the overall count on every row; an empty first page has no rows because nothing matches
-    val total = Option.when(isFirstPage)(page.headOption.flatMap(_._2).getOrElse(0))
+    val page = readPage[(AssetRow[Sc], Option[LocalDate], SortValue, SortValue, Int)](statement, isTotalCounted)
+    // A page that counts the total carries it on every row; an empty one has no rows because nothing matches
+    val total = Option.when(isTotalCounted)(page.headOption.flatMap(_._2).getOrElse(0))
     val hasMore = page.headOption.exists(_._1._5 > query.rpp)
     logPage(page.length, total, hasMore)
 
@@ -120,15 +120,15 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
 
     val repositoryId = RequestContext.getRepository.persistedId
     val grouping = query.grouping.getOrElse(throw IllegalArgumentException("A grouped search needs a grouping"))
-    val isFirstPage = query.cursor.isEmpty
-    if matchesNothing(query) then return GroupedSearchPage(Nil, Option.when(isFirstPage)(0), hasMore = false)
+    val isTotalCounted = query.isTotalCounted
+    if matchesNothing(query) then return GroupedSearchPage(Nil, Option.when(isTotalCounted)(0), hasMore = false)
 
     // Each statement selects the asset columns, then what names the row's group, its two sort keys, the group's count and
     // the candidate count; the shape of the group columns is the grouping's
     val page: IndexedSeq[(GroupedSearchRow, Int, Option[Int])] = grouping.by match
       case GroupBy.DateTaken =>
         val statement = SearchQueries.grouped(searchDialect, query, repositoryId)
-        readPage[(AssetRow[Sc], Option[LocalDate], SortValue, SortValue, Int, Int)](statement, isFirstPage).map {
+        readPage[(AssetRow[Sc], Option[LocalDate], SortValue, SortValue, Int, Int)](statement, isTotalCounted).map {
           case ((asset, day, sortValue, secondSortValue, groupTotal, candidates), total) =>
             val row = GroupedSearchRow(toModel(asset), SearchGroupKey.Day(day), sortValue, secondSortValue, groupTotal)
             (row, candidates, total)
@@ -137,22 +137,22 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         val statement = SearchQueries.groupedByLocation(searchDialect, query, repositoryId)
         readPage[(AssetRow[Sc], Option[String], Option[String], Option[String], Option[String], SortValue, SortValue, Int, Int)](
           statement,
-          isFirstPage).map {
+          isTotalCounted).map {
           case ((asset, locationId, pathKey, name, categoryName, sortValue, secondSortValue, groupTotal, candidates), total) =>
             val group = SearchGroupKey.Location(id = locationId, pathKey = pathKey, name = name, categoryName = categoryName)
             (GroupedSearchRow(toModel(asset), group, sortValue, secondSortValue, groupTotal), candidates, total)
         }
       case GroupBy.Sequence =>
         val statement = SearchQueries.groupedBySequence(searchDialect, query, repositoryId)
-        readPage[(AssetRow[Sc], Option[String], Option[LocalDateTime], SortValue, SortValue, Int, Int)](statement, isFirstPage)
+        readPage[(AssetRow[Sc], Option[String], Option[LocalDateTime], SortValue, SortValue, Int, Int)](statement, isTotalCounted)
           .map {
             case ((asset, sequenceId, firstCapturedAt, sortValue, secondSortValue, groupTotal, candidates), total) =>
               val group = SearchGroupKey.Sequence(id = sequenceId, firstCapturedAt = firstCapturedAt)
               (GroupedSearchRow(toModel(asset), group, sortValue, secondSortValue, groupTotal), candidates, total)
           }
 
-    // A first page carries the overall count on every row; an empty first page has no rows because nothing matches
-    val total = Option.when(isFirstPage)(page.headOption.flatMap(_._3).getOrElse(0))
+    // A page that counts the total carries it on every row; an empty one has no rows because nothing matches
+    val total = Option.when(isTotalCounted)(page.headOption.flatMap(_._3).getOrElse(0))
     val hasMore = page.headOption.exists(_._2 > query.rpp)
     logPage(page.length, total, hasMore)
 
@@ -242,11 +242,11 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
   private def logPage(numOfRows: Int, total: Option[Int], hasMore: Boolean): Unit =
     logger.trace(s"Retrieved [$numOfRows] records, total ${total.getOrElse("not counted")}, more: $hasMore")
 
-  /** Runs a page's statement: a first page's rows end with the overall total, which a later page never selects */
-  private def readPage[Row](statement: SqlStr, isFirstPage: Boolean)(using
+  /** Runs a page's statement: the rows of a page that counts the total end with it, which no other page selects */
+  private def readPage[Row](statement: SqlStr, isTotalCounted: Boolean)(using
       Queryable.Row[?, Row],
       Queryable.Row[?, (Row, Int)]): IndexedSeq[(Row, Option[Int])] =
-    if isFirstPage then Db.read(dialect)(_.runSql[(Row, Int)](statement)).map((row, total) => (row, Some(total)))
+    if isTotalCounted then Db.read(dialect)(_.runSql[(Row, Int)](statement)).map((row, total) => (row, Some(total)))
     else Db.read(dialect)(_.runSql[Row](statement)).map(row => (row, None))
 
   /**

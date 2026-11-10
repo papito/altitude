@@ -53,7 +53,7 @@ export const Const = {
         personNameEdited: "PERSON_NAME_EDITED_EVENT",
         personMarkedAsBadMatch: "PERSON_MARKED_AS_BAD_MATCH_EVENT",
         personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
-        // A person was merged, hidden, shown, discarded or corrected on a Face; the People tab reloads its panes
+        // A person was merged, hidden, shown, discarded, renamed or corrected on a Face; the People tab reloads its panes
         peopleChanged: "PEOPLE_CHANGED_EVENT",
         // The Change combobox of a People row picked a Person (`detail.personId`) or a new name (`detail.name`) for
         // `detail.faceId` (js/alpine/components/face-combobox.js); js/search-results/detail-panel.js sends the correction
@@ -242,6 +242,12 @@ export const Const = {
             grid: "grid",
             map: "map",
         },
+        // The Triage subsets, the assets the Triage summary's counts show: the server's (`TriageSubset.apiValue`), sent
+        // as the `subset` parameter
+        subsets: {
+            unknownPeople: "unknownPeople",
+            noLocation: "noLocation",
+        },
         // The sort by match quality (`Const.Search.SORT_RELEVANCE`), which the server refuses without Search text
         sortRelevance: "relevance",
         // The largest page size the server serves (`Const.Search.MAX_RPP`); it refuses a larger one
@@ -267,7 +273,8 @@ export const Const = {
             unmatched: "unmatched",
         },
         // The two panes of the People tab, as `data-app-people-pane` names them: the Main pane,
-        // always shown, and the Duplicate pane of Split view
+        // always shown, and the Duplicate pane of Split view. The names are the server's too
+        // (`Const.PeoplePane`), sent as the `pane` parameter of a pane's list
         panes: {
             main: "main",
             duplicate: "duplicate",

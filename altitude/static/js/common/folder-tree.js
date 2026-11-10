@@ -22,9 +22,10 @@
  * Each non-root row's icon is a button. On a branch (a folder with child
  * folders) it expands and collapses: single-click reveals the direct children or
  * closes the branch, double-click on a collapsed branch reveals every level (see
- * `_bindBranchGestures`). On a leaf it navigates, as the name does. The folder
- * model (`models/folder.js`) owns the expansion state the control changes.
- * Expansion needs no request: the tree endpoint returns every folder.
+ * `_bindBranchGestures`). On a leaf it is a search trigger for the folder, as the
+ * name is. The folder model (`models/folder.js`) owns the expansion state the
+ * control changes. Expansion needs no request: the tree endpoint returns every
+ * folder.
  *
  * Each folder's context menu is built with the tree too, as a native
  * `popover="auto"` panel next to its ⋯ trigger (`common/context-menu-markup.js`, shared
@@ -245,7 +246,9 @@ function _restoreExpandedState(expandedIds) {
 /**
  * Build the root folder node.
  * The root folder is always shown as expanded and has a plain folder icon that
- * navigates to the root (same behaviour as the old template).
+ * navigates to the root, as its name does. The root is the whole repository, so
+ * in Triage, which describes a folder rather than search it, both do nothing
+ * (`search-results/search-triggers.js`) and anchor nothing.
  */
 function _renderRootNode(folder, repoId) {
     const folderEl = document.createElement("div")
@@ -268,7 +271,7 @@ function _buildRootControls(folder, repoId) {
     controlsEl.classList.add("controls", "dropzone")
     controlsEl.setAttribute(Const.attributes.folderId, folder.id)
 
-    // Clickable folder icon → navigate to root (same as clicking the name)
+    // Clickable folder icon → navigate to root (same as clicking the name; nothing in Triage)
     const iconEl = document.createElement("i")
     iconEl.id = `folder-icon-${folder.id}`
     iconEl.className = "fas fa-folder folder-icon"
@@ -314,7 +317,8 @@ function _buildFolderControls(folder, repoId) {
     controlsEl.setAttribute(Const.attributes.folderId, folder.id)
 
     const nameEl = _buildFolderNameEl(folder, folder.name)
-    const iconCtrlEl = _buildFolderIconCtrl(folder, nameEl)
+    _anchorDialogsTo(nameEl)
+    const iconCtrlEl = _buildFolderIconCtrl(folder)
 
     // ⋯ menu button (leftmost column)
     const menuCtrlEl = _buildMenuCtrl(folder, repoId, folder.name)
@@ -339,14 +343,15 @@ function _buildFolderControls(folder, repoId) {
  * Build a non-root folder's icon control (pure JS, no HTMX): a native button, so Enter and Space
  * activate it and it never submits a form or jumps the page. It keeps the stable IDs
  * `expand-folder-children-<id>` (focus restoration after a rebuild, focus recovery after a
- * collapse) and `folder-icon-<id>` (the model's glyph updates); the icon itself is decorative.
+ * collapse, and a leaf's dialog anchor) and `folder-icon-<id>` (the model's glyph updates); the
+ * icon itself is decorative.
  *
  * A branch's control toggles expansion and never navigates: it names the folder, points
  * `aria-controls` at the children container, and carries `aria-expanded`, which the model keeps
- * synchronized. A leaf's control navigates to the folder, exactly as the name does, and so is
- * blocked in the triage and trash views like the name.
+ * synchronized. A leaf's control, "Open folder <name>", is a search trigger for the folder, as the
+ * name is (`_makeSearchTrigger`), and the anchor of the scope dialog its click opens in Triage.
  */
-function _buildFolderIconCtrl(folder, nameEl) {
+function _buildFolderIconCtrl(folder) {
     const isBranch = folder.numOfChildren > 0
 
     const ctrlEl = document.createElement("button")
@@ -369,13 +374,8 @@ function _buildFolderIconCtrl(folder, nameEl) {
         _bindBranchGestures(ctrlEl, folder.id)
     } else {
         ctrlEl.setAttribute("aria-label", `Open folder ${folder.name}`)
-        ctrlEl.addEventListener("click", (event) => {
-            event.preventDefault()
-            event.stopPropagation()
-
-            // The name is a search trigger; it decides for itself whether the current view allows it
-            nameEl.click()
-        })
+        _makeSearchTrigger(ctrlEl, folder.id)
+        _anchorDialogsTo(ctrlEl)
     }
 
     return ctrlEl
@@ -453,11 +453,24 @@ function _buildFolderNameEl(folder, label) {
 /**
  * Navigating to a folder is a search like any other: the element declares the one parameter it
  * knows about and `search-results/search-triggers.js` combines it with the rest of the current
- * search. That hydrator also owns the rule that folder navigation does nothing in triage and trash.
+ * search. That hydrator also owns where a folder trigger's click goes outside Browse: in Triage the
+ * root does nothing and any other folder opens its scope dialog, a popover dialog anchored to the
+ * clicked trigger (`_anchorDialogsTo`), and in the Trash it does nothing.
  */
 function _makeSearchTrigger(el, folderId) {
     el.setAttribute("data-app-search", "click")
     el.setAttribute("data-app-search-folder-id", folderId)
+}
+
+/**
+ * Makes a non-root row's trigger, its name or a leaf's icon control, the anchor of the popover
+ * dialog its click requests in Triage: it carries `anchor-name: --<its id>` and names that ID in
+ * `data-app-dialog-anchor`, as the triggers `context-menu-markup.js` builds do. The ID is stable,
+ * so a rebuild of the tree re-anchors an open dialog.
+ */
+function _anchorDialogsTo(el) {
+    el.style.anchorName = `--${el.id}`
+    el.dataset.appDialogAnchor = el.id
 }
 
 /**

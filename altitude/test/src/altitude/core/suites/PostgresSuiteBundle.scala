@@ -7,7 +7,7 @@ import altitude.core.Altitude
 import altitude.core.Const as C
 
 object PostgresSuiteBundle {
-  val testApp: Altitude = new Altitude(dbEngineOverride = Some(C.DbEngineName.POSTGRES))
+  val testApp: Altitude = TestAltitudeApp.build(C.DbEngineName.POSTGRES)
 
   def setup(testApp: Altitude): Unit = TestDatabase.reset(testApp)
 }

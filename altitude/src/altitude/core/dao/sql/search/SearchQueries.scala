@@ -38,6 +38,7 @@ import altitude.core.util.SearchSort
 import altitude.core.util.SearchSource
 import altitude.core.util.SortDirection
 import altitude.core.util.SortValue
+import altitude.core.util.TriageSubset
 
 /**
  * A search as typed relations, rendered into hand-written statements.
@@ -74,6 +75,8 @@ object SearchQueries:
       .filterIf(query.personIds.nonEmpty)(asset => personFilter(engine, asset, query.personIds))
       .filterIf(query.albumIds.nonEmpty)(asset => albumFilter(engine, asset, query.albumIds))
       .filterIf(query.locationIds.nonEmpty)(asset => locationFilter(engine, asset, query.locationIds))
+      .filterIf(query.subset.contains(TriageSubset.UnknownPeople))(asset => unknownPeopleFilter(engine, asset))
+      .filterIf(query.subset.contains(TriageSubset.NoLocation))(asset => noLocationFilter(engine, asset.id))
       .filterIf(query.bbox.isDefined)(asset => bboxFilter(engine, asset, query, repositoryId, query.bbox.get))
 
   /** The people a Search text resolves names against, as (ID, name): named, visible, live and not a bad match */
@@ -124,7 +127,8 @@ object SearchQueries:
    * which orders by it next), ordered by the sort, then the ID, as a grouped page is within a group: a missing capture time
    * creates a large tie group, and without the ID a page is not deterministic. It fetches one row past the page to say whether
    * another page follows, and a page past the first starts after its cursor's anchor ([[afterBySort]]), so no page reads the rows
-   * of the pages before it. A first page also counts the matches, up to the cap.
+   * of the pages before it. A first page also counts the matches, up to the cap, unless its search counts no total
+   * (`SearchQuery.withoutTotal`).
    *
    * Sorted by capture time, the candidates are the day-ordered ones of a page grouped by day ([[dayCandidates]]), the days in the
    * sort's direction: the capture day followed by the capture time is the order of the capture time alone, and it is the order of
@@ -180,7 +184,7 @@ object SearchQueries:
         val sortValue = sort.fold[Expr[?]](nullSortValue)(_ => sortColumn(engine, query, asset))
         candidatesOf(base, Position(asset.id, nullDay, sortValue, asset.originalCreatedAt))
 
-    val total = totalFragments(engine, base, query.cursor.isEmpty, query.totalCap)
+    val total = totalFragments(engine, base, query.isTotalCounted, query.totalCap)
 
     def order(prefix: String): SqlStr =
       SqlStr.raw(
@@ -291,10 +295,10 @@ object SearchQueries:
    * Relevance, computed once, which the slices, the cursor comparison and the order then read. No index orders a computed value,
    * so nothing is lost by reading every match first.
    *
-   * A page reached by cursor skips the overall count: the footer total was set by the first page. Ordering is day, then the sort,
-   * then the ID as a deterministic tiebreaker. Nulls fall where the engine puts them natively; an explicit NULLS clause would
-   * forfeit index-ordered reads on both engines. The Relevance sort is the exception ([[orderWithinGroup]]): its capture-time
-   * tiebreaker places them itself.
+   * A page reached by cursor skips the overall count, the footer total having been set by the first page, as does a search
+   * without a total (`SearchQuery.withoutTotal`). Ordering is day, then the sort, then the ID as a deterministic tiebreaker.
+   * Nulls fall where the engine puts them natively; an explicit NULLS clause would forfeit index-ordered reads on both engines.
+   * The Relevance sort is the exception ([[orderWithinGroup]]): its capture-time tiebreaker places them itself.
    *
    * The shell is hand-written on purpose: `MATERIALIZED`, the guarded `LIMIT CASE`, SQLite's planner hint and native null
    * placement are all tuned against the two engines' plans, and none of them can be expressed through a typed query.
@@ -309,7 +313,6 @@ object SearchQueries:
 
     // A grouping timestamp the schema lets be null gives its rows their own group, at the engine's native null position
     val ownGroup = engine.isNullableTimestamp(dateField)
-    val isFirstPage = query.cursor.isEmpty
 
     def day(row: AssetRow[Expr]): Expr[Option[LocalDate]] = engine.day(row, dateField)
     def isUndated(row: AssetRow[Expr]): Expr[Boolean] = Expr[Boolean](implicit ctx => sql"${day(row)} IS NULL")
@@ -326,7 +329,7 @@ object SearchQueries:
       else SqlStr.empty
     val nullJoin = if ownGroup then SqlStr.raw(" OR (d.day IS NULL AND p.day IS NULL)") else SqlStr.empty
 
-    val total = totalFragments(engine, base, isFirstPage, query.totalCap)
+    val total = totalFragments(engine, base, query.isTotalCounted, query.totalCap)
 
     def order(prefix: String): SqlStr =
       SqlStr.raw(s"${prefix}day ${grouping.direction}, ${candidateOrderWithinGroup(prefix, sort)}")
@@ -381,13 +384,10 @@ object SearchQueries:
     val sort = query.searchSort.head
     val base = matching(engine, query, repositoryId)
     val scored = ScoredRow.select
-    val isFirstPage = query.cursor.isEmpty
     // A cursor whose anchor was in a Location continues the located part; one without a key is in the trailing group already
     val inLocatedPart = query.cursor.forall(_.key.isDefined)
 
     def assetPosition(row: AssetRow[Expr]): Position = assetPositionIn(engine, query, row)
-    def inNoLocation(id: Expr[String]): Expr[Boolean] =
-      LocationAssetRow.select.filter(link => link.assetId `=` id).map(_.assetId).isEmpty
     def nullText: Expr[Option[String]] = Expr[Option[String]](implicit ctx => sql"NULL")
 
     /** The located slice: each match under each of its Locations, in path order, after the cursor's anchor when it has one */
@@ -459,10 +459,10 @@ object SearchQueries:
 
     val unlocated =
       if sort.isRelevance then
-        val relation = scored.filter(row => inNoLocation(row.id))
+        val relation = scored.filter(row => noLocationFilter(engine, row.id))
         unlocatedSlice(relation, scoredPosition(WithSqlExpr.get(relation)))
       else
-        val relation = base.filter(row => inNoLocation(row.id))
+        val relation = base.filter(row => noLocationFilter(engine, row.id))
         unlocatedSlice(relation, assetPosition(WithSqlExpr.get(relation)))
 
     val candidatesCte =
@@ -485,7 +485,7 @@ object SearchQueries:
       )
       .withCompleteQuery(false)
 
-    val total = totalFragments(engine, base, isFirstPage, query.totalCap)
+    val total = totalFragments(engine, base, query.isTotalCounted, query.totalCap)
 
     // Located rows first whatever the engine's null placement, then path order
     def order(prefix: String): SqlStr = SqlStr.raw(
@@ -505,7 +505,7 @@ object SearchQueries:
           FROM (SELECT DISTINCT location_id FROM page WHERE location_id IS NOT NULL) AS p
         UNION ALL
         SELECT p.location_id AS location_id,
-               (SELECT count(*) FROM (${matchingIds(engine, base, Some(row => inNoLocation(row.id)))}) AS m) AS n
+               (SELECT count(*) FROM (${matchingIds(engine, base, Some(row => noLocationFilter(engine, row.id)))}) AS m) AS n
           FROM (SELECT DISTINCT location_id FROM page WHERE location_id IS NULL) AS p
       )"""
     ) ++ total.cte
@@ -550,7 +550,6 @@ object SearchQueries:
     val sort = query.searchSort.head
     val base = matching(engine, query, repositoryId)
     val scored = ScoredRow.select
-    val isFirstPage = query.cursor.isEmpty
     // A cursor whose anchor was in a Sequence continues the sequenced part; a Sequence with no capture time has an ID and no key
     val inSequencedPart = query.cursor.forall(_.groupId.isDefined)
 
@@ -644,7 +643,7 @@ object SearchQueries:
 
     val inPageSequence = (row: AssetRow[Expr]) => Expr[Boolean](implicit ctx => sql"${row.sequenceId} = p.sequence_id")
 
-    val total = totalFragments(engine, base, isFirstPage, query.totalCap)
+    val total = totalFragments(engine, base, query.isTotalCounted, query.totalCap)
 
     // The Sequences first whatever the engine's null placement, by the first capture with those that have none last
     def order(prefix: String): SqlStr = SqlStr.raw(
@@ -964,16 +963,19 @@ object SearchQueries:
   private def cappedIds(engine: SearchDialect, base: Select[AssetRow[Expr], AssetRow[Sc]], cap: Int): SqlStr =
     matchingIds(engine, base, None) + SqlStr.raw(s" LIMIT ${cap + 1}")
 
-  /** A first page's overall count: its CTE, the column that reads it and the join that brings it in; nothing on a continuation */
+  /**
+   * A first page's overall count: its CTE, the column that reads it and the join that brings it in; nothing on a continuation or
+   * for a search without a total
+   */
   private case class TotalFragments(cte: Option[SqlStr], column: SqlStr, join: SqlStr)
 
-  /** The overall count on a first page, counted up to one past the cap */
+  /** The overall count of a page that counts one (`SearchQuery.isTotalCounted`), counted up to one past the cap */
   private def totalFragments(
       engine: SearchDialect,
       base: Select[AssetRow[Expr], AssetRow[Sc]],
-      isFirstPage: Boolean,
+      isTotalCounted: Boolean,
       cap: Int): TotalFragments =
-    if isFirstPage then
+    if isTotalCounted then
       TotalFragments(
         Some(sql"total AS MATERIALIZED (SELECT count(*) AS n FROM (${cappedIds(engine, base, cap)}) AS m)"),
         SqlStr.raw(", t.n AS total"),
@@ -1268,6 +1270,29 @@ object SearchQueries:
       .filter(link => Columns.isInSet(link.locationId, locationIds, engine.dialect))
       .map(_.assetId)
       .contains(asset.id)
+
+  /**
+   * Assets with a Face of an Unknown person: one with no name who is neither hidden, merged away (`is_deleted`) nor discarded as
+   * a bad match, whatever their bucket
+   */
+  private def unknownPeopleFilter(engine: SearchDialect, asset: AssetRow[Expr]): Expr[Boolean] =
+    import engine.dialect.*
+
+    FaceRow.select
+      .join(PersonRow)((face, person) => face.personId `=` person.id)
+      .filter {
+        (_, person) =>
+          (person.isNamed `=` false) && (person.isHidden `=` false) && (person.isDeleted `=` false) &&
+          (person.isBadMatch `=` false)
+      }
+      .map((face, _) => face.assetId)
+      .contains(asset.id)
+
+  /** Assets no Location points at; a GPS position of their own does not count */
+  private def noLocationFilter(engine: SearchDialect, id: Expr[String]): Expr[Boolean] =
+    import engine.dialect.*
+
+    LocationAssetRow.select.filter(link => link.assetId `=` id).map(_.assetId).isEmpty
 
   /**
    * Assets plotted inside the box: by their own point or, without one of their own, by the pin of a Location they are in - the

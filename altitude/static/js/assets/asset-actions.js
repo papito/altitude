@@ -44,7 +44,9 @@ export function createAssetActions({
     // Every successful mutation refreshes the nav counts, the folder tree counts, the album and
     // Location counts (recycling drops an asset from its albums and Locations), the number of
     // Sequences to curate, and each person's number on the People tab (`peopleChanged`, which
-    // nothing hears while the tab is not mounted)
+    // the People tab hears only while it is mounted). In Triage the nav's reload, the Location
+    // counts' and `peopleChanged` each ask for the Triage summary, which they reload once
+    // (listeners/triage.js)
     function refreshCounts() {
         reloadNav()
         reloadFolderCounts()

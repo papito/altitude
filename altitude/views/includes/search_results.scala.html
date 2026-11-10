@@ -4,6 +4,7 @@
 @import altitude.core.util.SearchGrouping
 @import altitude.core.util.SearchSort
 @import altitude.core.util.SortDirection
+@import altitude.core.util.TriageSubset
 @import altitude.core.models.Album
 @import altitude.core.models.Folder
 @import altitude.core.models.Location
@@ -15,9 +16,9 @@
    `grouping`, or htmx/map_view for the map layout) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the Group and Sort choice menus. `text` is the Search text the
    results were matched by, when `q` had a usable term: it is what makes the Relevance sort available. `total` counts the matches
    up to one past `totalCap`, which means more than the cap. `person`, `folderPath` (the folder's ancestors, top-level first,
-   then the folder; empty for the root), `album` and `location` (with its category's name) are the scope the results title
-   names (includes/results_title); `text` is its title when none of them is set. *@
-@(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None)
+   then the folder; empty for the root), `album`, `location` (with its category's name) and `subset` (a Triage subset)
+   are the scope the results title names (includes/results_title); `text` is its title when none of them is set. *@
+@(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None, subset: Option[TriageSubset] = None)
 
 @* The effective scope of these results, as the server resolved them from the search parameters it was sent;
    the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js).
@@ -56,6 +57,15 @@
 } else if (location.isDefined) {
 @includes.html.results_title("fa-map-marker-alt", subtitle = location.get.categoryName) {
 <span class="name">@{location.get.name}</span>
+}
+} else if (subset.contains(TriageSubset.UnknownPeople)) {
+@* Font Awesome 5 Free has no person with a question mark: the incognito user stands for a person with no name *@
+@includes.html.results_title("fa-user-secret") {
+<span class="name">Unknown people</span>
+}
+} else if (subset.contains(TriageSubset.NoLocation)) {
+@includes.html.results_title("fa-map-marker-alt slashed") {
+<span class="name">No Location</span>
 }
 } else if (text.isDefined) {
 @includes.html.results_title("fa-search", subtitle = Some("in this repository")) {

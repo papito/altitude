@@ -37,10 +37,13 @@ lint:
 
 
 test:
-	ENV=test mill -j1 altitude.test
+	ENV=test mill -j4 altitude.test.testOnly '*SuiteBundle'
+
+test-local:
+	ENV=test mill -j3 altitude.test.testOnly '*UnitSuiteBundle' '*SqliteSuiteBundle' '*ControllerSuiteBundle'
 
 test-focused:
-	ENV=test mill -j1 altitude.test.testOnly -- -n focused -oD
+	ENV=test mill -j4 altitude.test.testOnly '*SuiteBundle' -- -n focused -oD
 
 test-focused-psql:
 	ENV=test mill -j1 altitude.test.testOnly *PostgresSuiteBundle -- -n focused -oD

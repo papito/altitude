@@ -108,6 +108,19 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     }
 
   /**
+   * The Person by ID when they are live in the context repository, hidden or not: one merged away or marked as a bad match is not
+   * found, as another repository's or none is
+   */
+  def getLiveInRepository(personId: String): Person =
+    val live = new Query()
+      .add(FieldConst.ID -> personId)
+      .add(FieldConst.Person.IS_DELETED -> false)
+      .add(FieldConst.Person.IS_BAD_MATCH -> false)
+    query(live).records.headOption.getOrElse {
+      throw NotFoundException(s"Live person [$personId] not found")
+    }
+
+  /**
    * Stores the Face as the person's in the asset, sets it as the cover when the person has none, and counts the asset toward
    * `numOfFaces` when it is the person's first Face on it: the number counts the assets a person is found on, so a second Face of
    * theirs on the same asset (the same person twice in one image) adds nothing

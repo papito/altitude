@@ -8,6 +8,7 @@ import { bindAppDragDrop } from "./dragdrop/index.js"
 import { hydrateAppFragments } from "./fragments/index.js"
 import { openCurationInLocation } from "./listeners/curation.js"
 import { handlePeopleEscapeKeyPressed } from "./listeners/people.js"
+import { reloadTriageSummary } from "./listeners/triage.js"
 import { registerAppEventListeners } from "./listeners/index.js"
 import { createDetailFullscreen } from "./search-results/detail-fullscreen.js"
 import { createDetailPanel } from "./search-results/detail-panel.js"
@@ -105,6 +106,8 @@ export class FrontendApp {
                 target: "nav",
             },
         )
+        // What changes the nav's counts can change the Triage summary's
+        this.reloadTriageSummary()
     }
 
     reloadFolderCounts() {
@@ -117,5 +120,12 @@ export class FrontendApp {
 
     reloadLocationCounts() {
         refreshLocationCounts(this.context.getRepoId())
+        // A membership change can put a triaged asset in its first Location or take it out of its last
+        this.reloadTriageSummary()
+    }
+
+    /** Reloads the Triage summary in Triage, once for every change however many paths ask (listeners/triage.js) */
+    reloadTriageSummary() {
+        reloadTriageSummary()
     }
 }

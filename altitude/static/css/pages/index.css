@@ -84,24 +84,32 @@ html[data-dock-side="top"] #content { border-top: var(--border-hairline) var(--p
 html[data-dock-side="bottom"] #explorer { border-top: var(--border-hairline) var(--panel-border-color); }
 html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) var(--panel-border-color); }
 
-/* The explorer's header: the tab list, growing, and whatever sits at its end. The tab list's own bottom edge (tabs.css)
-   moves up to the header so it spans the whole row; the selected tab's primary edge still sits right above it */
+/* The explorer's header: the tab list, growing, and whatever sits at its end, under the Triage summary in Triage, which
+   spans both columns. The tab list's own bottom edge (tabs.css) moves up to the header so it spans the whole row; the
+   selected tab's primary edge still sits right above it. The summary's sentences wrap, so the header's min-content, the
+   explorer's minimum width (#explorer), is still the tabs and the Dock side control in full */
 #explorerHeader {
-  display: flex;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
   border-bottom: var(--border-hairline) var(--panel-border-color);
 }
 
 #explorerHeader [role="tablist"] {
-  flex: 1;
   border-bottom: 0;
 }
 
-/* The Dock side menu at the header's end, centered on the tab row, inset as the tab list is; in triage, where the
-   tab list is hidden, it is pushed to the end on its own */
+/* The Triage summary's host (htmx/triage_summary), inset as the tab list is, so the summary's icon lines up with the
+   first tab's */
+#triageSummary {
+  grid-column: 1 / -1;
+  margin: 0 var(--panel-padding) var(--space-4);
+}
+
+/* The Dock side menu at the header's end, after the growing tab list: centered on the tab row, inset as the tab list
+   is */
 #dockSideMenuHost {
   align-self: center;
-  margin-inline-start: auto;
   padding-inline-end: var(--panel-padding);
 }
 
@@ -122,6 +130,70 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   overflow-y: auto;
   overflow-x: hidden;
   contain: inline-size;
+}
+
+/* Triage tints the explorer with the accent, flat and weaker than the results' stripes (#content.triage, core.css) */
+:where(body.index) main:has(> #content.triage) > #explorer {
+  background-color: hsl(from var(--theme-accent) h s l / 0.17);
+}
+
+/* The view band: the view's name on a strip of frosted glass with an edge of the view's color (--band-color: Triage's
+   accent, the Trash's warning color), down the left edge of the results, from the toolbar's bottom edge to the pane's.
+   It is positioned in the results' own grid area (main is its containing block), over the gutter the striped pane
+   leaves (core.css), so it stays put while the results scroll; its top is anchored to the toolbar, wherever the
+   results title and a wrapped row put it. It takes no pointer events and, with an empty alternative text, is not
+   announced */
+:where(body.index) main:has(> #content:is(.triage, .trashbin)) {
+  position: relative;
+}
+
+:where(body.index) main:has(> #content.triage)::after {
+  content: "Triage" / "";
+  --band-color: var(--theme-accent);
+}
+
+:where(body.index) main:has(> #content.trashbin)::after {
+  content: "Trash" / "";
+  --band-color: var(--warning-color);
+}
+
+:where(body.index) main:has(> #content:is(.triage, .trashbin))::after {
+  position: absolute;
+  grid-area: content;
+  inset: anchor(--results-toolbar bottom, 0) auto 0 0;
+  width: var(--view-band-width);
+  display: grid;
+  place-items: center;
+  writing-mode: vertical-rl;
+  border: var(--border-heavy) var(--band-color);
+  background-color: hsl(from var(--band-color) h s l / 0.28);
+  backdrop-filter: var(--popover-backdrop-filter);
+  opacity: 0.8;
+  font-size: var(--font-size-large);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  letter-spacing: var(--letter-spacing-band);
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+/* The results title and the toolbar span the pane, the band's gutter included: the band starts below them */
+:where(body.index) #content:is(.triage, .trashbin) :is(.results-title, #searchControl) {
+  margin-left: calc(-1 * var(--view-band-width));
+}
+
+/* Triage counts nothing in the explorer: no asset count of a folder or a Location (.asset-count), nor a Person's
+   (people_list's .count). The cells stay in the page, and the code that patches them goes on as in Browse */
+:where(body.index) main:has(> #content.triage) #explorer .asset-count,
+:where(body.index) main:has(> #content.triage) #people .cell .count {
+  display: none;
+}
+
+/* A click on the root folder does nothing in Triage, where a folder is described rather than searched and the root is
+   the whole repository (js/search-results/search-triggers.js), so its name and icon show the arrow, and not the pointer
+   of folders.css. Everything else that searches in Browse acts in Triage and keeps its pointer */
+:where(body.index) main:has(> #content.triage) #rootFolderList .folder.root > .controls > :is(.folder-name, .folder-icon) {
+  cursor: default;
 }
 
 /* The divider between the explorer and the results, in the grid's gutter area: a .divider of core.css that, with no

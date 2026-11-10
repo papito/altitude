@@ -198,10 +198,11 @@ class TestContext(val testApp: Altitude) {
 
     val imported: Asset = testApp.service.library.addAsset(dataAsset)
 
-    // The random image is undated and of one size, so in triage the import may pair it, by likeness, with an earlier one as it
-    // would the frames of one scene. A persisted asset is a plain fixture: the Sequence the import gave it is cleared from every
-    // asset that took it, and a test that wants Sequences stamps them (`setAssetSequence`). An import that paired with a stamped
-    // Sequence would wipe that stamp off every member with the clear, so it fails the test instead
+    // The random image is undated and of one size, so in triage, in a suite that turns the Scene models on, the import may pair
+    // it by likeness with an earlier one as it would the frames of one scene; with the models off it pairs by the hash alone, and
+    // two random images' hashes never come near. A persisted asset is a plain fixture: the Sequence the import gave it is cleared
+    // from every asset that took it, and a test that wants Sequences stamps them (`setAssetSequence`). An import that paired with
+    // a stamped Sequence would wipe that stamp off every member with the clear, so it fails the test instead
     val persistedAsset = imported.sequenceId.fold(imported) {
       sequenceId =>
         if (stampedSequences.contains(sequenceId)) {
@@ -221,6 +222,18 @@ class TestContext(val testApp: Altitude) {
     assets = assets ::: persistedAsset :: Nil
 
     persistedAsset
+  }
+
+  /**
+   * A fixture without the import pipeline: the asset persisted, indexed and completed (`persistAndIndex`, then `completeImport`),
+   * and counted in the stats, as an import's database stages leave it. It has no file, Preview, faces, Image quality, perceptual
+   * hash or Scene embeddings, so a test reading any of them persists its asset through the pipeline (`persistAsset`). With no
+   * hash it is no frame, and the completion puts it in no Sequence; a test that wants one stamps it (`setAssetSequence`).
+   */
+  def insertAsset(asset: Asset = makeAsset()): Asset = {
+    val completed = testApp.service.library.completeImport(testApp.service.library.persistAndIndex(asset))
+    assets = assets ::: completed :: Nil
+    completed
   }
 
   /** Rewrites an asset's capture time (camera wall-clock) and import time (an instant) in each engine's storage form */

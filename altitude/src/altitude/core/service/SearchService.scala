@@ -145,7 +145,7 @@ class SearchService(val app: Altitude):
 
     logger.trace(
       s"Search page: ${result.records.length} assets" +
-        result.total.map(total => s" of $total matching").getOrElse(" (continued)") +
+        result.total.map(total => s" of $total matching").getOrElse(", total not counted") +
         s", in ${System.currentTimeMillis - started}ms")
     result
 
@@ -249,7 +249,7 @@ class SearchService(val app: Altitude):
     logger.trace(
       s"Grouped search by ${result.grouping.by} ${result.grouping.direction}, sorted ${result.sort}: " +
         s"${result.assets.length} images in ${result.groups.length} groups" +
-        result.total.map(total => s" of $total matching").getOrElse(" (continued)") +
+        result.total.map(total => s" of $total matching").getOrElse(", total not counted") +
         s", in ${System.currentTimeMillis - started}ms")
 
     result

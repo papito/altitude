@@ -104,8 +104,8 @@
     cursor: pointer;
 }
 
-/* The add button sits centered above the tree (below the navigation warning when that shows);
-   the control is built by js/common/folder-tree.js. Scoped to the shown state like the album hosts */
+/* The add button sits centered above the tree; the control is built by js/common/folder-tree.js.
+   Scoped to the shown state like the album hosts */
 #folderActions:not([hidden]) {
     display: grid;
     justify-items: center;
@@ -114,24 +114,4 @@
 
 #folderActions .action-button span {
     margin-left: var(--space-3);
-}
-
-#folderNavWarning {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    margin-bottom: var(--control-vertical-space);
-    padding: var(--space-4);
-    border-radius: var(--radius);
-    background-color: var(--warning-background-color);
-    /* The text, not the warning color: on the fill the warning color reads 3:1, the text 5.5:1 */
-    color: var(--theme-neutral-4);
-    line-height: var(--line-height-text);
-    border: 1px solid var(--warning-color);
-    text-shadow: none;
-}
-
-#folderNavWarning i {
-    flex-shrink: 0;
-    font-size: var(--font-size-medium);
 }

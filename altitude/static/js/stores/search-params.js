@@ -14,6 +14,7 @@ const DEFAULTS = {
     personId: null,
     albumId: null,
     locationId: null,
+    subset: null,
     q: null,
     bbox: null,
     triaged: null,
@@ -27,14 +28,20 @@ const DEFAULTS = {
 /**
  * What changing one parameter does to the others.
  *
- * Choosing a folder, a person, an album, or a Location are all "look somewhere else", so each clears
- * the other three; a view is a different place again and clears all four. The map area (`bbox`, the
- * crowded-pin panel's scope) belongs to the search it was drawn on, so looking somewhere else clears
- * it too.
+ * Choosing a folder, a person, an album, a Location or a Triage subset (`subset`, the assets one of
+ * the Triage summary's counts shows: those with Unknown people, or in no Location) are all "look somewhere
+ * else", so each clears the other four; a view is a different place again and clears all five. The
+ * map area (`bbox`, the crowded-pin panel's scope) belongs to the search it was drawn on, so looking
+ * somewhere else clears it too.
  *
  * Search text (`q`) is one more place to look: the whole repository outside the trash. So text
- * clears the four and returns to the repository view (a cleared parameter is back at its default),
- * and each of the four, and a view, clears the text.
+ * clears the five and returns to the repository view (a cleared parameter is back at its default),
+ * and each of the five, and a view, clears the text.
+ *
+ * A place set to nothing still clears the others, so a trigger with one empty literal (the Results
+ * title's ×, `data-app-search-person-id=""`) goes back to the whole
+ * view, from a folder, an album, a Location or a subset alike. Only the Triage summary offers a
+ * subset, but the server takes one in every view. An empty value is never sent (`isOmitted`).
  *
  * The layout, the grouping and the sort narrow or reorder what is already in scope and survive all
  * of them; the one sort that does not outlive its search is Relevance, which goes with the text
@@ -43,7 +50,7 @@ const DEFAULTS = {
  * clears it, and the store drops it from any other view. This table is what the server's old `newSearch=true` flag used to express, and it is the whole
  * reason a widget can send just the one parameter it knows about.
  */
-const PLACES = ["folderId", "personId", "albumId", "locationId"]
+const PLACES = ["folderId", "personId", "albumId", "locationId", "subset"]
 
 /** What looking at `place` (or, with none, at another view) clears */
 const elsewhere = (place) => [
@@ -58,6 +65,7 @@ const CLEARS = {
     personId: elsewhere("personId"),
     albumId: elsewhere("albumId"),
     locationId: elsewhere("locationId"),
+    subset: elsewhere("subset"),
     q: ["view", ...PLACES, "bbox"],
 }
 
@@ -66,11 +74,16 @@ const NUMBER_RANGES = {
     rpp: { min: 1, max: Const.search.maxRpp },
 }
 
+/** The words the server reads, each held to the values it accepts: a subset is one of the Triage subsets */
+const ALLOWED_VALUES = {
+    subset: Object.values(Const.search.subsets),
+}
+
 const PARAM_NAMES = Object.keys(DEFAULTS)
 
 /**
  * Search parameters read out of a browser URL's query string. Unknown parameters are ignored, and so
- * is a page size the server would refuse (`normalize`). The layout is the one
+ * is a page size or a subset the server would refuse (`normalize`). The layout is the one
  * exception to "the URL, then the defaults": a URL that says nothing about it gets the layout last
  * chosen in this browser (`localStorage`), so a map user opens on the map.
  */
@@ -233,8 +246,9 @@ function isOmitted(name, value) {
 }
 
 /**
- * A parameter's value as the store keeps it. A number the server would refuse is no opinion, like an
- * empty one, so a hand-edited URL cannot turn every search into a 400: the server's default applies.
+ * A parameter's value as the store keeps it. A number or a word the server would refuse is no opinion,
+ * like an empty one, so a hand-edited URL cannot turn every search into a 400: the server's default
+ * applies.
  */
 function normalize(name, value) {
     if (value === null || value === undefined || value === "") {
@@ -246,6 +260,12 @@ function normalize(name, value) {
         const { min, max } = NUMBER_RANGES[name]
         return Number.isInteger(num) && num >= min && num <= max
             ? num
+            : DEFAULTS[name]
+    }
+
+    if (name in ALLOWED_VALUES) {
+        return ALLOWED_VALUES[name].includes(String(value))
+            ? String(value)
             : DEFAULTS[name]
     }
 

@@ -24,9 +24,10 @@
  * with no Locations is plain: no button, no badge. A category row shows its ⋯ menu (Rename,
  * Delete), the icon and the name. A Location row shows its ⋯ menu (Rename, Delete, Move to
  * category), an icon, the name and its asset count (`.asset-count`, directly after the name, empty
- * for zero; `common/asset-count.js`); icon and name are search triggers for the Location and the
- * row's `.controls` is a drop zone for assets (`dragdrop/locations.js`). Locations are pointers
- * only: nothing here moves or changes an asset.
+ * for zero; `common/asset-count.js`); icon and name are search triggers for the Location, each the
+ * anchor of the scope dialog its click may open in Triage, and the row's `.controls` is a drop zone
+ * for assets (`dragdrop/locations.js`). Locations are pointers only: nothing here moves or changes
+ * an asset.
  *
  * Expansion is presentation state: it survives every rebuild of the list within the page (the
  * snapshot is taken immediately before the DOM is replaced) and is not persisted across page loads.
@@ -545,7 +546,7 @@ function _buildLocationRow(location, repoId, isChild) {
 
 function _buildIconEl(location, glyphClass) {
     const iconEl = document.createElement("i")
-    iconEl.id = `location-icon-${location.id}`
+    iconEl.id = `locationIcon-${location.id}`
     iconEl.className = `fas ${glyphClass} location-icon`
     return iconEl
 }
@@ -561,10 +562,17 @@ function _buildNameEl(location) {
 /**
  * Opening a Location is a search like any other: the element declares the one parameter it knows
  * about and `search-results/search-triggers.js` combines it with the rest of the current search.
+ * That hydrator also owns where the click goes in Triage: a search there too when the Location has
+ * triaged assets, and otherwise its scope dialog, a popover dialog anchored to the clicked icon or
+ * name. Each carries `anchor-name: --<its id>` (`locationIcon-<id>`, `locationName-<id>`) and names
+ * that ID in `data-app-dialog-anchor`, as the triggers `context-menu-markup.js` builds do; the IDs
+ * are stable, so a rebuild of the list re-anchors an open dialog.
  */
 function _makeSearchTrigger(el, locationId) {
     el.setAttribute("data-app-search", "click")
     el.setAttribute("data-app-search-location-id", locationId)
+    el.style.anchorName = `--${el.id}`
+    el.dataset.appDialogAnchor = el.id
 }
 
 /**

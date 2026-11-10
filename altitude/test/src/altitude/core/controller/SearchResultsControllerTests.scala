@@ -1,5 +1,6 @@
 package altitude.core.controller
 
+import altitude.test.TestContext
 import java.time.{ LocalDateTime, OffsetDateTime, ZoneOffset }
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ include, not, should, shouldBe }
@@ -10,6 +11,8 @@ import altitude.core.Const
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
+import altitude.core.models.Person
+import altitude.core.util.TriageSubset
 import altitude.core.util.Util
 
 /** The grouped HTML grid of the search results route, its continuation by cursor, and the ungrouped grid next to it */
@@ -1283,6 +1286,93 @@ import altitude.core.util.Util
         textPage should include("fa-search")
         textPage should include("""<span class="query">beach</span>""")
         textPage should include("in this repository")
+    }
+  }
+
+  test("A subset narrows the results in Triage and Browse, titles them and stays in the replaced URL") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with three triaged assets, one with a Face of an unnamed person, one with a Face of a named
+     * person, one in the Location "Beach", and a sorted asset with a Face of the unnamed person.
+     *
+     * Assertions:
+     *
+     * In Triage, `subset=unknownPeople` renders the cell of the asset with the unknown person alone, under the Results title
+     * "Unknown people" with its icon and the way back, and `subset=noLocation` the two assets no Location points at under "No
+     * Location"; both grid shapes and the map layout render the title, and the replaced URL carries the subset. In Browse,
+     * `subset=unknownPeople` renders the sorted asset with the unknown person.
+     *
+     * Edge cases:
+     *
+     * A subset that is not one of the two, or empty, is a plain-text 400, in the grid and in the map layout.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val unknown = testApp.service.person.addPerson(Person())
+        val named = testApp.service.person.addPerson(Person(name = Some("Alice")))
+        def withFaceOf(person: Person, isTriaged: Boolean): Asset = {
+          val asset = testContext.persistAsset(isTriaged = isTriaged)
+          testContext.addTestFace(person, asset, TestContext.unitVector(1))
+          asset
+        }
+        val withUnknown = withFaceOf(unknown, isTriaged = true)
+        val withNamed = withFaceOf(named, isTriaged = true)
+        val inBeach = testContext.persistAsset(isTriaged = true)
+        val beach = testApp.service.location.addLocation("Beach", 1, 2)
+        testApp.service.location.addAssets(beach.persistedId, Set(inBeach.persistedId))
+        val sortedWithUnknown = withFaceOf(unknown, isTriaged = false)
+        val triage = Map(Api.Field.Search.VIEW -> Const.Search.View.TRIAGE)
+        val unknownPeople = Map(Api.Field.Search.SUBSET -> TriageSubset.UnknownPeople.apiValue)
+        val noLocation = Map(Api.Field.Search.SUBSET -> TriageSubset.NoLocation.apiValue)
+
+        for (shape <- List(Map.empty[String, String], Map("groupBy" -> "dateTaken"))) withClue(s"$shape: ") {
+          val response = htmlSearch(host, repoId, triage ++ unknownPeople ++ shape)
+          response.statusCode shouldBe 200
+          val page = response.text()
+          page should include(cell(withUnknown))
+          (page should not).include(cell(withNamed))
+          (page should not).include(cell(inBeach))
+          page should include("""class="results-title"""")
+          page should include("fa-user-secret")
+          page should include("""<span class="name">Unknown people</span>""")
+          page should include("""data-app-search-person-id=""""")
+          java.net.URLDecoder.decode(response.headers("hx-replace-url").head, "UTF-8") should include(
+            s"subset=${TriageSubset.UnknownPeople.apiValue}")
+        }
+
+        val noLocationResponse = htmlSearch(host, repoId, triage ++ noLocation)
+        val noLocationPage = noLocationResponse.text()
+        noLocationPage should include(cell(withUnknown))
+        noLocationPage should include(cell(withNamed))
+        (noLocationPage should not).include(cell(inBeach))
+        noLocationPage should include("fa-map-marker-alt slashed")
+        noLocationPage should include("""<span class="name">No Location</span>""")
+        noLocationResponse.headers("hx-replace-url").head should include(s"subset=${TriageSubset.NoLocation.apiValue}")
+
+        val map = htmlSearch(host, repoId, triage ++ noLocation + (Api.Field.Search.LAYOUT -> Const.Search.Layout.MAP))
+        map.statusCode shouldBe 200
+        map.text() should include("""data-results-total="2"""")
+        map.text() should include("""<span class="name">No Location</span>""")
+        map.headers("hx-replace-url").head should include(s"subset=${TriageSubset.NoLocation.apiValue}")
+
+        val browse = htmlSearch(host, repoId, unknownPeople).text()
+        browse should include(cell(sortedWithUnknown))
+        (browse should not).include(cell(withUnknown))
+
+        for (
+          subset <- List("everyone", "");
+          shape <- List(Map.empty[String, String], Map(Api.Field.Search.LAYOUT -> Const.Search.Layout.MAP))
+        ) withClue(s"'$subset' $shape: ") {
+          val response = htmlSearch(host, repoId, triage ++ shape + (Api.Field.Search.SUBSET -> subset))
+          response.statusCode shouldBe 400
+          response.headers("content-type").head should include("text/plain")
+        }
     }
   }
 }

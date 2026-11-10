@@ -16,10 +16,12 @@ import { effectiveSide, isVerticalAxis } from "../../common/explorer-dock.js"
  * split. The server knows nothing of it: it renders a pane's list (`htmx/people_list`) for the
  * buckets the pane asks for, and this component loads each pane's list into its `.list` host
  * itself, on init, when a switch flips, when a person changes (`Const.events.peopleChanged`: a
- * merge, a hide, a show or a discard moves people between buckets, and an asset mutation or a Face
- * correction can change a person's number, so every pane reloads with its own) and when "Show
- * triaged items" flips. Each load reads `triaged` from the `searchParams` store, so each person's
- * number is what opening them from the repository view finds.
+ * merge, a hide, a show, a discard or a rename moves people between buckets, and an asset mutation
+ * or a Face correction can change a person's number, so every pane reloads with its own) and when
+ * "Show triaged items" flips. Each load reads `triaged` from the `searchParams` store, so each
+ * person's number is what opening them from the repository view finds. In Triage every load asks for
+ * triaged items whatever the store holds, so the tab lists every Person of its buckets, those
+ * found only in triaged assets included; the numbers are not displayed there.
  *
  * Split view adds the Duplicate pane under the shell's `x-if` and divides the two panes with
  * Split.js along the axis the Dock side calls for (`js/common/explorer-dock.js`): stacked, a
@@ -136,6 +138,8 @@ export function peopleTab() {
 
         /**
          * Loads the pane's list from the server, for the buckets it has on; nothing with no pane.
+         * The request names the pane, which the ID of each rename pencil carries: a Person can be
+         * in both panes, and a pencil anchors its own dialog.
          * The `.list` host is the request's source (htmx takes the target as the source when none
          * is given), and its `hx-sync="replace"` aborts a load of the pane still in flight, so
          * the latest bucket set always lands.
@@ -146,15 +150,17 @@ export function peopleTab() {
                 return
             }
 
+            // Triage lists everyone, whatever the switch: its people may be in triaged items alone.
             // Sent only when on: the store's null would go out as `triaged=null`, which the server refuses
-            const showsTriaged = Alpine.store(
-                Const.state.searchParams,
-            ).showsTriaged()
+            const showsTriaged =
+                Alpine.store(Const.state.currentView).isTriageView() ||
+                Alpine.store(Const.state.searchParams).showsTriaged()
 
             htmx.ajax("GET", `/htmx/people/r/${context.getRepoId()}/list`, {
                 target: listEl,
                 swap: "innerHTML",
                 values: {
+                    pane,
                     buckets: this.bucketsOf(pane).join(","),
                     ...(showsTriaged ? { triaged: "true" } : {}),
                 },

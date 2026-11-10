@@ -210,6 +210,15 @@
   background: var(--theme-secondary);
 }
 
+/* The People tab's cell specimens: a stand-in for a cover face, the size and shape of the image a cell holds */
+#people .sg-cover {
+  display: block;
+  width: var(--face-box);
+  height: var(--face-box);
+  border-radius: 25%;
+  background: var(--theme-secondary);
+}
+
 /* The combobox's listbox specimen is no popover: it sits in the flow under its field, at the field's width */
 .sg-face-listbox {
   margin-top: var(--space-2);
@@ -236,6 +245,29 @@
 #styleGuideLabelledFields {
   display: grid;
   row-gap: var(--control-vertical-space);
+}
+
+/* The Triage summary's specimen at about an explorer's width, in the text color it has there rather than a usage note's */
+.sg-triage-summary {
+  width: var(--modal-content-width);
+}
+
+.sg-triage-summary .triage-summary {
+  color: var(--theme-neutral-4);
+}
+
+/* Quick view's specimen at the width the general modal takes for it; a stand-in for each Preview, the square the grid fits
+   one in */
+.sg-quick-view {
+  width: var(--quick-view-width);
+  max-width: 100%;
+}
+
+.sg-quick-view .sg-preview {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  background: var(--theme-secondary);
 }
 
 /* A Bundle's row takes the width of Curation's rail */

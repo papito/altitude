@@ -43,10 +43,8 @@ import altitude.core.util.Query
     }
 
   /** An asset of the size, persisted and counted as an import does, without its file */
-  private def importedAsset(sizeBytes: Long, isTriaged: Boolean = false): Asset = {
-    val asset = testContext.makeAsset(isTriaged = isTriaged).copy(sizeBytes = sizeBytes)
-    testApp.service.library.completeImport(testApp.service.library.persistAndIndex(asset))
-  }
+  private def importedAsset(sizeBytes: Long, isTriaged: Boolean = false): Asset =
+    testContext.insertAsset(testContext.makeAsset(isTriaged = isTriaged).copy(sizeBytes = sizeBytes))
 
   test("Test totals") {
 

@@ -85,6 +85,8 @@
     --detail-panel-min-height: 7.5rem;
     --detail-stage-min-width: 12.5rem;
     --detail-stage-min-height: 7.5rem;
+    /* The band naming the view along the results' left edge, and the gutter the results leave for it (pages/index.css) */
+    --view-band-width: var(--space-9);
     --nav-brand-width: 12.5rem;
     --nav-search-width: 11.5rem;
     --nav-search-focus-width: 15.5rem;
@@ -113,6 +115,9 @@
     --curation-kept-name-max-width: 20rem;
     --curation-loupe-max-size: 20rem;
     --curation-histogram-height: 4.25rem;
+    --quick-view-width: 60rem;
+    --quick-view-preview-size: 8rem;
+    --quick-view-previews-max-height: 32rem;
 
     --success-color: light-dark(#297612, #87d575);
     --warning-color: light-dark(#976212, #ebb16b);
@@ -154,6 +159,7 @@
     --font-weight-medium: 500;
     --letter-spacing-medium: 0.05em;
     --letter-spacing-wide: 0.1em;
+    --letter-spacing-band: 0.4em;
     --line-height-text: 1.4;
 }
 
@@ -442,14 +448,22 @@ nav form:has(input:placeholder-shown) .clear {
 /* CONTENT */
 /*         */
 
+/* Triage's and the Trash's panes: diagonal stripes of the view's color, --view-tint and a weaker --view-stripe. The bars
+   that stick inside the pane paint --view-tint alone. The left padding is the gutter of the view band (pages/index.css),
+   so nothing lies under it. Triage's color is the accent, the Trash's the warning color */
+#content:is(.triage, .trashbin) {
+    padding-left: var(--view-band-width);
+    background: repeating-linear-gradient(135deg, var(--view-tint) 0 var(--space-8), var(--view-stripe) var(--space-8) calc(var(--space-8) * 2));
+}
+
 #content.triage {
-    --view-tint: rgb(from var(--success-background-color) r g b / 0.07);
-    background-color: var(--view-tint);
+    --view-tint: hsl(from var(--theme-accent) h s l / 0.14);
+    --view-stripe: hsl(from var(--theme-accent) h s l / 0.11);
 }
 
 #content.trashbin {
     --view-tint: rgb(from var(--warning-color) r g b / 0.05);
-    background-color: var(--view-tint);
+    --view-stripe: rgb(from var(--warning-color) r g b / 0.02);
 }
 
 /*        */
@@ -748,10 +762,11 @@ footer {
 /* CRUMBS */
 /*        */
 
-/* A path's breadcrumb: the results title's folder path (includes/results_title_inner) and the Detail panel's Folder row
-   (htmx/detail_panel). Each ancestor is a dimmed link (.crumb) and the crumbs are parted by a faint chevron (.sep); the
-   row wraps rather than hiding an ancestor. The results title's leaf is its own (.leaf, includes/results_title.css), and the
-   Detail panel colors its crumbs as its other links (htmx/detail_panel.css). */
+/* A path's breadcrumb: the results title's folder path (includes/results_title_inner), the Detail panel's Folder row
+   (htmx/detail_panel) and Quick view's path (htmx/quick_view_modal). Each ancestor is dimmed (.crumb), a link that brightens
+   under the pointer except in Quick view, whose crumbs are plain text, and the crumbs are parted by a faint chevron (.sep);
+   the row wraps rather than hiding an ancestor. The results title's leaf is its own (.leaf, includes/results_title.css), and
+   the Detail panel colors its crumbs as its other links (htmx/detail_panel.css). */
 .crumbs {
     display: flex;
     flex-wrap: wrap;
@@ -766,7 +781,7 @@ footer {
     text-decoration: none;
 }
 
-.crumb:hover {
+a.crumb:hover {
     color: var(--theme-neutral-4);
 }
 
@@ -1108,6 +1123,20 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
             translate: 0 var(--space-4);
         }
     }
+}
+
+/* A notice: what a view holds rather than the outcome of an action, in the info fill, or the warning fill (.warning).
+   Curation's notices (htmx/curation_set) and the Triage summary (htmx/triage_summary.css) wear it. */
+.notice {
+    margin: 0;
+    padding: var(--space-3) var(--space-5);
+    line-height: var(--line-height-text);
+    background-color: var(--info-background-color);
+    border-radius: var(--radius);
+}
+
+.notice.warning {
+    background-color: var(--warning-background-color);
 }
 
 /*             */

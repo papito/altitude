@@ -13,10 +13,14 @@ import altitude.core.models.Person
 
   /** Renames the person through the name editor's route */
   private def rename(host: String, repoId: String, person: Person, name: String): requests.Response =
+    renameInline(host, repoId, person.persistedId, ujson.Obj(Api.Field.Person.NAME -> name))
+
+  /** Sends `body` to the name editor's route of the Person with this ID, who is named by the path alone */
+  private def renameInline(host: String, repoId: String, personId: String, body: ujson.Obj): requests.Response =
     requests.put(
-      s"$host/htmx/people/r/$repoId/p/${person.persistedId}/name/edit",
+      s"$host/htmx/people/r/$repoId/p/$personId/name/edit",
       headers = Map("Content-Type" -> "application/json"),
-      data = ujson.write(ujson.Obj(Api.Field.Person.NAME -> name, Api.Field.ID -> person.persistedId)),
+      data = ujson.write(body),
       cookies = testContext.cookies,
       check = false
     )
@@ -33,9 +37,57 @@ import altitude.core.models.Person
       cookies = testContext.cookies,
       check = false)
 
+  /** The rename dialog the People tab's pencil opens for the Person with this ID, with the query parameters given */
+  private def renameDialog(
+      host: String,
+      repoId: String,
+      personId: String,
+      params: Map[String, String] = Map.empty): requests.Response =
+    requests.get(
+      s"$host/htmx/people/r/$repoId/dialogs/rename-person",
+      params = params + ("personId" -> personId),
+      cookies = testContext.cookies,
+      check = false)
+
+  /** Renames the Person with this ID through the rename dialog's route, as its form submits, from `pane` when one is given */
+  private def renameInDialog(
+      host: String,
+      repoId: String,
+      personId: String,
+      name: String,
+      pane: Option[String] = None): requests.Response = {
+    val body = ujson.Obj(Api.Field.Person.NAME -> name)
+    pane.foreach(paneName => body(Api.Field.Person.PANE) = ujson.Str(paneName))
+    requests.put(
+      s"$host/htmx/people/r/$repoId/p/$personId/rename",
+      headers = Map("Content-Type" -> "application/json"),
+      data = ujson.write(body),
+      cookies = testContext.cookies,
+      check = false
+    )
+  }
+
+  /** The response is the rename dialog's form again, sent to replace the submitted one, with an error in it */
+  private def renameDialogRefused(response: requests.Response): Unit = {
+    response.statusCode shouldBe 200
+    response.headers("hx-retarget") shouldBe Seq("this")
+    response.headers("hx-reswap") shouldBe Seq("outerHTML settle:0")
+    response.text() should include("""id="renamePerson"""")
+    response.text() should include("""class="error"""")
+  }
+
+  /** The response completes the rename dialog's operation: an empty body, sent to replace nothing */
+  private def renameDialogSaved(response: requests.Response): Unit = {
+    response.statusCode shouldBe 200
+    response.text() shouldBe ""
+    response.headers.keys should not contain "hx-retarget"
+  }
+
   /** The number the list shows on the Person's cell, when the Person is listed */
   private def listedCount(html: String, person: Person): Option[Int] =
-    s"""(?s)data-person-id="${person.persistedId}".*?<span>\\((-?\\d+)\\)</span>""".r.findFirstMatchIn(html).map(_.group(1).toInt)
+    s"""(?s)data-person-id="${person.persistedId}".*?<span class="count"> \\((-?\\d+)\\)</span>""".r
+      .findFirstMatchIn(html)
+      .map(_.group(1).toInt)
 
   test("The assignable people are the live people who are not a bad match, named first, Hidden marked") {
 
@@ -198,8 +250,8 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * With no `triaged` parameter Bob reads (1), and with `triaged=true` he reads (3). Mia's name link says the same number to
-     * assistive tech: "Mia (1), hidden" by default, "Mia (2), hidden" with `triaged=true`.
+     * With no `triaged` parameter Bob reads (1), and with `triaged=true` he reads (3). Mia's name link is named by its content:
+     * her name, the number, (1) by default and (2) with `triaged=true`, and then a visually hidden ", hidden".
      *
      * Edge cases:
      *
@@ -223,12 +275,12 @@ import altitude.core.models.Person
         val hidden = listPeople(host, repoId, buckets)
         hidden.statusCode shouldBe 200
         listedCount(hidden.text(), bob) shouldBe Some(1)
-        hidden.text() should include("""aria-label="Mia (1), hidden"""")
+        hidden.text() should include("""Mia<span class="count"> (1)</span><span class="visually-hidden">, hidden</span>""")
 
         val shown = listPeople(host, repoId, buckets, Map("triaged" -> "true"))
         shown.statusCode shouldBe 200
         listedCount(shown.text(), bob) shouldBe Some(3)
-        shown.text() should include("""aria-label="Mia (2), hidden"""")
+        shown.text() should include("""Mia<span class="count"> (2)</span><span class="visually-hidden">, hidden</span>""")
 
         val notShown = listPeople(host, repoId, buckets, Map("triaged" -> "false"))
         notShown.statusCode shouldBe 200
@@ -341,6 +393,71 @@ import altitude.core.models.Person
         // Cask also answers 400 for a parameter the route does not declare
         (refused.text() should not).include("Unknown argument")
         listPeople(host, repoId, Const.PeopleBucket.MATCHED).statusCode shouldBe 200
+    }
+  }
+
+  test("A Person's rename pencil and name link on the People list are anchored by IDs that carry the pane") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob" with a sorted asset.
+     *
+     * Assertions:
+     *
+     * Listed with `pane=main`, Bob's cell holds a pencil named "Rename Bob" that requests the rename dialog and names itself as
+     * the dialog's anchor by an ID carrying the pane and Bob's ID. Its name link is the anchor of the scope dialog a click on the
+     * face or the name opens in Triage: an ID carrying the pane and Bob's ID, with that anchor name, which both links name as
+     * their dialog's anchor. Listed with `pane=duplicate`, both IDs carry that pane instead, so the two panes' copies of one
+     * Person never share an ID.
+     *
+     * Edge cases:
+     *
+     * A list asked for with no `pane` is the Main pane's. A `pane` that is no pane is a 400 for the value, not for a parameter
+     * the route does not know.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        testContext.addTestFacesAndAssets(bob)
+        val mainAnchor = s"personRenameCtrl-main-${bob.persistedId}"
+        val duplicateAnchor = s"personRenameCtrl-duplicate-${bob.persistedId}"
+        val mainLink = s"personLink-main-${bob.persistedId}"
+        val duplicateLink = s"personLink-duplicate-${bob.persistedId}"
+
+        val main = listPeople(host, repoId, Const.PeopleBucket.MATCHED, Map("pane" -> "main"))
+        main.statusCode shouldBe 200
+        main.text() should include(s"""id="$mainAnchor"""")
+        main.text() should include(s"""data-app-dialog-anchor="$mainAnchor"""")
+        main.text() should include("""aria-label="Rename Bob"""")
+        main.text() should include(s"/htmx/people/r/$repoId/dialogs/rename-person")
+        (main.text() should not).include(duplicateAnchor)
+        main.text() should include(s"""id="$mainLink"""")
+        main.text() should include(s"""style="anchor-name: --$mainLink"""")
+        // The face's link and the name link
+        s"""data-app-dialog-anchor="$mainLink"""".r.findAllIn(main.text()).size shouldBe 2
+        (main.text() should not).include(duplicateLink)
+
+        val duplicate = listPeople(host, repoId, Const.PeopleBucket.MATCHED, Map("pane" -> "duplicate"))
+        duplicate.statusCode shouldBe 200
+        duplicate.text() should include(s"""id="$duplicateAnchor"""")
+        duplicate.text() should include(s"""data-app-dialog-anchor="$duplicateAnchor"""")
+        (duplicate.text() should not).include(mainAnchor)
+        duplicate.text() should include(s"""id="$duplicateLink"""")
+        (duplicate.text() should not).include(mainLink)
+
+        val noPane = listPeople(host, repoId, Const.PeopleBucket.MATCHED)
+        noPane.statusCode shouldBe 200
+        noPane.text() should include(s"""id="$mainAnchor"""")
+
+        val refused = listPeople(host, repoId, Const.PeopleBucket.MATCHED, Map("pane" -> "side"))
+        refused.statusCode shouldBe 400
+        // Cask also answers 400 for a parameter the route does not declare
+        (refused.text() should not).include("Unknown argument")
     }
   }
 
@@ -506,6 +623,379 @@ import altitude.core.models.Person
     }
   }
 
+  test("The rename dialog renders for a Person with the current name") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob".
+     *
+     * Assertions:
+     *
+     * The rename dialog asked for with Bob's ID answers 200 with an HTML document holding the dialog's form: a modal fragment
+     * titled "Rename person", its name field holding "Bob", submitting to Bob's rename route, and announcing the name edit with
+     * Bob's ID as its detail once it succeeds. Asked for with `pane=duplicate`, it returns focus to Bob's pencil in that pane and
+     * its form sends the pane back.
+     *
+     * Edge cases:
+     *
+     * Asked for with no `pane`, the dialog is the Main pane's. A `pane` that is no pane is a 400.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+
+        val response = renameDialog(host, repoId, bob.persistedId)
+
+        response.statusCode shouldBe 200
+        response.headers("content-type").head should include("text/html")
+        val text = response.text()
+        text.startsWith("<!doctype html>") shouldBe true
+        text should include("""id="renamePerson"""")
+        text should include("""data-app-fragment="modal"""")
+        text should include("""data-app-modal-title="Rename person"""")
+        text should include("""value="Bob"""")
+        text should include(s"""hx-put="/htmx/people/r/$repoId/p/${bob.persistedId}/rename"""")
+        text should include("""data-app-success-event="PERSON_NAME_EDITED_EVENT"""")
+        text should include(s"""data-app-success-detail='{"personId":"${bob.persistedId}"}'""")
+        text should include(s"""data-app-dialog-return-focus="#personRenameCtrl-main-${bob.persistedId}"""")
+
+        val duplicate = renameDialog(host, repoId, bob.persistedId, Map("pane" -> "duplicate"))
+        duplicate.statusCode shouldBe 200
+        duplicate.text() should include(s"""data-app-dialog-return-focus="#personRenameCtrl-duplicate-${bob.persistedId}"""")
+        duplicate.text() should include("""name="pane" value="duplicate"""")
+
+        renameDialog(host, repoId, bob.persistedId, Map("pane" -> "side")).statusCode shouldBe 400
+    }
+  }
+
+  test("Saving a new name in the rename dialog returns an empty success") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob".
+     *
+     * Assertions:
+     *
+     * Renaming him "Robert" through the dialog's route answers 200 with an empty body that replaces nothing, which completes the
+     * dialog, and the stored name is "Robert".
+     *
+     * Edge cases:
+     *
+     * A name sent with spaces around it, " Bobby ", is saved trimmed.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+
+        renameDialogSaved(renameInDialog(host, repoId, bob.persistedId, "Robert"))
+        testApp.service.person.getById(bob.persistedId).name shouldBe Some("Robert")
+
+        renameDialogSaved(renameInDialog(host, repoId, bob.persistedId, " Bobby "))
+        testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bobby")
+    }
+  }
+
+  test("An invalid name re-renders the rename dialog with its error") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob".
+     *
+     * Assertions:
+     *
+     * Renaming him "Unknown 42" through the dialog's route answers with the dialog's form again, sent to replace the submitted
+     * one, with the reserved-name error and the name typed kept in its field; Bob keeps his name.
+     *
+     * Edge cases:
+     *
+     * An empty name is refused the same way. A refusal of a form sent from the Duplicate pane names that pane's pencil again.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+
+        val reserved = renameInDialog(host, repoId, bob.persistedId, "Unknown 42")
+
+        renameDialogRefused(reserved)
+        reserved.text() should include(Const.Msg.Err.RESERVED_PERSON_NAME)
+        reserved.text() should include("""value="Unknown 42"""")
+
+        renameDialogRefused(renameInDialog(host, repoId, bob.persistedId, ""))
+
+        val fromDuplicate = renameInDialog(host, repoId, bob.persistedId, "", pane = Some("duplicate"))
+        renameDialogRefused(fromDuplicate)
+        fromDuplicate.text() should include(s"""data-app-dialog-return-focus="#personRenameCtrl-duplicate-${bob.persistedId}"""")
+
+        testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bob")
+    }
+  }
+
+  test("A name another Person holds offers the merge in the rename dialog, and says when the holder is hidden") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with Persons named "Tessa" and "Bob"; Tessa is then hidden.
+     *
+     * Assertions:
+     *
+     * Renaming Bob "tessa" through the dialog's route answers with the dialog's form again, sent to replace the submitted one,
+     * the name typed kept, the error naming Tessa as she is stored, and a button that dispatches the merge confirmation with Bob
+     * as the source, Tessa as the destination, the direction kept and the Main pane, the pane of a form that sends none. With
+     * Tessa hidden, the same rename says she exists and is hidden, and still offers the merge. Bob keeps his name throughout.
+     *
+     * Edge cases:
+     *
+     * A form sent from the Duplicate pane offers the merge with that pane.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+
+        val taken = renameInDialog(host, repoId, bob.persistedId, "tessa")
+
+        renameDialogRefused(taken)
+        taken.text() should include("""value="tessa"""")
+        taken.text() should include("Tessa already exists.")
+        taken.text() should include("Merge into Tessa…")
+        taken.text() should include(
+          s"$$dispatch(window.Const.events.confirmPersonMerge, " +
+            s"{ mergeSourceId: '${bob.persistedId}', mergeDestId: '${tessa.persistedId}', keepDirection: true, pane: 'main' })")
+
+        val takenFromDuplicate = renameInDialog(host, repoId, bob.persistedId, "tessa", pane = Some("duplicate"))
+        renameDialogRefused(takenFromDuplicate)
+        takenFromDuplicate.text() should include("keepDirection: true, pane: 'duplicate' })")
+
+        testApp.service.person.setVisibility(tessa, isHidden = true)
+
+        val takenByHidden = renameInDialog(host, repoId, bob.persistedId, "TESSA")
+
+        renameDialogRefused(takenByHidden)
+        takenByHidden.text() should include("Tessa already exists and is hidden.")
+        takenByHidden.text() should include("Merge into Tessa…")
+
+        testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bob")
+    }
+  }
+
+  test("A change of case alone saves in the rename dialog") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Tessa".
+     *
+     * Assertions:
+     *
+     * Renaming her "TESSA" through the dialog's route answers the empty success, with no offer to merge her into herself, and the
+     * stored name is "TESSA".
+     *
+     * Edge cases:
+     *
+     * Saving the exact name she already has, "TESSA" again, is the empty success too, and the name stays.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+
+        renameDialogSaved(renameInDialog(host, repoId, tessa.persistedId, "TESSA"))
+        testApp.service.person.getById(tessa.persistedId).name shouldBe Some("TESSA")
+
+        renameDialogSaved(renameInDialog(host, repoId, tessa.persistedId, "TESSA"))
+        testApp.service.person.getById(tessa.persistedId).name shouldBe Some("TESSA")
+    }
+  }
+
+  test("The rename dialog and its save are 404s for an unknown Person and for another repository's") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, and a second repository of theirs with a Person named "Eve".
+     *
+     * Assertions:
+     *
+     * Asked through the first repository, the rename dialog and the rename itself answer 404 for a Person ID that does not exist
+     * and for Eve's, the answers do not carry her name, and Eve keeps it.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val eve = testApp.service.person.addPerson(Person(name = Some("Eve")))
+        testApp.service.repository.switchContextToRepository(repo)
+        val unknownId = java.util.UUID.randomUUID.toString
+
+        renameDialog(host, repoId, unknownId).statusCode shouldBe 404
+        renameInDialog(host, repoId, unknownId, "Robert").statusCode shouldBe 404
+
+        val foreignDialog = renameDialog(host, repoId, eve.persistedId)
+        foreignDialog.statusCode shouldBe 404
+        (foreignDialog.text() should not).include("Eve")
+        val foreignRename = renameInDialog(host, repoId, eve.persistedId, "Robert")
+        foreignRename.statusCode shouldBe 404
+        (foreignRename.text() should not).include("Eve")
+
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        testApp.service.person.getById(eve.persistedId).name shouldBe Some("Eve")
+    }
+  }
+
+  test("The name editor renames the Person its path names, and is a 404 for an unknown Person and for another repository's") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with Persons named "Bob" and "Ann", and a second repository of theirs with a Person named
+     * "Eve".
+     *
+     * Assertions:
+     *
+     * A body holding the name alone, sent to Bob's name editor route, answers the name view and stores the name: the route needs
+     * no ID in the body. Sent through the first repository to a Person ID that does not exist, and to Eve's, the rename answers
+     * 404, the answer does not carry her name, and Eve keeps it.
+     *
+     * Edge cases:
+     *
+     * A body that also carries Ann's ID still renames Bob, the Person of the path, and leaves Ann as she was.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val ann: Person = testApp.service.person.addPerson(Person(name = Some("Ann")))
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val eve = testApp.service.person.addPerson(Person(name = Some("Eve")))
+        testApp.service.repository.switchContextToRepository(repo)
+
+        val byPath = renameInline(host, repoId, bob.persistedId, ujson.Obj(Api.Field.Person.NAME -> "Robert"))
+        byPath.statusCode shouldBe 200
+        (byPath.text() should not).include("""id="editPersonName"""")
+        byPath.text() should include("Robert")
+        testApp.service.person.getById(bob.persistedId).name shouldBe Some("Robert")
+
+        val withAnotherId = renameInline(
+          host,
+          repoId,
+          bob.persistedId,
+          ujson.Obj(Api.Field.Person.NAME -> "Bobby", Api.Field.ID -> ann.persistedId))
+        withAnotherId.statusCode shouldBe 200
+        testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bobby")
+        testApp.service.person.getById(ann.persistedId).name shouldBe Some("Ann")
+
+        val unknownId = java.util.UUID.randomUUID.toString
+        renameInline(host, repoId, unknownId, ujson.Obj(Api.Field.Person.NAME -> "Robert")).statusCode shouldBe 404
+
+        val foreign = renameInline(host, repoId, eve.persistedId, ujson.Obj(Api.Field.Person.NAME -> "Robert"))
+        foreign.statusCode shouldBe 404
+        (foreign.text() should not).include("Eve")
+
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        testApp.service.person.getById(eve.persistedId).name shouldBe Some("Eve")
+    }
+  }
+
+  test("The rename dialog and its save are 404s for a merged-away Person and for a bad match") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob" merged into a Person named "Tessa", and a Person named "Carl"
+     * marked as a bad match.
+     *
+     * Assertions:
+     *
+     * The rename dialog asked for with Bob's ID, and with Carl's, answers 404 and not the dialog's form. A rename of either
+     * through the dialog's route answers 404 too, and each keeps the name stored on their row.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val carl: Person = testApp.service.person.addPerson(Person(name = Some("Carl")))
+        testApp.service.person.merge(dest = tessa, source = bob)
+        testApp.service.person.markAsBadMatch(carl)
+
+        List(bob -> "Bob", carl -> "Carl").foreach {
+          (person, storedName) =>
+            val dialog = renameDialog(host, repoId, person.persistedId)
+            dialog.statusCode shouldBe 404
+            (dialog.text() should not).include("""id="renamePerson"""")
+
+            renameInDialog(host, repoId, person.persistedId, "Robert").statusCode shouldBe 404
+            testApp.service.person.getById(person.persistedId).name shouldBe Some(storedName)
+        }
+    }
+  }
+
+  test("The name editor's rename is a 404 for a merged-away Person and for a bad match") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob" merged into a Person named "Tessa", and a Person named "Carl"
+     * marked as a bad match.
+     *
+     * Assertions:
+     *
+     * A rename of Bob, and of Carl, through the name editor's route answers 404, and each keeps the name stored on their row.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val carl: Person = testApp.service.person.addPerson(Person(name = Some("Carl")))
+        testApp.service.person.merge(dest = tessa, source = bob)
+        testApp.service.person.markAsBadMatch(carl)
+
+        List(bob -> "Bob", carl -> "Carl").foreach {
+          (person, storedName) =>
+            rename(host, repoId, person, "Robert").statusCode shouldBe 404
+            testApp.service.person.getById(person.persistedId).name shouldBe Some(storedName)
+        }
+    }
+  }
+
   test("The merge modal keeps the requested direction when asked, and otherwise merges the person with fewer faces") {
 
     /**
@@ -542,6 +1032,55 @@ import altitude.core.models.Person
 
         modal(Map("keepDirection" -> "true")) should include(s"/src/${larger.persistedId}/dest/${smaller.persistedId}")
         modal(Map.empty) should include(s"/src/${smaller.persistedId}/dest/${larger.persistedId}")
+    }
+  }
+
+  test("The merge modal returns focus to the rename pencil of the pane it is asked with") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with Persons named "Bob" and "Tessa".
+     *
+     * Assertions:
+     *
+     * The merge modal requested with Bob as the source, the direction kept and `pane=duplicate` answers 200 and names Bob's
+     * rename pencil of the Duplicate pane as the control focus returns to. Requested with no `pane`, it names no control.
+     *
+     * Edge cases:
+     *
+     * A `pane` that is no pane is a 400 for the value, not for a parameter the route does not know.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+
+        def modal(params: Map[String, String]): requests.Response =
+          requests.get(
+            s"$host/htmx/people/r/$repoId/modals/merge",
+            params =
+              Map("mergeSourceId" -> bob.persistedId, "mergeDestId" -> tessa.persistedId, "keepDirection" -> "true") ++ params,
+            cookies = testContext.cookies,
+            check = false
+          )
+
+        val fromPencil = modal(Map("pane" -> "duplicate"))
+        fromPencil.statusCode shouldBe 200
+        fromPencil.text() should include(s"""data-app-dialog-return-focus="#personRenameCtrl-duplicate-${bob.persistedId}"""")
+
+        val plain = modal(Map.empty)
+        plain.statusCode shouldBe 200
+        (plain.text() should not).include("data-app-dialog-return-focus")
+
+        val refused = modal(Map("pane" -> "side"))
+        refused.statusCode shouldBe 400
+        // Cask also answers 400 for a parameter the route does not declare
+        (refused.text() should not).include("Unknown argument")
     }
   }
 

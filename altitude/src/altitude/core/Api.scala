@@ -111,6 +111,8 @@ object Api:
       val PEOPLE = "people"
       val NAME = "name"
       val NEW_NAME = "newName"
+      // The pane of the People tab a rename dialog was opened from, which its form sends back
+      val PANE = "pane"
       val MERGE_SOURCE_ID = "mergeSourceId"
       val MERGE_DEST_ID = "mergeDestId"
       val MERGE_SOURCE_PERSON = "mergeSourcePerson"
@@ -128,6 +130,7 @@ object Api:
       val PERSON_ID = "personId"
       val ALBUM_ID = "albumId"
       val LOCATION_ID = "locationId"
+      val SUBSET = "subset"
       val BBOX = "bbox"
       val LAYOUT = "layout"
       val VIEW = "view"

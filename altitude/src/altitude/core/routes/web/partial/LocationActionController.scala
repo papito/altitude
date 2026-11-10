@@ -40,36 +40,36 @@ class LocationActionController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tab")
-  def tab(repoId: String)(using request: Request): Response[String] = html(htmx.html.locations())
+  def tab(repoId: String)(using request: Request): Response[String] = htmlResponse(htmx.html.locations())
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-location")
-  def addLocationDialog(repoId: String)(using request: Request): Response[String] = html(addForm())
+  def addLocationDialog(repoId: String)(using request: Request): Response[String] = htmlResponse(addForm())
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-category")
-  def addCategoryDialog(repoId: String)(using request: Request): Response[String] = html(htmx.html.add_category_dialog())
+  def addCategoryDialog(repoId: String)(using request: Request): Response[String] = htmlResponse(htmx.html.add_category_dialog())
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-location")
   def renameDialog(repoId: String, id: String)(using request: Request): Response[String] =
     withLocation(id) {
       location =>
-        html(
+        htmlResponse(
           htmx.html.rename_location_dialog(location, renameTitle(location), formJson = ujson.Obj(fields.NAME -> location.name)))
     }
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete-location")
   def deleteDialog(repoId: String, id: String)(using request: Request): Response[String] =
-    withLocation(id)(location => html(htmx.html.delete_location_dialog(location, deleteTitle(location))))
+    withLocation(id)(location => htmlResponse(htmx.html.delete_location_dialog(location, deleteTitle(location))))
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/move-location")
   def moveDialog(repoId: String, id: String)(using request: Request): Response[String] =
     withLocation(id) {
       location =>
-        html(
+        htmlResponse(
           htmx.html.move_location_dialog(
             location,
             categories,
@@ -80,7 +80,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-to-location")
   def addToLocationDialog(repoId: String)(using request: Request): Response[String] =
-    html(htmx.html.add_to_location_dialog(Const.UI.ADD_TO_LOCATION_DIALOG_TITLE, locations))
+    htmlResponse(htmx.html.add_to_location_dialog(Const.UI.ADD_TO_LOCATION_DIALOG_TITLE, locations))
 
   @requireLogin()
   @cask.post(f"/$prefix/r/:repoId/add")
@@ -167,8 +167,8 @@ class LocationActionController(using logger: Logger) extends BaseController:
       ApiRequestValidator(required = List(Api.Field.ID), uuid = List(Api.Field.ID)).validate(ujson.Obj(Api.Field.ID -> id))
       action(App.altitude.service.location.getById(id))
     catch
-      case _: ValidationException => cask.Response("Invalid Location id", 400, Seq("Content-Type" -> "text/plain"))
-      case ex: NotFoundException => cask.Response(ex.getMessage, 404, Seq("Content-Type" -> "text/plain"))
+      case _: ValidationException => textError("Invalid Location id", 400)
+      case ex: NotFoundException => textError(ex.getMessage, 404)
 
   private def addForm(errors: Map[String, String] = Map.empty, json: ujson.Obj = ujson.Obj()): Html =
     val settings = App.altitude.settings.current
@@ -240,8 +240,6 @@ class LocationActionController(using logger: Logger) extends BaseController:
     errors.trigger()
 
   private def optional(json: ujson.Obj, field: String): Option[String] = json.obj.get(field).flatMap(_.strOpt).filter(_.nonEmpty)
-  private def html(payload: Html): Response[String] =
-    cask.Response("<!doctype html>" + payload, 200, Seq("Content-Type" -> "text/html"))
   private def empty: Response[String] = cask.Response("", 200, Seq("Content-Type" -> "text/html"))
 
   initialize()

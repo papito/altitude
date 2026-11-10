@@ -120,7 +120,7 @@
              <code>--font-size-display</code>, with <code>--font-size-base</code> on <code>body</code>: a font size is a
              step of the scale, never a literal. A weight is <code>--font-weight-bold</code> or
              <code>--font-weight-medium</code>, spaced-out text takes <code>--letter-spacing-wide</code> (the brand the
-             narrower <code>--letter-spacing-medium</code>) and text that wraps <code>--line-height-text</code>. A glyph's own size and leading (the spinner, the merge arrow, a
+             narrower <code>--letter-spacing-medium</code>, Triage's view band the wider <code>--letter-spacing-band</code>) and text that wraps <code>--line-height-text</code>. A glyph's own size and leading (the spinner, the merge arrow, a
              category's badge) stay in its rule. The Sizes row shows the steps on the real components. The tester
              previews any font this browser has installed.</p>
           <div class="sg-halves">
@@ -224,7 +224,11 @@
           </div>
           <p>The results title (<code>.results-title</code>, <code>includes/results_title</code>) opens scoped results: the
              kind's icon, the title in <code>--font-size-display</code> and <code>--theme-primary-text</code>, the × back to
-             the whole result set, and a subtitle, set off by a hairline below in <code>--panel-border-color</code>. A folder's title is its path, the ancestors dimmed links.</p>
+             the whole result set, and a subtitle, set off by a hairline below in <code>--panel-border-color</code>. A folder's title is its path, the ancestors dimmed links.
+             A Triage subset, the assets one of the Triage summary's counts shows, is titled by its name with no subtitle: "Unknown people" under
+             <code>fa-user-secret</code>, and "No Location" under the marker struck through, <code>.kind-icon.slashed</code>
+             laying Font Awesome's own slash glyph over <code>fa-map-marker-alt</code>, since the free set has no slashed
+             marker.</p>
           <div class="results-title">
             <div class="text">
               <div class="title">
@@ -233,6 +237,54 @@
                 <button type="button" class="clear-scope" title="Back to all results" aria-label="Back to all results">&times;</button>
               </div>
               <div class="subtitle">A subtitle: an album's creation day, a Location's category</div>
+            </div>
+          </div>
+          <div class="results-title">
+            <div class="text">
+              <div class="title">
+                <i class="fas fa-map-marker-alt slashed kind-icon" aria-hidden="true"></i>
+                <span class="name">No Location</span>
+                <button type="button" class="clear-scope" title="Back to all results" aria-label="Back to all results">&times;</button>
+              </div>
+            </div>
+          </div>
+          <p>A Person's cell on the People tab (<code>#people .cell</code>, <code>htmx/people_list</code>) is the cover face,
+             <code>--face-box</code> square and rounded, over the name row in <code>--theme-secondary</code>: the name in
+             <code>--font-size-small</code> and <code>--theme-neutral-4</code>, an Unmatched person's "Unknown N" in
+             <code>--warning-color</code>, and the number dimmed after it, which Triage does not display. A Hidden
+             person's cell carries <code>fa-eye-slash</code> in the cover's corner. The rename pencil
+             (<code>.rename</code>, <code>fa-edit</code>) sits at the end of the name row, out of its flow so the name
+             stays centered, <code>--space-8</code> wide at least, a 24 px pointer target, in
+             <code>--theme-neutral-3</code> and <code>--theme-neutral-4</code> on hover; it shows only while the cell is
+             hovered or holds keyboard focus (<code>:focus-visible</code>), and always where nothing hovers, on a touch
+             screen, and opens the rename dialog as a popover anchored to it. A name that wraps is centered line by
+             line. Hover a specimen, or Tab into it, to see the pencil.</p>
+          @* The People tab's cells, hand-written to htmx/people_list's markup inside the tab's ID, which the rules of
+             static/css/htmx/people.css are scoped by, with --face-box set as htmx/people sets it. No drag-drop or dropzone
+             class and no search trigger, so nothing binds to them, and the pencils request nothing *@
+          <div id="people" style="--face-box: @{altitude.core.service.FaceDetectionService.faceDetectionBoxPx}px">
+            <div class="sg-row">
+              <div class="cell">
+                <div class="image"><span class="sg-cover"></span></div>
+                <div class="name">
+                  <span>
+                    <a href="#">Alice<span class="count"> (12)</span></a>
+                    <button type="button" class="rename" aria-label="Rename Alice"><i class="fas fa-edit" aria-hidden="true"></i></button>
+                  </span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="image">
+                  <span class="sg-cover"></span>
+                  <i class="fas fa-eye-slash hidden-badge" aria-hidden="true"></i>
+                </div>
+                <div class="name">
+                  <span>
+                    <a href="#" class="unknown">Unknown 4<span class="count"> (2)</span><span class="visually-hidden">, hidden</span></a>
+                    <button type="button" class="rename" aria-label="Rename Unknown 4"><i class="fas fa-edit" aria-hidden="true"></i></button>
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
           <p>The Detail panel (<code>.detail-panel</code>, <code>htmx/detail_panel</code>) stacks its sections under small-caps
@@ -507,6 +559,26 @@
              tooltip; the script that takes the pick re-checks the options and swaps the glyph.</p>
           @* js/style-guide.js builds both controls here, with the functions the explorer lists build theirs with *@
           <div class="sg-row" id="styleGuideMenuSpecimens"></div>
+          <p>Quick view (<code>#quickView</code>, <code>htmx/quick_view_modal</code>), opened from a folder's scope dialog in
+             Triage, takes that popover's place in the general modal, widened to <code>--quick-view-width</code> for it alone.
+             It is a look at a folder and nothing more: the folder's path as plain crumbs, which no pointer brightens, the
+             Previews of its first 100 assets in an <code>auto-fill</code> grid of <code>--quick-view-preview-size</code>
+             squares, each fitted whole and rounded with <code>--radius</code>, which scrolls on its own past
+             <code>--quick-view-previews-max-height</code>, and, past 100, a footer in <code>--theme-neutral-3</code> saying
+             how many there are, with a small action button opening the folder in Browse in a new tab. No selection, drag or
+             Asset detail binds to a Preview. The specimen is its content without the modal, a stand-in for each Preview.</p>
+          @* Quick view's content, hand-written to htmx/quick_view_modal's markup inside its ID, which the rules of
+             static/css/htmx/quick_view_modal.css are scoped by; no data-app-fragment, so nothing opens it *@
+          <div id="quickView" class="sg-quick-view">
+            <header class="crumbs"><span class="crumb">Trips</span><i class="fas fa-chevron-right sep" aria-hidden="true"></i><span class="leaf">Iceland</span></header>
+            <ul class="previews">
+              @for(_ <- 1 to 8) {<li><span class="sg-preview"></span></li>}
+            </ul>
+            <footer>
+              <span>Showing 100 of 1,204</span>
+              <a class="action-button small" href="#menus-dialogs">Show in new tab</a>
+            </footer>
+          </div>
         </section>
 
         <section id="feedback">
@@ -535,6 +607,21 @@
               <button type="button" class="snackbar-dismiss" aria-label="Dismiss message">&times;</button>
             </div>
           </div>
+          <p>What a view holds, rather than the outcome of an action, is said in a notice (<code>.notice</code>), a
+             rounded block in the <code>--info-background-color</code> fill, or in the warning fill with
+             <code>.warning</code>. The Triage summary (<code>.notice.triage-summary</code>, <code>htmx/triage_summary</code>)
+             above the Triage explorer's tabs is one, with <code>fa-info-circle</code> in <code>--info-color</code> before its
+             sentences, which wrap beside it; Curation's notices are under Badges &amp; states. The total is plain text; each other
+             count above zero is a link, semibold in the text's own color, that searches what it counts, and a zero is plain text. It is no live
+             region, since it reloads after every change it counts.</p>
+          @* The Triage summary as htmx/triage_summary renders it, at about an explorer's width; its links are no search
+             triggers here *@
+          <div class="sg-triage-summary">
+            <p class="notice triage-summary">
+              <i class="fas fa-info-circle" aria-hidden="true"></i>
+              <span>There are 1,204 items in triage. <a href="#feedback" aria-label="Show the 37 items in triage with unknown people">37</a> have unknown people. All have a Location.</span>
+            </p>
+          </div>
           <div id="serverError">#serverError: something went wrong on the server.</div>
           <div class="sg-row">
             <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
@@ -560,7 +647,7 @@
             <div class="sg-badge-host"><span class="drag-count-badge">3</span></div>
             <span>.drag-count-badge</span>
           </div>
-          <p>Curation's rail says what is wrong with a set's frames. A notice (<code>.curation-notice</code>) is what the set
+          <p>Curation's rail says what is wrong with a set's frames. A notice (<code>.notice</code>, Feedback) is what the set
              says of itself: that it is too close to call, or, in the warning fill, a problem of every frame. A Bundle's row
              (<code>.curation-bundle</code>, the Contenders' too) is a header with its name, its dimmed count and its reason,
              what is wrong, how much and compared to what, over its frames, each a Preview that focuses it with its own
@@ -568,8 +655,8 @@
              color, and its <code>.sole</code> form marks the only frame with no problem, the one thing the view suggests. The
              focused frame wears the accent's edge, on its Preview in the rail and along the bottom of its pane on the stage.</p>
           <div class="sg-row">
-            <p class="curation-notice">Too close to call</p>
-            <p class="curation-notice warning">Every frame: 8% blown highlights</p>
+            <p class="notice">Too close to call</p>
+            <p class="notice warning">Every frame: 8% blown highlights</p>
             <span class="curation-chip">Too bright</span>
             <strong class="curation-chip sole">The only frame with no problem</strong>
           </div>

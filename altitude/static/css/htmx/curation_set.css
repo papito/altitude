@@ -15,19 +15,6 @@
   border-right: var(--border-hairline) var(--panel-border-color);
 }
 
-/* What the set says of itself: a problem of every frame (.warning), or that it is too close to call */
-.curation-notice {
-  margin: 0;
-  padding: var(--space-3) var(--space-5);
-  line-height: var(--line-height-text);
-  background-color: var(--info-background-color);
-  border-radius: var(--radius);
-}
-
-.curation-notice.warning {
-  background-color: var(--warning-background-color);
-}
-
 /* A Bundle's row in the rail, the Contenders' too: a header with its name, count and reason over its frames */
 .curation-bundle {
   display: grid;

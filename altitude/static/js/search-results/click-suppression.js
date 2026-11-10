@@ -2,10 +2,12 @@
  * Swallows the click the browser fires after a pointer gesture ends.
  *
  * Releasing the mouse after a drag (an asset drag or a box selection) still produces a `click` on
- * the element under the pointer, which would toggle a thumbnail or open its detail view. The
- * gesture that ended calls `suppressNextClick()`, and the one capture-phase listener below then
- * drops the next click before HTMX or Alpine listeners see it. The flag clears itself shortly
- * afterwards so a click that never comes cannot swallow a later, genuine one.
+ * the element under the pointer, which would toggle a thumbnail or open its detail view; after a
+ * Person or folder drag it would search, and after a drag of the batch mover show its hint. The
+ * gesture that ended calls `suppressNextClick()`, or one that is starting arms
+ * `suppressClickAfterRelease()`, and the one capture-phase listener below then drops the next
+ * click before HTMX or Alpine listeners see it. The flag clears itself shortly afterwards so a
+ * click that never comes cannot swallow a later, genuine one.
  */
 const SUPPRESSION_WINDOW_MS = 300
 
@@ -33,7 +35,9 @@ export function suppressNextClick() {
 }
 
 /**
- * For a gesture cancelled while the button is still down: swallows the click that its eventual
+ * For a gesture cancelled while the button is still down, and for a drag that arms it at its
+ * start (a Person, a folder, the batch mover: with inertia a flick's `end` fires after the
+ * browser's click, too late for `suppressNextClick()`): swallows the click that its eventual
  * release produces. If the button is released outside the page instead, no `mouseup` arrives, so
  * the next press withdraws the request rather than swallowing an unrelated click later.
  */

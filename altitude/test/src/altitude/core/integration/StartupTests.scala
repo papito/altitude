@@ -1,5 +1,6 @@
 package altitude.core.integration
 
+import altitude.test.TestAltitudeApp
 import altitude.test.TestFocus
 import java.sql.SQLException
 import java.time.Instant
@@ -28,7 +29,7 @@ import altitude.core.suites.TestDatabase
 
   /** A second instance against the test database, shut down afterwards; nothing else may run against it meanwhile */
   private def withFreshInstance[T](f: Altitude => T): T = {
-    val other = new Altitude(dbEngineOverride = Some(testApp.dataSourceType))
+    val other = TestAltitudeApp.build(testApp.dataSourceType)
     try f(other)
     finally {
       other.cleanup()

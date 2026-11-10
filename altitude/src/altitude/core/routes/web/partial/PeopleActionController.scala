@@ -31,23 +31,27 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   /**
    * The list of the people in the People buckets named, comma-separated, by `buckets`, each with the number the tab shows; a name
    * that is no bucket is a 400. Only `triaged=true` shows triaged items, the repository view's rule (`SearchRequestParser`), and
-   * a value that is no boolean is a 400.
+   * a value that is no boolean is a 400. `pane` names the pane of the People tab the list is for (`Const.PeoplePane`, the Main
+   * pane when left out), which each rename pencil's ID carries, since a Person can be listed in both panes; a name that is no
+   * pane is a 400.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/list")
-  def listPeople(repoId: String, buckets: String = Const.PeopleBucket.MATCHED, triaged: Option[Boolean] = None)(using
-      request: Request): Response[String] =
+  def listPeople(
+      repoId: String,
+      buckets: String = Const.PeopleBucket.MATCHED,
+      triaged: Option[Boolean] = None,
+      pane: String = Const.PeoplePane.MAIN)(using request: Request): Response[String] =
     val requested: Set[String] = App.altitude.service.person.parseBuckets(buckets)
     val unknown = requested -- Const.PeopleBucket.ALL
-    if unknown.nonEmpty then return badRequest(s"Unknown People bucket: ${unknown.mkString(", ")}")
+    if unknown.nonEmpty then return textError(s"Unknown People bucket: ${unknown.mkString(", ")}", 400)
+    if !Const.PeoplePane.ALL.contains(pane) then return unknownPane(pane)
 
     val listed = App.altitude.service.person.getListedInBuckets(requested, showTriaged = triaged.contains(true))
-    val payload = "<!doctype html>" + htmx.html.people_list(listed = listed)
+    val payload = "<!doctype html>" + htmx.html.people_list(listed = listed, pane = pane)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-  /** A plain-text 400; the snackbar reports the status */
-  private def badRequest(message: String): Response[String] =
-    cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
+  private def unknownPane(pane: String): Response[String] = textError(s"Unknown People pane: $pane", 400)
 
   /**
    * The options of the Change combobox of Asset detail's People section: the people a Face can be given to
@@ -108,67 +112,125 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.edit_person_name(person = person)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
+  /**
+   * The name editor's save, for the Person the path names; an ID in the body is ignored. A saved name answers the name view, and
+   * a name that cannot be saved answers the editor again with its error or the offer to merge. A Person who is not live in the
+   * context repository (unknown, another repository's, merged away or a bad match) is a 404.
+   */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/p/:personId/name/edit")
   def editPersonName(repoId: String, personId: String)(using request: Request): Response[String] =
-    val dataScrubber = DataScrubber(
-      trim = List(Api.Field.Person.NAME)
-    )
+    answering {
+      val payload = renamePerson(App.altitude.service.person.getLiveInRepository(personId)) match
+        case RenameOutcome.Saved(person) => htmx.html.view_person_name(person = person)
+        case RenameOutcome.Refused(person, form, errors, holder) =>
+          htmx.html.edit_person_name(fieldErrors = errors, formJson = form, person = person, conflictingPerson = holder)
+      cask.Response("<!doctype html>" + payload, 200, Seq(("Content-Type", "text/html")))
+    }
 
-    val apiRequestValidator = ApiRequestValidator(
-      required = List(Api.Field.Person.NAME, Api.Field.ID),
-      maxLengths = Map(
-        Api.Field.Person.NAME -> Api.Constraints.MAX_NAME_LENGTH
-      ),
-      minLengths = Map(
-        Api.Field.Person.NAME -> Api.Constraints.MIN_NAME_LENGTH
-      ),
-      uuid = List(Api.Field.ID)
-    )
+  /**
+   * The rename dialog the People tab's pencil opens for a Person, its field holding the current name. `pane` is the pane of the
+   * pencil (`Const.PeoplePane`, the Main pane when left out), the control focus goes back to when the dialog closes; a name that
+   * is no pane is a 400. A Person who is not live in the context repository (unknown, another repository's, merged away or a bad
+   * match) is a 404.
+   */
+  @requireLogin()
+  @cask.get(f"/$prefix/r/:repoId/dialogs/rename-person")
+  def showRenamePersonDialog(repoId: String, personId: String, pane: String = Const.PeoplePane.MAIN)(using
+      request: Request): Response[String] =
+    if !Const.PeoplePane.ALL.contains(pane) then return unknownPane(pane)
 
-    val jsonIn: ujson.Obj = dataScrubber.scrub(unscrubbedJson.get)
-    val personIdFromJson = jsonIn(Api.Field.ID).str
-    val person: Person = App.altitude.service.person.getById(personIdFromJson)
-
-    def responseWithValidationErrors(errors: Map[String, String], conflictingPerson: Option[Person] = None): Response[String] =
-      val payload = "<!doctype html>" + htmx.html.edit_person_name(
-        fieldErrors = errors,
-        formJson = jsonIn,
-        person = person,
-        conflictingPerson = conflictingPerson
-      )
+    answering {
+      val person: Person = App.altitude.service.person.getLiveInRepository(personId)
+      val payload = "<!doctype html>" + htmx.html.rename_person_dialog(person, C.UI.RENAME_PERSON_DIALOG_TITLE, pane)
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    }
 
-    try apiRequestValidator.validate(jsonIn)
+  /**
+   * The rename dialog's save. A saved name, the name the Person already has included, is an empty success, which completes the
+   * dialog; a name that cannot be saved answers the dialog's form again, in place of the submitted one
+   * (`dialogFormValidationResponse`), with its error or, for a name another live Person holds, the offer to merge into them. A
+   * Person who is not live in the context repository is a 404, as for the dialog.
+   */
+  @requireLogin()
+  @cask.put(f"/$prefix/r/:repoId/p/:personId/rename")
+  def renamePersonInDialog(repoId: String, personId: String)(using request: Request): Response[String] =
+    answering {
+      renamePerson(App.altitude.service.person.getLiveInRepository(personId)) match
+        case RenameOutcome.Saved(_) => cask.Response("", 200, Seq(("Content-Type", "text/html")))
+        case RenameOutcome.Refused(person, form, errors, holder) =>
+          logger.debug(s"Rename dialog refused a name for person [${person.persistedId}]")
+          // The form sends its pane back so that the form replacing it names the same pencil; a missing or unknown one is the
+          // Main pane's, as for the dialog itself
+          val pane = form.obj
+            .get(Api.Field.Person.PANE)
+            .flatMap(_.strOpt)
+            .filter(Const.PeoplePane.ALL.contains)
+            .getOrElse(Const.PeoplePane.MAIN)
+          dialogFormValidationResponse(
+            "<!doctype html>" + htmx.html.rename_person_dialog(
+              person,
+              C.UI.RENAME_PERSON_DIALOG_TITLE,
+              pane,
+              fieldErrors = errors,
+              formJson = form,
+              conflictingPerson = holder))
+    }
+
+  /**
+   * How a rename ended: `Saved` with the Person as stored, which is also the answer for the name they already had, or `Refused`
+   * with the submitted form, its field errors and, when another live Person holds the name, that Person (`holder`), whom the form
+   * offers to merge into.
+   */
+  private enum RenameOutcome:
+    case Saved(person: Person)
+    case Refused(person: Person, form: ujson.Obj, errors: Map[String, String], holder: Option[Person])
+
+  private val nameScrubber = DataScrubber(trim = List(Api.Field.Person.NAME))
+
+  private val nameValidator = ApiRequestValidator(
+    required = List(Api.Field.Person.NAME),
+    maxLengths = Map(Api.Field.Person.NAME -> Api.Constraints.MAX_NAME_LENGTH),
+    minLengths = Map(Api.Field.Person.NAME -> Api.Constraints.MIN_NAME_LENGTH)
+  )
+
+  /**
+   * Renames the Person to the name in the request's scrubbed JSON: the one rename of the inline name editor and of the rename
+   * dialog, each of which finds the Person by its path and renders the outcome its own way.
+   */
+  private def renamePerson(person: Person)(using request: Request): RenameOutcome =
+    val jsonIn: ujson.Obj = nameScrubber.scrub(unscrubbedJson.get)
+
+    def refused(errors: Map[String, String], holder: Option[Person] = None): RenameOutcome =
+      RenameOutcome.Refused(person, jsonIn, errors, holder)
+
+    try nameValidator.validate(jsonIn)
     catch
       case validationException: ValidationException =>
-        return responseWithValidationErrors(validationException.errors.toMap)
+        return refused(validationException.errors.toMap)
 
     val newName = jsonIn(Api.Field.Person.NAME).str
 
     // Only the exact stored name is no change: a name that differs in case alone is a rename, and saves
     if PersonService.normalizedName(newName) == person.name.get then
       logger.debug("Name has not changed")
-      val payload = "<!doctype html>" + htmx.html.view_person_name(person = person)
-      return cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+      return RenameOutcome.Saved(person)
 
     try App.altitude.service.person.updateName(person, newName = newName)
     catch
       case _: DuplicateException =>
-        // The editor offers to merge into the person holding the name. No one holds it when the holder was merged away meanwhile,
+        // The form offers to merge into the person holding the name. No one holds it when the holder was merged away meanwhile,
         // or when the constraint was not the name's: the plain error then, with nothing to merge into
         App.altitude.service.person.getLiveByNameKey(newName) match
           case Some(holder) =>
             logger.debug(s"Name [$newName] is held by person [${holder.persistedId}], offering to merge into them")
-            return responseWithValidationErrors(Map.empty, conflictingPerson = Some(holder))
+            return refused(Map.empty, holder = Some(holder))
           case None =>
-            return responseWithValidationErrors(Map(Api.Field.Person.NAME -> C.Msg.Err.PERSON_NAME_ALREADY_EXISTS))
+            return refused(Map(Api.Field.Person.NAME -> C.Msg.Err.PERSON_NAME_ALREADY_EXISTS))
       case ex: ValidationException =>
-        return responseWithValidationErrors(Map(Api.Field.Person.NAME -> ex.message))
+        return refused(Map(Api.Field.Person.NAME -> ex.message))
 
-    val updatedPerson: Person = App.altitude.service.person.getById(personIdFromJson)
-    val payload = "<!doctype html>" + htmx.html.view_person_name(person = updatedPerson)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    RenameOutcome.Saved(App.altitude.service.person.getById(person.persistedId))
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/p/:personId/name")
@@ -177,10 +239,23 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.view_person_name(person = person)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
+  /**
+   * The Merge people modal for the two people asked for. `pane` is sent by the rename dialog's offer to merge alone
+   * (`includes/person_name_taken`): the pane of the People tab (`Const.PeoplePane`) whose pencil opened that dialog. The merge
+   * modal takes the rename dialog's place, so the modal names that pencil, the requested source's in that pane, as the control
+   * focus goes back to when it closes; a name that is no pane is a 400. Without `pane` focus goes back to the control that asked
+   * for the modal.
+   */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/merge")
-  def showMergePeopleModal(repoId: String, mergeSourceId: String, mergeDestId: String, keepDirection: Boolean = false)(using
-      request: Request): Response[String] =
+  def showMergePeopleModal(
+      repoId: String,
+      mergeSourceId: String,
+      mergeDestId: String,
+      keepDirection: Boolean = false,
+      pane: Option[String] = None)(using request: Request): Response[String] =
+    if pane.exists(!Const.PeoplePane.ALL.contains(_)) then return unknownPane(pane.get)
+
     val requestedSourcePerson: Person = App.altitude.service.person.getById(mergeSourceId)
     val requestedDestPerson: Person = App.altitude.service.person.getById(mergeDestId)
 
@@ -194,7 +269,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.merge_people_modal(
       title = C.UI.MERGE_PEOPLE_DIALOG_TITLE,
       mergeSourcePerson = sourcePerson,
-      mergeDestPerson = destPerson
+      mergeDestPerson = destPerson,
+      returnFocusPencil = pane.map(_ -> requestedSourcePerson.persistedId)
     )
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
@@ -207,7 +283,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
     App.altitude.service.person.merge(dest = destPerson, source = srcPerson)
 
-    cask.Response("", 204, Seq(("Content-Type", "text/html")))
+    noContentResponse
 
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/p/:personId/hide")

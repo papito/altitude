@@ -9,7 +9,7 @@ import altitude.core.util.JsonCodec
  * One of the vision models the import embeds every still image with (the glossary's Scene model). Each knows its name in the logs
  * (`name`), how its embedding is stored (`column`: its `asset` column, named in `FieldConst.Asset`, `dimensions`), where its ONNX
  * export lives on the classpath, and the per-channel mean and std, in RGB order, its input is normalized with after a scale to
- * 0..1: what the checkpoint was trained with, so `SceneEmbedder` feeds it what it expects.
+ * 0..1: what the checkpoint was trained with, so `OnnxSceneEmbedder` feeds it what it expects.
  */
 enum SceneModel(
     val name: String,
@@ -50,7 +50,7 @@ object SceneEmbedding:
 
 /**
  * A vector a vision model computes over a whole still image, describing its content and layout (the glossary's Scene embedding):
- * L2-normalized, as `SceneEmbedder` makes it. Two embeddings of one model compare by [[similarity]], 1 for the same picture;
+ * L2-normalized, as `OnnxSceneEmbedder` makes it. Two embeddings of one model compare by [[similarity]], 1 for the same picture;
  * embeddings of different models never compare, and the dimensions tell them apart. The values are immutable, and two embeddings
  * are equal when their values are: a case class over an array would compare it by reference, so two reads of one row would
  * differ.

@@ -61,14 +61,14 @@ And on each `face`: `sharpness`, the same Laplacian variance inside the face's b
 fitted scale. Face sharpness falls as a face fills more of the frame, so it only compares between Faces of one Person
 at a similar size, never across Persons and never as an absolute threshold.
 
-The two Scene embeddings are not measurements of the gray, fitted image: `SceneEmbedder` (`core/util`) takes the same
-upright decode in color, fits its short side to 224 (`INTER_AREA` when shrinking, `INTER_CUBIC` when enlarging an
+The two Scene embeddings are not measurements of the gray, fitted image: `OnnxSceneEmbedder` (`core/util`) takes the
+same upright decode in color, fits its short side to 224 (`INTER_AREA` when shrinking, `INTER_CUBIC` when enlarging an
 image under that size: a transform of this project's own, not the checkpoints' reference one, which the similarity
 thresholds are calibrated to), center-crops the square, converts it to RGB and runs it through each Scene model's ONNX
-Runtime session (one per model in the process, opened when `AssetService` is built, so a missing model file fails the
-start, never an import). Two embeddings of one model compare by cosine similarity, 1 for the same picture. They are
-selected by the two Sequence candidates' statements only (`AssetDao.candidateColumns`), and transferred by no other
-read: every other read's column list comes from `AssetRow`, which leaves them out.
+Runtime session (one per model in the process, opened when `Altitude` builds its embedder, before the services, so a
+missing model file fails the start, never an import). Two embeddings of one model compare by cosine similarity, 1 for
+the same picture. They are selected by the two Sequence candidates' statements only (`AssetDao.candidateColumns`), and
+transferred by no other read: every other read's column list comes from `AssetRow`, which leaves them out.
 
 All of these are NULL together for a Video, an animated image, or a still image the measurement could not decode, and
 an embedding alone for a still image its model could not embed. Measurement is the one stage that swallows its own

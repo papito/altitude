@@ -20,14 +20,14 @@ import altitude.core.models.Settings
  *   - A 24-megapixel image is 72 MB decoded. `DetectFacesFlow`, `MeasureImageFlow` and `AddPreviewFlow` each decode an image and
  *     release it inside their work, and no decoded image rides on the element, so a thread holds one at a time, while an image is
  *     decoded three times over its import.
- *   - The two Scene models (`SceneEmbedder`: one ONNX Runtime session each, which every thread runs) add about 1,050 MB resident
- *     once opened and about 50 MB more after a first pass of each, on the same machine: 691 MB of weights, which the runtime
- *     pre-packs for its GEMM kernels and keeps both copies of (`session.disable_prepacking` saves 300 MB for passes 8 to 10%
- *     slower, and is not set). `SCENE_MODELS_COST`, at 1152 MB. A forward pass on one thread takes about 365 ms for DINOv2 and
- *     270 ms for CLIP, with ONNX Runtime's graph optimizations making under 10% of difference, since the GEMMs run at the core's
- *     AVX2 limit; fitting a 24-megapixel image to the input adds about 50 ms, so an image costs its thread about 0.7 s. With 12
- *     threads embedding at once a pass of both models takes about 1.1 s and the process embeds about 10.7 images a second; the
- *     passes' working memory adds about 45 MB a thread, with the runtime's arena or without it.
+ *   - The two Scene models (`OnnxSceneEmbedder`: one ONNX Runtime session each, which every thread runs) add about 1,050 MB
+ *     resident once opened and about 50 MB more after a first pass of each, on the same machine: 691 MB of weights, which the
+ *     runtime pre-packs for its GEMM kernels and keeps both copies of (`session.disable_prepacking` saves 300 MB for passes 8 to
+ *     10% slower, and is not set). `SCENE_MODELS_COST`, at 1152 MB. A forward pass on one thread takes about 365 ms for DINOv2
+ *     and 270 ms for CLIP, with ONNX Runtime's graph optimizations making under 10% of difference, since the GEMMs run at the
+ *     core's AVX2 limit; fitting a 24-megapixel image to the input adds about 50 ms, so an image costs its thread about 0.7 s.
+ *     With 12 threads embedding at once a pass of both models takes about 1.1 s and the process embeds about 10.7 images a
+ *     second; the passes' working memory adds about 45 MB a thread, with the runtime's arena or without it.
  *
  * `THREAD_COST` is a YuNet, one decode of a large image and the file copy a decode leaves for the finalizer, about 150 MB at 24
  * megapixels, and the working memory of its Scene model passes, and the rest is a margin left on purpose for a larger image and
@@ -47,7 +47,7 @@ object ImportParallelism:
   val ARCFACE_NETS = 1
   val POOL_COST: Long = ARCFACE_NETS * 384 * MB
 
-  /** The two Scene models' sessions `AssetService` opens, shared by the threads */
+  /** The two Scene models' sessions `OnnxSceneEmbedder` opens (`Altitude.sceneEmbedder`), shared by the threads */
   val SCENE_MODELS_COST: Long = 1152 * MB
 
   /** What the import costs once, however many threads do its work */

@@ -29,3 +29,6 @@
 @import "htmx/add_to_album_dialog.css";
 @import "htmx/merge_people_modal.css";
 @import "htmx/choose_person_cover_face_modal.css";
+@import "htmx/triage_summary.css";
+@import "htmx/triage_scope_dialog.css";
+@import "htmx/quick_view_modal.css";

@@ -10,8 +10,8 @@ import { runSearch } from "../search-results/search.js"
 
 /**
  * Location events: the dialogs' outcomes (add, add category, rename, move and delete reload the
- * list; the Add to location dialog announces its memberships) and membership changes from
- * drag/drop and the batch footer. A single-asset drop escalates to a batch when that asset is
+ * list, and a delete the Triage summary; the Add to location dialog announces its memberships) and
+ * membership changes from drag/drop and the batch footer. A single-asset drop escalates to a batch when that asset is
  * among the selected ones, as folder moves and album drops do. The reload restores the expanded
  * categories; an add also reveals the category the new Location went into, while a move leaves a
  * collapsed category collapsed, as moving a folder under a collapsed parent does.
@@ -49,6 +49,9 @@ export function registerLocationListeners(app) {
             // Capture the name before the list is rebuilt
             const id = event.detail.id
             const name = locationName(id)
+
+            // Its assets may now be in no Location, one of the Triage summary's counts
+            app.reloadTriageSummary()
 
             await reloadLocationList(repoId())
             // Deleting the last row hides the top button the dialog returned focus to
