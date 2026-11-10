@@ -198,10 +198,26 @@ triaged items. Turn on Show triaged items to see them." in place of "No one in t
 
 In Triage the tab asks for `triaged=true` on every load, whatever the switch: it lists every Person of its buckets, those
 found only in triaged assets included. The numbers are rendered and not displayed there, since they read confusingly
-against what Triage holds, and a click on a person warns instead of searching: Triage manages people (rename, merge by
-drag and drop) and does not search them (**The explorer in Triage** in `views/AGENTS.md`). A merge there reloads the tab
-and searches for no one, so the results stay on all of Triage. Results that a Triage URL scoped to one of the two people
-follow the merge: the source's go back to all of Triage, and the destination's are read again.
+against what Triage holds. Triage finds only triaged assets, so a click on a person's face or name asks the Triage scope
+route first (`GET /htmx/triage/r/:repoId/dialogs/scope?personId=`, `TriageController`): a person with a Face on a
+triaged asset outside the trash is a 204, and the click searches Triage scoped to them; any other live person gets a
+popover dialog under the cell's name, "This person has no assets assigned in Triage", with "Show person in new tab",
+Browse scoped to them in a new tab, and Close (**The explorer in Triage** and **Scope dialog and Quick view** in
+`views/AGENTS.md`). The tab manages people there as in Browse: rename by the pencil, merge by drag and drop.
+
+A merge reloads the tab and confirms in the snackbar, and runs no search of its own, in Browse and Triage alike: results
+that are neither person's stay as they are, results scoped to the source, who is gone, become the destination's in the
+same view, and results scoped to the destination are read again with the Faces the merge gave it (**Event Flow** in
+`views/AGENTS.md`).
+
+The Triage summary above the Triage explorer's tabs counts, among other things, the assets in triage that have an
+**Unknown person** (the glossary's term): a triaged asset outside the trash with a Face of a Person who has no name and is
+neither hidden, merged away nor discarded as a bad match, whatever their bucket, so an Unmatched person or a Matched one.
+A named person on the same asset does not keep it out; an asset whose Faces are all of named, hidden, merged-away or
+discarded people, or that has none, is not counted. The number searches those assets (`subset=unknownPeople`,
+`SearchQueries.unknownPeopleFilter`; the server takes the subset in any view) under the Results title "Unknown people".
+Naming, hiding, discarding and merging a person, a Face correction and every asset mutation announce `peopleChanged`,
+which reloads the summary (`js/listeners/triage.js`).
 
 While assets are being imported the number and a search can differ, as a search skips those assets and `num_of_faces` holds
 their Faces. With triaged items shown, the number runs ahead of the search by those assets until they complete. With them

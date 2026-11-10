@@ -12,7 +12,8 @@ import altitude.core.util.SearchText
 import altitude.core.util.TriageSubset
 
 /**
- * The grid, map cells and map bounds interpret search scope identically; each caller owns its presentation and paging.
+ * The grid, map cells, map bounds and the counts of the Triage routes (`TriageController`) interpret search scope identically;
+ * each caller owns its presentation and paging.
  *
  * A scope has Search text only when `q` has a usable term: text that parses to nothing (blank, a lone `-`, a dangling `OR`) is no
  * text, for the filter, for the default sort and for the rules below alike. Text searches the repository outside the trash, so

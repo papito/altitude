@@ -224,7 +224,11 @@
           </div>
           <p>The results title (<code>.results-title</code>, <code>includes/results_title</code>) opens scoped results: the
              kind's icon, the title in <code>--font-size-display</code> and <code>--theme-primary-text</code>, the × back to
-             the whole result set, and a subtitle, set off by a hairline below in <code>--panel-border-color</code>. A folder's title is its path, the ancestors dimmed links.</p>
+             the whole result set, and a subtitle, set off by a hairline below in <code>--panel-border-color</code>. A folder's title is its path, the ancestors dimmed links.
+             A Triage subset, a tally of the Triage summary, is titled by its name with no subtitle: "Unknown people" under
+             <code>fa-user-secret</code>, and "No Location" under the marker struck through, <code>.kind-icon.slashed</code>
+             laying Font Awesome's own slash glyph over <code>fa-map-marker-alt</code>, since the free set has no slashed
+             marker.</p>
           <div class="results-title">
             <div class="text">
               <div class="title">
@@ -233,6 +237,15 @@
                 <button type="button" class="clear-scope" title="Back to all results" aria-label="Back to all results">&times;</button>
               </div>
               <div class="subtitle">A subtitle: an album's creation day, a Location's category</div>
+            </div>
+          </div>
+          <div class="results-title">
+            <div class="text">
+              <div class="title">
+                <i class="fas fa-map-marker-alt slashed kind-icon" aria-hidden="true"></i>
+                <span class="name">No Location</span>
+                <button type="button" class="clear-scope" title="Back to all results" aria-label="Back to all results">&times;</button>
+              </div>
             </div>
           </div>
           <p>A Person's cell on the People tab (<code>#people .cell</code>, <code>htmx/people_list</code>) is the cover face,
@@ -546,6 +559,26 @@
              tooltip; the script that takes the pick re-checks the options and swaps the glyph.</p>
           @* js/style-guide.js builds both controls here, with the functions the explorer lists build theirs with *@
           <div class="sg-row" id="styleGuideMenuSpecimens"></div>
+          <p>Quick view (<code>#quickView</code>, <code>htmx/quick_view_modal</code>), opened from a folder's scope dialog in
+             Triage, takes that popover's place in the general modal, widened to <code>--quick-view-width</code> for it alone.
+             It is a look at a folder and nothing more: the folder's path as plain crumbs, which no pointer brightens, the
+             Previews of its first 100 assets in an <code>auto-fill</code> grid of <code>--quick-view-preview-size</code>
+             squares, each fitted whole and rounded with <code>--radius</code>, which scrolls on its own past
+             <code>--quick-view-previews-max-height</code>, and, past 100, a footer in <code>--theme-neutral-3</code> saying
+             how many there are, with a small action button opening the folder in Browse in a new tab. No selection, drag or
+             Asset detail binds to a Preview. The specimen is its content without the modal, a stand-in for each Preview.</p>
+          @* Quick view's content, hand-written to htmx/quick_view_modal's markup inside its ID, which the rules of
+             static/css/htmx/quick_view_modal.css are scoped by; no data-app-fragment, so nothing opens it *@
+          <div id="quickView" class="sg-quick-view">
+            <header class="crumbs"><span class="crumb">Trips</span><i class="fas fa-chevron-right sep" aria-hidden="true"></i><span class="leaf">Iceland</span></header>
+            <ul class="previews">
+              @for(_ <- 1 to 8) {<li><span class="sg-preview"></span></li>}
+            </ul>
+            <footer>
+              <span>Showing 100 of 1,204</span>
+              <a class="action-button small" href="#menus-dialogs">Show in new tab</a>
+            </footer>
+          </div>
         </section>
 
         <section id="feedback">
@@ -573,6 +606,20 @@
               <span class="snackbar-count">&times;2</span>
               <button type="button" class="snackbar-dismiss" aria-label="Dismiss message">&times;</button>
             </div>
+          </div>
+          <p>What a view holds, rather than the outcome of an action, is said in an info callout: the Triage summary
+             (<code>.triage-summary</code>, <code>htmx/triage_summary</code>) above the Triage explorer's tabs, the look of
+             Curation's notice, the <code>--info-background-color</code> fill, with <code>fa-info-circle</code> in
+             <code>--info-color</code> before its sentences, which wrap beside it. A number above zero is a link,
+             semibold in the text's own color, that searches what it counts; a zero is plain text. It is no live
+             region, since it reloads after every change it counts.</p>
+          @* The Triage summary as htmx/triage_summary renders it, at about an explorer's width; its links are no search
+             triggers here *@
+          <div class="sg-triage-summary">
+            <p class="triage-summary">
+              <i class="fas fa-info-circle" aria-hidden="true"></i>
+              <span>There are <a href="#feedback" aria-label="Show all 1,204 items in triage">1,204</a> items in triage. <a href="#feedback" aria-label="Show the 37 items in triage with unknown people">37</a> have unknown people. All have a Location.</span>
+            </p>
           </div>
           <div id="serverError">#serverError: something went wrong on the server.</div>
           <div class="sg-row">

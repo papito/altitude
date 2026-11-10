@@ -111,8 +111,7 @@ proven on SQLite and on Postgres (`make test-sqlite`, `make test-psql`). Groups 
     - a Location's name and icon: `locationName-<id>`, `locationIcon-<id>`
     - a Person tile's link: `personLink-<pane>-<id>`, since a Person can be in both panes.
 11. **Cursor and labels (`static/css/pages/index.css`, `folder-tree.js`).** The Triage cursor rule is narrowed to `cursor: default` on the root
-    folder's name and icon. The leaf icon's label reads "Open folder <name>" in every view again, and the root's control in Triage is
-    labelled by the folder's name alone.
+    folder's name and icon. The leaf icon's label reads "Open folder <name>" in every view again.
 
 ### D. The Triage summary in the explorer
 
@@ -121,7 +120,8 @@ proven on SQLite and on Postgres (`make test-sqlite`, `make test-psql`). Groups 
       load.
     - `app.reloadTriageSummary()` reloads it on `peopleChanged`. `reloadNav`, `reloadLocationCounts` and the Location delete
       listener call it too, and it does nothing outside Triage.
-    - The callout is styled as an info callout in `static/css/pages/index.css`, using the style guide's info colors.
+    - The callout is styled as an info callout in `static/css/htmx/triage_summary.css`, using the style guide's info colors;
+      `static/css/pages/index.css` places the host.
 13. **The subset in the store (`static/js/stores/search-params.js`).** Add `subset` to `DEFAULTS` and to `PLACES`, so it clears and
     is cleared like a folder, Person, album or Location, and the scope comments name it.
 

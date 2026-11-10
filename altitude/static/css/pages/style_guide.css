@@ -247,6 +247,29 @@
   row-gap: var(--control-vertical-space);
 }
 
+/* The Triage summary's specimen at about an explorer's width, in the text color it has there rather than a usage note's */
+.sg-triage-summary {
+  width: var(--modal-content-width);
+}
+
+.sg-triage-summary .triage-summary {
+  color: var(--theme-neutral-4);
+}
+
+/* Quick view's specimen at the width the general modal takes for it; a stand-in for each Preview, the square the grid fits
+   one in */
+.sg-quick-view {
+  width: var(--quick-view-width);
+  max-width: 100%;
+}
+
+.sg-quick-view .sg-preview {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  background: var(--theme-secondary);
+}
+
 /* A Bundle's row takes the width of Curation's rail */
 .sg-curation-bundle {
   width: var(--curation-rail-width);

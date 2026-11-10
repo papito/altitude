@@ -330,7 +330,7 @@ import altitude.core.util.*
     ids
   }
 
-  /** The triage view's flags, as `SearchRequestParser` sets them */
+  /** The triage view's flags, as `SearchRequestParser` sets them (`SearchQuery.TRIAGE_VIEW`) */
   private val triageView = Map[String, Any](FieldConst.Asset.IS_TRIAGED -> true, FieldConst.Asset.IS_RECYCLED -> false)
 
   test("The Triage summary counts the assets in triage, those with Unknown people and those in no Location") {
