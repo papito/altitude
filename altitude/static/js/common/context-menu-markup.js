@@ -12,8 +12,9 @@
  *
  * The menus' actions and the Add buttons open popover dialogs, placed below the trigger that
  * summoned them (`common/modal.js`); Add location, whose map editor needs the room, opens a modal.
- * A choice menu's options are search triggers (`search-results/search-triggers.js`) and open
- * nothing. Every trigger built here carries `anchor-name: --<its id>` for that placement.
+ * A choice menu's options are search triggers (`search-results/search-triggers.js`), or links (the
+ * nav's Browse menu), and open nothing; its actions after a separator open dialogs as a ⋯ menu's
+ * do. Every trigger built here carries `anchor-name: --<its id>` for that placement.
  */
 import { ModalHost } from "./modal.js"
 
@@ -154,15 +155,21 @@ export function buildDialogTriggerCtrl({
 
 /**
  * Turns a choice menu host into the control, in place. The host (a `[data-choice-menu]` element the
- * server renders, see `includes/search_results.scala.html`) names the menu (`data-choice-menu`),
- * its icon (`data-choice-menu-icon`), whether it is disabled (`data-choice-menu-disabled`), and
- * holds one `button` per option, the current one `aria-checked="true"`; each option carries its
- * own search trigger. The control is a trigger showing the menu's name and the current choice,
- * and the panel the options move into, a `role="menu"` of `menuitemradio` items. The host keeps
- * its ID and gets the component root as its only child; the trigger and panel IDs derive from
- * the host's (`fooHost` → `fooBtn`, `foo`), so they are stable across rebuilds. Picking an option
- * closes the menu (`data-menu-kind="choice"`, read by the component); the search the option runs
- * then replaces the whole control with one showing the new choice.
+ * server renders, see `includes/search_results.scala.html` and `includes/library_menu.scala.html`)
+ * names the menu (`data-choice-menu`), its icon (`data-choice-menu-icon`), whether it is disabled
+ * (`data-choice-menu-disabled`) and the trigger's class (`data-choice-menu-trigger-class`, else
+ * `action-button small`), and holds one element per option, the current one
+ * `aria-checked="true"`: a `button` carrying its own search trigger (Group, Sort), or a link
+ * (`a[href]`, the nav's Browse menu), which the browser follows. The control is a trigger showing
+ * the menu's name and the current choice, with the checked option's `title` (a long name's whole
+ * text), and the panel the options move into, a `role="menu"` of `menuitemradio` items. A
+ * separator (`hr`) may follow the options, and after it the menu's actions: plain `menuitem`
+ * buttons, never checked, each requesting a popover dialog (`hx-get` into `#popoverContent`) that
+ * opens below the trigger, as a ⋯ menu's actions do. The host keeps its ID and gets the component
+ * root as its only child; the trigger and panel IDs derive from the host's (`fooHost` → `fooBtn`,
+ * `foo`), so they are stable across rebuilds. Picking an option or an action closes the menu
+ * (`data-menu-kind="choice"`, read by the component); the search an option runs then replaces the
+ * whole control with one showing the new choice, and a link loads another page.
  *
  * A compact host (`data-choice-menu-compact`, the explorer's Dock side menu) has no icon of its
  * own: its options each carry a `.glyph`, and the trigger shows the checked option's glyph alone,
@@ -177,7 +184,14 @@ export function buildChoiceMenuCtrl(hostEl) {
     const triggerId = `${baseId}Btn`
     const panelId = baseId
     const name = hostEl.dataset.choiceMenu
-    const optionEls = Array.from(hostEl.querySelectorAll("button"))
+    const itemEls = Array.from(hostEl.children)
+    const separatorEl = itemEls.find((itemEl) => itemEl.matches("hr"))
+    const optionEls = separatorEl
+        ? itemEls.slice(0, itemEls.indexOf(separatorEl))
+        : itemEls
+    const actionEls = separatorEl
+        ? itemEls.slice(itemEls.indexOf(separatorEl) + 1)
+        : []
     const checkedEl = optionEls.find(
         (optionEl) => optionEl.getAttribute("aria-checked") === "true",
     )
@@ -187,7 +201,8 @@ export function buildChoiceMenuCtrl(hostEl) {
     rootEl.dataset.menuKind = "choice"
 
     const btnEl = _buildTrigger({ id: triggerId, panelId })
-    btnEl.className = "action-button small"
+    btnEl.className =
+        hostEl.dataset.choiceMenuTriggerClass ?? "action-button small"
     btnEl.setAttribute("aria-haspopup", "menu")
     btnEl.disabled = "choiceMenuDisabled" in hostEl.dataset
 
@@ -212,6 +227,9 @@ export function buildChoiceMenuCtrl(hostEl) {
         const choiceEl = document.createElement("span")
         choiceEl.className = "choice"
         choiceEl.textContent = checkedEl?.textContent.trim() ?? ""
+        if (checkedEl?.title) {
+            btnEl.title = checkedEl.title
+        }
         const caretEl = document.createElement("i")
         caretEl.className = "fas fa-caret-down choice-caret"
         caretEl.setAttribute("aria-hidden", "true")
@@ -231,6 +249,14 @@ export function buildChoiceMenuCtrl(hostEl) {
             optionEl.setAttribute("aria-checked", "false")
         }
         actionsEl.appendChild(optionEl)
+    })
+    if (separatorEl) {
+        actionsEl.appendChild(separatorEl)
+    }
+    actionEls.forEach((actionEl) => {
+        actionEl.setAttribute("role", "menuitem")
+        actionEl.dataset.appDialogAnchor = triggerId
+        actionsEl.appendChild(actionEl)
     })
     panelEl.appendChild(actionsEl)
 

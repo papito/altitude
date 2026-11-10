@@ -232,6 +232,101 @@ import altitude.core.models.AccountType
     }
   }
 
+  /** The Browse menu's host in `page`: from its opening tag to the end of the host, which holds no other `div` */
+  private def browseMenu(page: String): String = {
+    val start = page.indexOf("""data-choice-menu="Browse"""")
+    start should be >= 0
+    page.substring(start, page.indexOf("</div>", start))
+  }
+
+  /** The Libraries a Browse menu lists, in order: each one's link, its title and whether it is checked */
+  private def browseMenuOptions(page: String): List[(String, String, Boolean)] =
+    """<a href="([^"]+)" title="([^"]*)"( aria-checked="true")?>""".r
+      .findAllMatchIn(browseMenu(page))
+      .map(m => (m.group(1), m.group(2), m.group(3) != null))
+      .toList
+
+  test("The nav's Browse menu lists the account's Libraries by name, checks the current one, and offers an Admin New library") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in Admin with Libraries "Client 10", "client 2" and "Alpha", and another user's Library "Beta".
+     *
+     * Assertions:
+     *
+     * On the main page of "client 2", its Import and Settings pages and a nav reload, the Browse cell holds the Browse choice
+     * menu (the database icon), which lists the Admin's Libraries by name, case-insensitively and naturally (Alpha, client 2,
+     * Client 10), each a link to its Library's main page titled with its name, with "client 2" alone checked; then a separator
+     * and "New library…", which requests the New library dialog of "client 2" into the popover dialog host. The main page's
+     * Browse cell keeps `aria-current="page"`.
+     *
+     * Edge cases:
+     *
+     * The other user's Library is not listed.
+     */
+    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val client10 = addLibrary("Client 10", admin)
+    val client2 = addLibrary("client 2", admin)
+    val alpha = addLibrary("Alpha", admin)
+    // Not one of the test context's users, whose one user logs in
+    addLibrary("Beta", testApp.service.user.add(testContext.makeUser(), TestContext.USER_PASSWORD))
+    login()
+    val repoId = client2.persistedId
+
+    withServer(App) {
+      host =>
+        def get(path: String): String = {
+          val response = requests.get(s"$host/$path", cookies = testContext.cookies, check = false)
+          response.statusCode shouldBe 200
+          response.text()
+        }
+
+        val mainPage = get(s"r/$repoId")
+        mainPage should include("""<div class="menu repository" aria-current="page">""")
+
+        for (page <- List(mainPage, get(s"pipeline/r/$repoId"), get(s"settings/r/$repoId"), get(s"htmx/nav/r/$repoId"))) {
+          val menu = browseMenu(page)
+          menu should include("""data-choice-menu-icon="fas fa-database"""")
+          browseMenuOptions(page) shouldBe List(
+            (s"/r/${alpha.persistedId}", "Alpha", false),
+            (s"/r/$repoId", "client 2", true),
+            (s"/r/${client10.persistedId}", "Client 10", false))
+          menu should include("<hr>")
+          menu should include(s"""hx-get="/htmx/library/r/$repoId/dialogs/new"""")
+          menu should include("""hx-target="#popoverContent"""")
+          menu should include(s">${Const.UI.NEW_LIBRARY_OPTION}</button>")
+          menu.contains("Beta") shouldBe false
+        }
+    }
+  }
+
+  test("A User's Browse menu lists their Library and offers no New library") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in User's Library.
+     *
+     * Assertions:
+     *
+     * The main page and a nav reload list the Library, checked, in the Browse menu, with no separator and no New library entry.
+     */
+    val repoId = loginAs(AccountType.User)
+    val name = testContext.repository.name
+
+    withServer(App) {
+      host =>
+        for (path <- List(s"r/$repoId", s"htmx/nav/r/$repoId")) {
+          val page = requests.get(s"$host/$path", cookies = testContext.cookies, check = false).text()
+          browseMenuOptions(page) shouldBe List((s"/r/$repoId", name, true))
+          browseMenu(page).contains("<hr>") shouldBe false
+          page.contains(Const.UI.NEW_LIBRARY_OPTION) shouldBe false
+          page.contains("/dialogs/new") shouldBe false
+        }
+    }
+  }
+
   /** Where `/` sends the logged-in client */
   private def landing(host: String): Seq[String] =
     requests.get(s"$host/", cookies = testContext.cookies, maxRedirects = 0, check = false).headers("location")

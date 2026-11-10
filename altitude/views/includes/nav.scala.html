@@ -1,4 +1,5 @@
 @import altitude.core.Api
+@import altitude.core.App
 @import altitude.core.Const
 @import altitude.core.Environment
 @import altitude.core.models.AccountType
@@ -11,11 +12,19 @@
 
 @currentAttr(entry: String) = {@if(entry == current){ aria-current="page"}}
 
+@* Every nav is rendered behind a login, so the account is always here *@
+@isAdmin = @{ RequestContext.getAccount.accountType == AccountType.Admin }
+
 <div class="brand">
     <a href="/"><i class="fas fa-chevron-up"></i><span>Altitude</span></a>
 </div>
+@* The whole cell is the Browse menu's trigger: the account's Libraries, and New library for an Admin *@
 <div class="menu repository"@currentAttr(Const.NavEntry.BROWSE)>
-      <a href="/"><i class="fas fa-database"></i><span>Browse</span></a>
+    @includes.html.library_menu(
+        hostId = "libraryMenuHost",
+        libraries = App.altitude.service.repository.getOwnedBy(RequestContext.getAccount),
+        currentId = repoId,
+        newLibraryDialogUrl = Option.when(isAdmin)(s"/htmx/library/r/$repoId/dialogs/new"))
 </div>
 
 @* The quick search is on every page. Where js/search-results/search-input.js binds it (the main page), Enter searches
@@ -48,8 +57,8 @@
     </a>
 </div>
 
-@* Settings are an Admin's alone; every nav is rendered behind a login, so the account is always here *@
-@if(RequestContext.account.value.exists(_.accountType == AccountType.Admin)) {
+@* Settings are an Admin's alone *@
+@if(isAdmin) {
 <div class="menu settings"@currentAttr(Const.NavEntry.SETTINGS)>
     <a href="/settings/r/@repoId"><i class="fas fa-cog"></i><span>Settings</span></a>
 </div>

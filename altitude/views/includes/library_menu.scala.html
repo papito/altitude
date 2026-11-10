@@ -1,0 +1,24 @@
+@import altitude.core.Const
+@import altitude.core.models.Repository
+
+@* The Browse menu's host (includes/nav, and the style guide's specimen): a choice menu that js/common/choice-menus.js builds
+   into the nav entry's trigger, "Browse · <the current Library>", and its panel. Its options are the `libraries` given (the
+   account's own, by name), each a link to `href` of it, the one `currentId` names checked; a link's title is the full name,
+   which the trigger and the panel cut with an ellipsis. For an Admin, `newLibraryDialogUrl` adds a separator and the New library
+   entry, an action that requests the dialog into the popover dialog host, below the trigger. `hx-preserve` keeps the built
+   control, and an open panel or dialog anchored to it, through a nav reload. *@
+@(hostId: String,
+  libraries: Seq[Repository],
+  currentId: String,
+  newLibraryDialogUrl: Option[String],
+  href: Repository => String = library => s"/r/${library.persistedId}")
+
+<div id="@hostId" data-choice-menu="Browse" data-choice-menu-icon="fas fa-database" data-choice-menu-trigger-class="nav-menu-trigger" hx-preserve>
+    @for(library <- libraries) {
+    <a href="@href(library)" title="@library.name"@if(library.persistedId == currentId){ aria-checked="true"}><span>@library.name</span></a>
+    }
+    @for(url <- newLibraryDialogUrl) {
+    <hr>
+    <button type="button" hx-get="@url" hx-target="#popoverContent" hx-swap="innerHTML">@Const.UI.NEW_LIBRARY_OPTION</button>
+    }
+</div>

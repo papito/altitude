@@ -5,11 +5,15 @@ import cask.model.Response
 import java.nio.file.Path
 import org.slf4j.Logger
 
+import altitude.core.{ Const => C }
+import altitude.core.Api
 import altitude.core.App
 import altitude.core.DataScrubber
 import altitude.core.Environment
+import altitude.core.FieldConst
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
+import altitude.core.models.Repository
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.rememberRepository
 import altitude.core.routes.decorators.requireLogin
@@ -86,6 +90,44 @@ class StyleGuideController(using logger: Logger) extends BaseController:
   def showSampleDialog(repoId: String): Response[String] =
     val payload = "<!doctype html>" + htmx.html.style_guide_sample_dialog()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+
+  /**
+   * The New library dialog as the style guide shows it, in error: a name typed that a Library already holds, its form posting to
+   * the sample's operation below rather than the create route
+   */
+  @requireLogin()
+  @cask.get(f"/$prefix/r/:repoId/dialogs/new-library")
+  def showNewLibrarySample(repoId: String): Response[String] =
+    htmlResponse(
+      htmx.html.new_library_dialog(
+        fieldErrors = Map(Api.Field.Library.NAME -> C.Msg.Err.LIBRARY_NAME_TAKEN.format("client smith")),
+        formJson = ujson.Obj(Api.Field.Library.NAME -> "client  smith"),
+        postUrl = newLibrarySampleUrl(repoId)
+      ))
+
+  /**
+   * The New library sample's operation: the Library name rule's errors under the field, as the create route answers them, and an
+   * empty answer to a valid name, which creates nothing. Whether a Library holds the name is not asked.
+   */
+  @requireLogin()
+  @cask.post(f"/$prefix/r/:repoId/new-library")
+  def htmxSubmitNewLibrarySample(repoId: String)(using request: Request): Response[String] =
+    val jsonIn: ujson.Obj = unscrubbedJson.get
+    val name = jsonIn.obj.get(Api.Field.Library.NAME).flatMap(_.strOpt).getOrElse("")
+
+    try Repository.validName(name)
+    catch
+      case ex: ValidationException =>
+        return dialogFormValidationResponse(
+          "<!doctype html>" + htmx.html.new_library_dialog(
+            fieldErrors = Map(Api.Field.Library.NAME -> ex.errors.getOrElse(FieldConst.Repository.NAME, ex.message)),
+            formJson = jsonIn,
+            postUrl = newLibrarySampleUrl(repoId)
+          ))
+
+    cask.Response("", 200, Seq(("Content-Type", "text/html")))
+
+  private def newLibrarySampleUrl(repoId: String) = s"/$prefix/r/$repoId/new-library"
 
   /** The sample dialog's operation: validates as a real dialog does, and persists nothing */
   @requireLogin()

@@ -90,6 +90,11 @@
     --nav-brand-width: 12.5rem;
     --nav-search-width: 11.5rem;
     --nav-search-focus-width: 15.5rem;
+    /* The longest a Library's name runs in the nav's Browse menu, its trigger and its entries, before an ellipsis */
+    --library-name-max-width: 16rem;
+    /* The Browse entry's least width, wider than an entry's share of a laptop's nav, so the trigger shows some of the
+       Library's name; a share of the viewport, so the nav still fits a narrow window */
+    --nav-browse-min-width: min(16rem, 18vw);
 
     --snackbar-width: 31.25rem;
     /* A snackbar message's entry and its fade when dismissed; js/common/snackbar.js reads it, in ms, to remove the
@@ -255,7 +260,7 @@ body {
     outline-offset: 2px;
 }
 
-.action-button, .toggle-group button, .filter-chip, .menu-trigger, .context-menu .actions button, .switch, .switch::before {
+.action-button, .toggle-group button, .filter-chip, .menu-trigger, .context-menu .actions :is(button, a), .switch, .switch::before {
     transition-property: background, border-color, color, box-shadow, translate, scale;
     transition-duration: 160ms;
     transition-timing-function: ease-out;
@@ -306,23 +311,24 @@ nav .brand i {
     color: var(--theme-accent);
 }
 
-nav div {
+/* The cells alone: a cell may hold a menu's popover panel, which a descendant rule setting `display` would show closed */
+nav > div {
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-nav .menu, nav .menu a {
+nav .menu, nav .menu > a {
     display: flex;
     align-items: center;
     gap: var(--space-6);
 }
 
-nav .menu a, nav .theme-switch {
+nav .menu > a, nav .nav-menu-trigger, nav .theme-switch {
     transition: filter 0.25s ease;
 }
 
-nav .menu:hover a, nav .theme-switch:hover {
+nav .menu:hover > a, nav .nav-menu-trigger:hover, nav .theme-switch:hover {
     filter: drop-shadow(0 0 8px hsl(from currentColor h s l / 0.8));
 }
 
@@ -377,6 +383,81 @@ nav .menu[aria-current="page"] {
     background-color: hsl(from var(--theme-accent) h s l / 0.16);
     color: var(--theme-accent);
     font-weight: var(--font-weight-bold);
+}
+
+/* The Browse entry is its menu's trigger, the whole cell (includes/library_menu): the cell's padding is the trigger's, and the
+   host and the control between them fill the cell. The cell takes an entry's share of the nav, and at least
+   --nav-browse-min-width, whatever the Library's name, which the trigger cuts to fit */
+nav .menu:has(> [data-choice-menu]) {
+    align-self: stretch;
+    min-width: var(--nav-browse-min-width);
+    padding: 0;
+}
+
+nav .menu > [data-choice-menu], nav .menu .choice-menu-ctrl {
+    display: flex;
+    flex: 1 1 auto;
+    align-self: stretch;
+    min-width: 0;
+}
+
+/* The entry's label, then the current Library after a dot, cut with an ellipsis; the icon keeps an entry's distance from the
+   label (the gap and its margin make --space-6) */
+nav .nav-menu-trigger {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    min-width: 0;
+    padding: var(--space-5) var(--space-3);
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+}
+
+nav .nav-menu-trigger > i:first-child {
+    margin-right: var(--space-5);
+}
+
+nav .nav-menu-trigger .choice-name {
+    color: inherit;
+}
+
+/* The name is the user's, so it keeps its case */
+nav .nav-menu-trigger .choice {
+    max-width: var(--library-name-max-width);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-transform: none;
+
+    &::before {
+        content: "·" / "";
+        margin-right: var(--space-3);
+        color: hsl(from currentColor h s l / 0.6);
+    }
+}
+
+/* A panel in the nav takes the page's text rather than its entry's: the nav font, lowercase, the current entry's accent and
+   weight */
+nav .context-menu {
+    color: var(--theme-neutral-4);
+    font-family: var(--font);
+    font-size: var(--font-size-base);
+    font-weight: normal;
+    text-transform: none;
+}
+
+/* A Library's name in the Browse menu's panel */
+nav .context-menu .actions a > span {
+    max-width: var(--library-name-max-width);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* The quick search cell is as wide as every entry (the same flex and side padding) and holds the form at its own
@@ -901,7 +982,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
 /* A row is tinted on hover as a select picker's option is, and when checked as a checked option is. The leading
    column is the check mark's, drawn on the checked option of a choice menu and left empty on the others, so the
    labels line up; a ⋯ menu's actions, never checked, keep the column for one look across the menus */
-.context-menu .actions button {
+.context-menu .actions :is(button, a) {
     display: grid;
     grid-template-columns: var(--space-6) 1fr;
     align-items: center;
@@ -914,28 +995,29 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     font: inherit;
     font-size: var(--font-size-base);
     text-align: left;
+    text-decoration: none;
     transition-duration: 120ms;
     transition-timing-function: ease;
 }
 
-.context-menu .actions button::before {
+.context-menu .actions :is(button, a)::before {
     content: "";
     font-size: var(--font-size-small);
 }
 
-.context-menu .actions button[aria-checked="true"] {
+.context-menu .actions :is(button, a)[aria-checked="true"] {
     background: hsl(from var(--theme-accent) h s l / 0.2);
 }
 
-.context-menu .actions button[aria-checked="true"]::before {
+.context-menu .actions :is(button, a)[aria-checked="true"]::before {
     content: "✓";
 }
 
-.context-menu .actions button:hover {
+.context-menu .actions :is(button, a):hover {
     background: hsl(from var(--theme-neutral-4) h s l / 0.08);
 }
 
-.context-menu .actions button + button {
+.context-menu .actions :is(button, a) + :is(button, a) {
     border-top: var(--border-hairline) hsl(from var(--theme-neutral-3) h s l / 0.3);
 }
 
@@ -949,10 +1031,17 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     color: hsl(from currentColor h s l / 0.6);
 }
 
-/* A choice menu host before its control is built (common/choice-menus.js): its options, which the build moves into the
-   panel, are not shown raw. Only an unbuilt host has buttons as direct children */
-[data-choice-menu] > button {
+/* A choice menu host before its control is built (common/choice-menus.js): its options, separator and actions, which the
+   build moves into the panel, are not shown raw. Only an unbuilt host has them as direct children */
+[data-choice-menu] > :is(button, a, hr) {
     display: none;
+}
+
+/* The separator between a choice menu's options and its actions (the Browse menu's New library), in the panel's edge color */
+.context-menu .actions hr {
+    margin: var(--space-2) 0;
+    border: none;
+    border-top: var(--border-hairline) var(--popover-border-color);
 }
 
 /* A compact choice menu's trigger (the Dock side menu): a square button showing the checked option's glyph alone */
@@ -984,7 +1073,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     display: grid;
 }
 
-.context-menu .actions button:focus-visible {
+.context-menu .actions :is(button, a):focus-visible {
     outline-offset: -2px;
 }
 

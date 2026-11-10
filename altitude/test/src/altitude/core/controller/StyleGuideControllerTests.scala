@@ -6,7 +6,9 @@ import org.scalatest.matchers.should.Matchers.{ be, fullyMatch, include, regex, 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import altitude.core.Api
 import altitude.core.App
+import altitude.core.Const
 import altitude.core.routes.web.StyleGuideController
 
 /** `App` as it is in dev: its decorators and routes, plus the style guide's, which `App` registers only there */
@@ -45,9 +47,9 @@ object DevApp extends cask.Main:
      *
      * Assertions:
      *
-     * The page, the scan JSON, the sample dialog and the sample submission each answer 404, and neither the main page's nav nor a
-     * nav reload carries the Style Guide button. The main page loads neither the panel's adapter nor the vendored tokentweak
-     * package nor its boot script, and holds no pre-paint script reading the tweaks.
+     * The page, the scan JSON, the sample dialog, the New library sample and their submissions each answer 404, and neither the
+     * main page's nav nor a nav reload carries the Style Guide button. The main page loads neither the panel's adapter nor the
+     * vendored tokentweak package nor its boot script, and holds no pre-paint script reading the tweaks.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -59,16 +61,20 @@ object DevApp extends cask.Main:
 
         get(s"style-guide/r/$repoId").statusCode shouldBe 404
         get("style-guide/scan.json").statusCode shouldBe 404
-        get(s"htmx/style-guide/r/$repoId/dialogs/sample").statusCode shouldBe 404
-        requests
-          .post(
-            s"$host/htmx/style-guide/r/$repoId/sample",
-            headers = Map("Content-Type" -> "application/json"),
-            data = ujson.write(ujson.Obj("name" -> "x")),
-            cookies = testContext.cookies,
-            check = false
-          )
-          .statusCode shouldBe 404
+        for (sample <- List("sample", "new-library")) {
+          withClue(s"[$sample]: ") {
+            get(s"htmx/style-guide/r/$repoId/dialogs/$sample").statusCode shouldBe 404
+            requests
+              .post(
+                s"$host/htmx/style-guide/r/$repoId/$sample",
+                headers = Map("Content-Type" -> "application/json"),
+                data = ujson.write(ujson.Obj("name" -> "x")),
+                cookies = testContext.cookies,
+                check = false
+              )
+              .statusCode shouldBe 404
+          }
+        }
 
         val index = get(s"r/$repoId")
         index.statusCode shouldBe 200
@@ -136,7 +142,7 @@ object DevApp extends cask.Main:
      * Assertions:
      *
      * The page answers 200, holds the scan JSON element and an element for each section, and loads the two libraries the app
-     * start and the sample dialog need.
+     * start and the sample dialog need. Its Browse menu specimen offers New library, which opens the New library sample.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -151,6 +157,8 @@ object DevApp extends cask.Main:
         sectionIds.foreach(id => page.text() should include(s"""<section id="$id">"""))
         page.text() should include("/static/js/lib/interact.min.js")
         page.text() should include("/static/js/lib/json-enc.js")
+        page.text() should include("""id="styleGuideLibraryMenuHost"""")
+        page.text() should include(s"""hx-get="/htmx/style-guide/r/$repoId/dialogs/new-library"""")
     }
   }
 
@@ -199,6 +207,69 @@ object DevApp extends cask.Main:
         blank.headers("hx-retarget") shouldBe Seq("this")
         blank.text() should include("""id="styleGuideSample"""")
         blank.text() should include("""class="error"""")
+    }
+  }
+
+  test("The New library sample is the New library dialog in error, and submitting it applies the name rule and creates nothing") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's Library, the app with the style guide's routes registered, and names posted to the New library sample's
+     * endpoint as JSON.
+     *
+     * Assertions:
+     *
+     * The sample renders the New library dialog with "client smith" typed and the error a taken name gets, its form posting to
+     * the sample's endpoint rather than the create route. A blank name and a one-character name answer the dialog with the
+     * Library name rule's errors under the field, retargeted to replace the submitted form in place, and a valid name answers an
+     * empty 200.
+     *
+     * Edge cases:
+     *
+     * No submission creates a Library.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    val libraries = testApp.service.repository.getAll.size
+
+    withServer(DevApp) {
+      host =>
+        val dialog =
+          requests.get(s"$host/htmx/style-guide/r/$repoId/dialogs/new-library", cookies = testContext.cookies, check = false)
+        dialog.statusCode shouldBe 200
+        dialog.text() should include("""id="newLibrary"""")
+        dialog.text() should include(s"""hx-post="/htmx/style-guide/r/$repoId/new-library"""")
+        dialog.text() should include("""value="client  smith"""")
+        dialog.text() should include(s"""<div class="error">${Const.Msg.Err.LIBRARY_NAME_TAKEN.format("client smith")}</div>""")
+
+        def post(name: String) = requests.post(
+          s"$host/htmx/style-guide/r/$repoId/new-library",
+          headers = Map("Content-Type" -> "application/json"),
+          data = ujson.write(ujson.Obj(Api.Field.Library.NAME -> name)),
+          cookies = testContext.cookies,
+          check = false
+        )
+
+        for (
+          (name, error) <- List("" -> Const.Msg.Err.LIBRARY_NAME_REQUIRED, "C" -> Const.Msg.Err.LIBRARY_NAME_TOO_SHORT.format(2))
+        ) {
+          withClue(s"[$name]: ") {
+            val refused = post(name)
+            refused.statusCode shouldBe 200
+            refused.headers("hx-retarget") shouldBe Seq("this")
+            refused.text() should include("""id="newLibrary"""")
+            refused.text() should include(s"""<div class="error">$error</div>""")
+            refused.text() should include(s"""value="$name"""")
+          }
+        }
+
+        val valid = post("Client Smith")
+        valid.statusCode shouldBe 200
+        valid.text() shouldBe ""
+
+        testApp.service.repository.getAll.size shouldBe libraries
     }
   }
 
