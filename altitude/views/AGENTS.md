@@ -81,27 +81,31 @@ the same header (**Triage summary**). The URL fragment names the tab to open, Fo
 one, and a fragment naming no tab of the view, `#albums` in Triage, opens the first tab, Folders. Where the explorer sits
 against the results, and the divider between them, is under **Explorer dock** below.
 
-**Triage's look** — Triage is set apart from Browse by the accent (`--theme-accent`, the token nearest teal), at an
-alpha in relative color syntax, so it holds in either theme:
+**Triage's and the Trash's look** — Triage is set apart from Browse by the accent (`--theme-accent`, the token nearest
+teal), and the Trash by the warning color (`--warning-color`), each at an alpha in relative color syntax, so it holds
+in either theme:
 
-- The results pane (`#content.triage`, `core.css`) is diagonal stripes, a `repeating-linear-gradient` at 135° of
-  `--view-tint` (the accent at 0.24) and the accent at 0.11, each `--space-8` wide. The background belongs to the
-  scroll container, so the stripes stay put while the results scroll. The bars that stick inside the pane (the results
-  title, the toolbar, a group's header, the map's surfaces) paint `--view-tint` alone over `--theme-neutral-2`.
-- The explorer is the accent at 0.17, flat (`pages/index.css`, under `main:has(> #content.triage)`).
+- The results pane (`#content:is(.triage, .trashbin)`, `core.css`) is diagonal stripes, a `repeating-linear-gradient`
+  at 135° of `--view-tint` and the weaker `--view-stripe`, each `--space-8` wide: the accent at 0.14 and 0.11 in
+  Triage, the warning color at 0.05 and 0.02 in the Trash. The background belongs to the scroll container, so the
+  stripes stay put while the results scroll. The bars that stick inside the pane (the results title, the toolbar, a
+  group's header, the map's surfaces) paint `--view-tint` alone over `--theme-neutral-2`.
+- Triage's explorer is the accent at 0.17, flat (`pages/index.css`, under `main:has(> #content.triage)`); the Trash
+  shows no explorer.
 - The **view band** names the view down the left edge of the results, from the toolbar's bottom edge to the pane's:
-  `main`'s `::after` under the same selector, absolutely positioned in the `content` grid area (`main` is
-  `position: relative` there), `--view-band-width` wide, so it follows the results on every Dock side and stays put
+  `main`'s `::after` under `main:has(> #content:is(.triage, .trashbin))`, each view setting its word and its
+  `--band-color` (the accent, the warning color) on the pseudo-element, absolutely positioned in the `content` grid
+  area (`main` is `position: relative` there), `--view-band-width` wide, so it follows the results on every Dock side and stays put
   while they scroll. Its top is anchored to the toolbar (`anchor(--results-toolbar bottom, 0)`; `#searchControl`
   carries the `anchor-name`), so it follows a results title above the toolbar and a toolbar that wraps with no
-  script. It is frosted glass (the accent at 0.28 under `--popover-backdrop-filter`) with a `--border-heavy` accent
-  edge, at 0.8 opacity; its text is vertical (`writing-mode: vertical-rl`), uppercase, `--font-size-large`,
-  `--font-weight-bold`, tracked `--letter-spacing-band`. The word is the pseudo-element's `content` with an empty
-  alternative text (`"Triage" / ""`), since the nav already names the current view, and the band takes no pointer
-  events. `#content.triage` pads its left by `--view-band-width`, the band's gutter, so nothing that scrolls lies
-  under the glass; the results title and the toolbar take a negative left margin of the same width, so they span the
+  script. It is frosted glass (`--band-color` at 0.28 under `--popover-backdrop-filter`) with a `--border-heavy`
+  `--band-color` edge, at 0.8 opacity; its text is vertical (`writing-mode: vertical-rl`), uppercase,
+  `--font-size-large`, `--font-weight-bold`, tracked `--letter-spacing-band`. The word is the pseudo-element's
+  `content` with an empty alternative text (`"Triage" / ""`, `"Trash" / ""`), since the nav already names the current
+  view, and the band takes no pointer events. The striped pane pads its left by `--view-band-width`, the band's
+  gutter, so nothing that scrolls lies under the glass; the results title and the toolbar take a negative left margin of the same width, so they span the
   pane above the band. It has no `z-index`: Asset detail, Curation and the dialogs paint over it.
-- The nav's Triage entry stays `--success-color`.
+- The nav's Triage entry stays `--success-color`, and its Trash entry `--warning-color`.
 
 **The explorer in Triage** — Triage manages what the explorer lists and finds only triaged assets (the glossary's
 **Triage**), so its tabs differ from Browse's in four ways, none of them in the tabs' markup or renderers:

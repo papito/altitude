@@ -137,17 +137,27 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   background-color: hsl(from var(--theme-accent) h s l / 0.17);
 }
 
-/* The view band: Triage's name on a strip of frosted glass with an accent edge, down the left edge of the results, from
-   the toolbar's bottom edge to the pane's. It is positioned in the results' own grid area (main is its containing
-   block), over the gutter #content.triage leaves (core.css), so it stays put while the results scroll; its top is
-   anchored to the toolbar, wherever the results title and a wrapped row put it. It takes no pointer events and, with
-   an empty alternative text, is not announced */
-:where(body.index) main:has(> #content.triage) {
+/* The view band: the view's name on a strip of frosted glass with an edge of the view's color (--band-color: Triage's
+   accent, the Trash's warning color), down the left edge of the results, from the toolbar's bottom edge to the pane's.
+   It is positioned in the results' own grid area (main is its containing block), over the gutter the striped pane
+   leaves (core.css), so it stays put while the results scroll; its top is anchored to the toolbar, wherever the
+   results title and a wrapped row put it. It takes no pointer events and, with an empty alternative text, is not
+   announced */
+:where(body.index) main:has(> #content:is(.triage, .trashbin)) {
   position: relative;
 }
 
 :where(body.index) main:has(> #content.triage)::after {
   content: "Triage" / "";
+  --band-color: var(--theme-accent);
+}
+
+:where(body.index) main:has(> #content.trashbin)::after {
+  content: "Trash" / "";
+  --band-color: var(--warning-color);
+}
+
+:where(body.index) main:has(> #content:is(.triage, .trashbin))::after {
   position: absolute;
   grid-area: content;
   inset: anchor(--results-toolbar bottom, 0) auto 0 0;
@@ -155,8 +165,8 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   display: grid;
   place-items: center;
   writing-mode: vertical-rl;
-  border: var(--border-heavy) var(--theme-accent);
-  background-color: hsl(from var(--theme-accent) h s l / 0.28);
+  border: var(--border-heavy) var(--band-color);
+  background-color: hsl(from var(--band-color) h s l / 0.28);
   backdrop-filter: var(--popover-backdrop-filter);
   opacity: 0.8;
   font-size: var(--font-size-large);
@@ -168,7 +178,7 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
 }
 
 /* The results title and the toolbar span the pane, the band's gutter included: the band starts below them */
-:where(body.index) #content.triage :is(.results-title, #searchControl) {
+:where(body.index) #content:is(.triage, .trashbin) :is(.results-title, #searchControl) {
   margin-left: calc(-1 * var(--view-band-width));
 }
 
