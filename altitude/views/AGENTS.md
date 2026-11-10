@@ -85,14 +85,18 @@ alpha in relative color syntax, so it holds in either theme:
   scroll container, so the stripes stay put while the results scroll. The bars that stick inside the pane (the results
   title, the toolbar, a group's header, the map's surfaces) paint `--view-tint` alone over `--theme-neutral-2`.
 - The explorer is the accent at 0.17, flat (`pages/index.css`, under `main:has(> #content.triage)`).
-- The **view band** names the view down the left edge of the results: `main`'s `::after` under the same selector, a
-  grid item of the `content` area at its start, `--view-band-width` wide, so it follows the results on every Dock side
-  and stays put while they scroll. It is frosted glass (the accent at 0.28 under `--popover-backdrop-filter`) with a
-  `--border-heavy` accent edge, at 0.8 opacity; its text is vertical (`writing-mode: vertical-rl`), uppercase,
-  `--font-size-large`, `--font-weight-bold`, tracked `--letter-spacing-band`. The word is the pseudo-element's
-  `content` with an empty alternative text (`"Triage" / ""`), since the nav already names the current view, and the
-  band takes no pointer events. `#content.triage` pads its left by `--view-band-width`, the band's gutter, so nothing
-  of the results lies under the glass. It has no `z-index`: Asset detail, Curation and the dialogs paint over it.
+- The **view band** names the view down the left edge of the results, from the toolbar's bottom edge to the pane's:
+  `main`'s `::after` under the same selector, absolutely positioned in the `content` grid area (`main` is
+  `position: relative` there), `--view-band-width` wide, so it follows the results on every Dock side and stays put
+  while they scroll. Its top is anchored to the toolbar (`anchor(--results-toolbar bottom, 0)`; `#searchControl`
+  carries the `anchor-name`), so it follows a results title above the toolbar and a toolbar that wraps with no
+  script. It is frosted glass (the accent at 0.28 under `--popover-backdrop-filter`) with a `--border-heavy` accent
+  edge, at 0.8 opacity; its text is vertical (`writing-mode: vertical-rl`), uppercase, `--font-size-large`,
+  `--font-weight-bold`, tracked `--letter-spacing-band`. The word is the pseudo-element's `content` with an empty
+  alternative text (`"Triage" / ""`), since the nav already names the current view, and the band takes no pointer
+  events. `#content.triage` pads its left by `--view-band-width`, the band's gutter, so nothing that scrolls lies
+  under the glass; the results title and the toolbar take a negative left margin of the same width, so they span the
+  pane above the band. It has no `z-index`: Asset detail, Curation and the dialogs paint over it.
 - The nav's Triage entry stays `--success-color`.
 
 **The explorer in Triage** — Triage manages what the explorer lists and does not search it (the glossary's **Triage**),

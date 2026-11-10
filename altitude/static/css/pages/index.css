@@ -128,13 +128,20 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   background-color: hsl(from var(--theme-accent) h s l / 0.17);
 }
 
-/* The view band: Triage's name on a strip of frosted glass with an accent edge, down the left edge of the results. It
-   is a grid item of the results' own area, laid over the gutter #content.triage leaves (core.css), so it stays put
-   while the results scroll; it takes no pointer events and, with an empty alternative text, is not announced */
+/* The view band: Triage's name on a strip of frosted glass with an accent edge, down the left edge of the results, from
+   the toolbar's bottom edge to the pane's. It is positioned in the results' own grid area (main is its containing
+   block), over the gutter #content.triage leaves (core.css), so it stays put while the results scroll; its top is
+   anchored to the toolbar, wherever the results title and a wrapped row put it. It takes no pointer events and, with
+   an empty alternative text, is not announced */
+:where(body.index) main:has(> #content.triage) {
+  position: relative;
+}
+
 :where(body.index) main:has(> #content.triage)::after {
   content: "Triage" / "";
+  position: absolute;
   grid-area: content;
-  justify-self: start;
+  inset: anchor(--results-toolbar bottom, 0) auto 0 0;
   width: var(--view-band-width);
   display: grid;
   place-items: center;
@@ -149,6 +156,11 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   letter-spacing: var(--letter-spacing-band);
   text-transform: uppercase;
   pointer-events: none;
+}
+
+/* The results title and the toolbar span the pane, the band's gutter included: the band starts below them */
+:where(body.index) #content.triage :is(.results-title, #searchControl) {
+  margin-left: calc(-1 * var(--view-band-width));
 }
 
 /* Triage manages what the explorer lists and never searches it, so no count shows there: an asset count of a folder

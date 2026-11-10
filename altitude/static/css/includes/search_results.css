@@ -5,6 +5,8 @@
   position: sticky;
   top: var(--results-title-height, 0);
   z-index: 2;
+  /* The view band's top edge (pages/index.css) */
+  anchor-name: --results-toolbar;
   padding: var(--space-6) var(--space-8);
   /* A wrapping row of three groups (includes/search_results). The lead (the total, then the batch ops) and the trail (the
      trash view's Purge button) grow from the same zero basis, so they split what the controls leave evenly and the
