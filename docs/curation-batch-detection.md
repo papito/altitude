@@ -67,8 +67,8 @@ image under that size: a transform of this project's own, not the checkpoints' r
 thresholds are calibrated to), center-crops the square, converts it to RGB and runs it through each Scene model's ONNX
 Runtime session (one per model in the process, opened when `Altitude` builds its embedder, before the services, so a
 missing model file fails the start, never an import). Two embeddings of one model compare by cosine similarity, 1 for
-the same picture. They are selected by the two Sequence candidates' statements only (`AssetDao.candidateColumns`), and transferred by no other
-read: every other read's column list comes from `AssetRow`, which leaves them out.
+the same picture. They are selected by the two Sequence candidates' statements only (`AssetDao.candidateColumns`), and
+transferred by no other read: every other read's column list comes from `AssetRow`, which leaves them out.
 
 All of these are NULL together for a Video, an animated image, or a still image the measurement could not decode, and
 an embedding alone for a still image its model could not embed. Measurement is the one stage that swallows its own

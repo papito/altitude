@@ -34,12 +34,9 @@ trait SceneEmbedder extends AutoCloseable:
    */
   def embed(image: Mat, name: String): SceneEmbeddings
 
-object SceneEmbedder:
+object OnnxSceneEmbedder:
   /** The side of the square every Scene model takes */
   val INPUT_SIZE: Int = 224
-
-object OnnxSceneEmbedder:
-  import SceneEmbedder.INPUT_SIZE
 
   private val CHANNELS = 3
   private val PIXELS = INPUT_SIZE * INPUT_SIZE
@@ -64,20 +61,19 @@ object OnnxSceneEmbedder:
  *
  * The preprocessing is this project's own, not the checkpoints' reference transform (DINOv2's processor resizes the short side to
  * 256 bicubic and crops 224; CLIP's resizes the short side to 224 bicubic): the short side fitted to
- * [[SceneEmbedder.INPUT_SIZE]], a center crop of that square, converted to RGB, scaled to 0..1 and normalized per channel with
- * the model's mean and std, laid out NCHW; the output row is L2-normalized, so two embeddings compare by their dot product. One
- * pass prepares the one square for both models, since the resize and the crop are the costly part and the normalization is each
- * model's own; the fit is `INTER_AREA` for the downscale an import is, which averages the pixels it drops where bicubic aliases a
- * large photo, and `INTER_CUBIC` where an image smaller than the input is enlarged, which `INTER_AREA` does not interpolate. The
- * export script checks the models on the same transform, and the Settings' similarity thresholds are calibrated to it: a change
- * here means calibrating again.
+ * [[OnnxSceneEmbedder.INPUT_SIZE]], a center crop of that square, converted to RGB, scaled to 0..1 and normalized per channel
+ * with the model's mean and std, laid out NCHW; the output row is L2-normalized, so two embeddings compare by their dot product.
+ * One pass prepares the one square for both models, since the resize and the crop are the costly part and the normalization is
+ * each model's own; the fit is `INTER_AREA` for the downscale an import is, which averages the pixels it drops where bicubic
+ * aliases a large photo, and `INTER_CUBIC` where an image smaller than the input is enlarged, which `INTER_AREA` does not
+ * interpolate. The export script checks the models on the same transform, and the Settings' similarity thresholds are calibrated
+ * to it: a change here means calibrating again.
  *
  * The two sessions hold about 1.1 GB resident, and on one thread a pass takes about 365 ms for DINOv2 and 270 ms for CLIP, plus
  * about 50 ms to fit a 24-megapixel image; the figures and what they mean for the import are in [[ImportParallelism]].
  */
 class OnnxSceneEmbedder extends SceneEmbedder:
   import OnnxSceneEmbedder.*
-  import SceneEmbedder.INPUT_SIZE
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 

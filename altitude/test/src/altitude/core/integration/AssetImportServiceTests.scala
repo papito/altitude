@@ -511,17 +511,20 @@ import altitude.core.util.ImageUtil
     /**
      * Setup:
      *
-     * A synthesized two-second MP4 (TestVideos.portrait) run through the whole import, which completes it.
+     * A synthesized two-second MP4 (TestVideos.portrait) run through the whole import with the real Scene models on, which
+     * completes it.
      *
      * Assertions:
      *
-     * Both embedding columns of its row are NULL, and the Video reads back with neither.
+     * Both embedding columns of its row are NULL, and the Video reads back with neither: no Scene model embeds a Video.
      */
-    val video = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.portrait.toFile))
-    testApp.service.asset.getById(video.persistedId).isPipelineProcessed shouldBe true
+    withSceneModels {
+      val video = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.portrait.toFile))
+      testApp.service.asset.getById(video.persistedId).isPipelineProcessed shouldBe true
 
-    rawEmbeddingColumns(video.persistedId) shouldBe (None, None)
-    testApp.service.asset.getById(video.persistedId).sceneEmbeddings shouldBe SceneEmbeddings()
+      rawEmbeddingColumns(video.persistedId) shouldBe (None, None)
+      testApp.service.asset.getById(video.persistedId).sceneEmbeddings shouldBe SceneEmbeddings()
+    }
   }
 
   test("A still image's Faces carry their sharpness and its own sharpness is the whole frame's") {
