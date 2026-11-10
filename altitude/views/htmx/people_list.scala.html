@@ -7,8 +7,9 @@
 
 @* The list of one pane of the People tab (htmx/people): the people in the People buckets the pane asked for
    (GET /htmx/people/r/:repoId/list?buckets=..., with &triaged=true while triaged items are shown), one `.cell` each, found
-   by `data-person-id` wherever one is looked up, since a person may be in both panes. A cell's number is the visible count,
-   what opening the person from the repository view finds, and never `Person.numOfFaces` directly. A hidden person's cell carries the eye-slash badge, and its name link says
+   by `data-person-id` wherever one is looked up, since a person may be in both panes. A cell's number (`.count`, not
+   displayed in Triage: pages/index.css) is the visible count, what opening the person from the repository view finds,
+   and never `Person.numOfFaces` directly. A hidden person's cell carries the eye-slash badge, and its name link says
    so to assistive tech; an Unmatched person is told apart by its orange "Unknown N" name. With no one listed, one line
    of text and no grid: that everyone is only in triaged items when the buckets hold people the triage switch left off
    (`leftOffByTriage`), and otherwise that no one is in the buckets. *@
@@ -43,7 +44,7 @@
                    }
                    data-app-search="click"
                    data-app-search-person-id="@{person.persistedId}">
-                    @{person.name.getOrElse("")} <span>(@{visibleCount})</span>
+                    @{person.name.getOrElse("")} <span class="count">(@{visibleCount})</span>
                 </a>
             </span>
         </div>

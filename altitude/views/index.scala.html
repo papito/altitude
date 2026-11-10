@@ -1,3 +1,4 @@
+@import altitude.core.Const
 @import altitude.core.RequestContext
 @import altitude.core.models.Stats
 
@@ -35,11 +36,10 @@
 
       <div id="explorer">
         <div id="explorerViews">
-          @* The header: the tab list, hidden in triage, and the row's end. Each tab is the link itself. A successful
-             tab load marks its tab selected (js/listeners/htmx-requests.js); the initial tab is loaded the same way
-             below *@
+          @* The header: the tab list and the row's end. Each tab is the link itself. A successful tab load marks its
+             tab selected (js/listeners/htmx-requests.js); the initial tab is loaded the same way below *@
           <div id="explorerHeader">
-            <div role="tablist" x-data x-show="!$store.currentView.isTriageView()">
+            <div role="tablist">
               <a id="foldersTab"
                  role="tab"
                  aria-selected="false"
@@ -51,6 +51,8 @@
                 <i class="fas fa-folder"></i> Folders
               </a>
 
+              @* Triage has no Albums tab *@
+              @if(current != Const.NavEntry.TRIAGE) {
               <a id="albumsTab"
                  role="tab"
                  aria-selected="false"
@@ -61,6 +63,7 @@
                  hx-get="/htmx/album/r/@{RequestContext.getRepository.persistedId}/tab">
                 <i class="fas fa-images"></i> Albums
               </a>
+              }
 
               <a id="peopleTab"
                  role="tab"
@@ -150,10 +153,11 @@
           // bin shows no explorer, so nothing is bound there (js/common/explorer-dock.js)
           initExplorerDock(view)
 
-          // The URL fragment names the explorer tab to open, defaulting to folders; in triage
-          // the tab list is hidden, so it is always folders. The tab is loaded exactly as a
-          // click on it would load it: issued from the tab, so it is marked selected on success
-          const fragment = (view === Const.views.triage) ? "#folders" : (window.location.hash || "#folders")
+          // The URL fragment names the explorer tab to open, defaulting to folders; a fragment
+          // naming no tab of this view (#albums in triage) opens the first tab, folders. The tab
+          // is loaded exactly as a click on it would load it: issued from the tab, so it is
+          // marked selected on success
+          const fragment = window.location.hash || "#folders"
           const tabEl = document.querySelector(`[role="tab"][href="${fragment}"]`) ?? document.querySelector('[role="tab"]')
 
           htmx.ajax("GET", tabEl.getAttribute("hx-get"), {

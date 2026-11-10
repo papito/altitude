@@ -97,11 +97,10 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   border-bottom: 0;
 }
 
-/* The Dock side menu at the header's end, centered on the tab row, inset as the tab list is; in triage, where the
-   tab list is hidden, it is pushed to the end on its own */
+/* The Dock side menu at the header's end, after the growing tab list: centered on the tab row, inset as the tab list
+   is */
 #dockSideMenuHost {
   align-self: center;
-  margin-inline-start: auto;
   padding-inline-end: var(--panel-padding);
 }
 
@@ -122,6 +121,28 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   overflow-y: auto;
   overflow-x: hidden;
   contain: inline-size;
+}
+
+/* Triage manages what the explorer lists and never searches it, so no count shows there: an asset count of a folder
+   or a Location (.asset-count), or a Person's (people_list's .count). The cells stay in the page, and the code that
+   patches them goes on as in Browse */
+:where(body.index) main:has(> #content.triage) #explorer .asset-count,
+:where(body.index) main:has(> #content.triage) #people .cell .count {
+  display: none;
+}
+
+/* Nor does a click there open anything, so what searches in Browse loses its pointer cursor: a folder's name, the
+   tree's icons (the rule of folders.css gives every icon of the tree the pointer for the root's sake), a leaf folder's
+   control, a Location's name and icon, and a Person's face and name. Inherit and not default: a draggable row keeps
+   the cursor interact.js gives it, and an icon inside a control that still acts, a branch folder's or a ⋯ trigger's,
+   takes that control's pointer. A Category's control is not named here and keeps its own */
+:where(body.index) main:has(> #content.triage) #rootFolderList .folder-name,
+:where(body.index) main:has(> #content.triage) #rootFolderList .folder.root i,
+:where(body.index) main:has(> #content.triage) #rootFolderList .expand-ctrl:not([aria-expanded]),
+:where(body.index) main:has(> #content.triage) #locationList .location:not(.category) .location-name,
+:where(body.index) main:has(> #content.triage) #locationList .location:not(.category) .location-icon,
+:where(body.index) main:has(> #content.triage) #people .cell a {
+  cursor: inherit;
 }
 
 /* The divider between the explorer and the results, in the grid's gutter area: a .divider of core.css that, with no
