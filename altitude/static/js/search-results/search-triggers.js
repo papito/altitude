@@ -1,5 +1,4 @@
 import { Alpine } from "../lib/alpine.esm.min.js"
-import { showWarningSnackBar } from "../common/snackbar.js"
 import { Const } from "../constants.js"
 import { datasetKeySuffixToDetailKey } from "../fragments/helpers.js"
 import { runSearch } from "./search.js"
@@ -15,10 +14,22 @@ import { runSearch } from "./search.js"
  * Everything else - the folder you are in, the sort you picked - comes from the `searchParams`
  * store, so markup never has to spell out a whole search.
  *
- * The hydrator also owns the one rule on where a trigger may not search (`blockedSearchOf`):
- * Triage is not for finding results, so a trigger naming a folder, a Person or a Location warns
- * there instead of searching, and a trigger carrying a folder does nothing in the Trash. Every
- * explorer row reaches a search through a trigger, so the rule holds for all of them.
+ * The hydrator also owns the one rule on where a trigger's event goes in the current view
+ * (`routeOf`), so it holds for every explorer row and for the Results title's crumbs alike:
+ *
+ * - In the Trash, which spans every folder and has no explorer, a trigger carrying a folder does
+ *   nothing.
+ * - In Triage, a trigger naming a folder, a Person or a Location asks the Triage scope route
+ *   (`GET /htmx/triage/r/:repoId/dialogs/scope`) instead. A folder holds no triaged asset, so it is
+ *   always described by the popover dialog the route answers, except the root folder, the whole
+ *   repository, which does nothing. A Person or a Location with triaged assets is a 204, and the
+ *   trigger then searches as anywhere else (`runTriggerSearch`, called by `listeners/dialogs.js`);
+ *   one without them is the dialog. The request is an open request of the popover host like any
+ *   other (`common/modal.js`): it is issued from the trigger, so the dialog is placed against the
+ *   anchor the trigger names in `data-app-dialog-anchor`, and an open the user replaced or dismissed
+ *   meanwhile neither shows its dialog nor searches. An empty value names nothing and searches, so
+ *   the Results title's × and the Triage summary's total still clear a scope there.
+ * - Everything else searches.
  */
 const PREFIX = "appSearch"
 const EVENT_KEY = "appSearch"
@@ -27,8 +38,11 @@ const BOUND_KEY = "appSearchBound"
 // The parameters whose value names what the explorer lists: a folder, a Person or a Location
 const EXPLORER_SCOPE_PARAMS = ["folderId", "personId", "locationId"]
 
-const NO_SEARCH_IN_TRIAGE_MESSAGE =
-    "You can manage items here but not perform search - use Browse for that"
+// Where a trigger's event goes (`routeOf`), besides the scope dialog
+const Route = {
+    search: "search",
+    nothing: "nothing",
+}
 
 // Attributes that configure the trigger rather than naming a search parameter
 const RESERVED_KEYS = new Set([
@@ -51,22 +65,32 @@ export function bindSearchTriggers(root) {
             event.preventDefault()
 
             const params = searchParamsOf(triggerEl)
+            const route = routeOf(params)
 
-            const blocked = blockedSearchOf(params)
-
-            if (blocked) {
-                event.stopPropagation()
-
-                if (blocked.warns) {
-                    showWarningSnackBar(NO_SEARCH_IN_TRIAGE_MESSAGE)
-                }
-
+            if (route === Route.search) {
+                runSearch({ params })
                 return
             }
 
-            runSearch({ params })
+            event.stopPropagation()
+
+            if (route !== Route.nothing) {
+                requestScopeDialog(triggerEl, route.scope)
+            }
         })
     })
+}
+
+/**
+ * Runs the search `triggerEl` declares, as its event would have outside Triage: what a 204 from the
+ * Triage scope route asks for. A source that is no search trigger is left alone.
+ */
+export function runTriggerSearch(triggerEl) {
+    if (!triggerEl?.dataset[EVENT_KEY]) {
+        return
+    }
+
+    runSearch({ params: searchParamsOf(triggerEl) })
 }
 
 function triggerElements(root) {
@@ -102,28 +126,52 @@ function searchParamsOf(triggerEl) {
 }
 
 /**
- * Whether the current view refuses the search `params` asks for: `null` when it may run, and
- * otherwise whether the refusal is explained to the user (`warns`).
- *
- * - The Trash spans every folder and has no explorer, so a trigger carrying a folder does nothing
- *   there, silently.
- * - Triage manages folders, People and Locations but does not search them: a trigger naming one
- *   warns. An empty value names nothing and passes, so the Results title's × still clears the
- *   scope of a Triage URL that carries one.
+ * Where the event of a trigger asking for `params` goes in the current view: `Route.search`,
+ * `Route.nothing`, or `{ scope }`, the one explorer scope the Triage scope route is asked about
+ * (`{ folderId }`, `{ personId }` or `{ locationId }`). See the module comment.
  */
-function blockedSearchOf(params) {
+function routeOf(params) {
     const currentView = Alpine.store(Const.state.currentView)
 
     if (currentView.isTrashBinView()) {
-        return "folderId" in params ? { warns: false } : null
+        return "folderId" in params ? Route.nothing : Route.search
     }
 
-    if (
-        currentView.isTriageView() &&
-        EXPLORER_SCOPE_PARAMS.some((param) => params[param])
-    ) {
-        return { warns: true }
+    const scopeParam = EXPLORER_SCOPE_PARAMS.find((param) => params[param])
+
+    if (!currentView.isTriageView() || !scopeParam) {
+        return Route.search
     }
 
-    return null
+    const id = params[scopeParam]
+
+    if (scopeParam === "folderId" && isRootFolder(id)) {
+        return Route.nothing
+    }
+
+    return { scope: { [scopeParam]: id } }
+}
+
+/**
+ * Whether `folderId` is the repository's root folder, the one tree node marked `data-is-root`. The
+ * Results title has no crumb for the root, so the tree's root row is the one trigger naming it.
+ */
+function isRootFolder(folderId) {
+    return (
+        document.getElementById(`folder-${folderId}`)?.dataset.isRoot === "true"
+    )
+}
+
+/**
+ * Asks the Triage scope route about `scope` from `triggerEl`, into the popover host: a dialog opens
+ * against the trigger's anchor, and a 204 searches (`runTriggerSearch`). A failure is reported as
+ * any failed dialog open is.
+ */
+function requestScopeDialog(triggerEl, scope) {
+    htmx.ajax("GET", `/htmx/triage/r/${window.ctx.getRepoId()}/dialogs/scope`, {
+        source: triggerEl,
+        target: "#popoverContent",
+        swap: "innerHTML",
+        values: scope,
+    })
 }

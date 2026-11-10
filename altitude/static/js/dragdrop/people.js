@@ -31,7 +31,7 @@ export function bindPeopleDragDrop({ dispatch }) {
                 setFixedPositionWhileDragging(event)
 
                 // The release's click lands on the Person's link, moved under the pointer, and
-                // would search (or warn in Triage) as if the tile had been clicked. Armed at
+                // would search (or open a dialog in Triage) as if the tile had been clicked. Armed at
                 // start rather than in `end`: with inertia, a flick's `end` fires after the
                 // browser's click.
                 suppressClickAfterRelease()

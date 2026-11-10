@@ -20,7 +20,7 @@ export function bindFolderDragDrop({ dispatch }) {
         listeners: {
             move: dragMoveListener,
             // The release's click lands on the folder's name, moved under the pointer, and would
-            // search (or warn in Triage) as if the row had been clicked. Armed at start rather
+            // search (or open a dialog in Triage) as if the row had been clicked. Armed at start rather
             // than in `end`: with inertia, a flick's `end` fires after the browser's click.
             start: suppressClickAfterRelease,
             end: dragged,

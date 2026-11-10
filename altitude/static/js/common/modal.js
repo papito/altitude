@@ -148,7 +148,8 @@ export function isInModalHost(el) {
  * field's text) or else to the host's close control, which is never a destructive action.
  * On close, focus goes to `returnFocusSelector` - the control the fragment declares as the
  * relevant one to return to, chosen to survive the page update its operation triggers - or, without
- * one, back to the element that was focused when the open was requested.
+ * one, back to the element that was focused when the open was requested, or to the control that
+ * stands for it when the open takes it away (`openerOf`).
  *
  * The popover host is shown below the control its request names (`data-app-dialog-anchor`), or
  * placed like the general host (`data-unanchored`) when that control is gone or not displayed.
@@ -436,13 +437,11 @@ export function trackModalOpenRequest(event) {
         return false
     }
 
-    // Menu actions become hidden when the dialog opens. Return to their visible ⋯ trigger.
     const sourceEl = event.detail.ctx.sourceElement
-    const panel = sourceEl?.closest(".context-menu")
     pendingOpen = {
         ctx: event.detail.ctx,
         host,
-        opener: panel ? getContextMenuTrigger(panel) : document.activeElement,
+        opener: openerOf(sourceEl),
         anchorId: sourceEl?.dataset.appDialogAnchor,
     }
 
@@ -450,11 +449,35 @@ export function trackModalOpenRequest(event) {
 }
 
 /**
+ * The control focus returns to when the dialog `sourceEl` requests closes. A control that the open
+ * takes away hands over the one it stands for: a menu action, hidden as the dialog opens, its
+ * visible ⋯ trigger, and a control of the open popover dialog, which the new dialog replaces (Quick
+ * view, opened from the Triage scope dialog into the general modal), the control the popover dialog
+ * would have returned to. Otherwise it is the control focused as the open was requested.
+ */
+function openerOf(sourceEl) {
+    const panel = sourceEl?.closest(".context-menu")
+    if (panel) {
+        return getContextMenuTrigger(panel)
+    }
+
+    const replacesPopover =
+        returnFocus !== null &&
+        getActiveModalHost() === ModalHost.popover &&
+        getContainer(ModalHost.popover).contains(sourceEl)
+
+    return replacesPopover ? returnFocus.opener : document.activeElement
+}
+
+/**
  * `htmx:after:request` hook for modal open requests. Cancels the swap when the request is no
  * longer the latest open (the user dismissed or requested another modal meanwhile) and reports
- * failed opens. Returns whether the event was a modal open request.
+ * failed opens. An open answered with no content (204, which htmx does not swap) opens nothing: it
+ * stops being the pending open, and `onNoContent` gets its context, so its source can act instead
+ * (a search trigger of the Triage explorer searches). Returns whether the event was a modal open
+ * request.
  */
-export function settleModalOpenRequest(event, { onFailure }) {
+export function settleModalOpenRequest(event, { onFailure, onNoContent }) {
     const host = getModalOpenRequestHost(event)
     if (!host) {
         return false
@@ -471,6 +494,9 @@ export function settleModalOpenRequest(event, { onFailure }) {
     if (ctx.response.status >= 400) {
         pendingOpen = null
         onFailure(ctx)
+    } else if (ctx.response.status === 204) {
+        pendingOpen = null
+        onNoContent(ctx)
     }
 
     return true

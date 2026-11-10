@@ -163,38 +163,18 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   margin-left: calc(-1 * var(--view-band-width));
 }
 
-/* Triage manages what the explorer lists and never searches it, so no count shows there: an asset count of a folder
-   or a Location (.asset-count), or a Person's (people_list's .count). The cells stay in the page, and the code that
-   patches them goes on as in Browse */
+/* Triage counts nothing in the explorer: no asset count of a folder or a Location (.asset-count), nor a Person's
+   (people_list's .count). The cells stay in the page, and the code that patches them goes on as in Browse */
 :where(body.index) main:has(> #content.triage) #explorer .asset-count,
 :where(body.index) main:has(> #content.triage) #people .cell .count {
   display: none;
 }
 
-/* Nor does a click there open anything, so what searches in Browse shows the arrow there, or the move cursor
-   interact.js gives a draggable row, and never the pointer, nor the text cursor that `auto` shows over a name. Two rules.
-   This one sets the arrow: on what no drag starts from, which is a Location's name and icon, a leaf folder's control
-   (interact.js is told to ignore it) and a folder crumb of the Results title, a search trigger and nothing else, there
-   when a Triage URL carries a folder; and on the rows the next rule inherits from, a folder's `.controls` (the root's,
-   which is not draggable, included) and a Person's cell. interact.js writes its move cursor inline on a draggable row
-   under the mouse, which wins over this rule */
-:where(body.index) main:has(> #content.triage) #rootFolderList .controls,
-:where(body.index) main:has(> #content.triage) #rootFolderList .expand-ctrl:not([aria-expanded]),
-:where(body.index) main:has(> #content.triage) #locationList .location:not(.category) .location-name,
-:where(body.index) main:has(> #content.triage) #locationList .location:not(.category) .location-icon,
-:where(body.index) main:has(> #content.triage) #people .cell,
-:where(body.index) main:has(> #content.triage) .results-title .crumb {
+/* A click on the root folder does nothing in Triage, where a folder is described rather than searched and the root is
+   the whole repository (js/search-results/search-triggers.js), so its name and icon show the arrow, and not the pointer
+   of folders.css. Everything else that searches in Browse acts in Triage and keeps its pointer */
+:where(body.index) main:has(> #content.triage) #rootFolderList .folder.root > .controls > :is(.folder-name, .folder-icon) {
   cursor: default;
-}
-
-/* And this one hands the row's cursor to what is inside it: a folder's name, the tree's icons (the rule of folders.css
-   gives every icon of the tree the pointer for the root's sake) and a Person's face and name. So they show the arrow,
-   or the move cursor on a draggable row, and an icon inside a control that still acts, a branch folder's or a ⋯
-   trigger's, takes that control's pointer. A Category's control is named in neither rule and keeps its own */
-:where(body.index) main:has(> #content.triage) #rootFolderList .folder-name,
-:where(body.index) main:has(> #content.triage) #rootFolderList .folder.root i,
-:where(body.index) main:has(> #content.triage) #people .cell a {
-  cursor: inherit;
 }
 
 /* The divider between the explorer and the results, in the grid's gutter area: a .divider of core.css that, with no

@@ -396,7 +396,7 @@ import altitude.core.models.Person
     }
   }
 
-  test("A Person's rename pencil on the People list is anchored by an ID that carries the pane") {
+  test("A Person's rename pencil and name link on the People list are anchored by IDs that carry the pane") {
 
     /**
      * Setup:
@@ -406,8 +406,10 @@ import altitude.core.models.Person
      * Assertions:
      *
      * Listed with `pane=main`, Bob's cell holds a pencil named "Rename Bob" that requests the rename dialog and names itself as
-     * the dialog's anchor by an ID carrying the pane and Bob's ID. Listed with `pane=duplicate`, the pencil's ID carries that
-     * pane instead, so the two panes' pencils of one Person never share an ID.
+     * the dialog's anchor by an ID carrying the pane and Bob's ID. Its name link is the anchor of the scope dialog a click on the
+     * face or the name opens in Triage: an ID carrying the pane and Bob's ID, with that anchor name, which both links name as
+     * their dialog's anchor. Listed with `pane=duplicate`, both IDs carry that pane instead, so the two panes' copies of one
+     * Person never share an ID.
      *
      * Edge cases:
      *
@@ -424,6 +426,8 @@ import altitude.core.models.Person
         testContext.addTestFacesAndAssets(bob)
         val mainAnchor = s"personRenameCtrl-main-${bob.persistedId}"
         val duplicateAnchor = s"personRenameCtrl-duplicate-${bob.persistedId}"
+        val mainLink = s"personLink-main-${bob.persistedId}"
+        val duplicateLink = s"personLink-duplicate-${bob.persistedId}"
 
         val main = listPeople(host, repoId, Const.PeopleBucket.MATCHED, Map("pane" -> "main"))
         main.statusCode shouldBe 200
@@ -432,12 +436,19 @@ import altitude.core.models.Person
         main.text() should include("""aria-label="Rename Bob"""")
         main.text() should include(s"/htmx/people/r/$repoId/dialogs/rename-person")
         (main.text() should not).include(duplicateAnchor)
+        main.text() should include(s"""id="$mainLink"""")
+        main.text() should include(s"""style="anchor-name: --$mainLink"""")
+        // The face's link and the name link
+        s"""data-app-dialog-anchor="$mainLink"""".r.findAllIn(main.text()).size shouldBe 2
+        (main.text() should not).include(duplicateLink)
 
         val duplicate = listPeople(host, repoId, Const.PeopleBucket.MATCHED, Map("pane" -> "duplicate"))
         duplicate.statusCode shouldBe 200
         duplicate.text() should include(s"""id="$duplicateAnchor"""")
         duplicate.text() should include(s"""data-app-dialog-anchor="$duplicateAnchor"""")
         (duplicate.text() should not).include(mainAnchor)
+        duplicate.text() should include(s"""id="$duplicateLink"""")
+        (duplicate.text() should not).include(mainLink)
 
         val noPane = listPeople(host, repoId, Const.PeopleBucket.MATCHED)
         noPane.statusCode shouldBe 200

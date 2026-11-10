@@ -107,10 +107,10 @@ proven on SQLite and on Postgres (`make test-sqlite`, `make test-psql`). Groups 
    - The dialog anchors to the trigger, so the guard passes the trigger's ID.
 10. **Anchor IDs on the triggers (`folder-tree.js`, `location-list.js`, `people_list.scala.html`).** These elements get IDs and an
     `anchor-name`:
-    - a folder's name and a leaf's icon control: `folderName-<id>`, `folderIcon-<id>`
+    - a folder's name and a leaf's icon control: `folderName-<id>`, and the control's existing `expand-folder-children-<id>`
     - a Location's name and icon: `locationName-<id>`, `locationIcon-<id>`
     - a Person tile's link: `personLink-<pane>-<id>`, since a Person can be in both panes.
-11. **Cursor and labels (`static/css/pages/index.css`, `folder-tree.js`).** The Triage `cursor: inherit` rule is narrowed to the root
+11. **Cursor and labels (`static/css/pages/index.css`, `folder-tree.js`).** The Triage cursor rule is narrowed to `cursor: default` on the root
     folder's name and icon. The leaf icon's label reads "Open folder <name>" in every view again, and the root's control in Triage is
     labelled by the folder's name alone.
 
