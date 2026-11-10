@@ -4,6 +4,13 @@ Altitude organizes and searches a library of media assets.
 
 ## Language
 
+**Library**:
+A collection of assets kept apart from every other: its own folders, albums,
+People, Locations, Triage and Trash. Nothing crosses between Libraries, and the
+user works in one at a time. An Admin creates and owns it, and its name is
+unique on the server, whatever its case or spacing.
+_Avoid_: Repository, Repo, Catalog, Collection in user-facing text.
+
 **Date Taken**:
 The date and time an asset was captured, distinct from when it was added to the
 library. Its calendar day follows the camera's recorded date and does not change
@@ -22,12 +29,13 @@ _Avoid_: Place, Geotag, Pin when referring to the entity rather than its point.
 
 **Category**:
 A named container for Locations, one level deep, with no pin and no assets of
-its own. Locations and Categories share one name pool per repository.
+its own. Locations and Categories share one name pool per Library.
 _Avoid_: Parent, Folder, Group.
 
 **Choice menu**:
-A toolbar control that picks one of several values from a popover list, such as
-the results grid's Group and Sort; its trigger shows the current choice.
+A control that picks one of several values from a popover list, such as the
+results grid's Group and Sort, or the nav's Browse, which picks the Library; its
+trigger shows the current choice.
 _Avoid_: Dropdown, Select (a select is a form's field).
 
 **Pin**:
@@ -145,7 +153,7 @@ _Avoid_: Header, Banner, Scope bar.
 **Search text**:
 What the user types into the nav's quick search input: Search terms, optionally joined by
 `OR`, excluded with a leading `-`, or quoted into a phrase. It always searches
-the whole repository outside the trash.
+the whole Library outside the trash.
 _Avoid_: Query, Keywords, Search string in user-facing text.
 
 **Search term**:
@@ -171,7 +179,7 @@ or album, Search document), and the terms add up.
 _Avoid_: Rank, Score, Weight in user-facing text.
 
 **Admin**:
-The account type that set the system up. It owns the repositories and alone
+The account type that set the system up. It owns the Libraries and alone
 may change Settings.
 _Avoid_: Owner, Superuser, Root.
 
