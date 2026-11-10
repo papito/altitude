@@ -343,8 +343,8 @@ function _buildFolderControls(folder, repoId) {
  *
  * A branch's control toggles expansion and never navigates: it names the folder, points
  * `aria-controls` at the children container, and carries `aria-expanded`, which the model keeps
- * synchronized. A leaf's control navigates to the folder, exactly as the name does, and so is
- * blocked in the triage and trash views like the name.
+ * synchronized. A leaf's control navigates to the folder, exactly as the name does, and so
+ * warns in Triage and does nothing in the Trash, like the name.
  */
 function _buildFolderIconCtrl(folder, nameEl) {
     const isBranch = folder.numOfChildren > 0
@@ -453,7 +453,8 @@ function _buildFolderNameEl(folder, label) {
 /**
  * Navigating to a folder is a search like any other: the element declares the one parameter it
  * knows about and `search-results/search-triggers.js` combines it with the rest of the current
- * search. That hydrator also owns the rule that folder navigation does nothing in triage and trash.
+ * search. That hydrator also owns the rule that a folder trigger warns instead of
+ * searching in Triage and does nothing in the Trash.
  */
 function _makeSearchTrigger(el, folderId) {
     el.setAttribute("data-app-search", "click")

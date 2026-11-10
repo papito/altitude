@@ -2,7 +2,8 @@
  * Swallows the click the browser fires after a pointer gesture ends.
  *
  * Releasing the mouse after a drag (an asset drag or a box selection) still produces a `click` on
- * the element under the pointer, which would toggle a thumbnail or open its detail view. The
+ * the element under the pointer, which would toggle a thumbnail or open its detail view; after a
+ * Person or folder drag it would search, and after a drag of the batch mover show its hint. The
  * gesture that ended calls `suppressNextClick()`, and the one capture-phase listener below then
  * drops the next click before HTMX or Alpine listeners see it. The flag clears itself shortly
  * afterwards so a click that never comes cannot swallow a later, genuine one.

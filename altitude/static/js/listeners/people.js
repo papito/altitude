@@ -1,3 +1,4 @@
+import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import {
     getRequestSource,
@@ -11,7 +12,8 @@ const NAME_EDITOR_SELECTOR = '[data-app-fragment="person-name-editor"]'
 
 /**
  * People events: merging (a drop of one person onto another confirms in a modal, whose success
- * shows the merged person), the inline name editor, and the follow-up on the People tab. A
+ * shows the merged person in Browse and leaves the results alone in Triage), the inline name
+ * editor, and the follow-up on the People tab. A
  * person's cell may be in both of the tab's panes, so a rename and a cover face change patch
  * every cell of the person, found by `data-person-id` under `#people`. A merge and a discard
  * move people between the People buckets instead, so they announce `peopleChanged`, which the
@@ -46,8 +48,11 @@ export function registerPeopleListeners(app) {
 
         showSuccessSnackBar("Person merged successfully")
 
-        // The merge itself returns no content - showing the destination person is a search like any other
-        runSearch({ params: { personId: event.detail.mergeDestId } })
+        // The merge itself returns no content - showing the destination person is a search like
+        // any other. Triage does not search by Person, so its results stay on all of Triage
+        if (!Alpine.store(Const.state.currentView).isTriageView()) {
+            runSearch({ params: { personId: event.detail.mergeDestId } })
+        }
     })
 
     /**

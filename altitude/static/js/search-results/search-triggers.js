@@ -1,4 +1,5 @@
 import { Alpine } from "../lib/alpine.esm.min.js"
+import { showWarningSnackBar } from "../common/snackbar.js"
 import { Const } from "../constants.js"
 import { datasetKeySuffixToDetailKey } from "../fragments/helpers.js"
 import { runSearch } from "./search.js"
@@ -13,10 +14,21 @@ import { runSearch } from "./search.js"
  *
  * Everything else - the folder you are in, the sort you picked - comes from the `searchParams`
  * store, so markup never has to spell out a whole search.
+ *
+ * The hydrator also owns the one rule on where a trigger may not search (`blockedSearchOf`):
+ * Triage is not for finding results, so a trigger naming a folder, a Person or a Location warns
+ * there instead of searching, and a trigger carrying a folder does nothing in the Trash. Every
+ * explorer row reaches a search through a trigger, so the rule holds for all of them.
  */
 const PREFIX = "appSearch"
 const EVENT_KEY = "appSearch"
 const BOUND_KEY = "appSearchBound"
+
+// The parameters whose value names what the explorer lists: a folder, a Person or a Location
+const EXPLORER_SCOPE_PARAMS = ["folderId", "personId", "locationId"]
+
+const NO_SEARCH_IN_TRIAGE_MESSAGE =
+    "You can manage items here but not perform search - use Browse for that"
 
 // Attributes that configure the trigger rather than naming a search parameter
 const RESERVED_KEYS = new Set([
@@ -40,9 +52,15 @@ export function bindSearchTriggers(root) {
 
             const params = searchParamsOf(triggerEl)
 
-            // Folder navigation is meaningless in triage and trash - those views span every folder
-            if (isFolderNavigationBlocked(params)) {
+            const blocked = blockedSearchOf(params)
+
+            if (blocked) {
                 event.stopPropagation()
+
+                if (blocked.warns) {
+                    showWarningSnackBar(NO_SEARCH_IN_TRIAGE_MESSAGE)
+                }
+
                 return
             }
 
@@ -83,12 +101,29 @@ function searchParamsOf(triggerEl) {
     return params
 }
 
-function isFolderNavigationBlocked(params) {
-    if (!("folderId" in params)) {
-        return false
-    }
-
+/**
+ * Whether the current view refuses the search `params` asks for: `null` when it may run, and
+ * otherwise whether the refusal is explained to the user (`warns`).
+ *
+ * - The Trash spans every folder and has no explorer, so a trigger carrying a folder does nothing
+ *   there, silently.
+ * - Triage manages folders, People and Locations but does not search them: a trigger naming one
+ *   warns. An empty value names nothing and passes, so the Results title's × still clears the
+ *   scope of a Triage URL that carries one.
+ */
+function blockedSearchOf(params) {
     const currentView = Alpine.store(Const.state.currentView)
 
-    return currentView.isTriageView() || currentView.isTrashBinView()
+    if (currentView.isTrashBinView()) {
+        return "folderId" in params ? { warns: false } : null
+    }
+
+    if (
+        currentView.isTriageView() &&
+        EXPLORER_SCOPE_PARAMS.some((param) => params[param])
+    ) {
+        return { warns: true }
+    }
+
+    return null
 }

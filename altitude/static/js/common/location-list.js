@@ -561,6 +561,7 @@ function _buildNameEl(location) {
 /**
  * Opening a Location is a search like any other: the element declares the one parameter it knows
  * about and `search-results/search-triggers.js` combines it with the rest of the current search.
+ * That hydrator also owns the rule that the icon and the name warn instead of searching in Triage.
  */
 function _makeSearchTrigger(el, locationId) {
     el.setAttribute("data-app-search", "click")
