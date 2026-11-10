@@ -6,7 +6,9 @@ import org.slf4j.Logger
 
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.models.User
 import altitude.core.routes.decorators.extractToken
+import altitude.core.routes.decorators.rememberRepository
 import altitude.core.routes.decorators.requireLogin
 
 class IndexController(using logger: Logger, caskLogger: cask.Logger, context: castor.Context) extends cask.Routes:
@@ -23,28 +25,32 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
 
     if devUser.isDefined then
       logger.debug(s"User authenticated: ${devUser.get.email}")
-      return Response("", 302, Seq("Location" -> s"/r/${devUser.get.lastActiveRepoId.get}"), Nil)
+      return landing(devUser.get)
 
     extractToken(request) match
       case Some(token) =>
         App.altitude.service.user.getUserFromToken(token) match
           case Some(user) =>
             logger.debug(s"User authenticated: ${user.email}")
-
-            // Get the last active repo id for the user, and if it doesn't exist, set it to the default repo id and use that.
-            val repoId = user.lastActiveRepoId.getOrElse {
-              val defaultRepoId = App.altitude.service.repository.getDefaultRepository.persistedId
-              App.altitude.service.user.setLastActiveRepoId(user, defaultRepoId)
-              defaultRepoId
-            }
-
-            Response("", 302, Seq("Location" -> s"/r/$repoId"), Nil)
+            landing(user)
           case None =>
             Response("", 302, Seq("Location" -> "/login"), Nil)
       case None =>
         Response("", 302, Seq("Location" -> "/login"), Nil)
 
+  /**
+   * To the Library `user` lands in (`RepositoryService.landingRepositoryOf`). A user who owns none is told so in plain text, the
+   * way a foreign Library is not found, rather than sent anywhere.
+   */
+  private def landing(user: User): cask.Response[String] =
+    App.altitude.service.repository.landingRepositoryOf(user) match
+      case Some(repo) => Response("", 302, Seq("Location" -> s"/r/${repo.persistedId}"), Nil)
+      case None =>
+        logger.info(s"User [${user.persistedId}] owns no library to land in")
+        cask.Response(Const.Msg.Err.NO_LIBRARY, 404, Seq(("Content-Type", "text/plain")))
+
   @requireLogin()
+  @rememberRepository()
   @cask.get("/r/:repoId")
   def repositoryView(
       repoId: String,
@@ -63,6 +69,7 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
    * repository's, is a 404 here, before any page is rendered around it.
    */
   @requireLogin()
+  @rememberRepository()
   @cask.get("/r/:repoId/asset/:assetId")
   def assetView(repoId: String, assetId: String, params: cask.QueryParams /* allow unknown params */ ): cask.Response[String] =
     if App.altitude.service.asset.isInRepository(assetId) then mainPage(Const.Search.View.DEFAULT)

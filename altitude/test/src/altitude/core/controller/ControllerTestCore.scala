@@ -6,7 +6,8 @@ import org.scalatest.{ funsuite, BeforeAndAfterAll, BeforeAndAfterEach }
 import org.scalatest.matchers.should.Matchers.shouldBe
 
 import altitude.core.{ Altitude, App }
-import altitude.core.models.{ AccountType, User }
+import altitude.core.Const as C
+import altitude.core.models.{ AccountType, Repository, User }
 import altitude.core.suites.SqliteSuiteBundle
 
 class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll with BeforeAndAfterEach with TestFocus {
@@ -59,6 +60,44 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
     login()
     testContext.repository.persistedId
   }
+
+  /** A Library owned by `owner`, under `name` */
+  def addLibrary(name: String, owner: User): Repository =
+    testApp.service.repository.addRepository(name = name, fileStoreType = C.StorageEngineName.FS, owner = owner)
+
+  /** The account's last active Library, as stored */
+  def lastActiveRepoIdOf(user: User): Option[String] =
+    testApp.service.user.getById(user.persistedId).lastActiveRepoId
+
+  /** Clears the account's update time, which every write of its last active Library stamps, so a write after it shows */
+  def clearAccountUpdatedAt(user: User): Unit =
+    testApp.txManager.withTransaction {
+      testApp.DAO.user.updateByBySql("UPDATE account SET updated_at = NULL WHERE id = ?", List(user.persistedId))
+    }
+
+  /** Whether the account was written since [[clearAccountUpdatedAt]] */
+  def accountWritten(user: User): Boolean =
+    testApp.txManager.asReadOnly {
+      testApp.DAO.user.manyBySqlQuery("SELECT updated_at FROM account WHERE id = ?", List(user.persistedId)).head("updated_at")
+    } != null
+
+  /**
+   * Loads `path`, a full page of `repo`, with `other` recorded as the user's last active Library beforehand: the page answers 200
+   * and records `repo`, and a reload of it writes nothing
+   */
+  def assertPageRecords(host: String, user: User, path: String, repo: Repository, other: Repository): Unit =
+    withClue(s"[$path]: ") {
+      def load(): Unit = requests.get(s"$host/$path", cookies = testContext.cookies, check = false).statusCode shouldBe 200
+
+      testApp.service.user.rememberLastActiveRepository(user, other.persistedId)
+      load()
+      lastActiveRepoIdOf(user) shouldBe Some(repo.persistedId)
+
+      clearAccountUpdatedAt(user)
+      load()
+      accountWritten(user) shouldBe false
+      lastActiveRepoIdOf(user) shouldBe Some(repo.persistedId)
+    }
 
   def withServer[T](app: cask.main.Main)(f: String => T): T = {
     val server = Undertow.builder

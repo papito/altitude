@@ -201,4 +201,23 @@ object DevApp extends cask.Main:
         blank.text() should include("""class="error"""")
     }
   }
+
+  test("The style guide page records its Library as the last active one, and a reload writes nothing") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user with Libraries A and B, and the app as it is in dev.
+     *
+     * Assertions:
+     *
+     * A's style guide page answers and records A when B is recorded before the load, and a reload of it writes nothing.
+     */
+    val user = testContext.persistUser()
+    val a = addLibrary("Library A", user)
+    val b = addLibrary("Library B", user)
+    login()
+
+    withServer(DevApp)(host => assertPageRecords(host, user, s"style-guide/r/${a.persistedId}", a, b))
+  }
 }

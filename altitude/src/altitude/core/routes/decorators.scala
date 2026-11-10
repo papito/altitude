@@ -224,6 +224,25 @@ object decorators:
         else Result.Success(Response("Forbidden: Admin only", statusCode = 403, headers = Seq("Content-Type" -> "text/plain")))
 
   /**
+   * For a full page of a repository, applied after `requireLogin`, whose ownership check has refused a foreign repository: once
+   * the page answers 200, the request's repository is recorded as the account's last active one
+   * (`UserService.rememberLastActiveRepository`), which login and `/` open next. Partials and API routes do not carry it, so a
+   * nav reload or a search never moves where the user lands, and neither does a page that is not found.
+   */
+  class rememberRepository extends cask.RawDecorator:
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      // The innermost decorator's map fills the endpoint's extra parameter list, so the request travels on from here too
+      delegate(req, Map("request" -> req)).transform {
+        case v: Raw if v.statusCode == 200 =>
+          for
+            user <- RequestContext.account.value
+            repo <- RequestContext.repository.value
+          do App.altitude.service.user.rememberLastActiveRepository(user, repo.persistedId)
+          v
+        case v: Raw => v
+      }
+
+  /**
    * For files under content-hashed names: the bytes under a name never change, so a found file may be cached by anyone for good.
    * A miss carries no Cache-Control, since the name may be served once a build produces that content again.
    */

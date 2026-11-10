@@ -1,6 +1,8 @@
 package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import scalasql.Sc
 import scalasql.Table
 import scalasql.core.Expr
@@ -79,3 +81,13 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
 
     addRecord(sql, sqlVals)
     user.copy(id = Some(id))
+
+  // One conditional statement, so a load of the Library recorded already matches no row; SQLite reads IS DISTINCT FROM too
+  override def rememberLastActiveRepository(userId: String, repoId: String): Boolean =
+    val sql = s"""
+        UPDATE account
+           SET ${FieldConst.User.LAST_ACTIVE_REPO_ID} = ?, ${FieldConst.UPDATED_AT} = ?
+         WHERE ${FieldConst.ID} = ? AND ${FieldConst.User.LAST_ACTIVE_REPO_ID} IS DISTINCT FROM ?
+    """
+
+    updateByBySql(sql, List(repoId, nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC)), userId, repoId)) > 0

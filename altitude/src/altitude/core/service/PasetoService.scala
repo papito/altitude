@@ -43,12 +43,15 @@ class PasetoService(val app: Altitude):
 
   private val tokenExpirationDays: Int = Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS
 
-  /** Creates a PASETO token for the given user. The token contains the user ID and expiration time. */
+  /**
+   * Creates a PASETO token for the given user: the user ID, email, name and account type, and the expiration time. It does not
+   * carry the last active Library, which changes with every switch the token outlives: that is read from the database.
+   */
   def createToken(user: User): String =
     val now = Instant.now()
     val expiration = now.plus(Duration.ofDays(tokenExpirationDays))
 
-    val builder = Pasetos.V2.LOCAL
+    Pasetos.V2.LOCAL
       .builder()
       .setSharedSecret(secretKey)
       .setIssuedAt(now)
@@ -57,11 +60,7 @@ class PasetoService(val app: Altitude):
       .claim("email", user.email)
       .claim("name", user.name)
       .claim("accountType", user.accountType.toString)
-
-    // Add lastActiveRepoId if present
-    user.lastActiveRepoId.foreach(repoId => builder.claim("lastActiveRepoId", repoId))
-
-    builder.compact()
+      .compact()
 
   /** Validates a PASETO token and returns the user ID if valid. Returns None if the token is invalid or expired. */
   def validateToken(token: String): Option[String] =
@@ -93,7 +92,7 @@ class PasetoService(val app: Altitude):
   /**
    * Validates a PASETO token and returns the User object if valid. Returns None if the token is invalid or expired.
    *
-   * The User object is reconstructed from the token claims - no database query.
+   * The User object is reconstructed from the token claims - no database query - so it has no last active Library.
    */
   def validateTokenAndGetUser(token: String): Option[User] =
     try
@@ -119,7 +118,6 @@ class PasetoService(val app: Altitude):
       val email = claims.get("email", classOf[String])
       val name = claims.get("name", classOf[String])
       val accountTypeStr = claims.get("accountType", classOf[String])
-      val lastActiveRepoId = Option(claims.get("lastActiveRepoId", classOf[String]))
 
       if email.isEmpty || name.isEmpty || accountTypeStr.isEmpty then
         logger.debug("Token missing required user claims")
@@ -131,8 +129,7 @@ class PasetoService(val app: Altitude):
         id = Some(userId),
         email = email,
         name = name,
-        accountType = AccountType.valueOf(accountTypeStr),
-        lastActiveRepoId = lastActiveRepoId
+        accountType = AccountType.valueOf(accountTypeStr)
       )
 
       Some(user)

@@ -178,6 +178,8 @@ object Const:
       val LIBRARY_NAME_CONTROL_CHARACTERS = "Remove the control characters"
       // A Library name whose name key another Library holds (repository_01), named as it was submitted, once normalized
       val LIBRARY_NAME_TAKEN = "A library named “%s” already exists"
+      // `/` for an account that owns no Library to land in
+      val NO_LIBRARY = "There is no library to open"
       // A Face correction (PersonService.moveFace) onto the Face's own Person
       val FACE_ALREADY_THEIRS = "The face is already this person's"
       // A Face correction's body naming neither a person nor a name, or both

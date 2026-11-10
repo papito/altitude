@@ -76,3 +76,7 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao[Reposi
     val sql = s"SELECT ${columnsForSelect.mkString(", ")} FROM repository"
     val recs = manyBySqlQuery(sql)
     recs.map(makeModel)
+
+  def getOwnedBy(ownerAccountId: String): List[Repository] =
+    val sql = s"SELECT ${columnsForSelect.mkString(", ")} FROM repository WHERE ${FieldConst.Repository.OWNER_ACCOUNT_ID} = ?"
+    manyBySqlQuery(sql, List(ownerAccountId)).map(makeModel)

@@ -11,6 +11,7 @@ import altitude.core.Const as C
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.ValidationException
+import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.util.Util
@@ -176,5 +177,102 @@ import altitude.core.util.Util
 
     val libraries = librariesKeyed(name.toLowerCase)
     libraries.map(_.ownerAccountId) shouldBe List(owner.persistedId)
+  }
+
+  test("An account's Libraries are listed alone, by name: case-insensitively and naturally") {
+
+    /**
+     * Setup:
+     *
+     * An Admin's four Libraries, added out of order and named under one random prefix "client 10", "Client 2", "alpha" and
+     * "Client 100", and another Admin's Library under the same prefix.
+     *
+     * Assertions:
+     *
+     * The Admin's Libraries are listed, and only those, as "alpha", "Client 2", "client 10", "Client 100".
+     */
+    val owner = persistAdmin()
+    val otherAdmin = persistAdmin()
+    val prefix = Util.randomStr()
+    for (name <- List("client 10", "Client 2", "alpha", "Client 100")) addLibrary(s"$prefix $name", owner)
+    addLibrary(s"$prefix Client 3", otherAdmin)
+
+    testApp.service.repository.getOwnedBy(owner).map(_.name) shouldBe
+      List("alpha", "Client 2", "client 10", "Client 100").map(name => s"$prefix $name")
+  }
+
+  test("A user lands in their last active Library") {
+
+    /**
+     * Setup:
+     *
+     * An Admin's three Libraries, the last active one being neither the first by name nor the newest.
+     *
+     * Assertions:
+     *
+     * The landing Library is the last active one, which stays recorded.
+     */
+    val owner = persistAdmin()
+    val prefix = Util.randomStr()
+    addLibrary(s"$prefix A", owner)
+    val lastActive = addLibrary(s"$prefix B", owner)
+    addLibrary(s"$prefix C", owner)
+    testApp.service.user.rememberLastActiveRepository(owner, lastActive.persistedId)
+
+    testApp.service.repository.landingRepositoryOf(owner).map(_.persistedId) shouldBe Some(lastActive.persistedId)
+    testApp.service.user.getById(owner.persistedId).lastActiveRepoId shouldBe Some(lastActive.persistedId)
+  }
+
+  test("A last active Library that is unset, missing or another account's falls back to the first owned by name, recorded") {
+
+    /**
+     * Setup:
+     *
+     * An Admin's Libraries "Client 10" and "Client 2" (under one random prefix), the second added last, and another Admin's
+     * Library.
+     *
+     * Assertions:
+     *
+     * With no last active Library, with one that names no Library, and with the other Admin's, the landing Library is "Client 2",
+     * and it is recorded as the last active one.
+     */
+    val owner = persistAdmin()
+    val otherAdmin = persistAdmin()
+    val prefix = Util.randomStr()
+    addLibrary(s"$prefix Client 10", owner)
+    val firstByName = addLibrary(s"$prefix Client 2", owner)
+    val foreign = addLibrary(s"$prefix Client 1", otherAdmin)
+
+    def landsInFirstByName(): Unit = {
+      testApp.service.repository.landingRepositoryOf(owner).map(_.persistedId) shouldBe Some(firstByName.persistedId)
+      testApp.service.user.getById(owner.persistedId).lastActiveRepoId shouldBe Some(firstByName.persistedId)
+    }
+
+    testApp.service.user.getById(owner.persistedId).lastActiveRepoId shouldBe None
+    landsInFirstByName()
+
+    for (lastActiveId <- List(BaseDao.genId, foreign.persistedId)) {
+      withClue(s"[$lastActiveId]: ") {
+        testApp.service.user.rememberLastActiveRepository(owner, lastActiveId)
+        landsInFirstByName()
+      }
+    }
+  }
+
+  test("A user who owns no Library has none to land in") {
+
+    /**
+     * Setup:
+     *
+     * A User who owns no Library, with no last active one.
+     *
+     * Assertions:
+     *
+     * There is no landing Library, and nothing is recorded.
+     */
+    val user = testContext.persistUser()
+
+    testApp.service.repository.landingRepositoryOf(user) shouldBe None
+    testApp.service.user.getById(user.persistedId).lastActiveRepoId shouldBe None
   }
 }

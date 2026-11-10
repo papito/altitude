@@ -11,3 +11,9 @@ trait UserDao extends BaseDao[User]:
 
   /** The account an email address names, whatever its case; a `NotFoundException` when it names none */
   def getByEmail(email: String): User
+
+  /**
+   * Records `repoId` as the account's last active Library, stamping `updated_at`, unless it is the one recorded already, in which
+   * case nothing is written. Whether it wrote.
+   */
+  def rememberLastActiveRepository(userId: String, repoId: String): Boolean

@@ -118,13 +118,12 @@ class SetupFormController(using logger: Logger) extends BaseController:
           accountType = AccountType.Admin
         )
 
-        val (admin, repo) = App.altitude.service.system.initializeSystem(
+        // The Library is recorded as the Admin's last active one when the redirect loads its page
+        val (_, repo) = App.altitude.service.system.initializeSystem(
           repositoryName = repositoryName,
           adminModel = userModel,
           password = password
         )
-
-        App.altitude.service.user.setLastActiveRepoId(admin, repo.persistedId)
 
         // Auto-login the newly created admin user
         val adminUser = RequestContext.getAccount

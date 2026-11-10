@@ -15,6 +15,7 @@ import altitude.core.App
 import altitude.core.RequestContext
 import altitude.core.actors.ImportStatusWsActor
 import altitude.core.pipeline.PipelineTypes.PipelineContext
+import altitude.core.routes.decorators.rememberRepository
 import altitude.core.routes.decorators.requireLogin
 
 object ImportController:
@@ -25,6 +26,7 @@ object ImportController:
 
 class ImportController(using logger: Logger, caskLogger: cask.Logger, context: castor.Context) extends cask.Routes:
   @requireLogin()
+  @rememberRepository()
   @cask.get("/pipeline/r/:repoId")
   def pipeline(repoId: String): cask.Response[String] =
     val stats = App.altitude.service.stats.getStats

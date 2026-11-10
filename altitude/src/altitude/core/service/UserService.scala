@@ -102,10 +102,16 @@ class UserService(val app: Altitude) extends BaseService[User]:
   def getByToken(token: String): Option[User] =
     getUserFromToken(token)
 
-  def setLastActiveRepoId(user: User, repoId: String): Unit =
+  /**
+   * Records `repoId` as the user's last active Library, the one login and `/` open next
+   * (`RepositoryService.landingRepositoryOf`). One conditional UPDATE: a load of the Library recorded already writes nothing.
+   * Whether it wrote.
+   */
+  def rememberLastActiveRepository(user: User, repoId: String): Boolean =
     txManager.withTransaction {
-      logger.trace(s"Setting the last active repository of user [${user.persistedId}] to [$repoId]")
-      dao.updateById(user.persistedId, Map(FieldConst.User.LAST_ACTIVE_REPO_ID -> repoId))
+      val written = dao.rememberLastActiveRepository(user.persistedId, repoId)
+      if written then logger.debug(s"Recorded [$repoId] as the last active repository of user [${user.persistedId}]")
+      written
     }
 
   // The dev user's ID once its password has checked out: every request asks for the dev user, a page of thumbnails included,
@@ -114,8 +120,8 @@ class UserService(val app: Altitude) extends BaseService[User]:
 
   /**
    * The user that `dev.user` and `dev.password` log in, made the request's account, or None when they are not set or do not log
-   * in. The password is checked until it first succeeds; after that the user is read by ID, so a change to it (its last active
-   * repository) is seen, and a user that is gone is logged in again.
+   * in. The password is checked until it first succeeds; after that the user is read by ID, so a change to it is seen, and a user
+   * that is gone is logged in again.
    */
   def getDevUser: Option[User] =
     val devEmail: String = App.altitude.config.getString(Const.Conf.DEV_USER)

@@ -11,6 +11,7 @@ import altitude.core.Environment
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.routes.BaseController
+import altitude.core.routes.decorators.rememberRepository
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.util.StyleGuideScan
 
@@ -55,6 +56,7 @@ class StyleGuideController(using logger: Logger) extends BaseController:
 
   /** The page. The source tree is scanned on every request, so an edit to a stylesheet or a template shows on reload. */
   @requireLogin()
+  @rememberRepository()
   @cask.get("/style-guide/r/:repoId")
   def styleGuide(repoId: String): Response[String] =
     val scan = StyleGuideScan.scan(scanRoots(moduleDir), excludedFiles)

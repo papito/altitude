@@ -42,22 +42,39 @@ import altitude.core.util.Util
     user.id shouldEqual storedUser.id
   }
 
-  test("Can set user active repository") {
+  test("Remembering a Library writes the account only when it is not the one recorded") {
 
     /**
      * Setup:
      *
-     * A new regular user and the common setup's repository.
+     * A new User with no last active Library, the common setup's Library and a second one.
      *
      * Assertions:
      *
-     * The repository is stored as the user's last active one: reading the user back yields its ID.
+     * Remembering the first Library records it, reports a write and stamps the account's update time. Remembering it again
+     * reports no write and leaves the update time as it was (cleared beforehand, so a write would show). Remembering the second
+     * Library records it and reports a write.
      */
     val user: User = testContext.persistUser()
-    testApp.service.user.setLastActiveRepoId(user, testContext.repository.persistedId)
+    val first = testContext.repository.persistedId
+    val second = testContext.persistRepository(Some(user)).persistedId
 
-    val storedUser: User = testApp.service.user.getById(user.persistedId)
-    storedUser.lastActiveRepoId shouldEqual Some(testContext.repository.persistedId)
+    def updatedAt: Option[AnyRef] = testApp.txManager.asReadOnly {
+      Option(query("SELECT updated_at FROM account WHERE id = ?", user.persistedId).head("updated_at"))
+    }
+    def lastActive: Option[String] = testApp.service.user.getById(user.persistedId).lastActiveRepoId
+
+    testApp.service.user.rememberLastActiveRepository(user, first) shouldBe true
+    lastActive shouldBe Some(first)
+    updatedAt should not be empty
+
+    testApp.txManager.withTransaction(update("UPDATE account SET updated_at = NULL WHERE id = ?", user.persistedId))
+    testApp.service.user.rememberLastActiveRepository(user, first) shouldBe false
+    lastActive shouldBe Some(first)
+    updatedAt shouldBe None
+
+    testApp.service.user.rememberLastActiveRepository(user, second) shouldBe true
+    lastActive shouldBe Some(second)
   }
 
   test("Check valid user password") {

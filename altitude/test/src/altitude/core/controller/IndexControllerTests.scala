@@ -1,10 +1,12 @@
 package altitude.core.controller
 
+import altitude.test.TestContext
 import java.net.URLEncoder
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ be, include, should, shouldBe }
 
 import altitude.core.App
+import altitude.core.Const
 import altitude.core.models.AccountType
 
 @DoNotDiscover class IndexControllerTests extends ControllerTestCore {
@@ -227,6 +229,148 @@ import altitude.core.models.AccountType
         current(get(s"settings/r/$repoId")) shouldBe Some("settings")
         current(get(s"htmx/nav/r/$repoId", Map("current" -> "trashbin"))) shouldBe Some("trashbin")
         current(get(s"htmx/nav/r/$repoId")) shouldBe None
+    }
+  }
+
+  /** Where `/` sends the logged-in client */
+  private def landing(host: String): Seq[String] =
+    requests.get(s"$host/", cookies = testContext.cookies, maxRedirects = 0, check = false).headers("location")
+
+  test("`/` opens the last active Library, and after a page load of another, that one, with the same login") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user with Libraries A, B and C, B recorded as the last active one before the login.
+     *
+     * Assertions:
+     *
+     * `/` redirects to B. Once C's main page has loaded, `/` redirects to C, though the login's token was issued before the
+     * switch.
+     */
+    val user = testContext.persistUser()
+    addLibrary("Library A", user)
+    val b = addLibrary("Library B", user)
+    val c = addLibrary("Library C", user)
+    testApp.service.user.rememberLastActiveRepository(user, b.persistedId)
+    login()
+
+    withServer(App) {
+      host =>
+        landing(host) shouldBe Seq(s"/r/${b.persistedId}")
+        requests.get(s"$host/r/${c.persistedId}", cookies = testContext.cookies).statusCode shouldBe 200
+        landing(host) shouldBe Seq(s"/r/${c.persistedId}")
+    }
+  }
+
+  test("`/` falls back to the first owned Library by name when the last active one is another user's or gone, and records it") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's Libraries "Client 10" and "Client 2", the second added last, and another user's Library.
+     *
+     * Assertions:
+     *
+     * With the other user's Library recorded as the last active one, and then with an ID that names no Library, `/` redirects to
+     * "Client 2", which is recorded as the last active one.
+     */
+    val user = testContext.persistUser()
+    addLibrary("Client 10", user)
+    val firstByName = addLibrary("Client 2", user)
+    // Not one of the test context's users, whose one user logs in
+    val foreign = addLibrary("Client 1", testApp.service.user.add(testContext.makeUser(), TestContext.USER_PASSWORD))
+    login()
+
+    withServer(App) {
+      host =>
+        for (lastActiveId <- List(foreign.persistedId, java.util.UUID.randomUUID().toString)) {
+          withClue(s"[$lastActiveId]: ") {
+            testApp.service.user.rememberLastActiveRepository(user, lastActiveId)
+            landing(host) shouldBe Seq(s"/r/${firstByName.persistedId}")
+            lastActiveRepoIdOf(user) shouldBe Some(firstByName.persistedId)
+          }
+        }
+    }
+  }
+
+  test("A login and `/` of a user who owns no Library end in a plain not found, not a server error") {
+
+    /**
+     * Setup:
+     *
+     * A User who owns no Library.
+     *
+     * Assertions:
+     *
+     * The login redirects to `/`, which answers 404 in plain text saying there is no library to open.
+     */
+    testContext.persistUser()
+
+    withServer(App) {
+      host =>
+        val loginResponse = requests.post(
+          s"$host/login",
+          maxRedirects = 0,
+          check = false,
+          data = Map("login" -> testContext.user.email, "password" -> TestContext.USER_PASSWORD))
+        loginResponse.statusCode shouldBe 302
+        loginResponse.headers("location") shouldBe Seq("/")
+
+        val response = requests.get(s"$host/", cookies = loginResponse.cookies, maxRedirects = 0, check = false)
+        response.statusCode shouldBe 404
+        response.text() shouldBe Const.Msg.Err.NO_LIBRARY
+    }
+  }
+
+  test("Each full page of a Library records it as the last active one; a reload, a partial and an API call write nothing") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in Admin (so the Settings page answers) with Libraries A and B, an image in A.
+     *
+     * Assertions:
+     *
+     * A's main page, its Triage view, the image's page, Import and Settings each answer and record A when B is recorded before
+     * the load, and a reload of each writes nothing.
+     *
+     * Edge cases:
+     *
+     * With B recorded, A's nav reload, its folder tree API and the page of an asset A does not hold leave B recorded and write
+     * nothing.
+     */
+    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val a = addLibrary("Library A", admin)
+    val b = addLibrary("Library B", admin)
+    login()
+
+    withServer(App) {
+      host =>
+        testApp.service.repository.switchContextToRepository(a)
+        val asset = testContext.persistAsset(repository = Some(a))
+        val aId = a.persistedId
+
+        for (
+          path <- List(
+            s"r/$aId",
+            s"r/$aId?view=triage",
+            s"r/$aId/asset/${asset.persistedId}",
+            s"pipeline/r/$aId",
+            s"settings/r/$aId")
+        ) {
+          assertPageRecords(host, admin, path, a, b)
+        }
+
+        testApp.service.user.rememberLastActiveRepository(admin, b.persistedId)
+        clearAccountUpdatedAt(admin)
+        val unrecorded =
+          List(s"htmx/nav/r/$aId" -> 200, s"api/folder/r/$aId/tree" -> 200, s"r/$aId/asset/${java.util.UUID.randomUUID()}" -> 404)
+        for ((path, status) <- unrecorded) {
+          requests.get(s"$host/$path", cookies = testContext.cookies, check = false).statusCode shouldBe status
+        }
+        accountWritten(admin) shouldBe false
+        lastActiveRepoIdOf(admin) shouldBe Some(b.persistedId)
     }
   }
 }
