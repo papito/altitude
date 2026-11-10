@@ -102,6 +102,11 @@ A Person with a Face on fewer than three assets outside the trash and no name:
 a merge candidate or noise.
 _Avoid_: Unverified, Incomplete, Below threshold.
 
+**Unknown person**:
+A Person with no name that is neither hidden nor discarded, whatever its
+bucket: an Unmatched person, or a Matched one whose faces made it established.
+_Avoid_: Unnamed person, Stranger, Unidentified.
+
 **Hidden person**:
 A Person taken off the People list by the user; its Faces still match. Being
 hidden overrides the tier: a hidden person is neither Matched nor Unmatched in
@@ -217,8 +222,21 @@ _Avoid_: Browse mode, Repository view in user-facing text.
 
 **Triage**:
 The view of imported assets not yet sorted into a folder. The explorer there
-manages folders, Locations and People but does not search them.
+manages folders, Locations and People, and searches People and Locations
+among the triaged assets alone; a folder holds no triaged asset, so it is
+only described.
 _Avoid_: Triage mode, Inbox, Unsorted.
+
+**Triage summary**:
+The sentence above the Triage explorer's tabs stating how many assets are in
+triage, how many of them have an Unknown person, and how many are in no
+Location; each number above zero shows those assets.
+_Avoid_: Banner, Callout, Tally, Info message.
+
+**Quick view**:
+A wide dialog showing a folder's first 100 assets from Triage, to look at
+only, under the folder's path.
+_Avoid_: Preview (a single asset's still), Peek, Folder preview.
 
 **Sequence**:
 Still images in triage that the import found shot as one scene: within a
