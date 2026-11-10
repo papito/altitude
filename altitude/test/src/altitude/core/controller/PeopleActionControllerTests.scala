@@ -35,7 +35,7 @@ import altitude.core.models.Person
 
   /** The number the list shows on the Person's cell, when the Person is listed */
   private def listedCount(html: String, person: Person): Option[Int] =
-    s"""(?s)data-person-id="${person.persistedId}".*?<span>\\((-?\\d+)\\)</span>""".r.findFirstMatchIn(html).map(_.group(1).toInt)
+    s"""(?s)data-person-id="${person.persistedId}".*?<span class="count"> \\((-?\\d+)\\)</span>""".r.findFirstMatchIn(html).map(_.group(1).toInt)
 
   test("The assignable people are the live people who are not a bad match, named first, Hidden marked") {
 
@@ -198,8 +198,8 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * With no `triaged` parameter Bob reads (1), and with `triaged=true` he reads (3). Mia's name link says the same number to
-     * assistive tech: "Mia (1), hidden" by default, "Mia (2), hidden" with `triaged=true`.
+     * With no `triaged` parameter Bob reads (1), and with `triaged=true` he reads (3). Mia's name link is named by its content,
+     * the number and a visually hidden ", hidden" after it: "Mia (1), hidden" by default, "Mia (2), hidden" with `triaged=true`.
      *
      * Edge cases:
      *
@@ -223,12 +223,12 @@ import altitude.core.models.Person
         val hidden = listPeople(host, repoId, buckets)
         hidden.statusCode shouldBe 200
         listedCount(hidden.text(), bob) shouldBe Some(1)
-        hidden.text() should include("""aria-label="Mia (1), hidden"""")
+        hidden.text() should include("""Mia<span class="count"> (1)</span><span class="visually-hidden">, hidden</span>""")
 
         val shown = listPeople(host, repoId, buckets, Map("triaged" -> "true"))
         shown.statusCode shouldBe 200
         listedCount(shown.text(), bob) shouldBe Some(3)
-        shown.text() should include("""aria-label="Mia (2), hidden"""")
+        shown.text() should include("""Mia<span class="count"> (2)</span><span class="visually-hidden">, hidden</span>""")
 
         val notShown = listPeople(host, repoId, buckets, Map("triaged" -> "false"))
         notShown.statusCode shouldBe 200

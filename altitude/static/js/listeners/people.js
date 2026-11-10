@@ -85,8 +85,8 @@ export function registerPeopleListeners(app) {
         })
     })
 
-    // A hidden person's name link carries an aria-label, which the server renders again on the
-    // next reload; the patch leaves it alone
+    // The patch replaces the name link's whole content, so the cell's number and a hidden
+    // person's ", hidden" text are gone until the server renders them again on the next reload
     document.body.addEventListener(Const.events.personNameEdited, (event) => {
         const newPersonName = event.detail.newPersonName
 
