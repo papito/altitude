@@ -3,36 +3,36 @@
 
 @(summary: TriageSummary)
 
-@* The Triage summary (GET /htmx/triage/r/:repoId/summary): an info callout above the Triage explorer's tabs saying how many
+@* The Triage summary (GET /htmx/triage/r/:repoId/summary): an info notice above the Triage explorer's tabs saying how many
    assets are in triage, how many of them have a Face of an Unknown person and how many no Location points at. Each number above
-   zero is a search trigger: the total clears the scope as the Results title's × does, back to all of Triage, and each tally
-   searches its `subset`. A zero is plain text ("None have…", "All have…"), and an empty triage is one sentence. Each link is
+   zero is a search trigger: the total clears the scope as the Results title's × does, back to all of Triage, and each of the
+   other two counts searches its Triage subset (`subset`). A zero is plain text ("None have…", "All have…"), and an empty triage is one sentence. Each link is
    named for what it shows, since its text is a bare number. The counts are LibraryService.triageSummary's. *@
 
 @count(n: Int) = @{ f"$n%,d" }
 
-@tally(n: Int, label: String, attribute: String, value: String) = {<a href="#" data-app-search="click" @attribute="@value" aria-label="@label">@count(n)</a>}
+@searchLink(n: Int, label: String, attribute: String, value: String) = {<a href="#" data-app-search="click" @attribute="@value" aria-label="@label">@count(n)</a>}
 
-<p class="triage-summary">
+<p class="notice triage-summary">
     <i class="fas fa-info-circle" aria-hidden="true"></i>
     <span>
     @if(summary.total == 0) {
         There are no items in triage.
     } else {
         @if(summary.total == 1) {
-            There is @tally(1, "Show the 1 item in triage", "data-app-search-person-id", "") item in triage.
+            There is @searchLink(1, "Show the 1 item in triage", "data-app-search-person-id", "") item in triage.
         } else {
-            There are @tally(summary.total, s"Show all ${count(summary.total)} items in triage", "data-app-search-person-id", "") items in triage.
+            There are @searchLink(summary.total, s"Show all ${count(summary.total)} items in triage", "data-app-search-person-id", "") items in triage.
         }
         @summary.unknownPeople match {
             case 0 => {None have unknown people.}
-            case 1 => {@tally(1, "Show the 1 item in triage with unknown people", "data-app-search-subset", TriageSubset.UnknownPeople.apiValue) has unknown people.}
-            case n => {@tally(n, s"Show the ${count(n)} items in triage with unknown people", "data-app-search-subset", TriageSubset.UnknownPeople.apiValue) have unknown people.}
+            case 1 => {@searchLink(1, "Show the 1 item in triage with unknown people", "data-app-search-subset", TriageSubset.UnknownPeople.apiValue) has unknown people.}
+            case n => {@searchLink(n, s"Show the ${count(n)} items in triage with unknown people", "data-app-search-subset", TriageSubset.UnknownPeople.apiValue) have unknown people.}
         }
         @summary.noLocation match {
             case 0 => {All have a Location.}
-            case 1 => {@tally(1, "Show the 1 item in triage with no Location", "data-app-search-subset", TriageSubset.NoLocation.apiValue) has no Location.}
-            case n => {@tally(n, s"Show the ${count(n)} items in triage with no Location", "data-app-search-subset", TriageSubset.NoLocation.apiValue) have no Locations.}
+            case 1 => {@searchLink(1, "Show the 1 item in triage with no Location", "data-app-search-subset", TriageSubset.NoLocation.apiValue) has no Location.}
+            case n => {@searchLink(n, s"Show the ${count(n)} items in triage with no Location", "data-app-search-subset", TriageSubset.NoLocation.apiValue) have no Locations.}
         }
     }
     </span>

@@ -225,7 +225,7 @@
           <p>The results title (<code>.results-title</code>, <code>includes/results_title</code>) opens scoped results: the
              kind's icon, the title in <code>--font-size-display</code> and <code>--theme-primary-text</code>, the × back to
              the whole result set, and a subtitle, set off by a hairline below in <code>--panel-border-color</code>. A folder's title is its path, the ancestors dimmed links.
-             A Triage subset, a tally of the Triage summary, is titled by its name with no subtitle: "Unknown people" under
+             A Triage subset, the assets one of the Triage summary's counts shows, is titled by its name with no subtitle: "Unknown people" under
              <code>fa-user-secret</code>, and "No Location" under the marker struck through, <code>.kind-icon.slashed</code>
              laying Font Awesome's own slash glyph over <code>fa-map-marker-alt</code>, since the free set has no slashed
              marker.</p>
@@ -607,16 +607,17 @@
               <button type="button" class="snackbar-dismiss" aria-label="Dismiss message">&times;</button>
             </div>
           </div>
-          <p>What a view holds, rather than the outcome of an action, is said in an info callout: the Triage summary
-             (<code>.triage-summary</code>, <code>htmx/triage_summary</code>) above the Triage explorer's tabs, the look of
-             Curation's notice, the <code>--info-background-color</code> fill, with <code>fa-info-circle</code> in
-             <code>--info-color</code> before its sentences, which wrap beside it. A number above zero is a link,
+          <p>What a view holds, rather than the outcome of an action, is said in a notice (<code>.notice</code>), a
+             rounded block in the <code>--info-background-color</code> fill, or in the warning fill with
+             <code>.warning</code>. The Triage summary (<code>.notice.triage-summary</code>, <code>htmx/triage_summary</code>)
+             above the Triage explorer's tabs is one, with <code>fa-info-circle</code> in <code>--info-color</code> before its
+             sentences, which wrap beside it; Curation's notices are under Badges &amp; states. A number above zero is a link,
              semibold in the text's own color, that searches what it counts; a zero is plain text. It is no live
              region, since it reloads after every change it counts.</p>
           @* The Triage summary as htmx/triage_summary renders it, at about an explorer's width; its links are no search
              triggers here *@
           <div class="sg-triage-summary">
-            <p class="triage-summary">
+            <p class="notice triage-summary">
               <i class="fas fa-info-circle" aria-hidden="true"></i>
               <span>There are <a href="#feedback" aria-label="Show all 1,204 items in triage">1,204</a> items in triage. <a href="#feedback" aria-label="Show the 37 items in triage with unknown people">37</a> have unknown people. All have a Location.</span>
             </p>
@@ -646,7 +647,7 @@
             <div class="sg-badge-host"><span class="drag-count-badge">3</span></div>
             <span>.drag-count-badge</span>
           </div>
-          <p>Curation's rail says what is wrong with a set's frames. A notice (<code>.curation-notice</code>) is what the set
+          <p>Curation's rail says what is wrong with a set's frames. A notice (<code>.notice</code>, Feedback) is what the set
              says of itself: that it is too close to call, or, in the warning fill, a problem of every frame. A Bundle's row
              (<code>.curation-bundle</code>, the Contenders' too) is a header with its name, its dimmed count and its reason,
              what is wrong, how much and compared to what, over its frames, each a Preview that focuses it with its own
@@ -654,8 +655,8 @@
              color, and its <code>.sole</code> form marks the only frame with no problem, the one thing the view suggests. The
              focused frame wears the accent's edge, on its Preview in the rail and along the bottom of its pane on the stage.</p>
           <div class="sg-row">
-            <p class="curation-notice">Too close to call</p>
-            <p class="curation-notice warning">Every frame: 8% blown highlights</p>
+            <p class="notice">Too close to call</p>
+            <p class="notice warning">Every frame: 8% blown highlights</p>
             <span class="curation-chip">Too bright</span>
             <strong class="curation-chip sole">The only frame with no problem</strong>
           </div>

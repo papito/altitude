@@ -3,7 +3,6 @@ package altitude.core.routes.web.partial
 import cask.Request
 import cask.Response
 import org.slf4j.Logger
-import play.twirl.api.Html
 
 import altitude.core.Api
 import altitude.core.App
@@ -33,7 +32,7 @@ class TriageController(using logger: Logger) extends BaseController:
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/summary")
   def summary(repoId: String)(using request: Request): Response[String] =
-    html(htmx.html.triage_summary(App.altitude.service.library.triageSummary()))
+    htmlResponse(htmx.html.triage_summary(App.altitude.service.library.triageSummary()))
 
   /**
    * What a click on a folder, a Person or a Location of the Triage explorer shows, named by exactly one of `folderId`, `personId`
@@ -57,15 +56,12 @@ class TriageController(using logger: Logger) extends BaseController:
       case (None, Some(id), None) => answering(personDialog(id))
       case (None, None, Some(id)) => answering(locationDialog(id))
       case _ =>
-        cask.Response(
-          s"Name one of ${fields.FOLDER_ID}, ${fields.PERSON_ID} or ${fields.LOCATION_ID}",
-          400,
-          Seq("Content-Type" -> "text/plain"))
+        textError(s"Name one of ${fields.FOLDER_ID}, ${fields.PERSON_ID} or ${fields.LOCATION_ID}", 400)
 
   /**
    * Quick view of a folder: the folder's path, and the Previews of the first `Const.Search.QUICK_VIEW_SIZE` assets Browse shows
-   * for it by default (the folder and its subfolders, newest import first), with how many there are in all. The root folder is a
-   * 400; an unknown folder, or another repository's, is a 404.
+   * for it by default (the folder and its subfolders, newest import first), with how many there are in all, counted exactly as
+   * the folder's dialog counts them. The root folder is a 400; an unknown folder, or another repository's, is a 404.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/quick-view")
@@ -74,27 +70,28 @@ class TriageController(using logger: Logger) extends BaseController:
       val folder = describedFolder(folderId)
       val browse = browseScope(folderId = Some(folder.persistedId))
       val newestFirst = SearchSort(Api.Field.SearchSort.BY_ASSET_CREATED_AT, SortDirection.DESC)
+      // The total is the exact count the folder's dialog shows, so the search counts none of its own (a capped one)
       val shown = App.altitude.service.library
-        .search(browse.query(rpp = Const.Search.QUICK_VIEW_SIZE, searchSort = List(newestFirst)))
+        .search(browse.query(rpp = Const.Search.QUICK_VIEW_SIZE, searchSort = List(newestFirst)).withoutTotal)
         .records
       val total = App.altitude.service.library.count(browse.query())
       logger.debug(s"Quick view of folder [${folder.persistedId}]: ${shown.size} of $total assets")
 
       val path = App.altitude.service.folder.getAncestors(folder.persistedId) :+ folder
-      html(htmx.html.quick_view_modal(Const.UI.QUICK_VIEW_DIALOG_TITLE, folder, path, shown, total))
+      htmlResponse(htmx.html.quick_view_modal(Const.UI.QUICK_VIEW_DIALOG_TITLE, folder, path, shown, total))
     }
 
   private def folderDialog(id: String): Response[String] =
     val folder = describedFolder(id)
     val count = App.altitude.service.library.count(browseScope(folderId = Some(folder.persistedId)).query())
     logger.debug(s"Folder [$id] has $count assets in Browse")
-    html(htmx.html.triage_scope_dialog(TriageScope.InFolder(folder, count)))
+    htmlResponse(htmx.html.triage_scope_dialog(TriageScope.InFolder(folder, count)))
 
   private def personDialog(id: String): Response[String] =
     val person = App.altitude.service.person.getLiveInRepository(id)
     val triaged = countInTriage(personId = Some(id))
     logger.debug(s"Person [$id] has $triaged assets in Triage")
-    if triaged > 0 then noContent else html(htmx.html.triage_scope_dialog(TriageScope.OfPerson(person)))
+    if triaged > 0 then noContentResponse else htmlResponse(htmx.html.triage_scope_dialog(TriageScope.OfPerson(person)))
 
   private def locationDialog(id: String): Response[String] =
     val location = App.altitude.service.location.getById(id)
@@ -102,10 +99,10 @@ class TriageController(using logger: Logger) extends BaseController:
 
     val triaged = countInTriage(locationId = Some(id))
     logger.debug(s"Location [$id] has $triaged assets in Triage")
-    if triaged > 0 then noContent
+    if triaged > 0 then noContentResponse
     else
       val count = App.altitude.service.library.count(browseScope(locationId = Some(id)).query())
-      html(htmx.html.triage_scope_dialog(TriageScope.InLocation(location, count)))
+      htmlResponse(htmx.html.triage_scope_dialog(TriageScope.InLocation(location, count)))
 
   /** A folder a dialog can describe: one of the repository's, but not the root, which is the whole repository */
   private def describedFolder(id: String): Folder =
@@ -129,10 +126,5 @@ class TriageController(using logger: Logger) extends BaseController:
     SearchRequestParser.parse(view, q = None, folderId, personId, albumId = None, locationId, bbox = None) match
       case Right(scope) => scope
       case Left(message) => throw IllegalStateException(message)
-
-  private def html(payload: Html): Response[String] =
-    cask.Response("<!doctype html>" + payload, 200, Seq("Content-Type" -> "text/html"))
-
-  private def noContent: Response[String] = cask.Response("", 204, Seq("Content-Type" -> "text/html"))
 
   initialize()

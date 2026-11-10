@@ -3,6 +3,7 @@ package altitude.core.routes
 import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
+import play.twirl.api.Html
 
 import altitude.core.{ Const => C }
 import altitude.core.Api
@@ -40,6 +41,17 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
 
   def jsonError(message: String, status: Int): Response[String] = jsonResponse(ujson.Obj("error" -> message), status)
 
+  /** An HTMX partial's response: the rendered template as an HTML document, with any further headers */
+  def htmlResponse(payload: Html, headers: (String, String)*): Response[String] =
+    cask.Response("<!doctype html>" + payload, 200, ("Content-Type", "text/html") +: headers)
+
+  /** A 204 for an HTMX request: nothing to swap */
+  def noContentResponse: Response[String] = cask.Response("", 204, Seq(("Content-Type", "text/html")))
+
+  /** A plain-text refusal, which the snackbar reports: the shape of every refusal `answering` makes */
+  def textError(message: String, status: Int): Response[String] =
+    cask.Response(message, status, Seq(("Content-Type", "text/plain")))
+
   /** What a restore did: the shape the client reads to report a duplicate, wherever assets leave the trash */
   def restoreResponse(result: RestoreResult): Response[String] =
     jsonResponse(
@@ -75,15 +87,12 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
    * failure is the route's own.
    */
   def answering(f: => Response[String]): Response[String] =
-    def refused(message: String, status: Int): Response[String] =
-      cask.Response(message, status, Seq(("Content-Type", "text/plain")))
-
     try f
     catch
       case ex: ValidationException =>
-        refused(if ex.message.nonEmpty then ex.message else ex.errors.values.mkString(", "), 400)
-      case ex: NotFoundException => refused(ex.getMessage, 404)
-      case ex: IllegalOperationException => refused(ex.getMessage, 409)
+        textError(if ex.message.nonEmpty then ex.message else ex.errors.values.mkString(", "), 400)
+      case ex: NotFoundException => textError(ex.getMessage, 404)
+      case ex: IllegalOperationException => textError(ex.getMessage, 409)
 
   /**
    * Response for a dialog form that failed validation: the rendered form (with errors and the submitted values) replaces the

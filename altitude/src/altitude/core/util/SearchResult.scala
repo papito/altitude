@@ -12,15 +12,15 @@ import altitude.core.models.Asset
 case class SearchRow(asset: Asset, day: Option[LocalDate], sortValue: SortValue, secondSortValue: SortValue)
 
 /**
- * What one flat search statement returns: the ordered page rows, whether a further match exists past the page and, on a first
- * page, the count of the matches up to the query's `totalCap`
+ * What one flat search statement returns: the ordered page rows, whether a further match exists past the page and, on a page that
+ * counts it (`SearchQuery.isTotalCounted`), the count of the matches up to the query's `totalCap`
  */
 case class SearchPage(rows: List[SearchRow], total: Option[Int], hasMore: Boolean)
 
 /**
- * One page of a flat search. `total` is present on a first page only, and counts the matches up to the query's `totalCap`: one
- * past the cap means more than it. `nextCursor` is where the next page continues from, the last asset of this one, and is absent
- * on the last page.
+ * One page of a flat search. `total` is present on a first page only, unless its search counts no total
+ * (`SearchQuery.withoutTotal`), and counts the matches up to the query's `totalCap`: one past the cap means more than it.
+ * `nextCursor` is where the next page continues from, the last asset of this one, and is absent on the last page.
  */
 case class SearchResult(
     records: List[Asset],

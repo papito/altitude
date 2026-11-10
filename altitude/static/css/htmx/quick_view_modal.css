@@ -9,11 +9,6 @@
   row-gap: var(--space-6);
 }
 
-/* Plain crumbs: the Results title's path with nothing to click, so an ancestor does not brighten under the pointer */
-#quickView .crumb:hover {
-  color: var(--theme-neutral-3);
-}
-
 #quickView .leaf {
   font-weight: var(--font-weight-semibold);
 }

@@ -137,8 +137,9 @@ _Avoid_: Bottom pane, Right pane, Secondary pane, Clone.
 
 **Results title**:
 The block above the results toolbar naming what the results are scoped to: a
-Person, a folder's path, an album, a Location, a tally of the Triage summary or
-the Search text, with the way back to the whole result set.
+Person, a folder's path, an album, a Location, a Triage subset (the assets one
+of the Triage summary's counts shows) or the Search text, with the way back to
+the whole result set.
 _Avoid_: Header, Banner, Scope bar.
 
 **Search text**:

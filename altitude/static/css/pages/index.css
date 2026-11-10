@@ -99,7 +99,7 @@ html[data-dock-side="bottom"] #content { border-bottom: var(--border-hairline) v
   border-bottom: 0;
 }
 
-/* The Triage summary's host (htmx/triage_summary), inset as the tab list is, so its callout's icon lines up with the
+/* The Triage summary's host (htmx/triage_summary), inset as the tab list is, so the summary's icon lines up with the
    first tab's */
 #triageSummary {
   grid-column: 1 / -1;

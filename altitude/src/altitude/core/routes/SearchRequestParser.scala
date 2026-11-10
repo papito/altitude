@@ -23,9 +23,9 @@ import altitude.core.util.TriageSubset
  * adds the triaged ones to them. In the trash `triaged` tells the assets recycled from triage (`true`) from the rest (`false`).
  * The triage view holds nothing but triaged assets, so `triaged=false` with it is refused.
  *
- * `subset` narrows any view to a tally of the Triage summary (`TriageSubset`): `unknownPeople`, the assets with a Face of an
- * Unknown person, or `noLocation`, those no Location points at, whatever their own GPS position. Only Triage offers it, but every
- * view takes it. Any other value, empty included, is refused.
+ * `subset` narrows any view to a Triage subset, the assets one of the Triage summary's counts shows (`TriageSubset`):
+ * `unknownPeople`, those with a Face of an Unknown person, or `noLocation`, those no Location points at, whatever their own GPS
+ * position. Only Triage offers it, but every view takes it. Any other value, empty included, is refused.
  */
 object SearchRequestParser:
   case class Scope(
@@ -87,9 +87,9 @@ object SearchRequestParser:
       try bbox.map(BoundingBox.parse)
       catch case ex: IllegalArgumentException => return Left(s"Invalid bbox: ${ex.getMessage}")
 
-    val tally = subset.map(TriageSubset.fromApiValue) match
+    val triageSubset = subset.map(TriageSubset.fromApiValue) match
       case None => None
       case Some(None) => return Left(s"Unknown ${Api.Field.Search.SUBSET} value")
       case Some(found) => found
 
-    Right(Scope(params, text, folderId.toSet, personId.toSet, albumId.toSet, locationId.toSet, box, tally))
+    Right(Scope(params, text, folderId.toSet, personId.toSet, albumId.toSet, locationId.toSet, box, triageSubset))

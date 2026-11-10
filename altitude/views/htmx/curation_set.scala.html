@@ -175,7 +175,7 @@
 
 @set match {
   case None => {
-    <p class="curation-notice">Fewer than two images are left to compare</p>
+    <p class="notice">Fewer than two images are left to compare</p>
   }
   case Some(curationSet) => {
     @defining(curationSet.openingFrames) { opening =>
@@ -187,13 +187,13 @@
              data-measurement-box="@{ImageMeasurement.MEASUREMENT_BOX_SIZE}">
       <aside id="curationRail" aria-label="Frames">
         @if(curationSet.heldBack > 0) {
-          <p class="curation-notice">Showing the first @{curationSet.frames.size} of @{f"${curationSet.frames.size + curationSet.heldBack}%,d"} frames. The Sequence stays in the queue with the rest.</p>
+          <p class="notice">Showing the first @{curationSet.frames.size} of @{f"${curationSet.frames.size + curationSet.heldBack}%,d"} frames. The Sequence stays in the queue with the rest.</p>
         }
         @for(notice <- curationSet.notices) {
-          <p class="curation-notice warning">Every frame: @{notice.readings.map(exposure).mkString(", ")}</p>
+          <p class="notice warning">Every frame: @{notice.readings.map(exposure).mkString(", ")}</p>
         }
         @if(curationSet.isTooCloseToCall) {
-          <p class="curation-notice">Too close to call</p>
+          <p class="notice">Too close to call</p>
         }
         @if(curationSet.contenders.nonEmpty) {
           <section class="curation-bundle">

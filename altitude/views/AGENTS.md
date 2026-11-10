@@ -951,17 +951,17 @@ grid (`grid-column: 1 / -1`, `pages/index.css`), above the tab list and the Dock
 as the tab list is, so its icon lines up with the first tab's, with `--space-4` below it (**Explorer dock**).
 
 The fragment, `htmx/triage_summary` (`static/css/htmx/triage_summary.css`), is one paragraph, `p.triage-summary`, styled
-as an info callout, the look of Curation's notice: the `--info-background-color` fill, `--radius`, `--space-3` by
-`--space-5` of padding and `--line-height-text`, with an `fa-info-circle` in `--info-color` before the sentences, in a
+as an info notice (`.notice`, `core.css`, shared with Curation's notice): the `--info-background-color` fill, `--radius`,
+`--space-3` by `--space-5` of padding and `--line-height-text`, with an `fa-info-circle` in `--info-color` before the sentences, in a
 flex row aligned on the baseline, so the sentences wrap beside the icon. It reads "There are X items in triage. Y have
 unknown people. Z have no Locations.", in the singular for 1 ("There is 1 item in triage. 1 has unknown people. 1 has
-no Location."), "None have unknown people." or "All have a Location." for a tally of zero, and "There are no items in
+no Location."), "None have unknown people." or "All have a Location." for a count of zero, and "There are no items in
 triage." alone for an empty triage; the numbers are grouped (`%,d`). The counts are the server's (**Triage summary,
 scope dialogs and Quick view** in `altitude/AGENTS.md`). Each number above zero is a link, semibold in the text's own
 color, and a search trigger (`data-app-search="click"`) named for what it shows (an `aria-label` such as "Show all 12
 items in triage", since its text is a bare number): the total carries `data-app-search-person-id=""`, an empty place
-that clears every place, as the Results title's × does, back to all of Triage, and each tally carries
-`data-app-search-subset` (`unknownPeople`, `noLocation`), which searches that subset of Triage under its own Results
+that clears every place, as the Results title's × does, back to all of Triage, and each of the other two
+carries `data-app-search-subset` (`unknownPeople`, `noLocation`), which searches that subset of Triage under its own Results
 title (**Results title**). A zero is plain text. The links are bound as the swap is hydrated
 (`js/listeners/htmx-requests.js`), like any fragment's triggers. The paragraph is no live region: it reloads after
 every change it counts, which the snackbar has already reported, and a region would read the whole sentence again
@@ -1010,8 +1010,8 @@ explorer's trigger, the control the popover would have returned to (`openerOf`, 
 `static/css/htmx/quick_view_modal.css`), is a grid of three rows `--space-6` apart:
 
 - the folder's path, top-level first, as plain crumbs: `header.crumbs`, the Results title's `.crumbs` with `span.crumb`s
-  that are no search triggers, a `:hover` rule keeping an ancestor in `--theme-neutral-3`, and the folder itself the
-  semibold `.leaf`;
+  that are no search triggers and do not brighten under the pointer (`core.css` brightens a link crumb, `a.crumb`, alone),
+  and the folder itself the semibold `.leaf`;
 - the Previews of the first 100 assets (`Const.Search.QUICK_VIEW_SIZE`) Browse shows for the folder by default, newest
   import first, in `ul.previews`: an `auto-fill` grid of `--quick-view-preview-size` (8rem) columns `--space-4` apart,
   scrolling on its own past `--quick-view-previews-max-height` (32rem) so the path and the footer stay in view, each a
@@ -1289,14 +1289,14 @@ does not show through it while it sticks). The scopes:
   shown by `static/css/htmx/person.css` only while the title is hovered or the name has focus
 - a **folder** as the path's breadcrumb (`.crumbs`, a shared primitive of `core.css` the Detail panel's Folder row wears too, in its own link color):
   every ancestor short of the repository root, top-level first, each a search trigger for its folder
-  (`data-app-search-folder-id`, dimmed `.crumb`; a trigger like any other, so in Triage a crumb opens its folder's
+  (`data-app-search-folder-id`, a dimmed `a.crumb` that brightens to `--theme-neutral-4` under the pointer; a trigger like any other, so in Triage a crumb opens its folder's
   scope dialog, unanchored since it names no anchor, and in the trash it does nothing, see **Search parameters**), separated by a dimmed `fa-chevron-right` (`.sep`), and the folder itself as
   the `.leaf` in the title style. The path wraps rather than truncating. The
   controller builds it from `FolderService.getAncestors` (root first) and the folder; the root folder is the whole
   repository and renders no block
 - an **album** by name, with "Created *day*" (`Util.humanReadableDate` of `Album.createdAt`) as the subtitle
 - a **Location** by name, with its category's name as the subtitle, when it has one
-- a **Triage subset** (`subset`, a tally of the Triage summary) by its name: "Unknown people" under `fa-user-secret`
+- a **Triage subset** (`subset`, the assets one of the Triage summary's counts shows) by its name: "Unknown people" under `fa-user-secret`
   (Font Awesome 5 Free has no person with a question mark: the incognito user stands for a person with no name), and
   "No Location" under `fa-map-marker-alt slashed`, the marker struck through: `.results-title .kind-icon.slashed` is
   `position: relative`, and its `::after` lays Font Awesome's own slash glyph (`fa-slash`, `\f715`, made to be laid over
@@ -1675,7 +1675,7 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   of the set do nothing. The walk's position and the undo entry stay as they were, so no Sequence is passed over, and on the
   queue the Sequence rail and the moves still work there, so a Sequence that will not read cannot block the rest.
 - **The Bundle rail** (`#curationRail`, `htmx/curation_set.scala.html`) is a column of its own that scrolls by itself: the notices
-  (`.curation-notice`, "Showing the first 100 of 2,000 frames" with what that means for the queue when a Sequence is over the window a
+  (`.notice`, `core.css`, "Showing the first 100 of 2,000 frames" with what that means for the queue when a Sequence is over the window a
   set reads, "Too close to call" or, in the warning fill, "Every frame: 8% blown highlights"), the Contenders, then
   each Bundle in the rule's order, each frame a Preview that focuses it, with its reasons and its chips (`.curation-chip`). A
   frame's `data-problems` holds what the stage's tag says is wrong with it, its Bundle first and then its chips; a Contender has
@@ -2378,7 +2378,8 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   token without a color is compared by its value alone.
 - **Hand-written, keep in sync:** the specimens. **A new or changed shared primitive in `core.css` or `tabs.css` (a
   class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** A feature's own
-  design conventions can have one too: Curation's notice, chip and Bundle row (`htmx/curation_set.css`) and the Sequence rail's
+  design conventions can have one too: Curation's notice (the shared `.notice` of `core.css`), chip and Bundle row
+  (`htmx/curation_set.css`) and the Sequence rail's
   rows (`htmx/curation_queue.css`), a done one and a current one side by side in `.sg-curation-queue`, are in Badges & states,
   where `.sg-curation-bundle` gives the row the rail's width, and the Detail panel's sections (`htmx/detail_panel.css`: a People
   row, selected and not, Change and Remove under a selected row, the Change combobox with its listbox and its Suggested group,
@@ -2389,7 +2390,7 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   inside an element with the tab's ID, `#people`, which the rules are scoped by, with `--face-box` set on it as the tab's
   shell sets it; the cells carry no `drag-drop` or `dropzone` class and no search trigger, so nothing binds to them, and
   `.sg-cover` stands in for the cover face. The Results title's specimens in Panels & layout show a folder's path and a
-  Triage subset's struck-through marker (`.kind-icon.slashed`). The Triage summary (`htmx/triage_summary.css`) is in
+  Triage subset's struck-through marker (`.kind-icon.slashed`). The Triage summary (`.notice` with `htmx/triage_summary.css`) is in
   Feedback, in `.sg-triage-summary`, which gives it about an explorer's width and its text color there, its links no
   search triggers; Quick view (`htmx/quick_view_modal.css`) is in Menus & dialogs, its content hand-written to
   `htmx/quick_view_modal`'s markup inside an element with its ID, `#quickView`, which its rules are scoped by, with no
@@ -2615,8 +2616,8 @@ it knows about; the `searchParams` store supplies the rest. Nothing else builds 
 
 `js/stores/search-params.js` owns the parameters (`view`, `folderId`, `personId`, `albumId`,
 `locationId`, `subset`, `q`, `bbox`, `triaged`, `layout`, `sort`, `groupBy`, `groupDirection`, `rpp`) and the rules for combining them:
-the five **places** (`PLACES`) are a folder, a person, an album, a Location and a Triage subset (`subset`, a tally of
-the Triage summary: `unknownPeople`, the assets with a Face of an Unknown person, or `noLocation`, those in no
+the five **places** (`PLACES`) are a folder, a person, an album, a Location and a Triage subset (`subset`, the assets one
+of the Triage summary's counts shows: `unknownPeople`, the assets with a Face of an Unknown person, or `noLocation`, those in no
 Location); choosing one clears the other four, and a view clears all five. A place set to nothing still clears the
 others, so a trigger with one empty literal (the Results title's ×, the Triage summary's total) goes back to the whole
 view from any place, and an empty value is never sent. Only the Triage summary offers a subset, but the server takes

@@ -99,7 +99,7 @@ import altitude.core.util.TriageSubset
         response.statusCode shouldBe 200
         val page = response.text()
         plain(page) shouldBe "There are 3 items in triage. 2 have unknown people. 2 have no Locations."
-        page should include("""class="triage-summary"""")
+        page should include("""class="notice triage-summary"""")
         linkText(page, allOfTriage) shouldBe Some("3")
         linkText(page, unknownPeopleSubset) shouldBe Some("2")
         linkText(page, noLocationSubset) shouldBe Some("2")
@@ -142,7 +142,7 @@ import altitude.core.util.TriageSubset
     }
   }
 
-  test("A tally of zero in the Triage summary is plain text") {
+  test("A count of zero in the Triage summary is plain text") {
 
     /**
      * Setup:
@@ -453,6 +453,44 @@ import altitude.core.util.TriageSubset
         val foreign = quickView(host, folder.persistedId)
         foreign.statusCode shouldBe 404
         (foreign.text() should not).include("Eve")
+    }
+  }
+
+  test("A Person's scope dialog is a 404 for a Person merged away and for a bad match") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob" merged into a Person named "Tessa", and a Person named "Carl"
+     * marked as a bad match, each of the three with a Face on a sorted asset.
+     *
+     * Assertions:
+     *
+     * The scope dialog asked for with Bob's ID, and with Carl's, answers 404 and no dialog naming them, while Tessa's is her
+     * dialog.
+     */
+    testContext.persistRepository()
+    login()
+    withServer(App) {
+      host =>
+        val tessa = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val carl = testApp.service.person.addPerson(Person(name = Some("Carl")))
+        List(tessa, bob, carl).foreach {
+          person => testContext.addTestFace(person, testContext.insertAsset(), TestContext.unitVector(1))
+        }
+        testApp.service.person.merge(dest = tessa, source = bob)
+        testApp.service.person.markAsBadMatch(carl)
+
+        for ((person, name) <- List(bob -> "Bob", carl -> "Carl")) withClue(s"$name: ") {
+          val response = scope(host, Api.Field.Search.PERSON_ID -> person.persistedId)
+          response.statusCode shouldBe 404
+          (response.text() should not).include(name)
+        }
+
+        val live = scope(host, Api.Field.Search.PERSON_ID -> tessa.persistedId)
+        live.statusCode shouldBe 200
+        live.text() should include("Tessa")
     }
   }
 }

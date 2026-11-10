@@ -757,10 +757,11 @@ footer {
 /* CRUMBS */
 /*        */
 
-/* A path's breadcrumb: the results title's folder path (includes/results_title_inner) and the Detail panel's Folder row
-   (htmx/detail_panel). Each ancestor is a dimmed link (.crumb) and the crumbs are parted by a faint chevron (.sep); the
-   row wraps rather than hiding an ancestor. The results title's leaf is its own (.leaf, includes/results_title.css), and the
-   Detail panel colors its crumbs as its other links (htmx/detail_panel.css). */
+/* A path's breadcrumb: the results title's folder path (includes/results_title_inner), the Detail panel's Folder row
+   (htmx/detail_panel) and Quick view's path (htmx/quick_view_modal). Each ancestor is dimmed (.crumb), a link that brightens
+   under the pointer except in Quick view, whose crumbs are plain text, and the crumbs are parted by a faint chevron (.sep);
+   the row wraps rather than hiding an ancestor. The results title's leaf is its own (.leaf, includes/results_title.css), and
+   the Detail panel colors its crumbs as its other links (htmx/detail_panel.css). */
 .crumbs {
     display: flex;
     flex-wrap: wrap;
@@ -775,7 +776,7 @@ footer {
     text-decoration: none;
 }
 
-.crumb:hover {
+a.crumb:hover {
     color: var(--theme-neutral-4);
 }
 
@@ -1117,6 +1118,20 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
             translate: 0 var(--space-4);
         }
     }
+}
+
+/* A notice: what a view holds rather than the outcome of an action, in the info fill, or the warning fill (.warning).
+   Curation's notices (htmx/curation_set) and the Triage summary (htmx/triage_summary.css) wear it. */
+.notice {
+    margin: 0;
+    padding: var(--space-3) var(--space-5);
+    line-height: var(--line-height-text);
+    background-color: var(--info-background-color);
+    border-radius: var(--radius);
+}
+
+.notice.warning {
+    background-color: var(--warning-background-color);
 }
 
 /*             */

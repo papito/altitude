@@ -16,7 +16,7 @@
    `grouping`, or htmx/map_view for the map layout) and passes in. `sort` and `grouping` are the effective ones the server used, reflected by the Group and Sort choice menus. `text` is the Search text the
    results were matched by, when `q` had a usable term: it is what makes the Relevance sort available. `total` counts the matches
    up to one past `totalCap`, which means more than the cap. `person`, `folderPath` (the folder's ancestors, top-level first,
-   then the folder; empty for the root), `album`, `location` (with its category's name) and `subset` (a Triage summary tally)
+   then the folder; empty for the root), `album`, `location` (with its category's name) and `subset` (a Triage subset)
    are the scope the results title names (includes/results_title); `text` is its title when none of them is set. *@
 @(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None, subset: Option[TriageSubset] = None)
 

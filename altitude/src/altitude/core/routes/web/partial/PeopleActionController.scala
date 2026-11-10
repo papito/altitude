@@ -44,18 +44,14 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       pane: String = Const.PeoplePane.MAIN)(using request: Request): Response[String] =
     val requested: Set[String] = App.altitude.service.person.parseBuckets(buckets)
     val unknown = requested -- Const.PeopleBucket.ALL
-    if unknown.nonEmpty then return badRequest(s"Unknown People bucket: ${unknown.mkString(", ")}")
+    if unknown.nonEmpty then return textError(s"Unknown People bucket: ${unknown.mkString(", ")}", 400)
     if !Const.PeoplePane.ALL.contains(pane) then return unknownPane(pane)
 
     val listed = App.altitude.service.person.getListedInBuckets(requested, showTriaged = triaged.contains(true))
     val payload = "<!doctype html>" + htmx.html.people_list(listed = listed, pane = pane)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-  /** A plain-text 400; the snackbar reports the status */
-  private def badRequest(message: String): Response[String] =
-    cask.Response(message, 400, Seq(("Content-Type", "text/plain")))
-
-  private def unknownPane(pane: String): Response[String] = badRequest(s"Unknown People pane: $pane")
+  private def unknownPane(pane: String): Response[String] = textError(s"Unknown People pane: $pane", 400)
 
   /**
    * The options of the Change combobox of Asset detail's People section: the people a Face can be given to
@@ -287,7 +283,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
     App.altitude.service.person.merge(dest = destPerson, source = srcPerson)
 
-    cask.Response("", 204, Seq(("Content-Type", "text/html")))
+    noContentResponse
 
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/p/:personId/hide")

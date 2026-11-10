@@ -29,7 +29,7 @@ class SearchQuery(
     val albumIds: Set[String] = Set(),
     val locationIds: Set[String] = Set(),
     val bbox: Option[BoundingBox] = None,
-    // The assets of a Triage summary tally: with a Face of an Unknown person, or in no Location
+    // A Triage subset, the assets one of the Triage summary's counts shows: with a Face of an Unknown person, or in no Location
     val subset: Option[TriageSubset] = None,
     rpp: Int = 0,
     val searchSort: List[SearchSort] = List(),
@@ -39,6 +39,9 @@ class SearchQuery(
     // How far a first page's total counts: one past it means more. With textProbeLimit, tuning carried here so that a test can
     // reach it, and not part of what identifies the search to a cursor.
     val totalCap: Int = Const.Search.TOTAL_CAP,
+    // Whether a first page counts that total at all: off for a caller that counts the matches exactly itself (Quick view), so
+    // they are not counted twice. Not part of what identifies the search to a cursor either.
+    val countsTotal: Boolean = true,
     // How many hits a group of the Search text may have and still be answered from them (SearchService.resolveText)
     val textProbeLimit: Int = Const.Search.TEXT_PROBE_LIMIT)
   extends Query(params = metadataFilters, rpp = rpp):
@@ -72,6 +75,9 @@ class SearchQuery(
   def requireResolvedText: ResolvedSearchText =
     resolvedText.getOrElse(throw IllegalStateException("The Search text was not resolved against the repository's names"))
 
+  /** Whether this page counts the total: a first page does, unless the search was asked for without one (`withoutTotal`) */
+  def isTotalCounted: Boolean = cursor.isEmpty && countsTotal
+
   val isGrouped: Boolean = grouping.isDefined
   override val isSorted: Boolean = searchSort.nonEmpty
 
@@ -90,6 +96,10 @@ class SearchQuery(
   def withTextProbeLimit(limit: Int): SearchQuery =
     copyWith(textProbeLimit = limit)
 
+  /** The same search with no total on its first page */
+  def withoutTotal: SearchQuery =
+    copyWith(countsTotal = false)
+
   override def add(_params: (String, Any)*): SearchQuery =
     copyWith(params = params ++ _params)
 
@@ -99,6 +109,7 @@ class SearchQuery(
       metadataFilters: Map[String, Any] = metadataFilters,
       folderIds: Set[String] = folderIds,
       resolvedText: Option[ResolvedSearchText] = resolvedText,
+      countsTotal: Boolean = countsTotal,
       textProbeLimit: Int = textProbeLimit): SearchQuery =
     SearchQuery(
       text = text,
@@ -116,6 +127,7 @@ class SearchQuery(
       cursor = cursor,
       resolvedText = resolvedText,
       totalCap = totalCap,
+      countsTotal = countsTotal,
       textProbeLimit = textProbeLimit
     )
 

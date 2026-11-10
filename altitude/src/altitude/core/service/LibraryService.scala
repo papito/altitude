@@ -169,8 +169,8 @@ class LibraryService(val app: Altitude):
     }
 
   /**
-   * The counts of the Triage summary, exact and read in one snapshot: the Triage view, then its two tallies, the `subset` scopes
-   * its links search
+   * The counts of the Triage summary, exact and read in one snapshot: the Triage view, then its two Triage subsets, the `subset`
+   * scopes its links search
    */
   def triageSummary(): TriageSummary =
     txManager.asReadOnly {

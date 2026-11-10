@@ -455,6 +455,43 @@ import altitude.core.util.*
     count(new SearchQuery(params = view, totalCap = 2)) shouldBe 4
   }
 
+  test("A search without a total has none on its first page, and pages as one with a total does") {
+
+    /**
+     * Setup:
+     *
+     * Three assets, searched in flat pages of two and in a grouped page of two, with a total and without one.
+     *
+     * Assertions:
+     *
+     * Without a total the first flat page and the first grouped page carry none, but hold the same assets and continue at the
+     * same place as the pages with a total, which count 3.
+     */
+    (1 to 3).foreach(_ => testContext.persistAsset())
+    val view = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false)
+    val byName = List(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC))
+
+    val counted = search(new SearchQuery(params = view, rpp = 2, searchSort = byName))
+    val uncounted = search(new SearchQuery(params = view, rpp = 2, searchSort = byName).withoutTotal)
+    counted.total shouldBe Some(3)
+    uncounted.total shouldBe None
+    uncounted.records.map(_.persistedId) shouldBe counted.records.map(_.persistedId)
+    uncounted.nextCursor shouldBe counted.nextCursor
+
+    val grouped =
+      new SearchQuery(
+        params = view,
+        rpp = 2,
+        searchSort = byName,
+        grouping = Some(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC)))
+    val groupedCounted = testApp.service.library.searchGrouped(grouped)
+    val groupedUncounted = testApp.service.library.searchGrouped(grouped.withoutTotal)
+    groupedCounted.total shouldBe Some(3)
+    groupedUncounted.total shouldBe None
+    groupedUncounted.assets.map(_.persistedId) shouldBe groupedCounted.assets.map(_.persistedId)
+    groupedUncounted.nextCursor shouldBe groupedCounted.nextCursor
+  }
+
   test("Create assets and search by metadata") {
 
     /**

@@ -49,7 +49,8 @@ case class GroupedSearchRow(
 
 /**
  * What one grouped search statement returns: the ordered page rows, whether a further match exists past the page and, on a first
- * page, the count of every match. A page reached by cursor skips that count: the footer total was set by the first page.
+ * page, the count of every match. A page reached by cursor skips that count, the footer total having been set by the first page,
+ * as does a search without a total (`SearchQuery.withoutTotal`).
  */
 case class GroupedSearchPage(rows: List[GroupedSearchRow], total: Option[Int], hasMore: Boolean)
 
@@ -57,9 +58,9 @@ case class GroupedSearchPage(rows: List[GroupedSearchRow], total: Option[Int], h
 case class AssetGroup(key: SearchGroupKey, total: Int, assets: List[Asset])
 
 /**
- * A grouped page with its assets in page order: what the grouped grid renders. `total` is present on a first page only.
- * `continuesGroup` says the first group continues the previous page's last group, including the "No date", "No location" and "No
- * sequence" groups.
+ * A grouped page with its assets in page order: what the grouped grid renders. `total` is present on a first page only, unless
+ * its search counts no total. `continuesGroup` says the first group continues the previous page's last group, including the "No
+ * date", "No location" and "No sequence" groups.
  */
 case class GroupedSearchResult(
     groups: List[AssetGroup],

@@ -50,7 +50,7 @@ export function registerLocationListeners(app) {
             const id = event.detail.id
             const name = locationName(id)
 
-            // Its assets may now be in no Location, a tally of the Triage summary
+            // Its assets may now be in no Location, one of the Triage summary's counts
             app.reloadTriageSummary()
 
             await reloadLocationList(repoId())

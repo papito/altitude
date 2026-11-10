@@ -28,8 +28,8 @@ const DEFAULTS = {
 /**
  * What changing one parameter does to the others.
  *
- * Choosing a folder, a person, an album, a Location or a Triage subset (`subset`, a tally of the
- * Triage summary: the triaged assets with Unknown people, or in no Location) are all "look somewhere
+ * Choosing a folder, a person, an album, a Location or a Triage subset (`subset`, the assets one of
+ * the Triage summary's counts shows: those with Unknown people, or in no Location) are all "look somewhere
  * else", so each clears the other four; a view is a different place again and clears all five. The
  * map area (`bbox`, the crowded-pin panel's scope) belongs to the search it was drawn on, so looking
  * somewhere else clears it too.
@@ -74,9 +74,9 @@ const NUMBER_RANGES = {
     rpp: { min: 1, max: Const.search.maxRpp },
 }
 
-/** The words the server reads, each held to the values it accepts: a subset is one of the Triage summary's tallies */
+/** The words the server reads, each held to the values it accepts: a subset is one of the Triage subsets */
 const ALLOWED_VALUES = {
-    subset: ["unknownPeople", "noLocation"],
+    subset: Object.values(Const.search.subsets),
 }
 
 const PARAM_NAMES = Object.keys(DEFAULTS)

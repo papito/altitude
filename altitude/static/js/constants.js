@@ -242,6 +242,12 @@ export const Const = {
             grid: "grid",
             map: "map",
         },
+        // The Triage subsets, the assets the Triage summary's counts show: the server's (`TriageSubset.apiValue`), sent
+        // as the `subset` parameter
+        subsets: {
+            unknownPeople: "unknownPeople",
+            noLocation: "noLocation",
+        },
         // The sort by match quality (`Const.Search.SORT_RELEVANCE`), which the server refuses without Search text
         sortRelevance: "relevance",
         // The largest page size the server serves (`Const.Search.MAX_RPP`); it refuses a larger one
