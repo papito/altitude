@@ -323,8 +323,8 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A burst of two frames run through the whole import, so each has its Histogram stored, and a still image whose metrics and
-     * Histogram are cleared, as an image the measurement could not decode is left. A second repository.
+     * A burst of two frames run through the whole import, so each has its Histogram stored, and a still image inserted without
+     * the pipeline, with no metrics or Histogram, as an image the measurement could not decode is left. A second repository.
      *
      * Assertions:
      *
@@ -332,9 +332,7 @@ import altitude.core.service.FaceDetectionService
      * frame has none. Read from the second repository, the frames have no Histograms.
      */
     val frames = burst(0)
-    val unmeasured = testContext.persistAsset(isTriaged = true)
-    testContext.setAssetImageQuality(unmeasured.persistedId, None)
-    testContext.setAssetHistogram(unmeasured.persistedId, None)
+    val unmeasured = testContext.insertAsset(testContext.makeAsset(isTriaged = true))
     val stored = testApp.txManager.asReadOnly(testApp.DAO.asset.getHistograms(ids(unmeasured :: frames)))
     stored.keySet shouldBe ids(frames)
 
@@ -370,7 +368,7 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A Sequence of three frames over `MAX_SEQUENCE_FRAMES`, and in it a frame with no capture time, imported before the others.
+     * A Sequence of three frames over `MAX_SEQUENCE_FRAMES`, and in it a frame with no capture time, inserted before the others.
      *
      * Assertions:
      *
@@ -382,8 +380,7 @@ import altitude.core.service.FaceDetectionService
      * Recycling frames of the window brings the frames past it in. At exactly `MAX_SEQUENCE_FRAMES` frames left, the window is
      * the whole Sequence and holds nothing back, the frame with no capture time last.
      */
-    val undated = testContext.persistAsset(isTriaged = true)
-    testContext.setAssetDates(undated.persistedId, None, OffsetDateTime.now())
+    val undated = testContext.insertAsset(testContext.makeAsset(isTriaged = true))
     val frames = longSequence(MAX_FRAMES + 3)
     val sequenceId = sequenceOf(frames)
     testContext.setAssetSequence(List(undated), sequenceId)
@@ -460,12 +457,12 @@ import altitude.core.service.FaceDetectionService
      * The set of all of them holds the two still images. A selection of one still image and everything else has fewer than two
      * left, as has an empty one, and reads as nothing.
      */
-    val first = testContext.persistAsset()
-    val second = testContext.persistAsset()
+    val first = testContext.insertAsset()
+    val second = testContext.insertAsset()
     val video = testApp.service.library.addImportAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.portrait.toFile))
-    val animated = testContext.persistAsset()
+    val animated = testContext.insertAsset()
     write("UPDATE asset SET duration_ms = 600 WHERE id = ?", animated.persistedId)
-    val recycled = testContext.persistAsset()
+    val recycled = testContext.insertAsset()
     testApp.service.library.recycleAssets(Set(recycled.persistedId))
 
     val others = Set(video, animated, recycled).map(_.persistedId) + "no-such-asset"

@@ -150,10 +150,9 @@ import altitude.core.service.FaceDetectionService
         none.text() should startWith("<!doctype html>")
         railSequenceIds(none.text()) shouldBe empty
 
-        // Every fixture is persisted before any Sequence is stamped, as the test context requires
         val List(laterFrames, earlierFrames, undatedFrames, lone) =
-          List(3, 2, 2, 1).map(frames => List.fill(frames)(testContext.persistAsset(isTriaged = true)))
-        testContext.persistAsset(isTriaged = true)
+          List(3, 2, 2, 1).map(frames => List.fill(frames)(testContext.insertAsset(testContext.makeAsset(isTriaged = true))))
+        testContext.insertAsset(testContext.makeAsset(isTriaged = true))
         val imported = OffsetDateTime.parse("2026-04-01T10:00:00Z")
         def sequence(assets: List[Asset], taken: Option[LocalDateTime]): String = {
           val id = UUID.randomUUID().toString
@@ -286,8 +285,7 @@ import altitude.core.service.FaceDetectionService
       host =>
         val blown = List(frame(fine.copy(clippedHighlights = 0.08)), frame(fine.copy(clippedHighlights = 0.08)))
         val measured = frame()
-        val unmeasured = testContext.persistAsset(isTriaged = true)
-        testContext.setAssetImageQuality(unmeasured.persistedId, None)
+        val unmeasured = testContext.insertAsset(testContext.makeAsset(isTriaged = true))
         testContext.setAssetSequence(blown, sequenceId)
 
         val html = getSet(host, repoId, sequenceId).text()
@@ -581,8 +579,8 @@ import altitude.core.service.FaceDetectionService
     /**
      * Setup:
      *
-     * A frame with its metrics and a Histogram whose tallest bin is the blue channel's last, and a frame whose metrics and
-     * Histogram are cleared, as an image the measurement could not decode is left.
+     * A frame with its metrics and a Histogram whose tallest bin is the blue channel's last, and a frame inserted without the
+     * pipeline, with no metrics or Histogram, as an image the measurement could not decode is left.
      *
      * Assertions:
      *
@@ -599,9 +597,7 @@ import altitude.core.service.FaceDetectionService
         val histogram = Histogram(luminance = channel(0), red = channel(1), green = channel(2), blue = channel(3))
         val measured = frame(fine.copy(clippedHighlights = 0.142, crushedShadows = 0.005))
         testContext.setAssetHistogram(measured.persistedId, Some(histogram))
-        val unmeasured = testContext.persistAsset(isTriaged = true)
-        testContext.setAssetImageQuality(unmeasured.persistedId, None)
-        testContext.setAssetHistogram(unmeasured.persistedId, None)
+        val unmeasured = testContext.insertAsset(testContext.makeAsset(isTriaged = true))
 
         val response = postSelection(host, repoId, List(measured, unmeasured).map(_.persistedId))
         response.statusCode shouldBe 200
@@ -724,7 +720,8 @@ import altitude.core.service.FaceDetectionService
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign =
-      List.fill(2)(testContext.persistAsset(repository = Some(strangersRepo), user = Some(stranger), isTriaged = true))
+      List.fill(2)(
+        testContext.insertAsset(testContext.makeAsset(repository = Some(strangersRepo), user = Some(stranger), isTriaged = true)))
     testContext.setAssetSequence(foreign, sequenceId)
 
     withServer(App) {
@@ -756,7 +753,8 @@ import altitude.core.service.FaceDetectionService
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign =
-      List.fill(2)(testContext.persistAsset(repository = Some(strangersRepo), user = Some(stranger), isTriaged = true))
+      List.fill(2)(
+        testContext.insertAsset(testContext.makeAsset(repository = Some(strangersRepo), user = Some(stranger), isTriaged = true)))
     testContext.setAssetSequence(foreign, sequenceId)
     val repoId = strangersRepo.persistedId
 
