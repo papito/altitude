@@ -231,7 +231,7 @@ _Avoid_: Triage mode, Inbox, Unsorted.
 **Triage summary**:
 The sentence above the Triage explorer's tabs stating how many assets are in
 triage, how many of them have an Unknown person, and how many are in no
-Location; each number above zero shows those assets.
+Location; each of the last two counts above zero shows those assets.
 _Avoid_: Banner, Callout, Tally, Info message.
 
 **Quick view**:

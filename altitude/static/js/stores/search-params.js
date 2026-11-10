@@ -39,7 +39,7 @@ const DEFAULTS = {
  * and each of the five, and a view, clears the text.
  *
  * A place set to nothing still clears the others, so a trigger with one empty literal (the Results
- * title's × and the Triage summary's total, `data-app-search-person-id=""`) goes back to the whole
+ * title's ×, `data-app-search-person-id=""`) goes back to the whole
  * view, from a folder, an album, a Location or a subset alike. Only the Triage summary offers a
  * subset, but the server takes one in every view. An empty value is never sent (`isOmitted`).
  *

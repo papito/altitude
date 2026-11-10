@@ -302,6 +302,9 @@ Two-layer event bus, both on `document.body`:
   Settings form, the person name editor). htmx's settle copies each old element's attributes onto the new element with the
   same id and restores them afterwards, skipping `value` on the element that has focus, so without `settle:0` the field
   shows the old value and the text submitted is lost.
+- Search results swap in with `innerHTML settle:0` too (`runSearch`'s default swap, `js/search-results/search.js`): the
+  restore would land after Alpine has initialized the new content and undo what it set, so an `x-show` row with the
+  server's `style="display: none"`, Triage's `#curateQueue`, would hide again after a search.
 - Attribute inheritance is explicit: every element that issues a request declares its own
   `hx-target` / `hx-swap`. Do not rely on a parent's attributes (add `:inherited` if you ever must).
 - Extensions activate by script inclusion, there is no `hx-ext`. Forms that post JSON carry the
@@ -961,12 +964,11 @@ flex row aligned on the baseline, so the sentences wrap beside the icon. It read
 unknown people. Z have no Locations.", in the singular for 1 ("There is 1 item in triage. 1 has unknown people. 1 has
 no Location."), "None have unknown people." or "All have a Location." for a count of zero, and "There are no items in
 triage." alone for an empty triage; the numbers are grouped (`%,d`). The counts are the server's (**Triage summary,
-scope dialogs and Quick view** in `altitude/AGENTS.md`). Each number above zero is a link, semibold in the text's own
-color, and a search trigger (`data-app-search="click"`) named for what it shows (an `aria-label` such as "Show all 12
-items in triage", since its text is a bare number): the total carries `data-app-search-person-id=""`, an empty place
-that clears every place, as the Results title's × does, back to all of Triage, and each of the other two
-carries `data-app-search-subset` (`unknownPeople`, `noLocation`), which searches that subset of Triage under its own Results
-title (**Results title**). A zero is plain text. The links are bound as the swap is hydrated
+scope dialogs and Quick view** in `altitude/AGENTS.md`). The total is plain text. Each of the other two counts above
+zero is a link, semibold in the text's own color, and a search trigger (`data-app-search="click"`) named for what it
+shows (an `aria-label` such as "Show the 12 items in triage with unknown people", since its text is a bare number),
+carrying `data-app-search-subset` (`unknownPeople`, `noLocation`), which searches that subset of Triage under its own
+Results title (**Results title**), whose × goes back to all of Triage. A zero is plain text. The links are bound as the swap is hydrated
 (`js/listeners/htmx-requests.js`), like any fragment's triggers. The paragraph is no live region: it reloads after
 every change it counts, which the snackbar has already reported, and a region would read the whole sentence again
 each time.

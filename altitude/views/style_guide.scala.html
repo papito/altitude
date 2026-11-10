@@ -611,15 +611,15 @@
              rounded block in the <code>--info-background-color</code> fill, or in the warning fill with
              <code>.warning</code>. The Triage summary (<code>.notice.triage-summary</code>, <code>htmx/triage_summary</code>)
              above the Triage explorer's tabs is one, with <code>fa-info-circle</code> in <code>--info-color</code> before its
-             sentences, which wrap beside it; Curation's notices are under Badges &amp; states. A number above zero is a link,
-             semibold in the text's own color, that searches what it counts; a zero is plain text. It is no live
+             sentences, which wrap beside it; Curation's notices are under Badges &amp; states. The total is plain text; each other
+             count above zero is a link, semibold in the text's own color, that searches what it counts, and a zero is plain text. It is no live
              region, since it reloads after every change it counts.</p>
           @* The Triage summary as htmx/triage_summary renders it, at about an explorer's width; its links are no search
              triggers here *@
           <div class="sg-triage-summary">
             <p class="notice triage-summary">
               <i class="fas fa-info-circle" aria-hidden="true"></i>
-              <span>There are <a href="#feedback" aria-label="Show all 1,204 items in triage">1,204</a> items in triage. <a href="#feedback" aria-label="Show the 37 items in triage with unknown people">37</a> have unknown people. All have a Location.</span>
+              <span>There are 1,204 items in triage. <a href="#feedback" aria-label="Show the 37 items in triage with unknown people">37</a> have unknown people. All have a Location.</span>
             </p>
           </div>
           <div id="serverError">#serverError: something went wrong on the server.</div>

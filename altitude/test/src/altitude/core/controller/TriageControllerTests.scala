@@ -73,8 +73,8 @@ import altitude.core.util.TriageSubset
      *
      * Assertions:
      *
-     * The summary reads "There are 3 items in triage. 2 have unknown people. 2 have no Locations." Each number is a search
-     * trigger: 3 clears the scope back to all of Triage, 2 with unknown people searches the `unknownPeople` subset, and 2 with no
+     * The summary reads "There are 3 items in triage. 2 have unknown people. 2 have no Locations." The 3 is plain text. Each
+     * count of a Triage subset is a search trigger: 2 with unknown people searches the `unknownPeople` subset, and 2 with no
      * Locations the `noLocation` subset; each link has a name that says what it shows.
      *
      * Edge cases:
@@ -100,7 +100,8 @@ import altitude.core.util.TriageSubset
         val page = response.text()
         plain(page) shouldBe "There are 3 items in triage. 2 have unknown people. 2 have no Locations."
         page should include("""class="notice triage-summary"""")
-        linkText(page, allOfTriage) shouldBe Some("3")
+        (page should not).include(allOfTriage)
+        page.split("<a ").length shouldBe 3
         linkText(page, unknownPeopleSubset) shouldBe Some("2")
         linkText(page, noLocationSubset) shouldBe Some("2")
         page.split("<a ").drop(1).foreach {
@@ -108,7 +109,6 @@ import altitude.core.util.TriageSubset
             link should include("""data-app-search="click"""")
             link should include("aria-label=")
         }
-        page should include("""aria-label="Show all 3 items in triage"""")
         page should include("""aria-label="Show the 2 items in triage with unknown people"""")
         page should include("""aria-label="Show the 2 items in triage with no Location"""")
     }
@@ -123,7 +123,8 @@ import altitude.core.util.TriageSubset
      *
      * Assertions:
      *
-     * The summary reads "There is 1 item in triage. 1 has unknown people. 1 has no Location.", each number a search trigger.
+     * The summary reads "There is 1 item in triage. 1 has unknown people. 1 has no Location.", the 1 item in triage plain text
+     * and each count of a Triage subset a search trigger.
      */
     testContext.persistRepository()
     login()
@@ -133,10 +134,9 @@ import altitude.core.util.TriageSubset
 
         val page = summary(host).text()
         plain(page) shouldBe "There is 1 item in triage. 1 has unknown people. 1 has no Location."
-        linkText(page, allOfTriage) shouldBe Some("1")
+        (page should not).include(allOfTriage)
         linkText(page, unknownPeopleSubset) shouldBe Some("1")
         linkText(page, noLocationSubset) shouldBe Some("1")
-        page should include("""aria-label="Show the 1 item in triage"""")
         page should include("""aria-label="Show the 1 item in triage with unknown people"""")
         page should include("""aria-label="Show the 1 item in triage with no Location"""")
     }
@@ -151,8 +151,7 @@ import altitude.core.util.TriageSubset
      *
      * Assertions:
      *
-     * The summary reads "There are 2 items in triage. None have unknown people. All have a Location." The 2 is a search trigger,
-     * and nothing searches a subset.
+     * The summary reads "There are 2 items in triage. None have unknown people. All have a Location." with no link.
      */
     testContext.persistRepository()
     login()
@@ -165,8 +164,7 @@ import altitude.core.util.TriageSubset
 
         val page = summary(host).text()
         plain(page) shouldBe "There are 2 items in triage. None have unknown people. All have a Location."
-        linkText(page, allOfTriage) shouldBe Some("2")
-        (page should not).include("data-app-search-subset")
+        (page should not).include("<a ")
     }
   }
 

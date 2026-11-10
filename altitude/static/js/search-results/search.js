@@ -17,8 +17,11 @@ import { Const } from "../constants.js"
  * `transient` are serialized into this one request only and never stored (continuous scroll: the
  *             page number or the `after` cursor, and `isContinuousScroll`; the crowded-pin panel's
  *             grid layout while the store says map)
- * `target`    / `swap` are the htmx swap for this caller
- * `source`    is the element htmx issues the request from, for a caller that needs to recognise
+ * `target`    / `swap` are the htmx swap for this caller. Results swap in without settling
+ *             (`settle:0`): settling would lay each old element's attributes on the new one of the
+ *             same ID and restore the server's afterwards, over what Alpine set meanwhile: Triage's
+ *             Curate row (`x-show`) would return to the server's `display: none`
+ * `source`   is the element htmx issues the request from, for a caller that needs to recognise
  *             the response in the lifecycle events (the map panel, whose URL update is rewritten)
  *
  * Resolves when the request completes, with the response swapped in.
@@ -27,7 +30,7 @@ export function runSearch({
     params = {},
     transient = {},
     target = "#content",
-    swap = "innerHTML",
+    swap = "innerHTML settle:0",
     source = undefined,
 } = {}) {
     Alpine.store(Const.state.searchParams).merge(params)
