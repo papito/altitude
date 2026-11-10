@@ -32,7 +32,7 @@
 | The warning snackbar | Removed. The Trash's silent block on folder triggers stays |
 | Merge, Browse and Triage alike | No search. Results scoped to the destination are searched again. Results scoped to the source search the destination, in the same view. Anything else stays as it is. The People tab reloads and the success snackbar shows, as today |
 | Triage summary placement | One callout above the tabs (`#explorerHeader`), on every tab, in Triage only. It does not reload with the tabs |
-| Triage summary wording | "There are X items in triage. Y have unknown people. Z have no Locations." Singular forms: "There is 1 item in triage. 1 has unknown people. 1 has no Location." An empty triage reads "There are no items in triage." A zero tally reads "None have unknown people." or "None have a Location." as plain text |
+| Triage summary wording | "There are X items in triage. Y have unknown people. Z have no Locations." Singular forms: "There is 1 item in triage. 1 has unknown people. 1 has no Location." An empty triage reads "There are no items in triage." A zero tally reads "None have unknown people." or "All have a Location." as plain text |
 | Triage summary links | X goes back to all of Triage, clearing any scope as the Results title's × does. Y and Z search their tally. Only numbers above zero are links |
 | Unknown people | A triaged asset with a Face of an Unknown person: a Person with no name who is neither hidden nor discarded, whatever their bucket |
 | No Location | A triaged asset that no Location points at. A GPS position of its own does not count |
@@ -86,16 +86,16 @@ proven on SQLite and on Postgres (`make test-sqlite`, `make test-psql`). Groups 
    expansion.
 7. **`TriageController` (new, `routes/web/partial`, registered in `App`).**
    - `GET /htmx/triage/r/:repoId/summary` renders the summary.
-   - `GET /htmx/triage/r/:repoId/dialogs/scope` takes one of `folderId`, `personId` or `locationId`, plus `anchor`. It answers 204
+   - `GET /htmx/triage/r/:repoId/dialogs/scope` takes one of `folderId`, `personId` or `locationId`. It answers 204
      when a Person or Location has triaged assets, and otherwise the dialog.
    - `GET /htmx/triage/r/:repoId/modals/quick-view?folderId=` renders Quick view.
 8. **Templates (`views/htmx/triage_summary`, `triage_scope_dialog`, `quick_view_modal`).**
    - The summary's links are `data-app-search` triggers. X carries `data-app-search-person-id=""`, and Y and Z carry
      `data-app-search-subset`.
-   - The dialog is a popover dialog (`data-app-fragment="modal"`) anchored by the `anchor` it is sent. "Show … in new tab" is an
+   - The dialog is a popover dialog (`data-app-fragment="modal"`), anchored on the client to the trigger that asked for it. "Show … in new tab" is an
      `<a target="_blank" rel="noopener">` to the Browse URL. Quick view is an `hx-get` into `#modalContent`.
-   - Quick view reuses `result_cell` markup with no selection, drag or detail hooks, in a wide modal styled in
-     `static/css/htmx/quick_view_modal.css`.
+   - Quick view has its own markup, a list of lazy Previews with none of the grid's cell hooks, so no selection, drag or detail
+     binds to it, in a wide modal styled in `static/css/htmx/quick_view_modal.css`.
 
 ### C. Clicks in the Triage explorer
 

@@ -333,6 +333,44 @@ import altitude.core.util.*
   /** The triage view's flags, as `SearchRequestParser` sets them */
   private val triageView = Map[String, Any](FieldConst.Asset.IS_TRIAGED -> true, FieldConst.Asset.IS_RECYCLED -> false)
 
+  test("The Triage summary counts the assets in triage, those with Unknown people and those in no Location") {
+
+    /**
+     * Setup:
+     *
+     * Four triaged assets: one with a Face of an unnamed person, one with a Face of that person in the Location Beach, one with a
+     * Face of a named person in Beach, and one with no Face. A sorted asset with a Face of the unnamed person, and a triaged
+     * asset with one, since recycled.
+     *
+     * Assertions:
+     *
+     * The summary counts the four triaged assets, two of them with an Unknown person and two in no Location.
+     *
+     * Edge cases:
+     *
+     * The sorted asset and the recycled one are counted nowhere.
+     */
+    val unknown = testApp.service.person.addPerson(Person())
+    val named = addPerson("Alice")
+
+    def triagedWithFacesOf(people: Person*): Asset = {
+      val asset = testContext.insertAsset(testContext.makeAsset(isTriaged = true))
+      people.foreach(addFace(_, asset))
+      asset
+    }
+
+    triagedWithFacesOf(unknown)
+    val unknownInBeach = triagedWithFacesOf(unknown)
+    val namedInBeach = triagedWithFacesOf(named)
+    triagedWithFacesOf()
+    addFace(unknown, testContext.insertAsset())
+    testApp.service.library.recycleAssets(Set(triagedWithFacesOf(unknown).persistedId))
+    val beach = testApp.service.location.addLocation("Beach", 1, 2)
+    testApp.service.location.addAssets(beach.persistedId, Set(unknownInBeach.persistedId, namedInBeach.persistedId))
+
+    testApp.service.library.triageSummary() shouldBe TriageSummary(total = 4, unknownPeople = 2, noLocation = 2)
+  }
+
   test("Pagination") {
 
     /**

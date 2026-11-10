@@ -115,6 +115,9 @@
     --curation-kept-name-max-width: 20rem;
     --curation-loupe-max-size: 20rem;
     --curation-histogram-height: 4.25rem;
+    --quick-view-width: 60rem;
+    --quick-view-preview-size: 8rem;
+    --quick-view-previews-max-height: 32rem;
 
     --success-color: light-dark(#297612, #87d575);
     --warning-color: light-dark(#976212, #ebb16b);

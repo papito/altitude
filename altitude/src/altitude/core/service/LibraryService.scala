@@ -25,6 +25,7 @@ import altitude.core.util.SearchCursor
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 import altitude.core.util.Sha256
+import altitude.core.util.TriageSubset
 
 /**
  * What is the difference between this and the AssetService?
@@ -165,6 +166,22 @@ class LibraryService(val app: Altitude):
   def count(query: SearchQuery): Int =
     txManager.asReadOnly {
       app.service.search.count(withResolvedScope(query))
+    }
+
+  /**
+   * The counts of the Triage summary, exact and read in one snapshot: the Triage view, then its two tallies, the `subset` scopes
+   * its links search
+   */
+  def triageSummary(): TriageSummary =
+    txManager.asReadOnly {
+      def triage(subset: Option[TriageSubset]) = count(new SearchQuery(params = SearchQuery.TRIAGE_VIEW, subset = subset))
+
+      val summary = TriageSummary(
+        total = triage(None),
+        unknownPeople = triage(Some(TriageSubset.UnknownPeople)),
+        noLocation = triage(Some(TriageSubset.NoLocation)))
+      logger.debug(s"Triage summary: $summary")
+      summary
     }
 
   /**

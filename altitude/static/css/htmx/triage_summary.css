@@ -1,0 +1,21 @@
+/* The Triage summary (htmx/triage_summary): an info callout, the look of Curation's notice with the info icon before its
+   sentences, whose numbers above zero are the links that search their tally */
+.triage-summary {
+  display: flex;
+  align-items: baseline;
+  column-gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  line-height: var(--line-height-text);
+  background-color: var(--info-background-color);
+  border-radius: var(--radius);
+}
+
+.triage-summary .fa-info-circle {
+  color: var(--info-color);
+}
+
+.triage-summary a {
+  color: inherit;
+  font-weight: var(--font-weight-semibold);
+}

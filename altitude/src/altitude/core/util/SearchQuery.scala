@@ -2,6 +2,7 @@ package altitude.core.util
 
 import altitude.core.Api
 import altitude.core.Const
+import altitude.core.FieldConst
 
 case class SearchSort(field: String, direction: SortDirection):
 
@@ -117,3 +118,7 @@ class SearchQuery(
       totalCap = totalCap,
       textProbeLimit = textProbeLimit
     )
+
+object SearchQuery:
+  /** The Triage view's flags: the triaged assets outside the trash, since an asset recycled from triage keeps its triage flag */
+  val TRIAGE_VIEW: Map[String, Any] = Map(FieldConst.Asset.IS_TRIAGED -> true, FieldConst.Asset.IS_RECYCLED -> false)

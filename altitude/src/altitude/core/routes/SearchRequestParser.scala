@@ -70,8 +70,7 @@ object SearchRequestParser:
       return Left(s"The ${Const.Search.View.TRIAGE} view holds only triaged assets")
 
     val viewParams: Map[String, Any] = view match
-      // An asset recycled from triage keeps its triage flag, so the trash is left out explicitly
-      case Const.Search.View.TRIAGE => Map(FieldConst.Asset.IS_TRIAGED -> true, FieldConst.Asset.IS_RECYCLED -> false)
+      case Const.Search.View.TRIAGE => SearchQuery.TRIAGE_VIEW
       case Const.Search.View.TRASHBIN => Map(FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_PURGED -> false)
       case _ => Map(FieldConst.Asset.IS_RECYCLED -> false)
     val triageParam = view match

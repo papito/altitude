@@ -1,0 +1,63 @@
+@import altitude.core.Api
+@import altitude.core.RequestContext
+@import altitude.core.models.TriageScope
+
+@(scope: TriageScope)
+
+@* The scope dialog (GET /htmx/triage/r/:repoId/dialogs/scope): what a click on a folder, a Person or a Location of the Triage
+   explorer shows when it does not search, a popover dialog anchored to the clicked control (the request names it in
+   `data-app-dialog-anchor`), titled by the name of what it describes. A folder holds no triaged asset, so it is described by its
+   Browse count, with Quick view, which loads into the general modal host and so takes this dialog's place. A Person or a
+   Location with no triaged assets says so. "Show … in new tab" opens Browse scoped to it, with Browse's defaults, in a new tab;
+   a folder or a Location with no assets at all offers Close alone. The bare x-data is the scope Close's Alpine handler needs:
+   the popover host has none. *@
+
+@repoId = @{ RequestContext.getRepository.persistedId }
+
+@dialog(title: String, message: String, browse: Option[(String, String, String)] = None, quickViewFolderId: Option[String] = None) = {
+<div id="triageScope"
+     x-data
+     data-app-fragment="modal"
+     data-app-modal-title="@title">
+    <p>@message</p>
+    <div class="actions">
+        @for((label, param, id) <- browse) {
+        <a class="action-button" href="/r/@repoId?@param=@id" target="_blank" rel="noopener">@label</a>
+        }
+        @for(folderId <- quickViewFolderId) {
+        <button type="button"
+                class="action-button"
+                hx-get="/htmx/triage/r/@repoId/modals/quick-view"
+                hx-vals='{"@{Api.Field.Search.FOLDER_ID}": "@folderId"}'
+                hx-target="#modalContent"
+                hx-trigger="click">Quick view</button>
+        }
+        <button type="button" class="action-button" x-on:click="$store.modal.close()">Close</button>
+    </div>
+</div>
+}
+
+@scope match {
+    case TriageScope.InFolder(folder, 0) => {
+        @dialog(folder.name, "This folder has no assets")
+    }
+    case TriageScope.InFolder(folder, count) => {
+        @dialog(folder.name,
+                f"This folder has $count%,d results in the repository",
+                Some(("Show in new tab", Api.Field.Search.FOLDER_ID, folder.persistedId)),
+                Some(folder.persistedId))
+    }
+    case TriageScope.OfPerson(person) => {
+        @dialog(person.name.getOrElse(""),
+                "This person has no assets assigned in Triage",
+                Some(("Show person in new tab", Api.Field.Search.PERSON_ID, person.persistedId)))
+    }
+    case TriageScope.InLocation(location, 0) => {
+        @dialog(location.name, "This Location has no assets")
+    }
+    case TriageScope.InLocation(location, _) => {
+        @dialog(location.name,
+                "This Location has no assets in Triage",
+                Some(("Show Location in new tab", Api.Field.Search.LOCATION_ID, location.persistedId)))
+    }
+}

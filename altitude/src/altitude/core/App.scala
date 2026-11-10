@@ -32,6 +32,7 @@ import altitude.core.routes.web.partial.SearchResultsController
 import altitude.core.routes.web.partial.SettingsFormController
 import altitude.core.routes.web.partial.SetupFormController
 import altitude.core.routes.web.partial.TrashActionController
+import altitude.core.routes.web.partial.TriageController
 import altitude.core.routes.web.partial.ViewSettingsActionController
 
 object App extends cask.Main:
@@ -100,5 +101,6 @@ object App extends cask.Main:
     new PeopleActionController,
     new SearchResultsController,
     new TrashActionController,
+    new TriageController,
     new ViewSettingsActionController
   )

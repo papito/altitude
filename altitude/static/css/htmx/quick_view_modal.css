@@ -1,0 +1,48 @@
+/* Quick view (htmx/quick_view_modal) needs room for its Previews: widen the general modal for this dialog only */
+#modalContent:has(#quickView) {
+  --modal-content-width: var(--quick-view-width);
+}
+
+/* The path, then the Previews, which scroll on their own so the path and the footer stay in view, then the footer */
+#quickView {
+  display: grid;
+  row-gap: var(--space-6);
+}
+
+/* Plain crumbs: the Results title's path with nothing to click, so an ancestor does not brighten under the pointer */
+#quickView .crumb:hover {
+  color: var(--theme-neutral-3);
+}
+
+#quickView .leaf {
+  font-weight: var(--font-weight-semibold);
+}
+
+#quickView .previews {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--quick-view-preview-size), 1fr));
+  gap: var(--space-4);
+  max-height: var(--quick-view-previews-max-height);
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A Preview fitted whole in a square, as the grid's cells show it */
+#quickView .previews img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: var(--radius);
+}
+
+#quickView footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  color: var(--theme-neutral-3);
+}

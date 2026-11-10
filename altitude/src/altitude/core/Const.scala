@@ -90,6 +90,9 @@ object Const:
     // with no direction digit.
     val SORT_RELEVANCE = "relevance"
 
+    // Quick view (htmx/quick_view_modal) shows a folder's first this many assets, by newest import
+    val QUICK_VIEW_SIZE = 100
+
     object Layout:
       val GRID = "grid"
       val MAP = "map"
@@ -184,7 +187,8 @@ object Const:
   // people dialogs in the modal host, whose sizing is owned by CSS (`--modal-content-width` in
   // core.css). The add dialogs have no title: their one field's placeholder says what they do, and
   // the inline view-settings dialog has none either: its checkbox labels are the whole content.
-  // The Location dialogs are titled by kind: the controller picks the Category or Location constant.
+  // The Location dialogs are titled by kind: the controller picks the Category or Location constant. The scope dialog of
+  // Triage's explorer is titled by the name of the folder, Person or Location it describes.
   object UI:
     val RENAME_FOLDER_DIALOG_TITLE = "Rename folder"
     val DELETE_FOLDER_DIALOG_TITLE = "Delete folder"
@@ -206,3 +210,4 @@ object Const:
     // opens the dialog above
     val MERGE_INTO_PERSON = "Merge into %s…"
     val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"
+    val QUICK_VIEW_DIALOG_TITLE = "Quick view"

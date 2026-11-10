@@ -1,0 +1,16 @@
+/* The scope dialog of a click in the Triage explorer (htmx/triage_scope_dialog): what it says, then its buttons in a row that
+   wraps in a narrow popover */
+#triageScope {
+  display: grid;
+  row-gap: var(--space-5);
+}
+
+#triageScope p {
+  margin: 0;
+}
+
+#triageScope .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
