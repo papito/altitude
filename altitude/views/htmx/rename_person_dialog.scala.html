@@ -1,0 +1,60 @@
+@import altitude.core.Api
+@import altitude.core.RequestContext
+@import altitude.core.models.Person
+
+@(person: Person, title: String, pane: String, fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj(), conflictingPerson: Option[Person] = None)
+@defining(formJson.obj.get(Api.Field.Person.NAME).flatMap(_.strOpt)) { newName =>
+
+@* The rename dialog of a Person's pencil on the People tab (htmx/people_list), a popover dialog anchored to that pencil.
+   `pane` is the pencil's pane: focus goes back to that pencil when the dialog closes, found by its ID so that the copy the
+   list renders again after the rename takes it, and the form sends the pane back so the form replacing it on an error names
+   the same pencil. Its success announces PERSON_NAME_EDITED_EVENT with the Person's ID (js/listeners/people.js). With a
+   conflictingPerson, the live person holding the name typed, the error row offers to merge the renamed person into them
+   (includes/person_name_taken); the Merge people modal then takes this dialog's place, since one dialog is open at a time.
+   The bare x-data is the scope that row's Alpine button needs: the popover host has none.
+   hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
+<form action="#"
+      id="renamePerson"
+      x-data
+      data-app-fragment="modal"
+      data-app-modal-title="@{title}"
+      data-app-dialog-autofocus-selector="#field-@{ Api.Field.Person.NAME }"
+      data-app-dialog-select-on-focus="true"
+      data-app-dialog-return-focus="#personRenameCtrl-@{pane}-@{person.persistedId}"
+      data-app-success-event="PERSON_NAME_EDITED_EVENT"
+      data-app-success-detail='{"personId":"@{ person.persistedId }"}'
+      hx-target="this"
+      hx-swap="none"
+      hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/rename"
+      hx-trigger="submit"
+      hx-json-enc>
+
+  <div>
+    <input type="text"
+           id="field-@{ Api.Field.Person.NAME }"
+           name="@{ Api.Field.Person.NAME }"
+           autocomplete="off"
+           aria-label="Person name"
+           placeholder="New person name"
+           maxlength="@{ Api.Constraints.MAX_NAME_LENGTH }"
+           minlength="@{ Api.Constraints.MIN_NAME_LENGTH }"
+        @if(conflictingPerson.nonEmpty || fieldErrors.contains(Api.Field.Person.NAME)) {
+           class="error"
+           aria-describedby="renamePersonError"
+        }
+           value="@{ newName.getOrElse(person.name.getOrElse("")) }">
+    @conflictingPerson match {
+      case Some(holder) => {
+        @includes.html.person_name_taken(person, holder, "renamePersonError")
+      }
+      case None => {
+        @if(fieldErrors.contains(Api.Field.Person.NAME)) {
+          <div id="renamePersonError" class="error">@{ fieldErrors(Api.Field.Person.NAME) }</div>
+        }
+      }
+    }
+    <input type="hidden" name="@{ Api.Field.Person.PANE }" value="@{ pane }">
+  </div>
+</form>
+
+}

@@ -133,6 +133,12 @@ object Const:
     val HIDDEN = "hidden"
     val ALL: Set[String] = Set(MATCHED, UNMATCHED, HIDDEN)
 
+  /** The two panes of the People tab, as the browser names them (`Const.people.panes` in constants.js): Main and Duplicate */
+  object PeoplePane:
+    val MAIN = "main"
+    val DUPLICATE = "duplicate"
+    val ALL: Set[String] = Set(MAIN, DUPLICATE)
+
   /** MESSAGES */
   object Msg:
 
@@ -194,7 +200,9 @@ object Const:
     val ADD_TO_ALBUM_DIALOG_TITLE = "Add to album"
     // The Add to album dialog's last option, which reveals the name field of the album it creates
     val NEW_ALBUM_OPTION = "New album…"
+    val RENAME_PERSON_DIALOG_TITLE = "Rename person"
     val MERGE_PEOPLE_DIALOG_TITLE = "Merge people"
-    // The name editor's offer to merge the renamed Person into the one holding the name, which opens the dialog above
+    // The offer of the name editor and of the rename dialog to merge the renamed Person into the one holding the name, which
+    // opens the dialog above
     val MERGE_INTO_PERSON = "Merge into %s…"
     val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"

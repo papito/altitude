@@ -53,7 +53,7 @@ export const Const = {
         personNameEdited: "PERSON_NAME_EDITED_EVENT",
         personMarkedAsBadMatch: "PERSON_MARKED_AS_BAD_MATCH_EVENT",
         personCoverFaceSet: "PERSON_COVER_FACE_SET_EVENT",
-        // A person was merged, hidden, shown, discarded or corrected on a Face; the People tab reloads its panes
+        // A person was merged, hidden, shown, discarded, renamed or corrected on a Face; the People tab reloads its panes
         peopleChanged: "PEOPLE_CHANGED_EVENT",
         // The Change combobox of a People row picked a Person (`detail.personId`) or a new name (`detail.name`) for
         // `detail.faceId` (js/alpine/components/face-combobox.js); js/search-results/detail-panel.js sends the correction

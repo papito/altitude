@@ -12,11 +12,12 @@ const NAME_EDITOR_SELECTOR = '[data-app-fragment="person-name-editor"]'
 
 /**
  * People events: merging (a drop of one person onto another confirms in a modal, whose success
- * shows the merged person in Browse and leaves the results alone in Triage), the inline name
- * editor, and the follow-up on the People tab. A
- * person's cell may be in both of the tab's panes, so a rename and a cover face change patch
- * every cell of the person, found by `data-person-id` under `#people`. A merge and a discard
- * move people between the People buckets instead, so they announce `peopleChanged`, which the
+ * shows the merged person in Browse and leaves the results alone in Triage), renaming (the results
+ * title's inline name editor and the rename dialog of a cell's pencil, one outcome for both), and
+ * the follow-up on the People tab. A person's cell may be in both of the tab's panes, so a cover
+ * face change patches every cell of the person, found by `data-person-id` under `#people`. A
+ * merge, a discard and a rename move people between the People buckets instead (a rename names an
+ * Unmatched person, who is Matched from then on), so they announce `peopleChanged`, which the
  * tab's `peopleTab` component answers by reloading each pane with its own buckets. An asset
  * mutation announces it as well (`refreshCounts` in `assets/asset-actions.js`), since a person's
  * number follows their assets.
@@ -59,8 +60,9 @@ export function registerPeopleListeners(app) {
      * The name editor (`htmx/edit_person_name.scala.html`) replaces itself with the server's
      * response: the saved name, or the editor again with its validation errors. The two arrive
      * alike (HTTP 200, no header), so the one way to tell them apart is the response itself: it is
-     * parsed, and only a response holding no editor is a saved name, which the people list is
-     * then told about.
+     * parsed, and only a response holding no editor is a saved name, which is then announced as
+     * the rename dialog's success is (`htmx/rename_person_dialog.scala.html` declares the event).
+     * The response is about to show the name in the results title, which `titleShowsName` says.
      */
     document.body.addEventListener("htmx:after:request", (event) => {
         const editorEl =
@@ -81,20 +83,33 @@ export function registerPeopleListeners(app) {
 
         app.dispatch(Const.events.personNameEdited, {
             personId: editorEl.dataset.appPersonId,
-            newPersonName: responseDoc.body.textContent.trim(),
+            titleShowsName: true,
         })
     })
 
-    // The patch replaces the name link's whole content, so the cell's number and a hidden
-    // person's ", hidden" text are gone until the server renders them again on the next reload
+    /**
+     * A person (`detail.personId`) was renamed, from the results title's editor or from a cell's
+     * pencil. The People tab reloads rather than patching the cell's text: a rename can move the
+     * person from Unmatched to Matched, and the list the server renders has them in the right
+     * bucket, with the cell's number and a hidden person's ", hidden" text intact. A results title
+     * showing that person reads the name again from the name route, unless the rename came from
+     * its own editor, whose response is the new name (`detail.titleShowsName`).
+     */
     document.body.addEventListener(Const.events.personNameEdited, (event) => {
-        const newPersonName = event.detail.newPersonName
+        const { personId, titleShowsName } = event.detail
 
-        personCellElements(event.detail.personId, ".name a").forEach(
-            (personNameEl) => {
-                personNameEl.textContent = newPersonName
-                personNameEl.classList.remove("unknown")
-            },
+        app.dispatch(Const.events.peopleChanged, { personId })
+
+        const showsPerson =
+            document.getElementById("person")?.dataset.personId === personId
+        if (!showsPerson || titleShowsName) {
+            return
+        }
+
+        htmx.ajax(
+            "GET",
+            `/htmx/people/r/${app.context.getRepoId()}/p/${personId}/name`,
+            { swap: "innerHTML", target: "#personName" },
         )
     })
 

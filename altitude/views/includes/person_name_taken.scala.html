@@ -1,0 +1,16 @@
+@import altitude.core.Const
+@import altitude.core.models.Person
+
+@(person: Person, holder: Person, errorId: String)
+
+@* The error row of a rename to a name another live person, the holder, has: shared by the inline name editor
+   (htmx/edit_person_name) and the rename dialog (htmx/rename_person_dialog). It names the holder as stored, says so when the
+   holder is hidden, and offers to merge the renamed person into them through the Merge people dialog with the direction
+   kept, so the holder's ID survives. The button is Alpine's, so the caller renders the row inside an `x-data` scope, and
+   names the row (`errorId`) so its field can be described by it. *@
+<div id="@{ errorId }" class="error">
+    @{ (if (holder.isHidden) Const.Msg.Err.PERSON_NAME_TAKEN_BY_HIDDEN else Const.Msg.Err.PERSON_NAME_TAKEN).format(holder.name.get) }
+    <button type="button"
+            class="action-button small"
+            @@click="$dispatch(window.Const.events.confirmPersonMerge, { mergeSourceId: '@{ person.persistedId }', mergeDestId: '@{ holder.persistedId }', keepDirection: true })">@{ Const.UI.MERGE_INTO_PERSON.format(holder.name.get) }</button>
+</div>

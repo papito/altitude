@@ -3,7 +3,7 @@
 @import altitude.core.models.ListedPerson
 @import altitude.core.Const
 
-@(listed: ListedPeople)
+@(listed: ListedPeople, pane: String)
 
 @* The list of one pane of the People tab (htmx/people): the people in the People buckets the pane asked for
    (GET /htmx/people/r/:repoId/list?buckets=..., with &triaged=true while triaged items are shown), one `.cell` each, found
@@ -13,7 +13,11 @@
    so to assistive tech in a `.visually-hidden` ", hidden" after the number: the link is named by its content, "Mia (3),
    hidden", and in Triage, with the number not displayed, "Mia, hidden". The space before the number is inside `.count`
    and the two spans touch, so neither name holds a space before its comma. An Unmatched person is told apart by its
-   orange "Unknown N" name. With no one listed, one line
+   orange "Unknown N" name. After the name link, and outside it so that it is no search trigger, the rename pencil
+   (`.rename`, shown while the cell is hovered or holds focus: htmx/people.css) requests the rename dialog
+   (htmx/rename_person_dialog) into the popover host, anchored to itself: its ID carries `pane`, the pane the list is for,
+   so the pencils of a person listed in both panes are two anchors, and the dialog's return-focus selector finds the copy
+   a reload renders. With no one listed, one line
    of text and no grid: that everyone is only in triaged items when the buckets hold people the triage switch left off
    (`leftOffByTriage`), and otherwise that no one is in the buckets. *@
 
@@ -46,6 +50,19 @@
                    data-app-search-person-id="@{person.persistedId}">
                     @{person.name.getOrElse("")}<span class="count"> (@{visibleCount})</span>@if(person.isHidden) {<span class="visually-hidden">, hidden</span>}
                 </a>
+                @defining(s"personRenameCtrl-$pane-${person.persistedId}") { renameCtrlId =>
+                <button type="button"
+                        class="rename"
+                        id="@{renameCtrlId}"
+                        style="anchor-name: --@{renameCtrlId}"
+                        aria-label="Rename @{person.name.getOrElse("")}"
+                        hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/dialogs/rename-person"
+                        hx-target="#popoverContent"
+                        hx-swap="innerHTML"
+                        hx-trigger="click"
+                        hx-vals='{"personId": "@{person.persistedId}", "pane": "@{pane}"}'
+                        data-app-dialog-anchor="@{renameCtrlId}"><i class="fas fa-edit" aria-hidden="true"></i></button>
+                }
             </span>
         </div>
     </div>
