@@ -25,6 +25,7 @@ import altitude.core.routes.web.partial.AlbumActionController
 import altitude.core.routes.web.partial.AssetActionController
 import altitude.core.routes.web.partial.CurationActionController
 import altitude.core.routes.web.partial.FolderActionController
+import altitude.core.routes.web.partial.LibraryActionController
 import altitude.core.routes.web.partial.LocationActionController
 import altitude.core.routes.web.partial.NavController
 import altitude.core.routes.web.partial.PeopleActionController
@@ -93,6 +94,7 @@ object App extends cask.Main:
     new SetupFormController,
     new SettingsFormController,
     new NavController,
+    new LibraryActionController,
     new AlbumActionController,
     new LocationActionController,
     new AssetActionController,

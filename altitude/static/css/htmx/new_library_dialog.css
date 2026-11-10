@@ -1,0 +1,7 @@
+/* The New library dialog (htmx/new_library_dialog): the name field, then Create and Cancel in a row, the popover form's action
+   distance below it */
+#newLibrary .actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}

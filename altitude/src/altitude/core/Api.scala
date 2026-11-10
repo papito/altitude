@@ -61,6 +61,9 @@ object Api:
       val ALBUM_ID = "albumId"
       val NAME = "name"
 
+    object Library:
+      val NAME = "name"
+
     object Location:
       val LOCATION_ID = "locationId"
       val NAME = "name"

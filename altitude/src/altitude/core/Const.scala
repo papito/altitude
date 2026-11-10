@@ -221,3 +221,6 @@ object Const:
     val MERGE_INTO_PERSON = "Merge into %s…"
     val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"
     val QUICK_VIEW_DIALOG_TITLE = "Quick view"
+    val NEW_LIBRARY_DIALOG_TITLE = "New library"
+    // The nav's Browse menu's last entry, for an Admin, which opens the New library dialog
+    val NEW_LIBRARY_OPTION = "New library…"

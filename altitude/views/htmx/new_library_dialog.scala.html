@@ -1,0 +1,44 @@
+@import altitude.core.Api
+@import altitude.core.Const
+@import altitude.core.RequestContext
+
+@(fieldErrors: Map[String, String] = Map.empty, formJson: ujson.Obj = ujson.Obj())
+
+@* The New library dialog (GET /htmx/library/r/:repoId/dialogs/new, Admin only), a popover dialog the nav's Browse menu opens
+   below its trigger. Return or Create submits, and Cancel, Escape and the host's × dismiss it. A refused name comes back as a
+   validation response replacing this form, with the typed name and the Library name rule's error; a created Library answers
+   with HX-Redirect to its Import page. The field sets no length limits: the rule counts the name normalized, its spaces
+   collapsed, which the browser cannot, and the server's error says what is wrong. The bare x-data is Cancel's Alpine handler's:
+   the popover host has none. *@
+<form action="#"
+      id="newLibrary"
+      x-data
+      data-app-fragment="modal"
+      data-app-modal-title="@{ Const.UI.NEW_LIBRARY_DIALOG_TITLE }"
+      data-app-dialog-autofocus-selector="#field-libraryName"
+      hx-target="this"
+      hx-swap="none"
+      hx-post="/htmx/library/r/@{ RequestContext.getRepository.persistedId }/new"
+      hx-trigger="submit"
+      hx-json-enc>
+
+    <div>
+        <input type="text"
+               id="field-libraryName"
+            @if(fieldErrors.contains(Api.Field.Library.NAME)) {
+               class="error"
+            }
+               name="@{ Api.Field.Library.NAME }"
+               autocomplete="off"
+               aria-label="Library name"
+               placeholder="Library name"
+               value="@{ formJson.obj.get(Api.Field.Library.NAME).flatMap(_.strOpt).getOrElse("") }">
+        @if(fieldErrors.contains(Api.Field.Library.NAME)) {
+            <div class="error">@{ fieldErrors(Api.Field.Library.NAME) }</div>
+        }
+    </div>
+    <div class="actions">
+        <button type="submit" class="action-button primary">Create</button>
+        <button type="button" class="action-button" x-on:click="$store.modal.close()">Cancel</button>
+    </div>
+</form>
