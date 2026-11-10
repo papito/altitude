@@ -6,7 +6,8 @@
 @(listed: ListedPeople, pane: String)
 
 @* The list of one pane of the People tab (htmx/people): the people in the People buckets the pane asked for
-   (GET /htmx/people/r/:repoId/list?buckets=..., with &triaged=true while triaged items are shown), one `.cell` each, found
+   (GET /htmx/people/r/:repoId/list?pane=...&buckets=..., with &triaged=true while triaged items are shown and on every
+   load in Triage), one `.cell` each, found
    by `data-person-id` wherever one is looked up, since a person may be in both panes. A cell's number (`.count`, not
    displayed in Triage: pages/index.css) is the visible count, what opening the person from the repository view finds,
    and never `Person.numOfFaces` directly. A hidden person's cell carries the eye-slash badge, and its name link says

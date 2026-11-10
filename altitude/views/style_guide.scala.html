@@ -235,6 +235,43 @@
               <div class="subtitle">A subtitle: an album's creation day, a Location's category</div>
             </div>
           </div>
+          <p>A Person's cell on the People tab (<code>#people .cell</code>, <code>htmx/people_list</code>) is the cover face,
+             <code>--face-box</code> square and rounded, over the name row in <code>--theme-secondary</code>: the name in
+             <code>--font-size-small</code> and <code>--theme-neutral-4</code>, an Unmatched person's "Unknown N" in
+             <code>--warning-color</code>, and the number dimmed after it, which Triage does not display. A Hidden
+             person's cell carries <code>fa-eye-slash</code> in the cover's corner. The rename pencil
+             (<code>.rename</code>, <code>fa-edit</code>) sits at the end of the name row, out of its flow so the name
+             stays centered, in <code>--theme-neutral-3</code> and <code>--theme-neutral-4</code> on hover; it shows
+             only while the cell is hovered or holds focus, as the results title's pencil does, and opens the rename
+             dialog as a popover anchored to it. Hover a specimen, or Tab into it, to see the pencil.</p>
+          @* The People tab's cells, hand-written to htmx/people_list's markup inside the tab's ID, which the rules of
+             static/css/htmx/people.css are scoped by, with --face-box set as htmx/people sets it. No drag-drop or dropzone
+             class and no search trigger, so nothing binds to them, and the pencils request nothing *@
+          <div id="people" style="--face-box: @{altitude.core.service.FaceDetectionService.faceDetectionBoxPx}px">
+            <div class="sg-row">
+              <div class="cell">
+                <div class="image"><span class="sg-cover"></span></div>
+                <div class="name">
+                  <span>
+                    <a href="#">Alice<span class="count"> (12)</span></a>
+                    <button type="button" class="rename" aria-label="Rename Alice"><i class="fas fa-edit" aria-hidden="true"></i></button>
+                  </span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="image">
+                  <span class="sg-cover"></span>
+                  <i class="fas fa-eye-slash hidden-badge" aria-hidden="true"></i>
+                </div>
+                <div class="name">
+                  <span>
+                    <a href="#" class="unknown">Unknown 4<span class="count"> (2)</span><span class="visually-hidden">, hidden</span></a>
+                    <button type="button" class="rename" aria-label="Rename Unknown 4"><i class="fas fa-edit" aria-hidden="true"></i></button>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
           <p>The Detail panel (<code>.detail-panel</code>, <code>htmx/detail_panel</code>) stacks its sections under small-caps
              headings in <code>--theme-neutral-3</code>, in <code>--font-size-small</code>. A People row is a Face's cover,
              <code>--detail-cover-size</code> and rounded like the People tab's, then the name at the body size, with a Hidden

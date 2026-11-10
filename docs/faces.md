@@ -196,6 +196,12 @@ triaged items. Turn on Show triaged items to see them." in place of "No one in t
 `num_of_faces`, so the switch moves no one between buckets, and the Discard link, `Person.isMatched`, the merge modal's
 "instances" and the merge direction read `num_of_faces` as well, since a merge moves every Face.
 
+In Triage the tab asks for `triaged=true` on every load, whatever the switch: it lists every Person of its buckets, those
+found only in triaged assets included. The numbers are rendered and not displayed there, since they read confusingly
+against what Triage holds, and a click on a person warns instead of searching: Triage manages people (rename, merge by
+drag and drop) and does not search them (**The explorer in Triage** in `views/AGENTS.md`). A merge there reloads the tab
+and leaves the results on all of Triage.
+
 While assets are being imported the number and a search can differ, as a search skips those assets and `num_of_faces` holds
 their Faces. With triaged items shown, the number runs ahead of the search by those assets until they complete. With them
 hidden the subtraction takes them out again, except after a merge: its recount goes through a search, so they are not in
@@ -210,8 +216,15 @@ The tab's actions:
   Unicode form. This is lowercasing, not a full Unicode case fold: "Weiß" and "WEISS", or a Greek name with a final sigma
   and with a plain one ("σοφος" and "σοφοσ"), keep different keys. A merged-away or bad-match person holds no name. An unnamed person's `name_for_sort` is `unknown 0042`, so
   a name of the form `Unknown N`, in any case and spacing, is reserved and refused with a validation error. A change of
-  case alone is a rename. A name another live person holds is refused, and the editor offers to merge into that person
-  (**Event Flow** in `views/AGENTS.md`).
+  case alone is a rename. A name another live person holds is refused, and the form offers to merge into that person
+  (**Event Flow** in `views/AGENTS.md`). There are two forms over one rename (`PeopleActionController.renamePerson`, whose
+  `RenameOutcome` is `Saved` or `Refused`, each route rendering it its own way): the results title's inline name editor
+  (`PUT /htmx/people/r/:repoId/p/:personId/name/edit`, answering the name or the editor again) and the rename dialog a
+  pencil on the person's cell in the People tab opens as a popover, in Browse and in Triage
+  (`GET /htmx/people/r/:repoId/dialogs/rename-person`, `PUT /htmx/people/r/:repoId/p/:personId/rename`, answering an
+  empty success or the dialog's form again). The two dialog routes find the person through
+  `PersonService.getInRepository`, so an unknown person, or another repository's, is a 404. Either rename reloads the
+  People tab, since naming an Unmatched person makes them Matched.
 - **Cover face**: `getPersonFaces` (by detection score) offers the candidates, `setFaceAsCover` picks one.
 - **Hide / show**: display only; the person's faces still match.
 - **Bad match** (`markAsBadMatch`): the person is taken out of listings and their faces out of the match candidates.

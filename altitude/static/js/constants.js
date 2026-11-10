@@ -267,7 +267,8 @@ export const Const = {
             unmatched: "unmatched",
         },
         // The two panes of the People tab, as `data-app-people-pane` names them: the Main pane,
-        // always shown, and the Duplicate pane of Split view
+        // always shown, and the Duplicate pane of Split view. The names are the server's too
+        // (`Const.PeoplePane`), sent as the `pane` parameter of a pane's list
         panes: {
             main: "main",
             duplicate: "duplicate",

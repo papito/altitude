@@ -49,8 +49,8 @@ the one bundle `header_common` links, so a swap carries markup only. Prefer decl
 `<script type="module">` blocks when the behavior can be hydrated centrally from
 `js/frontend-app.js`.
 
-`htmx/folders.scala.html` (styled by `static/css/htmx/folders.css`) supplies the navigation warning, the
-`#folderActions` host of the centered "Add folder" button (below the warning), and the empty
+`htmx/folders.scala.html` (styled by `static/css/htmx/folders.css`) supplies the
+`#folderActions` host of the centered "Add folder" button and the empty
 `#rootFolderList` host, marked `data-app-fragment="folder-tree"` so `js/fragments/explorer.js`
 calls `reloadFolderTree(repoId)` once the tab has settled; edit `js/common/folder-tree.js` for
 folder rows and action markup. The tree's interaction contract (expansion gestures, viewed-folder
@@ -71,8 +71,28 @@ explorer tab that issued a load is marked selected from `htmx:after:request`
 The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">` in a
 `role="tablist"`, styled by `tabs.css` on `aria-selected="true"`); the initial tab is loaded through
 `htmx.ajax` with the tab as `source`, so it is selected exactly as a click would select it. The tab list sits in
-`#explorerHeader`, the explorer's header row, which stays while the list hides in triage. Where the explorer sits
+`#explorerHeader`, the explorer's header row, in every view that has an explorer (the trash hides the whole explorer
+through CSS). Browse has four tabs, Folders, Albums, People and Locations; Triage has no Albums tab, which the server
+leaves out of the page (`current != Const.NavEntry.TRIAGE`). The URL fragment names the tab to open, Folders without
+one, and a fragment naming no tab of the view, `#albums` in Triage, opens the first tab, Folders. Where the explorer sits
 against the results, and the divider between them, is under **Explorer dock** below.
+
+**The explorer in Triage** — Triage manages what the explorer lists and does not search it (the glossary's **Triage**),
+so its tabs differ from Browse's in three ways, none of them in the tabs' markup or renderers:
+
+- A click that searches in Browse warns instead: a folder's name, the root folder, a leaf folder's icon, a Location's
+  icon and name, and a Person's face and name are search triggers, and the search hydrator refuses a trigger naming a
+  folder, a Person or a Location there with a warning snackbar (`blockedSearchOf`, see **Search parameters**). What never
+  searched acts as in Browse: a branch folder's expand control, a Category's row, the ⋯ menus, the add buttons, a
+  Person's rename pencil, and every drag and drop. A Person dropped on another merges and runs no search (**People
+  tab**).
+- No count is displayed: one rule of `static/css/pages/index.css`, under `main:has(> #content.triage)`, hides `.asset-count`
+  in the explorer and a People cell's `.count`. The cells stay in the page and the code that patches them runs as in
+  Browse.
+- Those triggers lose the pointer cursor: a second rule of `pages/index.css` sets `cursor: inherit` on a folder's name,
+  the root folder's icon, a leaf folder's control (`.expand-ctrl:not([aria-expanded])`), a Location's name and icon and a
+  People cell's links. Inherit, not `default`, so a draggable row keeps the cursor interact.js gives it; a branch
+  folder's control and a Category's keep their pointer.
 
 ## JS Directory ↔ Template Mapping
 
@@ -272,12 +292,20 @@ Two-layer event bus, both on `document.body`:
 Batch ops escalate a single-asset drag to a batch when the asset is among the selected ones: the
 `assetMoved`/`assetTrashed` handlers in `js/listeners/assets.js` re-dispatch
 `batchAssetsMoved`/`batchAssetsRecycled`. Person merge/name/cover-face events and the discard
-follow-up live in `js/listeners/people.js`: a merge, a hide, a show, a discard or a Face correction in the Detail panel
+follow-up live in `js/listeners/people.js`: a merge, a hide, a show, a discard, a rename or a Face correction in the Detail panel
 announces `peopleChanged`, as does every asset mutation that goes through `refreshCounts()` in `js/assets/asset-actions.js`
 (a move, a recycle, a purge, a restore, a Curation change), since a person's number follows their assets. The
-People tab, its only listener, answers by reloading each pane with its own buckets (see **People tab**) and reads no detail, while a rename and a cover-face
-change patch every cell of the person, found by `data-person-id` under `#people`; a purge of the recycle bin announces
-`trashPurged`, which refreshes the counts. `confirmPersonMerge`'s listener sends the event's whole detail as the values of
+People tab, its only listener, answers by reloading each pane with its own buckets (see **People tab**) and reads no detail. A rename is
+`personNameEdited`, from the results title's inline name editor or from the rename dialog of a cell's pencil, carrying
+`personId` and, from the inline editor alone, `titleShowsName: true`. Its listener announces `peopleChanged` and patches
+no cell's text: a rename can move a person from Unmatched to Matched, and the list the server renders has them in the
+right bucket with the cell's number intact. When `#person` shows that person (`data-person-id`) it also reloads
+`#personName` from the name route (`GET /htmx/people/r/:repoId/p/:personId/name`), unless `titleShowsName` says the
+editor's own response is about to show the name there. Only a cover-face
+change patches cells, every one of the person, found by `data-person-id` under `#people`; a purge of the recycle bin announces
+`trashPurged`, which refreshes the counts. `personMerged`'s listener announces `peopleChanged`, confirms in the snackbar
+and runs a search for the destination person, except in Triage, which does not search by Person: the results there stay
+as they are. `confirmPersonMerge`'s listener sends the event's whole detail as the values of
 the Merge people modal's request, so a `keepDirection: true` reaches `showMergePeopleModal` as a query parameter: with it
 the modal keeps the requested source and destination, and without it, as for a drop, the person with fewer faces is the
 source.
@@ -298,11 +326,18 @@ failed request, by `js/listeners/htmx-requests.js`; the only `htmx:before:reques
 dialog one on `document`. The person name editor's outcome is the one response the client has to
 inspect: the saved name and the re-rendered editor both arrive as HTTP 200 with no header, so
 `js/listeners/people.js` parses the response and dispatches `personNameEdited` only when it holds
-no editor. A name another live person holds re-renders the editor with `conflictingPerson`: the field's error row holds the
+no editor. The rename dialog of a People cell's pencil (`htmx/rename_person_dialog`, see **People tab**) needs no such
+inspection: it is a dialog operation, whose form declares `PERSON_NAME_EDITED_EVENT` as its success event with the
+person's ID as the detail, and whose refusals are validation replacements. A name another live person holds re-renders
+the editor, or the dialog's form, with `conflictingPerson`: the field's error row (`includes/person_name_taken`, which
+both render, each passing the row's ID as `errorId` for its field's `aria-describedby`) holds the
 message, naming the holder as stored and saying so if the holder is hidden, and a `Merge into X…` button dispatching
 `confirmPersonMerge` with `keepDirection: true`, so the renamed person merges into the holder, whose ID survives. The
-response still holds the editor, so no rename is announced, and the editor stays open behind the modal; closing the modal
-leaves the editor and its error.
+button is Alpine's, so the row is rendered inside an `x-data` scope: the results title block's (`#person`) for the editor, and a bare `x-data` on the
+dialog's form, since the popover host has none. The
+editor's response still holds the editor, so no rename is announced, and the editor stays open behind the modal; closing the modal
+leaves the editor and its error. The rename dialog is a popover dialog, and the dialog hosts hold one dialog at a time, so
+the Merge people modal takes its place.
 
 ## Alpine.js Integration
 
@@ -394,7 +429,8 @@ The popover dialog (`#popoverDialog`) is a native `<dialog popover="auto">`, a d
 ARIA role, with no scrim and no focus trap, so the page stays live. The browser owns its visibility (`:popover-open`; `modal.js` changes it only through `showPopover()` and
 `hidePopover()`, and nothing binds `x-show` to it); the store names it as the active host while it is open, for the
 shared title and the one-active-host rule. CSS anchor positioning places it, and no JS measures anything: every
-trigger `js/common/context-menu-markup.js` builds carries `anchor-name: --<its id>`, a popover request names its
+trigger `js/common/context-menu-markup.js` builds carries `anchor-name: --<its id>` (as does a People cell's rename
+pencil, which the server renders with it inline: **People tab**), a popover request names its
 trigger's ID in `data-app-dialog-anchor`, and `openModal` sets the host's `position-anchor` to `--<that id>`. The
 trigger IDs are stable, so a list rebuild that renders the trigger again re-anchors an open popover with no observer.
 `openModal` also passes the trigger as `showPopover({ source })`, which puts the popover next in the Tab order after
@@ -585,7 +621,9 @@ selector outranks `.context-menu:popover-open` and would leave the closed panel 
 `:not` leaves `#layoutToggle` its `.toggle-group` row).
 
 **Folder tree expansion and viewed scope** — In a non-root row the icon and the name have separate
-jobs: the name navigates (a search for the folder's results, disabled in triage and trash),
+jobs: the name navigates (a search for the folder's results; in Triage the click warns instead, and in the trash it
+does nothing, see **Search parameters**; a folder drag arms `suppressClickAfterRelease()` at its start, so the click its
+release produces on the name is never taken for one),
 and the icon sits in a native `button` (`#expand-folder-children-{id}`, icon `#folder-icon-{id}`,
 class `.expand-ctrl`) built by `js/common/folder-tree.js`. A **branch** is a non-root folder with
 child folders; only branches carry expansion state, root is always expanded with no gestures, and a
@@ -699,7 +737,8 @@ inside. Expanded categories get the folder tree's group spacing (twice the row g
 starts or ends, never more; an expanded category that is the list's first or last row gets no extra
 space at that end). A Location row is menu (Rename, Delete, Move to category) | `fa-map-marker-alt`
 icon | name | `.asset-count` (`#location-count-{id}`, directly after the name),
-with icon and name as `data-app-search-location-id` triggers and the row's `.controls` a drop zone
+with icon and name as `data-app-search-location-id` triggers (in Triage they warn instead of searching, while the add
+buttons, the menus and the drops work as in Browse: **The explorer in Triage**) and the row's `.controls` a drop zone
 (`js/dragdrop/locations.js`) for a single asset or the batch mover. Locations hold pointers only: a
 drop adds memberships (`PUT /api/location/r/:repoId/assets`, `assetActions.addAssetsToLocation`;
 assets already in the Location are skipped and reported), the grid does not change, and the counts
@@ -769,17 +808,43 @@ and a pane lists the union of the buckets switched on, Matched alone on a first 
 line and no grid: "No one in the buckets switched on" with none on or no one in them, and, when the buckets hold people and
 every one of them has only triaged assets with triaged items hidden (the server's `ListedPeople.leftOffByTriage`),
 "Everyone here is only in triaged items. Turn on Show triaged items to see them." The server renders no switch state, as with View settings: the component asks
-`GET /htmx/people/r/:repoId/list?buckets=matched,hidden` (comma-separated bucket names; a name that is no bucket is a 400),
+`GET /htmx/people/r/:repoId/list?pane=main&buckets=matched,hidden` (`pane` is the pane the list is for, `Const.PeoplePane`
+on the server, the Main pane when left out; comma-separated bucket names; a name that is no pane or no bucket is a 400),
 with `triaged=true` added only when the `searchParams` store's `triaged` is exactly `"true"`, read on every load (the store's
-null would go out as `triaged=null`, a 400),
+null would go out as `triaged=null`, a 400), or when the view is Triage, whatever the store holds,
 through `htmx.ajax` into the pane's `.list`, on init, when a switch flips, when a person changes and when "Show triaged
 items" flips, through a `$watch` on the store's `triaged` set up in `init()` (the host's
 `hx-sync="replace"` aborts a load of the pane still in flight, so the latest bucket set lands), and the response is
 `htmx/people_list`: the `.grid` of `.cell.drag-drop.dropzone` cells, each with `data-person-id` and no id, since a person
-may be in both panes, a hidden person's with an `fa-eye-slash` `.hidden-badge` in the image's corner and an `aria-label`
-("…, hidden") on its name link, an Unmatched person told apart by its orange "Unknown N" name. A cell's number, in the name link and a hidden person's
-`aria-label`, is the `ListedPerson`'s `visibleCount`, what opening the person from the repository view finds, and a person
-with nothing to find with triaged items hidden is left off (**People** in `docs/faces.md`). The remembered state is
+may be in both panes, a hidden person's with an `fa-eye-slash` `.hidden-badge` in the image's corner and a
+`.visually-hidden` ", hidden" at the end of its name link, an Unmatched person told apart by its orange "Unknown N" name. The name link carries
+no `aria-label`: it is named by its content, the name, the number and that text, "Mia (3), hidden". A cell's number, the name link's `.count` span,
+is the `ListedPerson`'s `visibleCount`, what opening the person from the repository view finds, and a person
+with nothing to find with triaged items hidden is left off (**People** in `docs/faces.md`).
+
+After the name link, a sibling and not inside it, so that it is no search trigger, each cell has a rename pencil:
+`button.rename` (`fa-edit`, named "Rename *name*"), at the end of the name row and out of its flow, shown by
+`people.css` while the cell is hovered or holds focus, as the results title's pencil is. It requests
+`GET /htmx/people/r/:repoId/dialogs/rename-person` (`personId`, `pane`) into `#popoverContent` and is the dialog's
+anchor: its ID is `personRenameCtrl-<pane>-<personId>`, which it names in `data-app-dialog-anchor` and carries as an
+inline `anchor-name: --<its id>`, as the triggers `context-menu-markup.js` builds do (**Modals**). The pane is in the ID
+because a person can be in both panes, and two pencils with one ID would be one anchor; `loadPane` sends `pane` with
+every list request and `people_list` takes it as a parameter. The dialog is `htmx/rename_person_dialog`, a
+`data-app-fragment="modal"` form of one unlabelled field holding the current name, selected on focus, as the explorer
+action dialogs' Rename is (**Explorer action dialogs**). Its `data-app-dialog-return-focus` is `#personRenameCtrl-<pane>-<personId>`,
+a selector and not the element, so focus goes to the pencil the list renders again after the rename, and a hidden `pane`
+field sends the pane back so that the form replacing it on a refusal names the same pencil. A saved name
+(`PUT /htmx/people/r/:repoId/p/:personId/rename`), the name the person already has included, is an empty success that
+completes the dialog and announces `PERSON_NAME_EDITED_EVENT` with the person's ID; a name that cannot be saved is a
+validation replacement with its error under the field, and a name another person holds offers the merge, whose modal
+replaces the popover (**Event flow**).
+
+In Triage the tab lists every Person of its buckets, those found only in triaged assets included (each load sends
+`triaged=true` there), so the "only in triaged items" line never shows; the buckets and Split view are the ones Browse
+remembers. The numbers are not displayed (`pages/index.css` hides `.count`; **The explorer in Triage**), which also
+leaves a hidden person's link named "Mia, hidden": the space before the number is inside `.count`, and the two spans
+touch, so neither name has a space before its comma. A click on a face or a name warns instead of searching, the links
+lose the pointer cursor, and a merge reloads the tab and confirms without running a search. The remembered state is
 `localStorage` `Const.localStore.peopleView`, `{ split, buckets: { main: [...], duplicate?: [...] }, paneSizes: { stacked,
 sideBySide } }`, written on every flip and drag and read once in `init()`, which falls back to the first visit's when it
 is missing or unreadable, keeps only the bucket names the tab knows, reads a pane's buckets remembered under the older
@@ -787,7 +852,7 @@ names `top` and `bottom` as its own, and takes an axis's sizes only as two perce
 for `Const.events.peopleChanged` on `document.body` from `init()` to `destroy()` (the events are dispatched on the body,
 an ancestor of the shell, which a listener on the shell cannot see whatever their bubbling) and reloads each displayed
 pane with its own buckets; a merge, a
-hide, a show, a discard, a Face correction and an asset mutation through `refreshCounts()` announce it (**Event flow**). Lookups inside the component start from `this.$root`, the shell
+hide, a show, a discard, a rename, a Face correction and an asset mutation through `refreshCounts()` announce it (**Event flow**). Lookups inside the component start from `this.$root`, the shell
 (in a `@click` handler `$el` is the button). **Split view** renders the Duplicate pane under `<template x-if="split">` and
 divides the two pane elements, found from `this.$root`, with a Split.js instance (`minSize` 120) along the axis the
 **Dock side** calls for (`effectiveSide()` of `js/common/explorer-dock.js`): stacked, `direction: "vertical"`, under a
@@ -801,7 +866,10 @@ axis with it, before `split` drops the pane, and `destroy()` does the same when 
 Duplicate pane copies the Main pane's buckets the first time Split view is turned on, when it has none remembered; from
 then on the two are remembered apart, across split off and on. `js/dragdrop/people.js` binds `#people .drag-drop` and
 `#people .dropzone`, which match both panes, so a
-cell dropped on the other pane's cell dispatches `confirmPersonMerge` as any drop does; on drag start the `autoScroll`
+cell dropped on the other pane's cell dispatches `confirmPersonMerge` as any drop does; on drag start it arms
+`suppressClickAfterRelease()` (`click-suppression.js`), so the click the release produces on the person's link, moved
+under the pointer, neither searches nor warns (at the start rather than in `end`: with inertia a flick's `end` fires
+after the click), and the `autoScroll`
 container becomes the dragged cell's `.pane .list` (the scrolling element: the pane itself is `overflow: hidden`), falling
 back to `#explorerPanelContent` for the `#person` cover in the results title. The heights: `#explorerViews` is a grid of
 `auto 1fr` at `height: 100%` (`static/css/pages/index.css`), `#explorerPanelContent` (`min-height: 0; overflow-y: auto`)
@@ -1075,7 +1143,8 @@ does not show through it while it sticks). The scopes:
   shown by `static/css/htmx/person.css` only while the title is hovered or the name has focus
 - a **folder** as the path's breadcrumb (`.crumbs`, a shared primitive of `core.css` the Detail panel's Folder row wears too, in its own link color):
   every ancestor short of the repository root, top-level first, each a search trigger for its folder
-  (`data-app-search-folder-id`, dimmed `.crumb`), separated by a dimmed `fa-chevron-right` (`.sep`), and the folder itself as
+  (`data-app-search-folder-id`, dimmed `.crumb`; a trigger like any other, so in Triage a crumb warns instead of
+  searching and in the trash it does nothing, see **Search parameters**), separated by a dimmed `fa-chevron-right` (`.sep`), and the folder itself as
   the `.leaf` in the title style. The path wraps rather than truncating. The
   controller builds it from `FolderService.getAncestors` (root first) and the folder; the root folder is the whole
   repository and renders no block
@@ -1085,7 +1154,8 @@ does not show through it while it sticks). The scopes:
 
 The way back is the `.clear-scope` × after the title: a search trigger carrying an empty `personId`, which the store's scope
 rules (see **Search parameters**) widen to clearing every place, the map area and the Search text while the view, the sort,
-the grouping and the layout stay, so a person selected in Triage goes back to all of Triage. The block and the toolbar
+the grouping and the layout stay, so a Triage URL scoped to a person goes back to all of Triage (an empty value names
+nothing, so the Triage guard on search triggers lets it through). The block and the toolbar
 (`#searchControl`) are both `position: sticky` at the top of `#content` (`z-index: 2`, above the group headers), the toolbar
 under the title: `js/search-results/sticky-offsets.js`, run by the results hydrator, writes the title's rendered height to
 `--results-title-height` on the fragment (the toolbar's `top`; 0 without a title) and the two heights together to
@@ -1904,8 +1974,8 @@ them side by side under a top or bottom one, remaking its Split.js instance on t
 `effectiveSide()` reads the attribute.
 
 The pick is the **Dock side menu** at the end of the explorer's header (`#explorerHeader`: the tab list, growing, then
-the menu, centered on the row and inset by `--panel-padding`; in triage, where the tab list is hidden, the menu stands
-alone at the row's end, and in the trash bin it is hidden with the explorer). `#dockSideMenuHost` is a compact choice
+the menu, centered on the row and inset by `--panel-padding`; Triage has the same row with one tab fewer, and in the
+trash bin the menu is hidden with the explorer). `#dockSideMenuHost` is a compact choice
 menu (see **Context menus**): four options, Left, Right, Top and Bottom, each `data-app-dock-side="<side>"` with the
 side's glyph, a `<use>` of `includes/dock_glyphs.scala.html`, the hidden `<svg class="svg-sprite">` of four symbols
 (a frame with the docked band filled, in `currentColor`) that `index.scala.html` and the style guide include. The
@@ -2154,7 +2224,11 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   row, selected and not, Change and Remove under a selected row, the Change combobox with its listbox and its Suggested group,
   Details rows with the crumbs), the toolbar toggles and the Face highlights
   (`htmx/view_image_detail_modal.css`: a highlight and its badge over a stand-in for a photo, `.sg-face-highlights`) are in Panels &
-  layout, in `.sg-detail-panel`. Specimens
+  layout, in `.sg-detail-panel`, as are the People tab's cells (`htmx/people.css`: a named person's and a hidden Unmatched
+  person's, each with its rename pencil, which hover or focus reveals), hand-written to `htmx/people_list`'s markup
+  inside an element with the tab's ID, `#people`, which the rules are scoped by, with `--face-box` set on it as the tab's
+  shell sets it; the cells carry no `drag-drop` or `dropzone` class and no search trigger, so nothing binds to them, and
+  `.sg-cover` stands in for the cover face. Specimens
   use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements
   under `body.style-guide`) only lay the page out, from the `:root` variables.
   Three more things keep the page current:
@@ -2297,15 +2371,17 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/setup-background/setup-background-textures.js` | the ten textures of the fields, each painting a cell from its corner: tiles repeated by a pattern (furrows, crop rows, tramlines, strip crops, an orchard, pasture, contours) and the headland and the centre pivot drawn to the cell |
 | `views/setup.scala.html` | The setup page: the scene's canvas first in the body, the message hosts, `main` with the title and the setup form (`htmx/setup_form`) on the frosted card, the footer; its layout, the canvas's placement and fade-in, the card, the title and the footer are `static/css/pages/setup.css` |
 | `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the general modal host |
-| `static/js/search-results/click-suppression.js` | swallows the click the browser fires after an asset drag or a box gesture |
+| `static/js/search-results/click-suppression.js` | swallows the click the browser fires after a pointer gesture: an asset drag or a box gesture (`suppressNextClick()`), and a Person drag, a folder drag or a drag of the batch mover, which arm `suppressClickAfterRelease()` at drag start |
 | `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, dialog open) |
-| `static/js/alpine/components/people-tab.js` | Alpine component of the People tab: the remembered buckets of the Main and Duplicate panes, Split view and the panes' sizes on each axis (`Const.localStore.peopleView`), the pane loads through `htmx.ajax`, the Split.js instance along the Dock side's axis and its remake on `dockSideChanged`, the reload on `peopleChanged` and when the `searchParams` store's `triaged` changes, which each load reads |
-| `views/htmx/people.scala.html`, `people_list.scala.html` | The People tab's shell (the panes and their bucket switches, no list) and one pane's list for the buckets asked for; styled by `static/css/htmx/people.css` |
+| `static/js/alpine/components/people-tab.js` | Alpine component of the People tab: the remembered buckets of the Main and Duplicate panes, Split view and the panes' sizes on each axis (`Const.localStore.peopleView`), the pane loads through `htmx.ajax`, the Split.js instance along the Dock side's axis and its remake on `dockSideChanged`, the reload on `peopleChanged` and when the `searchParams` store's `triaged` changes, which each load reads; each load names its pane, and in Triage asks for triaged items whatever the store holds |
+| `views/htmx/people.scala.html`, `people_list.scala.html` | The People tab's shell (the panes and their bucket switches, no list) and one pane's list for the buckets asked for, each cell with its rename pencil, whose ID carries the pane (`pane`); styled by `static/css/htmx/people.css` |
+| `views/htmx/rename_person_dialog.scala.html` | The popover dialog of a People cell's rename pencil: one field holding the name, focus returned to the pencil of its pane, `PERSON_NAME_EDITED_EVENT` on success, the error row or the offer to merge on a refusal |
+| `views/includes/person_name_taken.scala.html` | The error row of a rename to a name another live person holds, with its "Merge into X…" button; rendered by the inline name editor and the rename dialog, each naming the row (`errorId`) and supplying the `x-data` scope its button needs |
 | `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read; under each row, for a live asset, Change and Remove and the Change combobox's markup, its listbox rendering the Suggested group and then the list from one option block; a correction's response, its root carrying the result message and any deleted Person) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
 | `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu; its grid and the highlights' look are `static/css/htmx/view_image_detail_modal.css` |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
-| `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch` |
+| `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch`, and refuses the searches a view does not run (`blockedSearchOf`: a folder, Person or Location trigger warns in Triage, a folder trigger does nothing in the trash) |
 | `static/js/search-results/search-input.js` | `bindSearchInput`: the nav's Search input (`#searchForm`), submitting and clearing `q` and following the store |
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal (the box fitted from the shown element's size, the Detail panel told of each asset and size shown), and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
 | `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing) |
@@ -2454,8 +2530,19 @@ has settled):
 <button data-app-search="click" data-app-search-bbox="">             <!-- an empty literal clears the parameter -->
 ```
 
-The hydrator also owns the rule that folder navigation does nothing in triage and trash, so that
-guard lives in one place rather than in markup.
+The hydrator also owns the one rule on where a trigger may not search (`blockedSearchOf` in `search-triggers.js`), so
+that guard lives in one place rather than in markup, and holds for every trigger: the explorer's rows and the Results
+title's folder crumbs alike.
+
+- **Triage** manages folders, People and Locations but does not search them: a trigger whose `folderId`, `personId` or
+  `locationId` names one stops and shows a warning snackbar, "You can manage items here but not perform search - use
+  Browse for that"; repeated clicks count up on the one message (**Snackbar**). An empty value names nothing and
+  passes, so the Results title's × still clears the scope of a Triage URL that carries one. Every other trigger (a
+  sort, a grouping, a layout) searches as in Browse.
+- **Trash** spans every folder and has no explorer: a trigger carrying `folderId` does nothing there, silently.
+
+The guard is on triggers alone. `runSearch` called directly is not checked, so a caller that should not search in
+Triage says so itself, as the `personMerged` listener does.
 
 Per-request flags that must not be remembered (`isContinuousScroll`, a continuation's
 `after`, and the grid layout and no grouping of the crowded-pin panel's request while the store says
