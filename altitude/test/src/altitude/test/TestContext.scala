@@ -223,6 +223,18 @@ class TestContext(val testApp: Altitude) {
     persistedAsset
   }
 
+  /**
+   * A fixture without the import pipeline: the asset persisted, indexed and completed (`persistAndIndex`, then `completeImport`),
+   * and counted in the stats, as an import's database stages leave it. It has no file, Preview, faces, Image quality, perceptual
+   * hash or Scene embeddings, so a test reading any of them persists its asset through the pipeline (`persistAsset`). With no
+   * hash it is no frame, and the completion puts it in no Sequence; a test that wants one stamps it (`setAssetSequence`).
+   */
+  def insertAsset(asset: Asset = makeAsset()): Asset = {
+    val completed = testApp.service.library.completeImport(testApp.service.library.persistAndIndex(asset))
+    assets = assets ::: completed :: Nil
+    completed
+  }
+
   /** Rewrites an asset's capture time (camera wall-clock) and import time (an instant) in each engine's storage form */
   def setAssetDates(assetId: String, taken: Option[LocalDateTime], imported: OffsetDateTime): Unit = {
     val (takenValue, importedValue): (Any, Any) = testApp.dataSourceType match {

@@ -351,12 +351,13 @@ import altitude.core.service.FaceDetectionService
   }
 
   /**
-   * A Sequence of `count` frames, in capture order, a second apart. They are imported last frame first, so the order of the rows
-   * says nothing about capture order.
+   * A Sequence of `count` frames, in capture order, a second apart, inserted without the import pipeline (`insertAsset`): the
+   * tests over it read capture times and the Sequence, which it stamps, and no file or measurement. They are inserted last frame
+   * first, so the order of the rows says nothing about capture order.
    */
   private def longSequence(count: Int): List[Asset] = {
     val start = LocalDateTime.of(2024, 6, 1, 12, 0)
-    val frames = List.fill(count)(testContext.persistAsset(isTriaged = true)).reverse
+    val frames = List.fill(count)(testContext.insertAsset(testContext.makeAsset(isTriaged = true))).reverse
     frames.zipWithIndex.foreach {
       (frame, second) => testContext.setAssetDates(frame.persistedId, Some(start.plusSeconds(second)), OffsetDateTime.now())
     }

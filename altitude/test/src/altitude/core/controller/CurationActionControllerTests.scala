@@ -27,8 +27,12 @@ import altitude.core.service.FaceDetectionService
   // Identity encoding because the client cannot read a compressed empty body (the 204)
   private val identity = Map("Accept-Encoding" -> "identity")
 
+  /**
+   * A frame in triage with the Image quality, inserted without the import pipeline (`insertAsset`): no file, Preview or other
+   * measurement, and in no Sequence until a test stamps one
+   */
   private def frame(quality: ImageQuality = fine): Asset = {
-    val asset = testContext.persistAsset(isTriaged = true)
+    val asset = testContext.insertAsset(testContext.makeAsset(isTriaged = true))
     testContext.setAssetImageQuality(asset.persistedId, Some(quality))
     asset
   }
@@ -281,7 +285,6 @@ import altitude.core.service.FaceDetectionService
     withServer(App) {
       host =>
         val blown = List(frame(fine.copy(clippedHighlights = 0.08)), frame(fine.copy(clippedHighlights = 0.08)))
-        // Every fixture is persisted before the first stamp: a random image imported after it may pair with a stamped frame
         val measured = frame()
         val unmeasured = testContext.persistAsset(isTriaged = true)
         testContext.setAssetImageQuality(unmeasured.persistedId, None)
