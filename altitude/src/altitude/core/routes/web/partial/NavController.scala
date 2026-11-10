@@ -12,13 +12,13 @@ class NavController(using logger: Logger) extends BaseController:
 
   /**
    * The nav with fresh counts. `current` is the entry of the page reloading it (a `Const.NavEntry` key), which the swap would
-   * otherwise unmark.
+   * otherwise unmark. The Browse menu's host comes empty (`reload`): the page keeps its own, `hx-preserve`.
    */
   @requireLogin()
   @cask.get(f"/$prefix/nav/r/:repoId")
   def htmxAdminSetup(repoId: String, current: String = ""): Response[String] =
     val stats = App.altitude.service.stats.getStats
-    val payload = "<!doctype html>" + includes.html.nav(stats, current = current)
+    val payload = "<!doctype html>" + includes.html.nav(stats, current = current, reload = true)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   initialize()

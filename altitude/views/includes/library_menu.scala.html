@@ -6,7 +6,10 @@
    account's own, by name), each a link to `href` of it, the one `currentId` names checked; a link's title is the full name,
    which the trigger and the panel cut with an ellipsis. For an Admin, `newLibraryDialogUrl` adds a separator and the New library
    entry, an action that requests the dialog into the popover dialog host, below the trigger. `hx-preserve` keeps the built
-   control, and an open panel or dialog anchored to it, through a nav reload. *@
+   control through a nav reload, which renders this host empty (includes/nav); an open panel stays open only where the
+   browser moves the control with `moveBefore`, so the Import page's polling reload skips a tick while the panel or the
+   dialog is open (pipeline.scala.html). A name is a flex item in the trigger and a grid item in its entry, so it is a bidi
+   paragraph of its own and never reorders the text beside it. *@
 @(hostId: String,
   libraries: Seq[Repository],
   currentId: String,

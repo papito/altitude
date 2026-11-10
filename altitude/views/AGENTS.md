@@ -53,7 +53,7 @@ Import (`pipeline.scala.html`) and Settings (`settings.scala.html`) carry the na
 starts with `startNavPage()` of `js/nav-page.js`: Alpine with what `html_common` binds and the `contextMenu` component,
 the htmx request rule and the dialog wiring (`js/listeners/dialogs.js`) over a minimal app, whose hydration is the
 `modal` fragments and the choice menus, and the nav's Browse menu, built before Alpine starts. The import page's polling
-nav reload leaves that menu in place (**Nav refresh**).
+nav reload leaves that menu in place, and skips a tick while it or its dialog is open (**Nav refresh**).
 
 HTMX partial templates live in `views/htmx/`. They are returned by the `routes/web/partial/**`
 controllers as `"<!doctype html>" + template(...)`. They carry no `<style>`: a partial's styles are in
@@ -326,8 +326,15 @@ Two-layer event bus, both on `document.body`:
   compatibility shim is loaded: Alpine's mutation observer initializes swapped-in markup, and
   nothing calls `Alpine.initTree` on it.
 - Polling is declarative: the import page refreshes the nav with
-  `hx-trigger="every 5s [document.visibilityState === 'visible']"` (its `hx-get` carries `current=import`, so the
-  swap marks the page's entry again; see **Nav**).
+  `hx-trigger="every[document.visibilityState === 'visible' && !document.querySelector('nav .context-menu:popover-open, #popoverDialog:popover-open')] 5s"`
+  (its `hx-get` carries `current=import`, so the swap marks the page's entry again; see **Nav refresh**). htmx 4 reads a
+  trigger's filter only right after the event's name, with no space (`every[…] 5s`, `click[!event.shiftKey]`): the
+  htmx 2 spelling `every 5s […]` parses, and its filter is silently dropped.
+- A request whose failure is not worth a report declares the boolean `data-app-silent-failure` on the element that
+  issues it: `js/listeners/htmx-requests.js` then shows no error snackbar for its 4xx/5xx and does nothing else with it.
+  Only the import page's nav poll declares it: its next tick tries again, and a server answering 5xx while it restarts
+  would otherwise raise an error every 5 s. A request that gets no response at all reaches no `htmx:after:request`
+  listener (htmx fires `htmx:error`), so it is never reported there either way.
 - Global config (`defaultTimeout`, `noSwap`) is the `htmx-config` meta tag in
   `views/includes/header_common.scala.html`; 4xx/5xx bodies are not swapped, listeners report them.
 - The file upload (`js/fragments/upload-form.js`) is **not** an HTMX request: it posts through the
@@ -2245,8 +2252,10 @@ The cell is at least `--nav-browse-min-width`, a share of the viewport capped at
 the name, and a panel in the nav takes the page's text rather than its entry's (`nav .context-menu`: `--font` at
 `--font-size-base`, `--theme-neutral-4`, no transform). The main page builds the host with its first hydration, and
 Import and Settings with `startNavPage()` (**Template Layout**); the list is the page load's, since a nav reload keeps
-the built host (**Nav refresh**), so a Library created in another tab is listed at the next full page load. The style
-guide's navigation section holds the specimen.
+the built host (**Nav refresh**), so a Library created in another tab is listed at the next full page load. A name is a
+flex item in the trigger and a grid item in its entry, a bidi paragraph of its own, so a right-to-left name never
+reorders "Browse", the dot or the caret; the browser tab title, which holds no markup, isolates it with U+2068 … U+2069
+(`includes/page_title`). The style guide's navigation section holds the specimen.
 
 **Nav refresh** — After any successful asset mutation, reload the nav to update counts.
 Folder deletion also recycles assets throughout its subtree, so the `folderDeleted` listener
@@ -2262,9 +2271,14 @@ outside it they do nothing (**Triage summary**).
 
 `includes/nav` renders the Search input on every page (the import page's polling reload passes `current=import`).
 The form is `hx-preserve`, so a swap keeps the element itself, with its listeners and the text being typed. So is the
-Browse menu's host (`includes/library_menu`): a reload keeps the built control, its open panel, and the New library
-dialog anchored to its trigger, so the import page's polling reload never closes either; the host the reload carries is
-dropped, so its Library list is the page load's.
+Browse menu's host (`includes/library_menu`): a reload keeps the built control, so its Library list is the page load's,
+and the reload (`NavController`, `includes/nav`'s `reload`) renders the host empty, by its ID and `hx-preserve`, since
+htmx drops the one it carries: htmx 4 parks each element of the page that a `hx-preserve` element of the response names
+by ID, swaps, then moves the parked element in place of the new one and removes the new one. The move is
+`Element.moveBefore` where the browser has it, which keeps an open popover open, and `insertBefore` elsewhere, which
+takes the element out of the document and closes its open panel. So the import page's poll skips a tick while the
+nav's menu panel or the popover dialog (the New library dialog) is open (**HTMX 4 conventions**), so the poll never
+reloads the nav under either, in any browser.
 
 Asset mutations (move, recycle, purge, restore, sorting from triage) also call
 `app.reloadFolderCounts()`, which runs `refreshFolderCounts(repoId)` from `js/common/folder-tree.js`:

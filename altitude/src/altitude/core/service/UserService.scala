@@ -104,11 +104,17 @@ class UserService(val app: Altitude) extends BaseService[User]:
 
   /**
    * Records `repoId` as the user's last active Library, the one login and `/` open next
-   * (`RepositoryService.landingRepositoryOf`). One conditional UPDATE: a load of the Library recorded already writes nothing.
-   * Whether it wrote.
+   * (`RepositoryService.landingRepositoryOf`). Whether it wrote. Every page load of a Library calls it, so it reads the recorded
+   * Library first, in a read-only transaction, and opens a write transaction only when that differs: a load of the Library
+   * recorded already takes no write lock (on SQLite, the one write connection). The write is still the conditional UPDATE, so of
+   * two loads racing, the second writes nothing.
    */
   def rememberLastActiveRepository(user: User, repoId: String): Boolean =
-    txManager.withTransaction {
+    val recorded = txManager.asReadOnly {
+      dao.getById(user.persistedId).lastActiveRepoId
+    }
+
+    !recorded.contains(repoId) && txManager.withTransaction {
       val written = dao.rememberLastActiveRepository(user.persistedId, repoId)
       if written then logger.debug(s"Recorded [$repoId] as the last active repository of user [${user.persistedId}]")
       written

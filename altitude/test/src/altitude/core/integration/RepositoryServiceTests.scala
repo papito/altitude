@@ -77,30 +77,43 @@ import altitude.core.util.Util
     storedKey shouldBe s"\u00F6land smith caf\u00E9 ${suffix.toLowerCase}"
   }
 
-  test("A Library name that is empty, too short, too long or holds a control character fails, naming the field") {
+  test(
+    "A Library name that is empty, too short, too long, or holds a control or format character or an unpaired surrogate fails") {
 
     /**
      * Setup:
      *
      * Library names that are empty, only whitespace, one character, one character once composed ("e" and a combining accent), 81
-     * characters, and ones holding a control character between words or at the end.
+     * characters, ones holding a control character between words or at the end, ones holding an invisible format character (a
+     * zero-width space, a right-to-left override, a directional isolate pair, a byte order mark, a soft hyphen), and ones holding
+     * an unpaired surrogate, high or low.
      *
      * Assertions:
      *
-     * Each add fails with a `ValidationException` that gives the name field its error, and no Library is added.
+     * Each add fails with a `ValidationException` that gives the name field its error, the control characters' for the format
+     * characters and the unpaired surrogates too, and no Library is added.
      *
      * Edge cases:
      *
-     * A name typed longer than 80 characters that is 80 once its whitespace is collapsed is accepted.
+     * A name typed longer than 80 characters that is 80 once its whitespace is collapsed is accepted, and so are the two join
+     * controls: an emoji sequence joined by ZERO WIDTH JOINER and a Persian word holding ZERO WIDTH NON-JOINER.
      */
+    val controls = "Remove the control characters"
     val refused = List(
       "" -> "Enter a name for the library",
       " \t\n " -> "Enter a name for the library",
       "a" -> "Use at least 2 characters",
       "e\u0301" -> "Use at least 2 characters",
       "x" * 81 -> "Use at most 80 characters",
-      "Client\u0007Smith" -> "Remove the control characters",
-      s"Client ${Util.randomStr()}\u0000" -> "Remove the control characters"
+      "Client\u0007Smith" -> controls,
+      s"Client ${Util.randomStr()}\u0000" -> controls,
+      "Client\u200BSmith" -> controls,
+      "Client \u202Ehtims" -> controls,
+      "\u2066Client\u2069 Smith" -> controls,
+      "\uFEFFClient Smith" -> controls,
+      "Cli\u00ADent Smith" -> controls,
+      "Client\uD800 Smith" -> controls,
+      "Client \uDC00Smith" -> controls
     )
 
     val librariesBefore = testApp.service.repository.getAll.size
@@ -116,6 +129,16 @@ import altitude.core.util.Util
 
     val collapsedTo80 = addLibrary(s"${Util.randomStr(40)}     ${Util.randomStr(39)}")
     collapsedTo80.name.length shouldBe 80
+
+    // A family emoji, three people joined by ZERO WIDTH JOINER, and "I want" in Persian, whose ZERO WIDTH NON-JOINER is spelling
+    for (
+      joined <- List(
+        s"Family \uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67 ${Util.randomStr()}",
+        s"\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645 ${Util.randomStr()}"
+      )
+    ) {
+      addLibrary(joined).name shouldBe joined
+    }
   }
 
   test("A second Library whose name differs only in case, spacing or Unicode composition is a duplicate, for any owner") {

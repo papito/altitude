@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 
 import scala.jdk.CollectionConverters._
+import scala.util.control.NonFatal
 
 import altitude.core.App
 import altitude.core.Const
@@ -230,7 +231,9 @@ object decorators:
    * For a full page of a repository, applied after `requireLogin`, whose ownership check has refused a foreign repository: once
    * the page answers 200, the request's repository is recorded as the account's last active one
    * (`UserService.rememberLastActiveRepository`), which login and `/` open next. Partials and API routes do not carry it, so a
-   * nav reload or a search never moves where the user lands, and neither does a page that is not found.
+   * nav reload or a search never moves where the user lands, and neither does a page that is not found. The page is rendered
+   * already, so a failure to record is logged at WARN and the page is served: the next login lands where the last recorded load
+   * says.
    */
   class rememberRepository extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -240,7 +243,13 @@ object decorators:
           for
             user <- RequestContext.account.value
             repo <- RequestContext.repository.value
-          do App.altitude.service.user.rememberLastActiveRepository(user, repo.persistedId)
+          do
+            try App.altitude.service.user.rememberLastActiveRepository(user, repo.persistedId)
+            catch
+              case NonFatal(e) =>
+                logger.warn(
+                  s"Could not record [${repo.persistedId}] as the last active repository of user [${user.persistedId}]",
+                  e)
           v
         case v: Raw => v
       }

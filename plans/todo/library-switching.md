@@ -13,21 +13,21 @@
 |---|---|
 | The word | **Library** in UI text and the glossary. The code keeps `Repository`. The setup form already says "Library name" |
 | The Browse cell | The whole cell is a choice menu trigger reading "Browse · <Library name> ▾", with the Browse icon. It keeps `aria-current="page"` while Browse is shown |
-| Menu entries | The Libraries the user owns, sorted by name: case-insensitive and natural ("Client 2" before "Client 10"). Names only, with the current Library checked. A separator, then "New library…" |
+| Menu entries | The Libraries the user owns, sorted by name: case-insensitive and natural ("Client 2" before "Client 10"), an accented letter beside its base letter ("Émile" before "Zoo"). Names only, with the current Library checked. A separator, then "New library…" |
 | Picking a Library | A page load of that Library's Browse (`/r/<id>`), with Browse's defaults. Picking the current Library goes back to its Browse from anywhere, the way the Browse link did |
 | Long names | The trigger and the entries cut a long name with an ellipsis; the full name is the `title` |
 | Who creates | Admins only. "New library…" is rendered only for an Admin, and its routes refuse anyone else. The creator owns the new Library |
 | The dialog | A popover dialog, as Add album opens, anchored below the Browse cell and centered on it. Its title is "New library": one name field, Create and Cancel. Enter submits, Esc cancels, and focus returns to the trigger. Errors show under the field, and the values are kept |
 | Name normalization | Trim, collapse each run of whitespace to one space, then Unicode NFC. The name is stored that way |
-| Name validity | Required, 2 to 80 characters after normalization (`MIN_`/`MAX_REPOSITORY_NAME_LENGTH`), no control characters |
+| Name validity | Required, 2 to 80 characters after normalization (`MIN_`/`MAX_REPOSITORY_NAME_LENGTH`), no control characters: ISO controls, invisible format characters (Unicode `Cf`: zero-width spaces, bidirectional overrides and isolates, byte order marks, soft hyphens, tags) other than the two join controls (ZWJ for emoji sequences, ZWNJ for Persian and the Indic scripts), and unpaired surrogates |
 | Name uniqueness | Instance-wide: across every owner, compared lowercased after normalization. "Client  Smith" and "client smith" are the same name. The database enforces it, so two creates racing on one name leave one Library |
 | Error texts | "Enter a name for the library", "Use at least 2 characters", "Use at most 80 characters", "Remove the control characters", "A library named “<name>” already exists" |
 | After Create | The browser goes to the new Library's Import page (`/pipeline/r/<newId>`) |
-| Setup | The first Library's name follows the same normalization and validity rules. The form is otherwise unchanged |
+| Setup | The first Library's name follows the same normalization and validity rules, and its field sets no `minlength` or `maxlength`, as the dialog's does not. The form is otherwise unchanged |
 | Landing (login and `/`) | The account's last active Library, read from the database. Any full page load of a Library records it: the main page in any view, an asset's address, Import, Settings, the Style Guide. If it is missing or not owned, the user's first owned Library by name is used and recorded |
 | The login token | Stops carrying `lastActiveRepoId`, which went stale on the first switch |
 | Tabs | Each page's URL names its Library, so tabs are independent. The last tab loaded decides where the next login lands |
-| Browser tab title | The main page is "<Library> · Altitude". Import, Settings and the Style Guide are "<Page> · <Library> · Altitude". Setup is unchanged |
+| Browser tab title | The main page is "<Library> · Altitude". Import, Settings and the Style Guide are "<Page> · <Library> · Altitude". The name sits between U+2068 and U+2069, so a right-to-left name neither sets the title's direction nor reorders the text beside it. Setup is unchanged |
 | UI text | "in this repository" becomes "in this library", and so does every other user-facing "repository" |
 | Per-browser state | Unchanged. The map's remembered views are already keyed by the Library. The rest (theme, dock, View settings, People buckets, Curation switches) is preference that carries across Libraries |
 | Out of scope | Renaming and deleting a Library, membership and roles, the never-invalidated repository cache (nothing changes a cached Library yet), the user-wide import ticker (an Import page shows imports of the user's other Libraries running in other tabs), and a guard against leaving the Import page mid-upload (as today with any nav link) |
@@ -48,7 +48,8 @@ front-end code and docs, checked in the app.
 
 1. **Tests first (`RepositoryServiceTests`).**
    - A name is stored trimmed, with its whitespace collapsed and in NFC.
-   - Empty, one-character, 81-character and control-character names fail with a `ValidationException` naming the field.
+   - Empty, one-character, 81-character, control-character, format-character and unpaired-surrogate names fail with a
+     `ValidationException` naming the field; names holding a join control are accepted.
    - A second Library whose name differs only in case, spacing or Unicode composition fails with `DuplicateException`, whether
      its owner is the same Admin or another one.
    - Two transactions adding the same name concurrently leave exactly one Library (on PostgreSQL).
@@ -71,17 +72,21 @@ front-end code and docs, checked in the app.
      issued before the switch.
    - A last active Library that is missing, or owned by someone else, falls back to the first owned Library by name and is
      recorded. A login without a last active Library no longer fails with a 500.
-   - Each full page route records its Library, and a load of the Library already recorded writes nothing.
+   - Each full page route records its Library, and a load of the Library already recorded writes nothing and, on SQLite, does
+     not wait for the write connection. A page whose recording fails still answers 200.
 6. **Listing and landing (`RepositoryService`, `RepositoryDao`).** `getOwnedBy(account)` queries by `owner_account_id` and sorts
-   in Scala with a natural, case-insensitive comparator; there are only a few Libraries. `landingRepositoryOf(user)` replaces
+   in Scala with a natural comparator, which compares the text between numbers by the root locale's collation (case-insensitive,
+   accents beside their base letters); there are only a few Libraries. `landingRepositoryOf(user)` replaces
    `getDefaultRepository`, which assumed one Library.
 7. **The token and the redirects (`PasetoService`, `IndexController`, `SessionController`).** The `lastActiveRepoId` claim is
    dropped. `/`, the dev-user path and the login redirect use `landingRepositoryOf`, which removes the `.get`s on
    `lastActiveRepoId`.
-8. **Recording the last active Library (`UserService`, the page routes).** `rememberLastActiveRepository(user, repoId)` is one
-   conditional `UPDATE … WHERE last_active_repo_id IS DISTINCT FROM ?` on both engines. The `@rememberRepository` decorator runs
-   it on `IndexController` `repositoryView` and `assetView`, `ImportController.pipeline`, the Settings page and the Style Guide
-   page, when the page answers 200. Partials and API routes do not record it.
+8. **Recording the last active Library (`UserService`, the page routes).** `rememberLastActiveRepository(user, repoId)` reads
+   the recorded Library in a read-only transaction, and only when it differs runs one conditional
+   `UPDATE … WHERE last_active_repo_id IS DISTINCT FROM ?` on both engines in a write transaction. The `@rememberRepository`
+   decorator runs it on `IndexController` `repositoryView` and `assetView`, `ImportController.pipeline`, the Settings page and
+   the Style Guide page, when the page answers 200, and logs a failure at WARN without failing the page. Partials and API
+   routes do not record it.
 
 ### C. The New library dialog
 
@@ -108,12 +113,15 @@ front-end code and docs, checked in the app.
     - It has one option per owned Library: a `menuitemradio` that loads `/r/<id>`, with the current Library `aria-checked`. Then a
       separator and, for an Admin, the "New library…" dialog trigger, a plain `menuitem` that opens the popover dialog anchored
       to the trigger.
-    - The nav reload renders the same.
+    - The nav reload renders the host empty, by its ID and `hx-preserve`: htmx keeps the page's built host in its place, so
+      the reload reads no list.
 12. **The choice menu builder (`common/context-menu-markup.js`, `common/choice-menus.js`, `global.js`).**
     - `buildChoiceMenuCtrl` learns two option kinds: navigation options, which go to their `href` after closing the menu, and
       action options after a separator, which are not radios and keep their dialog-trigger behavior.
     - The nav's host is built on every page with a nav, and again after each nav reload swaps the nav's content. That reload
-      happens every 5 seconds on Import, so the open menu must survive it: no reload while the panel is `:popover-open`.
+      happens every 5 seconds on Import, so the open menu must survive it: no reload while the panel or the New library
+      dialog is `:popover-open`, since htmx's preserve keeps an open popover open only where the browser has
+      `Element.moveBefore`. A failed reload raises no snackbar (`data-app-silent-failure`).
 13. **Import gets the shared hosts (`pipeline.scala.html`, `upload-form-page.js`).** The page includes `html_common`, registers
     `registerHtmlCommonBindings` and starts Alpine, as Settings does, so the popover dialog and snackbar exist there.
 14. **Styles and the style guide (`core.css`, `style_guide.scala.html`).** The trigger's Library name is cut with an ellipsis to a

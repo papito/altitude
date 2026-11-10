@@ -243,7 +243,8 @@ import altitude.core.models.AccountType
      * Assertions:
      *
      * The main page is titled "Smith & Sons · Altitude", in any view, the import page "Import · Smith & Sons · Altitude" and the
-     * Settings page "Settings · Smith & Sons · Altitude".
+     * Settings page "Settings · Smith & Sons · Altitude", the name in each a first-strong isolate (U+2068 … U+2069), so a
+     * right-to-left name neither sets the title's direction nor reorders the text beside it.
      *
      * Edge cases:
      *
@@ -261,10 +262,12 @@ import altitude.core.models.AccountType
           """<title>([^<]*)</title>""".r.findFirstMatchIn(response.text()).map(_.group(1)).getOrElse("")
         }
 
-        title(s"r/$repoId") shouldBe "Smith &amp; Sons · Altitude"
-        title(s"r/$repoId", Map(Api.Field.Search.VIEW -> Const.Search.View.TRIAGE)) shouldBe "Smith &amp; Sons · Altitude"
-        title(s"pipeline/r/$repoId") shouldBe "Import · Smith &amp; Sons · Altitude"
-        title(s"settings/r/$repoId") shouldBe "Settings · Smith &amp; Sons · Altitude"
+        // The name between FIRST STRONG ISOLATE and POP DIRECTIONAL ISOLATE
+        val name = "\u2068Smith &amp; Sons\u2069"
+        title(s"r/$repoId") shouldBe s"$name · Altitude"
+        title(s"r/$repoId", Map(Api.Field.Search.VIEW -> Const.Search.View.TRIAGE)) shouldBe s"$name · Altitude"
+        title(s"pipeline/r/$repoId") shouldBe s"Import · $name · Altitude"
+        title(s"settings/r/$repoId") shouldBe s"Settings · $name · Altitude"
     }
   }
 
@@ -323,11 +326,11 @@ import altitude.core.models.AccountType
      *
      * Assertions:
      *
-     * On the main page of "client 2", its Import and Settings pages and a nav reload, the Browse cell holds the Browse choice
-     * menu (the database icon), which lists the Admin's Libraries by name, case-insensitively and naturally (Alpha, client 2,
-     * Client 10), each a link to its Library's main page titled with its name, with "client 2" alone checked; then a separator
-     * and "New library…", which requests the New library dialog of "client 2" into the popover dialog host. The main page's
-     * Browse cell keeps `aria-current="page"`.
+     * On the main page of "client 2", its Import and Settings pages, the Browse cell holds the Browse choice menu (the database
+     * icon), which lists the Admin's Libraries by name, case-insensitively and naturally (Alpha, client 2, Client 10), each a
+     * link to its Library's main page titled with its name, with "client 2" alone checked; then a separator and "New library…",
+     * which requests the New library dialog of "client 2" into the popover dialog host. The main page's Browse cell keeps
+     * `aria-current="page"`.
      *
      * Edge cases:
      *
@@ -353,7 +356,7 @@ import altitude.core.models.AccountType
         val mainPage = get(s"r/$repoId")
         mainPage should include("""<div class="menu repository" aria-current="page">""")
 
-        for (page <- List(mainPage, get(s"pipeline/r/$repoId"), get(s"settings/r/$repoId"), get(s"htmx/nav/r/$repoId"))) {
+        for (page <- List(mainPage, get(s"pipeline/r/$repoId"), get(s"settings/r/$repoId"))) {
           val menu = browseMenu(page)
           menu should include("""data-choice-menu-icon="fas fa-database"""")
           browseMenuOptions(page) shouldBe List(
@@ -378,20 +381,49 @@ import altitude.core.models.AccountType
      *
      * Assertions:
      *
-     * The main page and a nav reload list the Library, checked, in the Browse menu, with no separator and no New library entry.
+     * The main page lists the Library, checked, in the Browse menu, with no separator and no New library entry.
      */
     val repoId = loginAs(AccountType.User)
     val name = testContext.repository.name
 
     withServer(App) {
       host =>
-        for (path <- List(s"r/$repoId", s"htmx/nav/r/$repoId")) {
-          val page = requests.get(s"$host/$path", cookies = testContext.cookies, check = false).text()
-          browseMenuOptions(page) shouldBe List((s"/r/$repoId", name, true))
-          browseMenu(page).contains("<hr>") shouldBe false
-          page.contains(Const.UI.NEW_LIBRARY_OPTION) shouldBe false
-          page.contains("/dialogs/new") shouldBe false
-        }
+        val page = requests.get(s"$host/r/$repoId", cookies = testContext.cookies, check = false).text()
+        browseMenuOptions(page) shouldBe List((s"/r/$repoId", name, true))
+        browseMenu(page).contains("<hr>") shouldBe false
+        page.contains(Const.UI.NEW_LIBRARY_OPTION) shouldBe false
+        page.contains("/dialogs/new") shouldBe false
+    }
+  }
+
+  test("A nav reload renders the Browse menu's host empty, for the page's built one to take its place") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in Admin with two Libraries.
+     *
+     * Assertions:
+     *
+     * A nav reload's Browse cell holds the Browse menu's host by its ID, `hx-preserve` and empty: no Library, no choice menu
+     * attributes and no New library entry, since htmx keeps the page's built host in its place and drops the one the reload
+     * carries.
+     */
+    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val repoId = addLibrary("Library A", admin).persistedId
+    addLibrary("Library B", admin)
+    login()
+
+    withServer(App) {
+      host =>
+        val response = requests.get(s"$host/htmx/nav/r/$repoId", cookies = testContext.cookies, check = false)
+        response.statusCode shouldBe 200
+        val nav = response.text()
+        val emptyHost = """<div class="menu repository">\s*<div id="libraryMenuHost" hx-preserve></div>\s*</div>""".r
+        emptyHost.findFirstIn(nav).isDefined shouldBe true
+        nav.contains("data-choice-menu") shouldBe false
+        nav.contains("Library A") shouldBe false
+        nav.contains(Const.UI.NEW_LIBRARY_OPTION) shouldBe false
     }
   }
 
@@ -535,5 +567,40 @@ import altitude.core.models.AccountType
         accountWritten(admin) shouldBe false
         lastActiveRepoIdOf(admin) shouldBe Some(b.persistedId)
     }
+  }
+
+  test("A full page of a Library answers though recording it as the last active one fails") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user with Libraries A and B, B recorded as the last active one, and a trigger on the account table that refuses
+     * every update, so recording A fails.
+     *
+     * Assertions:
+     *
+     * A's main page and its Import page answer 200, and B stays recorded.
+     */
+    val user = testContext.persistUser()
+    val a = addLibrary("Library A", user)
+    val b = addLibrary("Library B", user)
+    testApp.service.user.rememberLastActiveRepository(user, b.persistedId)
+    login()
+
+    def ddl(sql: String): Unit = testApp.txManager.withTransaction(testApp.DAO.user.updateByBySql(sql, Nil): Unit)
+    ddl("CREATE TRIGGER refuse_account_update BEFORE UPDATE ON account BEGIN SELECT RAISE(ABORT, 'refused'); END")
+
+    try
+      withServer(App) {
+        host =>
+          for (path <- List(s"r/${a.persistedId}", s"pipeline/r/${a.persistedId}")) {
+            withClue(s"[$path]: ") {
+              requests.get(s"$host/$path", cookies = testContext.cookies, check = false).statusCode shouldBe 200
+            }
+          }
+      }
+    finally ddl("DROP TRIGGER refuse_account_update")
+
+    lastActiveRepoIdOf(user) shouldBe Some(b.persistedId)
   }
 }

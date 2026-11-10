@@ -217,5 +217,43 @@ import altitude.core.util.Util
         writer.join()
       }
     }
+
+    test("Remembering the Library recorded already does not wait for the SQLite write connection") {
+
+      /**
+       * Setup:
+       *
+       * A User whose last active Library is the common setup's, and a write transaction on a thread of its own that holds
+       * SQLite's single write connection until the test releases it.
+       *
+       * Assertions:
+       *
+       * While the write connection is held, remembering the recorded Library again completes within a few seconds and reports no
+       * write, since it only reads the account to find there is nothing to write.
+       */
+      val user: User = testContext.persistUser()
+      val repoId = testContext.repository.persistedId
+      testApp.service.user.rememberLastActiveRepository(user, repoId) shouldBe true
+
+      val writing = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+      // A write transaction on a thread of its own holds the one write connection until released
+      val writer = new Thread(
+        () =>
+          testApp.txManager.withTransaction {
+            writing.countDown()
+            release.await(30, TimeUnit.SECONDS): Unit
+          })
+      writer.start()
+
+      try {
+        writing.await(5, TimeUnit.SECONDS) shouldEqual true
+        val remember = Future(testApp.service.user.rememberLastActiveRepository(user, repoId))
+        Await.result(remember, 5.seconds) shouldBe false
+      } finally {
+        release.countDown()
+        writer.join()
+      }
+    }
   }
 }

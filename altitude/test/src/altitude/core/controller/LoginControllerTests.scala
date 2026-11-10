@@ -43,7 +43,7 @@ import altitude.core.App
         )
 
         indexResponse.statusCode shouldBe 200
-        indexResponse.text() should include(s"<title>${testContext.repository.name} · Altitude</title>")
+        indexResponse.text() should include(s"<title>\u2068${testContext.repository.name}\u2069 · Altitude</title>")
     }
   }
 

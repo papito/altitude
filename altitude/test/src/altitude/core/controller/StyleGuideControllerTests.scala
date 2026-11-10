@@ -282,7 +282,7 @@ object DevApp extends cask.Main:
      *
      * Assertions:
      *
-     * The page is titled "Style Guide · Smith & Sons · Altitude", the name HTML-escaped.
+     * The page is titled "Style Guide · Smith & Sons · Altitude", the name HTML-escaped and between U+2068 and U+2069.
      */
     val user = testContext.persistUser()
     val repoId = addLibrary("Smith & Sons", user).persistedId
@@ -293,7 +293,7 @@ object DevApp extends cask.Main:
         val page = requests.get(s"$host/style-guide/r/$repoId", cookies = testContext.cookies, check = false)
 
         page.statusCode shouldBe 200
-        page.text() should include("<title>Style Guide · Smith &amp; Sons · Altitude</title>")
+        page.text() should include("<title>Style Guide · \u2068Smith &amp; Sons\u2069 · Altitude</title>")
     }
   }
 

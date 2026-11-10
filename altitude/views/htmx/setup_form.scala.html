@@ -17,9 +17,7 @@
         name="@{ Api.Field.Setup.REPOSITORY_NAME }"
         placeholder="Library name"
         value='@{ formJson.obj.get(Api.Field.Setup.REPOSITORY_NAME).flatMap(_.strOpt).getOrElse("Personal") }'
-        autocomplete="off"
-        minlength="@{ Api.Constraints.MIN_REPOSITORY_NAME_LENGTH }"
-        maxlength="@{ Api.Constraints.MAX_REPOSITORY_NAME_LENGTH }"/>
+        autocomplete="off"/>
         @if(fieldErrors.contains(Api.Field.Setup.REPOSITORY_NAME)) {
             <div class="error">@{ fieldErrors(Api.Field.Setup.REPOSITORY_NAME) }</div>
         }

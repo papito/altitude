@@ -63,4 +63,79 @@ import altitude.core.util.NaturalOrder
     (NaturalOrder.compare("Smith", "smith") != 0) shouldBe true
     NaturalOrder.compare("Same 1", "Same 1") shouldBe 0
   }
+
+  test("Accented letters sort beside their base letters") {
+
+    /**
+     * Setup:
+     *
+     * Names starting with accented and unaccented letters in mixed case, and names that differ only in an accent or in case,
+     * shuffled.
+     *
+     * Assertions:
+     *
+     * An accented letter sorts with its base letter, not after "Z": "Émile" comes before "Zoo" and "Öland" before "Oz", and of
+     * names that differ only in an accent, the unaccented one comes first, whatever the case.
+     */
+    val expected = List(
+      "Eclair",
+      "éclair",
+      "emile",
+      "Émile",
+      "Öland",
+      "Oz",
+      "Zoo"
+    )
+
+    Random.shuffle(expected).sorted(using NaturalOrder) shouldBe expected
+  }
+
+  test("The order is total and transitive across numbers, punctuation, accents, other scripts and digits of other kinds") {
+
+    /**
+     * Setup:
+     *
+     * Names mixing numbers of several lengths with punctuation, accented and other-script letters, superscript and Arabic-Indic
+     * digits (which are not numbers to the order), and names that differ only in case.
+     *
+     * Assertions:
+     *
+     * For every pair, the comparison is antisymmetric and zero only for equal names, and for every triple it is transitive, so a
+     * sort of any list of names cannot fail or depend on the input order.
+     */
+    val names = List(
+      "9",
+      "10",
+      "\u00B2",
+      "\u00BD",
+      "\u0663",
+      "(draft)",
+      "-a",
+      "~x",
+      "a",
+      "A",
+      "\u00C9mile",
+      "emile",
+      "Client 2",
+      "Client \u00B2",
+      "Client 10",
+      "Client",
+      "\u05E9\u05DC\u05D5\u05DD 2",
+      "\u0436"
+    )
+
+    def sign(a: String, b: String): Int = Integer.signum(NaturalOrder.compare(a, b))
+
+    for (a <- names; b <- names) {
+      withClue(s"[$a] [$b]: ") {
+        sign(a, b) shouldBe -sign(b, a)
+        (sign(a, b) == 0) shouldBe (a == b)
+      }
+    }
+    for (a <- names; b <- names; c <- names if sign(a, b) < 0 && sign(b, c) < 0) {
+      withClue(s"[$a] < [$b] < [$c]: ") {
+        sign(a, c) shouldBe -1
+      }
+    }
+  }
 }

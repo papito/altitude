@@ -7,24 +7,32 @@
 @import altitude.core.RequestContext
 
 @* `current` is the entry of the page shown (a `Const.NavEntry` key), which carries `aria-current="page"`; a nav reload
-   passes it again. *@
-@(stats: Stats = Stats(List()), repoId: String = RequestContext.getRepository.persistedId, current: String = "")
+   passes it again. `reload` is a nav reload's (NavController), which renders the Browse menu's host empty (below). *@
+@(stats: Stats = Stats(List()), repoId: String = RequestContext.getRepository.persistedId, current: String = "", reload: Boolean = false)
 
 @currentAttr(entry: String) = {@if(entry == current){ aria-current="page"}}
 
 @* Every nav is rendered behind a login, so the account is always here *@
 @isAdmin = @{ RequestContext.getAccount.accountType == AccountType.Admin }
 
+@libraryMenuHostId = @{ "libraryMenuHost" }
+
 <div class="brand">
     <a href="/"><i class="fas fa-chevron-up"></i><span>Altitude</span></a>
 </div>
-@* The whole cell is the Browse menu's trigger: the account's Libraries, and New library for an Admin *@
+@* The whole cell is the Browse menu's trigger: the account's Libraries, and New library for an Admin. A nav reload renders
+   the host empty, by its ID and `hx-preserve`: htmx swaps the page's built host back in for it, so a list would be read for
+   nothing. *@
 <div class="menu repository"@currentAttr(Const.NavEntry.BROWSE)>
+    @if(reload) {
+    <div id="@libraryMenuHostId" hx-preserve></div>
+    } else {
     @includes.html.library_menu(
-        hostId = "libraryMenuHost",
+        hostId = libraryMenuHostId,
         libraries = App.altitude.service.repository.getOwnedBy(RequestContext.getAccount),
         currentId = repoId,
         newLibraryDialogUrl = Option.when(isAdmin)(s"/htmx/library/r/$repoId/dialogs/new"))
+    }
 </div>
 
 @* The quick search is on every page. Where js/search-results/search-input.js binds it (the main page), Enter searches

@@ -19,9 +19,10 @@ import { registerHtmlCommonBindings } from "./stores/html-common.js"
  *   wiring (`listeners/dialogs.js`: the open requests, the operations dialogs submit, the popover
  *   dialog host's dismissals);
  * - the hydration of what a swap inserts, which on these pages is a dialog (`modal` fragments)
- *   or a choice menu host: the nav's, built here with the page. A nav reload keeps the built
- *   host, `hx-preserve` (`includes/library_menu`), so an open menu, or a dialog anchored to its
- *   trigger, survives the Import page's polling reload.
+ *   or a choice menu host: the nav's, built here with the page. A nav reload carries the host
+ *   empty and keeps the built one, `hx-preserve` (`includes/library_menu`); the Import page's
+ *   polling reload skips a tick while the menu or the dialog is open, since without
+ *   `Element.moveBefore` htmx's move would close it.
  *
  * Returns the minimal app handed to those listeners, for a page's own listeners to dispatch with.
  */

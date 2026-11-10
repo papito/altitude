@@ -42,13 +42,16 @@
     @* The snackbar and the dialog hosts, for the New library dialog of the nav's Browse menu (js/nav-page.js) *@
     @includes.html.html_common()
 
-    @* Keeps the nav counts fresh while imports run, only while the page is visible; `current` keeps this page's entry marked.
-       The Browse menu's host is `hx-preserve` (includes/library_menu), so the reload leaves its open panel, and the New library
-       dialog anchored to its trigger, in place *@
+    @* Keeps the nav counts fresh while imports run; `current` keeps this page's entry marked. The filter (htmx 4 reads it
+       after the event's name) skips a tick while the page is hidden, and while the nav's Browse menu or the New library
+       dialog is open: the Browse menu's host is `hx-preserve` (includes/library_menu), which keeps an open panel open only
+       where the browser has `moveBefore`. A failed tick is not reported (`data-app-silent-failure`): the next one tries
+       again, and a server answering 5xx while it restarts would otherwise raise an error every 5 s *@
     <div hx-get="/htmx/nav/r/@{RequestContext.getRepository.persistedId}?current=@{Const.NavEntry.IMPORT}"
-         hx-trigger="every 5s [document.visibilityState === 'visible']"
+         hx-trigger="every[document.visibilityState === 'visible' && !document.querySelector('nav .context-menu:popover-open, #popoverDialog:popover-open')] 5s"
          hx-target="nav"
-         hx-swap="innerHTML"></div>
+         hx-swap="innerHTML"
+         data-app-silent-failure></div>
 
     <script src="/static/js/lib/hx-ws.js" defer></script>
     <script type="module" src="/static/js/upload-form-page.js"></script>
