@@ -91,7 +91,7 @@ Login rate limiting is under [Identity and access](#identity-and-access).
 
 ### Permissions
 
-As built, each repository has one owner (`repository.owner_account_id` in [all.sql]) and there is no membership table. `AccountType` is Admin, User or Guest and gates only the Settings screen. Today the app has one user and one repository, so the cross-repository holes below become reachable only once a second account exists.
+As built, each repository has one owner (`repository.owner_account_id` in [all.sql]) and there is no membership table. `AccountType` is Admin, User or Guest and gates only the Settings screen and the creation of a Library. An Admin may own several Libraries, creating them from the nav's Browse menu ([LibraryActionController]), but the app has one account, so the cross-repository holes below become reachable only once a second account exists.
 
 - ✅ One login and ownership gate for `/r/:repoId` ([decorators] `requireLogin`, `ownedRepositoryOnly`); a foreign repository answers the same 404 as a missing one. The request context is cleared on pooled threads ([decorators] `repoContext`).
 - ✅ Routes without login are deliberate: `/`, `/login`, `/logout`, `/api/logout`, `/setup`, `/htmx/setup` (refused once initialized), `/api/health`, `/static/` and `/assets/:name`. The exception is the import-status WebSocket below.
@@ -216,12 +216,12 @@ Accepted uploads lost on restart are under [Running and upgrading](#running-and-
   - Fix: an Admin Users screen (create, disable through `disabled_at`, reset, set role) and a self-service password change, both on server-side sessions so they take effect at once.
 - ✅ Emails are unique case-insensitively (`account_01` on `lower(email)`), tested. The role column and its CHECK exist.
 - ✅ `requireAdmin` is correct and tested ([decorators] `requireAdmin`, [SettingsControllerTests]).
-- [ ] Roles grant nothing different. `AccountType` is Admin, User or Guest ([AccountType]), and only setup assigns one ([SetupFormController]). `requireAdmin` guards only the Settings page, its form and the nav link; nothing else reads `accountType`, so a Guest can upload, recycle and purge like anyone else. A role change would wait for the token to expire. [MEDIUM]
+- [ ] Roles grant nothing different. `AccountType` is Admin, User or Guest ([AccountType]), and only setup assigns one ([SetupFormController]). `requireAdmin` guards only the Settings page, its form and the nav link, and the New library dialog and its save ([LibraryActionController]), whose Browse menu entry the nav renders for an Admin alone; nothing else reads `accountType`, so a Guest can upload, recycle and purge like anyone else. A role change would wait for the token to expire. [MEDIUM]
 - [ ] A repository cannot be shared: access is ownership alone ([decorators] `ownedRepositoryOnly`), so nobody can see who has access. [MEDIUM]
   - Fix: `repository_member(repository_id, account_id, role)` with View, Edit and Admin, enforced where `ownedRepositoryOnly` checks today, with last-admin and self-demotion guards; Guest removed or defined as View.
 - [ ] Deleting an account deletes its library. `owner_account_id … ON DELETE CASCADE` ([all.sql]), and 12 tables cascade from `repository`, so deleting an account row wipes every repository it owns and leaves its files orphaned on disk. Nothing documents this. [HIGH]
   - Fix: the owner foreign key as `RESTRICT`, with deletion requiring a transfer or archive first.
-- [ ] A second user would hit two latent failures: a 500 at login without `last_active_repo_id` (the `.get` in [SessionController]), and a redirect to the first repository, which they do not own ([IndexController]; [RepositoryService] `getDefaultRepository` assumes there is one repository). [LOW]
+- ✅ A second account lands in a Library of its own. Login and `/` open the account's last active Library, read from the database (the token carries none), while the account owns it, and otherwise the first Library it owns by name, which is recorded ([RepositoryService] `landingRepositoryOf`, [SessionController], [IndexController]). An account that owns no Library is answered a plain-text 404, "There is no library to open", not a 500; only an Admin creates a Library, for themselves, so such an account stays there until a Library can be shared with it (above).
 - [ ] `User.forgetMe` is a leftover `println` stub ([User]). [LOW]
 
 ### Sharing with clients
@@ -441,6 +441,7 @@ Entries leave this list when their items close.
 [PeopleActionController]: ../altitude/src/altitude/core/routes/web/partial/PeopleActionController.scala
 [SearchResultsController]: ../altitude/src/altitude/core/routes/web/partial/SearchResultsController.scala
 [SetupFormController]: ../altitude/src/altitude/core/routes/web/partial/SetupFormController.scala
+[LibraryActionController]: ../altitude/src/altitude/core/routes/web/partial/LibraryActionController.scala
 [AlbumService]: ../altitude/src/altitude/core/service/AlbumService.scala
 [AssetService]: ../altitude/src/altitude/core/service/AssetService.scala
 [BaseService]: ../altitude/src/altitude/core/service/BaseService.scala

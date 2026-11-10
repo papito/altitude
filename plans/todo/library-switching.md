@@ -79,9 +79,9 @@ front-end code and docs, checked in the app.
    dropped. `/`, the dev-user path and the login redirect use `landingRepositoryOf`, which removes the `.get`s on
    `lastActiveRepoId`.
 8. **Recording the last active Library (`UserService`, the page routes).** `rememberLastActiveRepository(user, repoId)` is one
-   conditional `UPDATE … WHERE last_active_repo_id IS DISTINCT FROM ?` (`IS NOT` on SQLite). It runs from `IndexController`
-   `repositoryView` and `assetView`, `ImportController.pipeline`, the Settings page and the Style Guide page. Partials and API
-   routes do not record it.
+   conditional `UPDATE … WHERE last_active_repo_id IS DISTINCT FROM ?` on both engines. The `@rememberRepository` decorator runs
+   it on `IndexController` `repositoryView` and `assetView`, `ImportController.pipeline`, the Settings page and the Style Guide
+   page, when the page answers 200. Partials and API routes do not record it.
 
 ### C. The New library dialog
 

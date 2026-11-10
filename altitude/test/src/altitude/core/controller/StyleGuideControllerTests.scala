@@ -273,6 +273,30 @@ object DevApp extends cask.Main:
     }
   }
 
+  test("The style guide page's browser tab title names the page and its Library") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user with the Library "Smith & Sons", and the app as it is in dev.
+     *
+     * Assertions:
+     *
+     * The page is titled "Style Guide · Smith & Sons · Altitude", the name HTML-escaped.
+     */
+    val user = testContext.persistUser()
+    val repoId = addLibrary("Smith & Sons", user).persistedId
+    login()
+
+    withServer(DevApp) {
+      host =>
+        val page = requests.get(s"$host/style-guide/r/$repoId", cookies = testContext.cookies, check = false)
+
+        page.statusCode shouldBe 200
+        page.text() should include("<title>Style Guide · Smith &amp; Sons · Altitude</title>")
+    }
+  }
+
   test("The style guide page records its Library as the last active one, and a reload writes nothing") {
 
     /**

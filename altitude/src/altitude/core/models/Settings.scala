@@ -431,7 +431,7 @@ object Settings:
       Operations,
       "Import parallelism",
       "How many threads do the import's work: metadata, face detection and recognition, image measurement, previews and the " +
-        "database writes, for every repository at once. Each thread takes up to about 512 MB of native memory at its worst, " +
+        "database writes, for every library at once. Each thread takes up to about 512 MB of native memory at its worst, " +
         "for its own face detector and the decode of a large image in flight, and the threads share one face recognition " +
         "network of about 370 MB and the two Scene models of about 1 GB together, so this bounds memory as well as CPU. 0 " +
         "means half the cores or as many threads as " +

@@ -18,7 +18,8 @@ import altitude.core.App
      *
      * Assertions:
      *
-     * Logging in with the user's email and password redirects, and the session cookie it sets opens the repository's main page.
+     * Logging in with the user's email and password redirects, and the session cookie it sets opens the repository's main page,
+     * titled with its name.
      */
     testContext.persistRepository()
     testApp.app.isInitialized = true
@@ -42,7 +43,7 @@ import altitude.core.App
         )
 
         indexResponse.statusCode shouldBe 200
-        indexResponse.text() should include("<title>ALTITUDE</title>")
+        indexResponse.text() should include(s"<title>${testContext.repository.name} · Altitude</title>")
     }
   }
 

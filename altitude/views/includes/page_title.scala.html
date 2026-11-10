@@ -1,0 +1,7 @@
+@import altitude.core.RequestContext
+
+@* The browser tab title of a page of a Library: "<page> · <Library> · Altitude", or "<Library> · Altitude" on the main page,
+   which passes no `page`. The Library is the request's, so each tab names its own. *@
+@(page: Option[String] = None)
+
+<title>@for(name <- page){@name · }@{ RequestContext.getRepository.name } · Altitude</title>

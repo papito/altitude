@@ -3,8 +3,9 @@ package altitude.core.controller
 import altitude.test.TestContext
 import java.net.URLEncoder
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ be, include, should, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ be, include, should, shouldBe, startWith }
 
+import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.models.AccountType
@@ -229,6 +230,73 @@ import altitude.core.models.AccountType
         current(get(s"settings/r/$repoId")) shouldBe Some("settings")
         current(get(s"htmx/nav/r/$repoId", Map("current" -> "trashbin"))) shouldBe Some("trashbin")
         current(get(s"htmx/nav/r/$repoId")) shouldBe None
+    }
+  }
+
+  test("Each page's browser tab title names its Library: alone on the main page, after the page's name elsewhere") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in Admin (so the Settings page answers) with the Library "Smith & Sons".
+     *
+     * Assertions:
+     *
+     * The main page is titled "Smith & Sons · Altitude", in any view, the import page "Import · Smith & Sons · Altitude" and the
+     * Settings page "Settings · Smith & Sons · Altitude".
+     *
+     * Edge cases:
+     *
+     * The name is HTML-escaped in the title.
+     */
+    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val repoId = addLibrary("Smith & Sons", admin).persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        def title(path: String, params: Map[String, String] = Map.empty): String = {
+          val response = requests.get(s"$host/$path", params = params, cookies = testContext.cookies, check = false)
+          response.statusCode shouldBe 200
+          """<title>([^<]*)</title>""".r.findFirstMatchIn(response.text()).map(_.group(1)).getOrElse("")
+        }
+
+        title(s"r/$repoId") shouldBe "Smith &amp; Sons · Altitude"
+        title(s"r/$repoId", Map(Api.Field.Search.VIEW -> Const.Search.View.TRIAGE)) shouldBe "Smith &amp; Sons · Altitude"
+        title(s"pipeline/r/$repoId") shouldBe "Import · Smith &amp; Sons · Altitude"
+        title(s"settings/r/$repoId") shouldBe "Settings · Smith &amp; Sons · Altitude"
+    }
+  }
+
+  test("A Library that does not exist or is another user's is a plain-text Library not found, and JSON for an API request") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's Library, and another user's Library.
+     *
+     * Assertions:
+     *
+     * The main page of the other user's Library and of a Library ID that names none answer the same plain-text 404, "Library not
+     * found"; an API request for either is the JSON 404 of a foreign entity.
+     */
+    testContext.persistRepository()
+    login()
+    val stranger = testApp.service.user.add(testContext.makeUser(), TestContext.USER_PASSWORD)
+    val strangersRepo = addLibrary("Stranger's library", stranger)
+
+    withServer(App) {
+      host =>
+        for (repoId <- List(strangersRepo.persistedId, java.util.UUID.randomUUID().toString)) {
+          val page = requests.get(s"$host/r/$repoId", cookies = testContext.cookies, check = false)
+          page.statusCode shouldBe 404
+          page.contentType.head should startWith("text/plain")
+          page.text() shouldBe Const.Msg.Err.LIBRARY_NOT_FOUND
+
+          val api = requests.get(s"$host/api/album/r/$repoId/list", cookies = testContext.cookies, check = false)
+          api.statusCode shouldBe 404
+          api.contentType.head should startWith("application/json")
+        }
     }
   }
 

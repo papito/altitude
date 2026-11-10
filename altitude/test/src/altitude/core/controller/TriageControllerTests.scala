@@ -297,9 +297,9 @@ import altitude.core.util.TriageSubset
      *
      * Assertions:
      *
-     * Trips' scope dialog is a popover dialog fragment titled "Trips", reading "This folder has 3 results in the repository",
-     * with "Show in new tab", a link opening Browse scoped to the folder in a new tab, "Quick view", a button that loads Quick
-     * view into the general modal host, and Close.
+     * Trips' scope dialog is a popover dialog fragment titled "Trips", reading "This folder has 3 results in the library", with
+     * "Show in new tab", a link opening Browse scoped to the folder in a new tab, "Quick view", a button that loads Quick view
+     * into the general modal host, and Close.
      *
      * Edge cases:
      *
@@ -325,7 +325,7 @@ import altitude.core.util.TriageSubset
         val page = response.text()
         page should include("""data-app-fragment="modal"""")
         page should include("""data-app-modal-title="Trips"""")
-        plain(page) should include("This folder has 3 results in the repository")
+        plain(page) should include("This folder has 3 results in the library")
         page should include(s"""href="/r/$repoId?folderId=${trips.persistedId}" target="_blank" rel="noopener"""")
         linkText(page, "target=\"_blank\"") shouldBe Some("Show in new tab")
         page should include(s"""hx-get="/htmx/triage/r/$repoId/modals/quick-view"""")

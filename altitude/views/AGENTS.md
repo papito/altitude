@@ -35,12 +35,25 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 ```
 views/
   *.scala.html          ← full pages (index, login, setup, pipeline, settings, style_guide)
-  includes/             ← reusable layout fragments (nav, header, batch ops, search results, results title)
+  includes/             ← reusable layout fragments (nav, the nav's Browse menu, page title, header, batch ops, search results, results title)
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
 Full pages include `@includes.html.html_common()` (provides the snackbar's two stacks and its announcers, the tooltip's host, and the four dialog hosts)
 and `@includes.html.header_common()` (loads HTMX, Alpine, the stylesheet bundle).
+
+A page of a Library titles its browser tab with `@includes.html.page_title(page)`: "<Library> · Altitude" on the main
+page (`index`, which passes no `page`), and "Import · <Library> · Altitude", "Settings · <Library> · Altitude" and
+"Style Guide · <Library> · Altitude" on the others. The Library is the request's (`RequestContext.getRepository.name`,
+escaped by Twirl), so each tab names its own; setup keeps its own title.
+
+Import (`pipeline.scala.html`) and Settings (`settings.scala.html`) carry the nav outside the main app. Each includes
+`html_common`, for the snackbar and the popover dialog host the nav's New library dialog opens into, and
+`lib/json-enc.js`, since that dialog posts JSON, and its page module (`js/upload-form-page.js`, `js/settings-page.js`)
+starts with `startNavPage()` of `js/nav-page.js`: Alpine with what `html_common` binds and the `contextMenu` component,
+the htmx request rule and the dialog wiring (`js/listeners/dialogs.js`) over a minimal app, whose hydration is the
+`modal` fragments and the choice menus, and the nav's Browse menu, built before Alpine starts. The import page's polling
+nav reload leaves that menu in place (**Nav refresh**).
 
 HTMX partial templates live in `views/htmx/`. They are returned by the `routes/web/partial/**`
 controllers as `"<!doctype html>" + template(...)`. They carry no `<style>`: a partial's styles are in
@@ -645,6 +658,20 @@ is built, `core.css` hides its options, separator and actions (`[data-choice-men
 unbuilt host has them as direct children), so the page's Dock side menu shows nothing before the deferred modules run; a `.glyph` also carries
 `width`/`height="16"`, its symbols' `viewBox`, so an unstyled one never draws at the SVG default of 300×150.
 
+A choice menu's options may be links rather than search triggers, and the menu may end with actions: the nav's Browse
+menu (`includes/library_menu`, see **Nav**) is the one such menu. A link option (`a[href]`) becomes a `menuitemradio` as a
+button does; picking it closes the menu and the browser follows the link. The trigger also takes the checked option's
+`title`, so a choice cut short is read whole on hover. A separator, an `hr` among the host's children, ends the
+options: it moves into the panel as it is, and each element after it is an action, a plain `menuitem` that is never
+checked and carries its own `hx-get` into `#popoverContent`; `buildChoiceMenuCtrl` gives it `data-app-dialog-anchor`
+naming the trigger, so its popover dialog opens below the trigger, centered on it, and focus returns to the trigger,
+as from a ⋯ menu's action (`openerOf`). `data-choice-menu-trigger-class` replaces the trigger's class, `action-button
+small` by default (the nav's is `nav-menu-trigger`, the look of a nav entry). The component's actions are the panel's
+`.actions` buttons and links, so the keys below move over the options and the actions alike, past the separator, and
+Space follows a focused link as Enter does. `core.css` draws a link option as it draws a button option
+(`.context-menu .actions :is(button, a)`, no underline), and the separator as a `--border-hairline` in
+`--popover-border-color`, `--space-2` above and below.
+
 A menu opens on its checked action, else its first (`focusInitialAction`, on `toggle`; View settings has no actions
 and keeps the focus its dialog hydrator sets); Down and Up move through the actions, wrapping, Home and End jump
 (`handleKeydown` on the panel), Enter and Space are the button's own, and no type-ahead exists.
@@ -999,7 +1026,7 @@ buttons that wraps in a narrow popover, `--space-5` below the sentence and `--sp
 
 | Clicked | It says | Buttons |
 |---|---|---|
-| A folder | "This folder has X results in the repository", X its Browse count: the folder and its subfolders, without triaged or recycled assets | Show in new tab, Quick view, Close |
+| A folder | "This folder has X results in the library", X its Browse count: the folder and its subfolders, without triaged or recycled assets | Show in new tab, Quick view, Close |
 | An empty folder | "This folder has no assets" | Close |
 | A Person with no triaged assets | "This person has no assets assigned in Triage" | Show person in new tab, Close |
 | A Location with no triaged assets | "This Location has no assets in Triage" | Show Location in new tab, Close |
@@ -1111,6 +1138,20 @@ opener; for a menu action the modal owner remembers the visible ⋯ trigger. Re-
 preserves that original return control and leaves the popover where it is. Escape, the host's ×, an outside click
 and Tab out of the popover dismiss the dialog; Escape and the × return focus as above, while an outside click and
 Tab leave it where they put it.
+
+**New library dialog** — `htmx/new_library_dialog.scala.html` (`#newLibrary`, `static/css/htmx/new_library_dialog.css`) is
+an Admin's dialog, opened by the Browse menu's "New library…" action (`Const.UI.NEW_LIBRARY_OPTION`) into the popover
+host, below the nav's Browse trigger and centered on it, and titled "New library" (`Const.UI.NEW_LIBRARY_DIALOG_TITLE`).
+Like the explorer's Add dialogs it declares `data-app-fragment="modal"`, holds one field with no label (the placeholder
+and `aria-label` "Library name"), which it focuses (`data-app-dialog-autofocus-selector`), and posts JSON with
+`hx-target="this"`, `hx-swap="none"` and `hx-json-enc`, to `POST /htmx/library/r/:repoId/new` (`LibraryActionController`,
+**Libraries** in `altitude/AGENTS.md`). Its actions are Create, the submit, so Return creates too, and Cancel
+(`$store.modal.close()`, through the form's bare `x-data`, since the popover host has none); Escape, the host's × and
+an outside click dismiss it as above, and focus returns to the trigger. The field sets no `minlength` or `maxlength`:
+the Library name rule counts the name normalized, its whitespace collapsed, which the browser cannot, so every error
+is the server's. A refused name comes back as the validation replacement, the form with the typed name and the error
+under the field, and a created Library answers with `HX-Redirect` to its Import page, a full page load. The form posts
+to `postUrl`, the create route everywhere but the style guide's sample (**Style guide**).
 
 **Inline dialogs** — Only View settings uses `js/fragments/inline-dialog.js`, which gives it initial
 focus. It is two columns (`htmx/view_settings_dialog.scala.html`, `static/css/htmx/view_settings_dialog.css`): on the
@@ -1306,7 +1347,7 @@ does not show through it while it sticks). The scopes:
   "No Location" under `fa-map-marker-alt slashed`, the marker struck through: `.results-title .kind-icon.slashed` is
   `position: relative`, and its `::after` lays Font Awesome's own slash glyph (`fa-slash`, `\f715`, made to be laid over
   another icon) centered over it, since the free set has no slashed marker; no subtitle
-- the **Search text** (`.query`, in curly quotes drawn by CSS) with "in this repository" as the subtitle
+- the **Search text** (`.query`, in curly quotes drawn by CSS) with "in this library" as the subtitle
 
 The way back is the `.clear-scope` × after the title: a search trigger carrying an empty `personId`, which the store's scope
 rules (see **Search parameters**) widen to clearing every place, a folder, an album, a Location or a Triage subset alike,
@@ -2190,6 +2231,23 @@ its whole cell the target, icon only with the accessible name "Toggle light and 
 icon from `data-theme` on `<html>`, so a nav reload needs no client step, and the one delegated click in `global.js` (`[data-app-theme-switch]`)
 works on every page, those without Alpine included. See **Themes**.
 
+The Browse cell (`.menu.repository`, marked while Browse is shown) is the whole trigger of the **Browse menu**, the choice
+menu of the account's Libraries: `includes/nav` renders `includes/library_menu` into it, a host `data-choice-menu="Browse"`
+(`#libraryMenuHost`) with `data-choice-menu-icon="fas fa-database"`, `data-choice-menu-trigger-class="nav-menu-trigger"`
+and `hx-preserve`. Its options are the Libraries `RepositoryService.getOwnedBy` lists (by name, case-insensitively and
+naturally), each a link to its main page, `/r/<id>`, Browse with its defaults, holding the name in a `span` and titled
+with it in full, the current Library `aria-checked`; picking it goes back to its Browse from any page. For an Admin a
+separator and the "New library…" action follow, requesting the **New library dialog** of the current Library. The
+trigger (`.nav-menu-trigger`, a nav entry's look and hover glow, the cell's padding its own) reads the icon,
+"Browse", then the current Library's name after a dot (`·`, drawn by `::before` at 0.6 alpha) in the name's own
+case, cut with an ellipsis at `--library-name-max-width`, and the caret; a name in the panel is cut at the same width.
+The cell is at least `--nav-browse-min-width`, a share of the viewport capped at 16rem, so the trigger shows some of
+the name, and a panel in the nav takes the page's text rather than its entry's (`nav .context-menu`: `--font` at
+`--font-size-base`, `--theme-neutral-4`, no transform). The main page builds the host with its first hydration, and
+Import and Settings with `startNavPage()` (**Template Layout**); the list is the page load's, since a nav reload keeps
+the built host (**Nav refresh**), so a Library created in another tab is listed at the next full page load. The style
+guide's navigation section holds the specimen.
+
 **Nav refresh** — After any successful asset mutation, reload the nav to update counts.
 Folder deletion also recycles assets throughout its subtree, so the `folderDeleted` listener
 calls `app.reloadNav()` before awaiting the folder-tree refresh. Reuse `FrontendApp.reloadNav()`
@@ -2423,6 +2481,13 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   a snackbar. Nothing is persisted. The Forms section's Labelled fields button (`data-app-open-dialog`, see
   **Modals**) opens a page-held `<template>` dialog in the general modal host, a labelled input and a labelled select,
   so its labels take the dialog's small caps; it requests and submits nothing, and the × or Escape closes it.
+- **Browse menu and New library:** the navigation section's Browse cell is `includes/library_menu` as the nav renders
+  it (`#styleGuideLibraryMenuHost`), over the page's Library under a long name and a second Library, "Client 2"; its
+  links lead to the section, and its New library action opens the real `htmx/new_library_dialog` as a taken name
+  leaves it ("client  smith" typed, its error under the field) from the dev-only `GET
+  /htmx/style-guide/r/:repoId/dialogs/new-library`. The sample's form posts to `POST
+  /htmx/style-guide/r/:repoId/new-library`, which applies the Library name rule alone: a refused name returns the
+  validation replacement, a valid one an empty 200, and nothing is created.
 - **Theme switcher:** the Light / Dark `.toggle-group` at the top of the contents column (`#styleGuideTheme`), which
   stays on screen. `setTheme` calls `chooseTheme` (see **Themes**), so the choice is the whole app's, and the component answers
   `Const.events.themeChanged`, which the nav's switch announces too, by following the theme and resolving the tokens again:
@@ -2573,7 +2638,10 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid, and its Curate button (`removeCurateButtons`) |
 | `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
-| `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder, album or Location row, the dialog-trigger buttons and a choice menu from its host (`buildChoiceMenuCtrl`, with the compact, glyph-only variant of the Dock side menu) |
+| `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder, album or Location row, the dialog-trigger buttons and a choice menu from its host (`buildChoiceMenuCtrl`, with the compact, glyph-only variant of the Dock side menu, and the link options and the actions after a separator of the nav's Browse menu) |
+| `views/includes/library_menu.scala.html` | The nav's Browse menu host: the account's Libraries as link options, the current one checked, and for an Admin a separator and New library…; `hx-preserve` (**Nav**) |
+| `views/htmx/new_library_dialog.scala.html` | The New library dialog: one name field, Create and Cancel, the Library name rule's errors under the field (**New library dialog**) |
+| `views/includes/page_title.scala.html` | The browser tab title of a page of a Library: "<page> · <Library> · Altitude", or "<Library> · Altitude" on the main page |
 | `views/includes/dock_glyphs.scala.html` | The hidden SVG symbol sheet of the four Dock side glyphs, drawn by the Dock side menu's options and trigger through `<use>`; included by `index.scala.html` and the style guide |
 | `static/js/common/album-list.js` | renders the album list, its counts (after each name), and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |
 | `static/js/common/location-list.js` | renders the categories (expandable nodes holding their Locations) and top-level Locations, the counts after each name, and each row's menu from the JSON list endpoint; restores expansion across rebuilds; patches the counts in place; marks the viewed Location |

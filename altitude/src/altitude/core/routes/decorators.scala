@@ -14,6 +14,7 @@ import org.slf4j.MDC
 import scala.jdk.CollectionConverters._
 
 import altitude.core.App
+import altitude.core.Const
 import altitude.core.RequestContext
 import altitude.core.models.AccountType
 import altitude.core.models.User
@@ -89,6 +90,7 @@ object decorators:
       handleNotFound(req)
     else endpoint
 
+  // A person reads the plain text, which names a Library as the UI does; the JSON is an API client's
   private def handleNotFound(req: cask.Request): Result[Raw] =
     if isApiRequest(req) then
       Result.Success(
@@ -97,7 +99,8 @@ object decorators:
           statusCode = 404,
           headers = Seq("Content-Type" -> "application/json")
         ))
-    else Result.Success(Response("Repository not found", statusCode = 404, headers = Seq("Content-Type" -> "text/plain")))
+    else
+      Result.Success(Response(Const.Msg.Err.LIBRARY_NOT_FOUND, statusCode = 404, headers = Seq("Content-Type" -> "text/plain")))
 
   /**
    * Decorator that requires a valid PASETO token for the endpoint. If the token is invalid or missing, returns a 401 Unauthorized

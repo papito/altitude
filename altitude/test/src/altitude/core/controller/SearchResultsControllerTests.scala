@@ -1234,7 +1234,7 @@ import altitude.core.util.Util
      * search triggers, the folder as the leaf and the way back to the whole result set (a trigger clearing the person scope,
      * which the store's rules widen to every scope); the toolbar keeps "Total:" with and without a scope. An album scope shows
      * the album's icon, name and creation day; a Location scope its icon, name and category; Search text its icon, the text and
-     * "in this repository".
+     * "in this library".
      *
      * Edge cases:
      *
@@ -1285,7 +1285,7 @@ import altitude.core.util.Util
         val textPage = htmlSearch(host, repoId, Map(Api.Field.Search.QUERY_TEXT -> "beach")).text()
         textPage should include("fa-search")
         textPage should include("""<span class="query">beach</span>""")
-        textPage should include("in this repository")
+        textPage should include("""<div class="subtitle">in this library</div>""")
     }
   }
 

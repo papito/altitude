@@ -180,6 +180,8 @@ object Const:
       val LIBRARY_NAME_TAKEN = "A library named “%s” already exists"
       // `/` for an account that owns no Library to land in
       val NO_LIBRARY = "There is no library to open"
+      // A page of a Library that does not exist or that the account does not own (decorators.requireLogin): one text for both
+      val LIBRARY_NOT_FOUND = "Library not found"
       // A Face correction (PersonService.moveFace) onto the Face's own Person
       val FACE_ALREADY_THEIRS = "The face is already this person's"
       // A Face correction's body naming neither a person nor a name, or both
