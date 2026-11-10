@@ -21,20 +21,21 @@ import scala.compiletime.uninitialized
 import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneEmbeddings
 import altitude.core.models.SceneModel
-import altitude.core.util.SceneEmbedder
+import altitude.core.util.OnnxSceneEmbedder
 
 /**
- * The Scene embeddings of [[SceneEmbedder]] over the `people/` photos, as orderings of similarities, never values: the one place
- * the preprocessing is checked against what the models were trained on. Needs the model files, as the face tests need ArcFace.
+ * The Scene embeddings of [[OnnxSceneEmbedder]] over the `people/` photos, as orderings of similarities, never values: the one
+ * place the preprocessing is checked against what the models were trained on. Needs the model files, as the face tests need
+ * ArcFace.
  */
 @DoNotDiscover class SceneEmbedderTests extends AnyFunSuite with BeforeAndAfterAll with TestFocus {
 
   Loader.load(classOf[opencv_java])
 
   /** One embedder for the suite, opened before the first test and closed after the last: a session per Scene model is 350 MB */
-  private var embedder: SceneEmbedder = uninitialized
+  private var embedder: OnnxSceneEmbedder = uninitialized
 
-  override def beforeAll(): Unit = embedder = new SceneEmbedder()
+  override def beforeAll(): Unit = embedder = OnnxSceneEmbedder()
 
   override def afterAll(): Unit = embedder.close()
 

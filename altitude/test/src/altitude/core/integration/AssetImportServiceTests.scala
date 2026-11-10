@@ -412,7 +412,8 @@ import altitude.core.util.ImageUtil
     /**
      * Setup:
      *
-     * Two frames of the synthesized burst a second apart (BurstFrames), each run through the whole import.
+     * Two frames of the synthesized burst a second apart (BurstFrames), each run through the whole import with the real Scene
+     * models on.
      *
      * Assertions:
      *
@@ -420,20 +421,22 @@ import altitude.core.util.ImageUtil
      * second frame's Sequence candidates, the one read that selects the two columns, hold the first with both equal to what the
      * import returned, value for value: the embeddings were written with the completion.
      */
-    val first = importFrame(frame(0))
-    val second = importFrame(frame(1), taken = Some(takenAt(1)))
+    withSceneModels {
+      val first = importFrame(frame(0))
+      val second = importFrame(frame(1), taken = Some(takenAt(1)))
 
-    SceneModel.values.foreach {
-      model =>
-        val embedding = first.sceneEmbeddings.of(model).value
-        embedding.values.length shouldBe model.dimensions
-        embedding.similarity(embedding) shouldBe 1.0 +- 1e-4
+      SceneModel.values.foreach {
+        model =>
+          val embedding = first.sceneEmbeddings.of(model).value
+          embedding.values.length shouldBe model.dimensions
+          embedding.similarity(embedding) shouldBe 1.0 +- 1e-4
+      }
+
+      // A write transaction: the candidates are locked until it ends
+      val candidates = testApp.txManager.withTransaction(testApp.DAO.asset.getSequenceCandidates(second, gapMs = 3000))
+      val candidate = candidates.find(_.id == first.id).value
+      candidate.sceneEmbeddings shouldBe first.sceneEmbeddings
     }
-
-    // A write transaction: the candidates are locked until it ends
-    val candidates = testApp.txManager.withTransaction(testApp.DAO.asset.getSequenceCandidates(second, gapMs = 3000))
-    val candidate = candidates.find(_.id == first.id).value
-    candidate.sceneEmbeddings shouldBe first.sceneEmbeddings
   }
 
   test("A still image's Scene embeddings are stored with its completion and read back float32-exact") {

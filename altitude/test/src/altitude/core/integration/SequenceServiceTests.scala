@@ -30,6 +30,9 @@ import altitude.core.util.SequenceRule
   import BurstFrames.*
   import SequenceServiceTests.*
 
+  /** Pairing and parting real frames by their likeness is the suite's subject, so every import runs the Scene models */
+  override protected def usesSceneModels: Boolean = true
+
   private def stored(asset: Asset): Asset = testApp.service.asset.getById(asset.persistedId)
 
   /** The similarity of two imported frames' Scene embeddings of a model, as the import returned them */

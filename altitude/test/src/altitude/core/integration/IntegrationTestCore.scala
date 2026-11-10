@@ -1,6 +1,6 @@
 package altitude.core.integration
 
-import altitude.test.{ IntegrationTestUtil, TestContext, TestFocus }
+import altitude.test.{ IntegrationTestUtil, SwitchableSceneEmbedder, TestContext, TestFocus }
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
 import java.util.concurrent.atomic.AtomicReference
 import org.apache.commons.dbutils.QueryRunner
@@ -28,6 +28,7 @@ abstract class IntegrationTestCore
   with AltitudeTestApp
   with BeforeAndAfter
   with BeforeAndAfterEach
+  with BeforeAndAfterAll
   with OptionValues
   with TestFocus {
   final protected val log: Logger = LoggerFactory.getLogger(getClass)
@@ -58,6 +59,42 @@ abstract class IntegrationTestCore
       case Const.DbEngineName.SQLITE => t.toLocalDateTime.format(SqliteOverrides.DATETIME_FORMATTER)
       case _ => throw new IllegalArgumentException("Unsupported data source type")
     }
+  }
+
+  /**
+   * Whether the suite's tests run the real Scene models. Off, a fixture import is measured and hashed but carries no Scene
+   * embedding, which spares each import about 0.7 s of model passes; a suite whose subject is the embeddings turns them on for
+   * all its tests here, or for one test with `withSceneModels`.
+   */
+  protected def usesSceneModels: Boolean = false
+
+  /** The test instance's Scene embedder, which the test bundles build switched off (`TestAltitudeApp.build`) */
+  private def sceneModels: SwitchableSceneEmbedder = testApp.sceneEmbedder match {
+    case switchable: SwitchableSceneEmbedder => switchable
+    case other =>
+      throw new IllegalStateException(
+        s"The test instance's Scene embedder is a ${other.getClass.getName}, which cannot be switched: build the instance with " +
+          "TestAltitudeApp.build")
+  }
+
+  // The suites of a bundle run one after another, so the switch set here is this suite's alone until afterAll turns it off
+  override def beforeAll(): Unit = {
+    sceneModels.on = usesSceneModels
+    super.beforeAll()
+  }
+
+  override def afterAll(): Unit = {
+    try super.afterAll()
+    finally sceneModels.on = false
+  }
+
+  /** Runs `f` with the real Scene models on, and puts the switch back as it was */
+  def withSceneModels[T](f: => T): T = {
+    val switch = sceneModels
+    val was = switch.on
+    switch.on = true
+    try f
+    finally switch.on = was
   }
 
   override def beforeEach(): Unit = {

@@ -23,19 +23,9 @@ import altitude.core.util.ImageUtil
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
-import altitude.core.util.SceneEmbedder
 
 class AssetService(val app: Altitude) extends BaseService[Asset]:
   override protected val dao: AssetDao = app.DAO.asset
-
-  /**
-   * The Scene models, one ONNX session each, opened here so a missing model file fails the start and never an import, as the
-   * ArcFace pool's file does. The sessions are thread-safe and the import threads share them; `close` releases them.
-   */
-  private val sceneEmbedder: SceneEmbedder = new SceneEmbedder()
-
-  /** Closes the Scene models' sessions; after the import pipeline has shut down, since its threads run them */
-  def close(): Unit = sceneEmbedder.close()
 
   def setRecycledProp(asset: Asset, isRecycled: Boolean): Unit =
     if asset.isRecycled == isRecycled then return
@@ -123,7 +113,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
     try
       val image = ImageUtil.matFromBytes(dataAsset.bytes)
       val (measurement, embeddings) =
-        try (ImageMeasurement.measure(image, detected.map(_._1)), sceneEmbedder.embed(image, asset.fileName))
+        try (ImageMeasurement.measure(image, detected.map(_._1)), app.sceneEmbedder.embed(image, asset.fileName))
         finally image.release()
       val quality = measurement.quality
       logger.debug(

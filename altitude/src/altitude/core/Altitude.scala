@@ -51,8 +51,15 @@ import altitude.core.service.filestore.FileSystemStoreService
 import altitude.core.transactions.SqlExplainer
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.ImportParallelism
+import altitude.core.util.OnnxSceneEmbedder
+import altitude.core.util.SceneEmbedder
 
-class Altitude(val dbEngineOverride: Option[String] = None):
+/**
+ * @param newSceneEmbedder
+ *   builds the instance's Scene embedder: the ONNX Runtime one, which production and the dev server use; the test instances build
+ *   one they can switch off
+ */
+class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: () => SceneEmbedder = () => OnnxSceneEmbedder()):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
   logger.debug(s"Environment is: ${Environment.CURRENT}")
 
@@ -176,10 +183,10 @@ class Altitude(val dbEngineOverride: Option[String] = None):
   if isPipelineRestartEnabled then logger.info("A pipeline queue whose stream fails restarts it after a backoff")
 
   // Startup order: settings service (empty) → transaction manager → DAOs → migration → settings load → importParallelism → actor
-  // system → services. The transaction manager reads the Settings an Admin tunes on the Settings screen for the transactions it
-  // begins, so their service comes first; it is loaded once the schema is in place, and until then a transaction sets none. The
-  // import dispatcher's thread count starts from a Setting, so the database must be current and read before the actor system is
-  // built.
+  // system → Scene embedder → services. The transaction manager reads the Settings an Admin tunes on the Settings screen for the
+  // transactions it begins, so their service comes first; it is loaded once the schema is in place, and until then a transaction
+  // sets none. The import dispatcher's thread count starts from a Setting, so the database must be current and read before the
+  // actor system is built.
   final val settings: SettingsService = SettingsService(app)
 
   final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer, () => settings.currentIfLoaded)
@@ -330,6 +337,13 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     actorSystem.scheduler.scheduleAtFixedRate(1.hour, 1.hour)(() => txManager.optimize())(actorSystem.executionContext)
   }
 
+  /**
+   * The Scene models every imported still image is embedded with (`AssetService.measureImage`), built before the services, so a
+   * missing model file fails the start and never an import, as the ArcFace pool's file does. The import threads share it, and
+   * `cleanup` closes it.
+   */
+  final val sceneEmbedder: SceneEmbedder = newSceneEmbedder()
+
   object service {
     val system: SystemService = SystemService(app)
     val contentSigner: ContentSigner = ContentSigner(system.loadOrCreateSigningKey())
@@ -381,8 +395,8 @@ class Altitude(val dbEngineOverride: Option[String] = None):
     // Before the transaction manager closes the pools: each queue finishes what it has accepted, up to a limit
     service.importPipeline.shutdown()
     service.purgePipeline.shutdown()
-    // After the import has stopped: its threads run the Scene models' sessions
-    service.asset.close()
+    // After the import has stopped: its threads run the Scene models
+    sceneEmbedder.close()
 
     sqliteOptimizing.foreach(_.cancel())
     txManager.optimize()
