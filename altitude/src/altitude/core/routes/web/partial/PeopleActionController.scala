@@ -116,19 +116,27 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.edit_person_name(person = person)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
+  /**
+   * The name editor's save, for the Person the path names; an ID in the body is ignored. A saved name answers the name view, and
+   * a name that cannot be saved answers the editor again with its error or the offer to merge. A Person who is not live in the
+   * context repository (unknown, another repository's, merged away or a bad match) is a 404.
+   */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/p/:personId/name/edit")
   def editPersonName(repoId: String, personId: String)(using request: Request): Response[String] =
-    val payload = renamePerson(json => App.altitude.service.person.getById(json(Api.Field.ID).str)) match
-      case RenameOutcome.Saved(person) => htmx.html.view_person_name(person = person)
-      case RenameOutcome.Refused(person, form, errors, holder) =>
-        htmx.html.edit_person_name(fieldErrors = errors, formJson = form, person = person, conflictingPerson = holder)
-    cask.Response("<!doctype html>" + payload, 200, Seq(("Content-Type", "text/html")))
+    answering {
+      val payload = renamePerson(App.altitude.service.person.getLiveInRepository(personId)) match
+        case RenameOutcome.Saved(person) => htmx.html.view_person_name(person = person)
+        case RenameOutcome.Refused(person, form, errors, holder) =>
+          htmx.html.edit_person_name(fieldErrors = errors, formJson = form, person = person, conflictingPerson = holder)
+      cask.Response("<!doctype html>" + payload, 200, Seq(("Content-Type", "text/html")))
+    }
 
   /**
    * The rename dialog the People tab's pencil opens for a Person, its field holding the current name. `pane` is the pane of the
    * pencil (`Const.PeoplePane`, the Main pane when left out), the control focus goes back to when the dialog closes; a name that
-   * is no pane is a 400. An unknown Person, or another repository's, is a 404.
+   * is no pane is a 400. A Person who is not live in the context repository (unknown, another repository's, merged away or a bad
+   * match) is a 404.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-person")
@@ -137,7 +145,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     if !Const.PeoplePane.ALL.contains(pane) then return unknownPane(pane)
 
     answering {
-      val person: Person = App.altitude.service.person.getInRepository(personId)
+      val person: Person = App.altitude.service.person.getLiveInRepository(personId)
       val payload = "<!doctype html>" + htmx.html.rename_person_dialog(person, C.UI.RENAME_PERSON_DIALOG_TITLE, pane)
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
     }
@@ -145,14 +153,14 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   /**
    * The rename dialog's save. A saved name, the name the Person already has included, is an empty success, which completes the
    * dialog; a name that cannot be saved answers the dialog's form again, in place of the submitted one
-   * (`dialogFormValidationResponse`), with its error or, for a name another live Person holds, the offer to merge into them. An
-   * unknown Person, or another repository's, is a 404.
+   * (`dialogFormValidationResponse`), with its error or, for a name another live Person holds, the offer to merge into them. A
+   * Person who is not live in the context repository is a 404, as for the dialog.
    */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/p/:personId/rename")
   def renamePersonInDialog(repoId: String, personId: String)(using request: Request): Response[String] =
     answering {
-      renamePerson(_ => App.altitude.service.person.getInRepository(personId)) match
+      renamePerson(App.altitude.service.person.getLiveInRepository(personId)) match
         case RenameOutcome.Saved(_) => cask.Response("", 200, Seq(("Content-Type", "text/html")))
         case RenameOutcome.Refused(person, form, errors, holder) =>
           logger.debug(s"Rename dialog refused a name for person [${person.persistedId}]")
@@ -175,8 +183,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   /**
    * How a rename ended: `Saved` with the Person as stored, which is also the answer for the name they already had, or `Refused`
-   * with the submitted form, its field errors and, when another live Person holds the name, that Person (`holder`), whom the
-   * form offers to merge into.
+   * with the submitted form, its field errors and, when another live Person holds the name, that Person (`holder`), whom the form
+   * offers to merge into.
    */
   private enum RenameOutcome:
     case Saved(person: Person)
@@ -191,12 +199,11 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   )
 
   /**
-   * Renames the Person that `personOf` finds for the request's scrubbed JSON to the name in it: the one rename of the inline name
-   * editor and of the rename dialog, each of which renders the outcome its own way.
+   * Renames the Person to the name in the request's scrubbed JSON: the one rename of the inline name editor and of the rename
+   * dialog, each of which finds the Person by its path and renders the outcome its own way.
    */
-  private def renamePerson(personOf: ujson.Obj => Person)(using request: Request): RenameOutcome =
+  private def renamePerson(person: Person)(using request: Request): RenameOutcome =
     val jsonIn: ujson.Obj = nameScrubber.scrub(unscrubbedJson.get)
-    val person: Person = personOf(jsonIn)
 
     def refused(errors: Map[String, String], holder: Option[Person] = None): RenameOutcome =
       RenameOutcome.Refused(person, jsonIn, errors, holder)
@@ -240,8 +247,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
    * The Merge people modal for the two people asked for. `pane` is sent by the rename dialog's offer to merge alone
    * (`includes/person_name_taken`): the pane of the People tab (`Const.PeoplePane`) whose pencil opened that dialog. The merge
    * modal takes the rename dialog's place, so the modal names that pencil, the requested source's in that pane, as the control
-   * focus goes back to when it closes; a name that is no pane is a 400. Without `pane` focus goes back to the control that
-   * asked for the modal.
+   * focus goes back to when it closes; a name that is no pane is a 400. Without `pane` focus goes back to the control that asked
+   * for the modal.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/merge")

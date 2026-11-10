@@ -85,7 +85,9 @@ import altitude.core.models.Person
 
   /** The number the list shows on the Person's cell, when the Person is listed */
   private def listedCount(html: String, person: Person): Option[Int] =
-    s"""(?s)data-person-id="${person.persistedId}".*?<span class="count"> \\((-?\\d+)\\)</span>""".r.findFirstMatchIn(html).map(_.group(1).toInt)
+    s"""(?s)data-person-id="${person.persistedId}".*?<span class="count"> \\((-?\\d+)\\)</span>""".r
+      .findFirstMatchIn(html)
+      .map(_.group(1).toInt)
 
   test("The assignable people are the live people who are not a bad match, named first, Hidden marked") {
 
@@ -726,8 +728,7 @@ import altitude.core.models.Person
 
         val fromDuplicate = renameInDialog(host, repoId, bob.persistedId, "", pane = Some("duplicate"))
         renameDialogRefused(fromDuplicate)
-        fromDuplicate.text() should include(
-          s"""data-app-dialog-return-focus="#personRenameCtrl-duplicate-${bob.persistedId}"""")
+        fromDuplicate.text() should include(s"""data-app-dialog-return-focus="#personRenameCtrl-duplicate-${bob.persistedId}"""")
 
         testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bob")
     }
@@ -867,9 +868,9 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * A body holding the name alone, sent to Bob's name editor route, answers the name view and stores the name: the route
-     * needs no ID in the body. Sent through the first repository to a Person ID that does not exist, and to Eve's, the rename
-     * answers 404, the answer does not carry her name, and Eve keeps it.
+     * A body holding the name alone, sent to Bob's name editor route, answers the name view and stores the name: the route needs
+     * no ID in the body. Sent through the first repository to a Person ID that does not exist, and to Eve's, the rename answers
+     * 404, the answer does not carry her name, and Eve keeps it.
      *
      * Edge cases:
      *
@@ -1051,7 +1052,8 @@ import altitude.core.models.Person
         def modal(params: Map[String, String]): requests.Response =
           requests.get(
             s"$host/htmx/people/r/$repoId/modals/merge",
-            params = Map("mergeSourceId" -> bob.persistedId, "mergeDestId" -> tessa.persistedId, "keepDirection" -> "true") ++ params,
+            params =
+              Map("mergeSourceId" -> bob.persistedId, "mergeDestId" -> tessa.persistedId, "keepDirection" -> "true") ++ params,
             cookies = testContext.cookies,
             check = false
           )

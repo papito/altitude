@@ -19,6 +19,7 @@ import altitude.core.Const.FaceRecognition
 import altitude.core.Const.PeopleBucket
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
+import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.dao.jdbc.PersonDao
@@ -587,6 +588,47 @@ import altitude.core.util.Util
 
     val cara: Person = testApp.service.person.addPerson(Person(name = Some("Cara")))
     testApp.service.person.updateName(cara, "tessa").name shouldBe Some("tessa")
+  }
+
+  test("A live Person of the context repository is found, and a merged-away, bad-match or other repository's one is not") {
+
+    /**
+     * Setup:
+     *
+     * Persons named "London" and "Tessa" with one test Face each, Tessa merged into London; Persons named "Bob" and "Carl", Carl
+     * marked as a bad match, and Bob hidden; a second repository with a Person named "Eve".
+     *
+     * Assertions:
+     *
+     * Through the first repository, London and the hidden Bob are found live, with their names. Tessa, Carl, Eve and an ID that
+     * no Person has are not found, though Tessa and Carl are found when liveness does not matter (`getInRepository`).
+     */
+    val repo = testContext.repository
+    val london: Person = testApp.service.person.addPerson(Person(name = Some("London")))
+    testContext.addTestFacesAndAssets(london)
+    val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+    testContext.addTestFacesAndAssets(tessa)
+    testApp.service.person.merge(dest = london, source = tessa)
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+    testApp.service.person.setVisibility(bob, isHidden = true)
+    val carl: Person = testApp.service.person.markAsBadMatch(testApp.service.person.addPerson(Person(name = Some("Carl"))))
+
+    val otherRepo = testContext.persistRepository()
+    testApp.service.repository.switchContextToRepository(otherRepo)
+    val eve: Person = testApp.service.person.addPerson(Person(name = Some("Eve")))
+    testApp.service.repository.switchContextToRepository(repo)
+
+    testApp.service.person.getLiveInRepository(london.persistedId).name shouldBe Some("London")
+    testApp.service.person.getLiveInRepository(bob.persistedId).name shouldBe Some("Bob")
+
+    List(tessa.persistedId, carl.persistedId, eve.persistedId, java.util.UUID.randomUUID.toString).foreach {
+      personId =>
+        intercept[NotFoundException] {
+          testApp.service.person.getLiveInRepository(personId)
+        }
+    }
+    testApp.service.person.getInRepository(tessa.persistedId).name shouldBe Some("Tessa")
+    testApp.service.person.getInRepository(carl.persistedId).name shouldBe Some("Carl")
   }
 
   test("A person cannot be named as an unnamed person is") {
