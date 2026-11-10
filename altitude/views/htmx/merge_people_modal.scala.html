@@ -3,12 +3,20 @@
 @import altitude.core.models.Person
 @import altitude.core.Api
 
-@(title: String, mergeSourcePerson: Person, mergeDestPerson: Person)
+@(title: String, mergeSourcePerson: Person, mergeDestPerson: Person, returnFocusPencil: Option[(String, String)] = None)
 
+@* The Merge people modal. `returnFocusPencil` is the pane and the Person ID of the People tab's rename pencil
+   (htmx/people_list) whose rename dialog offered this merge: that dialog is gone once this modal shows, and the control
+   that asked for the modal with it, so the modal names the pencil as the control focus goes back to when it closes. A merge
+   that completes takes the source Person's pencil out of the list, and focus then goes nowhere. Without a pencil (a drop,
+   the results title's name editor) focus goes back to the control that asked for the modal. *@
 <form action="#"
       id="mergePeople"
       data-app-fragment="modal"
       data-app-modal-title="@{title}"
+      @for((pane, personId) <- returnFocusPencil) {
+      data-app-dialog-return-focus="#personRenameCtrl-@{pane}-@{personId}"
+      }
       data-app-success-event="PERSON_MERGED_EVENT"
       data-app-success-detail='{"@{Api.Field.Person.MERGE_SOURCE_ID}":"@{ mergeSourcePerson.persistedId }","@{Api.Field.Person.MERGE_DEST_ID}":"@{ mergeDestPerson.persistedId }"}'
       hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/src/@{mergeSourcePerson.persistedId}/dest/@{mergeDestPerson.persistedId}"

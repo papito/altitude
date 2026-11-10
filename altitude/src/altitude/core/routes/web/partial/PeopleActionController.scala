@@ -236,10 +236,23 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.view_person_name(person = person)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
+  /**
+   * The Merge people modal for the two people asked for. `pane` is sent by the rename dialog's offer to merge alone
+   * (`includes/person_name_taken`): the pane of the People tab (`Const.PeoplePane`) whose pencil opened that dialog. The merge
+   * modal takes the rename dialog's place, so the modal names that pencil, the requested source's in that pane, as the control
+   * focus goes back to when it closes; a name that is no pane is a 400. Without `pane` focus goes back to the control that
+   * asked for the modal.
+   */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/merge")
-  def showMergePeopleModal(repoId: String, mergeSourceId: String, mergeDestId: String, keepDirection: Boolean = false)(using
-      request: Request): Response[String] =
+  def showMergePeopleModal(
+      repoId: String,
+      mergeSourceId: String,
+      mergeDestId: String,
+      keepDirection: Boolean = false,
+      pane: Option[String] = None)(using request: Request): Response[String] =
+    if pane.exists(!Const.PeoplePane.ALL.contains(_)) then return unknownPane(pane.get)
+
     val requestedSourcePerson: Person = App.altitude.service.person.getById(mergeSourceId)
     val requestedDestPerson: Person = App.altitude.service.person.getById(mergeDestId)
 
@@ -253,7 +266,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.merge_people_modal(
       title = C.UI.MERGE_PEOPLE_DIALOG_TITLE,
       mergeSourcePerson = sourcePerson,
-      mergeDestPerson = destPerson
+      mergeDestPerson = destPerson,
+      returnFocusPencil = pane.map(_ -> requestedSourcePerson.persistedId)
     )
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 

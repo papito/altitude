@@ -200,7 +200,8 @@ In Triage the tab asks for `triaged=true` on every load, whatever the switch: it
 found only in triaged assets included. The numbers are rendered and not displayed there, since they read confusingly
 against what Triage holds, and a click on a person warns instead of searching: Triage manages people (rename, merge by
 drag and drop) and does not search them (**The explorer in Triage** in `views/AGENTS.md`). A merge there reloads the tab
-and leaves the results on all of Triage.
+and searches for no one, so the results stay on all of Triage. Results that a Triage URL scoped to one of the two people
+follow the merge: the source's go back to all of Triage, and the destination's are read again.
 
 While assets are being imported the number and a search can differ, as a search skips those assets and `num_of_faces` holds
 their Faces. With triaged items shown, the number runs ahead of the search by those assets until they complete. With them

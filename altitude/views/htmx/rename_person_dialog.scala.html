@@ -10,7 +10,8 @@
    list renders again after the rename takes it, and the form sends the pane back so the form replacing it on an error names
    the same pencil. Its success announces PERSON_NAME_EDITED_EVENT with the Person's ID (js/listeners/people.js). With a
    conflictingPerson, the live person holding the name typed, the error row offers to merge the renamed person into them
-   (includes/person_name_taken); the Merge people modal then takes this dialog's place, since one dialog is open at a time.
+   (includes/person_name_taken); the Merge people modal then takes this dialog's place, since one dialog is open at a time,
+   and is told the pane so that it returns focus to the same pencil.
    The bare x-data is the scope that row's Alpine button needs: the popover host has none.
    hx-target="this" lets the server's "HX-Retarget: this" (validation errors) replace this form in place *@
 <form action="#"
@@ -45,7 +46,7 @@
            value="@{ newName.getOrElse(person.name.getOrElse("")) }">
     @conflictingPerson match {
       case Some(holder) => {
-        @includes.html.person_name_taken(person, holder, "renamePersonError")
+        @includes.html.person_name_taken(person, holder, "renamePersonError", pane = Some(pane))
       }
       case None => {
         @if(fieldErrors.contains(Api.Field.Person.NAME)) {

@@ -85,6 +85,8 @@
     --detail-panel-min-height: 7.5rem;
     --detail-stage-min-width: 12.5rem;
     --detail-stage-min-height: 7.5rem;
+    /* The band naming the view along the results' left edge, and the gutter the results leave for it (pages/index.css) */
+    --view-band-width: var(--space-9);
     --nav-brand-width: 12.5rem;
     --nav-search-width: 11.5rem;
     --nav-search-focus-width: 15.5rem;
@@ -154,6 +156,7 @@
     --font-weight-medium: 500;
     --letter-spacing-medium: 0.05em;
     --letter-spacing-wide: 0.1em;
+    --letter-spacing-band: 0.4em;
     --line-height-text: 1.4;
 }
 
@@ -442,9 +445,12 @@ nav form:has(input:placeholder-shown) .clear {
 /* CONTENT */
 /*         */
 
+/* Triage's pane: diagonal stripes of the accent, --view-tint and a weaker one. The bars that stick inside the pane paint
+   --view-tint alone. The left padding is the gutter of the view band (pages/index.css), so nothing lies under it */
 #content.triage {
-    --view-tint: rgb(from var(--success-background-color) r g b / 0.07);
-    background-color: var(--view-tint);
+    --view-tint: hsl(from var(--theme-accent) h s l / 0.14);
+    padding-left: var(--view-band-width);
+    background: repeating-linear-gradient(135deg, var(--view-tint) 0 var(--space-8), hsl(from var(--theme-accent) h s l / 0.11) var(--space-8) calc(var(--space-8) * 2));
 }
 
 #content.trashbin {

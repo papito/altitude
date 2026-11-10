@@ -6,7 +6,9 @@
 
 @* The inline name editor. With a conflictingPerson, the live person holding the name typed, its error names that person and
    offers to merge the renamed person into them, through the Merge people dialog with the direction kept: the row of
-   includes/person_name_taken, which the rename dialog (htmx/rename_person_dialog) shows too. The focus comes back
+   includes/person_name_taken, which the rename dialog (htmx/rename_person_dialog) shows too. The field's ID is the
+   editor's own and not a dialog field's `field-<name>`: the rename dialog can be open over this editor, and its field
+   is the one with that ID. The focus comes back
    to the field with each response, so the field is described by its error for a screen reader. The swap does not settle: htmx
    would copy the old field's value attribute onto the new field and, the field having focus by then, leave it there, losing
    the name typed. *@
@@ -16,7 +18,7 @@
       id="editPersonName"
       data-app-fragment="person-name-editor"
       data-app-person-id="@{ person.persistedId }"
-      data-app-autofocus-selector="#field-@{ Api.Field.Person.NAME }"
+      data-app-autofocus-selector="#editPersonNameField"
       data-app-select-on-focus="true"
       data-app-restore-url="/htmx/people/r/@{RequestContext.getRepository.persistedId}/p/@{person.persistedId}/name/"
       autocomplete="off"
@@ -26,7 +28,7 @@
       hx-json-enc>
 
     <input type="text"
-           id="field-@{ Api.Field.Person.NAME }"
+           id="editPersonNameField"
            name="@{ Api.Field.Person.NAME }"
            aria-label="Person name"
         @if(conflictingPerson.nonEmpty || fieldErrors.contains(Api.Field.Person.NAME)) {

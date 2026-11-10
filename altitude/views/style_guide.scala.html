@@ -120,7 +120,7 @@
              <code>--font-size-display</code>, with <code>--font-size-base</code> on <code>body</code>: a font size is a
              step of the scale, never a literal. A weight is <code>--font-weight-bold</code> or
              <code>--font-weight-medium</code>, spaced-out text takes <code>--letter-spacing-wide</code> (the brand the
-             narrower <code>--letter-spacing-medium</code>) and text that wraps <code>--line-height-text</code>. A glyph's own size and leading (the spinner, the merge arrow, a
+             narrower <code>--letter-spacing-medium</code>, Triage's view band the wider <code>--letter-spacing-band</code>) and text that wraps <code>--line-height-text</code>. A glyph's own size and leading (the spinner, the merge arrow, a
              category's badge) stay in its rule. The Sizes row shows the steps on the real components. The tester
              previews any font this browser has installed.</p>
           <div class="sg-halves">
@@ -241,9 +241,11 @@
              <code>--warning-color</code>, and the number dimmed after it, which Triage does not display. A Hidden
              person's cell carries <code>fa-eye-slash</code> in the cover's corner. The rename pencil
              (<code>.rename</code>, <code>fa-edit</code>) sits at the end of the name row, out of its flow so the name
-             stays centered, in <code>--theme-neutral-3</code> and <code>--theme-neutral-4</code> on hover; it shows
-             only while the cell is hovered or holds focus, as the results title's pencil does, and opens the rename
-             dialog as a popover anchored to it. Hover a specimen, or Tab into it, to see the pencil.</p>
+             stays centered, <code>--space-8</code> wide at least, a 24 px pointer target, in
+             <code>--theme-neutral-3</code> and <code>--theme-neutral-4</code> on hover; it shows only while the cell is
+             hovered or holds keyboard focus (<code>:focus-visible</code>), and always where nothing hovers, on a touch
+             screen, and opens the rename dialog as a popover anchored to it. A name that wraps is centered line by
+             line. Hover a specimen, or Tab into it, to see the pencil.</p>
           @* The People tab's cells, hand-written to htmx/people_list's markup inside the tab's ID, which the rules of
              static/css/htmx/people.css are scoped by, with --face-box set as htmx/people sets it. No drag-drop or dropzone
              class and no search trigger, so nothing binds to them, and the pencils request nothing *@

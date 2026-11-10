@@ -39,6 +39,7 @@
  * trace both indents the icon/name and draws the dotted guide back to the ⋯
  * button, which stays flush left at every depth.
  */
+import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import { Folder } from "../models/folder.js"
 import { http } from "../http/client.js"
@@ -344,7 +345,9 @@ function _buildFolderControls(folder, repoId) {
  * A branch's control toggles expansion and never navigates: it names the folder, points
  * `aria-controls` at the children container, and carries `aria-expanded`, which the model keeps
  * synchronized. A leaf's control navigates to the folder, exactly as the name does, and so
- * warns in Triage and does nothing in the Trash, like the name.
+ * warns in Triage and does nothing in the Trash, like the name. Its label follows: "Open folder
+ * <name>" where it opens the folder, and the folder alone, "Folder <name>", in Triage, where it
+ * opens nothing. The view is set once, at page load, before any tree is built.
  */
 function _buildFolderIconCtrl(folder, nameEl) {
     const isBranch = folder.numOfChildren > 0
@@ -368,7 +371,13 @@ function _buildFolderIconCtrl(folder, nameEl) {
         ctrlEl.title = "Show subfolders. Double-click to show all levels"
         _bindBranchGestures(ctrlEl, folder.id)
     } else {
-        ctrlEl.setAttribute("aria-label", `Open folder ${folder.name}`)
+        const opensFolder = !Alpine.store(
+            Const.state.currentView,
+        ).isTriageView()
+        ctrlEl.setAttribute(
+            "aria-label",
+            `${opensFolder ? "Open folder" : "Folder"} ${folder.name}`,
+        )
         ctrlEl.addEventListener("click", (event) => {
             event.preventDefault()
             event.stopPropagation()

@@ -96,13 +96,14 @@ html[data-dock-side="bottom"] #people {
     justify-content: center;
 }
 
-/* The name row is the rename pencil's containing block */
+/* The name row is the rename pencil's containing block. A name that wraps is centered line by line */
 #people .name {
     position: relative;
     display: grid;
     width: 100%;
     height: 100%;
     place-items: center;
+    text-align: center;
     background-color: var(--theme-secondary);
 }
 
@@ -123,13 +124,17 @@ html[data-dock-side="bottom"] #people {
     color: var(--warning-color);
 }
 
-/* The rename pencil (htmx/people_list), at the end of the name row and out of its flow, so the name stays centered. It
-   shows while the cell is hovered or holds focus, the pencil's own included, as the results title's does (htmx/person.css),
-   over the row's color so a long name does not show through it */
+/* The rename pencil (htmx/people_list), at the end of the name row and out of its flow, so the name stays centered,
+   over the row's color so a long name does not show through it. It is --space-8 wide at least, the least width of a
+   pointer target (24 CSS px at the default root size). It shows while the cell is hovered or holds keyboard focus
+   (:focus-visible, the pencil's own included, which then wears the focus ring of core.css): focus a click left in a
+   cell reveals nothing, so no second pencil shows beside the hovered cell's. Where nothing hovers, on a touch screen,
+   it shows always */
 #people .cell .rename {
     position: absolute;
     inset-block: 0;
     inset-inline-end: 0;
+    min-inline-size: var(--space-8);
     padding: 0 var(--space-2);
     border: 0;
     background: var(--theme-secondary);
@@ -141,8 +146,14 @@ html[data-dock-side="bottom"] #people {
 }
 
 #people .cell:hover .rename,
-#people .cell:focus-within .rename {
+#people .cell:has(:focus-visible) .rename {
     opacity: 1;
+}
+
+@media (hover: none) {
+    #people .cell .rename {
+        opacity: 1;
+    }
 }
 
 #people .cell .rename:hover {

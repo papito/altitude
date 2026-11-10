@@ -13,10 +13,14 @@ import altitude.core.models.Person
 
   /** Renames the person through the name editor's route */
   private def rename(host: String, repoId: String, person: Person, name: String): requests.Response =
+    renameInline(host, repoId, person.persistedId, ujson.Obj(Api.Field.Person.NAME -> name))
+
+  /** Sends `body` to the name editor's route of the Person with this ID, who is named by the path alone */
+  private def renameInline(host: String, repoId: String, personId: String, body: ujson.Obj): requests.Response =
     requests.put(
-      s"$host/htmx/people/r/$repoId/p/${person.persistedId}/name/edit",
+      s"$host/htmx/people/r/$repoId/p/$personId/name/edit",
       headers = Map("Content-Type" -> "application/json"),
-      data = ujson.write(ujson.Obj(Api.Field.Person.NAME -> name, Api.Field.ID -> person.persistedId)),
+      data = ujson.write(body),
       cookies = testContext.cookies,
       check = false
     )
@@ -53,7 +57,7 @@ import altitude.core.models.Person
       name: String,
       pane: Option[String] = None): requests.Response = {
     val body = ujson.Obj(Api.Field.Person.NAME -> name)
-    pane.foreach(name => body(Api.Field.Person.PANE) = ujson.Str(name))
+    pane.foreach(paneName => body(Api.Field.Person.PANE) = ujson.Str(paneName))
     requests.put(
       s"$host/htmx/people/r/$repoId/p/$personId/rename",
       headers = Map("Content-Type" -> "application/json"),
@@ -244,8 +248,8 @@ import altitude.core.models.Person
      *
      * Assertions:
      *
-     * With no `triaged` parameter Bob reads (1), and with `triaged=true` he reads (3). Mia's name link is named by its content,
-     * the number and a visually hidden ", hidden" after it: "Mia (1), hidden" by default, "Mia (2), hidden" with `triaged=true`.
+     * With no `triaged` parameter Bob reads (1), and with `triaged=true` he reads (3). Mia's name link is named by its content:
+     * her name, the number, (1) by default and (2) with `triaged=true`, and then a visually hidden ", hidden".
      *
      * Edge cases:
      *
@@ -740,8 +744,12 @@ import altitude.core.models.Person
      *
      * Renaming Bob "tessa" through the dialog's route answers with the dialog's form again, sent to replace the submitted one,
      * the name typed kept, the error naming Tessa as she is stored, and a button that dispatches the merge confirmation with Bob
-     * as the source, Tessa as the destination and the direction kept. With Tessa hidden, the same rename says she exists and is
-     * hidden, and still offers the merge. Bob keeps his name throughout.
+     * as the source, Tessa as the destination, the direction kept and the Main pane, the pane of a form that sends none. With
+     * Tessa hidden, the same rename says she exists and is hidden, and still offers the merge. Bob keeps his name throughout.
+     *
+     * Edge cases:
+     *
+     * A form sent from the Duplicate pane offers the merge with that pane.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -760,7 +768,11 @@ import altitude.core.models.Person
         taken.text() should include("Merge into Tessa…")
         taken.text() should include(
           s"$$dispatch(window.Const.events.confirmPersonMerge, " +
-            s"{ mergeSourceId: '${bob.persistedId}', mergeDestId: '${tessa.persistedId}', keepDirection: true })")
+            s"{ mergeSourceId: '${bob.persistedId}', mergeDestId: '${tessa.persistedId}', keepDirection: true, pane: 'main' })")
+
+        val takenFromDuplicate = renameInDialog(host, repoId, bob.persistedId, "tessa", pane = Some("duplicate"))
+        renameDialogRefused(takenFromDuplicate)
+        takenFromDuplicate.text() should include("keepDirection: true, pane: 'duplicate' })")
 
         testApp.service.person.setVisibility(tessa, isHidden = true)
 
@@ -845,6 +857,133 @@ import altitude.core.models.Person
     }
   }
 
+  test("The name editor renames the Person its path names, and is a 404 for an unknown Person and for another repository's") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with Persons named "Bob" and "Ann", and a second repository of theirs with a Person named
+     * "Eve".
+     *
+     * Assertions:
+     *
+     * A body holding the name alone, sent to Bob's name editor route, answers the name view and stores the name: the route
+     * needs no ID in the body. Sent through the first repository to a Person ID that does not exist, and to Eve's, the rename
+     * answers 404, the answer does not carry her name, and Eve keeps it.
+     *
+     * Edge cases:
+     *
+     * A body that also carries Ann's ID still renames Bob, the Person of the path, and leaves Ann as she was.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val ann: Person = testApp.service.person.addPerson(Person(name = Some("Ann")))
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val eve = testApp.service.person.addPerson(Person(name = Some("Eve")))
+        testApp.service.repository.switchContextToRepository(repo)
+
+        val byPath = renameInline(host, repoId, bob.persistedId, ujson.Obj(Api.Field.Person.NAME -> "Robert"))
+        byPath.statusCode shouldBe 200
+        (byPath.text() should not).include("""id="editPersonName"""")
+        byPath.text() should include("Robert")
+        testApp.service.person.getById(bob.persistedId).name shouldBe Some("Robert")
+
+        val withAnotherId = renameInline(
+          host,
+          repoId,
+          bob.persistedId,
+          ujson.Obj(Api.Field.Person.NAME -> "Bobby", Api.Field.ID -> ann.persistedId))
+        withAnotherId.statusCode shouldBe 200
+        testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bobby")
+        testApp.service.person.getById(ann.persistedId).name shouldBe Some("Ann")
+
+        val unknownId = java.util.UUID.randomUUID.toString
+        renameInline(host, repoId, unknownId, ujson.Obj(Api.Field.Person.NAME -> "Robert")).statusCode shouldBe 404
+
+        val foreign = renameInline(host, repoId, eve.persistedId, ujson.Obj(Api.Field.Person.NAME -> "Robert"))
+        foreign.statusCode shouldBe 404
+        (foreign.text() should not).include("Eve")
+
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        testApp.service.person.getById(eve.persistedId).name shouldBe Some("Eve")
+    }
+  }
+
+  test("The rename dialog and its save are 404s for a merged-away Person and for a bad match") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob" merged into a Person named "Tessa", and a Person named "Carl"
+     * marked as a bad match.
+     *
+     * Assertions:
+     *
+     * The rename dialog asked for with Bob's ID, and with Carl's, answers 404 and not the dialog's form. A rename of either
+     * through the dialog's route answers 404 too, and each keeps the name stored on their row.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val carl: Person = testApp.service.person.addPerson(Person(name = Some("Carl")))
+        testApp.service.person.merge(dest = tessa, source = bob)
+        testApp.service.person.markAsBadMatch(carl)
+
+        List(bob -> "Bob", carl -> "Carl").foreach {
+          (person, storedName) =>
+            val dialog = renameDialog(host, repoId, person.persistedId)
+            dialog.statusCode shouldBe 404
+            (dialog.text() should not).include("""id="renamePerson"""")
+
+            renameInDialog(host, repoId, person.persistedId, "Robert").statusCode shouldBe 404
+            testApp.service.person.getById(person.persistedId).name shouldBe Some(storedName)
+        }
+    }
+  }
+
+  test("The name editor's rename is a 404 for a merged-away Person and for a bad match") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob" merged into a Person named "Tessa", and a Person named "Carl"
+     * marked as a bad match.
+     *
+     * Assertions:
+     *
+     * A rename of Bob, and of Carl, through the name editor's route answers 404, and each keeps the name stored on their row.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val carl: Person = testApp.service.person.addPerson(Person(name = Some("Carl")))
+        testApp.service.person.merge(dest = tessa, source = bob)
+        testApp.service.person.markAsBadMatch(carl)
+
+        List(bob -> "Bob", carl -> "Carl").foreach {
+          (person, storedName) =>
+            rename(host, repoId, person, "Robert").statusCode shouldBe 404
+            testApp.service.person.getById(person.persistedId).name shouldBe Some(storedName)
+        }
+    }
+  }
+
   test("The merge modal keeps the requested direction when asked, and otherwise merges the person with fewer faces") {
 
     /**
@@ -881,6 +1020,54 @@ import altitude.core.models.Person
 
         modal(Map("keepDirection" -> "true")) should include(s"/src/${larger.persistedId}/dest/${smaller.persistedId}")
         modal(Map.empty) should include(s"/src/${smaller.persistedId}/dest/${larger.persistedId}")
+    }
+  }
+
+  test("The merge modal returns focus to the rename pencil of the pane it is asked with") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with Persons named "Bob" and "Tessa".
+     *
+     * Assertions:
+     *
+     * The merge modal requested with Bob as the source, the direction kept and `pane=duplicate` answers 200 and names Bob's
+     * rename pencil of the Duplicate pane as the control focus returns to. Requested with no `pane`, it names no control.
+     *
+     * Edge cases:
+     *
+     * A `pane` that is no pane is a 400 for the value, not for a parameter the route does not know.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val tessa: Person = testApp.service.person.addPerson(Person(name = Some("Tessa")))
+
+        def modal(params: Map[String, String]): requests.Response =
+          requests.get(
+            s"$host/htmx/people/r/$repoId/modals/merge",
+            params = Map("mergeSourceId" -> bob.persistedId, "mergeDestId" -> tessa.persistedId, "keepDirection" -> "true") ++ params,
+            cookies = testContext.cookies,
+            check = false
+          )
+
+        val fromPencil = modal(Map("pane" -> "duplicate"))
+        fromPencil.statusCode shouldBe 200
+        fromPencil.text() should include(s"""data-app-dialog-return-focus="#personRenameCtrl-duplicate-${bob.persistedId}"""")
+
+        val plain = modal(Map.empty)
+        plain.statusCode shouldBe 200
+        (plain.text() should not).include("data-app-dialog-return-focus")
+
+        val refused = modal(Map("pane" -> "side"))
+        refused.statusCode shouldBe 400
+        // Cask also answers 400 for a parameter the route does not declare
+        (refused.text() should not).include("Unknown argument")
     }
   }
 

@@ -11,11 +11,12 @@
    by `data-person-id` wherever one is looked up, since a person may be in both panes. A cell's number (`.count`, not
    displayed in Triage: pages/index.css) is the visible count, what opening the person from the repository view finds,
    and never `Person.numOfFaces` directly. A hidden person's cell carries the eye-slash badge, and its name link says
-   so to assistive tech in a `.visually-hidden` ", hidden" after the number: the link is named by its content, "Mia (3),
-   hidden", and in Triage, with the number not displayed, "Mia, hidden". The space before the number is inside `.count`
-   and the two spans touch, so neither name holds a space before its comma. An Unmatched person is told apart by its
+   so to assistive tech in a `.visually-hidden` ", hidden" after the number: the link is named by its content, the name,
+   the number, which is not displayed in Triage and so is no part of the name there, and then "hidden". An Unmatched
+   person is told apart by its
    orange "Unknown N" name. After the name link, and outside it so that it is no search trigger, the rename pencil
-   (`.rename`, shown while the cell is hovered or holds focus: htmx/people.css) requests the rename dialog
+   (`.rename`, shown while the cell is hovered or holds keyboard focus, and always on a touch screen: htmx/people.css)
+   requests the rename dialog
    (htmx/rename_person_dialog) into the popover host, anchored to itself: its ID carries `pane`, the pane the list is for,
    so the pencils of a person listed in both panes are two anchors, and the dialog's return-focus selector finds the copy
    a reload renders. With no one listed, one line

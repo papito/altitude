@@ -12,7 +12,8 @@ const NAME_EDITOR_SELECTOR = '[data-app-fragment="person-name-editor"]'
 
 /**
  * People events: merging (a drop of one person onto another confirms in a modal, whose success
- * shows the merged person in Browse and leaves the results alone in Triage), renaming (the results
+ * shows the merged person in Browse and, in Triage, leaves results that are not either person's
+ * alone), renaming (the results
  * title's inline name editor and the rename dialog of a cell's pencil, one outcome for both), and
  * the follow-up on the People tab. A person's cell may be in both of the tab's panes, so a cover
  * face change patches every cell of the person, found by `data-person-id` under `#people`. A
@@ -23,6 +24,9 @@ const NAME_EDITOR_SELECTOR = '[data-app-fragment="person-name-editor"]'
  * number follows their assets.
  */
 export function registerPeopleListeners(app) {
+    // The whole detail goes out as the modal's request values: the two people, and from a rename
+    // form's offer `keepDirection`, with the rename dialog's `pane`, whose pencil the modal returns
+    // focus to (`htmx/merge_people_modal.scala.html`)
     document.body.addEventListener(Const.events.confirmPersonMerge, (event) => {
         const mergeSourceId = event.detail.mergeSourceId
         const mergeDestId = event.detail.mergeDestId
@@ -43,16 +47,30 @@ export function registerPeopleListeners(app) {
     })
 
     document.body.addEventListener(Const.events.personMerged, (event) => {
-        app.dispatch(Const.events.peopleChanged, {
-            personId: event.detail.mergeSourceId,
-        })
+        const { mergeSourceId, mergeDestId } = event.detail
+
+        app.dispatch(Const.events.peopleChanged, { personId: mergeSourceId })
 
         showSuccessSnackBar("Person merged successfully")
 
         // The merge itself returns no content - showing the destination person is a search like
-        // any other. Triage does not search by Person, so its results stay on all of Triage
+        // any other
         if (!Alpine.store(Const.state.currentView).isTriageView()) {
-            runSearch({ params: { personId: event.detail.mergeDestId } })
+            runSearch({ params: { personId: mergeDestId } })
+            return
+        }
+
+        // Triage does not search by Person, so a merge there searches for no one and its results
+        // stay as they are. A Triage URL can still carry a person, though, and results scoped to
+        // one of the two are stale: the source is gone, so its results go back to all of Triage,
+        // as the Results title's × takes them, and the destination's are read again with the
+        // assets the merge gave it
+        const scopedPersonId = Alpine.store(Const.state.searchParams).personId
+
+        if (scopedPersonId === mergeSourceId) {
+            runSearch({ params: { personId: "" } })
+        } else if (scopedPersonId === mergeDestId) {
+            runSearch()
         }
     })
 

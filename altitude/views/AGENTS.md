@@ -12,7 +12,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 * Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the two fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, and the nav's quick search field's glow. The detail is under **Themes** below.
 * Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), the 1 px width and height of `.visually-hidden`, and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
-* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide` or the brand's `--letter-spacing-medium`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand, entries and quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin, the close button and the snackbar's dismiss button; the Font Awesome solid weight 900 selects the icon face.
+* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide`, the brand's `--letter-spacing-medium` or the view band's `--letter-spacing-band`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand, entries and quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin, the close button and the snackbar's dismiss button; the Font Awesome solid weight 900 selects the icon face.
 * Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; only View settings holds an inline dialog, in its menu's popover panel. A control that picks one of several values (the grid toolbar's Group and Sort, and any dropdown added later) is a **choice menu**: the same native popover panel, built by `buildChoiceMenuCtrl` from a server-rendered host of option buttons, never a `<select>`, which stays a form's field. Every menu panel wears the popover dialog's frosted surface. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
@@ -77,6 +77,24 @@ leaves out of the page (`current != Const.NavEntry.TRIAGE`). The URL fragment na
 one, and a fragment naming no tab of the view, `#albums` in Triage, opens the first tab, Folders. Where the explorer sits
 against the results, and the divider between them, is under **Explorer dock** below.
 
+**Triage's look** — Triage is set apart from Browse by the accent (`--theme-accent`, the token nearest teal), at an
+alpha in relative color syntax, so it holds in either theme:
+
+- The results pane (`#content.triage`, `core.css`) is diagonal stripes, a `repeating-linear-gradient` at 135° of
+  `--view-tint` (the accent at 0.24) and the accent at 0.11, each `--space-8` wide. The background belongs to the
+  scroll container, so the stripes stay put while the results scroll. The bars that stick inside the pane (the results
+  title, the toolbar, a group's header, the map's surfaces) paint `--view-tint` alone over `--theme-neutral-2`.
+- The explorer is the accent at 0.17, flat (`pages/index.css`, under `main:has(> #content.triage)`).
+- The **view band** names the view down the left edge of the results: `main`'s `::after` under the same selector, a
+  grid item of the `content` area at its start, `--view-band-width` wide, so it follows the results on every Dock side
+  and stays put while they scroll. It is frosted glass (the accent at 0.28 under `--popover-backdrop-filter`) with a
+  `--border-heavy` accent edge, at 0.8 opacity; its text is vertical (`writing-mode: vertical-rl`), uppercase,
+  `--font-size-large`, `--font-weight-bold`, tracked `--letter-spacing-band`. The word is the pseudo-element's
+  `content` with an empty alternative text (`"Triage" / ""`), since the nav already names the current view, and the
+  band takes no pointer events. `#content.triage` pads its left by `--view-band-width`, the band's gutter, so nothing
+  of the results lies under the glass. It has no `z-index`: Asset detail, Curation and the dialogs paint over it.
+- The nav's Triage entry stays `--success-color`.
+
 **The explorer in Triage** — Triage manages what the explorer lists and does not search it (the glossary's **Triage**),
 so its tabs differ from Browse's in three ways, none of them in the tabs' markup or renderers:
 
@@ -84,15 +102,22 @@ so its tabs differ from Browse's in three ways, none of them in the tabs' markup
   icon and name, and a Person's face and name are search triggers, and the search hydrator refuses a trigger naming a
   folder, a Person or a Location there with a warning snackbar (`blockedSearchOf`, see **Search parameters**). What never
   searched acts as in Browse: a branch folder's expand control, a Category's row, the ⋯ menus, the add buttons, a
-  Person's rename pencil, and every drag and drop. A Person dropped on another merges and runs no search (**People
+  Person's rename pencil, and every drag and drop. A Person dropped on another merges and searches for no one (**People
   tab**).
 - No count is displayed: one rule of `static/css/pages/index.css`, under `main:has(> #content.triage)`, hides `.asset-count`
   in the explorer and a People cell's `.count`. The cells stay in the page and the code that patches them runs as in
   Browse.
-- Those triggers lose the pointer cursor: a second rule of `pages/index.css` sets `cursor: inherit` on a folder's name,
-  the root folder's icon, a leaf folder's control (`.expand-ctrl:not([aria-expanded])`), a Location's name and icon and a
-  People cell's links. Inherit, not `default`, so a draggable row keeps the cursor interact.js gives it; a branch
-  folder's control and a Category's keep their pointer.
+- Those triggers show the arrow, or the move cursor of a draggable row, and never the pointer, nor the text cursor
+  that `auto` shows over a name: two more rules of `pages/index.css`. One sets `cursor: default` on what no drag starts
+  from, a Location's name and icon, a leaf folder's control (`.expand-ctrl:not([aria-expanded])`, which the folder drag
+  ignores) and a folder crumb of the Results title, and on the rows the other rule inherits from, a folder's `.controls`
+  (the root's, which is not draggable, included) and a People cell. The other sets `cursor: inherit` on a folder's
+  name, the tree's icons and a People cell's links, so they take the row's arrow, or the move cursor interact.js writes
+  inline on a draggable row under the mouse, which wins over the stylesheet. A branch folder's control and a Category's
+  keep their pointer.
+- A leaf folder's control is named for what it does: "Open folder *name*" in Browse and "Folder *name*" in Triage,
+  where it opens nothing (`_buildFolderIconCtrl` reads the `currentView` store, set at page load before any tree is
+  built).
 
 ## JS Directory ↔ Template Mapping
 
@@ -305,10 +330,18 @@ editor's own response is about to show the name there. Only a cover-face
 change patches cells, every one of the person, found by `data-person-id` under `#people`; a purge of the recycle bin announces
 `trashPurged`, which refreshes the counts. `personMerged`'s listener announces `peopleChanged`, confirms in the snackbar
 and runs a search for the destination person, except in Triage, which does not search by Person: the results there stay
-as they are. `confirmPersonMerge`'s listener sends the event's whole detail as the values of
+as they are, unless they are one of the two people's, which a Triage URL carrying a `personId` shows. The listener reads
+the `searchParams` store's `personId`: results scoped to the source, who is gone, go back to all of Triage
+(`runSearch` with an empty `personId`, as the Results title's × runs), and results scoped to the destination are read
+again (`runSearch()` with no parameters). `confirmPersonMerge`'s listener sends the event's whole detail as the values of
 the Merge people modal's request, so a `keepDirection: true` reaches `showMergePeopleModal` as a query parameter: with it
 the modal keeps the requested source and destination, and without it, as for a drop, the person with fewer faces is the
-source.
+source. The rename dialog's offer also sends `pane`, its pencil's pane, and the modal then declares that pencil of the
+requested source, `#personRenameCtrl-<pane>-<personId>`, as its `data-app-dialog-return-focus` (a `pane` that is no pane
+is a 400): the modal replaces the rename dialog, and the button that asked for it goes with the dialog, so without the
+selector a cancelled merge would leave focus on the body. A merge that completes takes the source's pencil out of the
+list, and focus then goes nowhere. A drop and the inline editor's offer send no `pane`, and focus returns to the control
+that asked.
 
 ### Full action flow (drag-and-drop example)
 
@@ -332,12 +365,15 @@ person's ID as the detail, and whose refusals are validation replacements. A nam
 the editor, or the dialog's form, with `conflictingPerson`: the field's error row (`includes/person_name_taken`, which
 both render, each passing the row's ID as `errorId` for its field's `aria-describedby`) holds the
 message, naming the holder as stored and saying so if the holder is hidden, and a `Merge into X…` button dispatching
-`confirmPersonMerge` with `keepDirection: true`, so the renamed person merges into the holder, whose ID survives. The
+`confirmPersonMerge` with `keepDirection: true`, and from the dialog its `pane` as well, so the renamed person merges
+into the holder, whose ID survives. The
 button is Alpine's, so the row is rendered inside an `x-data` scope: the results title block's (`#person`) for the editor, and a bare `x-data` on the
 dialog's form, since the popover host has none. The
 editor's response still holds the editor, so no rename is announced, and the editor stays open behind the modal; closing the modal
 leaves the editor and its error. The rename dialog is a popover dialog, and the dialog hosts hold one dialog at a time, so
-the Merge people modal takes its place.
+the Merge people modal takes its place, and returns focus to the dialog's pencil when it is cancelled. The editor's
+field is `#editPersonNameField`, not a dialog field's `#field-name`, which the rename dialog's field has: the dialog can
+be open over the editor, and two fields would share the ID.
 
 ## Alpine.js Integration
 
@@ -628,7 +664,7 @@ and the icon sits in a native `button` (`#expand-folder-children-{id}`, icon `#f
 class `.expand-ctrl`) built by `js/common/folder-tree.js`. A **branch** is a non-root folder with
 child folders; only branches carry expansion state, root is always expanded with no gestures, and a
 leaf keeps a plain `fa-folder` icon with no indicator even when it holds assets (its button
-navigates like the name). A branch's button carries an accessible name, `aria-controls` for its
+navigates like the name, and is named "Open folder *name*", or "Folder *name*" in Triage, where it only warns). A branch's button carries an accessible name, `aria-controls` for its
 children container, and `aria-expanded`, which the model keeps in step with the
 `fa-folder-plus`/`fa-folder-minus` glyph; Enter and Space are single-click activations. Expansion
 sends no request.
@@ -818,13 +854,16 @@ items" flips, through a `$watch` on the store's `triaged` set up in `init()` (th
 `htmx/people_list`: the `.grid` of `.cell.drag-drop.dropzone` cells, each with `data-person-id` and no id, since a person
 may be in both panes, a hidden person's with an `fa-eye-slash` `.hidden-badge` in the image's corner and a
 `.visually-hidden` ", hidden" at the end of its name link, an Unmatched person told apart by its orange "Unknown N" name. The name link carries
-no `aria-label`: it is named by its content, the name, the number and that text, "Mia (3), hidden". A cell's number, the name link's `.count` span,
+no `aria-label`: it is named by its content, the name, the number and then that text, "hidden". A cell's number, the name link's `.count` span,
 is the `ListedPerson`'s `visibleCount`, what opening the person from the repository view finds, and a person
 with nothing to find with triaged items hidden is left off (**People** in `docs/faces.md`).
 
 After the name link, a sibling and not inside it, so that it is no search trigger, each cell has a rename pencil:
-`button.rename` (`fa-edit`, named "Rename *name*"), at the end of the name row and out of its flow, shown by
-`people.css` while the cell is hovered or holds focus, as the results title's pencil is. It requests
+`button.rename` (`fa-edit`, named "Rename *name*"), at the end of the name row and out of its flow, `--space-8` wide at
+least (a 24 px pointer target), shown by `people.css` while the cell is hovered or holds keyboard focus
+(`.cell:has(:focus-visible)`: the pencil a dialog closed from the keyboard returns focus to shows, with the focus ring,
+while focus a click left in a cell shows no second pencil), and always where nothing hovers (`@media (hover: none)`).
+It requests
 `GET /htmx/people/r/:repoId/dialogs/rename-person` (`personId`, `pane`) into `#popoverContent` and is the dialog's
 anchor: its ID is `personRenameCtrl-<pane>-<personId>`, which it names in `data-app-dialog-anchor` and carries as an
 inline `anchor-name: --<its id>`, as the triggers `context-menu-markup.js` builds do (**Modals**). The pane is in the ID
@@ -842,9 +881,9 @@ replaces the popover (**Event flow**).
 In Triage the tab lists every Person of its buckets, those found only in triaged assets included (each load sends
 `triaged=true` there), so the "only in triaged items" line never shows; the buckets and Split view are the ones Browse
 remembers. The numbers are not displayed (`pages/index.css` hides `.count`; **The explorer in Triage**), which also
-leaves a hidden person's link named "Mia, hidden": the space before the number is inside `.count`, and the two spans
-touch, so neither name has a space before its comma. A click on a face or a name warns instead of searching, the links
-lose the pointer cursor, and a merge reloads the tab and confirms without running a search. The remembered state is
+leaves the number out of a hidden person's link name there: the name, then "hidden". A click on a face or a name warns
+instead of searching, the links lose the pointer cursor, and a merge reloads the tab and confirms, searching for no one
+(**Event flow**). The remembered state is
 `localStorage` `Const.localStore.peopleView`, `{ split, buckets: { main: [...], duplicate?: [...] }, paneSizes: { stacked,
 sideBySide } }`, written on every flip and drag and read once in `init()`, which falls back to the first visit's when it
 is missing or unreadable, keeps only the bucket names the tab knows, reads a pane's buckets remembered under the older
@@ -1144,7 +1183,7 @@ does not show through it while it sticks). The scopes:
 - a **folder** as the path's breadcrumb (`.crumbs`, a shared primitive of `core.css` the Detail panel's Folder row wears too, in its own link color):
   every ancestor short of the repository root, top-level first, each a search trigger for its folder
   (`data-app-search-folder-id`, dimmed `.crumb`; a trigger like any other, so in Triage a crumb warns instead of
-  searching and in the trash it does nothing, see **Search parameters**), separated by a dimmed `fa-chevron-right` (`.sep`), and the folder itself as
+  searching, and shows the arrow and not the pointer there, and in the trash it does nothing, see **Search parameters**), separated by a dimmed `fa-chevron-right` (`.sep`), and the folder itself as
   the `.leaf` in the title style. The path wraps rather than truncating. The
   controller builds it from `FolderService.getAncestors` (root first) and the folder; the root folder is the whole
   repository and renders no block
@@ -2090,7 +2129,7 @@ filter chip) and `--theme-on-primary` (text and glyphs on the primary fill: a pi
 checkmark of a selected cell; dark in the dark theme, since the primary cannot carry light text); `--theme-secondary`
 (the supporting surface, lifted off the page: a button, a hovered tab, row or menu action, a count pill in the
 nav, and at 0.5 the track of a toggle group); and `--theme-accent` (teal: where you are and what to do next. The current nav entry's text and
-its tint, the brand's mark and the end of its gradient, and the call to action: the fill of `.action-button.primary`,
+its tint, Triage's stripes, explorer tint and view band, the brand's mark and the end of its gradient, and the call to action: the fill of `.action-button.primary`,
 a dialog's or a form's main action) with `--theme-on-accent` (text on the accent fill, an ink tinted with its hue).
 The neutral scale, `--theme-neutral-1` to `--theme-neutral-4`, ordered from the lightest surface to the darkest text in
 the light theme: `-1` the lightest color in either theme, which no rule draws as a surface: at a low alpha it is the
@@ -2166,7 +2205,8 @@ written in the rule, or a new veil token, described here, when it must be transl
 value is a new token with a meaning, or an existing token whose meaning fits rather than one that merely holds the same
 value, is for lengths: the `--space-*` steps and the role tokens over them. A color a rule takes from a token at an
 alpha is written in relative color syntax too, so it follows the token's pair: the tints of the triage and trash views
-are `rgb(from var(--success-background-color) r g b / 0.07)` and `rgb(from var(--warning-color) r g b / 0.05)`, the
+are `hsl(from var(--theme-accent) h s l / 0.24)` and `rgb(from var(--warning-color) r g b / 0.05)` (Triage's look is
+under **Triage's look** above), the
 nav bar is the primary at 0.1, the current nav entry the accent at 0.16, the brand's hover glow the primary at 0.8, a
 toggle group's track the secondary at 0.5, and an entry's hover glow its own text color at 0.8, written over
 `currentColor` in the same syntax, as are the hover tints of a toggle segment (0.06) and the menu trigger (0.12). A
@@ -2376,7 +2416,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/alpine/components/people-tab.js` | Alpine component of the People tab: the remembered buckets of the Main and Duplicate panes, Split view and the panes' sizes on each axis (`Const.localStore.peopleView`), the pane loads through `htmx.ajax`, the Split.js instance along the Dock side's axis and its remake on `dockSideChanged`, the reload on `peopleChanged` and when the `searchParams` store's `triaged` changes, which each load reads; each load names its pane, and in Triage asks for triaged items whatever the store holds |
 | `views/htmx/people.scala.html`, `people_list.scala.html` | The People tab's shell (the panes and their bucket switches, no list) and one pane's list for the buckets asked for, each cell with its rename pencil, whose ID carries the pane (`pane`); styled by `static/css/htmx/people.css` |
 | `views/htmx/rename_person_dialog.scala.html` | The popover dialog of a People cell's rename pencil: one field holding the name, focus returned to the pencil of its pane, `PERSON_NAME_EDITED_EVENT` on success, the error row or the offer to merge on a refusal |
-| `views/includes/person_name_taken.scala.html` | The error row of a rename to a name another live person holds, with its "Merge into X…" button; rendered by the inline name editor and the rename dialog, each naming the row (`errorId`) and supplying the `x-data` scope its button needs |
+| `views/includes/person_name_taken.scala.html` | The error row of a rename to a name another live person holds, with its "Merge into X…" button; rendered by the inline name editor and the rename dialog, each naming the row (`errorId`) and supplying the `x-data` scope its button needs; the dialog also passes its `pane`, which the offer sends to the Merge people modal |
 | `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read; under each row, for a live asset, Change and Remove and the Change combobox's markup, its listbox rendering the Suggested group and then the list from one option block; a correction's response, its root carrying the result message and any deleted Person) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
 | `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu; its grid and the highlights' look are `static/css/htmx/view_image_detail_modal.css` |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
@@ -2542,7 +2582,8 @@ title's folder crumbs alike.
 - **Trash** spans every folder and has no explorer: a trigger carrying `folderId` does nothing there, silently.
 
 The guard is on triggers alone. `runSearch` called directly is not checked, so a caller that should not search in
-Triage says so itself, as the `personMerged` listener does.
+Triage says so itself, as the `personMerged` listener does: there it searches for no Person, and only clears or reads
+again results a Triage URL scoped to one of the merged people.
 
 Per-request flags that must not be remembered (`isContinuousScroll`, a continuation's
 `after`, and the grid layout and no grouping of the crowded-pin panel's request while the store says
