@@ -1,6 +1,7 @@
 package altitude.core
 
 import java.sql.Connection
+import java.time.Instant
 
 import scala.util.DynamicVariable
 
@@ -34,6 +35,8 @@ object RequestContext:
   // The account's grants in every Library, Library ID to Permissions, from its login token (decorators.requireLogin): none for an
   // Admin, who holds every Permission by type
   val grants: DynamicVariable[Map[String, Permissions]] = new DynamicVariable(Map.empty)
+  // When the request's login token expires (decorators.requireLogin), which the account info dialog shows
+  val sessionExpiresAt: DynamicVariable[Option[Instant]] = new DynamicVariable(None)
   val readQueryCount: DynamicVariable[Int] = new DynamicVariable(0)
   val writeQueryCount: DynamicVariable[Int] = new DynamicVariable(0)
 
@@ -90,5 +93,6 @@ object RequestContext:
     repository.value = None
     permissions.value = Permissions.none
     grants.value = Map.empty
+    sessionExpiresAt.value = None
     readQueryCount.value = 0
     writeQueryCount.value = 0

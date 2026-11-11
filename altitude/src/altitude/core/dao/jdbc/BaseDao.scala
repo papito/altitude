@@ -2,6 +2,7 @@ package altitude.core.dao.jdbc
 
 import com.typesafe.config.Config
 import java.sql.SQLException
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -158,6 +159,13 @@ abstract class BaseDao[Model <: BaseModel]:
    * the engine decides here what the `LocalDateTime` on the model means, exactly as `getDateTimeField` does for the raw paths.
    */
   protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime
+
+  /**
+   * The instant an instant column's `LocalDateTime` stands for, read back the way this engine wrote it (`toLocalDateTime`,
+   * `getDateTimeField`): in the JVM zone on PostgreSQL, as UTC on SQLite. What a model's moment needs before it leaves the
+   * server, which shows it in the viewer's zone.
+   */
+  def instantOf(value: LocalDateTime): Instant
 
   // Aggregates such as COUNT(*) come back as Long on Postgres and Integer on SQLite
   protected def getIntField(value: AnyRef): Int = value match

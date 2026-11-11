@@ -17,8 +17,6 @@
 @repoId = @{ RequestContext.getRepository.persistedId }
 @isAdmin = @{ viewer.accountType == AccountType.Admin }
 
-@count(n: Int, one: String, many: String) = @{ s"$n ${if (n == 1) one else many}" }
-
 @* The initials of a name: the first character of its first two words, in capitals *@
 @initials(name: String) = @{
   name.trim.split("\\s+").filter(_.nonEmpty).take(2).map(word => new String(Character.toChars(word.codePointAt(0)))).mkString.toUpperCase(java.util.Locale.ROOT)
@@ -27,31 +25,6 @@
 @successDetail(message: String) = @{ ujson.write(ujson.Obj("message" -> message)) }
 
 @tabs = @{ List(AccountType.Admin -> "Admins", AccountType.User -> "Users", AccountType.Guest -> "Guests") }
-
-@libraries(card: AccountCard) = {
-    @card.account.accountType match {
-      case AccountType.Admin => { All Libraries }
-      case accountType => {
-        @if(card.libraries.isEmpty) {
-            None
-        } else {
-            <details>
-                <summary>@count(card.libraries.size, "Library", "Libraries")@if(accountType == AccountType.User) { · @count(card.libraries.map(_._2.toList.size).sum, "Permission", "Permissions")}</summary>
-                <ul>
-                @for((library, permissions) <- card.libraries) {
-                    <li>
-                        <span class="library-name">@library.name</span>
-                        @if(accountType == AccountType.User) {
-                        <span class="permission-names">@{ if (permissions.isEmpty) "Access only" else permissions.toList.map(_.label).mkString(", ") }</span>
-                        }
-                    </li>
-                }
-                </ul>
-            </details>
-        }
-      }
-    }
-}
 
 @newLibraries(account: User) = @{
   account.accountType match {
@@ -123,7 +96,7 @@
                 <dt>Status</dt>
                 <dd>@{ if (card.account.isActive) "Active" else "Deactivated" }</dd>
                 <dt>Libraries</dt>
-                <dd>@libraries(card)</dd>
+                <dd>@includes.html.account_libraries(card.account.accountType, card.libraries)</dd>
                 <dt>New Libraries</dt>
                 <dd>@newLibraries(card.account)</dd>
                 <dt>Created</dt>

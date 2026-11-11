@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account Identity Playground</title>
+<style>
+/* ---------- Playground chrome (dark, minimal) ---------- */
+:root {
+  --pg-bg: #0e1015; --pg-panel: #161921; --pg-line: #262a35; --pg-text: #d9dce3; --pg-dim: #8a90a0; --pg-accent: #3bcfce;
+  --pg-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", "DejaVu Sans Mono", monospace;
+  --pg-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--pg-bg); color: var(--pg-text); font: 13px/1.45 var(--pg-font); display: grid; grid-template-columns: 340px 1fr; }
+#controls { border-right: 1px solid var(--pg-line); background: var(--pg-panel); overflow-y: auto; height: 100vh; padding: 14px 16px 40px; }
+#controls h1 { font: 600 15px var(--pg-font); margin: 0 0 4px; }
+#controls .sub { color: var(--pg-dim); margin: 0 0 12px; }
+fieldset { border: 0; border-top: 1px solid var(--pg-line); margin: 12px 0 0; padding: 10px 0 0; }
+legend { font: 600 11px var(--pg-font); text-transform: uppercase; letter-spacing: .06em; color: var(--pg-dim); padding: 0 6px 0 0; }
+.row { display: grid; gap: 4px; margin: 8px 0; }
+.row > label, .row > .lbl { color: var(--pg-dim); font-size: 12px; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.seg button { flex: 1 1 auto; padding: 5px 8px; border: 1px solid var(--pg-line); border-radius: 5px; background: #1c2029; color: var(--pg-text); font: inherit; font-size: 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: hsl(179 60% 52% / .18); border-color: var(--pg-accent); color: #fff; }
+.presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.presets button { padding: 7px 8px; border: 1px solid var(--pg-line); border-radius: 6px; background: #1c2029; color: var(--pg-text); font: inherit; cursor: pointer; text-align: left; }
+.presets button small { display: block; color: var(--pg-dim); font-size: 11px; }
+.presets button:hover { border-color: var(--pg-accent); }
+input[type=range] { width: 100%; accent-color: var(--pg-accent); }
+.range { display: grid; grid-template-columns: 1fr 52px; align-items: center; gap: 8px; }
+.range output { font: 11px var(--pg-mono); color: var(--pg-dim); text-align: right; }
+.check { display: flex; align-items: center; gap: 8px; margin: 3px 0; cursor: pointer; }
+.check input { accent-color: var(--pg-accent); }
+.check .src { margin-left: auto; font: 10px var(--pg-mono); padding: 0 5px; border-radius: 3px; }
+.src.token { color: #87d575; background: #87d57518; }
+.src.db { color: #ebb16b; background: #ebb16b18; }
+.hint { color: var(--pg-dim); font-size: 11px; margin: 2px 0 0; }
+.hue-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -2px; margin-right: 4px; }
+
+#right { display: grid; grid-template-rows: 1fr auto; height: 100vh; min-width: 0; }
+#stageWrap { overflow: auto; padding: 18px; }
+#stageMeta { display: flex; gap: 14px; align-items: center; color: var(--pg-dim); font-size: 12px; margin-bottom: 8px; }
+#stageMeta .warn { color: #ebb16b; }
+#promptBox { border-top: 1px solid var(--pg-line); background: var(--pg-panel); padding: 12px 18px 14px; }
+#promptBox header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+#promptBox h2 { font: 600 11px var(--pg-font); text-transform: uppercase; letter-spacing: .06em; color: var(--pg-dim); margin: 0; }
+#copyBtn { padding: 6px 12px; border-radius: 5px; border: 1px solid var(--pg-accent); background: hsl(179 60% 52% / .15); color: #fff; font: inherit; cursor: pointer; }
+#prompt { margin: 0; max-height: 26vh; overflow: auto; white-space: pre-wrap; font: 12px/1.5 var(--pg-mono); color: #c9cdd6; }
+
+/* ---------- The app mock: Altitude's own tokens (core.css) ---------- */
+.app {
+  color-scheme: dark;
+  --theme-primary: light-dark(#4159d4, #005bff);
+  --theme-secondary: light-dark(#dfe1e6, #484b52);
+  --theme-accent: light-dark(#1e7777, #3bcfce);
+  --theme-neutral-1: light-dark(#fdfdfe, #f7f8fa);
+  --theme-neutral-2: light-dark(#f4f5f7, #353639);
+  --theme-neutral-3: light-dark(#565b66, #babdc5);
+  --theme-neutral-4: light-dark(#12161f, #f7f8fa);
+  --shadow-color: #000;
+  --success-color: light-dark(#297612, #87d575);
+  --warning-color: light-dark(#976212, #ebb16b);
+  --error-color: light-dark(#be2229, #f88a81);
+  --info-color: light-dark(#0e6a9b, #69c1fb);
+  --panel-border-color: hsl(from var(--shadow-color) h s l / 0.18);
+  --popover-border-color: hsl(from var(--theme-neutral-3) h s l / 0.3);
+  --popover-background-color: hsl(from var(--theme-neutral-2) h s l / 0.84);
+  --sheen-shadow: inset 0 1px 0 hsl(from var(--theme-neutral-1) h s l / 0.08);
+  --float-shadow: 0 12px 32px hsl(from var(--shadow-color) h s l / 0.45);
+  --box-shadow: hsl(from var(--theme-neutral-4) h s l / 0.07) 0 1px 0;
+  --scrim-color: hsl(from var(--shadow-color) h s l / 0.45);
+  --radius: 0.3125rem; --radius-small: 0.1875rem; --radius-large: 0.5rem;
+  --space-1: .125rem; --space-2: .25rem; --space-3: .375rem; --space-4: .5rem; --space-5: .625rem; --space-6: 1rem; --space-7: 1.25rem; --space-8: 1.5rem; --space-9: 2.25rem;
+  --chip-padding: var(--space-1) var(--space-4); --chip-border-radius: 999rem;
+  --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  --font-nav: ui-monospace,"SF Mono","JetBrains Mono","Fira Code","DejaVu Sans Mono",monospace;
+  --font-size-xs: .625rem; --font-size-small: .75rem; --font-size-base: .875rem; --font-size-medium: 1rem; --font-size-large: 1.3rem; --font-size-xl: 1.5rem;
+  --font-weight-bold: 700; --font-weight-semibold: 600; --font-weight-medium: 500;
+  --nav-brand-width: 12.5rem; --nav-search-width: 11.5rem; --nav-browse-min-width: min(16rem, 18vw);
+  --account-avatar-size: 2.5rem;
+
+  position: relative; overflow: hidden;
+  min-height: 640px; border-radius: 8px; border: 1px solid var(--pg-line);
+  background: var(--theme-neutral-2); color: var(--theme-neutral-4); font: var(--font-size-base)/1.4 var(--font);
+}
+.app.light { color-scheme: light; }
+.app svg { width: 1em; height: 1em; display: block; flex: none; }
+
+nav { display: flex; column-gap: var(--space-5); align-items: center; background: hsl(from var(--theme-primary) h s l / 0.1); border-bottom: 1px solid var(--panel-border-color); }
+nav > div, nav > button { display: flex; align-items: center; justify-content: center; }
+nav .brand { flex: 0 0 var(--nav-brand-width); justify-content: flex-start; padding-left: var(--space-6); gap: var(--space-3); font: var(--font-weight-bold) var(--font-size-xl) var(--font-nav); letter-spacing: .02em; }
+nav .brand span { background: linear-gradient(90deg, var(--theme-primary), var(--theme-accent)); background-clip: text; color: transparent; }
+nav .brand svg { color: var(--theme-accent); }
+nav .menu { flex: 1 1 0; gap: var(--space-6); padding: var(--space-5) var(--space-3); font: var(--font-weight-medium) var(--font-size-medium) var(--font-nav); text-transform: lowercase; color: var(--theme-neutral-3); white-space: nowrap; }
+nav .menu .count { margin-left: var(--space-3); padding: var(--chip-padding); border-radius: var(--chip-border-radius); background: var(--theme-secondary); color: var(--theme-neutral-4); font-size: var(--font-size-base); }
+nav .menu.triage { color: var(--success-color); }
+nav .menu.trashbin { color: var(--warning-color); }
+nav .menu.current { background: hsl(from var(--theme-accent) h s l / 0.16); color: var(--theme-accent); font-weight: var(--font-weight-bold); align-self: stretch; }
+nav .menu.current .lib { text-transform: none; font-weight: var(--font-weight-medium); }
+nav .search { flex: 1 1 0; padding: 0 var(--space-3); }
+nav .search .field { display: flex; align-items: center; gap: var(--space-3); width: var(--nav-search-width); padding: var(--space-4); color: hsl(from var(--theme-neutral-4) h s l / .6); font: var(--font-size-base) var(--font-nav); }
+nav .theme-switch { flex: 0 0 auto; font-size: var(--font-size-large); padding: 0 var(--space-6) 0 0; border: 0; background: none; color: var(--theme-neutral-3); }
+
+/* ---- The account cell under test ---- */
+nav .menu.account { flex: 0 0 auto; align-self: stretch; padding: 0; gap: 0; position: relative; text-transform: none; }
+.acct-trigger { display: flex; align-items: center; gap: var(--space-4); min-width: 0; padding: var(--space-3) var(--space-3); border: 0; background: none; color: var(--theme-neutral-3); font: inherit; cursor: pointer; align-self: stretch; transition: filter .25s ease; }
+.acct-trigger:hover, .info-btn:hover { filter: drop-shadow(0 0 8px hsl(from var(--tier) h s l / 0.7)); }
+.acct-trigger .label { display: grid; text-align: left; min-width: 0; line-height: 1.15; }
+.acct-trigger .label .primary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: var(--name-max); }
+.acct-trigger .label.stacked .primary { font-size: var(--font-size-base); }
+.acct-trigger .label.ui .primary { font-family: var(--font); }
+.acct-trigger .label .secondary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: var(--name-max); font: var(--font-size-small) var(--font-nav); color: hsl(from var(--theme-neutral-3) h s l / .8); }
+.acct-trigger .label.lowercase .primary { text-transform: lowercase; }
+.acct-trigger .label.tinted .primary { color: var(--tier); }
+.acct-trigger .caret { font-size: var(--font-size-small); opacity: .7; }
+.info-btn { display: grid; place-items: center; padding: 0 var(--space-3); border: 0; background: none; color: hsl(from var(--theme-neutral-3) h s l / .75); font-size: var(--font-size-medium); cursor: pointer; align-self: stretch; }
+
+.avatar { display: grid; place-items: center; position: relative; flex: none; border-radius: 50%; font: var(--font-weight-semibold) .72em/1 var(--font); letter-spacing: .02em; }
+.avatar.icon { color: var(--tier); }
+.avatar.disc { background: color-mix(in oklab, var(--tier) var(--tint), transparent); color: var(--disc-ink); }
+.avatar.ring { background: var(--theme-secondary); color: var(--theme-neutral-4); box-shadow: 0 0 0 2px var(--tier); }
+.avatar.dot { color: var(--theme-neutral-3); }
+.avatar.dot::after { content: ""; position: absolute; right: -1px; bottom: -1px; width: 38%; height: 38%; border-radius: 50%; background: var(--tier); box-shadow: 0 0 0 2px light-dark(#e3e6f2, #2f3240); }
+.avatar.icon svg, .avatar.dot svg { width: 100%; height: 100%; }
+
+.chip-tier { display: inline-block; padding: 0 var(--space-3); border-radius: var(--chip-border-radius); border: 1px solid hsl(from var(--tier) h s l / .55); background: hsl(from var(--tier) h s l / .14); color: var(--tier); font: var(--font-weight-semibold) var(--font-size-xs)/1.5 var(--font-nav); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.label .row1 { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+
+/* Menu panel: core.css .context-menu */
+.context-menu { position: absolute; top: calc(100% + 2px); right: 0; z-index: 5; width: max-content; min-width: 12rem; padding: var(--space-2); border: 1px solid var(--popover-border-color); border-radius: var(--radius-large); background: var(--popover-background-color); backdrop-filter: blur(10px) saturate(200%); box-shadow: var(--sheen-shadow), var(--float-shadow); color: var(--theme-neutral-4); font: var(--font-size-base) var(--font); text-transform: none; display: grid; }
+.context-menu .act { display: grid; grid-template-columns: var(--space-6) 1fr; align-items: center; padding: var(--space-5) var(--space-6) var(--space-5) var(--space-4); border: 0; border-radius: var(--radius-small); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.context-menu .act::before { content: ""; }
+.context-menu .act:hover { background: hsl(from var(--theme-neutral-4) h s l / 0.08); }
+.context-menu hr { border: 0; border-top: 1px solid var(--popover-border-color); margin: var(--space-2) 0; }
+.menu-head { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: var(--space-5); padding: var(--space-5) var(--space-6) var(--space-5) var(--space-5); max-width: 18rem; }
+.context-menu .act.menu-head { grid-template-columns: auto 1fr; }
+.context-menu .act.menu-head::before { display: none; }
+.menu-head .n { font-weight: var(--font-weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-head .u { font: var(--font-size-small) var(--font-nav); color: var(--theme-neutral-3); }
+
+/* Flyout */
+.flyout { position: absolute; z-index: 6; color: var(--theme-neutral-4); font: var(--font-size-base)/1.45 var(--font); text-transform: none; border: 1px solid var(--popover-border-color); background: var(--popover-background-color); backdrop-filter: blur(10px) saturate(200%); box-shadow: var(--sheen-shadow), var(--float-shadow); display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
+.flyout.popover { border-radius: var(--radius-large); max-height: 560px; }
+.flyout.drawer { top: 0; right: 0; bottom: 0; border-radius: 0; border-width: 0 0 0 1px; background: var(--theme-neutral-2); animation: slideIn .18s ease-out; }
+.flyout.modal { border-radius: var(--radius-large); left: 50%; top: 50%; translate: -50% -50%; max-height: 90%; background: var(--theme-neutral-2); }
+@keyframes slideIn { from { translate: 100% 0; } }
+.scrim { position: absolute; inset: 0; background: var(--scrim-color); z-index: 5; }
+.flyout .fhead { display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-6); align-items: center; padding: var(--space-6) var(--space-6) var(--space-5); position: relative; }
+.flyout .fhead::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--tier); opacity: var(--band); }
+.flyout .fhead .n { font-size: var(--font-size-medium); font-weight: var(--font-weight-semibold); overflow-wrap: anywhere; }
+.flyout .fhead .u { font: var(--font-size-small) var(--font-nav); color: var(--theme-neutral-3); }
+.flyout .close { border: 0; background: none; color: hsl(from currentColor h s l / .6); font-size: var(--font-size-large); cursor: pointer; align-self: start; line-height: 1; }
+.flyout .fbody { overflow-y: auto; padding: var(--space-3) var(--space-6) var(--space-6); }
+.flyout dl { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-4) var(--space-6); margin: 0; }
+.flyout dt { color: var(--theme-neutral-3); }
+.flyout dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.flyout .desc { display: block; color: var(--theme-neutral-3); font-size: var(--font-size-small); margin-top: 2px; }
+.perm-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.perm-chips span { padding: 0 var(--space-3); border-radius: var(--radius-small); font-size: var(--font-size-small); background: hsl(from var(--theme-accent) h s l / .16); color: var(--theme-neutral-4); border: 1px solid hsl(from var(--theme-accent) h s l / .35); }
+.perm-chips span.off { background: none; border-color: var(--popover-border-color); color: hsl(from var(--theme-neutral-3) h s l / .6); text-decoration: line-through; text-decoration-color: hsl(from var(--theme-neutral-3) h s l / .4); }
+.flyout details summary { cursor: pointer; }
+.flyout details ul { display: grid; gap: var(--space-4); margin: var(--space-4) 0 0; padding: 0; list-style: none; }
+.flyout details li .ln { font-weight: var(--font-weight-medium); }
+.flyout details li .ln.here::after { content: " · this Library"; color: var(--theme-accent); font-weight: normal; font-size: var(--font-size-small); }
+.flyout details li .pn { display: block; color: var(--theme-neutral-3); font-size: var(--font-size-small); }
+.flyout .sec-title { grid-column: 1 / -1; margin-top: var(--space-4); padding-top: var(--space-5); border-top: 1px solid var(--popover-border-color); font: var(--font-weight-semibold) var(--font-size-xs) var(--font-nav); text-transform: uppercase; letter-spacing: .08em; color: var(--theme-neutral-3); }
+.flyout .ffoot { display: flex; gap: var(--space-3); justify-content: flex-end; padding: var(--space-5) var(--space-6); border-top: 1px solid var(--popover-border-color); }
+.action-button { padding: var(--space-3) var(--space-6); border-radius: var(--radius); border: 1px solid var(--popover-border-color); background: hsl(from var(--theme-neutral-4) h s l / .06); color: var(--theme-neutral-4); font: inherit; cursor: pointer; }
+.action-button:hover { background: hsl(from var(--theme-neutral-4) h s l / .12); }
+
+/* The page under the nav */
+.page { padding: var(--space-6) var(--space-6) var(--space-6) var(--space-9); }
+.page .title { font-size: var(--font-size-medium); color: var(--theme-neutral-3); margin-bottom: var(--space-6); }
+.thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-4); }
+.thumbs i { aspect-ratio: 3/2; border-radius: var(--radius-small); background: linear-gradient(135deg, hsl(from var(--theme-neutral-3) h s l / .18), hsl(from var(--theme-neutral-3) h s l / .07)); }
+</style>
+</head>
+<body>
+<aside id="controls">
+  <h1>Account identity in the nav</h1>
+  <p class="sub">Who you are, at a glance: name or username beside a tier-colored icon, and an info flyout. The mock uses Altitude's own tokens.</p>
+
+  <div class="presets" id="presets"></div>
+
+  <fieldset><legend>Preview</legend>
+    <div class="row"><span class="lbl">Logged in as</span><div class="seg" data-key="type" data-opts="Admin,User,Guest"></div></div>
+    <div class="row"><span class="lbl">Name</span><div class="seg" data-key="nameLen" data-opts="normal:Typical,long:Long"></div></div>
+    <div class="row"><span class="lbl">Theme</span><div class="seg" data-key="theme" data-opts="dark:Dark,light:Light"></div></div>
+    <div class="row"><span class="lbl">Open</span><div class="seg" data-key="show" data-opts="closed:Nothing,menu:Menu,flyout:Flyout"></div>
+      <p class="hint">Or click the trigger and the info button in the preview.</p></div>
+    <div class="row"><label>Window width</label><div class="range"><input type="range" data-key="width" min="1024" max="1920" step="16"><output data-out="width"></output></div></div>
+  </fieldset>
+
+  <fieldset><legend>Trigger label</legend>
+    <div class="row"><div class="seg" data-key="label" data-opts="icon:Icon only,username:@username,name:Name,stacked:Name + @user"></div></div>
+    <div class="row"><label>Longest label before an ellipsis</label><div class="range"><input type="range" data-key="nameMax" min="6" max="16" step="0.5"><output data-out="nameMax"></output></div></div>
+    <label class="check"><input type="checkbox" data-key="navCase"> Lowercase, like the nav entries</label>
+    <div class="row"><span class="lbl">Lettering</span><div class="seg" data-key="labelFont" data-opts="nav:Nav monospace,ui:UI sans"></div></div>
+    <label class="check"><input type="checkbox" data-key="tintLabel"> Tint the name in the tier color</label>
+    <label class="check"><input type="checkbox" data-key="caret"> Caret after the label</label>
+    <div class="row"><span class="lbl">Tier chip</span><div class="seg" data-key="chip" data-opts="none:None,after:After name,under:Under name"></div></div>
+  </fieldset>
+
+  <fieldset><legend>Icon</legend>
+    <div class="row"><div class="seg" data-key="iconStyle" data-opts="icon:Tinted icon,disc:Initials disc,ring:Initials + ring,dot:Icon + dot"></div></div>
+    <div class="row"><label>Icon size</label><div class="range"><input type="range" data-key="iconSize" min="1" max="2" step="0.05"><output data-out="iconSize"></output></div></div>
+    <div class="row" data-when="iconStyle=disc"><label>Disc fill strength</label><div class="range"><input type="range" data-key="tint" min="15" max="100" step="5"><output data-out="tint"></output></div></div>
+    <label class="check"><input type="checkbox" data-key="glyphByTier"> A glyph per tier too (shield, person, eye)</label>
+    <p class="hint">Color alone does not tell every viewer the tier; a glyph or chip carries it as well.</p>
+  </fieldset>
+
+  <fieldset><legend>Tier colors</legend>
+    <div class="row"><div class="seg" data-key="colorSource" data-opts="tokens:Existing tokens,custom:New tier tokens"></div>
+      <p class="hint" data-when="colorSource=tokens">--error-color, --success-color, --info-color. Note Triage's entry is already --success-color.</p></div>
+    <div data-when="colorSource=custom">
+      <div class="row"><label><span class="hue-swatch" id="swA"></span>Admin hue</label><div class="range"><input type="range" data-key="hueAdmin" min="0" max="60"><output data-out="hueAdmin"></output></div></div>
+      <div class="row"><label><span class="hue-swatch" id="swU"></span>User hue</label><div class="range"><input type="range" data-key="hueUser" min="100" max="175"><output data-out="hueUser"></output></div></div>
+      <div class="row"><label><span class="hue-swatch" id="swG"></span>Guest hue</label><div class="range"><input type="range" data-key="hueGuest" min="200" max="275"><output data-out="hueGuest"></output></div></div>
+      <div class="row"><label>Chroma (how vivid)</label><div class="range"><input type="range" data-key="chroma" min="0.04" max="0.2" step="0.01"><output data-out="chroma"></output></div></div>
+    </div>
+  </fieldset>
+
+  <fieldset><legend>Info button</legend>
+    <div class="row"><div class="seg" data-key="info" data-opts="button:(i) beside trigger,menuItem:Menu entry,menuHead:Menu header,merged:Flyout is the menu"></div>
+      <p class="hint" id="infoHint"></p></div>
+  </fieldset>
+
+  <fieldset><legend>Flyout</legend>
+    <div class="row"><div class="seg" data-key="flyout" data-opts="popover:Popover,drawer:Side drawer,modal:Modal"></div></div>
+    <div class="row"><label>Width</label><div class="range"><input type="range" data-key="flyoutWidth" min="18" max="34" step="1"><output data-out="flyoutWidth"></output></div></div>
+    <label class="check"><input type="checkbox" data-key="band"> Tier color band across the top</label>
+    <label class="check"><input type="checkbox" data-key="actions"> Change password and Log out in its footer</label>
+    <div class="row"><span class="lbl">Permissions shown</span><div class="seg" data-key="permStyle" data-opts="held:Held only,all:All nine, unheld dimmed"></div></div>
+    <div class="row"><span class="lbl">Sections <span class="src token">token</span> needs no read · <span class="src db">db</span> read when it opens</span></div>
+    <div id="sections"></div>
+  </fieldset>
+</aside>
+
+<main id="right">
+  <div id="stageWrap">
+    <div id="stageMeta"><span id="metaWidth"></span><span id="metaWarn" class="warn"></span></div>
+    <div class="app" id="app"></div>
+  </div>
+  <section id="promptBox">
+    <header><h2>Prompt</h2><button id="copyBtn" type="button">Copy prompt</button></header>
+    <pre id="prompt"></pre>
+  </section>
+</main>
+
+<script>
+const PERMS = ['Import', 'Curate own', 'Curate all', 'Organize', 'Edit Metadata', 'Create Users', 'Create Guests', 'Recycle', 'Purge'];
+const HERE = 'Family Archive';
+const ACCOUNTS = {
+  Admin: { name: 'Marta Okafor', long: 'Maximiliana Featherstonehaugh-Ravensworth', username: 'marta', email: 'marta@studio.lan',
+           grants: 'all', createLibs: true, newLib: null, createdBy: 'Setup', since: 'Mar 2, 2026', last: 'Today, 09:14', expires: 'Nov 18, 09:14' },
+  User:  { name: 'Jonas Lindqvist', long: 'Jonas Sebastian Lindqvist-Ekström', username: 'jonas', email: 'jonas@studio.lan',
+           grants: [{ lib: 'Family Archive', p: ['Import', 'Curate own', 'Organize', 'Edit Metadata', 'Recycle'] },
+                    { lib: 'Client 2', p: PERMS.slice() },
+                    { lib: 'Riverside Community Arts Foundation: Annual Report Photography, 2026', p: ['Import', 'Curate own'] }],
+           createLibs: false, newLib: ['Import', 'Curate own'], createdBy: 'Marta Okafor (@marta)', since: 'Apr 19, 2026', last: 'Yesterday, 17:40', expires: 'Nov 17, 17:40' },
+  Guest: { name: 'Priya Raman', long: 'Priyanka Venkataraman-Subramaniam', username: 'priya.client', email: 'priya@client.example',
+           grants: [{ lib: 'Family Archive', p: [] }, { lib: 'Client 2', p: [] }],
+           createLibs: false, newLib: null, createdBy: 'Jonas Lindqvist (@jonas)', since: 'Oct 30, 2026', last: 'Today, 11:02', expires: 'Nov 18, 11:02' },
+};
+const TYPE_DESC = {
+  Admin: 'Every Permission in every Library; manages accounts and Settings',
+  User: 'Holds Permissions per Library',
+  Guest: 'Views the Libraries shared with it',
+};
+const SECTIONS = [
+  ['identity', 'Name, @username, avatar', 'token'],
+  ['email', 'Email', 'token'],
+  ['type', 'Account type and what it means', 'token'],
+  ['here', 'Permissions in this Library', 'token'],
+  ['libraries', 'All Libraries (expandable)', 'token'],
+  ['createLibs', 'Create Libraries', 'token'],
+  ['newLib', 'New-Library grant', 'db'],
+  ['createdBy', 'Created by', 'db'],
+  ['since', 'Member since', 'db'],
+  ['last', 'Last login', 'db'],
+  ['expires', 'Session expires', 'token'],
+];
+const INFO_HINT = {
+  button: 'A small (i) after the trigger opens the flyout; the trigger still opens Change password / Log out.',
+  menuItem: '"Account info…" as the menu\'s first entry, above Change password and Log out.',
+  menuHead: 'The menu opens with an identity header; clicking it opens the full flyout.',
+  merged: 'One target: the trigger opens the flyout itself, which carries Change password and Log out.',
+};
+
+const DEFAULTS = {
+  type: 'User', nameLen: 'normal', theme: 'dark', show: 'closed', width: 1440,
+  label: 'name', nameMax: 11, navCase: false, labelFont: 'nav', tintLabel: false, caret: false, chip: 'none',
+  iconStyle: 'icon', iconSize: 1.3, tint: 30, glyphByTier: false,
+  colorSource: 'tokens', hueAdmin: 25, hueUser: 145, hueGuest: 240, chroma: 0.13,
+  info: 'button', flyout: 'popover', flyoutWidth: 22, band: true, actions: false, permStyle: 'held',
+  sections: { identity: true, email: true, type: true, here: true, libraries: true, createLibs: true, newLib: false, createdBy: false, since: true, last: true, expires: true },
+};
+const PRESETS = {
+  'Quiet': { sub: 'tinted icon + @username', v: { label: 'username', iconStyle: 'icon', chip: 'none', info: 'button', flyout: 'popover', navCase: true, caret: false } },
+  'Avatar': { sub: 'initials disc, name over @user', v: { label: 'stacked', iconStyle: 'disc', iconSize: 1.6, tint: 30, chip: 'none', info: 'button', flyout: 'popover', navCase: false } },
+  'Badge': { sub: 'icon, name and a tier chip', v: { label: 'name', iconStyle: 'icon', chip: 'after', info: 'menuItem', flyout: 'popover', glyphByTier: false } },
+  'Drawer': { sub: 'ring avatar, merged flyout', v: { label: 'stacked', iconStyle: 'ring', iconSize: 1.5, chip: 'none', info: 'merged', flyout: 'drawer', actions: true, flyoutWidth: 24,
+              sections: { identity: true, email: true, type: true, here: true, libraries: true, createLibs: true, newLib: true, createdBy: true, since: true, last: true, expires: true } } },
+  'Today': { sub: 'as shipped, for comparison', v: { label: 'icon', iconStyle: 'icon', colorSource: 'tokens', info: 'none', chip: 'none', caret: false, monochrome: true } },
+};
+
+let state = structuredClone(DEFAULTS);
+let open = null; // 'menu' | 'flyout' | null (from clicks); state.show overrides when not 'closed'
+
+/* ---------- icons ---------- */
+let maskN = 0;
+function svgUser() { const id = 'm' + (++maskN); return `<svg viewBox="0 0 24 24" aria-hidden="true"><defs><mask id="${id}"><rect width="24" height="24" fill="#fff"/><circle cx="12" cy="9.3" r="3.7" fill="#000"/><path d="M5.3 19.2c1.5-2.9 3.9-4.4 6.7-4.4s5.2 1.5 6.7 4.4" fill="#000"/></mask></defs><circle cx="12" cy="12" r="11" fill="currentColor" mask="url(#${id})"/></svg>`; }
+function svgShield() { const id = 'm' + (++maskN); return `<svg viewBox="0 0 24 24" aria-hidden="true"><defs><mask id="${id}"><rect width="24" height="24" fill="#fff"/><circle cx="12" cy="9.4" r="2.9" fill="#000"/><path d="M7 17.2c1.1-2.2 2.9-3.3 5-3.3s3.9 1.1 5 3.3z" fill="#000"/></mask></defs><path d="M12 1.2 21 4.6v6.2c0 5.6-3.8 10.4-9 12-5.2-1.6-9-6.4-9-12V4.6z" fill="currentColor" mask="url(#${id})"/></svg>`; }
+function svgEye() { const id = 'm' + (++maskN); return `<svg viewBox="0 0 24 24" aria-hidden="true"><defs><mask id="${id}"><rect width="24" height="24" fill="#fff"/><path d="M4.5 12c2-3.3 4.5-5 7.5-5s5.5 1.7 7.5 5c-2 3.3-4.5 5-7.5 5s-5.5-1.7-7.5-5z" fill="#000"/><circle cx="12" cy="12" r="2.6" fill="#fff"/></mask></defs><circle cx="12" cy="12" r="11" fill="currentColor" mask="url(#${id})"/></svg>`; }
+const svgInfo = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="7.6" r="1.4" fill="currentColor"/><rect x="10.8" y="10.4" width="2.4" height="7" rx="1" fill="currentColor"/></svg>`;
+const svgChevron = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16 12 8l8 8" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const svgCaret = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6z" fill="currentColor"/></svg>`;
+const svgSearch = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`;
+const svgSun = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 1.8v2.6M12 19.6v2.6M1.8 12h2.6M19.6 12h2.6M4.8 4.8l1.8 1.8M17.4 17.4l1.8 1.8M4.8 19.2l1.8-1.8M17.4 6.6l1.8-1.8"/></g></svg>`;
+const svgMoon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" fill="currentColor"/></svg>`;
+const svgBox = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}" fill="currentColor"/></svg>`;
+const ICON = {
+  inbox: svgBox('M3 13 5.5 4h13L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zm2.3-1H9l1 2h4l1-2h3.7L17 6H7z'),
+  plus: svgBox('M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm6.6 4v3.6H7v2.8h3.6V17h2.8v-3.6H17v-2.8h-3.6V7z'),
+  users: svgBox('M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zm7.5 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 19c.6-3.6 3.4-6 7-6s6.4 2.4 7 6zm15.4 0c-.3-2-1.2-3.7-2.6-4.9.6-.2 1.2-.3 1.8-.3 2.8 0 5 1.9 5.4 5.2z'),
+  cog: svgBox('M10.3 2h3.4l.5 2.7 1.7.9 2.5-1.2 2.4 2.4-1.2 2.5.7 1.7 2.7.5v3.4l-2.7.5-.7 1.7 1.2 2.5-2.4 2.4-2.5-1.2-1.7.7-.5 2.7h-3.4l-.5-2.7-1.7-.7-2.5 1.2-2.4-2.4 1.2-2.5-.7-1.7L2 13.7v-3.4l2.7-.5.7-1.7-1.2-2.5 2.4-2.4 2.5 1.2 1.7-.9zM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z'),
+  trash: svgBox('M9 2h6l1 2h4v2H4V4h4zm-3 5h12l-1 14H7z'),
+};
+
+/* ---------- color ---------- */
+function tierColor(type) {
+  if (state.monochrome) return 'var(--theme-neutral-3)';
+  if (state.colorSource === 'tokens') return { Admin: 'var(--error-color)', User: 'var(--success-color)', Guest: 'var(--info-color)' }[type];
+  const h = { Admin: state.hueAdmin, User: state.hueUser, Guest: state.hueGuest }[type];
+  return `light-dark(oklch(0.52 ${state.chroma} ${h}), oklch(0.8 ${state.chroma} ${h}))`;
+}
+function swatchColor(h) { return `oklch(0.8 ${state.chroma} ${h})`; }
+
+/* ---------- render ---------- */
+const acct = () => ACCOUNTS[state.type];
+const dispName = () => state.nameLen === 'long' ? acct().long : acct().name;
+const initials = (n) => { const w = n.split(/[\s-]+/).filter(Boolean); return ((w[0]?.[0] || '') + (w.length > 1 ? w[w.length - 1][0] : '')).toUpperCase(); };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function avatar(sizeEm) {
+  const t = state.type, style = state.monochrome ? 'icon' : state.iconStyle;
+  const glyph = state.glyphByTier ? ({ Admin: svgShield, User: svgUser, Guest: svgEye }[t])() : svgUser();
+  const sz = `width:${sizeEm}em;height:${sizeEm}em;font-size:${sizeEm < 1.6 ? 1 : sizeEm / 1.6}em;`;
+  if (style === 'icon') return `<span class="avatar icon" style="${sz}">${glyph}</span>`;
+  if (style === 'dot') return `<span class="avatar dot" style="${sz}">${glyph}</span>`;
+  const fs = `font-size:${(sizeEm * 0.42).toFixed(2)}em;width:${(1 / 0.42).toFixed(3)}em;height:${(1 / 0.42).toFixed(3)}em;`;
+  return `<span class="avatar ${style}" style="${fs}">${esc(initials(dispName()))}</span>`;
+}
+function chip() { return `<span class="chip-tier">${state.type}</span>`; }
+
+function triggerHTML() {
+  const a = acct(), name = dispName();
+  let label = '';
+  const showChip = state.chip !== 'none' && !state.monochrome;
+  const cls = `label${state.navCase ? ' lowercase' : ''}${state.tintLabel ? ' tinted' : ''}${state.label === 'stacked' ? ' stacked' : ''}${state.labelFont === 'ui' ? ' ui' : ''}`;
+  if (state.label === 'username') label = `<span class="${cls}"><span class="row1"><span class="primary" style="font-family:var(--font-nav)">@${esc(a.username)}</span>${state.chip === 'after' && showChip ? chip() : ''}</span>${state.chip === 'under' && showChip ? `<span>${chip()}</span>` : ''}</span>`;
+  else if (state.label === 'name') label = `<span class="${cls}"><span class="row1"><span class="primary">${esc(name)}</span>${state.chip === 'after' && showChip ? chip() : ''}</span>${state.chip === 'under' && showChip ? `<span>${chip()}</span>` : ''}</span>`;
+  else if (state.label === 'stacked') label = `<span class="${cls}"><span class="row1"><span class="primary">${esc(name)}</span>${state.chip === 'after' && showChip ? chip() : ''}</span><span class="secondary">@${esc(a.username)}${state.chip === 'under' && showChip ? ' ' + chip() : ''}</span></span>`;
+  else if (showChip) label = `<span class="${cls}">${chip()}</span>`;
+  const caret = state.caret && state.label !== 'icon' ? `<span class="caret">${svgCaret}</span>` : '';
+  const aria = `Account: ${a.username} (${state.type})`;
+  return `<button type="button" class="acct-trigger" data-act="trigger" title="${esc(aria)}" aria-label="${esc(aria)}">${avatar(state.iconSize)}${label}${caret}</button>`;
+}
+
+function menuHTML() {
+  const a = acct();
+  let head = '';
+  if (state.info === 'menuHead') head = `<button type="button" class="act menu-head" data-act="info">${avatar(2)}<span style="min-width:0"><span class="n" style="display:block">${esc(dispName())}</span><span class="u">@${esc(a.username)} · ${state.type}</span></span></button><hr>`;
+  const item = state.info === 'menuItem' ? `<button type="button" class="act" data-act="info">Account info…</button>` : '';
+  return `<div class="context-menu">${head}${item}<button type="button" class="act">Change password…</button><button type="button" class="act">Log out</button></div>`;
+}
+
+function permChips(held) {
+  const list = state.permStyle === 'all' ? PERMS : PERMS.filter((p) => held.includes(p));
+  if (!list.length) return `<span class="desc" style="margin:0">Access only: no Permission</span>`;
+  return `<span class="perm-chips">${list.map((p) => `<span class="${held.includes(p) ? '' : 'off'}">${p}</span>`).join('')}</span>`;
+}
+
+function flyoutHTML() {
+  const a = acct(), s = state.sections, isAdmin = state.type === 'Admin';
+  const rows = [];
+  const add = (dt, dd) => rows.push(`<dt>${dt}</dt><dd>${dd}</dd>`);
+  if (s.email) add('Email', esc(a.email));
+  if (s.type) add('Type', `${chip()}<span class="desc">${TYPE_DESC[state.type]}</span>`);
+  if (s.here || s.libraries) rows.push(`<div class="sec-title">Access</div>`);
+  if (s.here) {
+    if (isAdmin) add(esc(HERE), `<span class="desc" style="margin:0">Every Permission</span>`);
+    else add(`<span title="${esc(HERE)}">${esc(HERE)}</span>`, permChips(a.grants.find((g) => g.lib === HERE).p));
+  }
+  if (s.libraries) {
+    if (isAdmin) add('Libraries', 'All Libraries');
+    else {
+      const n = a.grants.length, pc = a.grants.reduce((t, g) => t + g.p.length, 0);
+      const sum = state.type === 'Guest' ? `${n} Libraries` : `${n} Libraries · ${pc} Permissions`;
+      add('Libraries', `<details${state.flyout === 'drawer' ? ' open' : ''}><summary>${sum}</summary><ul>${a.grants.map((g) => `<li><span class="ln${g.lib === HERE ? ' here' : ''}">${esc(g.lib)}</span><span class="pn">${g.p.length ? g.p.join(', ') : 'Access only'}</span></li>`).join('')}</ul></details>`);
+    }
+  }
+  const acc = [];
+  if (s.createLibs) acc.push(['Create Libraries', isAdmin ? 'Yes, as an Admin' : (a.createLibs ? 'Yes' : 'No')]);
+  if (s.newLib && !isAdmin) acc.push(['New Libraries', a.newLib ? `Granted: ${a.newLib.join(', ')}` : (state.type === 'Guest' ? 'Not granted' : 'Not granted')]);
+  if (acc.length) { rows.push(`<div class="sec-title">Abilities</div>`); acc.forEach(([d, v]) => add(d, v)); }
+  const ses = [];
+  if (s.createdBy) ses.push(['Created by', esc(a.createdBy)]);
+  if (s.since) ses.push(['Member since', a.since]);
+  if (s.last) ses.push(['Last login', a.last]);
+  if (s.expires) ses.push(['Session expires', a.expires]);
+  if (ses.length) { rows.push(`<div class="sec-title">Account</div>`); ses.forEach(([d, v]) => add(d, v)); }
+
+  const head = s.identity
+    ? `<div class="fhead">${avatar(2.6)}<div style="min-width:0"><div class="n">${esc(dispName())}</div><div class="u">@${esc(a.username)}</div></div><button class="close" data-act="close" aria-label="Close">×</button></div>`
+    : `<div class="fhead"><span></span><div class="n">Your account</div><button class="close" data-act="close" aria-label="Close">×</button></div>`;
+  const foot = (state.actions || state.info === 'merged') ? `<div class="ffoot"><button class="action-button">Change password…</button><button class="action-button">Log out</button></div>` : '<div></div>';
+  return `${head}<div class="fbody"><dl>${rows.join('')}</dl></div>${foot}`;
+}
+
+function navHTML() {
+  const t = state.type, member = t !== 'Guest';
+  const cells = [];
+  cells.push(`<div class="brand">${svgChevron}<span>altitude</span></div>`);
+  cells.push(`<div class="menu current"><span>browse</span><span class="lib">· ${HERE}</span>${svgCaret}</div>`);
+  cells.push(`<div class="search"><span class="field">${svgSearch}<span style="flex:1;text-align:center">quick search</span></span></div>`);
+  if (member) cells.push(`<div class="menu triage">${ICON.inbox}<span>triage<span class="count">37</span></span></div>`);
+  if (member) cells.push(`<div class="menu">${ICON.plus}<span>import</span></div>`);
+  if (t === 'Admin' || t === 'User') cells.push(`<div class="menu">${ICON.users}<span>users</span></div>`);
+  if (t === 'Admin') cells.push(`<div class="menu">${ICON.cog}<span>settings</span></div>`);
+  if (member) cells.push(`<div class="menu trashbin">${ICON.trash}<span>trash<span class="count">4</span></span></div>`);
+  const infoBtn = state.info === 'button' ? `<button type="button" class="info-btn" data-act="info" title="Account info" aria-label="Account info">${svgInfo}</button>` : '';
+  const shown = state.show !== 'closed' ? state.show : open;
+  cells.push(`<div class="menu account" id="acctCell">${triggerHTML()}${infoBtn}${shown === 'menu' && state.info !== 'merged' ? menuHTML() : ''}</div>`);
+  cells.push(`<button class="theme-switch">${state.theme === 'dark' ? svgSun : svgMoon}</button>`);
+  return `<nav id="nav">${cells.join('')}</nav>`;
+}
+
+function renderPreview() {
+  maskN = 0;
+  const app = document.getElementById('app');
+  app.className = 'app' + (state.theme === 'light' ? ' light' : '');
+  app.style.width = state.width + 'px';
+  app.style.setProperty('--tier', tierColor(state.type));
+  app.style.setProperty('--name-max', state.nameMax + 'rem');
+  app.style.setProperty('--tint', state.tint + '%');
+  app.style.setProperty('--disc-ink', state.tint >= 60 ? 'light-dark(#fff, #12161f)' : 'var(--tier)');
+  app.style.setProperty('--band', state.band ? 1 : 0);
+  const shown = state.show !== 'closed' ? state.show : open;
+  const flyoutOpen = shown === 'flyout' || (shown === 'menu' && state.info === 'merged');
+  app.innerHTML = navHTML() + `<div class="page"><div class="title">${state.type === 'Guest' ? 'Browse' : 'Triage'} · ${HERE}</div><div class="thumbs">${'<i></i>'.repeat(24)}</div></div>`;
+  if (flyoutOpen && state.info !== 'none') {
+    const navH = document.getElementById('nav').offsetHeight;
+    const f = document.createElement('div');
+    f.className = 'flyout ' + state.flyout;
+    f.style.width = state.flyoutWidth + 'rem';
+    f.innerHTML = flyoutHTML();
+    if (state.flyout === 'popover') {
+      const cell = document.getElementById('acctCell'), ar = app.getBoundingClientRect(), cr = cell.getBoundingClientRect();
+      f.style.top = (cr.bottom - ar.top + 2) + 'px';
+      f.style.right = Math.max(8, ar.right - cr.right) + 'px';
+    } else if (state.flyout === 'drawer') {
+      f.style.top = navH + 'px';
+    } else {
+      const s = document.createElement('div'); s.className = 'scrim'; s.dataset.act = 'close'; app.appendChild(s);
+    }
+    app.appendChild(f);
+  }
+  const nav = document.getElementById('nav');
+  document.getElementById('metaWidth').textContent = `Window ${state.width}px · ${state.type} · ${state.theme}`;
+  document.getElementById('metaWarn').textContent = nav.scrollWidth > nav.clientWidth + 1 ? `⚠ the nav overflows at ${state.width}px` : '';
+  document.getElementById('swA').style.background = swatchColor(state.hueAdmin);
+  document.getElementById('swU').style.background = swatchColor(state.hueUser);
+  document.getElementById('swG').style.background = swatchColor(state.hueGuest);
+}
+
+/* ---------- prompt ---------- */
+function updatePrompt() {
+  const s = state;
+  if (s.monochrome) { document.getElementById('prompt').textContent = 'The "Today" preset shows the account menu as it ships (icon only, no tier color, no info). Pick another preset or adjust the controls to describe a change.'; return; }
+  const L = [];
+  L.push('Show who is logged in on the nav\'s account menu (altitude/views/includes/nav.scala.html, `nav .menu.account` in core.css, and its specimen in the style guide).');
+  L.push('');
+  // Trigger
+  const labelText = { icon: 'the icon alone, as today', username: 'the icon followed by `@username` in the nav monospace', name: 'the icon followed by the account\'s name', stacked: 'the icon followed by the name, with `@username` under it, dimmed and monospace (as on an account card)' }[s.label];
+  let t = `Trigger: ${labelText}`;
+  if (s.label !== 'icon') {
+    t += `, cut with an ellipsis past ${s.nameMax}rem (a new size token in core.css) with the whole name in the title`;
+    t += s.labelFont === 'ui' ? ', in the UI sans-serif (--font) rather than the nav monospace' : ', in the nav monospace';
+    t += s.navCase ? ', lowercased like the nav entries' : ', keeping the name\'s own case as the Library menu does';
+    if (s.tintLabel) t += ', the name tinted in the tier color';
+    if (s.caret) t += ', then a caret like the Library menu\'s';
+  }
+  t += '.';
+  L.push(t);
+  if (s.chip !== 'none') L.push(`Tier chip: a small uppercase chip (ADMIN / USER / GUEST) in the tier color, ${s.chip === 'after' ? 'after the name on its line' : 'under the name'}.`);
+  // Icon
+  const iconText = {
+    icon: 'the `fa-user-circle` icon colored by tier',
+    disc: `an initials disc filled with the tier color at ${s.tint}% ${s.tint >= 60 ? '(solid, dark initials in dark theme)' : '(a tint, initials in the tier color)'}`,
+    ring: 'an initials disc in --theme-secondary with a 2px ring in the tier color',
+    dot: 'the `fa-user-circle` icon in the entry\'s neutral color with a small status dot in the tier color at its lower right',
+  }[s.iconStyle];
+  L.push(`Icon: ${iconText}, ${s.iconSize}em${s.glyphByTier ? '; the glyph also follows the tier (fa-user-shield for an Admin, fa-user-circle for a User, an eye for a Guest), so color is not the only signal' : ''}.`);
+  if (s.colorSource === 'tokens') L.push('Tier colors from existing tokens, no new color: Admin --error-color (reddish), User --success-color (greenish), Guest --info-color (bluish). (The Triage entry already uses --success-color.)');
+  else L.push(`Tier colors as three new tokens in core.css, light-dark pairs in OKLCH: --tier-admin oklch(0.52/0.8 ${s.chroma} ${s.hueAdmin}), --tier-user oklch(0.52/0.8 ${s.chroma} ${s.hueUser}), --tier-guest oklch(0.52/0.8 ${s.chroma} ${s.hueGuest}) (light L 0.52, dark L 0.8).`);
+  L.push('The trigger\'s accessible name and title say the type as well: "Account: <username> (Admin)".');
+  L.push('');
+  // Info
+  const infoText = {
+    button: 'An info button (fa-info-circle, dimmed) right after the trigger in the same cell opens the account flyout; the trigger keeps opening the menu with Change password… and Log out.',
+    menuItem: 'The menu gets "Account info…" as its first entry, above Change password… and Log out; it opens the account flyout.',
+    menuHead: 'The menu opens with an identity header (avatar, name, @username · type); pressing it opens the account flyout. Change password… and Log out follow a separator.',
+    merged: 'The trigger opens the account flyout directly; the separate menu goes, and the flyout\'s footer carries Change password… and Log out.',
+  }[s.info];
+  L.push(infoText);
+  const fly = { popover: `a popover dialog below the account cell, right-aligned, ${s.flyoutWidth}rem wide, on the frosted popover surface (#popoverDialog, as the Change password dialog opens)`, drawer: `a side drawer ${s.flyoutWidth}rem wide sliding in from the right under the nav, full height`, modal: `a modal ${s.flyoutWidth}rem wide in the general modal host` }[s.flyout];
+  L.push(`Flyout: ${fly}, loaded with htmx from a new GET /htmx/account/dialogs/info beside the Change password dialog's route (OwnPasswordController, any account's)${s.band ? ', a 3px band in the tier color across its top' : ''}.`);
+  const sec = SECTIONS.filter(([k]) => s.sections[k]);
+  const lines = sec.map(([k, label, src]) => {
+    let x = label;
+    if (k === 'here') x += s.permStyle === 'all' ? ' (all nine Permission chips, the ones not held dimmed and struck through; "Every Permission" for an Admin)' : ' (chips of the Permissions held; "Access only" for a Guest; "Every Permission" for an Admin)';
+    if (k === 'libraries') x += ' (the account card\'s summary, "3 Libraries · 14 Permissions", expanding to each Library with its Permission names, the current one marked; "All Libraries" for an Admin)';
+    if (k === 'type') x += ' (a tier chip and the type card\'s one-line description from the Add User modal)';
+    if (k === 'last') x += ' (last_login_at, which this very login stamped)';
+    return `  - ${x}${src === 'db' ? ' [read from the database when the flyout opens]' : ' [from the token\'s claims]'}`;
+  });
+  L.push('It shows, grouped under Access, Abilities and Account:');
+  L.push(...lines);
+  if ((s.actions || s.info === 'merged') && s.info !== 'merged') L.push('Its footer also carries Change password… and Log out.');
+  L.push('');
+  L.push('Keep to the existing tokens and components (views/AGENTS.md): sizes as tokens in core.css, the flyout\'s layout in a css file of its own in the app.css bundle. Check the nav still fits a 1280px window for each account type with a long name, and update the style guide\'s Navigation section and its account menu specimen.');
+  document.getElementById('prompt').textContent = L.join('\n');
+}
+
+function updateAll() { syncControls(); renderPreview(); updatePrompt(); }
+
+/* ---------- controls ---------- */
+function buildControls() {
+  document.querySelectorAll('.seg[data-key]').forEach((seg) => {
+    seg.innerHTML = seg.dataset.opts.split(',').map((o) => { const [v, l] = o.includes(':') ? o.split(':') : [o, o]; return `<button type="button" data-v="${v}">${l}</button>`; }).join('');
+    seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state[seg.dataset.key] = b.dataset.v; state.monochrome = false; if (seg.dataset.key === 'show') open = null; updateAll(); });
+  });
+  document.querySelectorAll('input[type=range][data-key]').forEach((r) => r.addEventListener('input', () => { state[r.dataset.key] = parseFloat(r.value); state.monochrome = false; updateAll(); }));
+  document.querySelectorAll('input[type=checkbox][data-key]').forEach((c) => c.addEventListener('change', () => { state[c.dataset.key] = c.checked; state.monochrome = false; updateAll(); }));
+  const secBox = document.getElementById('sections');
+  secBox.innerHTML = SECTIONS.map(([k, l, src]) => `<label class="check"><input type="checkbox" data-sec="${k}"> ${l}<span class="src ${src}">${src}</span></label>`).join('');
+  secBox.addEventListener('change', (e) => { const k = e.target.dataset.sec; if (k) { state.sections[k] = e.target.checked; updateAll(); } });
+  const pre = document.getElementById('presets');
+  pre.innerHTML = Object.entries(PRESETS).map(([n, p]) => `<button type="button" data-p="${n}">${n}<small>${p.sub}</small></button>`).join('');
+  pre.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const keep = { type: state.type, nameLen: state.nameLen, theme: state.theme, width: state.width };
+    state = Object.assign(structuredClone(DEFAULTS), keep, structuredClone(PRESETS[b.dataset.p].v));
+    if (PRESETS[b.dataset.p].v.info === 'none') state.info = 'none';
+    open = null; updateAll();
+  });
+}
+function syncControls() {
+  document.querySelectorAll('.seg[data-key]').forEach((seg) => seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(state[seg.dataset.key] === b.dataset.v))));
+  document.querySelectorAll('input[type=range][data-key]').forEach((r) => { r.value = state[r.dataset.key]; });
+  document.querySelectorAll('output[data-out]').forEach((o) => { const k = o.dataset.out, v = state[k]; o.textContent = k === 'width' ? v + 'px' : k === 'nameMax' || k === 'flyoutWidth' ? v + 'rem' : k === 'iconSize' ? v + 'em' : k === 'tint' ? v + '%' : k.startsWith('hue') ? v + '°' : v; });
+  document.querySelectorAll('input[type=checkbox][data-key]').forEach((c) => { c.checked = !!state[c.dataset.key]; });
+  document.querySelectorAll('input[data-sec]').forEach((c) => { c.checked = !!state.sections[c.dataset.sec]; });
+  document.querySelectorAll('[data-when]').forEach((el) => { const [k, v] = el.dataset.when.split('='); el.style.display = state[k] === v ? '' : 'none'; });
+  document.getElementById('infoHint').textContent = state.info === 'none' ? 'No info today.' : INFO_HINT[state.info];
+}
+
+/* ---------- preview interactions ---------- */
+document.getElementById('app').addEventListener('click', (e) => {
+  const a = e.target.closest('[data-act]');
+  const cur = state.show !== 'closed' ? state.show : open;
+  if (state.show !== 'closed') state.show = 'closed';
+  if (!a) { if (!e.target.closest('.flyout, .context-menu')) { open = null; updateAll(); } return; }
+  const act = a.dataset.act;
+  if (act === 'trigger') open = state.info === 'merged' ? (cur === 'menu' || cur === 'flyout' ? null : 'flyout') : (cur === 'menu' ? null : 'menu');
+  else if (act === 'info') open = cur === 'flyout' ? null : 'flyout';
+  else if (act === 'close') open = null;
+  updateAll();
+});
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  const b = document.getElementById('copyBtn');
+  try { await navigator.clipboard.writeText(document.getElementById('prompt').textContent); b.textContent = 'Copied!'; }
+  catch { const r = document.createRange(); r.selectNodeContents(document.getElementById('prompt')); getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent = 'Selected, press Ctrl+C'; }
+  setTimeout(() => { b.textContent = 'Copy prompt'; }, 1400);
+});
+window.addEventListener('resize', renderPreview);
+
+buildControls();
+for (const [k, v] of new URLSearchParams(location.search)) { if (k in state && typeof state[k] !== 'object') state[k] = typeof DEFAULTS[k] === 'number' ? +v : typeof DEFAULTS[k] === 'boolean' ? v === 'true' : v; }
+updateAll();
+</script>
+</body>
+</html>

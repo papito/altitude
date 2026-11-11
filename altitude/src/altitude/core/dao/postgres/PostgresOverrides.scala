@@ -1,6 +1,7 @@
 package altitude.core.dao.postgres
 
 import java.sql.ResultSet
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -50,6 +51,8 @@ trait PostgresOverrides:
   // An instant is shown in the JVM zone, as `getDateTimeField` does for the raw paths
   override protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime =
     value.atZoneSameInstant(ZoneId.systemDefault).toLocalDateTime
+
+  override def instantOf(value: LocalDateTime): Instant = value.atZone(ZoneId.systemDefault).toInstant
 
   override protected def jsonFunc = "CAST(? as jsonb)"
 

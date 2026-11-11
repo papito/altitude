@@ -293,3 +293,14 @@
   height: var(--section-vertical-space);
   border: var(--border-hairline) var(--theme-neutral-3);
 }
+
+/* The account menu's icon in each account type's color, beside the type's name (Navigation & tabs) */
+.sg-account-types {
+  display: flex;
+  gap: var(--space-7);
+}
+
+.sg-account-types i {
+  font-size: var(--font-size-large);
+  color: var(--account-type-color);
+}

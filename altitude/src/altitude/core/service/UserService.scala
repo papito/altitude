@@ -44,6 +44,9 @@ object UserService:
    */
   final case class EditForm(account: User, grants: Map[String, Permissions], state: String)
 
+  /** When an account was added and when it last logged in (any session of it), as instants: what its info dialog shows */
+  final case class AccountTimes(createdAt: Option[Instant], lastLoginAt: Option[Instant])
+
   /**
    * The fingerprint of what an Admin's edit shows of an account: its name, username, email address, type, Create Libraries flag
    * and new-Library grant, and its grants. Any change to them, another Admin's edit or a grant a new Library gave, changes it; a
@@ -377,6 +380,13 @@ class UserService(val app: Altitude) extends BaseService[User]:
         )
 
       dao.getById(stored.persistedId)
+    }
+
+  /** When the account was added and when it last logged in, as stored ([[UserService.AccountTimes]]) */
+  def accountTimes(accountId: String): UserService.AccountTimes =
+    txManager.asReadOnly {
+      val account = dao.getById(accountId)
+      UserService.AccountTimes(account.createdAt.map(dao.instantOf), account.lastLoginAt.map(dao.instantOf))
     }
 
   /** The account as an Admin's edit form opens it, with its grants and their state, read in one transaction */

@@ -116,24 +116,6 @@
   overflow-wrap: anywhere;
 }
 
-.account-card summary {
-  cursor: pointer;
-}
-
-.account-card details ul {
-  display: grid;
-  row-gap: var(--space-3);
-  margin: var(--space-3) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.account-card .permission-names {
-  display: block;
-  font-size: var(--font-size-small);
-  color: var(--theme-neutral-3);
-}
-
 /* The Add User modal: the general modal widened, one column whose body scrolls under the actions, which stay in view */
 #modalContent:has(#accountForm) {
   --modal-content-width: var(--account-form-width);

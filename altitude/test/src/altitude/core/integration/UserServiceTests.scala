@@ -375,6 +375,44 @@ import altitude.core.util.Util
     testApp.service.user.getById(user.persistedId).lastLoginAt shouldBe loggedInAt
   }
 
+  test("An account's addition and last login read back as the instants they happened at") {
+
+    /**
+     * Setup:
+     *
+     * An account added, then logged in, the clock read before and after each.
+     *
+     * Assertions:
+     *
+     * The account's times (`UserService.accountTimes`) put its addition between the readings around the add, and its last login
+     * between the readings around the login, on either engine and whatever the JVM's zone.
+     *
+     * Edge cases:
+     *
+     * Before its first login, the account has no last login.
+     */
+    // The engines keep a timestamp to the microsecond or the second, so a reading is widened by a second each way
+    def between(moment: Option[java.time.Instant], from: java.time.Instant, to: java.time.Instant): Boolean =
+      moment.exists(at => !at.isBefore(from.minusSeconds(1)) && !at.isAfter(to.plusSeconds(1)))
+
+    val beforeAdd = java.time.Instant.now
+    val user = testContext.persistUser()
+    val afterAdd = java.time.Instant.now
+    testApp.service.user.accountTimes(user.persistedId).lastLoginAt shouldBe None
+
+    val beforeLogin = java.time.Instant.now
+    testApp.service.user.loginAndSetUser(user.username, TestContext.USER_PASSWORD) should not be None
+    val afterLogin = java.time.Instant.now
+
+    val times = testApp.service.user.accountTimes(user.persistedId)
+    withClue(s"created at ${times.createdAt}, between $beforeAdd and $afterAdd: ") {
+      between(times.createdAt, beforeAdd, afterAdd) shouldBe true
+    }
+    withClue(s"last login at ${times.lastLoginAt}, between $beforeLogin and $afterLogin: ") {
+      between(times.lastLoginAt, beforeLogin, afterLogin) shouldBe true
+    }
+  }
+
   test("A login with a control character fails as a wrong password does, and its event keeps the login printable and short") {
 
     /**

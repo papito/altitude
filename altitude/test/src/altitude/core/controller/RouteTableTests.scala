@@ -556,6 +556,7 @@ import altitude.core.routes.decorators.requirePermission
     Row(DELETE, "/htmx/users/r/:repoId/account", Ids.NotEntity(Set("accountId"), ACCOUNT)).forAdmins,
     none(GET, "/htmx/account/dialogs/password"),
     none(PUT, "/htmx/account/password"),
+    none(GET, "/htmx/account/r/:repoId/dialogs/info"),
     // Curation
     none(GET, "/api/curation/r/:repoId/count").needs(Permission.CurateOwn, Permission.CurateAll),
     probed(POST, "/api/curation/r/:repoId/resolve") {

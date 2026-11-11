@@ -3,6 +3,7 @@ import { contextMenu } from "./context-menu.js"
 import { curation } from "./curation.js"
 import { faceCombobox } from "./face-combobox.js"
 import { initDateGroupSelectable } from "./date-group-selectable.js"
+import { localTime } from "./local-time.js"
 import { peopleTab } from "./people-tab.js"
 import { viewSettings } from "./view-settings.js"
 
@@ -11,6 +12,9 @@ window.initDateGroupSelectable = initDateGroupSelectable
 
 // Referenced as `x-data="contextMenu"` by the folder tree and album list renderers
 Alpine.data("contextMenu", contextMenu)
+
+// Referenced as `x-data="localTime"` by htmx/account_info_dialog.scala.html, which the nav's account menu opens
+Alpine.data("localTime", localTime)
 
 // Referenced as `x-data="viewSettings"` by htmx/view_settings_dialog.scala.html
 Alpine.data("viewSettings", viewSettings)

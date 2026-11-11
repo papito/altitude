@@ -1,0 +1,32 @@
+@import altitude.core.models.AccountType
+@import altitude.core.models.Permissions
+@import altitude.core.models.Repository
+
+@* An account's Libraries as an account card on the Users page (htmx/user_accounts) and the account info dialog
+   (htmx/account_info_dialog) show them: "All Libraries" for an Admin; for anyone else a summary counting the Libraries, and for a
+   User the Permissions too ("2 Libraries · 7 Permissions"), that expands to each Library with its Permissions' labels ("Access
+   only" for none; a Guest's carry none), the Library of `currentId` marked as this one; "None" without a Library. Styled by
+   static/css/includes/account_libraries.css. *@
+@(accountType: AccountType, libraries: List[(Repository, Permissions)], currentId: Option[String] = None)
+
+@count(n: Int, one: String, many: String) = @{ s"$n ${if (n == 1) one else many}" }
+
+@accountType match {
+  case AccountType.Admin => { All Libraries }
+  case _ if libraries.isEmpty => { None }
+  case _ => {
+    <details class="account-libraries">
+        <summary>@count(libraries.size, "Library", "Libraries")@if(accountType == AccountType.User) { · @count(libraries.map(_._2.toList.size).sum, "Permission", "Permissions")}</summary>
+        <ul>
+        @for((library, permissions) <- libraries) {
+            <li>
+                <span class="library-name">@library.name</span>@if(currentId.contains(library.persistedId)) { <span class="current">this Library</span>}
+                @if(accountType == AccountType.User) {
+                <span class="permission-names">@{ if (permissions.isEmpty) "Access only" else permissions.toList.map(_.label).mkString(", ") }</span>
+                }
+            </li>
+        }
+        </ul>
+    </details>
+  }
+}

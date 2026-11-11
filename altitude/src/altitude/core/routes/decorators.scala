@@ -170,9 +170,10 @@ object decorators:
    * cookie whose token will never be good again (`TokenCheck.Refused`). A repository in the path that the account cannot see is
    * answered as not found, as any foreign entity is: an Admin sees every one, anyone else one its token carries a grant in, so
    * the gate reads no database. The token's Permissions in the path's Library (every one for an Admin; none for anyone else with
-   * no Library in the path) are put in `RequestContext.permissions`, and its grants in every Library in `RequestContext.grants`.
-   * A token rebuilt from the database is set as the cookie of the answer, unless the answer sets the session cookie itself: an
-   * endpoint that mints a token (a password change) mints it after the rebuild, which its change made stale.
+   * no Library in the path) are put in `RequestContext.permissions`, its grants in every Library in `RequestContext.grants`, and
+   * its expiry in `RequestContext.sessionExpiresAt`. A token rebuilt from the database is set as the cookie of the answer, unless
+   * the answer sets the session cookie itself: an endpoint that mints a token (a password change) mints it after the rebuild,
+   * which its change made stale.
    */
   class requireLogin extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -194,6 +195,7 @@ object decorators:
     private def accessibleRepositoryOnly(req: cask.Request, claims: TokenClaims)(endpoint: => Result[Raw]): Result[Raw] =
       val account = claims.account
       RequestContext.grants.value = claims.grants
+      RequestContext.sessionExpiresAt.value = Some(claims.expiresAt)
       RequestContext.repository.value match
         case Some(repo) =>
           claims.permissionsIn(repo.persistedId) match

@@ -1,0 +1,66 @@
+@import java.time.Instant
+@import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.models.AccountType
+@import altitude.core.models.Permissions
+@import altitude.core.models.Repository
+@import altitude.core.models.User
+@import altitude.core.service.UserService.AccountTimes
+@import altitude.core.util.Util
+
+@* The account info dialog of the nav's account menu (GET /htmx/account/r/:repoId/dialogs/info, any account's), a popover dialog
+   right-aligned below the menu's info button, a band of the account type's color across its top: the account (its name,
+   username and email address), its type with the type's description, then under Access its Permissions in the Library of the
+   page (chips of those held; "Every Permission" for an Admin, "Access only" for none) and its Libraries
+   (includes/account_libraries, this one marked), under Abilities the Create Libraries flag, and under Account when it was added,
+   when it last logged in (any session of it) and when this session's token expires, each a `<time>` the page shows in the
+   viewer's zone (`localTime`, js/alpine/components/local-time.js) and holding its UTC text until then. Everything but the
+   Libraries' names and the two stored times comes from the login token. Styled by static/css/htmx/account_info_dialog.css. *@
+@(account: User, libraries: List[(Repository, Permissions)], times: AccountTimes, expiresAt: Option[Instant])
+
+@here = @{ RequestContext.getRepository }
+@isAdmin = @{ account.accountType == AccountType.Admin }
+
+@moment(at: Option[Instant], withTime: Boolean) = {@at match {
+  case Some(instant) => {<time datetime="@instant" x-data="localTime" data-app-time-style="@{ if (withTime) "datetime" else "date" }">@Util.utcText(instant, withTime)</time>}
+  case None => {Never}
+}}
+
+<div id="accountInfo"
+     x-data
+     data-account-type="@account.accountType"
+     data-app-fragment="modal"
+     data-app-modal-title="@Const.UI.ACCOUNT_INFO_DIALOG_TITLE">
+    <header>
+        <i class="fas fa-user-circle avatar" aria-hidden="true"></i>
+        <div class="who">
+            <div class="name">@account.name</div>
+            <div class="username">@@@account.username</div>
+        </div>
+    </header>
+    <dl>
+        <dt>Email</dt><dd>@account.email</dd>
+        <dt>Type</dt><dd><span class="account-type">@account.accountType</span><span class="description">@account.accountType.description</span></dd>
+    </dl>
+    <section aria-labelledby="accountInfoAccess">
+        <h3 id="accountInfoAccess">Access</h3>
+        <dl>
+            <dt>@here.name</dt><dd class="here">@if(isAdmin) {Every Permission} else {@if(RequestContext.permissions.value.isEmpty) {Access only} else {<ul class="permission-chips">@for(permission <- RequestContext.permissions.value.toList) {<li>@permission.label</li>}</ul>}}</dd>
+            <dt>Libraries</dt><dd>@includes.html.account_libraries(account.accountType, libraries, Some(here.persistedId))</dd>
+        </dl>
+    </section>
+    <section aria-labelledby="accountInfoAbilities">
+        <h3 id="accountInfoAbilities">Abilities</h3>
+        <dl>
+            <dt>Create Libraries</dt><dd>@{ if (isAdmin || account.canCreateLibraries) "Yes" else "No" }</dd>
+        </dl>
+    </section>
+    <section aria-labelledby="accountInfoAccount">
+        <h3 id="accountInfoAccount">Account</h3>
+        <dl>
+            <dt>Member since</dt><dd>@moment(times.createdAt, withTime = false)</dd>
+            <dt>Last login</dt><dd>@moment(times.lastLoginAt, withTime = true)</dd>
+            <dt>Session expires</dt><dd>@moment(expiresAt, withTime = true)</dd>
+        </dl>
+    </section>
+</div>

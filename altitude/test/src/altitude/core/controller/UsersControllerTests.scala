@@ -18,7 +18,7 @@ import altitude.core.util.Util
 /**
  * The Users page and its dialogs: who opens the page and sees which accounts, the nav's Users entry, the Add User form rendered
  * to the creator's ceiling and its round trip, the refusal of anything above the ceiling, an Admin's edit, password, deactivation
- * and delete, and every account's change of its own password.
+ * and delete, and every account's change of its own password and its account info dialog.
  */
 @DoNotDiscover class UsersControllerTests extends ControllerTestCore {
 
@@ -195,8 +195,9 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The main page's nav carries the Users entry, linking to the Users page of its Library, for the Admin and the holder of
-     * Create Guests, and not for the other two. Every nav carries the account menu, named after the username, with Change
-     * password.
+     * Create Guests, and not for the other two. Every nav carries the account menu in its account type's color, its trigger
+     * showing the username and named after it and the type, with Change password, and the info button requesting the account info
+     * dialog of the Library.
      */
     val callers = List(
       (AccountType.Admin, Permissions.all, true),
@@ -215,8 +216,11 @@ import altitude.core.util.Util
         host =>
           val page = get(s"$host/r/$repoId").text()
           page.contains(s"""href="/users/r/$repoId"""") shouldBe shown
-          page should include(s"""aria-label="Account: ${testContext.user.username}"""")
+          page should include(s"""<div class="menu account" data-account-type="$accountType">""")
+          page should include(s"""aria-label="Account: ${testContext.user.username} ($accountType)"""")
+          page should include(s"""<span class="username">@${testContext.user.username}</span>""")
           page should include("Change password…")
+          page should include(s"""hx-get="/htmx/account/r/$repoId/dialogs/info"""")
       }
     }
   }
@@ -500,6 +504,86 @@ import altitude.core.util.Util
         set.statusCode shouldBe 200
         sessionCookies(set).size shouldBe 1
         opens(set)
+    }
+  }
+
+  test("The account info dialog shows the account, its Permissions here and in every Library, and its times") {
+
+    /**
+     * Setup:
+     *
+     * A User holding Import, Curate own and Organize in the Library it is logged in to, and every Permission in a second one;
+     * then an Admin, and a Guest, each logged in to a Library.
+     *
+     * Assertions:
+     *
+     * The User's dialog, a popover dialog in its type's color, names the account (name, username and email address), its type
+     * with the type's description, the three Permissions it holds in this Library, its two Libraries and twelve Permissions with
+     * each Library's Permissions and this one marked, no Create Libraries, and as instants for the browser to show in its zone
+     * the account's addition, its last login and when this session's token expires.
+     *
+     * Edge cases:
+     *
+     * The Admin's reads every Permission here, all Libraries and Create Libraries; the Guest's access alone, here and in its one
+     * Library.
+     */
+    val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import, Permission.CurateOwn, Permission.Organize))
+    val user = testContext.user
+    val here = testContext.repositories.find(_.persistedId == repoId).get
+    val second = addLibrary(s"Client ${Util.randomStr(6)}", user)
+
+    withServer(App) {
+      host =>
+        val answer = get(s"$host/htmx/account/r/$repoId/dialogs/info")
+        answer.statusCode shouldBe 200
+        val dialog = answer.text()
+        dialog should include(s"""data-app-modal-title="${C.UI.ACCOUNT_INFO_DIALOG_TITLE}"""")
+        dialog should include(s"""data-account-type="${AccountType.User}"""")
+        dialog should include(user.name)
+        dialog should include(s"@${user.username}")
+        dialog should include(user.email)
+        dialog should include(AccountType.User.description)
+
+        val herePermissions = dialog.split("""<dd class="here">""")(1).split("</dd>")(0)
+        for (permission <- List(Permission.Import, Permission.CurateOwn, Permission.Organize)) {
+          herePermissions should include(s"<li>${permission.label}</li>")
+        }
+        (herePermissions should not).include(Permission.Purge.label)
+
+        dialog should include("2 Libraries · 12 Permissions")
+        dialog should include(here.name)
+        dialog should include(second.name)
+        dialog should include(Permission.values.map(_.label).mkString(", "))
+        dialog should include("""<span class="current">this Library</span>""")
+        dialog should include("<dt>Create Libraries</dt><dd>No</dd>")
+
+        val times = users.accountTimes(user.persistedId)
+        val expiresAt =
+          App.altitude.service.paseto.readToken(testContext.cookies(SessionController.AUTH_COOKIE_NAME).getValue).get.expiresAt
+        dialog should include(s"""<time datetime="${times.createdAt.get}"""")
+        dialog should include(s"""<time datetime="${times.lastLoginAt.get}"""")
+        dialog should include(s"""<time datetime="$expiresAt"""")
+    }
+
+    testContext = new altitude.test.TestContext(testApp)
+    val adminRepoId = loginAs(AccountType.Admin, Permissions.all)
+    withServer(App) {
+      host =>
+        val dialog = get(s"$host/htmx/account/r/$adminRepoId/dialogs/info").text()
+        dialog should include(s"""data-account-type="${AccountType.Admin}"""")
+        dialog should include("Every Permission")
+        dialog should include("All Libraries")
+        dialog should include("<dt>Create Libraries</dt><dd>Yes</dd>")
+    }
+
+    testContext = new altitude.test.TestContext(testApp)
+    val guestRepoId = loginAs(AccountType.Guest, Permissions.none)
+    withServer(App) {
+      host =>
+        val dialog = get(s"$host/htmx/account/r/$guestRepoId/dialogs/info").text()
+        dialog should include(s"""data-account-type="${AccountType.Guest}"""")
+        dialog.split("""<dd class="here">""")(1).split("</dd>")(0) should include("Access only")
+        dialog should include("<summary>1 Library</summary>")
     }
   }
 

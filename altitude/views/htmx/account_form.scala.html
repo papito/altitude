@@ -30,14 +30,6 @@
     </div>
 }
 
-@description(accountType: AccountType) = @{
-  accountType match {
-    case AccountType.Admin => "Every Permission in every Library, and the accounts and Settings"
-    case AccountType.User => "The Permissions chosen in each Library"
-    case AccountType.Guest => "Browses the Libraries shared with it"
-  }
-}
-
 <form id="accountForm"
       action="#"
       x-data="accountForm"
@@ -81,7 +73,7 @@
                     <label class="type-card">
                         <input type="radio" name="@Api.Field.User.ACCOUNT_TYPE" value="@accountType" x-model="type"@if(form.accountType.contains(accountType)){ checked}>
                         <span class="type-name">@accountType</span>
-                        <span class="type-description">@description(accountType)</span>
+                        <span class="type-description">@accountType.description</span>
                     </label>
                 }
                 </div>

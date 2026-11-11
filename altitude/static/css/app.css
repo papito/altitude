@@ -8,6 +8,7 @@
 @import "includes/batch_ops.css";
 @import "includes/search_results.css";
 @import "includes/results_title.css";
+@import "includes/account_libraries.css";
 @import "htmx/folders.css";
 @import "htmx/albums.css";
 @import "htmx/locations.css";
@@ -34,4 +35,5 @@
 @import "htmx/triage_scope_dialog.css";
 @import "htmx/new_library_dialog.css";
 @import "htmx/own_password_dialog.css";
+@import "htmx/account_info_dialog.css";
 @import "htmx/quick_view_modal.css";

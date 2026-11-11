@@ -13,7 +13,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- at the person table.
 
 CREATE TABLE _core (
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL
 );
 
@@ -136,7 +136,7 @@ CREATE TABLE audit_event (
   target jsonb,
   detail jsonb,
   client_ip TEXT,
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
 CREATE INDEX audit_event_01 ON audit_event (created_at);

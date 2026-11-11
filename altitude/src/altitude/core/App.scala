@@ -22,6 +22,7 @@ import altitude.core.routes.web.SetupController
 import altitude.core.routes.web.StaticController
 import altitude.core.routes.web.StyleGuideController
 import altitude.core.routes.web.UsersController
+import altitude.core.routes.web.partial.AccountInfoController
 import altitude.core.routes.web.partial.AlbumActionController
 import altitude.core.routes.web.partial.AssetActionController
 import altitude.core.routes.web.partial.CurationActionController
@@ -101,6 +102,7 @@ object App extends cask.Main:
     new LibraryActionController,
     new UserActionController,
     new OwnPasswordController,
+    new AccountInfoController,
     new AlbumActionController,
     new LocationActionController,
     new AssetActionController,

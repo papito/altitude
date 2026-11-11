@@ -3,8 +3,10 @@ package altitude.core.util
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.sql.SQLException
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import org.mindrot.jbcrypt.BCrypt
@@ -44,6 +46,17 @@ object Util:
   def humanReadableDateTime(dateTime: Option[LocalDateTime]): String =
     if dateTime.isEmpty then return "N/A"
     dateTime.get.format(outputFormatter)
+
+  private val utcDateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH).withZone(ZoneOffset.UTC)
+  private val utcDateTimeFormatter =
+    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'", Locale.ENGLISH).withZone(ZoneOffset.UTC)
+
+  /**
+   * A moment in UTC, "2026-11-11" or with its time "2026-11-11 22:12 UTC": the text a `<time>` element holds until the page shows
+   * it in the viewer's zone (js/alpine/components/local-time.js), and without script
+   */
+  def utcText(instant: Instant, withTime: Boolean): String =
+    (if withTime then utcDateTimeFormatter else utcDateFormatter).format(instant)
 
   private val dateFormatter = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.ENGLISH)
 

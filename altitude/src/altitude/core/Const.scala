@@ -290,3 +290,4 @@ object Const:
     val SET_PASSWORD_DIALOG_TITLE = "Set the password of %s"
     val DELETE_USER_DIALOG_TITLE = "Delete %s"
     val CHANGE_PASSWORD_DIALOG_TITLE = "Change password"
+    val ACCOUNT_INFO_DIALOG_TITLE = "Your account"

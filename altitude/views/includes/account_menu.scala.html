@@ -1,0 +1,29 @@
+@import altitude.core.RequestContext
+
+@* The account menu's cell, as includes/nav renders it and the style guide's navigation section holds it: the account's type in
+   `data-account-type`, which colors its icon (core.css), then the ⋯ menu (includes/menu_ctrl) whose trigger shows the
+   `fa-user-circle` icon and the account's `@username`, named "Account: <username> (<type>)", and holds `actions`, then the info
+   button, which requests the account info dialog (`infoDialogUrl`) into the popover host below itself, then `after`, what the
+   cell holds beside them (the nav's Log out form). *@
+@(triggerId: String, panelId: String, infoButtonId: String, infoDialogUrl: String)(actions: Html)(after: Html)
+
+@account = @{ RequestContext.getAccount }
+
+<div class="menu account" data-account-type="@account.accountType">
+    @includes.html.menu_ctrl(triggerId, panelId, s"Account: ${account.username} (${account.accountType})", "nav-menu-trigger") {
+        <i class="fas fa-user-circle" aria-hidden="true"></i><span class="username">@@@account.username</span>
+    } {
+        @actions
+    }
+    <button type="button"
+            id="@infoButtonId"
+            class="account-info"
+            style="anchor-name: --@infoButtonId"
+            aria-label="Account info"
+            title="Account info"
+            hx-get="@infoDialogUrl"
+            hx-target="#popoverContent"
+            hx-swap="innerHTML"
+            data-app-dialog-anchor="@infoButtonId"><i class="fas fa-info-circle" aria-hidden="true"></i></button>
+    @after
+</div>

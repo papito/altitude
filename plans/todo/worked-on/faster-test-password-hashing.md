@@ -60,27 +60,27 @@ users in (`LoginControllerTests`, `UserServiceTests`, the controller tests' `log
 
 ### B. The cost per instance
 
-2. **`Util` (`altitude/src/altitude/core/util/Util.scala`).** A named constant for the production cost (10), and
+2. **`Util` (`../../../altitude/src/altitude/core/util/Util.scala`).** A named constant for the production cost (10), and
    `hashPassword(password: String, cost: Int)` hashing with `BCrypt.gensalt(cost)`. Scaladoc: a check runs at the cost the hash
    carries, so the cost decides only new hashes.
-3. **`Altitude` (`altitude/src/altitude/core/Altitude.scala`).** The constructor takes `passwordHashCost: Int` after
+3. **`Altitude` (`../../../altitude/src/altitude/core/Altitude.scala`).** The constructor takes `passwordHashCost: Int` after
    `newSceneEmbedder`, defaulting to the constant, documented with `@param` beside `newSceneEmbedder`'s.
-4. **`UserService.add` (`altitude/src/altitude/core/service/UserService.scala`).** Hashes with `app.passwordHashCost`.
-5. **The test instances (`altitude/test/src/altitude/test/TestAltitudeApp.scala`).** `TestAltitudeApp.build` passes
+4. **`UserService.add` (`../../../altitude/src/altitude/core/service/UserService.scala`).** Hashes with `app.passwordHashCost`.
+5. **The test instances (`../../../altitude/test/src/altitude/test/TestAltitudeApp.scala`).** `TestAltitudeApp.build` passes
    `passwordHashCost = 4`, with a constant named for it and a line on why: bcrypt's cost is the point of a password hash and
    no point of a test.
 
 ### C. Docs
 
-6. **`altitude/AGENTS.md`.** In **Test Structure**, beside the Scene models in tests: the test instances hash passwords at
+6. **`../../../altitude/AGENTS.md`.** In **Test Structure**, beside the Scene models in tests: the test instances hash passwords at
    bcrypt's lowest cost, `App.altitude` at the production cost, and a check follows the stored hash's cost.
 
 ## Critical files
 
-- `altitude/src/altitude/core/util/Util.scala`, `altitude/src/altitude/core/Altitude.scala`,
+- `../../../altitude/src/altitude/core/util/Util.scala`, `altitude/src/altitude/core/Altitude.scala`,
   `altitude/src/altitude/core/service/UserService.scala`
-- `altitude/test/src/altitude/test/TestAltitudeApp.scala`
-- `altitude/AGENTS.md`
+- `../../../altitude/test/src/altitude/test/TestAltitudeApp.scala`
+- `../../../altitude/AGENTS.md`
 
 ## Verification
 
