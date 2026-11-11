@@ -35,5 +35,9 @@
         }
 
         <input type="hidden" name="@{ Api.Field.Folder.PARENT_ID }" value="@{ parentId }">
+        @* A parent that is no folder of the repository: nothing in the form can fix it, so it is said under the name *@
+        @if(fieldErrors.contains(Api.Field.Folder.PARENT_ID)) {
+            <div class="error">@{ fieldErrors(Api.Field.Folder.PARENT_ID) }</div>
+        }
     </div>
 </form>

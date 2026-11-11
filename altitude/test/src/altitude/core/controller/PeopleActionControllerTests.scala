@@ -7,6 +7,7 @@ import org.scalatest.matchers.should.Matchers.{ contain, include, not, should, s
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.FieldConst
 import altitude.core.models.Person
 
 @DoNotDiscover class PeopleActionControllerTests extends ControllerTestCore {
@@ -499,6 +500,58 @@ import altitude.core.models.Person
 
         response.statusCode shouldBe 200
         response.text() should include("""id="faceSelector"""")
+    }
+  }
+
+  test("A Person with no cover shows a placeholder on the People list, in the results title and in the merge modal") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Alice", with Faces on three assets and no cover, as a cover's Face
+     * deleted under it would leave her, and a Person named "Bob" with a Face and his cover.
+     *
+     * Assertions:
+     *
+     * The People list, Alice's results title and the merge modal of the two each render the no-cover placeholder in place of
+     * Alice's face, and no face URL with no Face ID at its end; Bob's cover is still his face's URL.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val alice: Person = testApp.service.person.addPerson(Person(name = Some("Alice")))
+        testContext.addTestFacesAndAssets(alice, assetCount = 3)
+        testApp.service.person.updateById(alice.persistedId, Map(FieldConst.Person.COVER_FACE_ID -> None))
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        testContext.addTestFacesAndAssets(bob)
+        val bobsCover = testApp.service.person.getById(bob.persistedId).coverFaceId.get
+
+        // The end of a face URL rendered with no Face ID
+        val emptyFaceUrl = s"/${Const.DataStore.FACE}/" + '"'
+        def get(path: String, params: Map[String, String] = Map.empty): String = {
+          val response = requests.get(s"$host$path", params = params, cookies = testContext.cookies, check = false)
+          response.statusCode shouldBe 200
+          response.text()
+        }
+
+        val list = get(s"/htmx/people/r/$repoId/list")
+        val title = get(s"/htmx/people/r/$repoId/p/${alice.persistedId}/title")
+        val modal = get(
+          s"/htmx/people/r/$repoId/modals/merge",
+          Map("mergeSourceId" -> alice.persistedId, "mergeDestId" -> bob.persistedId, "keepDirection" -> "true"))
+
+        List("list" -> list, "title" -> title, "modal" -> modal).foreach {
+          case (view, html) =>
+            withClue(s"$view: ") {
+              html should include("""class="no-cover"""")
+              (html should not).include(emptyFaceUrl)
+            }
+        }
+        list should include(s"/${Const.DataStore.FACE}/$bobsCover")
+        modal should include(s"/${Const.DataStore.FACE}/$bobsCover")
     }
   }
 
@@ -1125,6 +1178,169 @@ import altitude.core.models.Person
 
         response.statusCode shouldBe 204
         response.headers.keys should not contain "location"
+    }
+  }
+
+  /** A request of a People route through the repository, with no body */
+  private def peopleRoute(
+      method: requests.Requester,
+      host: String,
+      repoId: String,
+      path: String,
+      params: Map[String, String] = Map.empty): requests.Response =
+    method(s"$host/htmx/people/r/$repoId/$path", params = params, cookies = testContext.cookies, check = false)
+
+  test("Every People route that reads a Person by ID is a 404 for an unknown ID and for another repository's") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob" with a Face, and a second repository of theirs with a Person named
+     * "Eve" with a Face.
+     *
+     * Assertions:
+     *
+     * Asked through the first repository for a Person ID that does not exist, and for Eve's, the choose-cover modal, the cover
+     * image (given Eve's Face for Eve), the name view and its editor, the merge modal and the merge with Bob, either way round,
+     * hide, show and the discard as a bad match all answer 404, and no answer carries Eve's name. Neither Eve's repository nor
+     * Bob's changes.
+     *
+     * Edge cases:
+     *
+     * Bob's cover image set to Eve's Face, or to a Face ID that does not exist, is a 404 too.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        testContext.addTestFace(
+          bob,
+          testContext.insertAsset(testContext.makeAsset(repository = Some(repo))),
+          TestContext.unitVector(1))
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val eve = testApp.service.person.addPerson(Person(name = Some("Eve")))
+        val evesFace = testContext.addTestFace(
+          eve,
+          testContext.insertAsset(testContext.makeAsset(repository = Some(otherRepo))),
+          TestContext.unitVector(2))
+        testApp.service.repository.switchContextToRepository(repo)
+        val ownBefore = testContext.rowsOf(repo)
+        val othersBefore = testContext.rowsOf(otherRepo)
+        val unknownId = java.util.UUID.randomUUID.toString
+        val bobId = bob.persistedId
+
+        for ((id, faceId) <- List(unknownId -> unknownId, eve.persistedId -> evesFace.persistedId)) withClue(s"[$id]: ") {
+          val answers = List(
+            peopleRoute(requests.get, host, repoId, "modals/choose-person-cover-face", Map("personId" -> id)),
+            peopleRoute(requests.put, host, repoId, s"p/$id/cover-image", Map(Api.Field.FACE_ID -> faceId)),
+            peopleRoute(requests.get, host, repoId, s"p/$id/name"),
+            peopleRoute(requests.get, host, repoId, s"p/$id/name/edit"),
+            peopleRoute(requests.get, host, repoId, "modals/merge", Map("mergeSourceId" -> id, "mergeDestId" -> bobId)),
+            peopleRoute(requests.get, host, repoId, "modals/merge", Map("mergeSourceId" -> bobId, "mergeDestId" -> id)),
+            peopleRoute(requests.put, host, repoId, s"src/$id/dest/$bobId"),
+            peopleRoute(requests.put, host, repoId, s"src/$bobId/dest/$id"),
+            peopleRoute(requests.put, host, repoId, s"p/$id/hide"),
+            peopleRoute(requests.put, host, repoId, s"p/$id/show"),
+            peopleRoute(requests.delete, host, repoId, s"p/$id"),
+            peopleRoute(requests.put, host, repoId, s"p/$bobId/cover-image", Map(Api.Field.FACE_ID -> faceId))
+          )
+          for (answer <- answers) {
+            answer.statusCode shouldBe 404
+            (answer.text() should not).include("Eve")
+          }
+        }
+
+        testContext.rowsOf(repo) shouldBe ownBefore
+        testContext.rowsOf(otherRepo) shouldBe othersBefore
+    }
+  }
+
+  test("A cover image that is another Person's Face, or a Face on an asset marked for purging, is a 400, and the cover stays") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob" with Faces on two assets, the first his cover and the second's
+     * asset recycled and marked for purging, and a Person named "Ann" with a Face of her own.
+     *
+     * Assertions:
+     *
+     * Setting Bob's cover image to Ann's Face answers a plain-text 400 saying the Face is not his, and to his Face on the asset
+     * marked for purging a 400 saying the Face is on an asset being purged. His cover is still his first Face.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val cover = testContext.addTestFace(bob, testContext.insertAsset(), TestContext.unitVector(1))
+        // Read again, so the second Face finds the cover the first set
+        val purging = testContext.addTestFace(
+          testApp.service.person.getById(bob.persistedId),
+          testContext.insertAsset(),
+          TestContext.unitVector(2))
+        testApp.service.library.recycleAssets(Set(purging.assetId.get))
+        testApp.service.asset.updateById(purging.assetId.get, Map(FieldConst.Asset.IS_PURGED -> true))
+        val ann = testApp.service.person.addPerson(Person(name = Some("Ann")))
+        val annsFace = testContext.addTestFace(ann, testContext.insertAsset(), TestContext.unitVector(3))
+
+        for (
+          (face, message) <- List(annsFace -> Const.Msg.Err.COVER_FACE_NOT_THEIRS, purging -> Const.Msg.Err.COVER_FACE_PURGING)
+        )
+          withClue(s"[$message]: ") {
+            val response =
+              peopleRoute(
+                requests.put,
+                host,
+                repoId,
+                s"p/${bob.persistedId}/cover-image",
+                Map(Api.Field.FACE_ID -> face.persistedId))
+            response.statusCode shouldBe 400
+            response.headers("content-type") shouldBe Seq("text/plain")
+            response.text() shouldBe message
+          }
+
+        testApp.service.person.getById(bob.persistedId).coverFaceId shouldBe Some(cover.persistedId)
+    }
+  }
+
+  test("The choose-cover modal offers the Person's Faces, but none on an asset marked for purging") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Bob" with Faces on three assets, the second's asset recycled and marked
+     * for purging.
+     *
+     * Assertions:
+     *
+     * The choose-cover modal for Bob offers his Faces on the first and third assets, and not his Face on the asset marked for
+     * purging, which could not be set as his cover.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val faces = (1 to 3).toList.map(n => testContext.addTestFace(bob, testContext.insertAsset(), TestContext.unitVector(n)))
+        val purging = faces(1)
+        testApp.service.library.recycleAssets(Set(purging.assetId.get))
+        testApp.service.asset.updateById(purging.assetId.get, Map(FieldConst.Asset.IS_PURGED -> true))
+
+        val modal = peopleRoute(requests.get, host, repoId, "modals/choose-person-cover-face", Map("personId" -> bob.persistedId))
+
+        modal.statusCode shouldBe 200
+        modal.text() should include(s"""data-face-id="${faces.head.persistedId}"""")
+        modal.text() should include(s"""data-face-id="${faces(2).persistedId}"""")
+        (modal.text() should not).include(s"""data-face-id="${purging.persistedId}"""")
     }
   }
 }

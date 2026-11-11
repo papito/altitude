@@ -5,7 +5,7 @@
    main page with no search, then the Library menu's host, a choice menu that js/common/choice-menus.js builds into a trigger
    showing the current Library's name alone (`data-choice-menu-choice-only`) and its panel. Its options are the `libraries`
    given (the account's own, by name), each a link to `href` of it, the one `currentId` names checked; a link's title is the
-   full name, which the trigger and the panel cut with an ellipsis. For an Admin, `newLibraryDialogUrl` adds a separator and the
+   full name, which the trigger and the panel cut with an ellipsis. For an Admin or the Create Libraries flag, `newLibraryDialogUrl` adds a separator and the
    New library entry, an action that requests the dialog into the popover dialog host, below the trigger. `hx-preserve` keeps
    the built control through a nav reload, which renders the host empty (`emptyHost`, includes/nav); an open panel stays open
    only where the browser moves the control with `moveBefore`, so the Import page's polling reload skips a tick while the panel

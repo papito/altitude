@@ -5,6 +5,18 @@ export const Const = {
         trashbin: "trashbin",
     },
 
+    /**
+     * The Permissions a script's control may need, by the names `Permission` gives them on the
+     * server and the main page's body lists in `data-app-permissions` (js/context.js `holds`): those
+     * a script asks about; a template's controls follow the rest on the server
+     */
+    permission: {
+        curateOwn: "CurateOwn",
+        curateAll: "CurateAll",
+        organize: "Organize",
+        recycle: "Recycle",
+    },
+
     // Where the explorer sits against the results, as `data-dock-side` on <html> names it
     dockSides: {
         left: "left",
@@ -71,6 +83,10 @@ export const Const = {
         // `f` in Asset detail: puts it in fullscreen or leaves it (js/search-results/detail-fullscreen.js)
         toggleFullscreen: "TOGGLE_FULLSCREEN_EVENT",
         settingsSaved: "SETTINGS_SAVED_EVENT",
+        // An account was added, changed or deleted on the Users page; `detail.message` says which. The page reloads its cards
+        accountsChanged: "ACCOUNTS_CHANGED_EVENT",
+        // The account changed its own password (the account info dialog's Change password); the session carries on with the new token
+        passwordChanged: "PASSWORD_CHANGED_EVENT",
         // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
         dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",
         styleGuideSampleSubmitted: "STYLE_GUIDE_SAMPLE_SUBMITTED_EVENT",

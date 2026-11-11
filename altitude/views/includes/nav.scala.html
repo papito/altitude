@@ -3,8 +3,10 @@
 @import altitude.core.Const
 @import altitude.core.Environment
 @import altitude.core.models.AccountType
+@import altitude.core.models.Permission
 @import altitude.core.models.Stats
 @import altitude.core.RequestContext
+@import altitude.core.routes.decorators.mayCreateLibraries
 
 @* `current` is the entry of the page shown (a `Const.NavEntry` key), which carries `aria-current="page"`; a nav reload
    passes it again. `reload` is a nav reload's (NavController), which renders the Library menu's host empty (below). *@
@@ -12,7 +14,12 @@
 
 @currentAttr(entry: String) = {@if(entry == current){ aria-current="page"}}
 
-@* Every nav is rendered behind a login, so the account is always here *@
+@* Every nav is rendered behind a login, so the account is always here. An entry shows only where the account may open what it
+   leads to, by the Permissions of the login token in this Library (`RequestContext.holds`): Triage and Trash for a member (a
+   Guest sees Browse alone), Import for the holder of Import, Users for the holder of Create Users or Create Guests in any
+   Library, which the token's grants say (`RequestContext.createsAccounts`; an Admin holds both), New library for an Admin or the holder of the Create Libraries flag, Settings for an Admin. The account's
+   cell, every account's, says who is logged in and of which type, and opens the account info dialog, which changes the password
+   and logs out. *@
 @isAdmin = @{ RequestContext.getAccount.accountType == AccountType.Admin }
 
 @libraryMenuHostId = @{ "libraryMenuHost" }
@@ -21,15 +28,15 @@
     <a href="/"><i class="fas fa-chevron-up"></i><span>Altitude</span></a>
 </div>
 @* Browse goes to the current Library's main page with no search; the Library's name after it is the Library menu's trigger:
-   the account's Libraries, and New library for an Admin. A nav reload renders the menu's host empty, by its ID and
+   the Libraries the account can see, and New library for an Admin or the holder of the Create Libraries flag. A nav reload renders the menu's host empty, by its ID and
    `hx-preserve`: htmx swaps the page's built host back in for it, so a list would be read for nothing. *@
 <div class="menu repository"@currentAttr(Const.NavEntry.BROWSE)>
     @includes.html.library_menu(
         hostId = libraryMenuHostId,
         browseHref = s"/r/$repoId",
-        libraries = if (reload) Seq.empty else App.altitude.service.repository.getOwnedBy(RequestContext.getAccount),
+        libraries = if (reload) Seq.empty else App.altitude.service.repository.getAccessibleTo(RequestContext.getAccount),
         currentId = repoId,
-        newLibraryDialogUrl = Option.when(isAdmin)(s"/htmx/library/r/$repoId/dialogs/new"),
+        newLibraryDialogUrl = Option.when(mayCreateLibraries(RequestContext.getAccount))(s"/htmx/library/r/$repoId/dialogs/new"),
         emptyHost = reload)
 </div>
 
@@ -45,6 +52,7 @@
   </form>
 </div>
 
+@if(RequestContext.isMember) {
 @if(stats.getTriageAssetCount > 0) {
     <div class="menu triage"@currentAttr(Const.NavEntry.TRIAGE)>
         <a href="/r/@repoId?@{Api.Field.Search.VIEW}=@{Const.Search.View.TRIAGE}"><i class="fas fa-inbox"></i>
@@ -56,12 +64,21 @@
         <i class="fas fa-inbox"></i><span>Triage (0)</span>
     </div>
 }
+}
 
+@if(RequestContext.holds(Permission.Import)) {
 <div class="menu import"@currentAttr(Const.NavEntry.IMPORT)>
     <a href="/pipeline/r/@repoId"><i class="fas fa-plus-square">
         </i><span>Import</span>
     </a>
 </div>
+}
+
+@if(RequestContext.createsAccounts) {
+<div class="menu users"@currentAttr(Const.NavEntry.USERS)>
+    <a href="/users/r/@repoId"><i class="fas fa-users"></i><span>Users</span></a>
+</div>
+}
 
 @* Settings are an Admin's alone *@
 @if(isAdmin) {
@@ -70,6 +87,7 @@
 </div>
 }
 
+@if(RequestContext.isMember) {
 @if(stats.getRecycledAssetCount > 0) {
     <div id="trash" class="menu trashbin"@currentAttr(Const.NavEntry.TRASH)>
         <a href="/r/@repoId?@{Api.Field.Search.VIEW}=@{Const.Search.View.TRASHBIN}">
@@ -81,6 +99,7 @@
         <i class="fas fa-trash"></i><span>Trash (0)</span>
     </div>
 }
+}
 
 @* Dev only, like the routes behind it (StyleGuideController). The design tweaks panel has no nav entry: `Ctrl+Alt+T`
    toggles it (js/design-tweaks.js) *@
@@ -88,6 +107,13 @@
     <div class="menu style-guide"@currentAttr(Const.NavEntry.STYLE_GUIDE)>
         <a href="/style-guide/r/@repoId"><i class="fas fa-swatchbook"></i><span>Style Guide</span></a>
     </div>
+}
+
+@* The account's cell (includes/account_menu), its trigger the icon in the account type's color and the username, which opens
+   the account info dialog of this Library below itself: its Change password opens that dialog below the trigger, and its Log
+   out posts the empty form beside the trigger, which takes no room *@
+@includes.html.account_menu("accountMenuBtn", s"/htmx/account/r/$repoId/dialogs/info") {
+    <form id="logoutForm" method="post" action="/logout"></form>
 }
 
 @* The theme switch, always the last cell. The stylesheet shows one of its two icons (js/global.js handles the click) *@

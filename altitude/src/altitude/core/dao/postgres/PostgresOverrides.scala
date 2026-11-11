@@ -1,6 +1,7 @@
 package altitude.core.dao.postgres
 
 import java.sql.ResultSet
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -51,7 +52,11 @@ trait PostgresOverrides:
   override protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime =
     value.atZoneSameInstant(ZoneId.systemDefault).toLocalDateTime
 
+  override def instantOf(value: LocalDateTime): Instant = value.atZone(ZoneId.systemDefault).toInstant
+
   override protected def jsonFunc = "CAST(? as jsonb)"
+
+  override protected def jsonText(column: String, key: String): String = s"($column->>'$key')"
 
   override protected def nativeBool(value: Boolean): Any =
     if value then true else false
@@ -97,6 +102,8 @@ trait PostgresOverrides:
     labelRes("nextval")
 
   override val forUpdate: String = "FOR UPDATE"
+
+  override val forKeyShare: String = "FOR KEY SHARE"
 
   override protected def advisoryLock(key: String): Unit =
     manyBySqlQuery("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", List(key)): Unit

@@ -19,6 +19,17 @@
 import { ModalHost } from "./modal.js"
 
 /**
+ * The cell of an explorer row's ⋯ menu for an account that holds none of its actions (every action
+ * of a folder's, an album's or a Location's menu is Organize's): empty, so the row's other cells
+ * keep their grid columns
+ */
+export function buildNoMenuCell() {
+    const cellEl = document.createElement("span")
+    cellEl.className = "no-menu"
+    return cellEl
+}
+
+/**
  * Builds a menu cell: the ⋯ trigger button and the native popover panel it opens, holding the
  * action buttons. Each action requests its dialog into the popover dialog host; opening the dialog
  * closes the menu through `common/modal.js`. The stable trigger is also the dialog's anchor.

@@ -8,11 +8,11 @@ import scala.util.Try
 
 import altitude.core.Api
 import altitude.core.App
-import altitude.core.IllegalOperationException
-import altitude.core.NotFoundException
 import altitude.core.models.Location
+import altitude.core.models.Permission
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requirePermission
 
 /** Location JSON API: the list the Locations tab renders, and the membership changes made by drag/drop and the batch footer */
 class LocationController(using logger: Logger) extends BaseController:
@@ -25,11 +25,13 @@ class LocationController(using logger: Logger) extends BaseController:
     jsonResponse(ujson.Arr.from(App.altitude.service.location.getAll.map(toJson)))
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/assets")
   def addAssetsToLocation(repoId: String)(using request: Request): Response[String] =
     membershipChange("added", App.altitude.service.location.addAssets)
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.delete(f"/$prefix/r/:repoId/assets")
   def removeAssetsFromLocation(repoId: String)(using request: Request): Response[String] =
     membershipChange("removed", App.altitude.service.location.removeAssets)
@@ -40,10 +42,7 @@ class LocationController(using logger: Logger) extends BaseController:
     val (locationId, assetIds) = Try(membershipRequest(jsonIn)).toOption match
       case None => return jsonError("Expected locationId and an assetIds array of strings", 400)
       case Some(membership) => membership
-    try jsonResponse(ujson.Obj(countKey -> change(locationId, assetIds)))
-    catch
-      case ex: NotFoundException => jsonError(ex.getMessage, 404)
-      case ex: IllegalOperationException => jsonError(ex.getMessage, 400)
+    answeringJson(jsonResponse(ujson.Obj(countKey -> change(locationId, assetIds))))
 
   private def membershipRequest(jsonIn: ujson.Obj): (String, Set[String]) =
     (jsonIn(Api.Field.Location.LOCATION_ID).str, jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet)

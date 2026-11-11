@@ -9,19 +9,23 @@ import scala.util.Try
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.NotFoundException
 import altitude.core.QueryTimeoutException
+import altitude.core.RequestContext
 import altitude.core.SearchCursorException
-import altitude.core.models.Album
 import altitude.core.models.Folder
 import altitude.core.models.Location
+import altitude.core.models.Permission
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.SearchRequestParser
+import altitude.core.routes.decorators.refusedView
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.util.GroupBy
 import altitude.core.util.GroupedSearchResult
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchGrouping
+import altitude.core.util.SearchGroupKey
 import altitude.core.util.SearchSort
 import altitude.core.util.SortDirection
 
@@ -40,7 +44,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * fragment, so replacing the URL does not switch the explorer tab.
    *
    * `triaged` changes the view's scope (`SearchRequestParser`): `true` adds the triaged assets to the repository view, which
-   * leaves them out by default. The View settings dialog offers that switch there alone.
+   * leaves them out by default. The View settings dialog offers that switch there alone. A Guest sees Browse alone: the Triage
+   * and Trash views, and `triaged=true`, are a 403 for it (`refusedView`).
    *
    * `subset` narrows the view to a Triage subset, `unknownPeople` or `noLocation` (`SearchRequestParser`), in every layout and
    * view; any other value is a 400. The results title names it, and the browser URL keeps it.
@@ -95,6 +100,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         400,
         Seq(("Content-Type", "application/json")))
 
+    refusedView(view, triaged) match
+      case Some(refusal) => return refusal
+      case None =>
+
     val scope = SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox, triaged, subset) match
       case Left(message) => return textError(message, 400)
       case Right(scope) => scope
@@ -115,11 +124,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         400)
 
     // What the results title names: the person, the folder's path, the album, the Location or the subset the results are
-    // scoped to
-    val person = personOf(personId)
-    val folderPath = folderPathOf(folderId)
-    val album: Option[Album] = albumId.map(App.altitude.service.album.getById)
-    val location = locationOf(locationId)
+    // scoped to. One that is not the repository's, unknown or another repository's, is a 404 that names nothing of it
+    val (person, folderPath, album, location) =
+      try (personOf(personId), folderPathOf(folderId), albumId.map(App.altitude.service.album.getById), locationOf(locationId))
+      catch case ex: NotFoundException => return textError(ex.getMessage, 404)
 
     val browserUrl = browserViewUrl(
       view,
@@ -193,11 +201,17 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           case ex: SearchCursorException => return textError(ex.getMessage, 400)
           case _: QueryTimeoutException => return timedOut
 
+      // With Curate own alone, a Sequence's Curate follows the frames Curation would show the account: its own
+      val sequenceIds = results.groups.map(_.key).collect { case SearchGroupKey.Sequence(Some(id), _) => id }.toSet
+      val curatable =
+        if sequenceIds.isEmpty || !RequestContext.holds(Permission.CurateOwn, Permission.CurateAll) then None
+        else App.altitude.service.curation.curatableFrameCounts(sequenceIds)
+
       if isContinuousScroll then
         // The continuation ran dry: results are live, and the images past the cursor may be gone by now
         if results.isEmpty then return noContentResponse
 
-        return htmlResponse(htmx.html.results_grid_grouped(results = results, isContinuousScroll = true))
+        return htmlResponse(htmx.html.results_grid_grouped(results = results, isContinuousScroll = true, curatable = curatable))
 
       return htmlResponse(
         includes.html.search_results(
@@ -205,7 +219,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           totalCap = searchQuery.totalCap,
           sort = results.sort,
           grouping = Some(results.grouping),
-          grid = htmx.html.results_grid_grouped(results = results),
+          grid = htmx.html.results_grid_grouped(results = results, curatable = curatable),
           person = person,
           folderPath = folderPath,
           album = album,
@@ -328,7 +342,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     textError(Const.Msg.Err.SEARCH_TIMED_OUT, 503)
 
   private def personOf(personId: Option[String]): Person =
-    personId.map(id => App.altitude.service.person.getById(id): Person).orNull
+    personId.map(App.altitude.service.person.getById).orNull
 
   /**
    * The folder scope as a breadcrumb reads it: the top-level folder first, the folder itself last. The repository root is the

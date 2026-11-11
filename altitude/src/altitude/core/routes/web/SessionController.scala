@@ -2,14 +2,35 @@ package altitude.core.routes.web
 
 import cask.Request
 import cask.model.Cookie
+import java.time.Duration
+import java.time.Instant
 import org.slf4j.Logger
 
 import altitude.core.App
-import altitude.core.Const
+import altitude.core.routes.BaseController
+import altitude.core.util.Util
 
 object SessionController:
   val AUTH_COOKIE_NAME = "auth_token"
-  val COOKIE_MAX_AGE_SECONDS: Int = Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS * 24 * 60 * 60 // 7 days
+
+  /**
+   * The session cookie of `token`, kept by the browser until the token expires at `expiresAt`. Every cookie of a session is set
+   * here, with the same attributes: the login's, setup's, a rebuilt token's (`decorators.requireLogin`) and the logout's, which
+   * clears it.
+   */
+  def authCookie(token: String, expiresAt: Instant): Cookie =
+    Cookie(
+      name = AUTH_COOKIE_NAME,
+      value = token,
+      path = "/",
+      maxAge = math.max(0L, Duration.between(Instant.now, expiresAt).getSeconds).toInt,
+      httpOnly = true,
+      secure = true,
+      sameSite = "Strict"
+    )
+
+  /** The session cookie, empty and expired, so the browser drops it */
+  def clearedAuthCookie: Cookie = authCookie("", Instant.EPOCH)
 
   /**
    * Validates that a redirect URL is safe to use (prevents open redirect vulnerabilities). Only allows relative URLs that start
@@ -29,18 +50,19 @@ class SessionController(using logger: Logger) extends cask.Routes:
     val payload = "<!doctype html>" + html.login(redirect)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-  /** Process login form submission */
+  /** Process login form submission: the login is a username or an email address */
   @cask.postForm("/login")
-  def doLogin(login: String, password: String, redirect: Option[String] = None): cask.Response[String] =
-    logger.trace(s"Login attempt for user: $login")
+  def doLogin(login: String, password: String, redirect: Option[String] = None)(using request: Request): cask.Response[String] =
+    logger.trace(s"Login attempt for [${Util.printable(login, 64)}]")
+    val clientIp = BaseController.clientIpOf(request)
 
-    App.altitude.service.user.loginAndSetUser(login, password) match {
-      case Some((user, token)) =>
+    App.altitude.service.user.loginAndSetUser(login, password, clientIp) match {
+      case Some((user, token, expiresAt)) =>
         logger.debug(s"User logged in successfully: ${user.email}")
 
         // Determine where to redirect after successful login
         // Validate redirect URL to prevent open redirect vulnerabilities
-        // Without one, the Library the user lands in; `/` tells a user who owns none so
+        // Without one, the Library the user lands in; `/` tells a user who can see none so
         val decodedRedirect = redirect.map(java.net.URLDecoder.decode(_, "UTF-8"))
         val redirectUrl = decodedRedirect
           .filter(SessionController.isValidRedirectUrl)
@@ -51,22 +73,14 @@ class SessionController(using logger: Logger) extends cask.Routes:
           "",
           statusCode = 302,
           headers = Seq("Location" -> redirectUrl),
-          cookies = Seq(
-            Cookie(
-              name = SessionController.AUTH_COOKIE_NAME,
-              value = token,
-              path = "/",
-              maxAge = SessionController.COOKIE_MAX_AGE_SECONDS,
-              httpOnly = true,
-              secure = true,
-              sameSite = "Strict"
-            ))
+          cookies = Seq(SessionController.authCookie(token, expiresAt))
         )
 
       case None =>
-        logger.warn(s"Failed login attempt for user: $login")
-        // Return to login page with error, preserving the redirect parameter
-        val payload = "<!doctype html>" + html.login(redirect)
+        // The login as typed may carry a line break that forges a log line
+        logger.warn(s"Failed login attempt for [${Util.printable(login, 64)}] from [${clientIp.getOrElse("unknown")}]")
+        // The login page again, saying the login failed, with the login as typed and the page to come back to; never the password
+        val payload = "<!doctype html>" + html.login(redirect, login, failed = true)
         cask.Response(
           payload,
           statusCode = 401,
@@ -92,16 +106,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
       "",
       statusCode = 302,
       headers = Seq("Location" -> "/login"),
-      cookies = Seq(
-        Cookie(
-          name = SessionController.AUTH_COOKIE_NAME,
-          value = "",
-          path = "/",
-          maxAge = 0, // Expire immediately
-          httpOnly = true,
-          secure = true,
-          sameSite = "Strict"
-        ))
+      cookies = Seq(SessionController.clearedAuthCookie)
     )
 
   /** API endpoint for logout (returns JSON) */
@@ -125,16 +130,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
       responseJson.toString,
       statusCode = 200,
       headers = Seq(("Content-Type", "application/json")),
-      cookies = Seq(
-        Cookie(
-          name = SessionController.AUTH_COOKIE_NAME,
-          value = "",
-          path = "/",
-          maxAge = 0,
-          httpOnly = true,
-          secure = true,
-          sameSite = "Strict"
-        ))
+      cookies = Seq(SessionController.clearedAuthCookie)
     )
 
   initialize()

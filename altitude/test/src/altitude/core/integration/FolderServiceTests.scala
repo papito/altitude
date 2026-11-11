@@ -1,5 +1,6 @@
 package altitude.core.integration
 
+import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.contain
 import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shouldEqual, shouldNot }
@@ -7,6 +8,7 @@ import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shoul
 import scala.language.reflectiveCalls
 
 import altitude.core.Altitude
+import altitude.core.Api
 import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.IllegalOperationException
@@ -449,6 +451,104 @@ import altitude.core.models.Repository
     intercept[DuplicateException] {
       testApp.service.folder.rename(folder1.persistedId, folder2.name)
     }
+  }
+
+  test("Sibling folder names that differ only by case fold, canonical form or compatibility form are duplicates") {
+
+    /**
+     * Setup:
+     *
+     * Three folders at the root, "Straße", "Café" with a precomposed "é" and "Summer", a fourth, "Other", to rename, and a folder
+     * "Parent" holding none of them.
+     *
+     * Assertions:
+     *
+     * Adding a sibling, or renaming "Other", to "STRASSE" (the case fold of "ß"), to "Café" with an "e" and a combining accent
+     * (the canonical form) or to "Ｓummer" with a full-width "S" (the compatibility form) is a duplicate.
+     *
+     * Edge cases:
+     *
+     * Each of those names is free under "Parent", and a folder can be renamed to another form of its own name.
+     */
+    val other: Folder = testApp.service.folder.add("Other")
+    val parent: Folder = testApp.service.folder.add("Parent")
+    val clashes = List("Stra\u00DFe" -> "STRASSE", "Caf\u00E9" -> "Cafe\u0301", "Summer" -> "\uFF33ummer")
+
+    for ((name, clash) <- clashes) withClue(s"[$clash]: ") {
+      val folder: Folder = testApp.service.folder.add(name)
+      intercept[DuplicateException](testApp.service.folder.add(clash))
+      intercept[DuplicateException](testApp.service.folder.rename(other.persistedId, clash))
+
+      testApp.service.folder.add(clash, parentId = parent.id)
+      testApp.service.folder.rename(folder.persistedId, clash)
+    }
+  }
+
+  test("A folder name is stored in NFC, and its key does not depend on the default locale") {
+
+    /**
+     * Setup:
+     *
+     * A folder added as "Café" and one renamed to "Crème", both typed with a combining accent; a folder "Istanbul" added under a
+     * Turkish default locale.
+     *
+     * Assertions:
+     *
+     * The two folders read back as "Café" and "Crème" with precomposed letters. Adding "Istanbul" again under the root locale is
+     * a duplicate: the Turkish locale's dotless "ı" never reaches the key.
+     *
+     * Edge cases:
+     *
+     * A name with a full-width letter keeps it: the stored name is not folded.
+     */
+    val added: Folder = testApp.service.folder.add("Cafe\u0301")
+    val renamed: Folder = testApp.service.folder.add("before")
+    testApp.service.folder.rename(renamed.persistedId, "Cre\u0300me")
+
+    added.name shouldBe "Caf\u00E9"
+    testApp.service.folder.getById(added.persistedId).name shouldBe "Caf\u00E9"
+    testApp.service.folder.getById(renamed.persistedId).name shouldBe "Cr\u00E8me"
+
+    withDefaultLocale(Locale.forLanguageTag("tr"))(testApp.service.folder.add("Istanbul"))
+    withDefaultLocale(Locale.ROOT) {
+      intercept[DuplicateException](testApp.service.folder.add("Istanbul"))
+    }
+
+    testApp.service.folder.add("\uFF33ummer").name shouldBe "\uFF33ummer"
+  }
+
+  test("A folder name longer than 250 characters once in NFC, or whose name key is too long, is refused") {
+
+    /**
+     * Setup:
+     *
+     * A folder "Existing" at the root.
+     *
+     * Assertions:
+     *
+     * Adding a folder, or renaming "Existing", to 250 of U+FB2C (250 characters as typed, 750 in NFC) fails validation with the
+     * name field's too-long error, and to 100 of U+FDFA (whose name key NFKC spells out to 3300 bytes) with the name key error.
+     * "Existing" keeps its name.
+     *
+     * Edge cases:
+     *
+     * A name of 250 characters in NFC is accepted, counted in code points as the column counts them: 250 emoji, each two UTF-16
+     * units.
+     */
+    val max = Api.Constraints.MAX_FOLDER_NAME_LENGTH
+    val existing: Folder = testApp.service.folder.add("Existing")
+    val tooLong = Const.Msg.Err.VALUE_TOO_LONG.format(max)
+
+    refusesName(Api.Field.Folder.NAME, tooLong)(testApp.service.folder.add(lengthenedByNfc(max)))
+    refusesName(Api.Field.Folder.NAME, tooLong)(testApp.service.folder.rename(existing.persistedId, lengthenedByNfc(max)))
+    refusesName(Api.Field.Folder.NAME, Const.Msg.Err.NAME_KEY_TOO_LONG)(testApp.service.folder.add(longKeyName(100)))
+    refusesName(Api.Field.Folder.NAME, Const.Msg.Err.NAME_KEY_TOO_LONG) {
+      testApp.service.folder.rename(existing.persistedId, longKeyName(100))
+    }
+    testApp.service.folder.getById(existing.persistedId).name shouldBe "Existing"
+
+    val emoji = "\uD83D\uDE00" * max
+    testApp.service.folder.add(emoji).name shouldBe emoji
   }
 
   test("Illegal folder rename actions should throw") {

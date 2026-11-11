@@ -21,6 +21,7 @@
     --border-heavy-width: 2px;
     --border-heavy: var(--border-heavy-width) solid;
     --border-double: 2px double;
+    --border-band: 3px solid;
     --panel-border-color: hsl(from var(--shadow-color) h s l / 0.18);
     --popover-border-color: hsl(from var(--theme-neutral-3) h s l / 0.3);
 
@@ -123,6 +124,15 @@
     --quick-view-width: 60rem;
     --quick-view-preview-size: 8rem;
     --quick-view-previews-max-height: 32rem;
+    --users-page-max-width: 75rem;
+    --account-card-width: 17rem;
+    --account-avatar-size: 2.5rem;
+    --account-username-max-width: 11rem;
+    --account-info-width: 22rem;
+    --login-form-width: 20rem;
+    --account-form-width: 66rem;
+    --account-form-body-max-height: calc(100dvh - 16rem);
+    --permission-column-width: 4.4rem;
 
     --success-color: light-dark(#297612, #87d575);
     --warning-color: light-dark(#976212, #ebb16b);
@@ -288,9 +298,11 @@ nav .brand {
     flex: 0 0 var(--nav-brand-width);
 }
 
-nav .brand a {
+/* The brand: the nav's, and the login page's above its form */
+.brand a {
     display: flex;
     align-items: center;
+    text-decoration: none;
     gap: var(--space-3);
     font-family: var(--font-nav);
     font-size: var(--font-size-xl);
@@ -303,11 +315,11 @@ nav .brand a {
     transition: filter 0.25s ease;
 }
 
-nav .brand a:hover {
+.brand a:hover {
     filter: drop-shadow(0 0 8px hsl(from var(--theme-primary) h s l / 0.8));
 }
 
-nav .brand i {
+.brand i {
     color: var(--theme-accent);
 }
 
@@ -442,6 +454,45 @@ nav .nav-menu-trigger .choice {
         margin-right: var(--space-3);
         color: hsl(from currentColor h s l / 0.6);
     }
+}
+
+/* An account type's color (see Nav in views/AGENTS.md): the nav's account icon, and the account info dialog, whose popover
+   host takes the type of the account it shows */
+:is([data-account-type="Admin"], #popoverDialog:has([data-account-type="Admin"])) {
+    --account-type-color: var(--error-color);
+}
+
+:is([data-account-type="User"], #popoverDialog:has([data-account-type="User"])) {
+    --account-type-color: var(--success-color);
+}
+
+:is([data-account-type="Guest"], #popoverDialog:has([data-account-type="Guest"])) {
+    --account-type-color: var(--info-color);
+}
+
+/* The account's cell (includes/account_menu): as wide as its one target, the trigger, whose padding is the cell's */
+nav .menu.account {
+    flex: 0 0 auto;
+    align-self: stretch;
+    padding: 0;
+}
+
+nav .menu.account .fa-user-circle {
+    font-size: var(--font-size-large);
+    color: var(--account-type-color);
+}
+
+/* The username, cut with an ellipsis; the trigger's title holds it whole */
+nav .menu.account .username {
+    max-width: var(--account-username-max-width);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Log out's form, empty: its button is in the account info dialog, and the quick search's `nav form` rule would draw it */
+nav .menu.account form {
+    display: none;
 }
 
 /* A panel in the nav takes the page's text rather than its entry's: the nav font, lowercase, the current entry's accent and
@@ -604,7 +655,7 @@ footer {
     font-size: var(--font-size-small);
 }
 
-:is(#popoverContent, #modalContent) label {
+:is(#popoverContent, #modalContent, #loginForm) label {
     display: block;
     margin-bottom: var(--space-2);
     font-size: var(--font-size-xs);
@@ -876,6 +927,21 @@ a.crumb:hover {
     font-size: var(--font-size-small);
     color: var(--theme-neutral-3);
     opacity: 0.4;
+}
+
+/*          */
+/* NO COVER */
+/*          */
+
+/* What stands in a person's cover face when they have none (no Face left to be one): the People tab's cell
+   (htmx/people_list), the person's results title (includes/results_title_inner) and the merge modal
+   (htmx/merge_people_modal), each of which sizes and rounds it as it does the face */
+.no-cover {
+    display: grid;
+    place-items: center;
+    background-color: var(--theme-secondary);
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-xl);
 }
 
 /*         */

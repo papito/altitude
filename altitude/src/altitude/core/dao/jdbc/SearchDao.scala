@@ -25,6 +25,7 @@ import altitude.core.util.BoundingBox
 import altitude.core.util.GroupBy
 import altitude.core.util.GroupedSearchPage
 import altitude.core.util.GroupedSearchRow
+import altitude.core.util.NameKey
 import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchGroupKey
 import altitude.core.util.SearchName
@@ -103,7 +104,8 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
 
     val counts = Db.read(dialect)(_.run(SearchQueries.folderCounts(searchDialect, RequestContext.getRepository.persistedId)))
     logger.trace(s"Counted the assets of ${counts.length} folders")
-    counts.toMap
+    // The assets in no folder (NULL: triaged ones) are no folder's
+    counts.collect { case (Some(folderId), count) => folderId -> count }.toMap
 
   override def cappedCount(query: SearchQuery): Int =
     import dialect.*
@@ -293,7 +295,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         if metadataFields.contains(fieldId) then
           val field = metadataFields(fieldId)
           val values = m._2
-          logger.trace(s"Processing field [${field.nameLowercase}] with values [$values]")
+          logger.trace(s"Processing field [${field.nameKey}] with values [$values]")
           addParameters(asset = asset, field = field, values = values.map(_.value))
         else logger.error(s"Asset $asset contains metadata field ID [$fieldId] that is not part of field configuration!")
     }
@@ -305,7 +307,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
   /** One `metadata_parameter` row per value of a faceted field type; nothing for any other type */
   private def addParameters(asset: Asset, field: UserMetadataField, values: Set[String]): Unit =
     if !SearchDao.FACETED_FIELD_TYPES.contains(field.fieldType) then
-      logger.trace(s"Field [${field.nameLowercase}] of type ${field.fieldType} has no metadata parameters")
+      logger.trace(s"Field [${field.nameKey}] of type ${field.fieldType} has no metadata parameters")
       return
 
     logger.trace(s"INSERT SQL: ${SearchDao.VALUE_INSERT_SQL}. ARGS: ${values.toString}")
@@ -316,14 +318,14 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         preparedStatement.setString(1, RequestContext.getRepository.persistedId)
         preparedStatement.setString(2, asset.persistedId)
         preparedStatement.setString(3, field.persistedId)
-        // keyword
-        if field.fieldType == FieldType.KEYWORD then preparedStatement.setString(4, valueStr.toLowerCase)
+        // keyword, under its name key, which a keyword filter is folded to as well (`SearchQueries.valueMatch`)
+        if field.fieldType == FieldType.KEYWORD then preparedStatement.setString(4, NameKey.of(valueStr))
         else preparedStatement.setNull(4, Types.VARCHAR)
         // number
         if field.fieldType == FieldType.NUMBER then preparedStatement.setDouble(5, valueStr.toDouble)
         else preparedStatement.setNull(5, Types.DOUBLE)
-        // boolean
-        if field.fieldType == FieldType.BOOL then preparedStatement.setBoolean(6, valueStr.toBoolean)
+        // boolean, as the value stands for it in any form the field accepts ("1", "TRUE")
+        if field.fieldType == FieldType.BOOL then preparedStatement.setBoolean(6, UserMetadataValue.asBoolean(valueStr).get)
         else preparedStatement.setNull(6, Types.BOOLEAN)
         BaseDao.incrWriteQueryCount()
         preparedStatement.execute()

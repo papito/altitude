@@ -1,11 +1,11 @@
 package altitude.core.service
 
 import altitude.core.Altitude
+import altitude.core.Api
 import altitude.core.FieldConst
-import altitude.core.NotFoundException
+import altitude.core.Validators
 import altitude.core.dao.AlbumDao
 import altitude.core.models.Album
-import altitude.core.util.Query
 
 /**
  * Albums are flat, repository-scoped lists of pointers to assets. Nothing here touches an asset: adding to, removing from, or
@@ -15,15 +15,15 @@ import altitude.core.util.Query
 class AlbumService(val app: Altitude) extends BaseService[Album]:
   override protected val dao: AlbumDao = app.DAO.album
 
+  /** An album name as stored, once it passes the name rule (`Validators.validName`) */
+  private def validName(name: String): String =
+    Validators.validName(name, Api.Field.Album.NAME, Api.Constraints.MAX_ALBUM_NAME_LENGTH)
+
   def add(name: String): Album =
     txManager.withTransaction {
       logger.debug(s"Adding album [$name]")
-      add(Album(name = name.trim))
+      add(Album(name = validName(name.trim)))
     }
-
-  /** Scoped to the context repository: another repository's album is not found, so it is neither read, renamed nor added to */
-  override def getById(id: String): Album =
-    getOneByQuery(new Query().add(FieldConst.ID -> id).withRepository())
 
   def getAll: List[Album] =
     txManager.asReadOnly {
@@ -34,26 +34,18 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
     txManager.withTransaction {
       val album: Album = getById(albumId)
       // The copy validates the new name the same way a new album is validated
-      val renamed = album.copy(name = newName.trim)
+      val renamed = album.copy(name = validName(newName.trim))
 
       logger.debug(s"Renaming album [${album.name}] to [${renamed.name}]")
-      updateById(albumId, Map(FieldConst.Album.NAME -> renamed.name, FieldConst.Album.NAME_LC -> renamed.nameLowercase))
+      updateById(albumId, Map(FieldConst.Album.NAME -> renamed.name, FieldConst.Album.NAME_KEY -> renamed.nameKey))
       renamed
-    }
-
-  override def deleteById(id: String): Int =
-    txManager.withTransaction {
-      logger.debug(s"Deleting album [$id]")
-      val deleted = super.deleteById(id)
-      if deleted == 0 then throw NotFoundException(s"Album $id not found")
-      deleted
     }
 
   def addAssets(albumId: String, assetIds: Set[String]): Int =
     if assetIds.isEmpty then return 0
 
     txManager.withTransaction {
-      // Fails with NotFoundException for an unknown album
+      // Fails with NotFoundException for an unknown album, or another repository's
       getById(albumId)
 
       val added = dao.addAssets(albumId, assetIds)
@@ -77,6 +69,9 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
     if assetIds.isEmpty then return 0
 
     txManager.withTransaction {
+      // Fails with NotFoundException for an unknown album, or another repository's
+      getById(albumId)
+
       val removed = dao.removeAssets(albumId, assetIds)
       logger.debug(s"Removed $removed asset(s) from album [$albumId]")
       removed

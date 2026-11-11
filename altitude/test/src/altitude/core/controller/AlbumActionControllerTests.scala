@@ -171,6 +171,55 @@ import altitude.core.models.Album
     }
   }
 
+  test("An album name the service refuses once in NFC replaces the dialog form in place, with the error") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with one album, "before", and a name of 250 U+FB2C posted to the add endpoint and put to the
+     * rename endpoint: 250 characters as typed, which the form's length check passes, and 750 in NFC.
+     *
+     * Assertions:
+     *
+     * Each response is its dialog's form carrying the too-long error, retargeted to replace the submitted form in place, and the
+     * repository keeps "before" alone.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    val max = Api.Constraints.MAX_ALBUM_NAME_LENGTH
+    // U+FB2C is a composition exclusion: three code points in NFC
+    val name = "\uFB2C" * max
+
+    withServer(App) {
+      host =>
+        val album: Album = testApp.service.album.add("before")
+        val added = requests.post(
+          s"$host/htmx/album/r/$repoId/add",
+          headers = Map("Content-Type" -> "application/json"),
+          data = ujson.write(ujson.Obj(Api.Field.Album.NAME -> name)),
+          cookies = testContext.cookies,
+          check = false
+        )
+        val renamed = requests.put(
+          s"$host/htmx/album/r/$repoId/rename",
+          headers = Map("Content-Type" -> "application/json"),
+          data = ujson.write(ujson.Obj(Api.Field.Album.NAME -> name, Api.Field.ID -> album.persistedId)),
+          cookies = testContext.cookies,
+          check = false
+        )
+
+        for ((response, formId) <- List(added -> "addAlbum", renamed -> "renameAlbum")) withClue(s"[$formId]: ") {
+          response.statusCode shouldBe 200
+          response.headers("hx-retarget") shouldBe Seq("this")
+          response.text() should include(s"""id="$formId"""")
+          response.text() should include(Const.Msg.Err.VALUE_TOO_LONG.format(max))
+        }
+
+        testApp.service.album.getAll.map(_.name) shouldEqual List("before")
+    }
+  }
+
   test("The Add to album dialog lists the albums and offers a new one") {
 
     /**
@@ -321,6 +370,70 @@ import altitude.core.models.Album
           .get(s"$host/htmx/album/r/$repoId/dialogs/add-to-album", headers = headers, check = false)
           .statusCode shouldBe 401
         requests.put(s"$host/htmx/album/r/$repoId/assets", headers = headers, check = false).statusCode shouldBe 401
+    }
+  }
+
+  test("Every album route that takes an album ID is a 404 for an unknown ID and for another repository's") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, and a second repository of theirs with the album "Eve's album" holding an asset.
+     *
+     * Assertions:
+     *
+     * Asked through the first repository, the rename and delete dialogs, the rename and the delete answer 404 for an album ID
+     * that does not exist and for "Eve's album", and no answer carries its name. The album, its name and its membership stay as
+     * they were: no row of either repository changes.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val eves: Album = testApp.service.album.add("Eve's album")
+        val asset = testContext.insertAsset(testContext.makeAsset(repository = Some(otherRepo)))
+        testApp.service.album.addAssets(eves.persistedId, Set(asset.persistedId))
+        testApp.service.repository.switchContextToRepository(repo)
+        val ownBefore = testContext.rowsOf(repo)
+        val othersBefore = testContext.rowsOf(otherRepo)
+
+        for (id <- List(java.util.UUID.randomUUID.toString, eves.persistedId)) withClue(s"[$id]: ") {
+          val answers = List(
+            requests.get(
+              s"$host/htmx/album/r/$repoId/dialogs/rename-album",
+              params = Map("id" -> id),
+              cookies = testContext.cookies,
+              check = false),
+            requests.get(
+              s"$host/htmx/album/r/$repoId/dialogs/delete-album",
+              params = Map("id" -> id),
+              cookies = testContext.cookies,
+              check = false),
+            requests.put(
+              s"$host/htmx/album/r/$repoId/rename",
+              headers = jsonHeaders,
+              data = ujson.write(ujson.Obj(Api.Field.Album.NAME -> "Renamed", Api.Field.ID -> id)),
+              cookies = testContext.cookies,
+              check = false
+            ),
+            requests.delete(
+              s"$host/htmx/album/r/$repoId/",
+              params = Map("id" -> id),
+              cookies = testContext.cookies,
+              check = false)
+          )
+          for (answer <- answers) {
+            answer.statusCode shouldBe 404
+            (answer.text() should not).include("Eve")
+          }
+        }
+
+        testContext.rowsOf(repo) shouldBe ownBefore
+        testContext.rowsOf(otherRepo) shouldBe othersBefore
     }
   }
 }

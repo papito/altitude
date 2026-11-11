@@ -1,0 +1,26 @@
+@import altitude.core.RequestContext
+
+@* The account's cell, as includes/nav renders it and the style guide's navigation section holds it: the account's type in
+   `data-account-type`, which colors its icon (core.css), and one target, the trigger (`triggerId`), showing the
+   `fa-user-circle` icon and the account's `@username`, named "Account: <username> (<type>)", which requests the account info
+   dialog (`infoDialogUrl`, which holds Change password and Log out) into the popover host below itself; then `after`, what
+   the cell holds beside it (the nav's Log out form). *@
+@(triggerId: String, infoDialogUrl: String)(after: Html)
+
+@account = @{ RequestContext.getAccount }
+@label = @{ s"Account: ${account.username} (${account.accountType})" }
+
+<div class="menu account" data-account-type="@account.accountType">
+    <button type="button"
+            id="@triggerId"
+            class="nav-menu-trigger"
+            style="anchor-name: --@triggerId"
+            aria-haspopup="dialog"
+            aria-label="@label"
+            title="@label"
+            hx-get="@infoDialogUrl"
+            hx-target="#popoverContent"
+            hx-swap="innerHTML"
+            data-app-dialog-anchor="@triggerId"><i class="fas fa-user-circle" aria-hidden="true"></i><span class="username">@@@account.username</span></button>
+    @after
+</div>

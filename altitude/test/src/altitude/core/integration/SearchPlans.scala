@@ -62,22 +62,37 @@ trait SearchPlans { self: IntegrationTestCore =>
     finally if (isPostgres) testApp.txManager.withTransaction(update("ANALYZE"))
 
   /**
-   * `copies` copies of the asset, spread over `folders` folders that need not exist, each imported a minute before the last: a
-   * library for the planner to choose the asset's indexes by. `id`, `checksum`, `folder_id` and `created_at` are the copy's own.
+   * `copies` copies of the asset, spread over `folders` folders it adds under the repository's root, each imported a minute
+   * before the last: a library for the planner to choose the asset's indexes by. `id`, `checksum`, `folder_id` and `created_at`
+   * are the copy's own.
    */
   protected def seedCopies(templateId: String, copies: Int, folders: Int): Unit = {
     val (copyId, checksum, createdAt) =
       if (isPostgres)
         ("lpad(g.n::text, 36, '0')", "lpad((1000000 + g.n)::text, 64, '0')", "created_at - g.n * interval '1 minute'")
       else ("printf('%036d', g.n)", "printf('%064d', 1000000 + g.n)", "datetime(created_at, '-' || g.n || ' minutes')")
+    // The folder of number `n`, an ID of 36 characters, as every ID is
+    def folderId(n: String): String =
+      if (isPostgres) s"'seeded-folder-' || lpad(($n)::text, 22, '0')" else s"'seeded-folder-' || printf('%022d', $n)"
+
+    update(
+      s"""WITH RECURSIVE g (n) AS (SELECT 0 UNION ALL SELECT n + 1 FROM g WHERE n < ${folders - 1})
+         |INSERT INTO folder (id, repository_id, name, name_key, parent_id)
+         |SELECT ${folderId("g.n")}, asset.repository_id, 'seeded ' || g.n, 'seeded ' || g.n, repository.root_folder_id
+         |  FROM asset JOIN repository ON repository.id = asset.repository_id CROSS JOIN g
+         | WHERE asset.id = ?""".stripMargin,
+      templateId
+    )
 
     update(
       s"""WITH RECURSIVE g (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM g WHERE n < $copies)
-         |INSERT INTO asset (id, repository_id, user_id, checksum, media_type, media_subtype, mime_type, width, height, area_size,
+         |INSERT INTO asset (id, repository_id, owner_user_id, original_owner, checksum, media_type, media_subtype, mime_type,
+         |                   width, height, area_size,
          |                   folder_id, filename, size_bytes, is_triaged, is_recycled, is_purged, is_pipeline_processed,
          |                   original_created_at, created_at)
-         |SELECT $copyId, repository_id, user_id, $checksum, media_type, media_subtype, mime_type, width, height, area_size,
-         |       'folder-' || (g.n % $folders), filename, size_bytes, is_triaged, is_recycled, is_purged, is_pipeline_processed,
+         |SELECT $copyId, repository_id, owner_user_id, original_owner, $checksum, media_type, media_subtype, mime_type,
+         |       width, height, area_size,
+         |       ${folderId(s"g.n % $folders")}, filename, size_bytes, is_triaged, is_recycled, is_purged, is_pipeline_processed,
          |       original_created_at, $createdAt
          |  FROM asset CROSS JOIN g
          | WHERE asset.id = ?""".stripMargin,

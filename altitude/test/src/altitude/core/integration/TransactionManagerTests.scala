@@ -6,7 +6,7 @@ import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.shouldBe
+import org.scalatest.matchers.should.Matchers.{ empty, shouldBe }
 import org.sqlite.SQLiteConfig
 import scalasql.core.SqlStr.SqlStringSyntax
 
@@ -101,6 +101,46 @@ import altitude.core.transactions.TransactionManager
     }
 
     inherited shouldBe None
+  }
+
+  test("An after-commit action runs once the outermost write commits, and never when it rolls back") {
+
+    /**
+     * Setup:
+     *
+     * A write transaction that registers an action inside a nested one and checks it has not run when the nested one ends; a
+     * write transaction that registers one and then fails; and an action registered outside any transaction.
+     *
+     * Assertions:
+     *
+     * The first action runs once, after the outermost transaction has committed, with no connection in the request context. The
+     * second never runs. The third runs at once.
+     *
+     * Edge cases:
+     *
+     * An action that throws is logged and swallowed: the actions after it run, and the committed transaction does not fail.
+     */
+    val ran = scala.collection.mutable.ListBuffer[String]()
+
+    testApp.txManager.withTransaction {
+      testApp.txManager.withTransaction {
+        testApp.txManager.afterCommit(throw IllegalStateException("A failing action"))
+        testApp.txManager.afterCommit(ran += s"committed, connection ${RequestContext.conn.value.isDefined}")
+      }
+      ran shouldBe empty
+    }
+    ran.toList shouldBe List("committed, connection false")
+
+    intercept[IllegalStateException] {
+      testApp.txManager.withTransaction {
+        testApp.txManager.afterCommit(ran += "rolled back")
+        throw IllegalStateException("The change failed")
+      }
+    }
+    ran.toList shouldBe List("committed, connection false")
+
+    testApp.txManager.afterCommit(ran += "no transaction")
+    ran.toList shouldBe List("committed, connection false", "no transaction")
   }
 
   test("A transaction leaves no connection behind, committed or failed") {

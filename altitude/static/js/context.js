@@ -20,6 +20,26 @@ export const context = {
     },
 
     /**
+     * Whether the account holds any one of the Permissions (`Const.permission`) in this Library, as
+     * the main page's body lists them (`data-app-permissions`, from the login token): what a control
+     * the scripts build or bind follows, as the templates render theirs. A page without the list
+     * holds none.
+     */
+    holds: function (...anyOf) {
+        const held = (document.body.dataset.appPermissions ?? "").split(" ")
+        return anyOf.some((permission) => held.includes(permission))
+    },
+
+    /**
+     * Whether the account may recycle what the page's view shows, as the main page's body says it
+     * (`data-app-recycles`, from `RequestContext.recyclesIn`: Recycle in Browse, a Curate Permission
+     * in Triage, nothing in the Trash), so the rule is the server's alone
+     */
+    recyclesHere: function () {
+        return document.body.hasAttribute("data-app-recycles")
+    },
+
+    /**
      * The folder currently being browsed, or null when no folder filter is active. Read from the
      * search parameters rather than the address bar, which only catches up once the server has
      * replied.

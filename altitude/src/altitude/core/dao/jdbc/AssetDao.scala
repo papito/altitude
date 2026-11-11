@@ -13,6 +13,7 @@ import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.tables.AssetRow
+import altitude.core.models.AccountSnapshot
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.CaptureDateSource
@@ -26,6 +27,7 @@ import altitude.core.models.SceneEmbeddings
 import altitude.core.models.SceneModel
 import altitude.core.models.SequenceMembers
 import altitude.core.models.UserMetadata
+import altitude.core.util.JsonCodec
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SequenceRule
@@ -41,7 +43,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
     Asset(
       id = Option(row.id),
-      userId = row.userId,
+      ownerUserId = row.ownerUserId,
+      originalOwner = JsonCodec.read[AccountSnapshot](row.originalOwner),
       fileName = row.filename,
       checksum = row.checksum,
       assetType = assetType,
@@ -52,7 +55,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       extractedMetadata = getJsonFromColumn(row.extractedMetadata.orNull): ExtractedMetadata,
       publicMetadata = getJsonFromColumn(row.publicMetadata.orNull): PublicMetadata,
       userMetadata = getJsonFromColumn(row.userMetadata.orNull): UserMetadata,
-      folderId = row.folderId.trim,
+      folderId = row.folderId.fold("")(_.trim),
       isRecycled = row.isRecycled,
       isTriaged = row.isTriaged,
       isPipelineProcessed = row.isPipelineProcessed,
@@ -77,7 +80,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
     Asset(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
-      userId = rec(FieldConst.USER_ID).asInstanceOf[String],
+      ownerUserId = rec(FieldConst.Asset.OWNER_USER_ID).asInstanceOf[String],
+      originalOwner = JsonCodec.read[AccountSnapshot](rec(FieldConst.Asset.ORIGINAL_OWNER).toString),
       fileName = rec(FieldConst.Asset.FILENAME).asInstanceOf[String],
       checksum = rec(FieldConst.Asset.CHECKSUM).asInstanceOf[String],
       assetType = assetType,
@@ -89,7 +93,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       extractedMetadata = getJsonFromColumn(rec.get(FieldConst.Asset.EXTRACTED_METADATA).orNull): ExtractedMetadata,
       publicMetadata = getJsonFromColumn(rec(FieldConst.Asset.PUBLIC_METADATA)): PublicMetadata,
       userMetadata = getJsonFromColumn(rec.get(FieldConst.Asset.USER_METADATA).orNull): UserMetadata,
-      folderId = rec(FieldConst.Asset.FOLDER_ID).asInstanceOf[String].trim,
+      // An asset in no folder (a triaged one) holds NULL, which its key over the folder does not check; the model's is empty
+      folderId = Option(rec(FieldConst.Asset.FOLDER_ID)).fold("")(_.toString.trim),
       isRecycled = getBooleanField(rec(FieldConst.Asset.IS_RECYCLED)),
       isTriaged = getBooleanField(rec(FieldConst.Asset.IS_TRIAGED)),
       isPipelineProcessed = getBooleanField(rec(FieldConst.Asset.IS_PIPELINE_PROCESSED)),
@@ -116,30 +121,30 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     )
 
   override def queryNotRecycled(q: Query): QueryResult[Asset] =
-    queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> false).withRepository())
+    queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> false))
 
   override def queryRecycled(q: Query): QueryResult[Asset] =
-    queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> true).withRepository())
+    queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> true))
 
   override def queryAll(q: Query): QueryResult[Asset] =
-    queryRecords(q.withRepository())
+    queryRecords(q)
 
-  override def getUserMetadata(assetId: String): Option[UserMetadata] =
+  override def getUserMetadata(assetId: String): UserMetadata =
     val sql = s"""
       SELECT ${FieldConst.Asset.USER_METADATA}
          FROM asset
        WHERE ${FieldConst.ID} = ?
+         AND ${FieldConst.REPO_ID} = ?
       """
 
-    val rec = executeAndGetOne(sql, List(assetId))
-    val userMetadataJson = getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA))
-    val userMetadata = UserMetadata.fromJson(userMetadataJson)
-    Some(userMetadata)
+    val rec = executeAndGetOne(sql, List(assetId, RequestContext.getRepository.persistedId))
+    UserMetadata.fromJson(getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA)))
 
   override def add(asset: Asset): Asset =
     val sql = s"""
         INSERT INTO asset (
-             ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.USER_ID}, ${FieldConst.Asset.CHECKSUM},
+             ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Asset.OWNER_USER_ID}, ${FieldConst.Asset.ORIGINAL_OWNER},
+             ${FieldConst.Asset.CHECKSUM},
              ${FieldConst.Asset.FILENAME}, ${FieldConst.Asset.SIZE_BYTES},
              ${FieldConst.AssetType.MEDIA_TYPE}, ${FieldConst.AssetType.MEDIA_SUBTYPE}, ${FieldConst.AssetType.MIME_TYPE},
              ${FieldConst.Asset.FOLDER_ID}, ${FieldConst.Asset.IS_TRIAGED}, ${FieldConst.Asset.ORIGINAL_CREATED_AT}, ${FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE},
@@ -147,7 +152,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
              ${FieldConst.CREATED_AT},
              ${FieldConst.Asset.WIDTH}, ${FieldConst.Asset.HEIGHT}, ${FieldConst.Asset.AREA_SIZE}, ${FieldConst.Asset.DURATION_MS},
              ${FieldConst.Asset.USER_METADATA}, ${FieldConst.Asset.EXTRACTED_METADATA}, ${FieldConst.Asset.PUBLIC_METADATA})
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
+            VALUES(?, ?, ?, $jsonFunc, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
     """
 
     val id = asset.id match
@@ -164,14 +169,16 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     val sqlVals: List[Any] = List(
       id,
       RequestContext.getRepository.persistedId,
-      asset.userId,
+      asset.ownerUserId,
+      asset.originalOwner.toJson.toString,
       asset.checksum,
       asset.fileName,
       asset.sizeBytes.asInstanceOf[Object],
       asset.assetType.mediaType,
       asset.assetType.mediaSubtype,
       asset.assetType.mime,
-      asset.folderId,
+      // An asset in no folder (an empty ID: a triaged one) is stored with NULL, which the folder key does not check
+      Option(asset.folderId).filter(_.nonEmpty).orNull,
       asset.isTriaged,
       capture,
       captureSource,
@@ -192,7 +199,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     addRecord(sql, sqlVals)
     asset.copy(id = Some(id))
 
-  override def setUserMetadata(assetId: String, userMetadata: UserMetadata): Unit =
+  override def setUserMetadata(assetId: String, userMetadata: UserMetadata): Int =
     BaseDao.incrWriteQueryCount()
 
     val metadataWithIds = UserMetadata.withIds(userMetadata)
@@ -443,35 +450,53 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       firstCapturedAt = getDateTimeField(rec.get("first_captured_at"))
     )
 
-  override def getSequencesToCurate(): List[QueuedSequence] =
-    val (sql, values) = sequencesToCurateStatement
+  override def getSequencesToCurate(owner: Option[String]): List[QueuedSequence] =
+    val (sql, values) = sequencesToCurateStatement(owner)
     manyBySqlQuery(sql, values).map {
       rec =>
         val members = toSequenceMembers(rec)
         QueuedSequence(members.sequenceId, members.members, members.firstCapturedAt, rec("cover_id").toString)
     }
 
-  override def countSequencesToCurate(): Int =
-    val (sql, values) = countSequencesToCurateStatement
+  override def countSequencesToCurate(owner: Option[String]): Int =
+    val (sql, values) = countSequencesToCurateStatement(owner)
     getLongField(executeAndGetOne(sql, values)("sequences")).get.toInt
 
-  override def getSequenceFrames(sequenceId: String, limit: Int): List[Asset] =
-    val (sql, values) = sequenceFramesStatement(sequenceId, limit)
+  override def getSequenceFrames(sequenceId: String, limit: Int, owner: Option[String]): List[Asset] =
+    val (sql, values) = sequenceFramesStatement(sequenceId, limit, owner)
     manyBySqlQuery(sql, values).map(makeModel)
 
-  override def countSequenceFrames(sequenceId: String): Int =
-    val (sql, values) = countSequenceFramesStatement(sequenceId)
+  override def countSequenceFrames(sequenceId: String, owner: Option[String]): Int =
+    val (sql, values) = countSequenceFramesStatement(sequenceId, owner)
     getLongField(executeAndGetOne(sql, values)("frames")).get.toInt
+
+  override def countOwnedSequenceFrames(sequenceIds: Set[String], owner: String): Map[String, Int] =
+    if sequenceIds.isEmpty then return Map.empty
+
+    val (frames, values) = liveFramesOfSequences(inIdSet, Some(owner))
+    val sql = s"SELECT ${FieldConst.Asset.SEQUENCE_ID}, COUNT(*) AS frames $frames GROUP BY ${FieldConst.Asset.SEQUENCE_ID}"
+    manyBySqlQuery(sql, idSet(sequenceIds) :: values).map {
+      rec => rec(FieldConst.Asset.SEQUENCE_ID).toString.trim -> getLongField(rec("frames")).get.toInt
+    }.toMap
 
   /** The first capture of a Sequence's frames, which the queue is ordered by; none for an undated Sequence */
   private val firstCapture = s"MIN(${FieldConst.Asset.ORIGINAL_CREATED_AT})"
 
   /**
-   * The context repository's Sequences with at least two frames completed and out of the trash, counted over those frames alone.
-   * `sequence_id IS NOT NULL` is what lets `asset_sequence` answer it: that index holds only the rows that carry a Sequence, so
-   * the cost is theirs and not the library's.
+   * The test that keeps one account's frames alone, for an account that curates its own assets alone, and its bind value; nothing
+   * without an `owner`. `table` qualifies the column where the statement reads `asset` under another name.
    */
-  private def sequencesToCurate: String = s"""
+  private def ownerTest(owner: Option[String], table: String = "asset"): (String, List[Any]) =
+    owner.fold(("", Nil))(id => (s"AND $table.${FieldConst.Asset.OWNER_USER_ID} = ?", List(id)))
+
+  /**
+   * The context repository's Sequences with at least two frames completed and out of the trash, counted over those frames alone
+   * (one account's alone with an `owner`), and their bind values. `sequence_id IS NOT NULL` is what lets `asset_sequence` answer
+   * it: that index holds only the rows that carry a Sequence, so the cost is theirs and not the library's.
+   */
+  private def sequencesToCurate(owner: Option[String]): (String, List[Any]) =
+    val (byOwner, ownerValues) = ownerTest(owner)
+    val sql = s"""
       SELECT ${FieldConst.Asset.SEQUENCE_ID},
              COUNT(*) AS members,
              $firstCapture AS first_captured_at
@@ -481,19 +506,23 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
          AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
          AND ${FieldConst.Asset.IS_RECYCLED} = FALSE
          AND ${FieldConst.Asset.IS_PURGED} = FALSE
+         $byOwner
        GROUP BY ${FieldConst.Asset.SEQUENCE_ID}
       HAVING COUNT(*) >= ${C.Curation.MIN_FRAMES}
     """
+    (sql, RequestContext.getRepository.persistedId :: ownerValues)
 
   /**
    * The statement behind [[getSequencesToCurate]] with its bind values, which the plan tests explain. The grouped rows are a
    * derived table, so the `ORDER BY` names their columns: an undated Sequence has no first capture, and NULL sorts first on
    * SQLite and last on PostgreSQL, so the `IS NULL` test puts it last on both. The cover is a correlated subquery over those
-   * rows: the Sequence's first live frame in [[sequenceFramesStatement]]'s capture order, read once per Sequence of the queue
-   * through `asset_sequence`. The count statement leaves it out, since the toolbar reads the count after every mutation.
+   * rows: the Sequence's first live frame (of the `owner`, with one) in [[sequenceFramesStatement]]'s capture order, read once
+   * per Sequence of the queue through `asset_sequence`. The count statement leaves it out, since the toolbar reads the count
+   * after every mutation.
    */
-  def sequencesToCurateStatement: (String, List[Any]) =
+  def sequencesToCurateStatement(owner: Option[String] = None): (String, List[Any]) =
     val capturedAt = FieldConst.Asset.ORIGINAL_CREATED_AT
+    val (coverByOwner, coverOwnerValues) = ownerTest(owner, "cover")
     val cover = s"""
       (SELECT cover.${FieldConst.ID}
          FROM asset AS cover
@@ -502,33 +531,40 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
           AND cover.${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
           AND cover.${FieldConst.Asset.IS_RECYCLED} = FALSE
           AND cover.${FieldConst.Asset.IS_PURGED} = FALSE
+          $coverByOwner
         ORDER BY cover.$capturedAt IS NULL, cover.$capturedAt, cover.${FieldConst.CREATED_AT}, cover.${FieldConst.ID}
         LIMIT 1) AS cover_id
     """
+    val (toCurate, toCurateValues) = sequencesToCurate(owner)
     val sql = s"""
       SELECT to_curate.*, $cover
-        FROM ($sequencesToCurate) AS to_curate
+        FROM ($toCurate) AS to_curate
        ORDER BY first_captured_at IS NULL, first_captured_at, ${FieldConst.Asset.SEQUENCE_ID}
     """
-    val repoId = RequestContext.getRepository.persistedId
-    (sql, List(repoId, repoId))
+    // The cover's placeholders come first in the text
+    (sql, (RequestContext.getRepository.persistedId :: coverOwnerValues) ++ toCurateValues)
 
   /** The statement behind [[countSequencesToCurate]] with its bind values, which the plan tests explain */
-  def countSequencesToCurateStatement: (String, List[Any]) =
-    (s"SELECT COUNT(*) AS sequences FROM ($sequencesToCurate) AS to_curate", List(RequestContext.getRepository.persistedId))
+  def countSequencesToCurateStatement(owner: Option[String] = None): (String, List[Any]) =
+    val (toCurate, values) = sequencesToCurate(owner)
+    (s"SELECT COUNT(*) AS sequences FROM ($toCurate) AS to_curate", values)
 
   /**
-   * The `FROM` of the frames completed and out of the trash whose Sequence passes the test; its placeholder binds before the
-   * repository
+   * The `FROM` of the frames completed and out of the trash whose Sequence passes the test (one account's alone with an `owner`),
+   * and the bind values after the Sequence's: the repository, then the owner
    */
-  private def liveFramesOfSequences(sequenceTest: String): String = s"""
+  private def liveFramesOfSequences(sequenceTest: String, owner: Option[String] = None): (String, List[Any]) =
+    val (byOwner, ownerValues) = ownerTest(owner)
+    val sql = s"""
         FROM asset
        WHERE ${FieldConst.Asset.SEQUENCE_ID} $sequenceTest
          AND ${FieldConst.REPO_ID} = ?
          AND ${FieldConst.Asset.IS_PIPELINE_PROCESSED} = TRUE
          AND ${FieldConst.Asset.IS_RECYCLED} = FALSE
          AND ${FieldConst.Asset.IS_PURGED} = FALSE
+         $byOwner
     """
+    (sql, RequestContext.getRepository.persistedId :: ownerValues)
 
   /**
    * The statement behind [[getSequenceFrames]] with its bind values, which the plan tests explain. The order is
@@ -536,18 +572,20 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
    * tie before the ID, so an undated Sequence's frames come as they were uploaded rather than by their random IDs. The database
    * sorts and cuts, so nothing past the window comes back.
    */
-  def sequenceFramesStatement(sequenceId: String, limit: Int): (String, List[Any]) =
+  def sequenceFramesStatement(sequenceId: String, limit: Int, owner: Option[String] = None): (String, List[Any]) =
     val capturedAt = FieldConst.Asset.ORIGINAL_CREATED_AT
+    val (frames, values) = liveFramesOfSequences("= ?", owner)
     val sql = s"""
-      SELECT $assetWithoutBulkyMetadata ${liveFramesOfSequences("= ?")}
+      SELECT $assetWithoutBulkyMetadata $frames
        ORDER BY $capturedAt IS NULL, $capturedAt, ${FieldConst.CREATED_AT}, ${FieldConst.ID}
        LIMIT $limit
     """
-    (sql, List(sequenceId, RequestContext.getRepository.persistedId))
+    (sql, sequenceId :: values)
 
   /** The statement behind [[countSequenceFrames]] with its bind values, which the plan tests explain */
-  def countSequenceFramesStatement(sequenceId: String): (String, List[Any]) =
-    (s"SELECT COUNT(*) AS frames ${liveFramesOfSequences("= ?")}", List(sequenceId, RequestContext.getRepository.persistedId))
+  def countSequenceFramesStatement(sequenceId: String, owner: Option[String] = None): (String, List[Any]) =
+    val (frames, values) = liveFramesOfSequences("= ?", owner)
+    (s"SELECT COUNT(*) AS frames $frames", sequenceId :: values)
 
   // The advisory lock of the repository's Sequences; see `BaseDao.advisoryLock`
   override def lockSequences(): Unit = advisoryLock(s"sequences:${RequestContext.getRepository.persistedId}")
@@ -563,8 +601,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
    * order, the order of the library operations' locking select, so the two do not wait on each other in a cycle.
    */
   def liveSequenceMembersStatement(sequenceIds: Set[String]): (String, List[Any]) =
-    val sql = s"SELECT $assetWithoutBulkyMetadata ${liveFramesOfSequences(inIdSet)} ORDER BY ${FieldConst.ID} $forUpdate"
-    (sql, List(idSet(sequenceIds), RequestContext.getRepository.persistedId))
+    val (frames, values) = liveFramesOfSequences(inIdSet)
+    (s"SELECT $assetWithoutBulkyMetadata $frames ORDER BY ${FieldConst.ID} $forUpdate", idSet(sequenceIds) :: values)
 
   override def clearSequence(assetIds: Set[String]): Int =
     if assetIds.isEmpty then return 0
@@ -597,11 +635,25 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     """
     updateByBySql(sql, List(toId, RequestContext.getRepository.persistedId, idSet(fromIds)))
 
-  def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit =
-    val existingMetadata = getUserMetadata(assetId) match
-      case Some(m) => m
-      case None => UserMetadata()
+  // The three statements of an account across Libraries carry no repository_id: altitude/AGENTS.md, **Repository scoping**
+  override def countOwnedBy(accountId: String): Int =
+    val sql = s"SELECT COUNT(*) AS assets FROM asset WHERE ${FieldConst.Asset.OWNER_USER_ID} = ?"
+    getLongField(executeAndGetOne(sql, List(accountId))("assets")).get.toInt
 
+  override def reassignOwner(fromAccountId: String, toAccountId: String): Int =
+    val sql = s"UPDATE asset SET ${FieldConst.Asset.OWNER_USER_ID} = ? WHERE ${FieldConst.Asset.OWNER_USER_ID} = ?"
+    updateByBySql(sql, List(toAccountId, fromAccountId))
+
+  override def rewriteImporterRecords(snapshot: AccountSnapshot): Int =
+    val sql = s"""
+      UPDATE asset
+         SET ${FieldConst.Asset.ORIGINAL_OWNER} = $jsonFunc
+       WHERE ${jsonText(FieldConst.Asset.ORIGINAL_OWNER, "id")} = ?
+    """
+    updateByBySql(sql, List(ujson.write(snapshot.toJson), snapshot.id))
+
+  def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Int =
+    val existingMetadata = getUserMetadata(assetId)
     logger.trace(s"Updating $existingMetadata with $metadata")
     val newData = (existingMetadata.data ++ metadata.data).filterNot(m => deletedFields.contains(m._1))
     val newMetadata = new UserMetadata(newData)

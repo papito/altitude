@@ -3,7 +3,7 @@ import {
     settleModalOpenRequest,
     trackModalOpenRequest,
 } from "../common/modal.js"
-import { showErrorSnackBar } from "../common/snackbar.js"
+import { reportRequestFailure } from "../common/request-failure.js"
 import {
     finalizeDialogOperationRequest,
     settleDialogOperation,
@@ -39,10 +39,9 @@ export function registerDialogListeners(app) {
 
     document.addEventListener("htmx:after:request", (event) => {
         const handledAsOpen = settleModalOpenRequest(event, {
-            onFailure: (ctx) => {
-                showErrorSnackBar(
-                    `Could not open dialog: HTTP ${ctx.response.status}`,
-                )
+            // A refusal the server words (a 403 for a Permission not held) is shown as its text
+            onFailure: () => {
+                reportRequestFailure(event)
                 // Asset detail's URL, on the main page alone (`nav-page.js` has none)
                 app.detailUrl?.openFailed()
             },

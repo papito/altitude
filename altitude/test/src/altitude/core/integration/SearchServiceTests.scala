@@ -538,6 +538,36 @@ import altitude.core.util.*
     results.total shouldBe Some(2)
   }
 
+  test("A BOOL value given in any accepted form is indexed, and a filter on the flag finds it") {
+
+    /**
+     * Setup:
+     *
+     * A BOOL field; an asset imported with "1" in it, an asset given "TRUE" afterwards, and an asset given "0" afterwards.
+     *
+     * Assertions:
+     *
+     * Filtering the field by true finds the first two assets, and by false the third: every form the field accepts ("1", "0" and
+     * any case of "true" and "false") is indexed as the boolean it stands for. Each value reads back as it was given.
+     */
+    val field = testApp.service.metadata.addField(UserMetadataField(name = "flagged", fieldType = FieldType.BOOL))
+
+    val imported: Asset = testContext.persistAsset(metadata = UserMetadata(Map(field.persistedId -> Set("1"))))
+    val upper: Asset = testContext.persistAsset()
+    testApp.service.metadata.addMetadataValue(upper.persistedId, field.persistedId, "TRUE")
+    val zero: Asset = testContext.persistAsset()
+    testApp.service.metadata.addMetadataValue(zero.persistedId, field.persistedId, "0")
+
+    def flagged(flag: Boolean): Set[String] =
+      search(new SearchQuery(rpp = PAGE_SIZE, metadataFilters = Map(field.persistedId -> Query.EQUALS(flag)))).records
+        .map(_.persistedId)
+        .toSet
+
+    flagged(true) shouldBe Set(imported.persistedId, upper.persistedId)
+    flagged(false) shouldBe Set(zero.persistedId)
+    testApp.service.metadata.getMetadata(zero.persistedId)(field.persistedId).map(_.value) shouldBe Set("0")
+  }
+
   test("Search by wrong field type") {
 
     /**
@@ -606,6 +636,37 @@ import altitude.core.util.*
       )
     )
     results.total shouldBe Some(2)
+  }
+
+  test("A keyword filter finds its value in another case, canonical form or compatibility form") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field, an asset holding "Straße", "Café" typed with a combining accent and "Summer" in it, and an asset holding
+     * "Strand".
+     *
+     * Assertions:
+     *
+     * Filtering the field by "STRASSE" (the case fold of "ß"), "café" with a precomposed "é" (the canonical form), or "ＳUMMER"
+     * with a full-width "S" (the compatibility form) finds the first asset alone.
+     */
+    val field = testApp.service.metadata.addField(UserMetadataField(name = "field 1", fieldType = FieldType.KEYWORD))
+
+    val asset: Asset = testContext.persistAsset()
+    List("Straße", "Café", "Summer").foreach {
+      value => testApp.service.metadata.addMetadataValue(asset.persistedId, fieldId = field.persistedId, newValue = value)
+    }
+    val other: Asset = testContext.persistAsset()
+    testApp.service.metadata.addMetadataValue(other.persistedId, fieldId = field.persistedId, newValue = "Strand")
+
+    List("STRASSE", "café", "ＳUMMER").foreach {
+      filter =>
+        withClue(s"[$filter]: ") {
+          val results = search(new SearchQuery(rpp = PAGE_SIZE, metadataFilters = Map(field.persistedId -> filter)))
+          results.records.map(_.persistedId) shouldBe List(asset.persistedId)
+        }
+    }
   }
 
   test("Updating and removing metadata values updates search index") {
@@ -1013,7 +1074,7 @@ import altitude.core.util.*
     val kept = importAsset("lake.jpg")
     val purged = importAsset("beach.jpg")
 
-    val source = Source.single((purged, PipelineContext(testContext.repository, testContext.user)))
+    val source = Source.single((purged, PipelineContext(testContext.repository, Some(testContext.user))))
     Await.result(testApp.service.purgePipeline.run(source, VoidAssetSink()), Duration.Inf)
 
     documentBody(purged) shouldBe None
@@ -1303,7 +1364,8 @@ import altitude.core.util.*
      *
      * Assertions:
      *
-     * The capped count's plan reads the asset through its primary key index.
+     * The capped count's plan reads the asset through a key that leads with its ID: the primary key, or the unique key over the
+     * ID and the repository that the foreign keys name, which the engine may take as well, both being a lookup by ID.
      */
     val template = importAsset("beach.jpg")
     val query = new SearchQuery(text = Some("beach"), params = browsingView)
@@ -1315,7 +1377,8 @@ import altitude.core.util.*
       planOf(SearchQueries.cappedCount(searchDialect, resolved, RequestContext.getRepository.persistedId))
     }
 
-    withClue(plan)(plan should include(if (isPostgres) "asset_pkey" else "sqlite_autoindex_asset_1"))
+    withClue(plan)(
+      (plan should include).regex(if (isPostgres) "asset_pkey|asset_id_repository_id_key" else "sqlite_autoindex_asset_[12]"))
   }
 
   test("The name sources of a Search text are read from their indexes alone") {

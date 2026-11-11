@@ -1,13 +1,13 @@
 package altitude.core.service
 
 import altitude.core.Altitude
+import altitude.core.Api
 import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
-import altitude.core.NotFoundException
+import altitude.core.Validators
 import altitude.core.dao.LocationDao
 import altitude.core.models.Location
 import altitude.core.models.LocationKind
-import altitude.core.util.Query
 
 /**
  * Categories and Locations, one table and one name pool per repository (see [[Location]]). Like albums, nothing here touches an
@@ -18,13 +18,17 @@ import altitude.core.util.Query
 class LocationService(val app: Altitude) extends BaseService[Location]:
   override protected val dao: LocationDao = app.DAO.location
 
+  /** A Location or category name as stored, once it passes the name rule (`Validators.validName`) */
+  private def validName(name: String): String =
+    Validators.validName(name, Api.Field.Location.NAME, Api.Constraints.MAX_LOCATION_NAME_LENGTH)
+
   def addLocation(name: String, latitude: Double, longitude: Double, categoryId: Option[String] = None): Location =
     txManager.withTransaction {
       categoryId.foreach(requireCategory)
       logger.debug(s"Adding location [$name] at [$latitude, $longitude]" + categoryId.fold("")(id => s" under [$id]"))
       add(
         Location(
-          name = name.trim,
+          name = validName(name.trim),
           kind = LocationKind.Location,
           categoryId = categoryId,
           latitude = Some(latitude),
@@ -34,12 +38,8 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
   def addCategory(name: String): Location =
     txManager.withTransaction {
       logger.debug(s"Adding location category [$name]")
-      add(Location(name = name.trim, kind = LocationKind.Category))
+      add(Location(name = validName(name.trim), kind = LocationKind.Category))
     }
-
-  /** Scoped to the context repository: another repository's row is not found */
-  override def getById(id: String): Location =
-    getOneByQuery(new Query().add(FieldConst.ID -> id).withRepository())
 
   def getAll: List[Location] =
     txManager.asReadOnly {
@@ -50,10 +50,10 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
     txManager.withTransaction {
       val location: Location = getById(id)
       // The copy validates the new name the same way a new row is validated
-      val renamed = location.copy(name = newName.trim)
+      val renamed = location.copy(name = validName(newName.trim))
 
       logger.debug(s"Renaming location [${location.name}] to [${renamed.name}]")
-      updateById(id, Map(FieldConst.Location.NAME -> renamed.name, FieldConst.Location.NAME_LC -> renamed.nameLowercase))
+      updateById(id, Map(FieldConst.Location.NAME -> renamed.name, FieldConst.Location.NAME_KEY -> renamed.nameKey))
       renamed
     }
 
@@ -79,9 +79,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
         logger.debug(s"Deleting location category [${location.name}], moving $moved location(s) to the top level")
       else logger.debug(s"Deleting location [${location.name}]")
 
-      val deleted = super.deleteById(id)
-      if deleted == 0 then throw NotFoundException(s"Location $id not found")
-      deleted
+      super.deleteById(id)
     }
 
   def addAssets(locationId: String, assetIds: Set[String]): Int =

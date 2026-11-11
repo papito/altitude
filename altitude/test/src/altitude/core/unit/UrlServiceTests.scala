@@ -11,7 +11,6 @@ import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Repository
 import altitude.core.service.UrlService
-import altitude.core.util.Util
 
 @DoNotDiscover class UrlServiceTests extends funsuite.AnyFunSuite with TestFocus {
   val urlService = new UrlService
@@ -24,7 +23,6 @@ import altitude.core.util.Util
     new Repository(
       id = Some(repoId),
       name = "repo name",
-      ownerAccountId = Util.randomStr(),
       rootFolderId = "1",
       fileStoreConfig = Map(),
       fileStoreType = C.StorageEngineName.FS))

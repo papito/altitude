@@ -29,7 +29,10 @@
  * option reads "· merge Unknown 7 (5 assets)" and merges the Person into the picked one, the Create
  * row reads "Name Unknown 7 'X' (5 assets)" and names the Person, and a nameless option reads
  * "· this face" and still moves this Face only, since two nameless people are never merged from here.
- * With the switch on, every pick moves this Face only, as for a named Person's Face. The switch is a
+ * With the switch on, every pick moves this Face only, as for a named Person's Face. Merging People is
+ * Organize's (`Const.permission.organize`): without it a named option never merges, and moves this Face
+ * only, "· this face", as a nameless one does, while the Create row still names the Person (Edit
+ * Metadata's, as every correction here is). The switch is a
  * `.switch` (`button[role="switch"]`) with its label, both inside the component root, so Tab to it
  * keeps the listbox open (`onFocusOut`); a pointer press on either keeps focus in the input
  * (`mousedown` prevented, the label's own click replaced by the component's), so Enter still picks
@@ -55,6 +58,7 @@
  */
 import { Const } from "../../constants.js"
 import { context } from "../../context.js"
+import { nameKey, partialMatchKey } from "../../common/name-key.js"
 import { showErrorSnackBar } from "../../common/snackbar.js"
 import { getHttpErrorMessage, http } from "../../http/client.js"
 
@@ -79,21 +83,28 @@ export function assignablePeopleUrl({ repoId, faceId }) {
 /**
  * Reads the options out of the assignable people fragment (`htmx/assignable_people`), wherever they
  * sit in it: each option's Person, their name, whether named (`data-person-named`), whether Hidden,
- * their cover's URL, and whether the option is in the Suggested group (`data-suggested`).
+ * their cover's URL, and whether the option is in the Suggested group (`data-suggested`). Each
+ * option carries its name's two forms, computed once here rather than on every keystroke: its name
+ * key (`nameKey`, for the exact name) and its form for the substring match (`partialMatchKey`).
  */
 export function parseAssignablePeople(html) {
     const doc = new DOMParser().parseFromString(html, "text/html")
 
     return [...doc.querySelectorAll('[role="option"][data-person-id]')].map(
-        (optionEl) => ({
-            personId: optionEl.dataset.personId,
-            name: optionEl.dataset.personName ?? "",
-            named: optionEl.dataset.personNamed === "true",
-            hidden: optionEl.dataset.personHidden === "true",
-            suggested: optionEl.dataset.suggested !== undefined,
-            coverUrl:
-                optionEl.querySelector("img")?.getAttribute("src") ?? null,
-        }),
+        (optionEl) => {
+            const name = optionEl.dataset.personName ?? ""
+            return {
+                personId: optionEl.dataset.personId,
+                name,
+                nameKey: nameKey(name),
+                partialMatchKey: partialMatchKey(name),
+                named: optionEl.dataset.personNamed === "true",
+                hidden: optionEl.dataset.personHidden === "true",
+                suggested: optionEl.dataset.suggested !== undefined,
+                coverUrl:
+                    optionEl.querySelector("img")?.getAttribute("src") ?? null,
+            }
+        },
     )
 }
 
@@ -129,11 +140,6 @@ export function clearSelectedFaceRow() {
     rowEl.focus({ preventScroll: true })
     rowEl.click()
     return true
-}
-
-/** A name as the server compares names: trimmed, in NFC, lowercased (`PersonService.nameKey`) */
-function nameKey(text) {
-    return text.trim().normalize("NFC").toLowerCase()
 }
 
 /** "1 asset", "5 assets" */
@@ -198,6 +204,15 @@ export function faceCombobox() {
             return !this.rowPerson.named && !this.faceOnly
         },
 
+        /** The option's pick merges the row's Person into it: a named option, picked for the whole Person, by a holder of Organize */
+        mergesInto(option) {
+            return (
+                this.wholePerson &&
+                option.named &&
+                context.holds(Const.permission.organize)
+            )
+        },
+
         get listboxId() {
             return `faceListbox-${this.faceId}`
         },
@@ -217,16 +232,17 @@ export function faceCombobox() {
         /**
          * The options the query leaves, in the server's order (named first, then Unknowns), the first
          * few dozen: with nothing typed, the list under the Suggested group, which holds the rest;
-         * typed, every option, the suggested people ahead of the others
+         * typed, every option whose name holds the query in any case or Unicode form (`partialMatchKey`),
+         * the suggested people ahead of the others
          */
         get matches() {
-            const key = nameKey(this.query)
+            const key = partialMatchKey(this.query)
 
             return this.options
                 .filter((option) =>
                     key === ""
                         ? !option.suggested
-                        : nameKey(option.name).includes(key),
+                        : option.partialMatchKey.includes(key),
                 )
                 .slice(0, MAX_SHOWN_OPTIONS)
         },
@@ -245,7 +261,7 @@ export function faceCombobox() {
             }
 
             const key = nameKey(name)
-            return this.options.some((option) => nameKey(option.name) === key)
+            return this.options.some((option) => option.nameKey === key)
                 ? null
                 : name
         },
@@ -269,7 +285,7 @@ export function faceCombobox() {
             }
 
             const { name, assetCount } = this.rowPerson
-            return option.named
+            return this.mergesInto(option)
                 ? `· merge ${name} (${assetCountText(assetCount)})`
                 : "· this face"
         },
@@ -443,9 +459,7 @@ export function faceCombobox() {
                 return null
             }
 
-            const exact = this.matches.find(
-                (option) => nameKey(option.name) === key,
-            )
+            const exact = this.matches.find((option) => option.nameKey === key)
 
             return (
                 exact?.personId ??
@@ -561,7 +575,7 @@ export function faceCombobox() {
                 return
             }
 
-            if (!this.wholePerson || !option.named) {
+            if (!this.mergesInto(option)) {
                 this.announcePick({ faceId, action: "move", personId: key })
             } else if (this.armedKey !== key) {
                 this.setActive(key)

@@ -1,11 +1,13 @@
 package altitude.core.unit
 
+import altitude.test.TestFocus
 import org.scalatest.{ funsuite, DoNotDiscover }
 import org.scalatest.matchers.should.Matchers.{ shouldBe, shouldEqual }
 
 import altitude.core.routes.web.SessionController
+import altitude.core.util.Util
 
-@DoNotDiscover class SessionControllerTests extends funsuite.AnyFunSuite {
+@DoNotDiscover class SessionControllerTests extends funsuite.AnyFunSuite with TestFocus {
 
   test("isValidRedirectUrl should allow valid relative URLs") {
 
@@ -98,5 +100,23 @@ import altitude.core.routes.web.SessionController
      */
     SessionController.isValidRedirectUrl("evil.com") shouldBe false
     SessionController.isValidRedirectUrl("path/to/page") shouldBe false
+  }
+
+  test("A login is logged and audited printable: control characters escaped, cut to a length") {
+
+    /**
+     * Setup:
+     *
+     * A login with a carriage return and a line feed before text that reads like a log line, one with a NUL, and one of 100
+     * characters.
+     *
+     * Assertions:
+     *
+     * `Util.printable` escapes each control character as `\uXXXX`, so the text cannot start a line of its own or carry a NUL, and
+     * cuts the result to the length given.
+     */
+    Util.printable("jane\r\nINFO forged", 64) shouldBe "jane\\u000d\\u000aINFO forged"
+    Util.printable("jane\u0000", 64) shouldBe "jane\\u0000"
+    Util.printable("x" * 100, 64) shouldBe "x" * 64
   }
 }

@@ -7,9 +7,21 @@ Altitude organizes and searches a library of media assets.
 **Library**:
 A collection of assets kept apart from every other: its own folders, albums,
 People, Locations, Triage and Trash. Nothing crosses between Libraries, and the
-user works in one at a time. An Admin creates and owns it, and its name is
+user works in one at a time. It belongs to the server, not to an account: an
+Admin, or an account allowed to create Libraries, creates it, and its name is
 unique on the server, whatever its case or spacing.
 _Avoid_: Repository, Repo, Catalog, Collection in user-facing text.
+
+**Storage**:
+Where a Library keeps its originals, Previews and face images: This server, or
+an Object store. It is chosen when the Library is created and does not change.
+_Avoid_: Backend, Store, File store, Storage location in user-facing text.
+
+**Object store**:
+An S3-compatible service that the server's operator has set up and named, on
+which a Library can keep its files instead of on the server's own disk.
+_Avoid_: Bucket (a People bucket is something else), S3, Cloud storage, Remote
+storage.
 
 **Date Taken**:
 The date and time an asset was captured, distinct from when it was added to the
@@ -22,6 +34,26 @@ The date and time an asset was added to the library, distinct from when it was
 captured. Its calendar day is determined in UTC.
 _Avoid_: Date Taken when referring to import time.
 
+**Import**:
+One delivery of files to a Library, kept as a record: one upload from a browser,
+of chosen files or of a whole folder tree, or one scan of a Watch folder that
+found files. Its files land in Triage, or skip it: sorted into one chosen
+folder, or, when the Import keeps their folder structure, into folders that
+mirror it.
+_Avoid_: Batch (a user's selection), Job, Run, Upload when referring to the
+record.
+
+**Import file**:
+One file of an Import with its outcome: imported, already in the Library,
+unsupported, or failed.
+_Avoid_: Entry, Item, Line.
+
+**Watch folder**:
+A directory on the server that the app scans for new files and imports into one
+Library, including files that arrived while the app was not running. It is not
+a folder of the Library, and it may delete the files it has imported.
+_Avoid_: Hot folder, Inbox, Drop folder, Monitored folder.
+
 **Location**:
 A user-defined place: a name and a pin (a WGS84 point placed on a map, never
 typed), holding pointers to any number of assets, optionally under a Category.
@@ -31,6 +63,18 @@ _Avoid_: Place, Geotag, Pin when referring to the entity rather than its point.
 A named container for Locations, one level deep, with no pin and no assets of
 its own. Locations and Categories share one name pool per Library.
 _Avoid_: Parent, Folder, Group.
+
+**Name key**:
+The folded form of a name under which two names are the same name: names that
+differ only in letter case, in any script ("Weiß" and "WEISS"), or in how their
+characters are encoded (a combining accent, a full-width letter, a ligature)
+share one, while names that differ in an accent ("Émile" and "Emile") do not.
+Libraries, folders among their siblings, albums, Locations and Categories,
+metadata fields and People are unique under their names' keys, an asset's
+metadata values are one value under one key, and a keyword filter matches under
+it. The key is never shown: a name is shown with its own case and letters.
+_Avoid_: Lowercase name, Case-insensitive name, Normalized name (the name as
+stored).
 
 **Choice menu**:
 A control that picks one of several values from a popover list, such as the
@@ -179,9 +223,28 @@ or album, Search document), and the terms add up.
 _Avoid_: Rank, Score, Weight in user-facing text.
 
 **Admin**:
-The account type that set the system up. It owns the Libraries and alone
-may change Settings.
+The account type that may do everything in every Library. It alone changes
+Settings, creates another Admin, and edits, deactivates or deletes an account.
+There can be several; the last active one cannot be removed.
 _Avoid_: Owner, Superuser, Root.
+
+**Guest**:
+The account type that can only look at the Libraries shared with it. It never
+holds a Permission.
+_Avoid_: Client, Viewer, Read-only user.
+
+**Permission**:
+One thing a User may do in one Library, granted per account and per Library:
+Import, Curate own, Curate all, Organize, Edit Metadata, Create Users, Create
+Guests, Recycle, Purge. Looking needs none. Creating Libraries is allowed per
+account, not per Library.
+_Avoid_: Role, Right, Privilege, Policy.
+
+**Organize**:
+The Permission to arrange a Library: sort assets out of Triage into folders,
+move sorted assets, manage folders, albums, Locations and Categories, and merge
+or hide People.
+_Avoid_: Add to Catalog, Add to Library, Manage.
 
 **Setting**:
 A system-wide tunable value with a default, changed by an Admin on the Settings

@@ -10,14 +10,17 @@ import java.time.ZoneOffset
 import java.util.HexFormat
 import java.util.concurrent.atomic.AtomicInteger
 import org.apache.commons.dbutils.QueryRunner
+import org.apache.commons.dbutils.handlers.MapListHandler
 
 import scala.collection.mutable
+import scala.jdk.CollectionConverters.*
 import scala.util.Random
 
 import altitude.core.Altitude
 import altitude.core.Const as C
 import altitude.core.RequestContext
 import altitude.core.dao.sqlite.SqliteOverrides
+import altitude.core.models.AccountSnapshot
 import altitude.core.models.AccountType
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
@@ -28,6 +31,7 @@ import altitude.core.models.FaceImages
 import altitude.core.models.Folder
 import altitude.core.models.Histogram
 import altitude.core.models.ImageQuality
+import altitude.core.models.Permissions
 import altitude.core.models.Person
 import altitude.core.models.Repository
 import altitude.core.models.User
@@ -65,6 +69,21 @@ object TestContext {
    */
   def between(vector: Array[Float], other: Array[Float], parts: Int): Array[Float] =
     FaceRecognitionService.meanNormalized(Seq.fill(parts)(vector) :+ other)
+
+  /** The tables that carry `repository_id`, whose rows only their own repository's context reaches */
+  val SCOPED_TABLES: List[String] = List(
+    "asset",
+    "folder",
+    "album",
+    "album_asset",
+    "location",
+    "location_asset",
+    "person",
+    "face",
+    "metadata_field",
+    "metadata_parameter",
+    "stats",
+    "search_document")
 }
 
 class TestContext(val testApp: Altitude) {
@@ -74,20 +93,23 @@ class TestContext(val testApp: Altitude) {
   // to maintain login state for controllers
   var cookies: Map[String, HttpCookie] = Map.empty
 
+  // An email address holds an "@", or a login with it is looked up as a username
   def makeUser(): User = User(
-    email = Util.randomStr(),
+    email = s"${Util.randomStr()}@example.com",
+    username = Util.randomStr(),
     name = Util.randomStr(),
     accountType = AccountType.User
   )
 
-  def makeAdminUser(): User = User(
-    email = Util.randomStr(),
-    name = Util.randomStr(),
-    accountType = AccountType.Admin
-  )
+  def makeAdminUser(): User = makeUser().copy(accountType = AccountType.Admin)
 
-  def persistUser(user: Option[User] = None, password: String = TestContext.USER_PASSWORD): User = {
-    val userModel = user.getOrElse(makeUser())
+  /** The account `user` describes (a User of random names when None), under `username` when one is given */
+  def persistUser(
+      user: Option[User] = None,
+      password: String = TestContext.USER_PASSWORD,
+      username: Option[String] = None): User = {
+    val model = user.getOrElse(makeUser())
+    val userModel = username.fold(model)(name => model.copy(username = name))
 
     val persistedUser: User = testApp.service.user.add(userModel, password = password)
     users = users ::: persistedUser :: Nil
@@ -100,33 +122,34 @@ class TestContext(val testApp: Altitude) {
     persistedUser
   }
 
-  def persistRepository(user: Option[User] = None): Repository = {
-    if (user.isEmpty && users.length > 1) {
-      throw new RuntimeException(
-        "Cannot use existing user when there are multiple test context users - must supply a user explicitly")
-    }
-
-    if (user.isEmpty && users.isEmpty) {
+  /**
+   * A Library, which has no owner and grants nobody access (see [[grant]]). The context gets an account first when it has none,
+   * since every asset has an owner; the first Library becomes the context repository.
+   */
+  def persistRepository(): Repository = {
+    if (users.isEmpty) {
       persistUser(None)
     }
 
-    // use supplied user, then existing single user, then new user
-    val persistedUser = user.getOrElse(users.headOption.getOrElse(makeUser()))
-
-    val persistedRepo: Repository = testApp.service.repository.addRepository(
-      name = TestContext.nextRepositoryName(),
-      fileStoreType = C.StorageEngineName.FS,
-      owner = persistedUser)
+    val persistedRepo: Repository =
+      testApp.service.repository.addRepository(name = TestContext.nextRepositoryName(), fileStoreType = C.StorageEngineName.FS)
     repositories = repositories ::: persistedRepo :: Nil
 
     // if this is the only (or the first repo), set current request context
     if (repositories.length == 1) {
       testApp.service.repository.switchContextToRepository(persistedRepo)
-      testApp.service.user.switchContextToUser(persistedUser)
     }
 
     persistedRepo
   }
+
+  /** Gives a User or a Guest access to the Library with `permissions` (none for a Guest, who holds none) */
+  def grant(account: User, repository: Repository, permissions: Permissions = Permissions.all): Unit =
+    testApp.service.repository.setGrant(account.persistedId, repository.persistedId, permissions)
+
+  /** The account's Permissions in the Library as stored, None when it holds no grant there: the grant table read through its DAO */
+  def grantOf(account: User, repositoryId: String): Option[Permissions] =
+    testApp.txManager.asReadOnly(testApp.DAO.repositoryGrant.getGrant(account.persistedId, repositoryId)).map(_.permissions)
 
   def makeAsset(
       repository: Option[Repository] = None,
@@ -155,7 +178,8 @@ class TestContext(val testApp: Altitude) {
     val currentUser = user.getOrElse(this.user)
 
     Asset(
-      userId = currentUser.persistedId,
+      ownerUserId = currentUser.persistedId,
+      originalOwner = AccountSnapshot.of(currentUser),
       folderId = folderId,
       assetType = new AssetType(mediaType = "image", mediaSubtype = "png", mime = "image/png"),
       fileName = filename,
@@ -188,7 +212,7 @@ class TestContext(val testApp: Altitude) {
         "Cannot use existing repository when there are  multiple test context repositories - must supply a repository explicitly")
     }
 
-    val persistedRepository = repository.getOrElse(repositories.headOption.getOrElse(persistRepository(user = user)))
+    val persistedRepository = repository.getOrElse(repositories.headOption.getOrElse(persistRepository()))
 
     val asset = makeAsset(
       repository = Some(persistedRepository),
@@ -415,6 +439,35 @@ class TestContext(val testApp: Altitude) {
   def addTestFacesAndAssets(person: Person, assetCount: Int = 1, isTriaged: Boolean = false): Unit = {
     addFacesOnNewAssets(List(person), assetCount, isTriaged)
   }
+
+  /**
+   * Every row of every scoped table in the repository, each as text, read by hand-written SQL that no scoping touches: two reads
+   * that are equal saw no row of the repository change in between
+   */
+  def rowsOf(repository: Repository): Map[String, List[String]] =
+    testApp.txManager.asReadOnly {
+      TestContext.SCOPED_TABLES.map {
+        table =>
+          val read = new QueryRunner()
+            .query(
+              RequestContext.getConn,
+              s"SELECT * FROM $table WHERE repository_id = ?",
+              new MapListHandler(),
+              repository.persistedId)
+            .asScala
+            .toList
+          table -> read.map(row => asText(row.asScala.toMap)).sorted
+      }.toMap
+    }
+
+  private def asText(row: Map[String, AnyRef]): String =
+    row.toList
+      .sortBy(_._1)
+      .map {
+        case (column, bytes: Array[Byte]) => s"$column=${bytes.toSeq}"
+        case (column, value) => s"$column=$value"
+      }
+      .mkString(", ")
 
   def user: User = {
     if (users.length > 1) {

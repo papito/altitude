@@ -1,0 +1,198 @@
+@import altitude.core.Api
+@import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.models.AccountType
+@import altitude.core.routes.web.partial.UserActionController.AccountForm
+@import altitude.core.routes.web.partial.UserActionController.Ceiling
+
+@* The Add User modal, and an account's edit (GET /htmx/users/r/:repoId/dialogs/add and /dialogs/edit), in the general modal
+   host, one column: the identity (Name, Username, Email and, to add, Password with Generate and Show and its confirmation,
+   which must match it), then the access: the account type cards the creator may create, for an Admin creator the Create Libraries switch and the new-Library grant (a
+   switch and its Permission chips), and the Permission matrix of the creator's ceiling: a Library or a Permission above it is
+   not rendered at all. The `accountForm` component (js/alpine/components/account-form.js) holds the type and what is checked,
+   starting from `data-app-account-form`, and runs the matrix's toggles with no request; the inputs it disables (a Guest's
+   Permissions, an Admin's matrix, a row the type may not have) are not submitted. The body scrolls and the actions stay in
+   view. A refusal of a field comes back as this form with the values submitted and the error under the field, and an edit's
+   title names the account as stored; an edit carries the state it was opened over, and a save over a change made since comes
+   back with that error above the actions. The server refuses anything above the ceiling whatever is sent. *@
+@(form: AccountForm, ceiling: Ceiling, errors: Map[String, String] = Map.empty)
+
+@repoId = @{ RequestContext.getRepository.persistedId }
+@editing = @{ form.accountId.isDefined }
+
+@field(id: String, name: String, label: String, value: String, inputType: String = "text", autocomplete: String = "off") = {
+    <div class="field">
+        <label for="@id">@label</label>
+        <input type="@inputType" id="@id" name="@name" value="@value" autocomplete="@autocomplete"@if(errors.contains(name)){ class="error"}>
+        @for(message <- errors.get(name)) {
+        <div class="error">@message</div>
+        }
+    </div>
+}
+
+<form id="accountForm"
+      action="#"
+      x-data="accountForm"
+      data-app-account-form="@form.stateJson(ceiling)"
+      data-app-fragment="modal"
+      data-app-modal-title="@{ if (editing) Const.UI.EDIT_USER_DIALOG_TITLE.format(form.storedName.getOrElse(form.name)) else Const.UI.ADD_USER_DIALOG_TITLE }"
+      data-app-dialog-autofocus-selector="#field-accountName"
+      data-app-success-event="ACCOUNTS_CHANGED_EVENT"
+      hx-target="this"
+      hx-swap="none"
+      @if(editing) { hx-put="/htmx/users/r/@repoId/edit" } else { hx-post="/htmx/users/r/@repoId/add" }
+      hx-trigger="submit"
+      hx-json-enc>
+
+    @for(accountId <- form.accountId) {
+    <input type="hidden" name="@Api.Field.User.ACCOUNT_ID" value="@accountId">
+    }
+    @* The state the edit was opened over, which the save carries back: a save over a change made since is refused *@
+    @for(state <- form.openedState) {
+    <input type="hidden" name="@Api.Field.User.OPENED_STATE" value="@state">
+    }
+
+    <div class="account-form-body">
+        <section class="identity">
+            @field("field-accountName", Api.Field.User.NAME, "Name", form.name)
+            @field("field-accountUsername", Api.Field.User.USERNAME, "Username", form.username)
+            @field("field-accountEmail", Api.Field.User.EMAIL, "Email", form.email, "email")
+            @if(!editing) {
+            @* The password and its confirmation, which must match: one `passwordField`, so Generate fills both and Show shows both *@
+            <div class="password-fields" x-data="passwordField">
+                <div class="field">
+                    <label for="field-accountPassword">Password</label>
+                    @includes.html.password_field("field-accountPassword", Api.Field.User.PASSWORD, form.password, errors.get(Api.Field.User.PASSWORD))
+                </div>
+                <div class="field">
+                    <label for="field-accountPassword2">Confirm password</label>
+                    <input type="password"
+                           id="field-accountPassword2"
+                           name="@Api.Field.User.PASSWORD2"
+                           value="@form.passwordRepeat"
+                           autocomplete="new-password"
+                           x-ref="repeat"
+                           x-bind:type="inputType()"@if(errors.contains(Api.Field.User.PASSWORD2)){ class="error"}>
+                    @for(message <- errors.get(Api.Field.User.PASSWORD2)) {
+                    <div class="error">@message</div>
+                    }
+                </div>
+            </div>
+            }
+        </section>
+
+        <section class="access">
+            <fieldset class="account-types">
+                <legend>Account type</legend>
+                <div class="type-cards">
+                @for(accountType <- ceiling.types) {
+                    <label class="type-card">
+                        <input type="radio" name="@Api.Field.User.ACCOUNT_TYPE" value="@accountType" x-model="type"@if(form.accountType.contains(accountType)){ checked}>
+                        <span class="type-name">@accountType</span>
+                        <span class="type-description">@accountType.description</span>
+                    </label>
+                }
+                </div>
+                @for(message <- errors.get(Api.Field.User.ACCOUNT_TYPE)) {
+                <div class="error">@message</div>
+                }
+            </fieldset>
+
+            @if(ceiling.isAdmin) {
+            <div class="admin-only" x-show="takesGrants()">
+                <div class="switch-row" x-show="isUser()">
+                    <button type="button" role="switch" class="switch" id="switch-canCreateLibraries"
+                            x-bind:aria-checked="canCreateLibraries" x-on:click="toggleCreateLibraries()"></button>
+                    <label for="switch-canCreateLibraries">Create Libraries</label>
+                    <input type="hidden" name="@Api.Field.User.CAN_CREATE_LIBRARIES" x-bind:value="canCreateLibraries" x-bind:disabled="createLibrariesOff()">
+                </div>
+                <div class="switch-row">
+                    <button type="button" role="switch" class="switch" id="switch-grantsNewLibraries"
+                            x-bind:aria-checked="grantsNewLibraries" x-on:click="toggleNewLibraries()"></button>
+                    <label for="switch-grantsNewLibraries">Access to every new Library</label>
+                    <input type="hidden" name="@Api.Field.User.GRANTS_NEW_LIBRARIES" x-bind:value="grantsNewLibraries" x-bind:disabled="newLibrariesOff()">
+                    <span class="permission-chips" x-show="isUser()">
+                    @for(permission <- altitude.core.models.Permission.values) {
+                        <label class="chip">
+                            <input type="checkbox" name="@Api.Field.User.NEW_LIBRARY_PERMISSIONS" value="@permission"
+                                   x-bind:checked="newLibraryHolds('@permission')"
+                                   x-bind:disabled="newLibraryChipsOff()"
+                                   x-on:change="setNewLibraryPermission('@permission', $el.checked)">
+                            @permission.label
+                        </label>
+                    }
+                    </span>
+                </div>
+            </div>
+            }
+
+            <p class="notice" x-show="isAdmin()" style="display: none">An Admin holds every Permission in every Library, with no grant.</p>
+
+            <div class="matrix" x-show="takesGrants()">
+                @if(ceiling.libraries.isEmpty) {
+                <p class="notice warning">There is no Library you may give access to.</p>
+                } else {
+                <table class="permission-matrix" x-bind:class="matrixClass()">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="library">Library</th>
+                            <th scope="col" class="all">All</th>
+                            @for(permission <- ceiling.columns) {
+                            <th scope="col" class="permission">
+                                <button type="button" x-on:click="toggleColumn('@permission')" title="Toggle @permission.label in every Library chosen">@permission.label</button>
+                            </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @for(row <- ceiling.libraries) {
+                        <tr x-show="rowShown('@row.library.persistedId')">
+                            <th scope="row" class="library">
+                                <label>
+                                    <input type="checkbox" name="@Api.Field.User.LIBRARY_IDS" value="@row.library.persistedId"
+                                           x-bind:checked="hasAccess('@row.library.persistedId')"
+                                           x-bind:disabled="accessBlocked('@row.library.persistedId')"
+                                           x-on:change="setAccess('@row.library.persistedId', $el.checked)">
+                                    <span>@row.library.name</span>
+                                </label>
+                            </th>
+                            <td class="all">
+                                @if(row.users) {
+                                <button type="button" class="action-button small" x-on:click="toggleRow('@row.library.persistedId')"
+                                        x-bind:disabled="permissionsBlocked('@row.library.persistedId')"
+                                        aria-label="Every Permission in @row.library.name">All</button>
+                                }
+                            </td>
+                            @for(permission <- ceiling.columns) {
+                            <td class="permission">
+                                @if(row.users && row.permissions.has(permission)) {
+                                <input type="checkbox" name="@Api.Field.User.PERMISSIONS" value="@row.library.persistedId:@permission"
+                                       aria-label="@permission.label in @row.library.name"
+                                       x-bind:checked="holds('@row.library.persistedId', '@permission')"
+                                       x-bind:disabled="permissionsBlocked('@row.library.persistedId')"
+                                       x-on:change="setPermission('@row.library.persistedId', '@permission', $el.checked)">
+                                }
+                            </td>
+                            }
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                }
+                <p class="bound" x-show="atBound()" style="display: none">An account can be given access to at most @altitude.core.service.RepositoryService.MAX_GRANTS_PER_ACCOUNT Libraries.</p>
+                @for(message <- errors.get(Api.Field.User.LIBRARY_IDS)) {
+                <div class="error">@message</div>
+                }
+            </div>
+        </section>
+    </div>
+
+    @for(message <- errors.get(Api.Field.User.OPENED_STATE)) {
+    <div class="error">@message</div>
+    }
+
+    <div class="actions">
+        <button type="submit" class="action-button primary">@{ if (editing) "Save" else "Add User" }</button>
+        <button type="button" class="action-button" x-on:click="$store.modal.close()">Cancel</button>
+    </div>
+</form>

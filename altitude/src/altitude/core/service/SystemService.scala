@@ -9,6 +9,7 @@ import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.RequestContext
 import altitude.core.dao.SystemMetadataDao
+import altitude.core.models.AuditEventType
 import altitude.core.models.Repository
 import altitude.core.models.SystemMetadata
 import altitude.core.models.User
@@ -49,16 +50,28 @@ class SystemService(val app: Altitude):
       Base64.getDecoder.decode(stored)
     }
 
-  def initializeSystem(repositoryName: String, adminModel: User, password: String): (User, Repository) =
+  def initializeSystem(
+      repositoryName: String,
+      adminModel: User,
+      password: String,
+      clientIp: Option[String] = None): (User, Repository) =
     logger.warn("INITIALIZING SYSTEM")
 
     txManager.withTransaction {
       val admin = app.service.user.add(adminModel, password = password)
+      // The setup Admin creates itself: no other account exists to act
+      app.service.audit.record(
+        AuditEventType.AccountCreated,
+        actor = Some(admin),
+        target = Some(admin),
+        detail = ujson.Obj("accountType" -> admin.accountType.toString, "setup" -> true),
+        clientIp = clientIp
+      )
 
       val repo: Repository = app.service.repository.addRepository(
         name = repositoryName,
-        fileStoreType = Const.StorageEngineName.FS, // hard default for now
-        owner = admin)
+        fileStoreType = Const.StorageEngineName.FS // hard default for now
+      )
 
       RequestContext.repository.value = Some(repo)
 

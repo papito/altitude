@@ -16,11 +16,14 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration.DurationInt
 
+import altitude.core.actors.ImportStatusWsActor
 import altitude.core.dao.jdbc.PersonDao
 import altitude.core.dao.jdbc.SystemMetadataDao
 import altitude.core.models.Repository
+import altitude.core.service.AccountVersions
 import altitude.core.service.AlbumService
 import altitude.core.service.AssetService
+import altitude.core.service.AuditService
 import altitude.core.service.ContentSigner
 import altitude.core.service.CurationService
 import altitude.core.service.FaceDetectionService
@@ -216,6 +219,18 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
       case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
+    val repositoryGrant: dao.RepositoryGrantDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.RepositoryGrantDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.RepositoryGrantDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val auditEvent: dao.AuditEventDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.AuditEventDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.AuditEventDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
     val asset: dao.AssetDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.postgres.AssetDao(app.config)
       case Const.DbEngineName.SQLITE => new dao.jdbc.AssetDao(app.config) with dao.sqlite.SqliteOverrides
@@ -348,8 +363,10 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
     val system: SystemService = SystemService(app)
     val contentSigner: ContentSigner = ContentSigner(system.loadOrCreateSigningKey())
     val paseto: PasetoService = PasetoService(app)
+    val accountVersions: AccountVersions = AccountVersions.processWide
     val user: UserService = UserService(app)
     val repository: RepositoryService = RepositoryService(app)
+    val audit: AuditService = AuditService(app)
     val metadataExtractor: MetadataExtractionService = MetadataExtractionService()
     val staging: StagingService = StagingService(app)
     val metadata: UserMetadataService = UserMetadataService(app)
@@ -381,6 +398,9 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
   // How many assets the import and purge queues buffer and admit at once, on both engines. It does not decide the concurrent work
   // of an import, which the import dispatcher's threads (`importParallelism`) bound.
   val parallelism: Int = Runtime.getRuntime.availableProcessors()
+
+  // An account's import status sockets close when its versions change, so a deactivated, deleted or revoked account's feed ends
+  service.accountVersions.onChange((accountId, change) => actorSystem ! ImportStatusWsActor.CloseAllFor(accountId, change))
 
   // A staged file outlives nothing: whatever is there was left by a run that did not finish. After `parallelism`, which the
   // services read as they are wired up.

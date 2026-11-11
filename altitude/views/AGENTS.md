@@ -10,9 +10,9 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Always prefer CSS Grid and Flexbox.
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`. A nested rule extends its parent by a pseudo-class or a pseudo-element only (`&:focus-visible`, `&::picker(select)`), and a descendant takes a rule of its own: the design tweaks panel's element picker matches a nested selector with `closest()`, which cannot match a descendant one (`& option`).
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
-* Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the two fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, and the nav's quick search field's glow. The detail is under **Themes** below.
+* Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A color scoped to the elements it marks, rather than a token of `:root`, is declared by their rule from a theme or semantic color: a view's `--view-tint` and `--view-stripe` on its panes, and an account type's `--account-type-color` on `[data-account-type]` (an Admin's `--error-color`, a User's `--success-color`, a Guest's `--info-color`). A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the two fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, and the nav's quick search field's glow. The detail is under **Themes** below.
 * Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), the 1 px width and height of `.visually-hidden`, and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
-* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide`, the brand's `--letter-spacing-medium` or the view band's `--letter-spacing-band`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the nav's brand, entries and quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin, the close button and the snackbar's dismiss button; the Font Awesome solid weight 900 selects the icon face.
+* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide`, the brand's `--letter-spacing-medium` or the view band's `--letter-spacing-band`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the brand (the nav's and the login page's), the nav's entries and its quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the account info dialog's avatar's 2.5em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin, the close button and the snackbar's dismiss button; the Font Awesome solid weight 900 selects the icon face.
 * Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; only View settings holds an inline dialog, in its menu's popover panel. A control that picks one of several values (the grid toolbar's Group and Sort, and any dropdown added later) is a **choice menu**: the same native popover panel, built by `buildChoiceMenuCtrl` from a server-rendered host of option buttons, never a `<select>`, which stays a form's field. Every menu panel wears the popover dialog's frosted surface. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
@@ -34,7 +34,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 
 ```
 views/
-  *.scala.html          ← full pages (index, login, setup, pipeline, settings, style_guide)
+  *.scala.html          ← full pages (index, login, setup, pipeline, settings, users, style_guide)
   includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title)
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
@@ -47,9 +47,10 @@ page (`index`, which passes no `page`), and "Import · <Library> · Altitude", "
 "Style Guide · <Library> · Altitude" on the others. The Library is the request's (`RequestContext.getRepository.name`,
 escaped by Twirl), so each tab names its own; setup keeps its own title.
 
-Import (`pipeline.scala.html`) and Settings (`settings.scala.html`) carry the nav outside the main app. Each includes
-`html_common`, for the snackbar and the popover dialog host the nav's New library dialog opens into, and
-`lib/json-enc.js`, since that dialog posts JSON, and its page module (`js/upload-form-page.js`, `js/settings-page.js`)
+Import (`pipeline.scala.html`), Settings (`settings.scala.html`) and Users (`users.scala.html`) carry the nav outside the
+main app. Each includes `html_common`, for the snackbar and the popover dialog host the nav's New library and Change
+password dialogs open into, and `lib/json-enc.js`, since those dialogs post JSON, and its page module
+(`js/upload-form-page.js`, `js/settings-page.js`, `js/users-page.js`)
 starts with `startNavPage()` of `js/nav-page.js`: Alpine with what `html_common` binds and the `contextMenu` component,
 the htmx request rule and the dialog wiring (`js/listeners/dialogs.js`) over a minimal app, whose hydration is the
 `modal` fragments and the choice menus, and the nav's Library menu, built before Alpine starts. The import page's polling
@@ -146,21 +147,21 @@ in either theme:
 |---|---|
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), Curation's shell opening its host (`curation.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
-| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), the Triage summary's reload (`triage.js`), and the Settings form's save (`settings.js`, the success snackbar); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring, a 204 to an open handed back to its search trigger, and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
+| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), the Triage summary's reload (`triage.js`), the Settings form's save (`settings.js`, the success snackbar), and the account's (`account.js`: a changed own password, on every page with the nav, and the Users page's changes, which reload its cards); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring, a 204 to an open handed back to its search trigger, and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
 | `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), a Person's results title read again after a rename or a correction (`person-title.js`), Asset detail's URL (`detail-url.js`: the address bar names the asset and the Detail panel's state, and Back closes it), Asset detail's fullscreen (`detail-fullscreen.js`: `f`, the toolbar's toggle and the player's button on the whole of Asset detail), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
-| `js/upload-form-page.js`, `js/settings-page.js`, `js/nav-page.js` | the page modules of `pipeline.scala.html` and `settings.scala.html`, and what they share. Both start with `startNavPage()` (`nav-page.js`): Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store) and the `contextMenu` component, the htmx request rule and the dialog wiring (`listeners/dialogs.js`) with a minimal app, whose hydration is the `modal` fragments and the choice menus, and the nav's Library menu built; that is the nav's Library menu and the New library dialog it opens. Then the import page's hydrates its upload form, and Settings' registers its own listeners; see **Settings screen** |
+| `js/upload-form-page.js`, `js/settings-page.js`, `js/users-page.js`, `js/nav-page.js` | the page modules of `pipeline.scala.html`, `settings.scala.html` and `users.scala.html`, and what they share. Each starts with `startNavPage()` (`nav-page.js`): Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store) and the `contextMenu` component, the htmx request rule and the dialog wiring (`listeners/dialogs.js`) with a minimal app, whose hydration is the `modal` fragments and the choice menus, and the nav's Library menu built; that is the nav's menus and the dialogs they open (New library, Change password, whose outcome `listeners/account.js` confirms, connecting the page's WebSocket feeds again). Then the import page's hydrates its upload form and registers the status feed's end (`js/import-status.js`), Settings' registers its own listeners, and Users' registers its components first (`usersPage`, `accountForm`, `passwordField`) and its listener after; see **Settings screen** and **Users page** |
 | `js/theme-boot.js` | a plain blocking script of `includes/header_common`'s head, on every page with a nav: declares the remembered theme on `<html>` before the first paint, from the key in its `data-key`; see **Themes** |
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's and the Detail panel's docks are made from), stored-state (a remembered object under one localStorage key that modules share: `readStoredObject` and `writeStoredFields`, which sets some fields and keeps the rest; the Detail panel's view is read and written through it by `detail-panel.js` and `dock.js`), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font) |
+| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's and the Detail panel's docks are made from), stored-state (a remembered object under one localStorage key that modules share: `readStoredObject` and `writeStoredFields`, which sets some fields and keeps the rest; the Detail panel's view is read and written through it by `detail-panel.js` and `dock.js`), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font), name-key (the server's name fold, `nameKey` and `partialMatchKey`: the Change combobox's and the Users page filter's), request-failure (a failed htmx request in the snackbar: a 403 or 409 refusal in plain text as its text, a 401 nowhere, anything else by its path and status), session (a 401 sends the window to the login, back to the page: `goToLogin`) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell) and `face-combobox.js` (the Change combobox of a People row in the Detail panel); `index.js` registers them |
+| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell) and `face-combobox.js` (the Change combobox of a People row in the Detail panel); `index.js` registers them. The Users page's own, `users-page.js` (the tab and the filter), `account-form.js` (the account form's type and Permission matrix) and `password-field.js` (Generate and Show), are registered by its page module |
 
 ## Alpine.js Stores (initialized in `js/stores/app-stores.js` and `js/stores/html-common.js`)
 
@@ -297,7 +298,9 @@ Two-layer event bus, both on `document.body`:
    element that issued the request (`readSuccessEvent` in `js/fragments/helpers.js`).
 2. **HTMX lifecycle events** — `htmx:before:request` / `htmx:after:request` / `htmx:after:settle` —
    handled by `js/listeners/htmx-requests.js` (one rule for every request: a response of 400 or
-   above goes to the snackbar with its path and status; a validation replacement, a 200 with
+   above goes to the snackbar with its path and status, but for a refusal worded for the user, a 403 or a 409 in plain text
+   (`BaseController.answering`), which shows its text, a 409 as a warning (`js/common/request-failure.js`, which a dialog's
+   failed operation goes through too); a validation replacement, a 200 with
    `HX-Retarget: this`, is swapped in and announces nothing; any other successful one dispatches the
    declared success event and, for a tab, selects it; every swap hydrates the fragments it inserted) and by
    `js/listeners/dialogs.js` for dialog opens and dialog operations. There is no router keyed on
@@ -326,7 +329,16 @@ Two-layer event bus, both on `document.body`:
   `hx-target` / `hx-swap`. Do not rely on a parent's attributes (add `:inherited` if you ever must).
 - Extensions activate by script inclusion, there is no `hx-ext`. Forms that post JSON carry the
   boolean `hx-json-enc` attribute (`json-enc.js`); the import status stream uses `hx-ws:connect`
-  with an explicit `hx-target` / `hx-swap` on the connection element (`hx-ws.js`). No Alpine
+  with an explicit `hx-target` / `hx-swap` on the connection element (`hx-ws.js`), to
+  `/import/status` with no query string: the server takes the account from the session cookie the
+  handshake carries, refuses a handshake without a login with a 401 and one from another origin
+  with a 403, and closes the account's sockets when the account changes (1013, which `hx-ws.js`
+  reconnects on, checking the login again) or its sessions are revoked (1008, which it does not: a password change, a
+  deactivation). The page connects its feed again after the account changes its own password (`js/listeners/account.js`
+  swaps the `hx-ws:connect` element for a copy, which htmx cleans up and processes again; the new cookie is set by then), and
+  stops reconnecting after `MAX_RECONNECTS` (5) failed reconnects in a row, by cancelling the next in
+  `htmx:ws:before:connection` (`js/import-status.js`; the vendored library is not patched), saying in the status area,
+  `#importStatusLost`, to reload. No Alpine
   compatibility shim is loaded: Alpine's mutation observer initializes swapped-in markup, and
   nothing calls `Alpine.initTree` on it.
 - Polling is declarative: the import page refreshes the nav with
@@ -336,6 +348,16 @@ Two-layer event bus, both on `document.body`:
   htmx 2 spelling `every 5s […]` parses, and its filter is silently dropped.
 - A request whose failure is not worth a report declares the boolean `data-app-silent-failure` on the element that
   issues it: `js/listeners/htmx-requests.js` then shows no error snackbar for its 4xx/5xx and does nothing else with it.
+- **Requests and a refused session**: a 401 (no session, or one expired, revoked, or of an account deactivated or deleted
+  since) sends the window to the login, to come back to the page (`js/common/session.js`, `goToLogin`): from any htmx
+  request, a silent poll and a dialog's submit included, in `js/listeners/htmx-requests.js` before anything else, and from
+  any axios call, by the interceptor of `js/http/client.js`. Nothing is reported (`reportRequestFailure` ignores a 401), and a
+  dialog's submit answered 401 fires no success event. The server answers an htmx request with no login 401 with
+  `HX-Redirect` to the same login (`decorators.requireLogin`), never with a redirect that htmx's fetch would follow and swap
+  in.
+- A refusal the server words reaches the user as its words: an htmx request's plain-text 403 or 409 through
+  `reportRequestFailure` (a modal's open too, `js/listeners/dialogs.js`), an axios call's JSON `{"error": ...}` through
+  `getHttpErrorMessage` (`js/http/client.js`).
   Only the import page's nav poll declares it: its next tick tries again, and a server answering 5xx while it restarts
   would otherwise raise an error every 5 s. A request that gets no response at all reaches no `htmx:after:request`
   listener (htmx fires `htmx:error`), so it is never reported there either way.
@@ -575,8 +597,9 @@ membership change applied) arrives as JSON in the `App-Success-Detail` response 
 (`BaseController.dialogSuccessResponse`, `Const.http.successDetailHeader`), which
 `dialog-operations.js` merges over the declared detail. The one attribute that describes the host is
 `data-app-modal-title`, the title either host shows. Folder, album, Location, and category actions, including the Add
-controls, are **popover dialogs**, and so is the Triage explorer's scope dialog; Add location, Add to location, the
-people dialogs, the purge confirmation and Quick view are **modal dialogs**. Only View settings is an
+controls, are **popover dialogs**, and so are the Triage explorer's scope dialog, the Users page's Set password and
+Delete dialogs, the account info dialog and its Change password; Add location, Add to location, the people dialogs, the purge
+confirmation, Quick view and the Users page's Add User and edit form are **modal dialogs**. Only View settings is an
 **inline dialog** (`data-app-fragment="inline-dialog"`, see **Context menus**); its switches apply
 immediately without submitting an operation.
 
@@ -926,7 +949,11 @@ items" flips, through a `$watch` on the store's `triaged` set up in `init()` (th
 `hx-sync="replace"` aborts a load of the pane still in flight, so the latest bucket set lands), and the response is
 `htmx/people_list`: the `.grid` of `.cell.drag-drop.dropzone` cells, each with `data-person-id` and no id, since a person
 may be in both panes, a hidden person's with an `fa-eye-slash` `.hidden-badge` in the image's corner and a
-`.visually-hidden` ", hidden" at the end of its name link, an Unmatched person told apart by its orange "Unknown N" name. The name link carries
+`.visually-hidden` ", hidden" at the end of its name link, an Unmatched person told apart by its orange "Unknown N" name.
+A person with no cover (no Face of theirs left to be one) shows the no-cover placeholder in the face's place: `.no-cover`
+(`core.css`), an `fa-user` in `--theme-neutral-3` at `--font-size-xl` on `--theme-secondary`, which each of its hosts sizes
+and rounds as it does the face: the cell, the results title's cover (where it opens the Choose cover face modal as the face
+does) and the Merge people modal (where it is an `img` role named as the face's `alt` is). The name link carries
 no `aria-label`: it is named by its content, the name, the number and then that text, "hidden". The face's link and the
 name link are both `data-app-search-person-id` triggers for the person. The name link is
 `#personLink-<pane>-<personId>`, with an inline `anchor-name: --<its id>`, and both links name it in
@@ -1159,7 +1186,7 @@ and Tab out of the popover dismiss the dialog; Escape and the × return focus as
 Tab leave it where they put it.
 
 **New library dialog** — `htmx/new_library_dialog.scala.html` (`#newLibrary`, `static/css/htmx/new_library_dialog.css`) is
-an Admin's dialog, opened by the Library menu's "New library…" action (`Const.UI.NEW_LIBRARY_OPTION`) into the popover
+the dialog of an Admin or an account with the Create Libraries flag, opened by the Library menu's "New library…" action (`Const.UI.NEW_LIBRARY_OPTION`) into the popover
 host, below the nav's Browse trigger and centered on it, and titled "New library" (`Const.UI.NEW_LIBRARY_DIALOG_TITLE`).
 Like the explorer's Add dialogs it declares `data-app-fragment="modal"`, holds one field with no label (the placeholder
 and `aria-label` "Library name"), which it focuses (`data-app-dialog-autofocus-selector`), and posts JSON with
@@ -1198,7 +1225,7 @@ Alpine binding keeps in step with the setting; the track, `--switch-width` by `-
 pseudo-element, slides across it. The View settings dialog's switches, the People tab's bucket switches and the Change combobox's "This face only"
 switch use it. The last is the one whose label does not flip it natively: focus has to stay in the combobox's input, so the switch's and the
 label's `mousedown` is prevented, and the label's click, prevented too, calls the component's `toggleFaceOnly` (see **Detail panel**). Every rule of the section starts at `body:not(.setup)`, so the setup form's fields and error box are
-`htmx/setup_form.css`'s alone; the login page loads no app stylesheet. The upload form's file input takes the field's
+`htmx/setup_form.css`'s alone; the login page's take the field style like any page's (**Login page**). The upload form's file input takes the field's
 box and keeps its own `--theme-neutral-2` fill (`htmx/upload_form.css`). A field keeps the width its page gives it,
 except in a popover dialog, whose form fills `--popover-form-width` with its action `--space-5` below its fields
 (see **Modals**). A field in error carries the `error` class: the error fill
@@ -1347,7 +1374,8 @@ does not show through it while it sticks). The scopes:
   `data-app-success-event="PEOPLE_CHANGED_EVENT"` (the person id as the detail) as the Discard link declares
   `PERSON_MARKED_AS_BAD_MATCH_EVENT`, so `js/listeners/htmx-requests.js` announces a successful one and the People tab
   moves the person between its panes. The cover face (`.cover.drag-drop`, a `--person-avatar-size` circle
-  that opens the Choose cover face modal) comes before the text and the Hide / Show / Discard link (`.actions`) after it.
+  that opens the Choose cover face modal, or the no-cover placeholder for a person with none, which opens it too) comes
+  before the text and the Hide / Show / Discard link (`.actions`) after it.
   Which link shows depends on the person's whole count (`num_of_faces`), which is why the Detail panel reads the block's
   inside again after a Face correction (`GET /htmx/people/r/:repoId/p/:personId/title`). A person has no subtitle: the
   toolbar's Total says how many results there are. The title is `#personName`, the inline name editor's host: `htmx/view_person_name`
@@ -1534,7 +1562,7 @@ removed from the grid drops out of navigation with it, and the search route is H
 
 Asset detail's URL (`js/search-results/detail-url.js`, `app.detailUrl`) is `/r/:repoId/asset/:assetId`, with `?panel=open`
 while the Detail panel is open and no parameter while it is closed. It carries no search. `IndexController.assetView` answers
-it with the main page (a 404 for an asset the repository does not hold, through the scoped `AssetService.isInRepository`), and
+it with the main page (a 404 for an asset the repository does not hold, read through the scoped `AssetService.getById`, and for a Guest's triaged asset or one in the trash, `decorators.visibleOnly`), and
 `index.scala.html` opens the asset through `openAssetInLocation` after the page's first search, so it shows over the default
 results and, having no cell, with no previous or next. The panel goes by that URL for an open that starts on one, and by what
 this browser remembers otherwise (`attach`); only a toggle writes the remembered state. The URL follows from the panel, which
@@ -1653,7 +1681,7 @@ fragment's `role="option"` rows wherever they sit (`parseAssignablePeople`: each
 Hidden, cover and Suggested mark), and focuses the input once the combobox is drawn. The focus waits for the draw
 (`untilShown`): Alpine's `x-show` shows the combobox on the next animation frame (a timeout in a hidden tab), so options
 that loaded sooner would focus a hidden input, the focus would not take, the hidden Change button would lose it to the
-body, and that `focusout` would close the listbox. The options are filtered on the client as the user types, the first `MAX_SHOWN_OPTIONS` (50) matches rendered with lazy covers, Hidden marked; the server leaves the Face's own Person
+body, and that `focusout` would close the listbox. The options are filtered on the client as the user types, the first `MAX_SHOWN_OPTIONS` (50) matches rendered with lazy covers, Hidden marked. An option matches when its name holds the query under the server's fold (`nameKey`, which mirrors `NameKey.of`) with every final sigma read as a plain one (`partialMatchKey`), on both sides: the fold ends a word with "ς", so "σοφοσ", typed on the way to "Σοφοσάκης", would otherwise be no part of it; the exact name is told by the name key itself, and `parseAssignablePeople` computes both forms of each option's name once; the server leaves the Face's own Person
 out of the options (`PersonService.assignablePeople`, one read for the group and the list).
 The fragment opens with the **Suggested** group (`docs/faces.md` **Corrections**: the people whose Faces are nearest the
 Face's vector, closest first, at most 3, each option marked `data-suggested` and left out of the list after it): while
@@ -2049,6 +2077,17 @@ grid (`js/search-results/metadata-visibility.js`) keeps one `show-<field>` class
 on `#assets`, and the CSS in `static/css/includes/search_results.css` shows the matching
 `.metadata > .<field>` rows: no per-cell work, nothing to re-apply for appended pages.
 
+**Login page** — `login.scala.html` (`GET /login`, and a refused `POST /login`, `SessionController`) is a page of the app's
+look in the theme the nav remembers (`header_common`), with no nav: `body.login`, styled by `static/css/pages/login.css`, centers
+the brand (`.brand`, the nav's chevron and gradient wordmark, whose rules in `core.css` are the brand's wherever it is, here at
+`--font-size-display`) above one card, `#loginForm`, `--login-form-width` wide on the dialogs' surface
+(`--popover-background-color`, a hairline of `--popover-border-color`, `--radius-large`, `--sheen-shadow` over
+`--float-shadow`, `--modal-content-padding` inside), its labels in the dialogs' small caps. Its fields: "Email or username"
+(`autocomplete="username"`, either logs in) and "Password", then Log in (`.action-button.primary`) at the right. A refused
+login answers 401 with the page again: one error above the fields, the same whatever refused it (`LOGIN_FAILED`, which never
+says whether the account exists or is deactivated), the login as typed, focus on the password, and the page to come back to;
+never the password.
+
 **Settings screen** — `settings.scala.html` (`/settings/r/:repoId`, an Admin's page, `SettingsController`) is shaped like
 the import page: `header_common`, the shared nav, one `main`, `html_common` for the snackbar, `json-enc.js`, and the page
 module `js/settings-page.js`, which starts as the import page does (`startNavPage()` of `js/nav-page.js`: Alpine for
@@ -2075,6 +2114,76 @@ the first row with its Reset and spans everything after them, and `core.css`'s e
 covers a select as it does an input; the page adds none. `includes/nav` shows the Settings link (`.menu.settings`)
 to an Admin only (`RequestContext.account`), so `NavController` requires login and both nav loads happen behind one.
 
+**Users page** — `users.scala.html` (`/users/r/:repoId`, `UsersController`, for an Admin or a holder of Create Users or
+Create Guests in any Library, `requireAccountCreator`, so it opens from every Library the account sees) is shaped like Settings: `header_common`, the nav (`current` `Const.NavEntry.USERS`), one
+`main`, `html_common`, `json-enc.js` and the page module `js/users-page.js`, which registers the page's components and
+starts as Settings does (`startNavPage()`). Its layout, cards and dialogs are styled by `static/css/pages/users.css`.
+`main` (`#users`) is capped at `--users-page-max-width` and centered, and is the `usersPage` component
+(`js/alpine/components/users-page.js`): the tab shown and the filter's text. The header holds the title, the filter box
+(`x-model="filter"`, a `type="search"` field taking the rest of the row) and one Add User button (`#addUserBtn`,
+`.action-button.primary`) at the right, which requests the Add User modal into the general modal host. Under it,
+`htmx/user_accounts` (`#accounts`, also `GET /htmx/users/r/:repoId/accounts`): a `.toggle-group` of three buttons, Admins,
+Users and Guests, each with its count (`.tab-count`), `aria-pressed` bound to the tab (at first the one the server writes in `#accounts`' `data-app-start-tab`: the first holding a
+card, else Users, or Guests for a creator of Guests alone, in whichever Library), then one section per
+tab, a grid of cards auto-filling the row at about `--account-card-width`, shown by `x-show`; a tab with no card reads
+"No Admins", "No Users" or "No Guests". The filter narrows the cards
+with no request: each card carries its name, username and email address in `data-app-filter-text`, which `shows($el)`
+compares under the server's name fold (`common/name-key.js`, `partialMatchKey`). The cards are read again after every change
+the page makes: the dialogs and the menu entries declare `ACCOUNTS_CHANGED_EVENT`, whose listener (`listeners/account.js`)
+shows the message the server put in the success detail and swaps `#accounts` from the route named in `main`'s
+`data-app-accounts-url`; the tab and the filter live above, so they stay.
+
+A card (`.account-card`, padded `--space-6`, the panel's border and the box shadow) opens with an initials avatar
+(`--account-avatar-size`, the first character of the first two words of the name), the name, and `@username` under it in
+`--font-nav`, dimmed, then a definition list: Email, Status ("Active" or "Deactivated", plain text; a deactivated card is
+dimmed by `.deactivated`), Libraries, New Libraries and Created (the date of `created_at`). Libraries
+(`includes/account_libraries`, which the account info dialog shares, styled by `includes/account_libraries.css`) reads "All
+Libraries" for an Admin; for anyone else a `<details>` whose summary counts the Libraries, and for a User the Permissions
+("2 Libraries · 7 Permissions"), listing each Library with its Permissions' labels ("Access only" for none; a Guest's carry
+none). New
+Libraries is "All" for an Admin, "Off", or "On" with the Permissions of the new-Library grant. An Admin's cards carry a ⋯
+menu (`includes/menu_ctrl`, `#accountMenuBtn-<id>` opening `#accountMenu-<id>`): Edit…, which requests the edit form into the
+general modal host; Set password…, a popover dialog below the trigger (`htmx/set_password_dialog`: the new password with
+Generate and Show); Deactivate or Reactivate, a direct `PUT` (`hx-json-enc`, the account's ID in `hx-vals`; a refusal, a
+409, shows the server's reason) that declares
+the success event itself and closes the menu (`handleActionClick`); and Delete…, a popover dialog below the trigger
+(`htmx/delete_account_dialog`) naming how many assets of the account, in every Library, move to the Admin, its Delete a
+destructive `.action-button.error` and its initial focus the close control. Neither Deactivate nor Delete is on the Admin's
+own card. Anyone else's cards have no menu.
+
+The **Add User modal** (`htmx/account_form`, `#accountForm`; also the edit form, titled "Edit <name>" by the name as stored
+whatever a refused save typed, with the account's ID and the state it was opened over hidden, and no password) is a `modal` fragment of the general host, `--account-form-width` wide (`#modalContent:has(#accountForm)`),
+one column whose body (`.account-form-body`) scrolls within `--account-form-body-max-height` while the actions, the submit
+(Add User, or Save) and Cancel, stay in view. Its fields: Name, Username and Email one per row, then to add a Password field
+with Generate (a random password of 20 characters from `crypto.getRandomValues`, shown) and Show (`includes/password_field`),
+and Confirm password under it, both in one `passwordField` component's element (`.password-fields`, `display: contents`, so
+each stays a row of the identity's grid), so Generate fills both and Show shows both; the Set password dialog's form is that
+component's element itself. A confirmation that differs from the password comes back under its field
+(`PASSWORDS_DO_NOT_MATCH`, `Api.Field.User.PASSWORD2`), refused by the route before the service, beside every other field's
+error, both passwords kept. The account type is a row of cards (`.type-card`, a radio and a one-line description, the
+chosen one in the accent), only the types the creator may create. For an Admin creator, the Create Libraries switch (a User's)
+and the new-Library grant's switch, then its Permission chips (a User's; a Guest's grant is access alone), each switch a
+`.switch` button with a hidden input bound to it, which is disabled where the type may not have it; the section
+(`.admin-only`) is boxed as a type card is (`--border-hairline` in `--panel-border-color`, `--radius`, `--space-5` inside).
+Then the **Permission
+matrix**: a table under a sticky header, one row per Library the creator may give access to, the access checkbox before its
+name (`libraryIds`), an All button, and one column per Permission in the order of the Goals, `--permission-column-width` wide,
+its header a button spelling the Permission out, wrapped; a cell is a checkbox (`permissions`, "<Library ID>:<Permission>")
+where the creator holds that Permission there, and empty elsewhere: a Library or a Permission above a creator's ceiling is
+not rendered at all. The `accountForm` component (`js/alpine/components/account-form.js`) starts from the JSON in
+`data-app-account-form` (the values, the ceiling, and `preset`, the Permissions a User given a Library starts with; with the
+new-Library switch off, the chips start from the preset too) and runs the toggles with no request: checking access, for a User,
+checks the preset, Import and Curate own, where the ceiling holds them, and unchecking it clears its Permissions; checking a Permission
+checks access; All checks every Permission of the row, or clears them once all are; a column's header checks its Permission
+in every Library chosen, or clears it once all hold it. The inputs follow the state through bindings, and what may not be
+sent is disabled, so the browser leaves it out of the form: a Guest's Permissions (the table's `.guest` class hides the
+columns: a Guest gets the access column alone), an Admin's whole matrix (an Admin gets a notice in its place), a row the type
+may not be given there (and hidden), and an unchecked Library once as many are checked as an account may hold, with a note
+naming the bound. The form posts JSON (`hx-json-enc`) to `POST /htmx/users/r/:repoId/add` or `PUT .../edit`; a refused field
+comes back as the validation replacement, the values submitted kept and the error under its field (the type's under the
+cards, the Libraries' under the matrix), an edit saved over a change made since it was opened (another Admin's, a new
+Library's grant) comes back with `ACCOUNT_CHANGED` above the actions, and a saved one answers the success detail's message.
+
 **Setup background** — `setup.scala.html` (`/setup`, `SetupController`; the index redirects here until the repository
 exists) runs a full-screen animated scene behind the page, a top-down view of a jet over clouds and farmland. Its canvas,
 `<canvas id="setupBackground">`, is the first element of the body; `static/css/pages/setup.css` fixes it over the whole
@@ -2087,7 +2196,8 @@ zero alpha, at the corners, over `backdrop-filter: blur(12px)`, so the center is
 `--setup-form-card-border`, the outline in the form's accent; a 6px `border-radius` (a radius, not a spacing, so a
 literal, as is the blur's); `--section-vertical-space` padding. Its first row, above the form, is the page's title, `#setupTitle` ("Altitude",
 uppercase, centered, in `--setup-form-accent`, the outline's color). The card and the form on it are a carve-out from the
-theme: `static/css/htmx/setup_form.css` styles the fields, their placeholder, hover, focus and error
+theme: the form asks for the Library name, then the Administrator's name, username (3 to 32 ASCII letters, digits, `.`, `_` and `-`,
+`User.validUsername`, whose error shows under the field), email and password twice; `static/css/htmx/setup_form.css` styles the fields, their placeholder, hover, focus and error
 states, the labels, the database type line and the full-width submit button from the `--setup-form-*` tokens alone, so the form keeps its
 palette whatever the theme colors become. The page's palette, the scene's `--setup-background-*` tokens and the form's
 `--setup-form-*` tokens, is declared at the top of `pages/setup.css` on `body:where(.setup)`: the page's own, not
@@ -2300,21 +2410,52 @@ server renders from the include's `current` parameter, a `Const.NavEntry` key: t
 search from), and `import`, `settings` and `style-guide`, which those templates pass as constants. The marked entry is
 `--theme-accent` text, bold, on the accent at 0.16 alpha. Nothing marks an entry client-side, so a reload of the nav
 passes `current` again (below); the style guide's navigation section holds the specimen. The last cell, at the right edge after
-Style Guide, or after Settings where that entry is not shown, is the theme switch: a `button.menu.theme-switch`, as wide as an entry and
+Style Guide, or after Settings where that entry is not shown, then the account cell, is the theme switch: a `button.menu.theme-switch`, as wide as an entry and
 its whole cell the target, icon only with the accessible name "Toggle light and dark theme". It shows `fa-sun` in the dark theme and
 `fa-moon` in the light one, the theme a press goes to, in `--theme-neutral-3`, glowing in its own color on hover. CSS picks the
 icon from `data-theme` on `<html>`, so a nav reload needs no client step, and the one delegated click in `global.js` (`[data-app-theme-switch]`)
 works on every page, those without Alpine included. See **Themes**.
 
+The **account cell** (`.menu.account`, `includes/account_menu`, which the style guide's specimen renders too), every
+account's, sits before the theme switch and says who is logged in. The cell carries the account's type in
+`data-account-type`, which sets `--account-type-color` (`core.css`): an Admin's `--error-color`, a User's
+`--success-color`, a Guest's `--info-color`. Its one target, the cell's padding its own, is a `.nav-menu-trigger`
+(`#accountMenuBtn`, `aria-haspopup="dialog"`) showing the `fa-user-circle` icon at `--font-size-large` in the type's color,
+then `@username` in the entry's lettering (`--font-nav`, lowercase), cut with an ellipsis at
+`--account-username-max-width`, named "Account: <username> (<type>)" and titled so, since the color alone does not say the
+type. It glows on hover and requests the **account info dialog** (`htmx/account_info_dialog`, `GET /htmx/account/r/<the
+Library>/dialogs/info`) into the popover host below itself. That dialog is right-aligned with the trigger
+(`position-area: bottom span-left` on `#popoverDialog:has(#accountInfo)`), `--account-info-width` wide, a `--border-band`
+of the type's color across its top (the host takes the type of the account it shows); it is titled "Your account" and
+reads, in one label column (a subgrid): the account's `fa-user-circle` in the type's color at the glyph's 2.5em, its name
+and `@username`, its email address and type (a chip in the type's color, then the type's description,
+`AccountType.description`, which the Add User form's type cards show too), then under Access its Permissions in this
+Library (chips as the Add User form's checked ones; "Every Permission" for an Admin, "Access only" for none) and its
+Libraries (`includes/account_libraries`, as an account card shows them, this Library marked), under Abilities Create
+Libraries, and under Account Member since, Last login and Session expires. Each time is a `<time datetime>` holding its UTC
+text (`Util.utcText`), which the `localTime` component (`js/alpine/components/local-time.js`, registered by
+`alpine/components/index.js` and `nav-page.js`) shows in the viewer's zone and locale. Its actions, at the right under the
+lists, are the account's: "Change password…", which requests the Change password dialog (`htmx/own_password_dialog`, `GET
+/htmx/account/dialogs/password`), replacing it in the popover host below the trigger, and "Log out", a submit button of the
+empty `#logoutForm` (`POST /logout`) beside the trigger, which a rule of the account cell hides (the quick search's `nav
+form` rule would draw it). The Change password dialog asks for the current password and the new one twice, and posts
+JSON to `PUT /htmx/account/password`; a refusal comes back as the form with the error under its field and nothing typed
+kept, and a change answers with the session's new cookie and `PASSWORD_CHANGED_EVENT`, which `listeners/account.js`
+confirms in the snackbar. The style guide's navigation section holds its specimen, which opens the real dialog.
+A Users entry (`.menu.users`, `fa-users`) follows Import for an Admin and the holder of Create Users or Create Guests in
+any Library, linking to the Users page of the current Library (**Users page**).
+
 The Browse cell (`.menu.repository`, marked while Browse is shown) holds two targets side by side: **Browse**, a link
 like every entry's (the database icon and "Browse") to the current Library's main page with no search, `/r/<id>`, and
-the trigger of the **Library menu**, the choice menu of the account's Libraries, which the current Library's name alone
-opens. `includes/nav` renders both through `includes/library_menu`: the link, then a host `data-choice-menu="Library"`
-(`#libraryMenuHost`) with `data-choice-menu-choice-only`, `data-choice-menu-trigger-class="nav-menu-trigger"` and
-`hx-preserve`. Its options are the Libraries `RepositoryService.getOwnedBy` lists (by name, case-insensitively and
-naturally), each a link to its main page, `/r/<id>`, Browse with its defaults, holding the name in a `span` and titled
-with it in full, the current Library `aria-checked`. For an Admin a separator and the "New library…" action follow,
-requesting the **New library dialog** of the current Library. The trigger (`.nav-menu-trigger`, a nav entry's look)
+the trigger of the **Library menu**, the choice menu of the Libraries the account can see, which the current Library's
+name alone opens. `includes/nav` renders both through `includes/library_menu`: the link, then a host
+`data-choice-menu="Library"` (`#libraryMenuHost`) with `data-choice-menu-choice-only`,
+`data-choice-menu-trigger-class="nav-menu-trigger"` and `hx-preserve`. Its options are the Libraries
+`RepositoryService.getAccessibleTo` lists (every one for an Admin, those it holds a grant in for anyone else; by name,
+case-insensitively and naturally), each a link to its main page, `/r/<id>`, Browse with its defaults, holding the name in a `span` and titled
+with it in full, the current Library `aria-checked`. For an Admin, or an account with the Create Libraries flag
+(`decorators.mayCreateLibraries`), a separator and the "New library…" action follow, requesting the **New library dialog**
+of the current Library. The trigger (`.nav-menu-trigger`, a nav entry's look)
 reads the current Library's name after a dot (`·`, drawn by `::before` at 0.6 alpha) in the name's own case, cut with
 an ellipsis at `--library-name-max-width`, and the caret; its accessible name and title are "Library: <the full name>".
 A name in the panel is cut at the same width. Browse and the trigger each glow on their own hover, and each reaches the
@@ -2327,6 +2468,54 @@ is listed at the next full page load. A name is a flex item in the trigger and a
 paragraph of its own, so a right-to-left name never reorders the dot or the caret; the browser tab title, which holds no
 markup, isolates it with U+2068 … U+2069
 (`includes/page_title`). The style guide's navigation section holds the specimen.
+
+**Controls follow Permissions** — An action control is rendered, or bound, only where the account holds what its request
+needs, so no control answers 403 (`altitude/AGENTS.md`, **Permissions on routes**). A template reads the token's bitmask in
+the request's Library through `RequestContext.holds(p, ...)` (any one of them), `RequestContext.isMember` (no Guest),
+`RequestContext.recyclesIn(view)` (Recycle in Browse, a Curate Permission in Triage, nothing in the Trash) and
+`RequestContext.restores` (Recycle or a Curate Permission), the same values the route decorators and the services read; the
+main page (`index`) lists the Permissions held on its body, `data-app-permissions="Import CurateOwn ..."` (the `Permission`
+names), and marks `data-app-recycles` when the account may recycle what its view shows, and a script asks
+`context.holds(...)` or `context.recyclesHere()` (`js/context.js`, with `Const.permission` naming the Permissions) before it
+builds or binds a control. Where each control follows:
+
+- The nav (`includes/nav`): Triage and Trash for a member, Import for Import, Users for Create Users or Create Guests in any
+  Library (`RequestContext.createsAccounts`, from the token's grants), New library for an Admin or the Create Libraries
+  flag, Settings for an Admin. A Guest's nav is Browse, the search, the Library menu, the account cell and the theme switch.
+- The batch operations (`includes/batch_ops`, given the page's `view`): Move, Add to album, Remove from album, Add to
+  location and Remove from location for Organize; Recycle by `recyclesIn(view)`; the Trash's Restore by `restores`, since the
+  Trash holds assets recycled from a folder and from Triage alike, the server checking each (Curate own reaching only the
+  account's own); Curate Selected for a Curate Permission, and outside Triage for Recycle too, since the frames not picked
+  are recycled and a sorted one takes Recycle; the Trash's Purge, and the toolbar's Purge recycle bin
+  (`htmx/trashbin_header`), for Purge.
+- The explorer: the ⋯ menus and add buttons of the folder tree, the album list and the Location list
+  (`js/common/folder-tree.js`, `album-list.js`, `location-list.js`) for Organize; without it a row's menu cell is the
+  empty `buildNoMenuCell` (`js/common/context-menu-markup.js`), so the row's other cells keep their grid columns, and the
+  add hosts stay empty; in their place each tab opens with a warning saying why (`includes/cannot_organize`, a
+  `.notice.warning` as far above the list as the add controls are): "You cannot create folders as you do not have the
+  Permission to organize this Library", and the same for albums and Locations (`Const.UI.CANNOT_ORGANIZE`), a Guest's tabs
+  included. A folder's Delete is offered with Recycle too, unless the folder holds no asset (its recursive
+  `numOfAssets` as the tree read it), since deleting recycles what it holds; the server refuses a delete the count went stale
+  for. A Person's rename pencil (`htmx/people_list`) and the results title's name, the inline editor's trigger
+  (`htmx/view_person_name`, plain text without it), for Edit Metadata; the results title's cover choice and Hide / Show /
+  Discard (`includes/results_title_inner`), and a taken name's "Merge into …" offer (`includes/person_name_taken`), for
+  Organize. The View settings dialog's "Show triaged items" for a member.
+- Drag and drop (`js/dragdrop/index.js`): every move, membership, folder and People drag for Organize; the thumbnails drag,
+  and `#trash` is a drop zone, where the account may recycle what the view shows (`context.recyclesHere`) too.
+- The Detail panel: its People section (`htmx/detail_panel_people`) is read-only, Search alone, without Edit Metadata, as
+  for an asset in the trash; the Change combobox (`js/alpine/components/face-combobox.js`) merges a nameless Person into a
+  named one only for a holder of Organize, and otherwise moves this Face alone ("· this face"); its Curation row
+  (`htmx/detail_panel`) for a Curate Permission.
+- Curation is a Curate Permission's, as its routes are: every way in (Triage's Curate button in `includes/search_results`,
+  a Sequence header's in `htmx/results_grid_grouped`, which with Curate own alone needs two frames the account owns,
+  `CurationService.curatableFrameCounts`, Curate Selected (in Browse with Recycle too), the Detail panel's row, the `?curate=` address,
+  which `js/listeners/curation.js` leaves alone without one) and the queue's count (`js/stores/sequences-to-curate.js`,
+  which asks nothing without one). Inside, every control is offered: a set holds only the frames the account may curate,
+  its own alone with Curate own (`AssetRules.curatedOwner`).
+
+- The Users page (**Users page**): Add User for a holder of Create Users or Create Guests in any Library, as the page itself; each card's ⋯
+  menu for an Admin alone, without Deactivate and Delete on its own card; the Add User form renders nothing above the
+  creator's ceiling.
 
 **Nav refresh** — After any successful asset mutation, reload the nav to update counts.
 Folder deletion also recycles assets throughout its subtree, so the `folderDeleted` listener
@@ -2668,7 +2857,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/constants.js` | All string constants: events, attributes, store keys, view names |
 | `static/js/app.js` | thin bootstrap that exposes `initApp()` and starts `FrontendApp` |
 | `static/js/context.js` | `window.ctx` — repo ID (set once by `index.scala.html`) and metadata field settings |
-| `static/js/http/client.js` | shared axios client for non-HTMX requests; use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
+| `static/js/http/client.js` | shared axios client for non-HTMX requests (a 401 sends the window to the login; `getHttpErrorMessage` says a JSON refusal's reason); use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes (`Folder.find(id)`); owns branch expansion (`expand`, `expandAll`, `collapse` with descendant reset) |
 | `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
 | `static/js/common/modal.js` | owner of the four dialog hosts: `openModal`, `closeModal`, open identity (`isModalOpenActive`), the element that requested an open (`getModalOpenSource`), the control focus returns to (`openerOf`), an open answered 204 (`settleModalOpenRequest`'s `onNoContent`), the popover dialog's anchor and its own dismissals (`bindPopoverHost`), `setAssetDetailSize` (the size as shown, which the box is fitted from); a closing host leaves fullscreen |
@@ -2691,6 +2880,14 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/nav-page.js` | `startNavPage()`: the start of the pages with the nav outside the main app (Import, Settings): Alpine with what `html_common` binds and the `contextMenu` component, the request rule and the dialog wiring, the nav's Library menu built |
 | `static/js/listeners/settings.js` | `SETTINGS_SAVED_EVENT` → the success snackbar |
 | `views/settings.scala.html` | The Settings page: nav, `main` with the form, `html_common` |
+| `views/users.scala.html`, `views/htmx/user_accounts.scala.html` | The Users page: nav, the header (title, filter box, Add User) on the `usersPage` component, and the account cards under their three tabs, each with its ⋯ menu for an Admin; styled by `static/css/pages/users.css` |
+| `views/htmx/account_form.scala.html` | The Add User modal and the edit form: identity, account type cards, the Admin's switches, the Permission matrix of the creator's ceiling, on the `accountForm` component |
+| `views/htmx/set_password_dialog.scala.html`, `delete_account_dialog.scala.html`, `own_password_dialog.scala.html` | The Users page's Set password and Delete popover dialogs, and the account info dialog's Change password dialog (`static/css/htmx/own_password_dialog.css`) |
+| `views/includes/menu_ctrl.scala.html`, `password_field.scala.html` | A ⋯ menu rendered by the server (an account card's), and a new password's field with Generate and Show |
+| `views/includes/account_menu.scala.html`, `views/htmx/account_info_dialog.scala.html`, `views/includes/account_libraries.scala.html` | The nav's account cell (the type's color, the username) and the account info dialog it opens, with Change password and Log out; an account's Libraries, which the dialog and an account card share |
+| `static/js/users-page.js`, `static/js/alpine/components/users-page.js`, `account-form.js`, `password-field.js` | The Users page's module and components: the tab and filter, the account form's type and matrix toggles, a password's Generate and Show |
+| `static/js/listeners/account.js` | `PASSWORD_CHANGED_EVENT` on every page with the nav, `ACCOUNTS_CHANGED_EVENT` on the Users page (the snackbar, then the cards read again) |
+| `static/js/common/name-key.js` | `nameKey` and `partialMatchKey`, the server's name fold in the browser: the Change combobox's and the Users page filter's |
 | `views/htmx/settings_form.scala.html` | The one Settings form: sections per group, a field per applicable Setting with Reset, error, restart notice and help |
 | `static/js/setup-page.js` | the setup page module: starts the background scene on `#setupBackground`, nothing else |
 | `static/js/setup-background/setup-background.js` | the page side of the setup background: `startSetupBackground` (feature detection with no fallback, the palette probed to `[r, g, b]` channels, the module Worker and the transferred canvas, `resize`, `visible` and `motion` posted as they change, `.ready` on the Worker's first frame) |
@@ -2725,7 +2922,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
 | `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder, album or Location row, the dialog-trigger buttons and a choice menu from its host (`buildChoiceMenuCtrl`, with the compact, glyph-only variant of the Dock side menu, and the link options and the actions after a separator of the nav's Library menu) |
-| `views/includes/library_menu.scala.html` | The nav's Browse cell: the Browse link to the current Library's main page, then the Library menu host: the account's Libraries as link options, the current one checked, and for an Admin a separator and New library…; `hx-preserve` (**Nav**) |
+| `views/includes/library_menu.scala.html` | The nav's Browse cell: the Browse link to the current Library's main page, then the Library menu host: the account's Libraries as link options, the current one checked, and for an Admin or the Create Libraries flag a separator and New library…; `hx-preserve` (**Nav**) |
 | `views/htmx/new_library_dialog.scala.html` | The New library dialog: one name field, Create and Cancel, the Library name rule's errors under the field (**New library dialog**) |
 | `views/includes/page_title.scala.html` | The browser tab title of a page of a Library: "<page> · <Library> · Altitude", or "<Library> · Altitude" on the main page |
 | `views/includes/dock_glyphs.scala.html` | The hidden SVG symbol sheet of the four Dock side glyphs, drawn by the Dock side menu's options and trigger through `<use>`; included by `index.scala.html` and the style guide |

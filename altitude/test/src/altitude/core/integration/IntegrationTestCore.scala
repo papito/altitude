@@ -1,6 +1,7 @@
 package altitude.core.integration
 
 import altitude.test.{ IntegrationTestUtil, SwitchableSceneEmbedder, TestContext, TestFocus }
+import java.util.Locale
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
 import java.util.concurrent.atomic.AtomicReference
 import org.apache.commons.dbutils.QueryRunner
@@ -104,9 +105,19 @@ abstract class IntegrationTestCore
     testApp.isInitialized = false
     testContext = new TestContext(testApp)
 
-    // Every integration test has at least one repository and its admin to start with - you can't test anything otherwise.
-    // Tests then can create additional repos and users to test the boundaries of repository and user separation.
+    // A bundle's database keeps every test's accounts, and a Library created grants every account whose new-Library switch is on:
+    // no switch outlives the test that turned it on
+    testApp.txManager.withTransaction {
+      new QueryRunner().update(RequestContext.getConn, "UPDATE account SET grants_new_libraries = ?", Boolean.box(false))
+    }
+
+    // Every integration test starts with one repository and one account (a User holding no grant, which a test grants if it
+    // needs access), since every asset has an owner. Tests then create more repositories and accounts to test the boundaries
+    // between them.
     testContext.persistRepository()
+    // The context account acts with every Permission, as an Admin's request does; a test of the rules that read them narrows
+    // them around its calls (`RequestContext.permissions.withValue`)
+    RequestContext.permissions.value = Permissions.all
 
     // nuke the data dir tree
     IntegrationTestUtil.createFileStoreDir(testApp)
@@ -203,6 +214,30 @@ abstract class IntegrationTestCore
     testApp.settings.save(Map(name -> value))
     try f
     finally testApp.settings.save(Map(name -> testApp.settings.current.default(name)))
+  }
+
+  /** Runs `f` with the JVM's default locale set to `locale`, and sets the previous one back afterwards */
+  def withDefaultLocale[T](locale: Locale)(f: => T): T = {
+    val previous = Locale.getDefault
+    Locale.setDefault(locale)
+    try f
+    finally Locale.setDefault(previous)
+  }
+
+  /**
+   * A name of `length` UTF-16 units, as a form counts it, that is three times as long in NFC: U+FB2C, a composition exclusion, is
+   * three code points once normalized
+   */
+  def lengthenedByNfc(length: Int): String = "\uFB2C" * length
+
+  /** A name of `length` characters whose name key is 33 UTF-8 bytes a character: NFKC spells U+FDFA out as 18 code points */
+  def longKeyName(length: Int): String = "\uFDFA" * length
+
+  /** Runs `f`, which must refuse a name with a `ValidationException` saying `message`, its own and the name field's (`field`) */
+  def refusesName(field: String, message: String)(f: => Any): Unit = {
+    val ex = intercept[ValidationException](f)
+    ex.errors.get(field) shouldBe Some(message)
+    ex.message shouldBe message
   }
 
   /** The context repository's six stored stats by dimension, without the totals, which are summed on read */

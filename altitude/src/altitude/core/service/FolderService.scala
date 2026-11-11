@@ -1,12 +1,14 @@
 package altitude.core.service
 
 import altitude.core.Altitude
+import altitude.core.Api
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.ValidationException
+import altitude.core.Validators
 import altitude.core.dao.FolderDao
 import altitude.core.models.Folder
 import altitude.core.util.Query
@@ -15,12 +17,20 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
 
   override protected val dao: FolderDao = app.DAO.folder
 
+  /**
+   * Adds the folder under `parentId`, or under the repository root when none is given. A parent that is no folder of the context
+   * repository, unknown or another repository's, is a `NotFoundException` that adds nothing.
+   */
   def add(name: String, parentId: Option[String] = None): Folder =
     txManager.withTransaction {
-      val _parentId = if parentId.isDefined then parentId.get else RequestContext.getRepository.rootFolderId
-      val folder = Folder(name = name.trim, parentId = _parentId)
+      val _parentId = parentId.map(getById(_).persistedId).getOrElse(RequestContext.getRepository.rootFolderId)
+      val folder = Folder(name = validName(name.trim), parentId = _parentId)
       app.service.folder.add(folder)
     }
+
+  /** A folder name as stored, once it passes the name rule (`Validators.validName`) */
+  private def validName(name: String): String =
+    Validators.validName(name, Api.Field.Folder.NAME, Api.Constraints.MAX_FOLDER_NAME_LENGTH)
 
   override def add(folder: Folder): Folder =
     txManager.withTransaction {
@@ -30,8 +40,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
 
   def getAll: List[Folder] =
     txManager.asReadOnly {
-      val q: Query = new Query().withRepository()
-      dao.query(q).records
+      dao.query(new Query()).records
     }
 
   /**
@@ -62,19 +71,13 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       directCounts: Map[String, Int]): Folder =
     val children = childrenByParentId
       .getOrElse(folder.persistedId, Nil)
-      .sortBy(_.nameLowercase)
+      .sortBy(_.nameKey)
       .map(assembleTree(_, childrenByParentId, directCounts))
 
     folder.copy(
       children = children,
       numOfChildren = children.length,
       numOfAssets = directCounts.getOrElse(folder.persistedId, 0) + children.map(_.numOfAssets).sum)
-
-  /** The folder by ID when it is in the context repository; another repository's, or none, is not found */
-  def getInRepository(folderId: String): Folder =
-    query(new Query().add(FieldConst.ID -> folderId)).records.headOption.getOrElse {
-      throw NotFoundException(s"Folder [$folderId] not found")
-    }
 
   def isRootFolder(id: String): Boolean =
     id == contextRepo.rootFolderId
@@ -140,11 +143,9 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       val folder: Folder = getById(folderId)
       logger.debug(s"Renaming folder [${folder.name}] to [$newName]")
 
-      val folderForUpdate: Folder = folder.copy(
-        name = newName
-      )
+      val folderForUpdate: Folder = folder.copy(name = validName(newName))
 
-      val data = Map(FieldConst.Folder.NAME -> newName, FieldConst.Folder.NAME_LC -> newName.toLowerCase)
+      val data = Map(FieldConst.Folder.NAME -> folderForUpdate.name, FieldConst.Folder.NAME_KEY -> folderForUpdate.nameKey)
 
       updateById(folderId, data)
       folderForUpdate

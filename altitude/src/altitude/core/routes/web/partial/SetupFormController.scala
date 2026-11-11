@@ -27,6 +27,7 @@ class SetupFormController(using logger: Logger) extends BaseController:
     trim = List(
       Api.Field.Setup.ADMIN_EMAIL,
       Api.Field.Setup.ADMIN_NAME,
+      Api.Field.Setup.ADMIN_USERNAME,
       Api.Field.Setup.PASSWORD,
       Api.Field.Setup.PASSWORD2
     ),
@@ -37,6 +38,7 @@ class SetupFormController(using logger: Logger) extends BaseController:
     required = List(
       Api.Field.Setup.ADMIN_EMAIL,
       Api.Field.Setup.ADMIN_NAME,
+      Api.Field.Setup.ADMIN_USERNAME,
       Api.Field.Setup.PASSWORD,
       Api.Field.Setup.PASSWORD2
     ),
@@ -86,6 +88,7 @@ class SetupFormController(using logger: Logger) extends BaseController:
       val repositoryName = jsonIn.obj.get(Api.Field.Setup.REPOSITORY_NAME).flatMap(_.strOpt).getOrElse("")
       val email = jsonIn.obj.get(Api.Field.Setup.ADMIN_EMAIL).flatMap(_.strOpt).getOrElse("")
       val name = jsonIn.obj.get(Api.Field.Setup.ADMIN_NAME).flatMap(_.strOpt).getOrElse("")
+      val username = jsonIn.obj.get(Api.Field.Setup.ADMIN_USERNAME).flatMap(_.strOpt).getOrElse("")
       val password = jsonIn.obj.get(Api.Field.Setup.PASSWORD).flatMap(_.strOpt).getOrElse("")
       val password2 = jsonIn.obj.get(Api.Field.Setup.PASSWORD2).flatMap(_.strOpt).getOrElse("")
 
@@ -97,6 +100,16 @@ class SetupFormController(using logger: Logger) extends BaseController:
           validationException.errors.addOne(
             Api.Field.Setup.PASSWORD -> C.Msg.Err.PASSWORDS_DO_NOT_MATCH
           )
+
+      // The username rule's error, beside the request validator's (which says a missing one is required); UserService.add applies
+      // the rule again, to the same effect
+      if !validationException.errors.contains(Api.Field.Setup.ADMIN_USERNAME) then
+        try User.validUsername(username)
+        catch
+          case ex: ValidationException =>
+            ex.errors.get(FieldConst.User.USERNAME).foreach {
+              error => validationException.errors += (Api.Field.Setup.ADMIN_USERNAME -> error)
+            }
 
       // The Library name rule's error, beside the request validator's; addRepository applies the rule again, to the same effect
       try Repository.validName(repositoryName)
@@ -114,6 +127,7 @@ class SetupFormController(using logger: Logger) extends BaseController:
         // Initialize system
         val userModel = User(
           email = email,
+          username = username,
           name = name,
           accountType = AccountType.Admin
         )
@@ -122,28 +136,20 @@ class SetupFormController(using logger: Logger) extends BaseController:
         val (_, repo) = App.altitude.service.system.initializeSystem(
           repositoryName = repositoryName,
           adminModel = userModel,
-          password = password
+          password = password,
+          clientIp = BaseController.clientIpOf(request)
         )
 
         // Auto-login the newly created admin user
-        val adminUser = RequestContext.getAccount
-        val token = App.altitude.service.paseto.createToken(adminUser)
+        val claims = App.altitude.service.user.claimsOf(RequestContext.getAccount.persistedId).get
+        val token = App.altitude.service.paseto.createToken(claims)
 
         // Send HTML redirect header with auth cookie
         cask.Response(
           data = "",
           statusCode = 200,
           headers = Seq("HX-Redirect" -> s"/r/${repo.persistedId}"),
-          cookies = Seq(
-            cask.model.Cookie(
-              name = SessionController.AUTH_COOKIE_NAME,
-              value = token,
-              path = "/",
-              maxAge = SessionController.COOKIE_MAX_AGE_SECONDS,
-              httpOnly = true,
-              secure = true,
-              sameSite = "Strict"
-            ))
+          cookies = Seq(SessionController.authCookie(token, claims.expiresAt))
         )
 
   initialize()

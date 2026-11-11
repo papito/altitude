@@ -16,5 +16,7 @@ object WsAssetProcessedNotificationSink:
     Sink.foreach[TAssetOrInvalidWithContext] {
       assetOrInvalidWithContext =>
         val (assetOrInvalid, ctx) = assetOrInvalidWithContext
-        app.actorSystem ! ImportStatusWsActor.UserWideImportStatus(ctx.account.persistedId, assetOrInvalid)
+        // An element queued with no account has nobody to tell
+        ctx.account.foreach(
+          account => app.actorSystem ! ImportStatusWsActor.UserWideImportStatus(account.persistedId, assetOrInvalid))
     }

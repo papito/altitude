@@ -14,6 +14,7 @@ import scalasql.core.SqlStr.SqlStringSyntax
 import scala.util.Random
 
 import altitude.core.Altitude
+import altitude.core.Api
 import altitude.core.Const
 import altitude.core.Const.FaceRecognition
 import altitude.core.Const.PeopleBucket
@@ -29,6 +30,7 @@ import altitude.core.models.Face
 import altitude.core.models.Person
 import altitude.core.routes.SearchRequestParser
 import altitude.core.service.PersonService
+import altitude.core.service.PersonService.FaceTarget
 import altitude.core.util.Query
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSource
@@ -336,6 +338,83 @@ import altitude.core.util.Util
     top.map(_.persistedId) should be(all.take(3).map(_.persistedId))
   }
 
+  test("A person's top faces leave out the Faces on an asset marked for purging") {
+
+    /**
+     * Setup:
+     *
+     * A person with Faces on three assets, of detection scores 0.9, 0.8 and 0.7, the best one's asset recycled and marked for
+     * purging, and the next one's asset recycled only.
+     *
+     * Assertions:
+     *
+     * The person's top faces are the Faces of 0.8 and 0.7, in that order: the one on the asset marked for purging, which could
+     * not be set as the cover, is not among them, and the one in the trash is.
+     */
+    val person: Person = testApp.service.person.addPerson(Person())
+    val faces = List(0.9, 0.8, 0.7).zipWithIndex.map {
+      case (score, n) =>
+        testContext.addTestFace(
+          testApp.service.person.getById(person.persistedId),
+          testContext.insertAsset(),
+          TestContext.unitVector(n + 1),
+          detectionScore = score)
+    }
+    testApp.service.library.recycleAssets(Set(faces.head.assetId.get, faces(1).assetId.get))
+    testApp.service.asset.updateById(faces.head.assetId.get, Map(FieldConst.Asset.IS_PURGED -> true))
+
+    testApp.service.person.getPersonFaces(person.persistedId).map(_.persistedId) shouldBe faces.drop(1).map(_.persistedId)
+  }
+
+  test("A cover is refused for another Person's Face, another repository's Face and a Face on an asset marked for purging") {
+
+    /**
+     * Setup:
+     *
+     * A Person with Faces on three assets, the first Face their cover, the second's asset recycled and marked for purging; a
+     * second Person with a Face of their own; and a second repository with a Person and a Face.
+     *
+     * Assertions:
+     *
+     * Setting the first Person's cover to the second Person's Face, or to their own Face on the asset marked for purging, is a
+     * `ValidationException`, and to the other repository's Face a `NotFoundException`. The cover is still the first Face after
+     * each. Their Face on the third asset, which is live, becomes their cover, both on the Person the call answers and as stored.
+     */
+    val repo = testContext.repository
+    val added: Person = testApp.service.person.addPerson(Person())
+    val faces = (1 to 3).toList.map {
+      n =>
+        val asset = testContext.insertAsset()
+        testContext.addTestFace(testApp.service.person.getById(added.persistedId), asset, TestContext.unitVector(n))
+    }
+    val person: Person = testApp.service.person.getById(added.persistedId)
+    person.coverFaceId shouldBe Some(faces.head.persistedId)
+
+    val purging = faces(1).assetId.get
+    testApp.service.library.recycleAssets(Set(purging))
+    testApp.service.asset.updateById(purging, Map(FieldConst.Asset.IS_PURGED -> true))
+
+    val other: Person = testApp.service.person.addPerson(Person())
+    val othersFace = testContext.addTestFace(other, testContext.insertAsset(), TestContext.unitVector(4))
+
+    val otherRepo = testContext.persistRepository()
+    switchContextRepo(otherRepo)
+    val foreignFace = testContext.addTestFace(
+      testApp.service.person.addPerson(Person()),
+      testContext.insertAsset(testContext.makeAsset(repository = Some(otherRepo))),
+      TestContext.unitVector(5))
+    switchContextRepo(repo)
+
+    intercept[ValidationException](testApp.service.person.setFaceAsCover(person.persistedId, othersFace.persistedId))
+    intercept[ValidationException](testApp.service.person.setFaceAsCover(person.persistedId, faces(1).persistedId))
+    intercept[NotFoundException](testApp.service.person.setFaceAsCover(person.persistedId, foreignFace.persistedId))
+    testApp.service.person.getById(person.persistedId).coverFaceId shouldBe Some(faces.head.persistedId)
+
+    val covered = testApp.service.person.setFaceAsCover(person.persistedId, faces(2).persistedId)
+    covered.coverFaceId shouldBe Some(faces(2).persistedId)
+    testApp.service.person.getById(person.persistedId).coverFaceId shouldBe Some(faces(2).persistedId)
+  }
+
   test("Person merge B -> A") {
 
     /**
@@ -541,6 +620,43 @@ import altitude.core.util.Util
     row("name_for_sort") shouldBe precomposed("zoë")
   }
 
+  test("A live person's name in another case fold is refused to a rename, and a Face moved to it joins them") {
+
+    /**
+     * Setup:
+     *
+     * Live Persons named "Weiß" (with a Face), "σοφος" with a final sigma, and "Bob", and a source Person with two Faces.
+     *
+     * Assertions:
+     *
+     * Renaming Bob to "WEISS" or to "σοφοσ" with a plain sigma fails as a duplicate, and Bob keeps his name. Looking up "WEISS"
+     * finds Weiß, and moving a source Face to "WEISS" gives it to Weiß, who keeps her name and counts two assets, rather than
+     * creating a second Person.
+     */
+    val weiss: Person = testApp.service.person.addPerson(Person(name = Some("Weiß")))
+    testContext.addTestFace(weiss, testContext.insertAsset(), TestContext.unitVector(1))
+    testApp.service.person.addPerson(Person(name = Some("σοφος")))
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+    val source: Person = testApp.service.person.addPerson(Person())
+    val moved = testContext.addTestFace(source, testContext.insertAsset(), TestContext.unitVector(2))
+    testContext.addTestFace(
+      testApp.service.person.getById(source.persistedId),
+      testContext.insertAsset(),
+      TestContext.unitVector(3))
+
+    intercept[DuplicateException](testApp.service.person.updateName(bob, "WEISS"))
+    intercept[DuplicateException](testApp.service.person.updateName(bob, "σοφοσ"))
+    testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bob")
+
+    testApp.service.person.getLiveByNameKey("WEISS").map(_.persistedId) shouldBe Some(weiss.persistedId)
+
+    val move = testApp.service.person.moveFace(moved.persistedId, FaceTarget.Named("WEISS"))
+    move.target.persistedId shouldBe weiss.persistedId
+    val after: Person = testApp.service.person.getById(weiss.persistedId)
+    after.name shouldBe Some("Weiß")
+    after.numOfFaces shouldBe 2
+  }
+
   test("A person renamed to its own name in another case takes the new name") {
 
     /**
@@ -601,7 +717,7 @@ import altitude.core.util.Util
      * Assertions:
      *
      * Through the first repository, London and the hidden Bob are found live, with their names. Tessa, Carl, Eve and an ID that
-     * no Person has are not found, though Tessa and Carl are found when liveness does not matter (`getInRepository`).
+     * no Person has are not found, though Tessa and Carl are found when liveness does not matter (`getById`).
      */
     val repo = testContext.repository
     val london: Person = testApp.service.person.addPerson(Person(name = Some("London")))
@@ -627,8 +743,8 @@ import altitude.core.util.Util
           testApp.service.person.getLiveInRepository(personId)
         }
     }
-    testApp.service.person.getInRepository(tessa.persistedId).name shouldBe Some("Tessa")
-    testApp.service.person.getInRepository(carl.persistedId).name shouldBe Some("Carl")
+    testApp.service.person.getById(tessa.persistedId).name shouldBe Some("Tessa")
+    testApp.service.person.getById(carl.persistedId).name shouldBe Some("Carl")
   }
 
   test("A person cannot be named as an unnamed person is") {
@@ -663,6 +779,62 @@ import altitude.core.util.Util
     persistedBob.name shouldBe Some("Bob")
 
     testApp.service.person.updateName(bob, "Unknown Soldier").name shouldBe Some("Unknown Soldier")
+  }
+
+  test("A person cannot be named as an unnamed person is in compatibility forms") {
+
+    /**
+     * Setup:
+     *
+     * A live Person named "Bob".
+     *
+     * Assertions:
+     *
+     * Renaming him "Unknown 42" with a full-width "U", or with the number in circled digits, fails validation with the
+     * reserved-name error, and he keeps his name: the name's compatibility forms fold to an unnamed person's form, which would
+     * otherwise reach the name key.
+     */
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+
+    List("Ｕnknown 42", "Unknown ④②").foreach {
+      name =>
+        val ex = intercept[ValidationException](testApp.service.person.updateName(bob, name))
+        withClue(name)(ex.message shouldBe Const.Msg.Err.RESERVED_PERSON_NAME)
+    }
+
+    testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bob")
+  }
+
+  test("A person name is held to 2 to 80 characters once in NFC, and to a name key that is not too long") {
+
+    /**
+     * Setup:
+     *
+     * A live Person named "Bob", and an unnamed Person with a Face.
+     *
+     * Assertions:
+     *
+     * Renaming Bob, or moving the Face to a Person by name, to 80 of U+FB2C (80 characters as typed, 240 in NFC) fails validation
+     * with the name field's too-long error; to "e" and a combining accent (one character in NFC) with the too-short error; and to
+     * 70 of U+FDFA (whose name key NFKC spells out to 2310 bytes) with the name key error. Bob keeps his name, and the Face its
+     * Person.
+     */
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+    val unnamed: Person = testApp.service.person.addPerson(Person())
+    val face = testContext.addTestFace(unnamed, testContext.insertAsset(), TestContext.unitVector(1))
+    val refused = List(
+      lengthenedByNfc(Api.Constraints.MAX_NAME_LENGTH) -> Const.Msg.Err.VALUE_TOO_LONG.format(Api.Constraints.MAX_NAME_LENGTH),
+      "e\u0301" -> Const.Msg.Err.VALUE_TOO_SHORT.format(Api.Constraints.MIN_NAME_LENGTH),
+      longKeyName(70) -> Const.Msg.Err.NAME_KEY_TOO_LONG
+    )
+
+    for ((name, message) <- refused) withClue(s"[$name]: ") {
+      refusesName(Api.Field.Person.NAME, message)(testApp.service.person.updateName(bob, name))
+      refusesName(Api.Field.Person.NAME, message)(testApp.service.person.moveFace(face.persistedId, FaceTarget.Named(name)))
+    }
+
+    testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bob")
+    testApp.service.person.getFaceById(face.persistedId).personId shouldBe unnamed.id
   }
 
   test("Adding a named person stores its name in NFC and its name key as sort name") {
@@ -701,11 +873,9 @@ import altitude.core.util.Util
      *
      * The name key of "INGRID" is "ingrid".
      */
-    val defaultLocale = Locale.getDefault
-    try
-      Locale.setDefault(Locale.forLanguageTag("tr"))
+    withDefaultLocale(Locale.forLanguageTag("tr")) {
       PersonService.nameKey("INGRID") shouldBe "ingrid"
-    finally Locale.setDefault(defaultLocale)
+    }
   }
 
   test("The live person holding a name is found by it, hidden or not") {
@@ -817,13 +987,64 @@ import altitude.core.util.Util
     val firstCover = testApp.service.person.getById(first.persistedId).coverFaceId.value
 
     testApp.service.person.merge(dest = second, source = first)
-    testApp.service.person.setFaceAsCover(second, testApp.service.person.getFaceById(firstCover))
+    testApp.service.person.setFaceAsCover(second.persistedId, firstCover)
     testApp.service.person.merge(dest = third, source = testApp.service.person.getById(second.persistedId))
 
     val mergedAway = testApp.txManager.asReadOnly {
       query("SELECT cover_face_id FROM person WHERE id IN (?, ?) AND is_deleted = ?", first.persistedId, second.persistedId, true)
     }
     mergedAway.map(_("cover_face_id").toString.trim) shouldBe List(firstCover, firstCover)
+  }
+
+  test("A named Person with no cover takes the cover of a Person merged into them, or their best Face when it is about to go") {
+
+    /**
+     * Setup:
+     *
+     * Two named Persons with no Face, so no cover. Two unnamed Persons, each with Faces on three assets of their own: the first
+     * at detection scores of 0.5 (their cover), 0.9 and 0.7; the second at 0.9 (their cover), 0.5 and 0.7, the cover's asset
+     * recycled and marked for purging. The first unnamed Person is merged into the first named one, the second into the second.
+     *
+     * Assertions:
+     *
+     * The first named Person's cover is the merged Person's cover, though a Face of better score came with it. The second named
+     * Person's cover is their best Face on an asset not marked for purging, the one at 0.7. The merge answers each Person with
+     * the cover stored.
+     *
+     * Edge cases:
+     *
+     * The merged Person's cover is on an asset marked for purging, which a cover never rests on.
+     */
+    def withFaces(scores: List[Double], firstVector: Int): (Person, List[Face]) = {
+      val added = testApp.service.person.addPerson(Person())
+      val faces = scores.zipWithIndex.map {
+        case (score, n) =>
+          testContext.addTestFace(
+            testApp.service.person.getById(added.persistedId),
+            testContext.insertAsset(),
+            TestContext.unitVector(firstVector + n),
+            detectionScore = score)
+      }
+      (testApp.service.person.getById(added.persistedId), faces)
+    }
+
+    val first: Person = testApp.service.person.addPerson(Person(name = Some("Dana")))
+    val second: Person = testApp.service.person.addPerson(Person(name = Some("Ezra")))
+    List(first, second).foreach(person => testApp.service.person.getById(person.persistedId).coverFaceId shouldBe None)
+
+    val (firstSource, firstFaces) = withFaces(List(0.5, 0.9, 0.7), firstVector = 1)
+    firstSource.coverFaceId shouldBe Some(firstFaces.head.persistedId)
+    val (secondSource, secondFaces) = withFaces(List(0.9, 0.5, 0.7), firstVector = 4)
+    secondSource.coverFaceId shouldBe Some(secondFaces.head.persistedId)
+    val purging = secondFaces.head.assetId.get
+    testApp.service.library.recycleAssets(Set(purging))
+    testApp.service.asset.updateById(purging, Map(FieldConst.Asset.IS_PURGED -> true))
+
+    testApp.service.person.merge(dest = first, source = firstSource).coverFaceId shouldBe Some(firstFaces.head.persistedId)
+    testApp.service.person.getById(first.persistedId).coverFaceId shouldBe Some(firstFaces.head.persistedId)
+
+    testApp.service.person.merge(dest = second, source = secondSource).coverFaceId shouldBe Some(secondFaces(2).persistedId)
+    testApp.service.person.getById(second.persistedId).coverFaceId shouldBe Some(secondFaces(2).persistedId)
   }
 
   test("Listing the live people reads a partial index over them") {
@@ -1455,14 +1676,15 @@ import altitude.core.util.Util
       seedCopies(template.persistedId, copies = 5000, folders = 1)
       // Every copy whose zero-padded number does not end in 0 is sorted, so the triage set is a tenth of the library
       update("UPDATE asset SET is_triaged = FALSE WHERE id <> ? AND substr(id, 36, 1) <> '0'", template.persistedId)
-      // A Face per copy, taken from the template's, none enrolled, which keeps them out of PostgreSQL's vector index
+      // A Face per copy, taken from the template's, none enrolled, which keeps them out of PostgreSQL's vector index; the copies
+      // alone, as the bundle's database holds every test's repositories
       update(
         """INSERT INTO face (id, repository_id, asset_id, person_id, x1, y1, width, height, detection_score, features, checksum,
           |                  quality, is_enrolled)
           |SELECT a.id, a.repository_id, a.id, t.person_id, t.x1, t.y1, t.width, t.height, t.detection_score, t.features, a.checksum,
           |       t.quality, FALSE
           |  FROM asset a CROSS JOIN face t
-          | WHERE t.asset_id = ? AND a.id <> t.asset_id""".stripMargin,
+          | WHERE t.asset_id = ? AND a.id <> t.asset_id AND a.repository_id = t.repository_id""".stripMargin,
         template.persistedId
       )
     }(lookupPlanOf(sql, values))

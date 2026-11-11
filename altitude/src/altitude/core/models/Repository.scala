@@ -1,8 +1,6 @@
 package altitude.core.models
 
-import java.text.Normalizer
 import java.time.LocalDateTime
-import java.util.Locale
 
 import altitude.core.{ Const => C }
 import altitude.core.Api
@@ -10,6 +8,7 @@ import altitude.core.FieldConst
 import altitude.core.ValidationException
 import altitude.core.util.JsonCodec
 import altitude.core.util.JsonCodec.given
+import altitude.core.util.NameKey
 
 object Repository:
   given JsonCodec.ReadWriter[Repository] = JsonCodec.macroRW
@@ -23,7 +22,7 @@ object Repository:
    * the same name typed precomposed are one name
    */
   def normalizedName(name: String): String =
-    Normalizer.normalize(WHITESPACE.split(name).filter(_.nonEmpty).mkString(" "), Normalizer.Form.NFC)
+    NameKey.normalized(WHITESPACE.split(name).filter(_.nonEmpty).mkString(" "))
 
   private val ZERO_WIDTH_NON_JOINER = 0x200c
   private val ZERO_WIDTH_JOINER = 0x200d
@@ -42,8 +41,9 @@ object Repository:
   /**
    * The Library name rule, which setup and the New library dialog share through `RepositoryService.addRepository`: the name
    * normalized, or a `ValidationException` giving the name field (`FieldConst.Repository.NAME`) the first error of: a name is
-   * required, holds no control characters (`isControlCharacter`), and is 2 to 80 characters long once normalized (counted in code
-   * points, so an emoji is one).
+   * required, holds no control characters (`isControlCharacter`), is 2 to 80 characters long once normalized (counted in code
+   * points, so an emoji is one), and has a name key within `NameKey.MAX_KEY_BYTES`, as every keyed name has
+   * (`Validators.validName`).
    */
   def validName(name: String): String =
     val normalized = normalizedName(name)
@@ -55,6 +55,7 @@ object Repository:
       else if normalized.codePoints.anyMatch(isControlCharacter) then Some(C.Msg.Err.LIBRARY_NAME_CONTROL_CHARACTERS)
       else if length < min then Some(C.Msg.Err.LIBRARY_NAME_TOO_SHORT.format(min))
       else if length > max then Some(C.Msg.Err.LIBRARY_NAME_TOO_LONG.format(max))
+      else if !NameKey.keyFits(normalized) then Some(C.Msg.Err.NAME_KEY_TOO_LONG)
       else None
 
     error.foreach {
@@ -68,7 +69,6 @@ object Repository:
 case class Repository(
     id: Option[String] = None,
     name: String,
-    ownerAccountId: String,
     rootFolderId: String,
     fileStoreType: String,
     fileStoreConfig: Map[String, String] = Map(),
@@ -76,11 +76,8 @@ case class Repository(
     updatedAt: Option[LocalDateTime] = None)
   extends BaseModel:
 
-  /**
-   * The name key `repository_01` keeps unique instance-wide, folded here and not in SQL, since SQLite's `lower()` folds ASCII
-   * only. `Locale.ROOT` keeps "I" folding to "i" whatever the JVM's default locale.
-   */
-  val nameLowercase: String = name.toLowerCase(Locale.ROOT)
+  /** The name key `repository_01` keeps unique instance-wide (see [[NameKey]]) */
+  val nameKey: String = NameKey.of(name)
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 

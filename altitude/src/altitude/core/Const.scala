@@ -113,6 +113,7 @@ object Const:
     val TRASH: String = Search.View.TRASHBIN
     val IMPORT = "import"
     val SETTINGS = "settings"
+    val USERS = "users"
     val STYLE_GUIDE = "style-guide"
 
   object Security:
@@ -150,7 +151,9 @@ object Const:
       val VALUE_CANNOT_BE_EMPTY = "Cannot be empty"
       val VALUE_TOO_LONG = "Value is longer than %s characters"
       val VALUE_TOO_SHORT = "Value should be at least %s characters long"
-      val VALUE_NOT_AN_EMAIL = "This is a clown email"
+      // A name within its length whose name key passes NameKey.MAX_KEY_BYTES: compatibility characters NFKC spells out at length
+      val NAME_KEY_TOO_LONG = "Value is too long: some of its characters stand for several"
+      val VALUE_NOT_AN_EMAIL = "Enter a valid email address"
       val VALUE_NOT_A_UUID = "This is not a valid UUID"
       val VALIDATION_ERROR = "Validation error"
       val VALIDATION_ERRORS = "There are validation errors in: %s"
@@ -158,6 +161,28 @@ object Const:
       val DUPLICATE = "Duplicate"
       val INCORRECT_VALUE_TYPE = "Incorrect value type"
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
+      // The username rule (User.validUsername); the bounds are Api.Constraints.MIN_/MAX_USERNAME_LENGTH
+      val USERNAME_RULE = "Use 3 to 32 letters, digits, dots, underscores or hyphens"
+      // A grant past the number of Libraries a login token has room for (RepositoryService.MAX_GRANTS_PER_ACCOUNT)
+      val TOO_MANY_GRANTS = "An account can be given access to at most %s Libraries"
+      // The account rules of UserService's writes: a User or a Guest sees at least one Library; an address or a username another
+      // account holds; a password outside Api.Constraints.MIN_/MAX_PASSWORD_LENGTH; the current password of a change, wrong
+      val LIBRARY_REQUIRED = "Choose at least one Library"
+      val ACCOUNT_TYPE_REQUIRED = "Choose an account type"
+      val EMAIL_TAKEN = "Another account has this email address"
+      val USERNAME_TAKEN = "Another account has this username"
+      val PASSWORD_LENGTH = "Use %s to %s characters"
+      val WRONG_PASSWORD = "This is not your current password"
+      // A refused login, whatever refused it (an unknown login, a wrong password, a deactivated account), which it never says
+      val LOGIN_FAILED = "Wrong email, username or password"
+      // An Admin's edit saved over an account changed since its form was opened (UserService.update): another Admin's edit, a
+      // grant a new Library gave it
+      val ACCOUNT_CHANGED = "This account was changed since you opened it. Reopen it to see the change."
+      // A file whose importing account is gone or deactivated when the import inserts it (LibraryService.persistAndIndex)
+      val IMPORTER_GONE = "The account that imported this file no longer exists"
+      val IMPORTER_DEACTIVATED = "The account that imported this file is deactivated"
+      // An Admin's own account, which it cannot deactivate, delete or take the Admin type from
+      val OWN_ACCOUNT = "You cannot deactivate, delete or demote your own account"
       val INVALID_CONTENT_TYPE = "Invalid content type"
       // A JSON route's body that is not JSON, or not a JSON object
       val MALFORMED_JSON = "The request body is not a JSON object"
@@ -179,10 +204,27 @@ object Const:
       val LIBRARY_NAME_CONTROL_CHARACTERS = "Remove the control characters"
       // A Library name whose name key another Library holds (repository_01), named as it was submitted, once normalized
       val LIBRARY_NAME_TAKEN = "A library named “%s” already exists"
-      // `/` for an account that owns no Library to land in
+      // `/` for an account that can see no Library to land in
       val NO_LIBRARY = "There is no library to open"
-      // A page of a Library that does not exist or that the account does not own (decorators.requireLogin): one text for both
+      // A page of a Library that does not exist or that the account cannot see (decorators.requireLogin): one text for both
       val LIBRARY_NOT_FOUND = "Library not found"
+      // Why a route refused an account with 403 (decorators.forbidden: "Forbidden: " and this in plain text, this alone in
+      // JSON): a Permission it does not hold in the Library (requirePermission), naming the Permissions any one of which would do;
+      // a Guest, who sees Browse alone (requireMember, decorators.refusedView); an account without the Create Libraries flag
+      // (requireLibraryCreator); an account that is no Admin (requireAdmin)
+      val FORBIDDEN_PERMISSION = "needs the %s Permission"
+      val FORBIDDEN_ADMIN = "Admin only"
+      val FORBIDDEN_GUEST = "not for a Guest"
+      val FORBIDDEN_LIBRARY_CREATOR = "creating a Library needs the Create Libraries flag"
+      // An account that holds neither Create Users nor Create Guests in any Library (requireAccountCreator)
+      val FORBIDDEN_ACCOUNT_CREATOR = "needs the Create Users or Create Guests Permission in a Library"
+      // An account a creator who is no Admin may not give: an Admin, the Create Libraries flag or the new-Library grant, a
+      // Library where it holds no Create Users (for a User) or Create Guests (for a Guest), or a Permission it does not hold there
+      // An account deactivated since its login, whose write is refused
+      val FORBIDDEN_INACTIVE = "the account is deactivated"
+      val FORBIDDEN_CEILING = "an account can be given only the Libraries and Permissions its creator may pass on"
+      // An operation refused for assets the account's Permissions do not reach (AssetRules): the action and how many
+      val FORBIDDEN_ASSETS = "You do not hold the Permission to %s %d of these assets"
       // A Face correction onto the Face's own Person: a move (PersonService.moveFace), or a merge of the Face's Person into
       // themselves (mergeFacePerson)
       val FACE_ALREADY_THEIRS = "The face is already this person's"
@@ -195,6 +237,12 @@ object Const:
       val FACE_PERSON_NAMED_SINCE = "This person has a name now"
       // A merge of a Face's Person into a Person with no name, which the panel never offers
       val MERGE_INTO_NAMELESS = "Merge into a person with a name"
+      // A cover (PersonService.setFaceAsCover) that is another Person's Face, or a Face on an asset marked for purging, whose
+      // Faces are about to go
+      val COVER_FACE_NOT_THEIRS = "The face is not this person's"
+      val COVER_FACE_PURGING = "The face is on an asset being purged"
+      // A folder added under a parent folder that is no folder of the repository (FolderActionController.htmxAddFolder)
+      val PARENT_FOLDER_NOT_FOUND = "The parent folder does not exist"
 
     // What a Face correction did, named for the snackbar in the People section's data attributes (htmx/detail_panel_people)
     object FaceCorrection:
@@ -237,3 +285,14 @@ object Const:
     val NEW_LIBRARY_DIALOG_TITLE = "New library"
     // The nav's Library menu's last entry, for an Admin, which opens the New library dialog
     val NEW_LIBRARY_OPTION = "New library…"
+    // The Users page's dialogs (htmx/account_form, set_password_dialog, delete_account_dialog), and the own password dialog of
+    // the account info dialog (htmx/own_password_dialog); an edit and the two account dialogs are titled by the account's name
+    val ADD_USER_DIALOG_TITLE = "Add User"
+    val EDIT_USER_DIALOG_TITLE = "Edit %s"
+    val SET_PASSWORD_DIALOG_TITLE = "Set the password of %s"
+    val DELETE_USER_DIALOG_TITLE = "Delete %s"
+    val CHANGE_PASSWORD_DIALOG_TITLE = "Change password"
+    val ACCOUNT_INFO_DIALOG_TITLE = "Your account"
+    // The warning the folder, album and Location tabs open with for an account without Organize, which has nothing to add there:
+    // "folders", "albums" or "Locations"
+    val CANNOT_ORGANIZE = "You cannot create %s as you do not have the Permission to organize this Library"

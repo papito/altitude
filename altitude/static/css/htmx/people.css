@@ -74,6 +74,13 @@ html[data-dock-side="bottom"] #people {
     border-radius: 25%;
 }
 
+/* A person with no cover: the placeholder takes the face's box and shape */
+#people .cell .no-cover {
+    width: var(--face-box);
+    height: var(--face-box);
+    border-radius: 25%;
+}
+
 /* The image is the badge's containing block */
 #people .cell .image {
     position: relative;

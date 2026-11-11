@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Advanced search panel playground</title>
+<style>
+/* ---------- playground chrome ---------- */
+:root {
+  color-scheme: dark;
+  --bg: #111318; --bg2: #181b22; --bg3: #20242d; --line: #2a2f3a; --fg: #e6e8ee; --fg2: #9aa1b1;
+  --acc: #3bcfce;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 var(--sans); height: 100vh; display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
+header.top { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--bg2); flex-wrap: wrap; }
+header.top h1 { font-size: 14px; margin: 0; font-weight: 600; }
+.presets { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.presets span { color: var(--fg2); font-size: 12px; margin-right: 4px; }
+.pbtn { background: var(--bg3); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; cursor: pointer; }
+.pbtn:hover { border-color: var(--fg2); }
+.shell { display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
+aside.controls { overflow-y: auto; border-right: 1px solid var(--line); background: var(--bg2); padding: 6px 12px 30px; }
+aside.controls details { border-bottom: 1px solid var(--line); padding: 6px 0; }
+aside.controls summary { cursor: pointer; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg2); padding: 4px 0; }
+.ctl { margin: 8px 0; }
+.ctl > label { display: flex; justify-content: space-between; font-size: 12px; color: var(--fg2); margin-bottom: 3px; }
+.ctl > label output { font-family: var(--mono); color: var(--fg); }
+.ctl input[type=range] { width: 100%; accent-color: var(--acc); margin: 0; }
+.seg { display: flex; flex-wrap: wrap; gap: 3px; }
+.seg button { flex: 1 1 auto; background: var(--bg3); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 3px 7px; font: inherit; font-size: 12px; cursor: pointer; }
+.seg button.on { background: var(--acc); color: #06201f; border-color: var(--acc); font-weight: 600; }
+.right { display: grid; grid-template-rows: 1fr auto; min-height: 0; min-width: 0; }
+.stage { overflow: auto; padding: 16px; background: repeating-conic-gradient(#15171d 0 25%, #121419 0 50%) 0 0 / 20px 20px; }
+.promptbox { border-top: 1px solid var(--line); background: var(--bg2); padding: 10px 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; max-height: 30vh; overflow: auto; }
+.promptbox pre { margin: 0; white-space: pre-wrap; font: 12px/1.5 var(--mono); color: var(--fg); }
+
+/* ---------- the mock app (Altitude tokens, from static/css/core.css) ---------- */
+#app {
+  --theme-primary: light-dark(#4159d4, #005bff);
+  --theme-on-primary: light-dark(#f7f8fa, #12161f);
+  --theme-secondary: light-dark(#dfe1e6, #484b52);
+  --theme-accent: light-dark(#1e7777, #3bcfce);
+  --theme-on-accent: light-dark(#f5f9f8, #0a1919);
+  --theme-neutral-1: light-dark(#fdfdfe, #1c1d20);
+  --theme-neutral-2: light-dark(#f4f5f7, #353639);
+  --theme-neutral-3: light-dark(#565b66, #babdc5);
+  --theme-neutral-4: light-dark(#12161f, #f7f8fa);
+  --shadow-color: #000;
+  --popover-border-color: hsl(from var(--theme-neutral-3) h s l / 0.3);
+  --field-background-color: hsl(from var(--shadow-color) h s l / 0.23);
+  --soft-shadow: 0 1px 2px hsl(from var(--shadow-color) h s l / 0.25), 0 2px 6px hsl(from var(--shadow-color) h s l / 0.15);
+  --lift-shadow: 0 4px 12px hsl(from var(--shadow-color) h s l / 0.3);
+  --float-shadow: 0 12px 32px hsl(from var(--shadow-color) h s l / 0.45);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-nav: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", "DejaVu Sans Mono", monospace;
+
+  /* set by the playground */
+  --p-width: 26rem; --p-pad: 16px; --p-gap: 12px; --p-anchor-gap: 6px; --p-radius: 8px;
+  --p-opacity: 0.84; --p-blur: 10px; --p-font: 14px; --p-cover: 20px; --p-opt-cover: 28px; --p-opt-pad: 5px;
+
+  position: relative; min-width: 860px; min-height: 640px; border-radius: 8px; overflow: hidden;
+  background: var(--theme-neutral-1); color: var(--theme-neutral-4); font: var(--p-font)/1.4 var(--font);
+  border: 1px solid var(--line);
+}
+#app svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+#app nav { display: flex; align-items: center; gap: 18px; height: 44px; padding: 0 14px; background: var(--theme-neutral-2); font-family: var(--font-nav); font-size: 12px; border-bottom: 1px solid var(--popover-border-color); }
+#app nav .brand { font-weight: 700; letter-spacing: .4em; }
+#app nav .entry { color: var(--theme-neutral-3); }
+#app nav .entry b { color: var(--theme-neutral-4); font-weight: 600; }
+#app .search { position: relative; margin-left: 10px; }
+#app #searchForm { display: flex; align-items: center; gap: 6px; width: 17rem; padding: 4px 8px; border-radius: 999px; background: var(--field-background-color); box-shadow: 0 0 0 2px hsl(from var(--theme-accent) h s l / 0.35); }
+#app #searchForm input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: inherit; font: inherit; }
+#app .filter-btn { position: relative; display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 50%; background: hsl(from var(--theme-accent) h s l / 0.2); color: var(--theme-accent); cursor: pointer; font-size: 13px; }
+#app .filter-btn .badge { position: absolute; top: -5px; right: -6px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 999px; background: var(--theme-accent); color: var(--theme-on-accent); font: 700 9px/14px var(--font); text-align: center; }
+
+/* the results behind the panel */
+#app .results { padding: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+#app .results i { display: block; aspect-ratio: 4/3; border-radius: 5px; background: linear-gradient(135deg, hsl(calc(var(--h) * 1deg) 35% 45%), hsl(calc(var(--h) * 1deg + 40deg) 40% 30%)); opacity: .75; }
+
+/* the panel */
+#app .panel {
+  position: absolute; top: calc(100% + var(--p-anchor-gap)); width: var(--p-width); z-index: 5;
+  padding: var(--p-pad); border-radius: var(--p-radius); font-family: var(--font); font-size: var(--p-font);
+  background: hsl(from var(--theme-neutral-2) h s l / var(--p-opacity));
+  backdrop-filter: blur(var(--p-blur)) saturate(200%);
+}
+#app .panel[data-surface=solid] { background: var(--theme-neutral-2); backdrop-filter: none; }
+#app .panel[data-border=true] { border: 1px solid var(--popover-border-color); }
+#app .panel[data-shadow=soft] { box-shadow: var(--soft-shadow); }
+#app .panel[data-shadow=lift] { box-shadow: var(--lift-shadow); }
+#app .panel[data-shadow=float] { box-shadow: var(--float-shadow); }
+#app .panel[data-align=start] { left: 0; }
+#app .panel[data-align=center] { left: 50%; translate: -50% 0; }
+#app .panel[data-align=end] { right: 0; }
+
+#app .fields { display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); gap: var(--p-gap); }
+#app .field { position: relative; display: grid; gap: 4px; min-width: 0; align-content: start; }
+#app .field.wide, #app .dates { grid-column: 1 / -1; }
+#app .dates { display: grid; gap: var(--p-gap); grid-template-columns: minmax(0, 1fr); }
+#app .dates[data-row=side] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#app .panel[data-labels=side] .field { grid-template-columns: 5.5em minmax(0, 1fr); align-items: center; column-gap: 8px; }
+#app .panel[data-labels=side] .field > .below, #app .panel[data-labels=side] .field > .pop { grid-column: 2; }
+#app .panel[data-labels=none] .lbl { display: none; }
+#app .lbl { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .85em; color: var(--theme-neutral-3); font-weight: 500; min-height: 1.3em; }
+#app .panel[data-case=upper] .lbl > span:first-child { text-transform: uppercase; letter-spacing: .08em; font-size: .85em; }
+#app .box { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 2.2em; padding: 3px 8px; border-radius: 5px; background: var(--field-background-color); border: 1px solid transparent; color: var(--theme-neutral-4); }
+#app .box.focus { border-color: var(--theme-accent); box-shadow: 0 0 0 2px hsl(from var(--theme-accent) h s l / 0.15); }
+#app .box > svg { color: var(--theme-neutral-3); }
+#app .box .typed { flex: 1 1 4em; min-width: 3em; color: var(--theme-neutral-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#app .box .typed.has { color: var(--theme-neutral-4); }
+#app .box .typed.has::after { content: ""; display: inline-block; width: 1px; height: 1em; margin-left: 1px; vertical-align: -2px; background: var(--theme-accent); }
+#app .below { display: flex; flex-wrap: wrap; gap: 4px; }
+#app .below:empty { display: none; }
+
+/* chips */
+#app .chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 4px 2px 8px; font-size: .9em; white-space: nowrap; border: 1px solid transparent; }
+#app .chip.person { padding-left: 2px; }
+#app .chip span { overflow: hidden; text-overflow: ellipsis; }
+#app .panel[data-chip-shape=pill] .chip { border-radius: 999px; }
+#app .panel[data-chip-shape=rounded] .chip { border-radius: 4px; }
+#app .panel[data-chip-fill=gradient] .chip { background: linear-gradient(in oklch 180deg, hsl(from var(--theme-primary) h s l / 0.28), var(--theme-neutral-2)); }
+#app .panel[data-chip-fill=tint] .chip { background: hsl(from var(--theme-accent) h s l / 0.18); }
+#app .panel[data-chip-fill=outline] .chip { border-color: var(--popover-border-color); }
+#app .chip .x { display: grid; place-items: center; width: 1.3em; height: 1.3em; border-radius: 50%; color: var(--theme-neutral-3); font-size: .8em; cursor: pointer; }
+#app .chip .x:hover { background: hsl(from var(--theme-neutral-3) h s l / 0.25); color: var(--theme-neutral-4); }
+#app .cover { flex: none; display: grid; place-items: center; width: var(--p-cover); height: var(--p-cover); color: #fff; font-weight: 700; font-size: calc(var(--p-cover) * .42); background: linear-gradient(135deg, hsl(calc(var(--h) * 1deg) 55% 55%), hsl(calc(var(--h) * 1deg + 50deg) 55% 35%)); }
+#app .panel[data-cover-shape=circle] .cover { border-radius: 50%; }
+#app .panel[data-cover-shape=rounded] .cover { border-radius: 22%; }
+
+/* Any/All */
+#app .match { display: inline-flex; align-items: center; gap: 5px; font-size: .95em; color: var(--theme-neutral-3); cursor: pointer; }
+#app .match .track { position: relative; width: 28px; height: 16px; border-radius: 999px; background: var(--theme-accent); }
+#app .match .track::after { content: ""; position: absolute; top: 2px; left: 14px; width: 12px; height: 12px; border-radius: 50%; background: var(--theme-on-accent); }
+#app .match b { color: var(--theme-neutral-4); font-weight: 600; }
+#app .match.segm { gap: 0; padding: 1px; border-radius: 6px; background: var(--field-background-color); }
+#app .match.segm span { padding: 0 7px; border-radius: 5px; }
+#app .match.segm span.on { background: var(--theme-accent); color: var(--theme-on-accent); font-weight: 600; }
+
+/* listbox and calendar */
+#app .pop { position: absolute; top: calc(100% + 3px); left: 0; z-index: 6; border-radius: 6px; background: var(--theme-neutral-2); border: 1px solid var(--popover-border-color); box-shadow: var(--lift-shadow); }
+#app .listbox { right: 0; padding: 4px; max-height: 16rem; overflow: auto; }
+#app .panel[data-labels=side] .listbox { left: calc(5.5em + 8px); }
+#app .opt { display: flex; align-items: center; gap: 8px; padding: var(--p-opt-pad) 6px; border-radius: 4px; }
+#app .opt.active { background: hsl(from var(--theme-accent) h s l / 0.2); }
+#app .opt .cover { width: var(--p-opt-cover); height: var(--p-opt-cover); font-size: calc(var(--p-opt-cover) * .42); }
+#app .opt .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#app .opt mark { background: none; color: var(--theme-accent); font-weight: 700; }
+#app .opt .count { color: var(--theme-neutral-3); font-size: .85em; font-variant-numeric: tabular-nums; }
+#app .cal { display: flex; gap: 14px; padding: 10px; }
+#app .cal .month { width: 15.5em; }
+#app .cal .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-weight: 600; }
+#app .cal .head span { color: var(--theme-neutral-3); }
+#app .cal .grid { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: .9em; row-gap: 2px; }
+#app .cal .dow { color: var(--theme-neutral-3); font-size: .8em; padding-bottom: 3px; }
+#app .cal .d { padding: 4px 0; }
+#app .cal .d.in { background: hsl(from var(--theme-accent) h s l / 0.2); }
+#app .cal .d.end { background: var(--theme-accent); color: var(--theme-on-accent); font-weight: 700; }
+#app .cal .d.first { border-radius: 999px 0 0 999px; }
+#app .cal .d.last { border-radius: 0 999px 999px 0; }
+
+/* actions */
+#app .actions { display: flex; gap: 8px; margin-top: calc(var(--p-gap) + 4px); align-items: center; }
+#app .actions[data-layout=end] { justify-content: flex-end; }
+#app .actions[data-layout=split] { justify-content: space-between; flex-direction: row-reverse; }
+#app .actions[data-layout=full] .go { flex: 1; }
+#app .btn { padding: 5px 14px; border-radius: 8px; border: 0; font: inherit; font-weight: 600; cursor: pointer; background: var(--theme-secondary); color: var(--theme-neutral-4); }
+#app .btn.go[data-style=accent] { background: var(--theme-accent); color: var(--theme-on-accent); }
+#app .btn.go[data-style=primary] { background: var(--theme-primary); color: var(--theme-on-primary); }
+#app .btn.link { background: none; padding: 5px 4px; color: var(--theme-neutral-3); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Advanced search panel</h1>
+  <div class="presets" id="presets"><span>Presets</span></div>
+</header>
+<div class="shell">
+  <aside class="controls" id="controls"></aside>
+  <div class="right">
+    <div class="stage">
+      <div id="app">
+        <nav>
+          <span class="brand">ALTITUDE</span>
+          <span class="entry"><b>Family</b> ▾</span>
+          <div class="search">
+            <form id="searchForm" onsubmit="return false">
+              <span id="navSearchIcon"></span>
+              <input type="search" value="beach" aria-label="Quick search" readonly>
+              <button type="button" class="filter-btn" id="filterBtn" aria-label="Advanced search"></button>
+            </form>
+            <div class="panel" id="panel"></div>
+          </div>
+          <span class="entry">Triage <b>214</b></span>
+          <span class="entry">Import</span>
+        </nav>
+        <div class="results" id="results"></div>
+      </div>
+    </div>
+    <div class="promptbox">
+      <pre id="prompt"></pre>
+      <button class="pbtn" id="copy">Copy prompt</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEFAULTS = {
+  theme: "dark", scene: "filled",
+  width: 26, align: "start", anchorGap: 6, padding: 16, fieldGap: 12, columns: 1, labels: "above", labelCase: "normal", datesRow: "side", fontSize: 14,
+  surface: "frosted", opacity: 84, blur: 10, radius: 8, shadow: "float", border: true,
+  chipShape: "pill", chipFill: "gradient", chipPlace: "inside", coverSize: 20, coverShape: "circle",
+  optCover: 28, optDensity: "regular", optCounts: true, highlight: true,
+  switchStyle: "switch", months: 2, dateFormat: "friendly", dateIcon: true,
+  actions: "end", searchStyle: "accent", clearStyle: "button", badge: true, filterIcon: "sliders",
+}
+const state = { ...DEFAULTS }
+
+const PRESETS = {
+  "App default": {},
+  "Compact": { width: 21, padding: 10, fieldGap: 7, fontSize: 13, coverSize: 16, labels: "none", datesRow: "stacked", months: 1, optDensity: "compact", optCover: 22, actions: "full", radius: 6 },
+  "Two-column": { width: 36, columns: 2, padding: 20, fieldGap: 14, align: "start", labelCase: "upper", coverSize: 24, chipPlace: "below" },
+  "Solid card": { surface: "solid", shadow: "lift", radius: 12, chipFill: "tint", chipShape: "rounded", coverShape: "rounded", searchStyle: "primary", switchStyle: "segmented" },
+  "Side labels": { width: 30, labels: "side", datesRow: "stacked", chipFill: "outline", actions: "split", clearStyle: "link", months: 1 },
+}
+
+// group, key, label, type, options | [min, max, unit]
+const CONTROLS = [
+  ["Preview", "theme", "Theme", "seg", ["dark", "light"]],
+  ["Preview", "scene", "State shown", "seg", ["filled", "empty", "people list", "calendar"]],
+  ["Layout", "width", "Panel width", "range", [18, 42, "rem"]],
+  ["Layout", "align", "Anchored to the search field's", "seg", ["start", "center", "end"]],
+  ["Layout", "anchorGap", "Gap under the search field", "range", [0, 16, "px"]],
+  ["Layout", "padding", "Panel padding", "range", [8, 28, "px"]],
+  ["Layout", "fieldGap", "Gap between fields", "range", [4, 24, "px"]],
+  ["Layout", "columns", "Columns", "seg", [1, 2]],
+  ["Layout", "datesRow", "Date ranges", "seg", ["side", "stacked"]],
+  ["Layout", "labels", "Labels", "seg", ["above", "side", "none"]],
+  ["Layout", "labelCase", "Label case", "seg", ["normal", "upper"]],
+  ["Layout", "fontSize", "Font size", "range", [12, 16, "px"]],
+  ["Surface", "surface", "Surface", "seg", ["frosted", "solid"]],
+  ["Surface", "opacity", "Frost opacity", "range", [40, 100, "%"]],
+  ["Surface", "blur", "Frost blur", "range", [0, 30, "px"]],
+  ["Surface", "radius", "Corner radius", "range", [0, 20, "px"]],
+  ["Surface", "shadow", "Shadow", "seg", ["none", "soft", "lift", "float"]],
+  ["Surface", "border", "Border", "seg", [true, false]],
+  ["Chips", "chipPlace", "Chips sit", "seg", ["inside", "below"]],
+  ["Chips", "chipShape", "Shape", "seg", ["pill", "rounded"]],
+  ["Chips", "chipFill", "Fill", "seg", ["gradient", "tint", "outline"]],
+  ["Chips", "coverSize", "Cover Face size", "range", [14, 36, "px"]],
+  ["Chips", "coverShape", "Cover Face shape", "seg", ["circle", "rounded"]],
+  ["Chips", "switchStyle", "All / Any control", "seg", ["switch", "segmented"]],
+  ["Options list", "optDensity", "Density", "seg", ["compact", "regular", "roomy"]],
+  ["Options list", "optCover", "Cover Face size", "range", [20, 44, "px"]],
+  ["Options list", "optCounts", "Asset counts", "seg", [true, false]],
+  ["Options list", "highlight", "Highlight the match", "seg", [true, false]],
+  ["Dates", "months", "Calendar months", "seg", [1, 2]],
+  ["Dates", "dateFormat", "Shown as", "seg", ["friendly", "iso"]],
+  ["Dates", "dateIcon", "Calendar icon", "seg", [true, false]],
+  ["Actions", "actions", "Buttons", "seg", ["end", "split", "full"]],
+  ["Actions", "searchStyle", "Search button", "seg", ["accent", "primary"]],
+  ["Actions", "clearStyle", "Clear", "seg", ["button", "link"]],
+  ["Actions", "filterIcon", "Nav filter icon", "seg", ["sliders", "funnel", "chevron"]],
+  ["Actions", "badge", "Active filter count", "seg", [true, false]],
+]
+
+const ICON = {
+  search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
+  sliders: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>',
+  funnel: '<svg viewBox="0 0 24 24"><path d="M4 5h16l-6 8v6l-4-2v-4z"/></svg>',
+  chevron: '<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>',
+  folder: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  pin: '<svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.800 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+  cal: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+}
+const PEOPLE = [["Anna Lindqvist", 12, 1840], ["Daniel Okafor", 205, 912], ["Hannah Weiss", 300, 655], ["Joanna Park", 48, 431], ["Stan", 150, 77]]
+
+// ---------- controls ----------
+const controlsEl = document.getElementById("controls")
+function buildControls() {
+  const groups = {}
+  CONTROLS.forEach(([group, key, label, type, opts]) => {
+    if (!groups[group]) {
+      const d = document.createElement("details"); d.open = true
+      d.innerHTML = `<summary>${group}</summary>`
+      controlsEl.append(d); groups[group] = d
+    }
+    const ctl = document.createElement("div"); ctl.className = "ctl"; ctl.dataset.key = key
+    if (type === "range") {
+      ctl.innerHTML = `<label><span>${label}</span><output></output></label><input type="range" min="${opts[0]}" max="${opts[1]}" step="1">`
+      ctl.querySelector("input").addEventListener("input", (e) => { state[key] = Number(e.target.value); updateAll() })
+    } else {
+      ctl.innerHTML = `<label><span>${label}</span></label><div class="seg"></div>`
+      opts.forEach((o) => {
+        const b = document.createElement("button"); b.type = "button"
+        b.textContent = o === true ? "on" : o === false ? "off" : o
+        b.addEventListener("click", () => { state[key] = o; updateAll() })
+        b._value = o; ctl.querySelector(".seg").append(b)
+      })
+    }
+    groups[group].append(ctl)
+  })
+}
+function syncControls() {
+  CONTROLS.forEach(([, key, , type, opts]) => {
+    const ctl = controlsEl.querySelector(`[data-key=${key}]`)
+    if (type === "range") {
+      ctl.querySelector("input").value = state[key]
+      ctl.querySelector("output").textContent = state[key] + opts[2]
+    } else ctl.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b._value === state[key]))
+  })
+}
+const presetsEl = document.getElementById("presets")
+Object.entries(PRESETS).forEach(([name, values]) => {
+  const b = document.createElement("button"); b.className = "pbtn"; b.textContent = name
+  b.addEventListener("click", () => { Object.assign(state, DEFAULTS, values, { theme: state.theme, scene: state.scene }); updateAll() })
+  presetsEl.append(b)
+})
+
+// ---------- preview ----------
+const app = document.getElementById("app"), panel = document.getElementById("panel")
+const initials = (name) => name.split(" ").map((w) => w[0]).join("").slice(0, 2)
+const cover = ([name, hue]) => `<span class="cover" style="--h:${hue}">${initials(name)}</span>`
+const chip = (label, lead = "", cls = "") => `<span class="chip ${cls}">${lead}<span>${label}</span><i class="x">${ICON.x}</i></span>`
+
+function field(label, { icon = "", chips = [], typed = "", placeholder = "", extra = "", pop = "", wide = false, focus = false }) {
+  const inside = state.chipPlace === "inside"
+  return `<div class="field${wide ? " wide" : ""}">
+    <div class="lbl"><span>${label}</span>${extra}</div>
+    <div class="box${focus ? " focus" : ""}">${icon}${inside ? chips.join("") : ""}<span class="typed${typed ? " has" : ""}">${typed || placeholder}</span></div>
+    ${inside ? "" : `<div class="below">${chips.join("")}</div>`}${pop}
+  </div>`
+}
+
+function dateText(from, to) {
+  if (state.dateFormat === "iso") return `${from} to ${to}`
+  const f = (iso) => new Date(iso + "T00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+  return `${f(from)} – ${f(to)} ${to.slice(0, 4)}`
+}
+
+function month(year, m, from, to) {
+  const first = new Date(year, m, 1), days = new Date(year, m + 1, 0).getDate()
+  const lead = (first.getDay() + 6) % 7
+  let cells = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => `<span class="dow">${d}</span>`).join("") + "<span></span>".repeat(lead)
+  for (let d = 1; d <= days; d++) {
+    const iso = `${year}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`
+    const cls = iso === from ? "d end first" : iso === to ? "d end last" : iso > from && iso < to ? "d in" : "d"
+    cells += `<span class="${cls}">${d}</span>`
+  }
+  return `<div class="month"><div class="head"><span>‹</span>${first.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}<span>›</span></div><div class="grid">${cells}</div></div>`
+}
+
+function listbox() {
+  const typed = "an"
+  const rows = PEOPLE.filter(([n]) => n.toLowerCase().split(" ").some((w) => w.startsWith(typed)) || n === "Stan").slice(0, 4).concat([["Andrew Molnar", 90, 58], ["Angela Ruiz", 265, 23]])
+  return `<div class="pop listbox" role="listbox">${rows.map(([name, hue, count], i) => {
+    const shown = state.highlight ? name.replace(/\b(an)/i, "<mark>$1</mark>") : name
+    return `<div class="opt${i === 1 ? " active" : ""}" role="option">${cover([name, hue])}<span class="name">${shown}</span>${state.optCounts ? `<span class="count">${count.toLocaleString("en")}</span>` : ""}</div>`
+  }).join("")}</div>`
+}
+
+function renderPreview() {
+  const s = state, filled = s.scene !== "empty"
+  app.style.colorScheme = s.theme
+  const set = (name, value) => app.style.setProperty(name, value)
+  set("--p-width", s.width + "rem"); set("--p-pad", s.padding + "px"); set("--p-gap", s.fieldGap + "px")
+  set("--p-anchor-gap", s.anchorGap + "px"); set("--p-radius", s.radius + "px"); set("--p-opacity", s.opacity / 100)
+  set("--p-blur", s.blur + "px"); set("--p-font", s.fontSize + "px"); set("--p-cover", s.coverSize + "px")
+  set("--p-opt-cover", s.optCover + "px"); set("--p-opt-pad", { compact: 2, regular: 5, roomy: 9 }[s.optDensity] + "px")
+  set("--cols", s.columns)
+  Object.assign(panel.dataset, { surface: s.surface, border: s.border, shadow: s.shadow, align: s.align, labels: s.labels, case: s.labelCase, chipShape: s.chipShape, chipFill: s.chipFill, coverShape: s.coverShape })
+
+  document.getElementById("navSearchIcon").innerHTML = ICON.search
+  document.querySelector("#searchForm input").value = filled ? "beach" : ""
+  document.getElementById("filterBtn").innerHTML = ICON[s.filterIcon] + (s.badge && filled ? '<span class="badge">5</span>' : "")
+
+  const match = s.switchStyle === "switch"
+    ? '<span class="match">Any<span class="track"></span><b>All</b></span>'
+    : '<span class="match segm"><span>Any</span><span class="on">All</span></span>'
+  const people = filled ? PEOPLE.slice(0, 2).map((p) => chip(p[0], cover(p), "person")) : []
+  const cal = s.dateIcon ? ICON.cal : ""
+  const calendar = `<div class="pop cal">${month(2024, 5, "2024-06-08", "2024-06-21")}${s.months === 2 ? month(2024, 6, "2024-06-08", "2024-06-21") : ""}</div>`
+
+  panel.innerHTML = `<div class="fields">
+    ${field("Search text", { icon: ICON.search, typed: filled && s.scene === "filled" ? "beach" : "", placeholder: filled ? "beach" : "words, names, \"a phrase\", -exclude", wide: true, focus: s.scene === "filled" || s.scene === "empty" })}
+    ${field("Folder", { icon: ICON.folder, chips: filled ? [chip("Trips › 2024 › Lisbon")] : [], placeholder: filled ? "" : "any folder", wide: true })}
+    ${field("People", { chips: people, typed: s.scene === "people list" ? "an" : "", placeholder: filled ? "add…" : "anyone", extra: filled ? match : "", pop: s.scene === "people list" ? listbox() : "", focus: s.scene === "people list" })}
+    ${field("Locations", { icon: ICON.pin, chips: filled ? [chip("Portugal › Lisbon"), chip("Sintra")] : [], placeholder: filled ? "add…" : "anywhere" })}
+    <div class="dates" data-row="${s.datesRow}">
+      ${field("Date taken", { icon: cal, chips: filled ? [chip(dateText("2024-06-08", "2024-06-21"))] : [], placeholder: filled ? "" : "any time", pop: s.scene === "calendar" ? calendar : "", focus: s.scene === "calendar" })}
+      ${field("Date imported", { icon: cal, placeholder: "any time" })}
+    </div>
+  </div>
+  <div class="actions" data-layout="${s.actions}">
+    <button class="btn ${s.clearStyle === "link" ? "link" : ""}">Clear</button>
+    <button class="btn go" data-style="${s.searchStyle}">Search</button>
+  </div>`
+}
+
+// ---------- prompt ----------
+function updatePrompt() {
+  const s = state, d = DEFAULTS, parts = []
+  const changed = (key) => s[key] !== d[key]
+  const say = (keys, text) => { if ([].concat(keys).some(changed)) parts.push(text) }
+
+  say("width", `Make the panel ${s.width}rem wide (${s.width > d.width ? "wider" : "narrower"} than the ${d.width}rem default).`)
+  say("align", `Anchor it to the ${s.align} of the quick search field${s.align === "center" ? ", centered under it" : ""}.`)
+  say("anchorGap", `Leave a ${s.anchorGap}px gap between the search field and the panel.`)
+  say(["padding", "fieldGap"], `Use ${s.padding}px of padding and ${s.fieldGap}px between fields, for a ${s.padding + s.fieldGap < 22 ? "dense" : s.padding + s.fieldGap > 34 ? "roomy" : "balanced"} form.`)
+  say("columns", s.columns === 2 ? "Lay the fields out in two columns: the Search text and the folder across both, People beside Locations." : "Stack the fields in one column.")
+  say("datesRow", s.datesRow === "stacked" ? "Stack the two date ranges, one per row." : "Put the two date ranges side by side.")
+  say("labels", { above: "Put each label above its field.", side: "Put each label to the left of its field, in a fixed label column.", none: "Drop the visible labels and rely on placeholders and icons (keep the labels for screen readers)." }[s.labels])
+  say("labelCase", s.labelCase === "upper" ? "Set the labels in small, letter-spaced upper case." : "Set the labels in sentence case.")
+  say("fontSize", `Use a ${s.fontSize}px base font size in the panel.`)
+  say("surface", s.surface === "solid" ? "Give the panel a solid surface instead of the popover dialog's frosted glass." : "Keep the frosted glass surface.")
+  if (s.surface === "frosted") say(["opacity", "blur"], `Tune the frost to ${s.opacity}% opacity with a ${s.blur}px blur.`)
+  say("radius", `Round the panel's corners by ${s.radius}px${s.radius === 0 ? " (square)" : ""}.`)
+  say("shadow", s.shadow === "none" ? "Give it no shadow." : `Use the ${s.shadow} shadow token (--${s.shadow}-shadow).`)
+  say("border", s.border ? "Keep the hairline border." : "Drop the panel's border.")
+  say("chipPlace", s.chipPlace === "below" ? "Show the chosen items as chips in a row below the input, not inside it." : "Show the chosen items as chips inside the input.")
+  say(["chipShape", "chipFill"], `Chips are ${s.chipShape === "pill" ? "pills" : "rounded rectangles"} with ${{ gradient: "the app's chip gradient", tint: "a flat accent tint", outline: "a hairline outline and no fill" }[s.chipFill]}.`)
+  say(["coverSize", "coverShape"], `A person's chip shows the cover Face at ${s.coverSize}px, ${s.coverShape === "circle" ? "as a circle" : "with rounded corners"}.`)
+  say("switchStyle", s.switchStyle === "segmented" ? "Make All / Any a two-segment toggle instead of a switch." : "Make All / Any a switch.")
+  say(["optDensity", "optCover"], `In the options list use ${s.optDensity} rows with ${s.optCover}px cover Faces.`)
+  say("optCounts", s.optCounts ? "Show each person's number of assets in the options." : "Leave the asset counts out of the options.")
+  say("highlight", s.highlight ? "Highlight the matched start of a word in each option." : "Do not highlight the match in the options.")
+  say("months", `Show ${s.months === 1 ? "one month" : "two months"} in the Flatpickr calendar (showMonths: ${s.months}).`)
+  say("dateFormat", s.dateFormat === "iso" ? "Show a chosen range as ISO dates (2024-06-08 to 2024-06-21)." : "Show a chosen range in a friendly form (8 Jun – 21 Jun 2024).")
+  say("dateIcon", s.dateIcon ? "Lead each date field with a calendar icon." : "No calendar icon in the date fields.")
+  say("actions", { end: "Right-align Clear and Search.", split: "Put Clear at the left and Search at the right.", full: "Stretch Search to fill the row beside Clear." }[s.actions])
+  say("searchStyle", `Search is the ${s.searchStyle} button.`)
+  say("clearStyle", s.clearStyle === "link" ? "Clear is a quiet text link, not a button." : "Clear is a secondary button.")
+  say("filterIcon", `The nav's filter button uses a ${s.filterIcon} icon.`)
+  say("badge", s.badge ? "Show the number of active filters as a badge on the nav's filter button." : "No active-filter badge on the nav's filter button.")
+
+  document.getElementById("prompt").textContent = parts.length
+    ? "Update the look of the advanced search panel in plans/todo/advanced-search.md (the popover under the nav's quick search; styles go in static/css/htmx/search_panel.css, using the core.css tokens where one fits):\n\n- " + parts.join("\n- ")
+    : "The advanced search panel keeps the app's defaults: a 26rem frosted popover anchored under the quick search, one column, labels above, pill chips with 20px cover Faces inside the inputs, a two-month calendar, Clear and Search right-aligned. Adjust a control to describe a change."
+}
+
+function updateAll() { syncControls(); renderPreview(); updatePrompt() }
+
+document.getElementById("copy").addEventListener("click", (e) => {
+  navigator.clipboard.writeText(document.getElementById("prompt").textContent).then(() => {
+    e.target.textContent = "Copied!"; setTimeout(() => (e.target.textContent = "Copy prompt"), 1200)
+  })
+})
+
+document.getElementById("results").innerHTML = Array.from({ length: 28 }, (_, i) => `<i style="--h:${(i * 47) % 360}"></i>`).join("")
+buildControls()
+updateAll()
+</script>
+</body>
+</html>

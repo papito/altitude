@@ -27,6 +27,7 @@ import altitude.core.dao.sql.tables.PersonRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.models.LocationKind
 import altitude.core.util.BoundingBox
+import altitude.core.util.NameKey
 import altitude.core.util.Query
 import altitude.core.util.Query.QueryParam
 import altitude.core.util.ResolvedSearchGroup
@@ -93,9 +94,12 @@ object SearchQueries:
 
   /**
    * How many assets each folder of the repository holds itself, as (folder ID, count): the default view's matches grouped by
-   * folder, so a folder's count is what clicking it shows. It reads the capture-day index alone, which carries the folder.
+   * folder, so a folder's count is what clicking it shows; an asset in no folder (a triaged one) counts under none. It reads the
+   * capture-day index alone, which carries the folder.
    */
-  def folderCounts(engine: SearchDialect, repositoryId: String): Select[(Expr[String], Expr[Int]), (String, Int)] =
+  def folderCounts(
+      engine: SearchDialect,
+      repositoryId: String): Select[(Expr[Option[String]], Expr[Int]), (Option[String], Int)] =
     import engine.dialect.*
 
     val defaultView = new SearchQuery(params = Map(FieldConst.Asset.IS_RECYCLED -> false))
@@ -369,13 +373,13 @@ object SearchQueries:
    * and `unlocated` is the matches in no Location, which always come last as the "No location" group. Under the Relevance sort
    * both read `scored`, the matches with their Relevance computed once, as the day statement does.
    *
-   * Locations are in path order: the key is the category's lower-cased name and the Location's own joined by [[PATH_SEPARATOR]],
-   * or the Location's name alone at the top level - the order the sidebar lists them in - then the Location's ID as a
-   * deterministic tiebreaker, then the sort within the group, then the asset ID. A cursor whose anchor was in a Location slices
-   * `located` after it and lets `unlocated` fill the page only once `located` has run out, through the same guarded `LIMIT CASE`
-   * as the day statement's null slice; a cursor without a group key is already in the trailing group and slices `unlocated`
-   * alone. A group's count is the matching assets in that Location (or in none); the overall total on a first page is the number
-   * of matching assets, so the group counts may sum to more than it.
+   * Locations are in path order: the key is the category's name key and the Location's own joined by [[PATH_SEPARATOR]], or the
+   * Location's name alone at the top level - the order the sidebar lists them in - then the Location's ID as a deterministic
+   * tiebreaker, then the sort within the group, then the asset ID. A cursor whose anchor was in a Location slices `located` after
+   * it and lets `unlocated` fill the page only once `located` has run out, through the same guarded `LIMIT CASE` as the day
+   * statement's null slice; a cursor without a group key is already in the trailing group and slices `unlocated` alone. A group's
+   * count is the matching assets in that Location (or in none); the overall total on a first page is the number of matching
+   * assets, so the group counts may sum to more than it.
    */
   def groupedByLocation(engine: SearchDialect, query: SearchQuery, repositoryId: String): SqlStr =
     import engine.dialect.*
@@ -398,7 +402,7 @@ object SearchQueries:
         category: JoinNullable[LocationRow[Expr]]): SqlStr =
       val categoryName: Expr[Option[String]] = category.map(_.name)
       val pathKey =
-        Expr[String](implicit ctx => sql"COALESCE(${category.get.nameLc} || $PATH_SEPARATOR, '') || ${location.nameLc}")
+        Expr[String](implicit ctx => sql"COALESCE(${category.get.nameKey} || $PATH_SEPARATOR, '') || ${location.nameKey}")
 
       /** Rows strictly after the anchor: a later path key, or the anchor's own Location's rows after it by sort */
       def afterLocation(cursor: SearchCursor): Expr[Boolean] =
@@ -1088,7 +1092,8 @@ object SearchQueries:
       case SearchSource.Person => FaceRow.select.filter(face => inSet(face.personId)).map(_.assetId)
       case SearchSource.Location | SearchSource.Category =>
         LocationAssetRow.select.filter(link => inSet(link.locationId)).map(_.assetId)
-      case SearchSource.Folder => AssetRow.select.filter(asset => inSet(asset.folderId)).map(_.id)
+      case SearchSource.Folder =>
+        AssetRow.select.filter(asset => Columns.isInSet(asset.folderId, source.ids, engine.dialect)).map(_.id)
       case SearchSource.Album => AlbumAssetRow.select.filter(link => inSet(link.albumId)).map(_.assetId)
       case SearchSource.Document =>
         SearchDocumentRow.select
@@ -1219,7 +1224,10 @@ object SearchQueries:
       .map(_._1)
       .contains(asset.id)
 
-  /** One metadata filter: the value goes into the column of its type, so searching a keyword field by number matches nothing */
+  /**
+   * One metadata filter: the value goes into the column of its type, so searching a keyword field by number matches nothing. A
+   * keyword is compared under its name key, as `field_value_kw` holds it, so it matches in any case or Unicode form.
+   */
   private def valueMatch(
       engine: SearchDialect,
       parameter: MetadataParameterRow[Expr],
@@ -1232,13 +1240,13 @@ object SearchQueries:
       case param: QueryParam => throw IllegalArgumentException(s"This type of parameter is not supported: ${param.paramType}")
       case other => other
 
-    val column = plain match
-      case _: String => parameter.fieldValueKw
-      case _: Boolean => parameter.fieldValueBool
-      case _: Number => parameter.fieldValueNum
+    val (column, compared) = plain match
+      case keyword: String => (parameter.fieldValueKw, NameKey.of(keyword))
+      case _: Boolean => (parameter.fieldValueBool, plain)
+      case _: Number => (parameter.fieldValueNum, plain)
       case other => throw IllegalArgumentException(s"This type of parameter is not supported: $other")
 
-    (parameter.fieldId `=` fieldId) && Columns.equalTo(column, plain, engine.dialect)
+    (parameter.fieldId `=` fieldId) && Columns.equalTo(column, compared, engine.dialect)
 
   /** Assets in any of the given folders themselves; a subtree is the caller's to expand */
   private def folderFilter(engine: SearchDialect, asset: AssetRow[Expr], folderIds: Set[String]): Expr[Boolean] =

@@ -20,7 +20,7 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * The common setup's repository and its owner, with the request context cleared, then a system initialization with a new
+     * The common setup's repository and its account, with the request context cleared, then a system initialization with a new
      * admin, a repository named "My Repository" and a password.
      *
      * Assertions:
@@ -44,8 +44,8 @@ import altitude.core.util.Query
     val users = testApp.service.user.query(new Query())
 
     /**
-     * !!!! NOTE that since the common test setup creates a repository and its owner (a regular user), we should have 2 records in
-     * each table - the one we created in the test setup and the one created by the system initialization test.
+     * !!!! NOTE that since the common test setup creates a repository and an account (a regular user), we should have 2 records
+     * in each table - the one we created in the test setup and the one created by the system initialization test.
      */
     repos.records.size shouldBe 2
     users.records.size shouldBe 2

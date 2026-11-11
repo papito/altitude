@@ -1,0 +1,112 @@
+@import altitude.core.Api
+@import altitude.core.RequestContext
+@import altitude.core.models.AccountType
+@import altitude.core.models.User
+@import altitude.core.routes.web.partial.UserActionController.AccountCard
+
+@* The account cards of the Users page (users.scala.html, and GET /htmx/users/r/:repoId/accounts, which reloads them after a
+   change): the toggle group of the three tabs, Admins, Users and Guests, each with its count, then one grid of cards per tab,
+   the tab shown being the page component's (`usersPage`, js/alpine/components/users-page.js), which keeps it through a reload
+   and starts on `startTab` (`UserActionController.startTab`: the first tab holding a card, else Users, or Guests for a creator
+   of Guests alone),
+   as it keeps the filter that hides the cards not matching it. An Admin sees every account, each card with its ⋯ menu (Edit, Set
+   password, Deactivate or Reactivate, Delete; neither of the last two on its own card); anyone else sees the accounts it
+   created, read-only, each listing the Libraries it sees alone. *@
+@(cards: List[AccountCard], viewer: User, startTab: AccountType)
+
+@repoId = @{ RequestContext.getRepository.persistedId }
+@isAdmin = @{ viewer.accountType == AccountType.Admin }
+
+@* The initials of a name: the first character of its first two words, in capitals *@
+@initials(name: String) = @{
+  name.trim.split("\\s+").filter(_.nonEmpty).take(2).map(word => new String(Character.toChars(word.codePointAt(0)))).mkString.toUpperCase(java.util.Locale.ROOT)
+}
+
+@successDetail(message: String) = @{ ujson.write(ujson.Obj("message" -> message)) }
+
+@tabs = @{ List(AccountType.Admin -> "Admins", AccountType.User -> "Users", AccountType.Guest -> "Guests") }
+
+@newLibraries(account: User) = @{
+  account.accountType match {
+    case AccountType.Admin => "All"
+    case _ if !account.grantsNewLibraries => "Off"
+    case AccountType.Guest => "On"
+    case _ => s"On · ${if (account.newLibraryPermissions.isEmpty) "Access only" else account.newLibraryPermissions.toList.map(_.label).mkString(", ")}"
+  }
+}
+
+@menu(account: User) = {
+    @includes.html.menu_ctrl(s"accountMenuBtn-${account.persistedId}", s"accountMenu-${account.persistedId}", s"Actions for ${account.name}") {⋯} {
+        <button type="button"
+                hx-get="/htmx/users/r/@repoId/dialogs/edit"
+                hx-vals='{"@{Api.Field.User.ACCOUNT_ID}": "@account.persistedId"}'
+                hx-target="#modalContent"
+                hx-swap="innerHTML">Edit…</button>
+        <button type="button"
+                hx-get="/htmx/users/r/@repoId/dialogs/set-password"
+                hx-vals='{"@{Api.Field.User.ACCOUNT_ID}": "@account.persistedId"}'
+                hx-target="#popoverContent"
+                hx-swap="innerHTML"
+                data-app-dialog-anchor="accountMenuBtn-@account.persistedId">Set password…</button>
+        @if(account.id != viewer.id) {
+        <button type="button"
+                hx-put="/htmx/users/r/@repoId/@{ if (account.isActive) "deactivate" else "reactivate" }"
+                hx-vals='{"@{Api.Field.User.ACCOUNT_ID}": "@account.persistedId"}'
+                hx-json-enc
+                hx-swap="none"
+                data-app-success-event="ACCOUNTS_CHANGED_EVENT"
+                data-app-success-detail="@successDetail(s"${account.name} ${if (account.isActive) "deactivated" else "reactivated"}")"
+                x-on:click="handleActionClick">@{ if (account.isActive) "Deactivate" else "Reactivate" }</button>
+        <button type="button"
+                hx-get="/htmx/users/r/@repoId/dialogs/delete"
+                hx-vals='{"@{Api.Field.User.ACCOUNT_ID}": "@account.persistedId"}'
+                hx-target="#popoverContent"
+                hx-swap="innerHTML"
+                data-app-dialog-anchor="accountMenuBtn-@account.persistedId">Delete…</button>
+        }
+    }
+}
+
+<div id="accounts" data-app-start-tab="@startTab">
+    <div class="toggle-group" role="group" aria-label="Account types">
+    @for((accountType, title) <- tabs) {
+        <button type="button"
+                x-bind:aria-pressed="isTab('@accountType')"
+                x-on:click="showTab('@accountType')">@title <span class="tab-count">@cards.count(_.account.accountType == accountType)</span></button>
+    }
+    </div>
+
+    @for((accountType, title) <- tabs) {
+    <section class="account-grid" aria-label="@title" x-show="isTab('@accountType')"@if(accountType != startTab){ style="display: none"}>
+        @for(card <- cards if card.account.accountType == accountType) {
+        <article class="account-card@if(!card.account.isActive){ deactivated}"
+                 data-app-filter-text="@card.account.name @card.account.username @card.account.email"
+                 x-show="shows($el)">
+            <header>
+                <span class="avatar" aria-hidden="true">@initials(card.account.name)</span>
+                <div class="who">
+                    <div class="name">@card.account.name</div>
+                    <div class="username">@@@card.account.username</div>
+                </div>
+                @if(isAdmin) { @menu(card.account) }
+            </header>
+            <dl>
+                <dt>Email</dt>
+                <dd>@card.account.email</dd>
+                <dt>Status</dt>
+                <dd>@{ if (card.account.isActive) "Active" else "Deactivated" }</dd>
+                <dt>Libraries</dt>
+                <dd>@includes.html.account_libraries(card.account.accountType, card.libraries)</dd>
+                <dt>New Libraries</dt>
+                <dd>@newLibraries(card.account)</dd>
+                <dt>Created</dt>
+                <dd>@card.account.createdAt.fold("")(_.toLocalDate.toString)</dd>
+            </dl>
+        </article>
+        }
+        @if(!cards.exists(_.account.accountType == accountType)) {
+        <p class="no-accounts">No @title</p>
+        }
+    </section>
+    }
+</div>

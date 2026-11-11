@@ -5,9 +5,15 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Every ID column (id and every *_id, the foreign keys included) is CHAR(36) COLLATE "C": IDs are compared, sorted and grouped
 -- byte-wise, which is about twice as fast as under the database's default collation and orders them the same on both engines.
+--
+-- A row of a repository's table holds its repository (repository_id NOT NULL), and a reference from one such row to another is
+-- a foreign key over (repository_id, <ref>_id), so the database refuses a reference into another repository. Each table such a
+-- key names has UNIQUE (id, repository_id) for it, led by the ID so that it never competes with the indexes that lead with the
+-- repository. A NULL reference is not checked. A person's cover is the one reference that is not such a key: a single column,
+-- at the person table.
 
 CREATE TABLE _core (
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL
 );
 
@@ -62,33 +68,78 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('pipeline.shutdown_timeout', '30', '30'),
   ('import.parallelism', '0', '0');
 
+-- email_key and username_key are the name keys of the email address and the username (User.emailKey and User.usernameKey:
+-- NameKey.of, folded in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
 CREATE TABLE account (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   email TEXT NOT NULL,
+  email_key TEXT NOT NULL,
+  username TEXT NOT NULL,
+  username_key TEXT NOT NULL,
   name TEXT NOT NULL,
   account_type TEXT NOT NULL
     CHECK (account_type IN ('Admin', 'User', 'Guest')),
   password_hash TEXT NOT NULL,
+  -- A deactivated account can do nothing until it is reactivated
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  -- The Create Libraries flag, which only an Admin sets
+  can_create_libraries BOOLEAN NOT NULL DEFAULT FALSE,
+  -- The new-Library grant: with the switch on, every Library created later grants the account these Permissions (a bitmask of
+  -- Permission bits)
+  grants_new_libraries BOOLEAN NOT NULL DEFAULT FALSE,
+  new_library_permissions INT NOT NULL DEFAULT 0 CHECK (new_library_permissions >= 0),
+  -- The account that created this one; NULL for the setup Admin, and once the creator is deleted
+  created_by_account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE SET NULL,
+  last_login_at TIMESTAMP WITH TIME ZONE,
   last_active_repo_id CHAR(36) COLLATE "C"
 ) INHERITS (_core);
 
--- One account per email address, whatever its case, and the login lookup, which compares lower(email) too
-CREATE UNIQUE INDEX account_01 ON account (lower(email));
+-- One account per email address and one per username, whatever the case or Unicode form either is typed in; a login compares
+-- the key column of what it names
+CREATE UNIQUE INDEX account_01 ON account (email_key);
+CREATE UNIQUE INDEX account_02 ON account (username_key);
 
 CREATE TABLE repository (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   name TEXT NOT NULL,
-  name_lc TEXT NOT NULL,
+  name_key TEXT NOT NULL,
   description TEXT,
-  owner_account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE CASCADE,
   root_folder_id CHAR(36) COLLATE "C" NOT NULL,
   file_store_type VARCHAR NOT NULL,
   file_store_config jsonb
 ) INHERITS (_core);
 
--- repository_01: a Library's name is unique instance-wide, across owners, under its name key (Repository.nameLowercase: the
--- normalized name lowercased in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
-CREATE UNIQUE INDEX repository_01 ON repository (name_lc);
+-- repository_01: a Library's name is unique instance-wide under its name key (Repository.nameKey: NameKey.of of the normalized
+-- name, folded in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
+CREATE UNIQUE INDEX repository_01 ON repository (name_key);
+
+-- Who may see a Library, and do what in it: one row per account and Library, its Permissions a bitmask of Permission bits (0
+-- for a Guest, who only looks). An Admin reaches every Library with no row. A row goes with its Library or its account.
+CREATE TABLE repository_grant (
+  account_id CHAR(36) COLLATE "C" NOT NULL REFERENCES account (id) ON DELETE CASCADE,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  permissions INT NOT NULL DEFAULT 0 CHECK (permissions >= 0),
+  -- An account's grants, the lookup of a login and of the gate, and one row per pair
+  PRIMARY KEY (account_id, repository_id)
+);
+
+-- A Library's grants, and the cascade from a deleted Library
+CREATE INDEX repository_grant_01 ON repository_grant (repository_id);
+
+-- An append-only record of account events (AuditEventType), written from the service layer. The actor and the target are
+-- snapshots of the accounts as they were (id, name, username, email), since accounts are deleted; the actor is NULL for a failed
+-- login, which names no account.
+CREATE TABLE audit_event (
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  event TEXT NOT NULL,
+  actor jsonb,
+  target jsonb,
+  detail jsonb,
+  client_ip TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+CREATE INDEX audit_event_01 ON audit_event (created_at);
 
 CREATE TABLE stats (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
@@ -98,12 +149,36 @@ CREATE TABLE stats (
 
 CREATE UNIQUE INDEX stats_01 ON stats (repository_id, dimension);
 
+CREATE TABLE folder (
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL,
+  name_key TEXT NOT NULL,
+  -- The root folder is its own parent, which its insert satisfies: the key is checked once the row is in. No delete action, as
+  -- no folder is ever deleted on its own (a deleted folder is recycled).
+  parent_id CHAR(36) COLLATE "C" NOT NULL,
+  is_recycled BOOLEAN NOT NULL DEFAULT FALSE,
+  UNIQUE (id, repository_id),
+  FOREIGN KEY (repository_id, parent_id) REFERENCES folder (repository_id, id)
+) INHERITS (_core);
+
+-- A folder's name is unique among its siblings; it also lists a repository's folders
+CREATE UNIQUE INDEX folder_02 ON folder (repository_id, parent_id, name_key);
+-- A folder's children, live or recycled
+CREATE INDEX folder_03 ON folder (parent_id, is_recycled);
+
 -- toast_tuple_target: the jsonb metadata columns are moved out of line once a row passes 128 bytes, so the heap row a search
 -- reads stays narrow
 CREATE TABLE asset (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
-  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
-  user_id CHAR(36) COLLATE "C",
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  -- The account that owns the asset: its importer, until the importer is deleted and the asset moves to the deleting Admin. No
+  -- delete action, so an account with assets cannot be deleted without that move.
+  owner_user_id CHAR(36) COLLATE "C" NOT NULL REFERENCES account (id),
+  -- The importer record (AccountSnapshot): id, name, username and email of the account that imported the asset, written at
+  -- import, which outlives the account. Every general read selects it, so it is kept in the heap row (STORAGE MAIN) rather
+  -- than moved out of line with the metadata (toast_tuple_target, below), which would cost each row read a TOAST lookup.
+  original_owner jsonb STORAGE MAIN NOT NULL,
   -- SHA-256 of the file, 64 lowercase hex characters (Sha256.hex), compared byte-wise as the IDs are
   checksum CHAR(64) COLLATE "C" NOT NULL,
   media_type VARCHAR(64) NOT NULL,
@@ -116,6 +191,7 @@ CREATE TABLE asset (
   user_metadata jsonb,
   public_metadata jsonb,
   extracted_metadata jsonb,
+  -- NULL for an asset in no folder: a triaged one
   folder_id CHAR(36) COLLATE "C",
   filename TEXT NOT NULL,
   size_bytes BIGINT NOT NULL,
@@ -153,7 +229,10 @@ CREATE TABLE asset (
   clip_embedding vector(512),
   -- The Sequence the image is in while in triage: the id its members share. A Sequence has no table; it exists while some
   -- asset carries its id. NULL for a sorted asset, a Video or an animated image.
-  sequence_id CHAR(36) COLLATE "C"
+  sequence_id CHAR(36) COLLATE "C",
+  UNIQUE (id, repository_id),
+  -- No delete action, as no folder is ever deleted on its own (a deleted folder is recycled)
+  FOREIGN KEY (repository_id, folder_id) REFERENCES folder (repository_id, id)
 ) INHERITS (_core) WITH (toast_tuple_target = 128);
 
 -- One live asset per content in a repository; the recycle bin may hold any number of copies of it
@@ -187,29 +266,37 @@ CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_process
   INCLUDE (id, original_created_at, is_triaged) WHERE latitude IS NOT NULL;
 -- The members of a Sequence: their count, their repointing when Sequences merge, and a Curate view's listing
 CREATE INDEX asset_sequence ON asset (sequence_id) WHERE sequence_id IS NOT NULL;
+-- An account's assets, in every Library: the key from the account, which a delete of an account checks
+CREATE INDEX asset_owner ON asset (owner_user_id);
+-- The assets an account imported, in every Library, by the ID of their importer record: the rewrite of the records when the
+-- account changes (AssetDao.rewriteImporterRecords)
+CREATE INDEX asset_importer ON asset ((original_owner->>'id'));
 
 CREATE SEQUENCE person_label;
 
 CREATE TABLE person (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
-  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   -- this is taken from the person_label table, where its primary key is a sequence
   name TEXT NOT NULL,
   name_for_sort TEXT NOT NULL,
+  -- One of the person's own Faces, which the code checks (PersonService.setFaceAsCover); its key (person_cover_face, below the
+  -- face table) refuses one that is no Face. NULL for a person with no Face.
   cover_face_id CHAR(36) COLLATE "C",
   -- The assets outside the trash on which the person has a face, triaged ones included (what a search for the person finds with triaged items shown), not the face rows
   num_of_faces INT NOT NULL DEFAULT 0,
   is_named BOOLEAN NOT NULL DEFAULT FALSE,
   is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
   is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
-  is_bad_match BOOLEAN NOT NULL DEFAULT FALSE
+  is_bad_match BOOLEAN NOT NULL DEFAULT FALSE,
+  UNIQUE (id, repository_id)
 ) INHERITS (_core);
 
 -- The partial person indexes cover the live people, the ones every person query reads; a merged-away person keeps its name and
 -- its cover face, which another person may take.
--- person_01 is the name-key index: a named person's name_for_sort is its name key (PersonService.nameKey, folded in Scala
--- so both engines fold alike), and an unnamed person's is "unknown 0042", so a live person's name is unique under that fold:
--- lowercased NFC, which is not a full Unicode case fold
+-- person_01 is the name-key index: a named person's name_for_sort is its name key (PersonService.nameKey: NameKey.of of the
+-- name, folded in Scala so both engines fold alike), and an unnamed person's is "unknown 0042", so a live person's name is
+-- unique under that fold: case in any script, canonical and compatibility forms
 CREATE UNIQUE INDEX person_01 ON person (repository_id, name_for_sort)
     WHERE is_deleted = FALSE AND is_bad_match = FALSE;
 
@@ -218,12 +305,14 @@ CREATE UNIQUE INDEX person_02 ON person (cover_face_id)
 
 CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
     WHERE is_deleted = FALSE;
+-- Every person whose cover is a Face, a merged-away one included, for the cover's key when the Face is deleted
+CREATE INDEX person_04 ON person (cover_face_id);
 
 CREATE TABLE face (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
-  asset_id CHAR(36) COLLATE "C" NOT NULL REFERENCES asset (id) ON DELETE CASCADE,
-  person_id CHAR(36) COLLATE "C" NOT NULL REFERENCES person (id) ON DELETE CASCADE,
+  asset_id CHAR(36) COLLATE "C" NOT NULL,
+  person_id CHAR(36) COLLATE "C" NOT NULL,
   x1 INT NOT NULL,
   y1 INT NOT NULL,
   width INT NOT NULL,
@@ -241,8 +330,15 @@ CREATE TABLE face (
   is_enrolled BOOLEAN NOT NULL,
   -- How much fine detail the box holds at the measurement scale (ImageMeasurement), comparable only between Faces of one Person
   -- at a similar size; NULL for a Face in a Video, a box too small to say, or an image that could not be measured
-  sharpness DOUBLE PRECISION
+  sharpness DOUBLE PRECISION,
+  FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (repository_id, person_id) REFERENCES person (repository_id, id) ON DELETE CASCADE
 ) INHERITS (_core);
+
+-- A person's cover, declared here because the face table names the person table. A single column: a composite key's SET NULL
+-- would clear the person's repository_id too. Every path that deletes a cover Face picks another cover first
+-- (PersonService.moveCoversOff), so the delete action only backs that up.
+ALTER TABLE person ADD CONSTRAINT person_cover_face FOREIGN KEY (cover_face_id) REFERENCES face (id) ON DELETE SET NULL;
 
 -- A crop is unique within its asset: two assets may share a byte-identical frame (a trimmed copy of a video, a re-exported photo).
 -- Leading with the asset, it serves the purge cascade and the per-asset probes of Search text, which read the person from it.
@@ -255,41 +351,31 @@ CREATE INDEX face_03 ON face USING hnsw ((features::halfvec(512)) halfvec_cosine
 
 CREATE TABLE metadata_field (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
-  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
-  name_lc VARCHAR(255) NOT NULL,
-  field_type VARCHAR(255) NOT NULL
+  name_key TEXT NOT NULL,
+  field_type VARCHAR(255) NOT NULL,
+  UNIQUE (id, repository_id)
 ) INHERITS (_core);
 
-CREATE UNIQUE INDEX metadata_field_02 ON metadata_field (repository_id, name_lc);
-
-CREATE TABLE folder (
-  id CHAR(36) COLLATE "C" PRIMARY KEY,
-  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
-  name VARCHAR(255) NOT NULL,
-  name_lc VARCHAR(255) NOT NULL,
-  parent_id CHAR(36) COLLATE "C" NOT NULL,
-  is_recycled BOOLEAN NOT NULL DEFAULT FALSE
-) INHERITS (_core);
-
--- A folder's name is unique among its siblings; it also lists a repository's folders
-CREATE UNIQUE INDEX folder_02 ON folder (repository_id, parent_id, name_lc);
--- A folder's children, live or recycled
-CREATE INDEX folder_03 ON folder (parent_id, is_recycled);
+CREATE UNIQUE INDEX metadata_field_02 ON metadata_field (repository_id, name_key);
 
 CREATE TABLE album (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
-  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
-  name_lc VARCHAR(255) NOT NULL
+  name_key TEXT NOT NULL,
+  UNIQUE (id, repository_id)
 ) INHERITS (_core);
 
-CREATE UNIQUE INDEX album_01 ON album (repository_id, name_lc);
+CREATE UNIQUE INDEX album_01 ON album (repository_id, name_key);
 
 CREATE TABLE album_asset (
-  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
-  album_id CHAR(36) COLLATE "C" NOT NULL REFERENCES album (id) ON DELETE CASCADE,
-  asset_id CHAR(36) COLLATE "C" NOT NULL REFERENCES asset (id) ON DELETE CASCADE
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  album_id CHAR(36) COLLATE "C" NOT NULL,
+  asset_id CHAR(36) COLLATE "C" NOT NULL,
+  FOREIGN KEY (repository_id, album_id) REFERENCES album (repository_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX album_asset_01 ON album_asset (album_id, asset_id);
@@ -300,29 +386,33 @@ CREATE INDEX album_asset_02 ON album_asset (asset_id, album_id);
 -- and hold assets through location_asset. Both kinds share one name pool per repository.
 CREATE TABLE location (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
-  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   -- NULL = top level. No cascade: deleting a Category moves its Locations to the top level first (LocationService).
-  category_id CHAR(36) COLLATE "C" REFERENCES location (id),
+  category_id CHAR(36) COLLATE "C",
   kind VARCHAR(16) NOT NULL,
   name VARCHAR(255) NOT NULL,
-  name_lc VARCHAR(255) NOT NULL,
+  name_key TEXT NOT NULL,
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
   CHECK (kind IN ('category', 'location')),
   CHECK (kind <> 'category' OR (category_id IS NULL AND latitude IS NULL AND longitude IS NULL)),
   CHECK (kind <> 'location' OR (latitude IS NOT NULL AND longitude IS NOT NULL)),
   CHECK (latitude BETWEEN -90 AND 90),
-  CHECK (longitude BETWEEN -180 AND 180)
+  CHECK (longitude BETWEEN -180 AND 180),
+  UNIQUE (id, repository_id),
+  FOREIGN KEY (repository_id, category_id) REFERENCES location (repository_id, id)
 ) INHERITS (_core);
 
-CREATE UNIQUE INDEX location_01 ON location (repository_id, name_lc);
+CREATE UNIQUE INDEX location_01 ON location (repository_id, name_key);
 -- A category's Locations: moving them to the top level, and the check that keeps a deleted category from orphaning one
 CREATE INDEX location_02 ON location (category_id, repository_id);
 
 CREATE TABLE location_asset (
-  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
-  location_id CHAR(36) COLLATE "C" NOT NULL REFERENCES location (id) ON DELETE CASCADE,
-  asset_id CHAR(36) COLLATE "C" NOT NULL REFERENCES asset (id) ON DELETE CASCADE
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  location_id CHAR(36) COLLATE "C" NOT NULL,
+  asset_id CHAR(36) COLLATE "C" NOT NULL,
+  FOREIGN KEY (repository_id, location_id) REFERENCES location (repository_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
 ) INHERITS (_core);
 
 CREATE UNIQUE INDEX location_asset_01 ON location_asset (location_id, asset_id);
@@ -330,24 +420,29 @@ CREATE UNIQUE INDEX location_asset_01 ON location_asset (location_id, asset_id);
 CREATE INDEX location_asset_02 ON location_asset (asset_id, location_id);
 
 CREATE TABLE metadata_parameter (
-  repository_id CHAR(36) COLLATE "C" REFERENCES repository (id) ON DELETE CASCADE,
-  asset_id CHAR(36) COLLATE "C" REFERENCES asset (id) ON DELETE CASCADE,
-  field_id CHAR(36) COLLATE "C" REFERENCES metadata_field (id) ON DELETE CASCADE,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  asset_id CHAR(36) COLLATE "C",
+  field_id CHAR(36) COLLATE "C",
   field_value_kw TEXT NULL,
   field_value_num DECIMAL,
   field_value_bool BOOLEAN,
-  field_value_dt TIMESTAMP WITH TIME ZONE
+  field_value_dt TIMESTAMP WITH TIME ZONE,
+  FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (repository_id, field_id) REFERENCES metadata_field (repository_id, id) ON DELETE CASCADE
 );
 
 -- The purge cascade and clearing an asset's parameters
 CREATE INDEX metadata_parameter_01 ON metadata_parameter (asset_id);
+-- The cascade from a deleted metadata field
+CREATE INDEX metadata_parameter_02 ON metadata_parameter (field_id);
 
 -- body holds words already split by the application, so the vector takes them as they are: no stemming, no stop words
 CREATE TABLE search_document (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
-  asset_id CHAR(36) COLLATE "C" NOT NULL REFERENCES asset (id) ON DELETE CASCADE,
+  asset_id CHAR(36) COLLATE "C" NOT NULL,
   body TEXT NOT NULL,
-  tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', body)) STORED
+  tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', body)) STORED,
+  FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
 );
 
 -- An asset has one document. Leading with the asset, it serves the purge cascade and the per-asset probes of Search text; the

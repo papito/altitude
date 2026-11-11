@@ -1,9 +1,12 @@
 package altitude.core.integration
 
+import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ shouldBe, shouldEqual }
 
 import altitude.core.Altitude
+import altitude.core.Api
+import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
@@ -63,6 +66,32 @@ import altitude.core.models.Repository
     category.kind shouldEqual LocationKind.Category
     category.latitude shouldEqual None
     category.longitude shouldEqual None
+  }
+
+  test("A Location or category name longer than 250 characters once in NFC, or whose name key is too long, is refused") {
+
+    /**
+     * Setup:
+     *
+     * A Location "Existing".
+     *
+     * Assertions:
+     *
+     * Adding a Location or a category, or renaming "Existing", to 250 of U+FB2C (250 characters as typed, 750 in NFC) fails
+     * validation with the name field's too-long error, and to 100 of U+FDFA (whose name key NFKC spells out to 3300 bytes) with
+     * the name key error. The repository keeps "Existing" alone.
+     */
+    val max = Api.Constraints.MAX_LOCATION_NAME_LENGTH
+    val existing: Location = addLocation("Existing")
+    val tooLong = Const.Msg.Err.VALUE_TOO_LONG.format(max)
+
+    for ((name, message) <- List(lengthenedByNfc(max) -> tooLong, longKeyName(100) -> Const.Msg.Err.NAME_KEY_TOO_LONG)) {
+      refusesName(Api.Field.Location.NAME, message)(addLocation(name))
+      refusesName(Api.Field.Location.NAME, message)(testApp.service.location.addCategory(name))
+      refusesName(Api.Field.Location.NAME, message)(testApp.service.location.rename(existing.persistedId, name))
+    }
+
+    listedNames shouldEqual List("Existing")
   }
 
   test("An asset's Locations are read in path order with their category names, and an asset in none has none") {
@@ -134,6 +163,76 @@ import altitude.core.models.Repository
     // Changing only the casing of a row's own name is allowed
     testApp.service.location.rename(location.persistedId, "PARIS")
     (testApp.service.location.getById(location.persistedId): Location).name shouldEqual "PARIS"
+  }
+
+  test("Location and category names that differ only by case fold, canonical form or compatibility form are duplicates") {
+
+    /**
+     * Setup:
+     *
+     * A Location "Straße", a category "Café" with a precomposed "é", a Location "Summer", and a fourth Location, "Other", to
+     * rename.
+     *
+     * Assertions:
+     *
+     * Adding a Location or a category, or renaming "Other", to "STRASSE" (the case fold of "ß"), to "Café" with an "e" and a
+     * combining accent (the canonical form) or to "Ｓummer" with a full-width "S" (the compatibility form) is a duplicate, across
+     * the two kinds.
+     *
+     * Edge cases:
+     *
+     * A row can be renamed to another form of its own name.
+     */
+    val other: Location = addLocation("Other")
+    val clashes = List(
+      addLocation("Stra\u00DFe") -> "STRASSE",
+      testApp.service.location.addCategory("Caf\u00E9") -> "Cafe\u0301",
+      addLocation("Summer") -> "\uFF33ummer")
+
+    for ((location, clash) <- clashes) withClue(s"[$clash]: ") {
+      intercept[DuplicateException](addLocation(clash))
+      intercept[DuplicateException](testApp.service.location.addCategory(clash))
+      intercept[DuplicateException](testApp.service.location.rename(other.persistedId, clash))
+
+      testApp.service.location.rename(location.persistedId, clash)
+    }
+  }
+
+  test("A Location name is stored in NFC, and its key does not depend on the default locale") {
+
+    /**
+     * Setup:
+     *
+     * A Location added as "Café", a category added as "Crème" and a Location renamed to "Brûlée", each typed with a combining
+     * accent; a Location "Istanbul" added under a Turkish default locale.
+     *
+     * Assertions:
+     *
+     * The three read back as "Café", "Crème" and "Brûlée" with precomposed letters. Adding "Istanbul" again, as a Location or a
+     * category, under the root locale is a duplicate: the Turkish locale's dotless "ı" never reaches the key.
+     *
+     * Edge cases:
+     *
+     * A name with a full-width letter keeps it: the stored name is not folded.
+     */
+    val location: Location = addLocation("Cafe\u0301")
+    val category: Location = testApp.service.location.addCategory("Cre\u0300me")
+    val renamed: Location = addLocation("before")
+    testApp.service.location.rename(renamed.persistedId, "Bru\u0302le\u0301e")
+
+    location.name shouldBe "Caf\u00E9"
+    category.name shouldBe "Cr\u00E8me"
+    (testApp.service.location.getById(location.persistedId): Location).name shouldBe "Caf\u00E9"
+    (testApp.service.location.getById(category.persistedId): Location).name shouldBe "Cr\u00E8me"
+    (testApp.service.location.getById(renamed.persistedId): Location).name shouldBe "Br\u00FBl\u00E9e"
+
+    withDefaultLocale(Locale.forLanguageTag("tr"))(addLocation("Istanbul"))
+    withDefaultLocale(Locale.ROOT) {
+      intercept[DuplicateException](addLocation("Istanbul"))
+      intercept[DuplicateException](testApp.service.location.addCategory("Istanbul"))
+    }
+
+    addLocation("\uFF33ummer").name shouldBe "\uFF33ummer"
   }
 
   test("A Location needs a pin in range") {

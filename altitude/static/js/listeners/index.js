@@ -9,6 +9,7 @@ import { registerSearchListeners } from "./search.js"
 import { registerMapListeners } from "./map.js"
 import { registerHtmxRequestListeners } from "./htmx-requests.js"
 import { registerDialogListeners } from "./dialogs.js"
+import { registerAccountListeners } from "./account.js"
 
 export function registerAppEventListeners(app) {
     registerFolderListeners(app)
@@ -22,4 +23,5 @@ export function registerAppEventListeners(app) {
     registerMapListeners()
     registerHtmxRequestListeners(app)
     registerDialogListeners(app)
+    registerAccountListeners()
 }

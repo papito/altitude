@@ -11,12 +11,14 @@ import scala.util.control.NonFatal
 
 import altitude.core.DuplicateException
 import altitude.core.ImageException
+import altitude.core.ImporterUnavailableException
 import altitude.core.RequestContext
 import altitude.core.SamePersonDetectedTwiceException
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.VideoException
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
+import altitude.core.models.Permissions
 import altitude.core.pipeline.PipelineConstants.DEBUG
 import altitude.core.pipeline.PipelineTypes.InvalidAsset
 import altitude.core.pipeline.PipelineTypes.PipelineContext
@@ -28,16 +30,22 @@ import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
 object PipelineUtils:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  /** Runs the work with the pipeline context's repository and account as the request context, for the work alone */
+  /**
+   * Runs the work with the pipeline context's repository, account (or none, when the context has none) and the account's
+   * Permissions there (none with no account) as the request context, for the work alone, so a pooled thread never works under the
+   * request that last ran on it
+   */
   def withContext[A](ctx: PipelineContext)(work: => A): A =
     RequestContext.repository.withValue(Some(ctx.repository)) {
-      RequestContext.account.withValue(Some(ctx.account))(work)
+      RequestContext.account.withValue(ctx.account) {
+        RequestContext.permissions.withValue(if ctx.account.isEmpty then Permissions.none else ctx.permissions)(work)
+      }
     }
 
   /** A cause a file can have for being dropped, which the user is told and the log records in one line, without a stack trace */
   def isExpectedDrop(cause: Throwable): Boolean = cause match
     case _: UnsupportedMediaTypeException | _: ImageException | _: VideoException | _: DuplicateException |
-        _: SamePersonDetectedTwiceException =>
+        _: SamePersonDetectedTwiceException | _: ImporterUnavailableException =>
       true
     case _ => false
 

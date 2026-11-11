@@ -38,6 +38,18 @@ object Environment:
    * The one rule for a development-only key: it is on only when it is `true` and the environment is dev. Set anywhere else, it is
    * off, with a WARN.
    */
+  /**
+   * A development-only text setting, `devSwitch`'s rule for one that is no flag: its value only when the environment is dev; set
+   * anywhere else, it is ignored (empty), with a WARN. Read once, at startup.
+   */
+  def devSetting(config: Config, key: String, environment: String = CURRENT): String =
+    val value = config.getString(key)
+    if value.isEmpty then ""
+    else if environment != Name.DEV then
+      logger.warn(s"$key is for the dev environment only: ignored")
+      ""
+    else value
+
   def devSwitch(config: Config, key: String, environment: String = CURRENT): Boolean =
     if !config.getBoolean(key) then false
     else if environment != Name.DEV then

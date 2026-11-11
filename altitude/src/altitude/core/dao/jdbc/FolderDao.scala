@@ -38,6 +38,8 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
     /**
      * The wrinkle here is that we need to return the number of children for the folder, but if the folder is a root folder, we
      * need to subtract 1 from the count, because the root folder is its own parent, introducing a one-off error.
+     *
+     * Hand-written, so it carries the repository itself: another repository's folder is not found, as with any scoped read.
      */
     val sql = """
       SELECT f.*, (
@@ -56,9 +58,10 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
       ) AS num_of_children
       FROM folder f
       WHERE f.id = ?
+        AND f.repository_id = ?
    """
 
-    getOneBySql(sql, List(nativeBool(false), nativeBool(false), id))
+    getOneBySql(sql, List(nativeBool(false), nativeBool(false), id, RequestContext.getRepository.persistedId))
 
   override def add(folder: Folder): Folder =
     val id = folder.id match
@@ -67,13 +70,13 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
 
     val sql = s"""
         INSERT INTO $tableName (
-                      ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Folder.NAME}, ${FieldConst.Folder.NAME_LC}, ${FieldConst.Folder.PARENT_ID}
+                      ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Folder.NAME}, ${FieldConst.Folder.NAME_KEY}, ${FieldConst.Folder.PARENT_ID}
                     )
              VALUES (?, ? , ?, ?, ?)
     """
 
     val sqlVals: List[Any] =
-      List(id, RequestContext.getRepository.persistedId, folder.name, folder.nameLowercase, folder.parentId)
+      List(id, RequestContext.getRepository.persistedId, folder.name, folder.nameKey, folder.parentId)
 
     addRecord(sql, sqlVals)
     folder.copy(id = Some(id))
@@ -90,10 +93,13 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
      * the query itself.
      *
      * This kind of shenanigan is normally not recommended.
+     *
+     * Both arms of the recursion carry the repository, as every hand-written folder read does: another repository's folder has no
+     * children here.
      */
     val recursiveOrderByClause = getDataSourceType match
       case C.DbEngineName.POSTGRES => ""
-      case C.DbEngineName.SQLITE => "ORDER BY f.name_lc"
+      case C.DbEngineName.SQLITE => s"ORDER BY f.${FieldConst.Folder.NAME_KEY}"
 
     val sql = s"""
       WITH RECURSIVE children AS (
@@ -101,6 +107,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
         SELECT *, 0 AS level
           FROM folder
          WHERE id = ?
+           AND repository_id = ?
 
         UNION ALL
 
@@ -108,6 +115,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
         SELECT f.*, c.level + 1
           FROM folder f, children c
          WHERE f.parent_id = c.id
+           AND f.repository_id = ?
            AND f.is_recycled = false
            AND c.level < 1
           $recursiveOrderByClause
@@ -121,19 +129,24 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
        FROM children f
       WHERE f.level = 1
         AND f.id <> f.parent_id
-      ORDER BY f.name_lc
+      ORDER BY f.${FieldConst.Folder.NAME_KEY}
     """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId))
+    val repositoryId = RequestContext.getRepository.persistedId
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId, repositoryId, repositoryId))
     recs.map(makeModel)
 
-  /** Every folder above `folderId` short of the repository root (its own parent), the top-level folder first */
+  /**
+   * Every folder above `folderId` short of the repository root (its own parent), the top-level folder first. Both arms of the
+   * recursion carry the repository: another repository's folder has no ancestors here.
+   */
   def getAncestors(folderId: String): List[Folder] =
     val sql = """
       WITH RECURSIVE ancestors AS (
         SELECT *, 0 AS level
           FROM folder
          WHERE id = ?
+           AND repository_id = ?
 
         UNION ALL
 
@@ -141,7 +154,8 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
           FROM folder f
           JOIN ancestors a
             ON f.id = a.parent_id
-         WHERE f.id <> f.parent_id
+         WHERE f.repository_id = ?
+           AND f.id <> f.parent_id
       )
       SELECT *
         FROM ancestors
@@ -149,16 +163,19 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
        ORDER BY level DESC
     """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(folderId))
+    val repositoryId = RequestContext.getRepository.persistedId
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(folderId, repositoryId, repositoryId))
     recs.map(makeModel)
 
-  // this does NOT return the child counts
+  // This does NOT return the child counts. Both arms of the recursion carry the repository: another repository's folder has no
+  // children here
   def getChildrenRecursive(parentId: String): List[Folder] =
     val sql = """
       WITH RECURSIVE children AS (
         SELECT *
           FROM folder
          WHERE parent_id = ?
+           AND repository_id = ?
            AND is_recycled = ?
 
         UNION ALL
@@ -167,13 +184,16 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
           FROM folder f
           JOIN children c
             ON f.parent_id = c.id
-         WHERE f.is_recycled = ?
+         WHERE f.repository_id = ?
+           AND f.is_recycled = ?
            AND f.id <> f.parent_id
       )
       SELECT *
         FROM children
   """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId, nativeBool(false), nativeBool(false)))
+    val repositoryId = RequestContext.getRepository.persistedId
+    val recs: List[Map[String, AnyRef]] =
+      manyBySqlQuery(sql, List(parentId, repositoryId, nativeBool(false), repositoryId, nativeBool(false)))
 
     recs.map(makeModel)

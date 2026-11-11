@@ -13,8 +13,10 @@ import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Album
+import altitude.core.models.Permission
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requirePermission
 
 /**
  * The Albums tab and its dialogs. The tab shell is a Twirl partial; the list itself is rendered client-side from
@@ -41,30 +43,39 @@ class AlbumActionController(using logger: Logger) extends BaseController:
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-album")
   def showAddAlbumDialog(repoId: String)(using request: Request): Response[String] =
     val payload = "<!doctype html>" + htmx.html.add_album_dialog()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
+  /** An unknown album, or another repository's, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-album")
   def showRenameAlbumDialog(repoId: String, id: String)(using request: Request): Response[String] =
-    val album: Album = App.altitude.service.album.getById(id)
-    val payload = "<!doctype html>" + htmx.html.rename_album_dialog(
-      title = C.UI.RENAME_ALBUM_DIALOG_TITLE,
-      existingName = Some(album.name),
-      id = id
-    )
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    answering {
+      val album: Album = App.altitude.service.album.getById(id)
+      htmlResponse(
+        htmx.html.rename_album_dialog(
+          title = C.UI.RENAME_ALBUM_DIALOG_TITLE,
+          existingName = Some(album.name),
+          id = id
+        ))
+    }
 
+  /** An unknown album, or another repository's, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete-album")
   def showDeleteAlbumDialog(repoId: String, id: String)(using request: Request): Response[String] =
-    val album: Album = App.altitude.service.album.getById(id)
-    val payload = "<!doctype html>" + htmx.html.delete_album_dialog(title = C.UI.DELETE_ALBUM_DIALOG_TITLE, album = album)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    answering {
+      val album: Album = App.altitude.service.album.getById(id)
+      htmlResponse(htmx.html.delete_album_dialog(title = C.UI.DELETE_ALBUM_DIALOG_TITLE, album = album))
+    }
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.post(f"/$prefix/r/:repoId/add")
   def htmxAddAlbum(repoId: String)(using request: Request): Response[String] =
     val jsonIn: ujson.Obj = nameScrubber.scrub(unscrubbedJson.get)
@@ -80,13 +91,17 @@ class AlbumActionController(using logger: Logger) extends BaseController:
 
     try App.altitude.service.album.add(jsonIn(Api.Field.Album.NAME).str)
     catch
+      // The name rule the stored name is held to, once normalized (`Validators.validName`)
+      case ex: ValidationException => return responseWithValidationErrors(ex.errors.toMap)
       case ex: DuplicateException =>
         return responseWithValidationErrors(Map(Api.Field.Album.NAME -> ex.message.getOrElse("Album name already exists")))
 
     // The client reloads the album list off the "albumAdded" event - no markup needed here
     cask.Response("", 200, Seq(("Content-Type", "text/html")))
 
+  /** An unknown album, or another repository's, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/rename")
   def htmxRenameAlbum(repoId: String)(using request: Request): Response[String] =
     val jsonIn: ujson.Obj = nameScrubber.scrub(unscrubbedJson.get)
@@ -108,16 +123,21 @@ class AlbumActionController(using logger: Logger) extends BaseController:
     val newName = jsonIn(Api.Field.Album.NAME).str
     val albumId = jsonIn(Api.Field.ID).str
 
-    try App.altitude.service.album.rename(albumId = albumId, newName = newName)
-    catch
-      case ex: DuplicateException =>
-        return responseWithValidationErrors(
-          Map(Api.Field.Album.NAME -> ex.message.getOrElse("Album name already exists")),
-          albumId = albumId)
-
-    cask.Response(newName, 200, Seq(("Content-Type", "text/html")))
+    answering {
+      try
+        App.altitude.service.album.rename(albumId = albumId, newName = newName)
+        cask.Response(newName, 200, Seq(("Content-Type", "text/html")))
+      catch
+        // The name rule the stored name is held to, once normalized (`Validators.validName`)
+        case ex: ValidationException => responseWithValidationErrors(ex.errors.toMap, albumId = albumId)
+        case ex: DuplicateException =>
+          responseWithValidationErrors(
+            Map(Api.Field.Album.NAME -> ex.message.getOrElse("Album name already exists")),
+            albumId = albumId)
+    }
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-to-album")
   def showAddToAlbumDialog(repoId: String)(using request: Request): Response[String] =
     val payload =
@@ -131,6 +151,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
    * show.
    */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/assets")
   def htmxAddAssets(repoId: String)(using request: Request): Response[String] =
     val jsonIn: ujson.Obj = nameScrubber.scrub(unscrubbedJson.get)
@@ -171,10 +192,14 @@ class AlbumActionController(using logger: Logger) extends BaseController:
         responseWithValidationErrors(Map(Api.Field.Album.NAME -> ex.message.getOrElse("Album name already exists")))
       case ex: NotFoundException => responseWithValidationErrors(Map(Api.Field.Album.ALBUM_ID -> ex.getMessage))
 
+  /** An unknown album, or another repository's, is a 404, and its memberships stay */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.delete(f"/$prefix/r/:repoId/")
   def htmxDeleteAlbum(repoId: String, id: String)(using request: Request): Response[String] =
-    App.altitude.service.album.deleteById(id)
-    cask.Response("", 200, Seq(("Content-Type", "text/html")))
+    answering {
+      App.altitude.service.album.deleteById(id)
+      cask.Response("", 200, Seq(("Content-Type", "text/html")))
+    }
 
   initialize()

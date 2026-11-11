@@ -257,7 +257,7 @@ import altitude.core.util.Query
     val batchSize = 5
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source = Source.fromIterator(() => dataAssets.iterator).map((_, pipelineContext))
     val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] =
       testApp.service.importPipeline.run(source, AssetSeqOutputSink())

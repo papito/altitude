@@ -1,7 +1,7 @@
 package altitude.core.controller
 
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.shouldBe
+import org.scalatest.matchers.should.Matchers.{ include, not, should, shouldBe }
 
 import altitude.core.Api
 import altitude.core.App
@@ -201,7 +201,7 @@ import altitude.core.models.Asset
     }
   }
 
-  test("Assets in a repository the user does not own cannot be recycled") {
+  test("Assets in a repository the user cannot see cannot be recycled") {
 
     /**
      * Setup:
@@ -217,7 +217,8 @@ import altitude.core.models.Asset
     login()
 
     val stranger = testContext.persistUser()
-    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    val strangersRepo = testContext.persistRepository()
+    testContext.grant(stranger, strangersRepo)
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign = testContext.persistAsset(repository = Some(strangersRepo), user = Some(stranger))
@@ -237,5 +238,99 @@ import altitude.core.models.Asset
 
     testApp.service.repository.switchContextToRepository(strangersRepo)
     (testApp.service.asset.getById(foreign.persistedId): Asset).isRecycled.shouldBe(false)
+  }
+
+  test("Assets are not moved into another repository's folder, nor into one that does not exist") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with an imported asset in its root folder, and a second repository of theirs with the folder
+     * "Eve's folder".
+     *
+     * Assertions:
+     *
+     * Through the first repository, moving the asset into "Eve's folder", or into a folder ID that does not exist, answers a JSON
+     * 404 that does not carry the folder's name. The asset stays in its root folder: no row of either repository changes.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val asset = testContext.insertAsset(testContext.makeAsset(repository = Some(repo)))
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val eves = testApp.service.folder.add("Eve's folder")
+        testApp.service.repository.switchContextToRepository(repo)
+        val ownBefore = testContext.rowsOf(repo)
+        val othersBefore = testContext.rowsOf(otherRepo)
+
+        for (folderId <- List(java.util.UUID.randomUUID.toString, eves.persistedId)) withClue(s"[$folderId]: ") {
+          val response = requests.put(
+            s"$host/api/asset/r/$repoId/move",
+            cookies = testContext.cookies,
+            headers = Map("Content-Type" -> "application/json"),
+            data = ujson.write(ujson.Obj(Api.Field.FOLDER_ID -> folderId, Api.Field.ASSET_IDS -> Seq(asset.persistedId))),
+            check = false
+          )
+
+          response.statusCode shouldBe 404
+          response.headers("content-type") shouldBe Seq("application/json")
+          (response.text() should not).include("Eve")
+        }
+
+        testContext.rowsOf(repo) shouldBe ownBefore
+        testContext.rowsOf(otherRepo) shouldBe othersBefore
+    }
+  }
+
+  test("Restoring another repository's asset, or one that does not exist, is a JSON 404 that restores nothing") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a recycled asset, and a second repository of theirs with a recycled asset.
+     *
+     * Assertions:
+     *
+     * Through the first repository, restoring the user's asset together with the other repository's, or with an asset ID that
+     * does not exist, answers a JSON 404 that does not carry the other asset's file name. Both assets stay in the trash: no row
+     * of either repository changes.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val mine = testContext.insertAsset(testContext.makeAsset(repository = Some(repo)))
+        testApp.service.library.recycleAssets(Set(mine.persistedId))
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val theirs = testContext.insertAsset(testContext.makeAsset(repository = Some(otherRepo)))
+        testApp.service.library.recycleAssets(Set(theirs.persistedId))
+        testApp.service.repository.switchContextToRepository(repo)
+        val ownBefore = testContext.rowsOf(repo)
+        val othersBefore = testContext.rowsOf(otherRepo)
+
+        for (otherId <- List(java.util.UUID.randomUUID.toString, theirs.persistedId)) withClue(s"[$otherId]: ") {
+          val response = requests.put(
+            s"$host/api/asset/r/$repoId/restore",
+            cookies = testContext.cookies,
+            headers = Map("Content-Type" -> "application/json"),
+            data = ujson.write(ujson.Obj(Api.Field.ASSET_IDS -> Seq(mine.persistedId, otherId))),
+            check = false
+          )
+
+          response.statusCode shouldBe 404
+          response.headers("content-type") shouldBe Seq("application/json")
+          (response.text() should not).include(theirs.fileName)
+        }
+
+        testContext.rowsOf(repo) shouldBe ownBefore
+        testContext.rowsOf(otherRepo) shouldBe othersBefore
+    }
   }
 }

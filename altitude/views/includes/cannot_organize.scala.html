@@ -1,0 +1,12 @@
+@import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.models.Permission
+
+@* The warning an explorer tab (htmx/folders, albums, locations) opens with for an account without Organize in the request's
+   Library, whose add controls the tab's renderer leaves out: it cannot create `things` ("folders", "albums", "Locations"). A
+   holder of Organize gets nothing. Styled by static/css/includes/cannot_organize.css. *@
+@(things: String)
+
+@if(!RequestContext.holds(Permission.Organize)) {
+<p class="notice warning cannot-organize">@Const.UI.CANNOT_ORGANIZE.format(things)</p>
+}

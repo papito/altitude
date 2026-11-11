@@ -173,10 +173,24 @@ actually recycles or takes out of the trash are counted, and the people are lock
 the assets and in ID order), so a correction holding one of them (see **Corrections**) ends before the count is read: read
 while it held, from a snapshot in which its Face still existed, the count would take the asset from the Person twice.
 `merge` recounts the destination from a search for its assets.
-The faces themselves go with the asset on purge, and their files with them, except the cover face of its person. An
-import the pipeline drops, or one a crash cut off (pruned at startup), is undone (`LibraryService.discardImport`): the
-assets it added to the counts are given back, its faces and their files go, and a person it started, left with no face,
-is deleted. Moving a live asset between folders or out of triage does not touch the counts.
+The faces themselves go with the asset on purge, and their files with them. Before their rows go, each person whose
+cover is one of them, live or merged away, takes their best Face on another asset not marked for purging
+(`PersonService.moveCoversOff`, `FaceDao.getBestCoverCandidate`: the highest detection score, then the ID), or no cover
+when none is left, under the people's locks (`PersonDao.lockAssetPeople`). An asset whose covers cannot be moved goes no
+further down the purge (`DeletePersonFilesFlow`): its row, files and Faces stay, purge-pending, for the startup job to
+queue again, so the cover's key (below) never drops a cover without a repick. An import the pipeline drops, or one a crash
+cut off (pruned at startup), is undone (`LibraryService.discardImport`): a cover on one of its faces moves off it as on
+purge, the assets it added to the counts are given back, its faces and their files go, and a person it started, left with
+no face, is deleted. Moving a live asset between folders or out of triage does not touch the counts.
+
+A person with no cover, no Face of theirs being left to be one, shows a placeholder in its place (`.no-cover`, `fa-user`)
+in the People tab, the results title and the merge modal. `person.cover_face_id` references `face (id)` with
+`ON DELETE SET NULL` (`all.sql`, both engines; `person_cover_face` on PostgreSQL, declared after the `face` table), a
+single column, since a composite key's SET NULL would clear the person's `repository_id` too: every path that deletes a
+Face moves a cover off it first, so the key only backs that up, and the cover's repository is checked in code
+(`setFaceAsCover`). `person_04` indexes every cover for it. A Face's own references are keys over the repository and the
+ID (`face (repository_id, asset_id)` and `(repository_id, person_id)`, both cascading), so a Face never joins an asset or
+a person of another repository.
 
 The People tab (`PeopleActionController`) lists people by People bucket (`Const.PeopleBucket`; the glossary in
 `CONTEXT.md` has the terms): Matched (a Face on at least `Const.FaceRecognition.MIN_FACES_THRESHOLD`, 3, assets outside
@@ -230,26 +244,36 @@ negative number is shown: such a person is left off the list until the next reco
 
 The tab's actions:
 
-- **Name**: `updateName` stores the name in NFC and sets `is_named`; a named person is Matched whatever their count. A
-  named person's `name_for_sort` is its name key (`PersonService.nameKey`: the NFC name lowercased under `Locale.ROOT`),
-  and `person_01` keeps that unique over the live people, hidden ones included, so a name is unique regardless of case and
-  Unicode form. This is lowercasing, not a full Unicode case fold: "Weiß" and "WEISS", or a Greek name with a final sigma
-  and with a plain one ("σοφος" and "σοφοσ"), keep different keys. A merged-away or bad-match person holds no name. An unnamed person's `name_for_sort` is `unknown 0042`, so
-  a name of the form `Unknown N`, in any case and spacing, is reserved and refused with a validation error. A change of
-  case alone is a rename. A name another live person holds is refused, and the form offers to merge into that person
+- **Name**: `updateName` stores the name in NFC (`PersonService.normalizedName`, `NameKey.normalized`) and sets
+  `is_named`; a named person is Matched whatever their count. A named person's `name_for_sort` is its name key
+  (`PersonService.nameKey`, which is `NameKey.of`; **Names** in `altitude/AGENTS.md`), and `person_01` keeps that unique
+  over the live people, hidden ones included, so a name is unique regardless of case, in any script, and of Unicode form:
+  "Weiß" and "WEISS", a Greek name with a final sigma and with a plain one ("σοφος" and "σοφοσ"), or a name with a
+  full-width letter and the same name without, are one name. A merged-away or bad-match person holds no name. An unnamed
+  person's `name_for_sort` is `unknown 0042` (the name key of `UNKNOWN_NAME_PREFIX`, then the number), so a name of the
+  form `Unknown N`, in any case and spacing, is reserved and refused with a validation error. The name is held to 2 to 80
+  characters once in NFC, with a name key within `NameKey.MAX_KEY_BYTES` (`PersonService.validName`, which every naming
+  path, a rename and a move of a Face to a Person by name, goes through; **Names** in `altitude/AGENTS.md`). `isReservedName` tests the name's NFKC form, as the key folds it, so the form's
+  compatibility forms are reserved too: a full-width "Ｕnknown 42", or one with circled digits. A change that keeps the
+  name key, such as one of case alone, is a rename. A name another live person holds is refused, and the form offers to merge into that person
   (**Event Flow** in `views/AGENTS.md`). There are two forms over one rename (`PeopleActionController.renamePerson`, whose
   `RenameOutcome` is `Saved` or `Refused`, each route rendering it its own way): the results title's inline name editor
   (`PUT /htmx/people/r/:repoId/p/:personId/name/edit`, answering the name or the editor again) and the rename dialog a
   pencil on the person's cell in the People tab opens as a popover, in Browse and in Triage
   (`GET /htmx/people/r/:repoId/dialogs/rename-person`, `PUT /htmx/people/r/:repoId/p/:personId/rename`, answering an
   empty success or the dialog's form again). The two dialog routes find the person through
-  `PersonService.getInRepository`, so an unknown person, or another repository's, is a 404. Either rename reloads the
-  People tab, since naming an Unmatched person makes them Matched. A person with no name can also be named from the
+  `PersonService.getLiveInRepository`, so an unknown person, another repository's, or one merged away or discarded as a
+  bad match, is a 404. Either rename reloads the People tab, since naming an Unmatched person makes them Matched. A person
+  with no name can also be named from the
   Detail panel, by Change on a Face of theirs with a new name, which calls `updateName` too, and merged there into a named
   person (**Corrections**). A name another live person holds is never a new name there, since typing it makes that
   person's option the active one (a merge, or with "This face only" on a move); a holder who took it meanwhile makes the
   name a 400 with no offer to merge.
-- **Cover face**: `getPersonFaces` (by detection score) offers the candidates, `setFaceAsCover` picks one.
+- **Cover face**: the choose-cover modal offers `getPersonFaces` (by detection score, none on an asset marked for
+  purging), and `setFaceAsCover(personId, faceId)` sets one under the person's lock (`lockAndGetLive`) and answers the
+  person read again: a Face of another person, or one on an asset marked for purging, is refused (`ValidationException`,
+  a plain-text 400 saying why), and a person or a Face of another repository, or an unknown one, is not found (a 404),
+  the cover staying as it was.
 - **Hide / show**: display only; the person's faces still match.
 - **Bad match** (`markAsBadMatch`): the person is taken out of listings and their faces out of the match candidates.
 - **Merge** (`merge(dest, source)`): the source's faces move to the destination, the source is soft-deleted, and the
@@ -261,8 +285,12 @@ The tab's actions:
   per Video holds as at import (**Videos**): on each Video where both had a Face (`FaceDao.getFacesOnSharedVideos`, read
   before the Faces move), the higher-quality Face stays, the destination's own on a tie as for a move, and the other is
   deleted as Remove deletes it (`keepOneFacePerVideo`), after the source is soft-deleted, so a cover of either person that
-  pointed at it can move to the survivor, which `person_02` allows. The deleted Faces' files go once the merge commits,
-  given the destination as re-read after it, whose cover keeps its files. An image may hold two Faces of one person, so
+  pointed at it can move to the survivor, which `person_02` allows. The deleted Faces' files go once the merge commits.
+  A destination with no cover (a named person whose Faces all went) takes the source's cover, as it is once the Videos
+  are settled, or, when the source has none or it is on an asset marked for purging, their best Face
+  (`FaceDao.getBestCoverCandidate`); it is written with the recount, after the source is soft-deleted, so `person_02`
+  never sees one cover on two live people.
+  An image may hold two Faces of one person, so
   a merge keeps both there, and the recount counts the asset once. The Detail panel's Change merges through it as well,
   a person with no name into a named one (**Corrections**).
 
@@ -282,11 +310,11 @@ lowers its Person's `num_of_faces` only if they have no other Face on it, and a 
 they had none (`FaceDao.hasFaceOfPerson`). A name changes no count, and a merge recounts the destination as every merge
 does.
 
-- **Remove** (`removeFace(faceId)`): the Person is locked (`lockAndGetLive`), the Face re-read and its row deleted; the
-  cover, if it was this Face, becomes the Person's remaining Face with the highest detection score (`getTopFaces`); a
-  Person left with no Face row is deleted (`deletePeopleWithoutFaces`), named or not. Once committed the Face's files go
-  (`purgeFaceFiles`), given the Person as re-read after the repick, since a cover Face keeps its files and this one is no
-  longer the cover; a deleted Person's cover loses its files too.
+- **Remove** (`removeFace(faceId)`): the Person is locked (`lockAndGetLive`), the Face re-read, the Person read and the
+  Face's row deleted (the Person is read first, since the cover's key clears a cover on the deleted Face); the cover, if
+  it was this Face, becomes the Person's remaining Face with the highest detection score on an asset not marked for
+  purging (`getBestCoverCandidate`), or none; a Person left with no Face row is deleted (`deletePeopleWithoutFaces`),
+  named or not. Once committed the Face's files go (`purgeFaceFiles`).
 - **Change** (`moveFace(faceId, FaceTarget)`): the target is a live Person by ID (hidden or not; a merged-away or
   bad-match Person is not found) or a name, which resolves to the live Person holding it in any case or Unicode form
   (`getLiveByNameKey`) or creates a named Person. Creators of one name take turns under the name's lock

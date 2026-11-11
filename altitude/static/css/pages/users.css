@@ -1,0 +1,354 @@
+/* The Users page (users.scala.html) and its dialogs: the page's layout, the account cards (htmx/user_accounts), the Add User
+   modal (htmx/account_form, with its Permission matrix) and the two small account dialogs (htmx/set_password_dialog,
+   htmx/delete_account_dialog). The bundle applies on every page, so the page's rules are scoped to its body's class and the
+   dialogs' to their IDs. */
+
+:where(body.users) main {
+  display: grid;
+  align-content: start;
+  row-gap: var(--space-7);
+  width: 100%;
+  max-width: var(--users-page-max-width);
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6);
+}
+
+/* The title, the filter box taking the rest of the row, and Add User at its right */
+#users > header {
+  display: grid;
+  grid-template-columns: max-content 1fr max-content;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+#users > header h1 {
+  margin: 0;
+  font-size: var(--font-size-xl);
+}
+
+#accounts {
+  display: grid;
+  row-gap: var(--space-6);
+  justify-items: start;
+}
+
+#accounts .tab-count {
+  margin-left: var(--space-3);
+  color: hsl(from currentColor h s l / 0.6);
+}
+
+/* Cards of about --account-card-width, as many as fill the row */
+#accounts .account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--account-card-width), 1fr));
+  gap: var(--space-6);
+  justify-self: stretch;
+}
+
+#accounts .no-accounts {
+  margin: 0;
+  color: var(--theme-neutral-3);
+}
+
+.account-card {
+  display: grid;
+  align-content: start;
+  row-gap: var(--space-6);
+  padding: var(--space-6);
+  border: var(--border-hairline) var(--panel-border-color);
+  border-radius: var(--radius);
+  background-color: var(--theme-neutral-2);
+  box-shadow: var(--box-shadow);
+}
+
+/* A deactivated account's card, dimmed */
+.account-card.deactivated {
+  opacity: 0.55;
+}
+
+.account-card header {
+  display: grid;
+  grid-template-columns: var(--account-avatar-size) 1fr max-content;
+  align-items: center;
+  column-gap: var(--space-5);
+}
+
+.account-card .avatar {
+  display: grid;
+  place-items: center;
+  width: var(--account-avatar-size);
+  height: var(--account-avatar-size);
+  border-radius: 50%;
+  background-color: var(--theme-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.account-card .who {
+  min-width: 0;
+}
+
+.account-card .name {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.account-card .username {
+  font-family: var(--font-nav);
+  font-size: var(--font-size-small);
+  color: var(--theme-neutral-3);
+  overflow-wrap: anywhere;
+}
+
+.account-card dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+}
+
+.account-card dt {
+  color: var(--theme-neutral-3);
+}
+
+.account-card dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The Add User modal: the general modal widened, one column whose body scrolls under the actions, which stay in view */
+#modalContent:has(#accountForm) {
+  --modal-content-width: var(--account-form-width);
+}
+
+#accountForm {
+  display: grid;
+  row-gap: var(--space-6);
+}
+
+#accountForm .account-form-body {
+  display: grid;
+  row-gap: var(--space-8);
+  max-height: var(--account-form-body-max-height);
+  overflow: auto;
+}
+
+#accountForm .identity {
+  display: grid;
+  row-gap: var(--space-6);
+}
+
+#accountForm .identity input {
+  width: 100%;
+}
+
+#accountForm .access {
+  display: grid;
+  row-gap: var(--space-7);
+}
+
+#accountForm fieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+#accountForm legend {
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  color: hsl(from currentColor h s l / 0.6);
+}
+
+/* The account type cards, in a row, the chosen one in the accent */
+#accountForm .type-cards {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: var(--space-5);
+}
+
+#accountForm .type-card {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: var(--space-5);
+  border: var(--border-hairline) var(--panel-border-color);
+  border-radius: var(--radius);
+  font-size: var(--font-size-base);
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--theme-neutral-4);
+  cursor: pointer;
+
+  &:has(:checked) {
+    border-color: var(--theme-accent);
+    background-color: hsl(from var(--theme-accent) h s l / 0.12);
+  }
+}
+
+#accountForm .type-name {
+  font-weight: var(--font-weight-semibold);
+}
+
+#accountForm .type-description {
+  grid-column: 2;
+  font-size: var(--font-size-small);
+  color: var(--theme-neutral-3);
+}
+
+/* An Admin's section, the Library switches, boxed as a type card is */
+#accountForm .admin-only {
+  display: grid;
+  row-gap: var(--space-5);
+  padding: var(--space-5);
+  border: var(--border-hairline) var(--panel-border-color);
+  border-radius: var(--radius);
+}
+
+/* A switch, its label, and after the new-Library grant's switch its Permission chips */
+#accountForm .switch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+#accountForm .switch-row > label {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--theme-neutral-4);
+}
+
+#accountForm .permission-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+#accountForm .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--chip-padding);
+  border: var(--border-hairline) var(--panel-border-color);
+  border-radius: var(--chip-border-radius);
+  font-size: var(--font-size-small);
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--theme-neutral-4);
+  cursor: pointer;
+
+  &:has(:checked) {
+    background-color: hsl(from var(--theme-accent) h s l / 0.2);
+  }
+
+  &:has(:disabled) {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+/* The Permission matrix: a row per Library, a column per Permission under a header that stays in view as the body scrolls */
+#accountForm .permission-matrix {
+  border-collapse: collapse;
+}
+
+#accountForm .permission-matrix thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-4) var(--space-2);
+  background-color: var(--theme-neutral-2);
+  border-bottom: var(--border-hairline) var(--panel-border-color);
+  vertical-align: bottom;
+}
+
+#accountForm .permission-matrix th.library {
+  text-align: left;
+}
+
+#accountForm .permission-matrix tbody th, #accountForm .permission-matrix td {
+  padding: var(--space-3) var(--space-2);
+  border-bottom: var(--border-hairline) var(--panel-border-color);
+}
+
+#accountForm .permission-matrix tbody th label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--theme-neutral-4);
+}
+
+#accountForm .permission-matrix :is(th, td):is(.permission, .all) {
+  width: var(--permission-column-width);
+  text-align: center;
+}
+
+/* A column's header is its toggle: the Permission's name spelled out and wrapped */
+#accountForm .permission-matrix th.permission button {
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--radius-small);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--font-size-small);
+  cursor: pointer;
+
+  &:hover {
+    background: hsl(from var(--theme-neutral-4) h s l / 0.08);
+  }
+}
+
+/* A Guest gets the access column alone */
+#accountForm .permission-matrix.guest :is(.permission, .all) {
+  display: none;
+}
+
+#accountForm .bound {
+  margin: var(--space-4) 0 0;
+  color: var(--warning-color);
+}
+
+#accountForm > .actions, #setPassword .actions, #deleteAccount .actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+/* The new password's field, with Generate and Show after it */
+/* The Add User form's password and its confirmation: one component's element, each field a row of the identity's grid */
+#accountForm .password-fields {
+  display: contents;
+}
+
+.password-field {
+  display: grid;
+  grid-template-columns: 1fr max-content max-content;
+  gap: var(--space-3);
+}
+
+#setPassword {
+  display: grid;
+  row-gap: var(--space-5);
+}
+
+#deleteAccount p {
+  margin: 0 0 var(--space-5);
+  max-width: var(--popover-form-width);
+  line-height: var(--line-height-text);
+}

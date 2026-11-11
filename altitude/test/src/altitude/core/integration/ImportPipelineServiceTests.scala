@@ -148,7 +148,7 @@ import altitude.core.util.Query
   private def staged(relPath: String): (AssetWithData, PipelineContext) =
     (
       testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.getImportAsset(relPath)),
-      PipelineContext(testContext.repository, testContext.user))
+      PipelineContext(testContext.repository, Some(testContext.user)))
 
   /** The asset a single run imported, or the test fails with the cause it was dropped for */
   private def imported(results: Seq[TAssetOrInvalidWithContext]): Asset = results match {
@@ -176,7 +176,7 @@ import altitude.core.util.Query
     val batchSize = 5
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source = Source.fromIterator(() => dataAssets.iterator).map((_, pipelineContext))
 
     val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] = testApp.service.importPipeline.run(source, VoidAssetSink())
@@ -199,7 +199,7 @@ import altitude.core.util.Query
     val batchSize = 10
     val dataAssets = (1 to batchSize).map(_ => testContext.makeAssetWithData())
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source = Source.fromIterator(() => dataAssets.iterator).map((_, pipelineContext))
 
     val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] =
@@ -230,7 +230,7 @@ import altitude.core.util.Query
      * All six end up pipeline-processed in the repository, polled for up to a minute.
      */
     val batchSize = 6
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
 
     // Every offer is made before any is awaited
     val offers =
@@ -256,7 +256,7 @@ import altitude.core.util.Query
      */
     val batchSize = 6
     val pipeline = ImportPipelineService(testApp)
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
 
     val offers = (1 to batchSize).map(_ => pipeline.addToQueue((testContext.makeAssetWithData(), pipelineContext)))
     Await.result(Future.sequence(offers)(implicitly, scala.concurrent.ExecutionContext.global), 30.seconds)
@@ -281,7 +281,7 @@ import altitude.core.util.Query
 
     val upload = testContext.makeAssetWithData()
     intercept[QueueRefusedException] {
-      Await.result(pipeline.addToQueue((upload, PipelineContext(testContext.repository, testContext.user))), 30.seconds)
+      Await.result(pipeline.addToQueue((upload, PipelineContext(testContext.repository, Some(testContext.user)))), 30.seconds)
     }
     Files.exists(upload.path) shouldBe false
   }
@@ -382,7 +382,7 @@ import altitude.core.util.Query
         Left(dataAsset)
     }(using testApp.importDispatcher)
 
-    val element: TDataAssetOrInvalidWithContext = (Left(dataAsset), PipelineContext(otherRepository, testContext.user))
+    val element: TDataAssetOrInvalidWithContext = (Left(dataAsset), PipelineContext(otherRepository, Some(testContext.user)))
     Await.result(
       Source.single(element).via(recording).runWith(Sink.seq)(using matFromSystem(using testApp.actorSystem)),
       30.seconds)
@@ -403,7 +403,7 @@ import altitude.core.util.Query
      * The first comes out dropped with `ImageException` from the metadata stage and its staged file is deleted; the photo behind
      * it is imported.
      */
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val undecodable = notAnImage()
     val photo = testContext.makeAssetWithData()
 
@@ -435,7 +435,7 @@ import altitude.core.util.Query
      * The photo ends up pipeline-processed, polled for up to a minute, so the queue outlived the undecodable image, whose staged
      * file is deleted.
      */
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val undecodable = notAnImage()
 
     Await.result(testApp.service.importPipeline.addToQueue((undecodable, pipelineContext)), 30.seconds)
@@ -463,13 +463,15 @@ import altitude.core.util.Query
     val repository = testContext.repository
     val brokenRepository = testContext.persistRepository()
     breakFileStore(brokenRepository)
+    // Adding a repository makes it the context one; the photo is read back from the test's own
+    switchContextRepo(repository)
 
     val unstorable = testContext.makeAssetWithData(Some(testContext.makeAsset(repository = Some(brokenRepository))))
     val photo = testContext.makeAssetWithData(Some(testContext.makeAsset(repository = Some(repository))))
 
     val pipelineRes = runPipeline(
-      (unstorable, PipelineContext(brokenRepository, testContext.user)),
-      (photo, PipelineContext(repository, testContext.user)))
+      (unstorable, PipelineContext(brokenRepository, Some(testContext.user))),
+      (photo, PipelineContext(repository, Some(testContext.user))))
     pipelineRes should have size 2
 
     // Each repository has its own substream, so the results come in either order
@@ -503,7 +505,7 @@ import altitude.core.util.Query
     // now it's 11, but the second one is a duplicate
     val dataAssetsWithDuplicate = dataAssets.head +: dataAssets
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source = Source.fromIterator(() => dataAssetsWithDuplicate.iterator).map((_, pipelineContext))
 
     val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] =
@@ -546,7 +548,7 @@ import altitude.core.util.Query
     val assetWithBadMediaType = testContext.makeAsset().copy(assetType = badMediaType)
     val assetWithData = testContext.makeAssetWithData(asset = Some(assetWithBadMediaType))
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source: Source[(AssetWithData, PipelineContext), NotUsed] = Source.single(assetWithData, pipelineContext)
 
     val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] =
@@ -581,7 +583,7 @@ import altitude.core.util.Query
       testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.fileToImportAsset(TestVideos.undecodable.toFile))
     val photo = testContext.makeAssetWithData()
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source: Source[(AssetWithData, PipelineContext), NotUsed] = Source(List(clip, photo)).map((_, pipelineContext))
 
     val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] =
@@ -624,7 +626,7 @@ import altitude.core.util.Query
      */
     val dataAsset =
       testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.getImportAsset("images/exif/gps-north-east.jpg"))
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source: Source[(AssetWithData, PipelineContext), NotUsed] = Source.single(dataAsset, pipelineContext)
 
     val pipelineRes = Await.result(testApp.service.importPipeline.run(source, AssetSeqOutputSink()), Duration.Inf)
@@ -707,7 +709,7 @@ import altitude.core.util.Query
      * The first copy is dropped with `StorageException`; the second is imported rather than rejected as a duplicate of it.
      */
     val bytes = IntegrationTestUtil.generateRandomImagBytesBgr(dimensions = 150)
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     def upload(): (AssetWithData, PipelineContext) =
       (testApp.service.library.stagedFileToAsset("upload.png", testApp.service.staging.stage(bytes)), pipelineContext)
 
@@ -760,7 +762,7 @@ import altitude.core.util.Query
      * upload order, the first starting the Person and every other joining it.
      */
     val count = testApp.importParallelism + 2
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
 
     val photos = (0 until count).map {
       i =>
@@ -814,7 +816,8 @@ import altitude.core.util.Query
     val corrupt = pngWithUndecodableData(IntegrationTestUtil.generateRandomImagBytesBgr(dimensions = 150))
     val upload = testApp.service.library.stagedFileToAsset("corrupt.png", testApp.service.staging.stage(corrupt))
 
-    dropped(runPipeline((upload, PipelineContext(testContext.repository, testContext.user)))).cause.get shouldBe a[ImageException]
+    dropped(runPipeline((upload, PipelineContext(testContext.repository, Some(testContext.user))))).cause.get shouldBe a[
+      ImageException]
   }
 
   /** The PNG with the payload of its first IDAT chunk overwritten by bytes zlib refuses, and that chunk's CRC recomputed */
@@ -865,7 +868,7 @@ import altitude.core.util.Query
      * 600 ms (a frame without a delay plays for 100 ms, as browsers show it) and a preview, and has no Face: its frames are not
      * searched, and the Person keeps one Face. Nor is it measured: no Image quality, no hash.
      */
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     def gif(name: String, frames: Seq[BufferedImage], delaysCs: Seq[Int]): (AssetWithData, PipelineContext) =
       (
         testApp.service.library.stagedFileToAsset(name, testApp.service.staging.stage(gifBytes(frames, delaysCs))),
@@ -907,7 +910,7 @@ import altitude.core.util.Query
     ImageIO.write(image, "gif", gif)
 
     val upload = testApp.service.library.stagedFileToAsset("half.gif", testApp.service.staging.stage(gif.toByteArray))
-    val asset = imported(runPipeline((upload, PipelineContext(testContext.repository, testContext.user))))
+    val asset = imported(runPipeline((upload, PipelineContext(testContext.repository, Some(testContext.user)))))
 
     val preview = IntegrationTestUtil.decodePreview(testApp.service.asset.getPreview(asset.persistedId).data)
     // A pixel's samples are its blue, green, red and alpha

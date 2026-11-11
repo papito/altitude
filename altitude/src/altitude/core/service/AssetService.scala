@@ -200,13 +200,6 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
   // The rows a library operation may change, locked for the caller's transaction, so each is a write: see `AssetDao`
 
   /**
-   * Whether the request's repository holds the asset, in the trash or not: `queryAll` adds the repository in the DAO, while
-   * `getById` would find any repository's and `query` leaves out the trash
-   */
-  def isInRepository(assetId: String): Boolean =
-    queryAll(new Query().add(FieldConst.ID -> assetId)).records.nonEmpty
-
-  /**
    * What the Detail panel shows of an asset, read in one snapshot: the asset, in the trash or not (another repository's, or one
    * gone, is not found), its Faces with their people as the panel lists them, the path of its folder (nothing for the root or for
    * triage), its albums and Locations, and how many frames its Sequence has

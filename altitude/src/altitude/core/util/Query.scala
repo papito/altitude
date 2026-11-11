@@ -1,8 +1,5 @@
 package altitude.core.util
 
-import altitude.core.FieldConst
-import altitude.core.RequestContext
-
 object Query:
   enum ParamType:
     case EQ, GT, LT, GTE, LTE, IN, RANGE, OR, CONTAINS, MATCHES
@@ -73,10 +70,3 @@ class Query(val params: Map[String, Any] = Map(), val rpp: Int = 0, val page: In
 
   // append new params to the query and return a new copy
   def add(_params: (String, Any)*): Query = Query(params = params ++ _params, rpp = rpp, page = page, sort = sort)
-
-  def withRepository(): Query =
-    Query(
-      params = params ++ Map(FieldConst.REPO_ID -> RequestContext.getRepository.persistedId),
-      rpp = rpp,
-      page = page,
-      sort = sort)

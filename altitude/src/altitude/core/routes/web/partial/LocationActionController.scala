@@ -16,8 +16,10 @@ import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Location
 import altitude.core.models.LocationKind
+import altitude.core.models.Permission
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requirePermission
 
 /** Location dialogs use the shared operation lifecycle: a field error replaces the submitting form with its values intact. */
 class LocationActionController(using logger: Logger) extends BaseController:
@@ -43,14 +45,17 @@ class LocationActionController(using logger: Logger) extends BaseController:
   def tab(repoId: String)(using request: Request): Response[String] = htmlResponse(htmx.html.locations())
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-location")
   def addLocationDialog(repoId: String)(using request: Request): Response[String] = htmlResponse(addForm())
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-category")
   def addCategoryDialog(repoId: String)(using request: Request): Response[String] = htmlResponse(htmx.html.add_category_dialog())
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-location")
   def renameDialog(repoId: String, id: String)(using request: Request): Response[String] =
     withLocation(id) {
@@ -60,11 +65,13 @@ class LocationActionController(using logger: Logger) extends BaseController:
     }
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete-location")
   def deleteDialog(repoId: String, id: String)(using request: Request): Response[String] =
     withLocation(id)(location => htmlResponse(htmx.html.delete_location_dialog(location, deleteTitle(location))))
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/move-location")
   def moveDialog(repoId: String, id: String)(using request: Request): Response[String] =
     withLocation(id) {
@@ -78,11 +85,13 @@ class LocationActionController(using logger: Logger) extends BaseController:
     }
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-to-location")
   def addToLocationDialog(repoId: String)(using request: Request): Response[String] =
     htmlResponse(htmx.html.add_to_location_dialog(Const.UI.ADD_TO_LOCATION_DIALOG_TITLE, locations))
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.post(f"/$prefix/r/:repoId/add")
   def add(repoId: String)(using request: Request): Response[String] =
     val json = scrubber.scrub(unscrubbedJson.get)
@@ -100,6 +109,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
     }
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.post(f"/$prefix/r/:repoId/add-category")
   def addCategory(repoId: String)(using request: Request): Response[String] =
     val json = scrubber.scrub(unscrubbedJson.get)
@@ -110,6 +120,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
     }
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/rename")
   def rename(repoId: String)(using request: Request): Response[String] =
     val json = scrubber.scrub(unscrubbedJson.get)
@@ -123,6 +134,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
     }
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/move")
   def move(repoId: String)(using request: Request): Response[String] =
     val json = scrubber.scrub(unscrubbedJson.get)
@@ -138,6 +150,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
     }
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/assets")
   def addAssets(repoId: String)(using request: Request): Response[String] =
     val json = scrubber.scrub(unscrubbedJson.get)
@@ -153,6 +166,7 @@ class LocationActionController(using logger: Logger) extends BaseController:
     }
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.delete(f"/$prefix/r/:repoId/")
   def delete(repoId: String, id: String)(using request: Request): Response[String] =
     withLocation(id) {

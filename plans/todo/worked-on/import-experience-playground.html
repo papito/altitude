@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Import experience playground</title>
+<style>
+/* ---------- playground chrome ---------- */
+:root {
+  color-scheme: dark;
+  --bg: #111318; --bg2: #181b22; --bg3: #20242d; --line: #2a2f3a; --fg: #e6e8ee; --fg2: #9aa1b1;
+  --acc: #3bcfce;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 var(--sans); height: 100vh; display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
+header.top { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--bg2); flex-wrap: wrap; }
+header.top h1 { font-size: 14px; margin: 0; font-weight: 600; }
+.presets { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.presets span { color: var(--fg2); font-size: 12px; margin-right: 4px; }
+.pbtn { background: var(--bg3); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; cursor: pointer; }
+.pbtn:hover { border-color: var(--fg2); }
+.shell { display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
+aside.controls { overflow-y: auto; border-right: 1px solid var(--line); background: var(--bg2); padding: 6px 12px 30px; }
+aside.controls details { border-bottom: 1px solid var(--line); padding: 6px 0; }
+aside.controls summary { cursor: pointer; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg2); padding: 4px 0; }
+.ctl { margin: 8px 0; }
+.ctl > label { display: block; font-size: 12px; color: var(--fg2); margin-bottom: 3px; }
+.seg { display: flex; flex-wrap: wrap; gap: 3px; }
+.seg button { flex: 1 1 auto; background: var(--bg3); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 3px 7px; font: inherit; font-size: 12px; cursor: pointer; }
+.seg button.on { background: var(--acc); color: #06201f; border-color: var(--acc); font-weight: 600; }
+.right { display: grid; grid-template-rows: 1fr auto; min-height: 0; min-width: 0; }
+.stage { overflow: auto; padding: 16px; background: repeating-conic-gradient(#15171d 0 25%, #121419 0 50%) 0 0 / 20px 20px; }
+.promptbox { border-top: 1px solid var(--line); background: var(--bg2); padding: 10px 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; max-height: 30vh; overflow: auto; }
+.promptbox pre { margin: 0; white-space: pre-wrap; font: 12px/1.5 var(--mono); color: var(--fg); }
+
+/* ---------- the mock app (Altitude tokens) ---------- */
+#app {
+  --theme-primary: light-dark(#4159d4, #005bff);
+  --theme-primary-text: light-dark(#4057c2, #a4bbfe);
+  --theme-on-primary: light-dark(#f7f8fa, #f7f8fa);
+  --theme-secondary: light-dark(#dfe1e6, #484b52);
+  --theme-accent: light-dark(#1e7777, #3bcfce);
+  --theme-on-accent: light-dark(#f5f9f8, #0a1919);
+  --page: light-dark(#fdfdfe, #232427);
+  --theme-neutral-2: light-dark(#f4f5f7, #353639);
+  --theme-neutral-3: light-dark(#565b66, #babdc5);
+  --theme-neutral-4: light-dark(#12161f, #f7f8fa);
+  --hair: light-dark(#d5d8de, #4a4c52);
+  --success-color: light-dark(#297612, #87d575);
+  --warning-color: light-dark(#976212, #ebb16b);
+  --error-color: light-dark(#be2229, #f88a81);
+  --info-color: light-dark(#0e6a9b, #69c1fb);
+  --radius: 0.3125rem; --radius-large: 0.5rem;
+  --u: 1; /* density scale */
+  --s2: calc(0.25rem * var(--u)); --s4: calc(0.5rem * var(--u)); --s5: calc(0.625rem * var(--u));
+  --s6: calc(1rem * var(--u)); --s7: calc(1.25rem * var(--u)); --s9: calc(2.25rem * var(--u));
+  --live: var(--theme-accent);
+  position: relative; margin: 0 auto; max-width: 1180px; min-height: 100%;
+  background: var(--page); color: var(--theme-neutral-4); font: 14px/1.45 var(--sans);
+  border-radius: 8px; overflow: hidden; box-shadow: 0 12px 32px #0008;
+}
+#app[data-theme="dark"] { color-scheme: dark; }
+#app[data-theme="light"] { color-scheme: light; }
+#app[data-density="compact"] { --u: .62; font-size: 13px; }
+#app[data-live="primary"] { --live: var(--theme-primary); }
+#app[data-live="success"] { --live: var(--success-color); }
+#app .mono { font-family: var(--mono); font-size: .86em; }
+#app .muted { color: var(--theme-neutral-3); }
+.nav { display: flex; gap: 22px; align-items: center; padding: 10px 18px; background: var(--theme-neutral-2); border-bottom: 1px solid var(--hair); font-family: var(--mono); font-size: 13px; }
+.nav b { letter-spacing: .12em; }
+.nav .cur { color: var(--theme-accent); border-bottom: 2px solid var(--theme-accent); }
+.nav .sp { margin-left: auto; }
+.page { padding: var(--s7) var(--s9) var(--s9); display: grid; gap: var(--s9); }
+#app[data-layout="split"] .page { grid-template-columns: minmax(300px, 5fr) 7fr; align-items: start; gap: var(--s7) var(--s9); }
+#app[data-layout="split"] .col { display: grid; gap: var(--s9); }
+section > h2 { font-size: 1rem; margin: 0 0 var(--s5); display: flex; align-items: center; gap: var(--s4); }
+section > h2 .sp { margin-left: auto; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--hair); }
+.tabs button { background: none; border: 0; color: var(--theme-neutral-3); font: inherit; padding: var(--s4) var(--s6); cursor: pointer; border-bottom: 2px solid transparent; }
+.tabs button.on { color: var(--theme-neutral-4); border-color: var(--theme-accent); font-weight: 600; }
+.badge { background: var(--live); color: var(--theme-on-accent); border-radius: 99px; font-size: .72em; padding: 0 6px; margin-left: 4px; font-weight: 700; }
+
+.btn { font: inherit; border-radius: var(--radius); border: 1px solid var(--hair); background: var(--theme-neutral-2); color: var(--theme-neutral-4); padding: calc(var(--s2) + 2px) var(--s5); cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--theme-neutral-3); }
+.btn.primary { background: var(--theme-primary); border-color: var(--theme-primary); color: var(--theme-on-primary); }
+.btn.error { color: var(--error-color); }
+.btn.ghost { background: none; border-color: transparent; padding-inline: var(--s2); }
+.btn.sm { font-size: .82em; padding: 1px var(--s4); }
+.ico { width: 1em; height: 1em; vertical-align: -0.14em; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+/* upload */
+.up { border: 1px solid var(--hair); border-radius: var(--radius-large); background: var(--theme-neutral-2); padding: var(--s7); display: grid; gap: var(--s6); }
+.zone { border: 2px dashed var(--hair); border-radius: var(--radius-large); padding: var(--s9) var(--s6); text-align: center; display: grid; gap: var(--s5); justify-items: center; transition: .15s; }
+.zone .big { font-size: 2.2em; color: var(--theme-neutral-3); }
+.zone.over, .up.over { border-color: var(--theme-accent); background: color-mix(in srgb, var(--theme-accent) 12%, transparent); }
+.row { display: flex; gap: var(--s5); align-items: center; flex-wrap: wrap; }
+.cards2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s6); }
+.cards2 > div { border: 1px solid var(--hair); border-radius: var(--radius); padding: var(--s6); display: grid; gap: var(--s5); justify-items: start; align-content: start; background: var(--page); }
+.opt { display: flex; gap: var(--s5); align-items: center; flex-wrap: wrap; }
+.switch { width: 1.9rem; height: 1.05rem; border-radius: 99px; background: var(--theme-secondary); position: relative; cursor: pointer; flex: none; border: 0; padding: 0; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: calc(1.05rem - 4px); aspect-ratio: 1; border-radius: 50%; background: var(--theme-neutral-4); transition: .15s; }
+.switch.on { background: var(--theme-accent); } .switch.on::after { left: calc(100% - 1.05rem + 2px); }
+.segc { display: inline-flex; border: 1px solid var(--hair); border-radius: var(--radius); overflow: hidden; }
+.segc button { font: inherit; background: none; border: 0; color: var(--theme-neutral-3); padding: var(--s2) var(--s5); cursor: pointer; }
+.segc button.on { background: var(--theme-accent); color: var(--theme-on-accent); }
+.field { border: 1px solid var(--hair); border-radius: var(--radius); background: var(--page); color: inherit; font: inherit; padding: calc(var(--s2) + 2px) var(--s5); min-width: 0; }
+.hint { font-size: .85em; color: var(--theme-neutral-3); }
+.maphint { font-family: var(--mono); font-size: .8em; color: var(--theme-neutral-3); border-left: 2px solid var(--theme-accent); padding-left: var(--s5); }
+
+/* progress */
+.bar { height: calc(.5rem * var(--u) + 2px); border-radius: 99px; background: var(--theme-secondary); overflow: hidden; display: flex; min-width: 60px; }
+.bar i { display: block; height: 100%; transition: width .35s; }
+.bar .ok { background: var(--live); } .bar .dup { background: var(--info-color); }
+.bar .uns { background: var(--warning-color); } .bar .fail { background: var(--error-color); }
+#app[data-anim="stripes"] .live .bar .ok { background-image: repeating-linear-gradient(45deg, #fff3 0 6px, transparent 6px 12px); background-size: 17px 100%; animation: mv .6s linear infinite; }
+#app[data-anim="pulse"] .live .bar { animation: pl 1.3s ease-in-out infinite; }
+@keyframes mv { to { background-position: 17px 0; } } @keyframes pl { 50% { opacity: .55; } }
+.spin { display: inline-block; width: .8em; height: .8em; border: 2px solid var(--live); border-right-color: transparent; border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -1px; }
+@keyframes sp { to { transform: rotate(1turn); } }
+
+/* chips & status */
+.chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 99px; padding: 0 var(--s4); font-size: .8em; border: 1px solid currentColor; white-space: nowrap; }
+.c-ok { color: var(--success-color); } .c-dup { color: var(--info-color); } .c-uns { color: var(--warning-color); }
+.c-fail { color: var(--error-color); } .c-pend { color: var(--theme-neutral-3); }
+.chip.fill { border-color: transparent; background: color-mix(in srgb, currentColor 16%, transparent); }
+.dot { width: .55em; height: .55em; border-radius: 50%; background: currentColor; display: inline-block; }
+.st-watching { color: var(--success-color); } .st-paused { color: var(--warning-color); } .st-unavailable { color: var(--error-color); }
+
+/* lists */
+table.t { width: 100%; border-collapse: collapse; }
+table.t th { text-align: left; font-size: .78em; text-transform: uppercase; letter-spacing: .05em; color: var(--theme-neutral-3); font-weight: 600; padding: var(--s2) var(--s5); border-bottom: 1px solid var(--hair); }
+table.t td { padding: var(--s4) var(--s5); border-bottom: 1px solid var(--hair); vertical-align: middle; }
+table.t tr.click { cursor: pointer; } table.t tr.click:hover td { background: color-mix(in srgb, var(--theme-neutral-3) 8%, transparent); }
+.cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s6); }
+.card { border: 1px solid var(--hair); border-radius: var(--radius-large); background: var(--theme-neutral-2); padding: var(--s6); display: grid; gap: var(--s4); position: relative; }
+.card.band { border-left: 4px solid currentColor; }
+.card.band > * { color: var(--theme-neutral-4); }
+.rows { display: grid; }
+.rowi { display: flex; gap: var(--s6); align-items: center; padding: var(--s4) var(--s2); border-bottom: 1px solid var(--hair); flex-wrap: wrap; }
+.rowi.band { border-left: 4px solid currentColor; padding-left: var(--s5); } .rowi.band > * { color: var(--theme-neutral-4); }
+.grow { flex: 1 1 160px; min-width: 0; }
+.trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu { position: relative; display: inline-block; }
+.menu .pop { position: absolute; right: 0; top: 100%; z-index: 5; background: var(--theme-neutral-2); border: 1px solid var(--hair); border-radius: var(--radius); box-shadow: 0 4px 12px #0005; display: grid; min-width: 150px; padding: 4px; }
+.menu .pop button { text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+.menu .pop button:hover { background: color-mix(in srgb, var(--theme-neutral-3) 16%, transparent); }
+
+/* history */
+.imp { cursor: pointer; }
+.timeline { border-left: 2px solid var(--hair); margin-left: var(--s4); display: grid; gap: var(--s6); padding: var(--s2) 0; }
+.tl { position: relative; padding-left: var(--s7); display: grid; gap: var(--s2); }
+.tl::before { content: ""; position: absolute; left: -6px; top: .45em; width: 10px; height: 10px; border-radius: 50%; background: var(--theme-neutral-3); border: 2px solid var(--page); }
+.tl.live::before { background: var(--live); box-shadow: 0 0 0 4px color-mix(in srgb, var(--live) 25%, transparent); }
+.sub { font-size: .78em; text-transform: uppercase; letter-spacing: .06em; color: var(--theme-neutral-3); margin: var(--s5) 0 var(--s2); }
+.files { background: color-mix(in srgb, var(--theme-neutral-3) 7%, transparent); border-radius: var(--radius); padding: var(--s5); display: grid; gap: var(--s4); cursor: default; }
+.files .f { display: grid; grid-template-columns: 1fr auto; gap: var(--s5); font-size: .88em; padding: 2px 0; border-bottom: 1px dotted var(--hair); }
+.files .f small { grid-column: 1 / -1; color: var(--theme-neutral-3); }
+.empty { text-align: center; color: var(--theme-neutral-3); padding: var(--s9); border: 1px dashed var(--hair); border-radius: var(--radius-large); }
+
+/* dialog */
+.scrim { position: absolute; inset: 0; background: #0007; display: grid; place-items: start center; padding-top: 60px; z-index: 20; }
+.dlg { width: min(34rem, 92%); background: var(--theme-neutral-2); border: 1px solid var(--hair); border-radius: var(--radius-large); box-shadow: 0 12px 32px #0009; padding: var(--s7); display: grid; gap: var(--s6); }
+.dlg h3 { margin: 0; font-size: 1.1rem; }
+.dlg label.l { display: grid; gap: var(--s2); font-size: .88em; color: var(--theme-neutral-3); }
+.dlg label.l .field { color: var(--theme-neutral-4); font-size: 1rem; }
+.dlg fieldset { border: 1px solid var(--hair); border-radius: var(--radius); padding: var(--s5) var(--s6) var(--s6); display: grid; gap: var(--s5); margin: 0; }
+.dlg legend { font-size: .78em; text-transform: uppercase; letter-spacing: .06em; color: var(--theme-neutral-3); padding: 0 var(--s2); }
+.callout { border: 1px solid var(--error-color); background: color-mix(in srgb, var(--error-color) 12%, transparent); border-radius: var(--radius); padding: var(--s5); font-size: .9em; }
+.err { color: var(--error-color); font-size: .85em; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Import experience playground</h1>
+  <div class="presets"><span>Presets</span><span id="presets"></span></div>
+</header>
+<div class="shell">
+  <aside class="controls" id="controls"></aside>
+  <div class="right">
+    <div class="stage"><div id="app"><div id="pageHost"></div><div id="dlgHost"></div></div></div>
+    <div class="promptbox"><pre id="prompt"></pre><button class="pbtn" id="copy">Copy prompt</button></div>
+  </div>
+</div>
+
+<script>
+// ---------- controls schema: [key, label, [[value, text, prompt phrase], ...]] ----------
+const GROUPS = [
+  ["Page", [
+    ["theme", "Theme", [["dark", "Dark"], ["light", "Light"]]],
+    ["layout", "Section layout", [
+      ["stacked", "Stacked", "The three sections (Upload, Watch folders, Import history) stack in one column."],
+      ["split", "Split", "Upload and Watch folders sit in a left column, with the Import history in a wider right column so live progress stays in view."],
+      ["tabs", "Tabs", "Upload, Watch folders and Import history are three tabs; the history tab carries a badge with the number of Imports in progress."]]],
+    ["density", "Density", [["comfortable", "Comfortable", ""], ["compact", "Compact", "Use compact spacing throughout the page."]]],
+    ["role", "Viewer", [["admin", "Admin"], ["user", "Import only"]]],
+  ]],
+  ["Upload", [
+    ["upload", "Upload style", [
+      ["zone", "Drop zone", "The Upload section is a large dashed drop zone (\"Drop files or folders here\") with \"Choose files\" and \"Choose folder\" buttons inside it, and the Files and Folder options on two labelled lines below."],
+      ["bar", "Compact bar", "The Upload section is one compact row: \"Choose files\", \"Choose folder\" and the structure option, with the whole row accepting drops."],
+      ["cards", "Two cards", "The Upload section is two cards side by side, \"Files\" and \"Folder\", each with its own button, one line of explanation and its own option: Files has \"Skip Triage\" (off by default, with a destination folder picker when on), Folder has \"Keep folder structure\"."]]],
+    ["keep", "Options as", [
+      ["switch", "Switch", "\"Skip Triage\" and \"Keep folder structure\" are switches."],
+      ["checkbox", "Checkbox", "\"Skip Triage\" and \"Keep folder structure\" are checkboxes."],
+      ["segmented", "Segmented", "Each option is a two-way segmented control: \"To Triage\" / \"Skip Triage\" for Files, \"To Triage\" / \"Keep folder structure\" for Folder."]]],
+    ["mapHint", "Mapping hint", [["on", "Show", "When structure is kept, show a one-line example of the mapping (source subfolder → Library path) under the destination picker."], ["off", "Hide", "No mapping example under the destination picker."]]],
+    ["upState", "Simulated state", [["idle", "Idle"], ["over", "Drag over"], ["uploading", "Uploading"], ["done", "Done"]]],
+    ["upProgress", "Upload progress shown", [
+      ["both", "Both", "While uploading, the Upload section shows its own progress (files and bytes, Cancel) and the Import also appears live in the history."],
+      ["history", "History only", "While uploading, the Upload section shows only a short \"Uploading… Cancel\" line; all progress lives in the Import's history row."],
+      ["inline", "Upload only", "While uploading, progress shows in the Upload section; the Import's history row shows counts without a bar until it closes."]]],
+  ]],
+  ["Watch folders", [
+    ["wf", "List layout", [
+      ["table", "Table", "Watch folders are a table: name, path, target, status, last scan, counts, actions."],
+      ["cards", "Cards", "Watch folders are cards in a grid, one per Watch folder."],
+      ["rows", "Rows", "Watch folders are dense single-line rows."]]],
+    ["wfStatus", "Status shown as", [
+      ["chip", "Chip", "A Watch folder's status is a tinted chip with its reason beside it."],
+      ["dot", "Dot + text", "A Watch folder's status is a coloured dot followed by plain text."],
+      ["band", "Colour band", "A Watch folder's status colours a band on the leading edge of its row or card, with the text in normal colour."]]],
+    ["wfActions", "Admin actions", [
+      ["buttons", "Buttons", "Admin actions (Scan now, Pause/Resume, Retry failed, Edit, Remove) are inline text buttons."],
+      ["menu", "⋯ menu", "Admin actions live in a ⋯ context menu per Watch folder, as the folder tree's menus do."],
+      ["mixed", "Scan + ⋯", "\"Scan now\" is an inline button; the other Admin actions live in a ⋯ context menu."]]],
+    ["wfPath", "Path", [["full", "Full", ""], ["trunc", "Truncated", "Long paths are truncated with an ellipsis, the full path in the tooltip."]]],
+    ["wfEmpty", "List content", [["some", "Three folders"], ["none", "Empty state"]]],
+  ]],
+  ["Watch folder dialog", [
+    ["dlg", "Dialog", [["closed", "Closed"], ["open", "Open"]]],
+    ["dlgLayout", "Form layout", [
+      ["flat", "Flat", "The Add/Edit Watch folder dialog is one flat column of fields."],
+      ["sections", "Sections", "The Add/Edit Watch folder dialog groups its fields into three fieldsets: Source, Destination, After import."]]],
+    ["dlgDelete", "Deletion warning", [
+      ["callout", "Callout", "Switching \"Delete imported files\" on reveals a red callout in the dialog naming how many files are in the folder now, and the Save button reads \"Save and delete imported files\"."],
+      ["inline", "Inline text", "Switching \"Delete imported files\" on shows one line of warning text under the switch."],
+      ["confirm", "Confirm step", "Saving with \"Delete imported files\" on replaces the form with a confirmation step naming how many files are in the folder now."]]],
+    ["dlgError", "Path validation", [["ok", "Valid"], ["overlap", "Overlap error"]]],
+  ]],
+  ["Import history", [
+    ["hist", "Layout", [
+      ["table", "Table", "The Import history is a table, one row per Import."],
+      ["cards", "Cards", "The Import history is a list of full-width cards, one per Import."],
+      ["timeline", "Timeline", "The Import history is a vertical timeline, with a glowing node for each Import in progress."]]],
+    ["hGroup", "In-progress Imports", [
+      ["pinned", "Pinned group", "Imports in progress are pinned under an \"In progress\" heading above \"Earlier\"."],
+      ["flat", "In date order", "Imports in progress are simply the newest rows, with no separate heading."]]],
+    ["hBar", "Progress bar", [
+      ["stacked", "By outcome", "An Import's progress bar is segmented by outcome (imported, already in the Library, unsupported, failed)."],
+      ["single", "Single", "An Import's progress bar is a single fill of files settled."],
+      ["none", "None", "No progress bar: a spinner and the counts only."]]],
+    ["hCounts", "Counts as", [
+      ["chips", "Chips", "Counts are outcome-coloured chips; zero counts are hidden."],
+      ["text", "Sentence", "Counts are one sentence (\"1,930 imported, 212 already in the Library, 3 failed\")."],
+      ["cols", "Numbers", "Counts are bare coloured numbers in a fixed order, zeros shown as a dash."]]],
+    ["anim", "Live animation", [["stripes", "Stripes", "The in-progress bar has moving stripes."], ["pulse", "Pulse", "The in-progress bar pulses gently."], ["off", "None", "The in-progress bar does not animate beyond its growth."]]],
+    ["live", "Live colour", [["accent", "Accent", ""], ["primary", "Primary", "Live progress uses the primary colour."], ["success", "Success", "Live progress uses the success colour."]]],
+    ["hFilter", "Import files filter", [
+      ["chips", "Chips", "An expanded Import lists its Import files under outcome filter chips with counts."],
+      ["tabs", "Tabs", "An expanded Import lists its Import files under outcome tabs."],
+      ["problems", "Problems first", "An expanded Import opens on the files that were not imported, with a \"Show imported\" link for the rest."]]],
+    ["sim", "Simulate live import", [["on", "Running"], ["off", "Frozen"]]],
+    ["hEmpty", "Content", [["some", "Five Imports"], ["none", "Empty state"]]],
+  ]],
+];
+const DEFAULTS = { theme: "dark", layout: "tabs", density: "comfortable", role: "admin", upload: "cards", keep: "switch", mapHint: "on",
+  upState: "idle", upProgress: "both", wf: "rows", wfStatus: "chip", wfActions: "mixed", wfPath: "full", wfEmpty: "some", dlg: "closed",
+  dlgLayout: "sections", dlgDelete: "callout", dlgError: "ok", hist: "table", hGroup: "pinned", hBar: "stacked", hCounts: "chips",
+  anim: "stripes", live: "accent", hFilter: "chips", sim: "on", hEmpty: "some" };
+const PRESETS = {
+  "Plan baseline": {},
+  "Stacked zone": { layout: "stacked", upload: "zone", wf: "table" },
+  "Console": { layout: "split", density: "compact", upload: "bar", keep: "checkbox", wf: "rows", wfStatus: "dot", wfActions: "menu", wfPath: "trunc", hCounts: "cols", hBar: "single", anim: "off", hGroup: "flat", dlgLayout: "flat", dlgDelete: "inline", upProgress: "history" },
+  "Dashboard": { layout: "split", upload: "cards", wf: "cards", wfStatus: "band", hist: "cards", hCounts: "chips", anim: "pulse", keep: "segmented" },
+  "Timeline": { layout: "stacked", hist: "timeline", hCounts: "text", wf: "rows", wfStatus: "dot", upProgress: "history", hFilter: "problems" },
+  "Tabbed cards": { layout: "tabs", upload: "zone", wf: "cards", wfStatus: "chip", wfActions: "buttons", hist: "table", hFilter: "tabs", dlgDelete: "confirm" },
+};
+// Not design choices: left out of the prompt
+const TRANSIENT = new Set(["theme", "role", "upState", "wfEmpty", "dlg", "dlgError", "sim", "hEmpty"]);
+
+const state = { ...DEFAULTS };
+// Preview-only interaction state
+const ui = { tab: "upload", keepOn: true, skipOn: false, expanded: "i1", filter: "all", menu: null, showImported: false,
+  dlgKeep: false, dlgDelete: false, dlgConfirm: false, upPct: 37 };
+
+// ---------- sample data ----------
+const WATCH = [
+  { id: "w1", name: "Phone sync", path: "/mnt/nas/sync/phones/camera-uploads", target: null, status: "watching", reason: "", last: "40 s ago", del: true, imported: 12480, failed: 3 },
+  { id: "w2", name: "Scanner", path: "/srv/scans", target: "Documents / Scans", status: "paused", reason: "destination folder is in the Trash", last: "2 h ago", del: false, imported: 311, failed: 0 },
+  { id: "w3", name: "Studio card ingest", path: "/mnt/cards/ingest", target: "Shoots / Unsorted", status: "unavailable", reason: "the path is not readable", last: "yesterday", del: true, imported: 5402, failed: 12 },
+];
+const fresh = () => [
+  { id: "i1", src: "upload", title: "Wedding 2026", who: "Mara K.", when: "just now", target: "Clients / Wedding 2026", total: 4812, ok: 1930, dup: 212, uns: 14, fail: 3, open: true },
+  { id: "i2", src: "watch", title: "Phone sync", who: "Watch folder", when: "1 min ago", target: null, total: 37, ok: 9, dup: 2, uns: 0, fail: 0, open: true },
+  { id: "i3", src: "upload", title: "24 files", who: "Jon P.", when: "yesterday 18:02", target: null, total: 24, ok: 22, dup: 2, uns: 0, fail: 0, open: false },
+  { id: "i4", src: "watch", title: "Scanner", who: "Watch folder", when: "yesterday 09:40", target: "Documents / Scans", total: 6, ok: 5, dup: 0, uns: 0, fail: 1, open: false },
+  { id: "i5", src: "upload", title: "Lisbon trip", who: "Mara K.", when: "9 Nov 21:15", target: null, total: 120, ok: 75, dup: 0, uns: 0, fail: 45, open: false, note: "interrupted by a restart" },
+];
+let IMPORTS = fresh();
+const FILES = [
+  ["Ceremony/DSC_0412.jpg", "ok", ""], ["Ceremony/DSC_0413.jpg", "ok", ""], ["Ceremony/DSC_0413 (copy).jpg", "dup", "Already in the Library: Clients / Wedding 2026 / Ceremony"],
+  ["Party/clip-0007.mov", "ok", ""], ["Party/playlist.pdf", "uns", "Not an image or a video"], ["Party/DSC_0981.jpg", "fail", "The image could not be decoded"],
+  ["Portraits/DSC_1002.jpg", "dup", "Already in the Library: Triage"], ["Portraits/DSC_1003.jpg", "pend", ""], ["Portraits/DSC_1004.jpg", "pend", ""],
+];
+const OUT = { ok: ["imported", "c-ok"], dup: ["already in the Library", "c-dup"], uns: ["unsupported", "c-uns"], fail: ["failed", "c-fail"], pend: ["pending", "c-pend"] };
+
+// ---------- helpers ----------
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const n = (x) => x.toLocaleString("en-US");
+const ICONS = {
+  folder: "M2 4.5h4l1.5 2H14v6.5H2z", file: "M4 1.5h5l3 3v10H4zM9 1.5v3h3", up: "M8 11V3M4.5 6.5 8 3l3.5 3.5M2.5 13.5h11",
+  eye: "M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8zM8 6.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6", chev: "M5.5 3.5 10 8l-4.5 4.5",
+};
+const ico = (k) => `<svg class="ico" viewBox="0 0 16 16"><path d="${ICONS[k]}"/></svg>`;
+const settled = (i) => i.ok + i.dup + i.uns + i.fail;
+const admin = () => state.role === "admin";
+
+// ---------- upload section ----------
+function optControl(on, act, label) {
+  if (state.keep === "switch") return `<button class="switch ${on ? "on" : ""}" data-act="${act}"></button><span>${label}</span>`;
+  if (state.keep === "checkbox") return `<label class="row" style="gap:6px"><input type="checkbox" ${on ? "checked" : ""} data-act="${act}"> ${label}</label>`;
+  return `<span class="segc"><button class="${on ? "" : "on"}" data-act="${act}">To Triage</button><button class="${on ? "on" : ""}" data-act="${act}">${label}</button></span>`;
+}
+// The Files option: off lands in Triage, on sorts every file into one chosen folder
+function filesOpt() {
+  const dest = ui.skipOn ? `<span class="muted">into</span><button class="btn">${ico("folder")} Clients / Wedding 2026 ▾</button>` : `<span class="hint">Files land in Triage.</span>`;
+  return `<div class="opt">${optControl(ui.skipOn, "skip", "Skip Triage")}${dest}</div>`;
+}
+// The Folder option: off lands in Triage, on mirrors the tree under a chosen folder
+function folderOpt() {
+  const on = ui.keepOn;
+  const dest = on ? `<span class="muted">into</span><button class="btn">${ico("folder")} Clients / Wedding 2026 ▾</button>` : `<span class="hint">Everything lands in Triage.</span>`;
+  const hint = on && state.mapHint === "on" ? `<div class="maphint">Wedding 2026/Ceremony/DSC_0412.jpg → Clients / Wedding 2026 / Ceremony</div>` : "";
+  return `<div class="opt">${optControl(on, "keep", "Keep folder structure")}${dest}</div>${hint}`;
+}
+// Both options on labelled lines, for the upload styles without a card per kind
+const bothOpts = () => `<div style="display:grid;gap:var(--s4)"><div class="sub" style="margin:0">Files</div>${filesOpt()}<div class="sub" style="margin:0">Folder</div>${folderOpt()}</div>`;
+function uploadBusy() {
+  const s = state.upState;
+  if (s === "done") return `<div class="row"><span class="c-ok">✓ Sent 4,812 files.</span><span class="hint">Processing continues in the Import history.</span></div>`;
+  if (s !== "uploading") return "";
+  if (state.upProgress === "history") return `<div class="row"><span class="spin"></span> Uploading… <button class="btn sm error">Cancel</button></div>`;
+  return `<div class="live" style="display:grid;gap:var(--s2)"><div class="bar"><i class="ok" style="width:${ui.upPct}%"></i></div>
+    <div class="row hint"><span>${n(Math.round(48.12 * ui.upPct))} of 4,812 files · ${(61.4 * ui.upPct / 100).toFixed(1)} of 61.4 GB</span><span style="margin-left:auto"></span><button class="btn sm error">Cancel</button></div></div>`;
+}
+function renderUpload() {
+  const over = state.upState === "over" ? "over" : "";
+  const btns = `<button class="btn primary" data-act="start">${ico("file")} Choose files</button><button class="btn primary" data-act="start">${ico("folder")} Choose folder</button>`;
+  let body;
+  if (state.upload === "zone") body = `<div class="up"><div class="zone ${over}"><div class="big">${ico("up")}</div><div><b>Drop files or folders here</b></div><div class="row">${btns}</div></div>${bothOpts()}${uploadBusy()}</div>`;
+  else if (state.upload === "bar") body = `<div class="up ${over}" style="padding:var(--s5) var(--s6)"><div class="row">${btns}<span class="hint">or drop files or folders anywhere on this row</span></div>${bothOpts()}${uploadBusy()}</div>`;
+  else body = `<div class="up ${over}"><div class="cards2"><div><b>${ico("file")} Files</b><span class="hint">Pick photos and videos.</span><button class="btn primary" data-act="start">Choose files</button>${filesOpt()}</div>
+    <div><b>${ico("folder")} Folder</b><span class="hint">A whole folder tree, subfolders included.</span><button class="btn primary" data-act="start">Choose folder</button>${folderOpt()}</div></div>${uploadBusy()}</div>`;
+  return `<section><h2>Upload</h2>${body}</section>`;
+}
+
+// ---------- watch folders ----------
+const ST = { watching: "Watching", paused: "Paused", unavailable: "Unavailable" };
+function wfStatus(w) {
+  const text = ST[w.status] + (w.reason ? `: ${w.reason}` : "");
+  if (state.wfStatus === "chip") return `<span class="chip fill st-${w.status}">${ST[w.status]}</span>${w.reason ? ` <span class="hint">${esc(w.reason)}</span>` : ""}`;
+  if (state.wfStatus === "dot") return `<span class="st-${w.status}"><span class="dot"></span></span> ${esc(text)}`;
+  return esc(text);
+}
+function wfActions(w) {
+  if (!admin()) return "";
+  const items = [["Scan now"], [w.status === "paused" ? "Resume" : "Pause"], ["Retry failed"], ["Edit…", "edit"], ["Remove…"]];
+  const b = (t, a) => `<button class="btn sm" ${a ? `data-act="${a}"` : ""}>${t}</button>`;
+  if (state.wfActions === "buttons") return `<span class="row" style="gap:4px">${items.map(([t, a]) => b(t, a)).join("")}</span>`;
+  const rest = state.wfActions === "mixed" ? items.slice(1) : items;
+  const pop = ui.menu === w.id ? `<div class="pop">${rest.map(([t, a]) => `<button ${a ? `data-act="${a}"` : ""}>${t}</button>`).join("")}</div>` : "";
+  return `<span class="row" style="gap:4px;flex-wrap:nowrap">${state.wfActions === "mixed" ? b("Scan now") : ""}<span class="menu"><button class="btn sm" data-act="menu" data-id="${w.id}">⋯</button>${pop}</span></span>`;
+}
+const wfPath = (w) => `<span class="mono ${state.wfPath === "trunc" ? "trunc" : ""}" style="${state.wfPath === "trunc" ? "display:inline-block;max-width:11rem;vertical-align:bottom" : "word-break:break-all"}" title="${esc(w.path)}">${esc(w.path)}</span>`;
+const wfTarget = (w) => w.target ? `${ico("folder")} ${esc(w.target)}` : "Triage";
+const wfCounts = (w) => `<span class="c-ok">${n(w.imported)}</span> imported${w.failed ? `, <span class="c-fail">${w.failed} failed</span>` : ""}${w.del ? ` · <span class="muted">deletes imported files</span>` : ""}`;
+function renderWatch() {
+  const add = admin() ? `<span class="sp"></span><button class="btn" data-act="add">+ Add Watch folder</button>` : "";
+  let body;
+  const band = state.wfStatus === "band";
+  if (state.wfEmpty === "none") body = `<div class="empty">${ico("eye")}<br>No Watch folders. ${admin() ? "Add one to import everything that arrives in a folder on the server." : "An Admin can add one."}</div>`;
+  else if (state.wf === "table") body = `<table class="t"><tr><th>Name</th><th>Path</th><th>Into</th><th>Status</th><th>Last scan</th><th>Files</th><th></th></tr>${WATCH.map((w) =>
+    `<tr><td style="${band ? `border-left:4px solid; ` : ""}" class="${band ? `st-${w.status}` : ""}"><b style="color:var(--theme-neutral-4)">${esc(w.name)}</b></td><td>${wfPath(w)}</td><td>${wfTarget(w)}</td><td>${wfStatus(w)}</td><td class="muted">${w.last}</td><td>${wfCounts(w)}</td><td>${wfActions(w)}</td></tr>`).join("")}</table>`;
+  else if (state.wf === "cards") body = `<div class="cardgrid">${WATCH.map((w) => `<div class="card ${band ? `band st-${w.status}` : ""}"><div class="row"><b>${ico("eye")} ${esc(w.name)}</b><span style="margin-left:auto"></span>${state.wfActions !== "buttons" ? wfActions(w) : ""}</div>
+    <div>${wfPath(w)}</div><div class="hint">into ${wfTarget(w)} · scanned ${w.last}</div><div>${wfStatus(w)}</div><div class="hint">${wfCounts(w)}</div>${state.wfActions === "buttons" ? wfActions(w) : ""}</div>`).join("")}</div>`;
+  else body = `<div class="rows">${WATCH.map((w) => `<div class="rowi ${band ? `band st-${w.status}` : ""}"><b>${esc(w.name)}</b><span class="grow">${wfPath(w)} <span class="muted">→ ${wfTarget(w)}</span></span><span>${wfStatus(w)}</span><span class="hint">${w.last}</span>${wfActions(w)}</div>`).join("")}</div>`;
+  return `<section><h2>Watch folders ${add}</h2>${body}</section>`;
+}
+
+// ---------- history ----------
+function bar(i) {
+  if (state.hBar === "none") return i.open ? `<span class="spin"></span>` : "";
+  if (!i.open && state.hBar === "single") return "";
+  if (i.open && i.src === "upload" && state.upProgress === "inline") return `<span class="spin"></span>`;
+  const p = (x) => `${(x / i.total * 100).toFixed(2)}%`;
+  const segs = state.hBar === "single" ? `<i class="ok" style="width:${p(settled(i))}"></i>`
+    : `<i class="ok" style="width:${p(i.ok)}"></i><i class="dup" style="width:${p(i.dup)}"></i><i class="uns" style="width:${p(i.uns)}"></i><i class="fail" style="width:${p(i.fail)}"></i>`;
+  return `<div class="bar">${segs}</div>`;
+}
+function counts(i) {
+  const left = i.total - settled(i);
+  const parts = [["ok", i.ok], ["dup", i.dup], ["uns", i.uns], ["fail", i.fail]];
+  if (state.hCounts === "chips") return parts.filter(([, v]) => v).map(([k, v]) => `<span class="chip fill ${OUT[k][1]}">${n(v)} ${OUT[k][0]}</span>`).join(" ") + (i.open ? ` <span class="chip c-pend">${n(left)} remaining</span>` : "");
+  if (state.hCounts === "text") return parts.filter(([, v]) => v).map(([k, v]) => `<span class="${k === "ok" ? "" : OUT[k][1]}">${n(v)} ${OUT[k][0]}</span>`).join(", ") + (i.open ? `, ${n(left)} remaining` : "");
+  return `<span class="mono">` + parts.map(([k, v]) => `<span class="${OUT[k][1]}" title="${OUT[k][0]}" style="display:inline-block;min-width:3.4em;text-align:right">${v ? n(v) : "–"}</span>`).join("") + (i.open ? `<span class="muted" style="display:inline-block;min-width:4.6em;text-align:right">/ ${n(i.total)}</span>` : "") + `</span>`;
+}
+const srcIco = (i) => i.src === "watch" ? ico("eye") : ico(i.target ? "folder" : "up");
+const impMeta = (i) => `${esc(i.who)} · ${i.when} · into ${i.target ? esc(i.target) : "Triage"}${i.note ? ` · <span class="c-fail">${i.note}</span>` : ""}`;
+function filesPanel(i) {
+  const tally = { all: FILES.length }; FILES.forEach(([, o]) => tally[o] = (tally[o] || 0) + 1);
+  const keys = ["all", "ok", "dup", "uns", "fail"];
+  const lbl = (k) => k === "all" ? "All" : OUT[k][0];
+  let head, list = FILES;
+  if (state.hFilter === "problems") {
+    list = ui.showImported ? FILES : FILES.filter(([, o]) => o !== "ok" && o !== "pend");
+    head = `<div class="row hint"><b>${ui.showImported ? "All files" : "Not imported"}</b><a href="#" data-act="showImported" style="color:var(--theme-primary-text)">${ui.showImported ? "Show problems only" : "Show imported"}</a></div>`;
+  } else {
+    if (ui.filter !== "all") list = FILES.filter(([, o]) => o === ui.filter);
+    head = state.hFilter === "chips"
+      ? `<div class="row" style="gap:4px">${keys.map((k) => `<button class="chip ${ui.filter === k ? "fill" : ""} ${k === "all" ? "" : OUT[k][1]}" style="cursor:pointer;background-clip:padding-box;font:inherit;font-size:.8em" data-act="filter" data-id="${k}">${lbl(k)} ${tally[k] || 0}</button>`).join("")}</div>`
+      : `<div class="tabs">${keys.map((k) => `<button class="${ui.filter === k ? "on" : ""}" data-act="filter" data-id="${k}">${lbl(k)} <span class="muted">${tally[k] || 0}</span></button>`).join("")}</div>`;
+  }
+  const rows = list.map(([p, o, r]) => `<div class="f"><span class="mono">${esc(p)}</span><span class="${OUT[o][1]}">${o === "ok" ? `<a href="#" style="color:inherit">imported ↗</a>` : OUT[o][0]}</span>${r ? `<small>${esc(r)}</small>` : ""}</div>`).join("");
+  return `<div class="files" data-stop>${head}${rows || `<span class="hint">No files.</span>`}<span class="hint">Showing ${list.length} of ${n(i.total)} files</span></div>`;
+}
+function impRow(i) {
+  const exp = ui.expanded === i.id, live = i.open ? "live" : "";
+  const title = `${srcIco(i)} <b>${esc(i.title)}</b>`;
+  if (state.hist === "table") return `<tr class="click imp ${live}" data-act="expand" data-id="${i.id}"><td>${exp ? "▾" : "▸"} ${title}<div class="hint">${impMeta(i)}</div></td><td style="width:22%">${bar(i)}</td><td>${counts(i)}</td></tr>${exp ? `<tr><td colspan="3">${filesPanel(i)}</td></tr>` : ""}`;
+  if (state.hist === "cards") return `<div class="card imp ${live}" data-act="expand" data-id="${i.id}"><div class="row">${title}<span class="hint">${impMeta(i)}</span><span style="margin-left:auto">${exp ? "▾" : "▸"}</span></div>${bar(i)}<div>${counts(i)}</div>${exp ? filesPanel(i) : ""}</div>`;
+  return `<div class="tl imp ${live}" data-act="expand" data-id="${i.id}"><div class="row">${title}<span class="hint">${impMeta(i)}</span></div>${bar(i)}<div>${counts(i)}</div>${exp ? filesPanel(i) : ""}</div>`;
+}
+function renderHistory() {
+  if (state.hEmpty === "none") return `<section><h2>Import history</h2><div class="empty">Nothing imported yet. Uploads and Watch folder scans appear here.</div></section>`;
+  const wrap = (rows) => state.hist === "table" ? `<table class="t">${rows}</table>` : state.hist === "cards" ? `<div style="display:grid;gap:var(--s5)">${rows}</div>` : `<div class="timeline">${rows}</div>`;
+  const open = IMPORTS.filter((i) => i.open), closed = IMPORTS.filter((i) => !i.open);
+  const body = state.hGroup === "pinned"
+    ? (open.length ? `<div class="sub">In progress</div>${wrap(open.map(impRow).join(""))}` : "") + `<div class="sub">Earlier</div>${wrap(closed.map(impRow).join(""))}`
+    : wrap(IMPORTS.map(impRow).join(""));
+  return `<section><h2>Import history</h2>${body}</section>`;
+}
+
+// ---------- dialog ----------
+function renderDialog() {
+  const host = document.getElementById("dlgHost");
+  if (state.dlg !== "open") { host.innerHTML = ""; return; }
+  const pathErr = state.dlgError === "overlap" ? `<span class="err">This path is inside the Watch folder "Phone sync" (/mnt/nas/sync).</span>` : "";
+  const src = `<label class="l">Name<input class="field" value="Studio card ingest"></label>
+    <label class="l">Path on the server<input class="field mono" value="/mnt/cards/ingest">${pathErr}<span class="hint">Scanned with its subfolders every 60 s, and at startup for anything that arrived meanwhile.</span></label>`;
+  const dest = `<div class="opt"><button type="button" class="switch ${ui.dlgKeep ? "on" : ""}" data-act="dlgKeep"></button><span>Keep folder structure</span></div>
+    ${ui.dlgKeep ? `<label class="l">Destination folder<button type="button" class="btn" style="justify-self:start">${ico("folder")} Shoots / Unsorted ▾</button></label>` : `<span class="hint">Files land in Triage.</span>`}`;
+  const warn = !ui.dlgDelete ? "" : state.dlgDelete === "callout" ? `<div class="callout"><b>1,204 files are in this folder now.</b> Each is deleted from the server once it is imported, and so is one whose content the Library already has. Unsupported and failed files stay.</div>`
+    : state.dlgDelete === "inline" ? `<span class="err">Files are deleted from the server once imported (1,204 in the folder now).</span>` : "";
+  const after = `<div class="opt"><button type="button" class="switch ${ui.dlgDelete ? "on" : ""}" data-act="dlgDelete"></button><span>Delete imported files</span></div>${warn}`;
+  const fs = (legend, inner) => state.dlgLayout === "sections" ? `<fieldset><legend>${legend}</legend>${inner}</fieldset>` : inner;
+  const saveText = ui.dlgDelete && state.dlgDelete === "callout" ? "Save and delete imported files" : "Save";
+  const form = ui.dlgConfirm
+    ? `<h3>Delete imported files?</h3><div class="callout"><b>1,204 files are in /mnt/cards/ingest now.</b> Each is deleted from the server once it is imported. This cannot be undone.</div>
+       <div class="row" style="justify-content:flex-end"><button class="btn" data-act="dlgBack">Back</button><button class="btn primary" data-act="dlgClose">Delete after import</button></div>`
+    : `<h3>Watch folder</h3>${fs("Source", src)}${fs("Destination", dest)}${fs("After import", after)}
+       <div class="hint">Imports as you (Admin). Assets belong to your account.</div>
+       <div class="row" style="justify-content:flex-end"><button class="btn" data-act="dlgClose">Cancel</button><button class="btn primary" data-act="dlgSave">${saveText}</button></div>`;
+  host.innerHTML = `<div class="scrim"><div class="dlg">${form}</div></div>`;
+}
+
+// ---------- page ----------
+function renderPage() {
+  const app = document.getElementById("app");
+  for (const k of ["theme", "layout", "density", "anim", "live"]) app.dataset[k] = state[k];
+  const nav = `<div class="nav"><b>ALTITUDE</b><span>Studio ▾</span><span>Browse</span><span>Triage 214</span><span class="cur">Import</span><span>Trash</span><span class="sp">${admin() ? "Admin" : "Mara K."}</span></div>`;
+  let body;
+  const openN = IMPORTS.filter((i) => i.open).length;
+  if (state.layout === "split") body = `<div class="col">${renderUpload()}${renderWatch()}</div><div class="col">${renderHistory()}</div>`;
+  else if (state.layout === "tabs") {
+    const tabs = [["upload", "Upload"], ["watch", "Watch folders"], ["history", "Import history"]];
+    body = `<div style="display:grid;gap:var(--s7)"><div class="tabs">${tabs.map(([k, t]) => `<button class="${ui.tab === k ? "on" : ""}" data-act="tab" data-id="${k}">${t}${k === "history" && openN ? `<span class="badge">${openN}</span>` : ""}</button>`).join("")}</div>
+      ${ui.tab === "upload" ? renderUpload() : ui.tab === "watch" ? renderWatch() : renderHistory()}</div>`;
+  } else body = renderUpload() + renderWatch() + renderHistory();
+  document.getElementById("pageHost").innerHTML = nav + `<div class="page">${body}</div>`;
+}
+
+// ---------- prompt ----------
+function updatePrompt() {
+  const lines = [];
+  for (const [group, ctls] of GROUPS) {
+    const g = [];
+    for (const [key, , opts] of ctls) {
+      if (TRANSIENT.has(key)) continue;
+      const o = opts.find((x) => x[0] === state[key]);
+      if (o && o[2]) g.push(o[2]);
+    }
+    if (g.length) lines.push(`${group}: ${g.join(" ")}`);
+  }
+  document.getElementById("prompt").textContent =
+    "Design the Import page of plans/todo/import-folder-trees-and-watch-folders.md (tasks 6, 7 and 12) as follows, using the app's existing tokens and components.\n\n" + lines.join("\n\n");
+}
+
+// ---------- controls ----------
+function renderControls() {
+  document.getElementById("controls").innerHTML = GROUPS.map(([g, ctls], gi) => `<details ${gi < 5 ? "open" : ""}><summary>${g}</summary>${ctls.map(([key, label, opts]) =>
+    `<div class="ctl"><label>${label}</label><div class="seg">${opts.map(([v, t]) => `<button class="${state[key] === v ? "on" : ""}" data-k="${key}" data-v="${v}">${t}</button>`).join("")}</div></div>`).join("")}</details>`).join("");
+}
+function updateAll() { renderControls(); renderPage(); renderDialog(); updatePrompt(); }
+
+document.getElementById("controls").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-k]"); if (!b) return;
+  // Keep each group's open/closed state across the re-render
+  const open = [...document.querySelectorAll("#controls details")].map((d) => d.open);
+  state[b.dataset.k] = b.dataset.v;
+  if (b.dataset.k === "dlg") ui.dlgConfirm = false;
+  
+  updateAll();
+  document.querySelectorAll("#controls details").forEach((d, i) => d.open = open[i]);
+});
+document.getElementById("presets").innerHTML = Object.keys(PRESETS).map((p) => `<button class="pbtn" data-p="${p}">${p}</button>`).join(" ");
+document.getElementById("presets").addEventListener("click", (e) => {
+  const p = e.target.dataset.p; if (!p) return;
+  // A preset keeps the transient view state (theme, viewer, simulated states)
+  const keep = {}; TRANSIENT.forEach((k) => keep[k] = state[k]);
+  Object.assign(state, DEFAULTS, PRESETS[p], keep); updateAll();
+});
+document.getElementById("copy").addEventListener("click", (e) => {
+  navigator.clipboard.writeText(document.getElementById("prompt").textContent).then(() => {
+    e.target.textContent = "Copied!"; setTimeout(() => e.target.textContent = "Copy prompt", 1200);
+  });
+});
+
+// Interactions inside the mock app
+document.getElementById("app").addEventListener("click", (e) => {
+  const a = e.target.closest("[data-act]");
+  if (!a) { if (ui.menu) { ui.menu = null; renderPage(); } return; }
+  if (a.tagName === "A") e.preventDefault();
+  const act = a.dataset.act, id = a.dataset.id;
+  if (act === "expand") { if (e.target.closest("[data-stop]")) return; ui.expanded = ui.expanded === id ? null : id; ui.filter = "all"; }
+  else if (act === "keep") ui.keepOn = !ui.keepOn;
+  else if (act === "skip") ui.skipOn = !ui.skipOn;
+  else if (act === "filter") ui.filter = id;
+  else if (act === "showImported") ui.showImported = !ui.showImported;
+  else if (act === "tab") ui.tab = id;
+  else if (act === "menu") { ui.menu = ui.menu === id ? null : id; renderPage(); return; }
+  else if (act === "start") { state.upState = "uploading"; ui.upPct = 0; IMPORTS = fresh(); Object.assign(IMPORTS[0], { ok: 0, dup: 0, uns: 0, fail: 0 }); updateAll(); return; }
+  else if (act === "add" || act === "edit") { state.dlg = "open"; ui.dlgConfirm = false; ui.menu = null; updateAll(); return; }
+  else if (act === "dlgKeep") { ui.dlgKeep = !ui.dlgKeep; renderDialog(); return; }
+  else if (act === "dlgDelete") { ui.dlgDelete = !ui.dlgDelete; renderDialog(); return; }
+  else if (act === "dlgBack") { ui.dlgConfirm = false; renderDialog(); return; }
+  else if (act === "dlgSave") { if (ui.dlgDelete && state.dlgDelete === "confirm") { ui.dlgConfirm = true; renderDialog(); return; } state.dlg = "closed"; updateAll(); return; }
+  else if (act === "dlgClose") { state.dlg = "closed"; updateAll(); return; }
+  ui.menu = null; renderPage();
+});
+
+// ---------- live simulation: settles pending files of the Imports in progress ----------
+setInterval(() => {
+  if (state.sim !== "on") return;
+  if (ui.menu) return; // an open menu would be closed by the re-render
+  for (const i of IMPORTS) {
+    if (!i.open) continue;
+    let step = Math.min(i.total - settled(i), Math.max(1, Math.round(i.total / 90)));
+    while (step-- > 0) { const r = Math.random(); if (r < .9) i.ok++; else if (r < .97) i.dup++; else if (r < .993) i.uns++; else i.fail++; }
+    if (settled(i) >= i.total) i.open = false;
+  }
+  if (state.upState === "uploading") { ui.upPct = Math.min(100, ui.upPct + 2); if (ui.upPct >= 100) { state.upState = "done"; renderControls(); } }
+  if (!IMPORTS.some((i) => i.open)) { IMPORTS = fresh(); if (state.upState === "done") { state.upState = "idle"; renderControls(); } }
+  renderPage();
+}, 700);
+
+updateAll();
+</script>
+</body>
+</html>

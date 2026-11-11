@@ -1,0 +1,121 @@
+/* The account info dialog (htmx/account_info_dialog), a popover dialog right-aligned below the nav's account trigger, a band
+   of the account type's color across its top. Its lists share one label column (subgrid), so the values line up from the
+   email address to the session's expiry, and each section opens under a hairline; the account's actions close it at the
+   right */
+#popoverDialog:has(#accountInfo) {
+  position-area: bottom span-left;
+  border-top: var(--border-band) var(--account-type-color);
+}
+
+#accountInfo {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-5) var(--space-6);
+  width: var(--account-info-width);
+  max-width: 100%;
+}
+
+#accountInfo :is(header, dl, section) {
+  grid-column: 1 / -1;
+}
+
+#accountInfo :is(dl, section) {
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-4);
+  margin: 0;
+}
+
+#accountInfo header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+/* The glyph's own size, as large as an account card's avatar */
+#accountInfo .avatar {
+  font-size: 2.5em;
+  color: var(--account-type-color);
+}
+
+#accountInfo .name {
+  font-size: var(--font-size-medium);
+  font-weight: var(--font-weight-semibold);
+}
+
+#accountInfo .username {
+  font-family: var(--font-nav);
+  font-size: var(--font-size-small);
+  color: var(--theme-neutral-3);
+}
+
+#accountInfo section {
+  padding-top: var(--space-5);
+  border-top: var(--border-hairline) var(--popover-border-color);
+}
+
+/* A section's name, in the small caps of a dialog's labels */
+#accountInfo h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  color: hsl(from currentColor h s l / 0.6);
+}
+
+#accountInfo dt {
+  color: var(--theme-neutral-3);
+}
+
+#accountInfo dd {
+  margin: 0;
+  min-width: 0;
+}
+
+/* The account type, a chip in its color, and its description under it */
+#accountInfo .account-type {
+  padding: var(--chip-padding);
+  border: var(--border-hairline) hsl(from var(--account-type-color) h s l / 0.55);
+  border-radius: var(--chip-border-radius);
+  background: hsl(from var(--account-type-color) h s l / 0.14);
+  color: var(--account-type-color);
+  font-family: var(--font-nav);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+#accountInfo .description {
+  display: block;
+  margin-top: var(--space-3);
+  font-size: var(--font-size-small);
+  color: var(--theme-neutral-3);
+}
+
+/* The Permissions held in the Library of the page, chips as the Add User form's checked ones */
+#accountInfo .permission-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#accountInfo .permission-chips li {
+  padding: var(--chip-padding);
+  border: var(--border-hairline) var(--panel-border-color);
+  border-radius: var(--chip-border-radius);
+  background-color: hsl(from var(--theme-accent) h s l / 0.2);
+  font-size: var(--font-size-small);
+}
+
+#accountInfo .actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}

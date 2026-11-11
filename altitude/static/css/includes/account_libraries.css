@@ -1,0 +1,24 @@
+/* An account's Libraries (includes/account_libraries), on an account card and in the account info dialog: a summary that
+   expands to one row per Library, its Permissions' labels under its name, dimmed, and the Library of the page marked */
+.account-libraries summary {
+  cursor: pointer;
+}
+
+.account-libraries ul {
+  display: grid;
+  row-gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-libraries .permission-names {
+  display: block;
+  font-size: var(--font-size-small);
+  color: var(--theme-neutral-3);
+}
+
+.account-libraries .current {
+  font-size: var(--font-size-small);
+  color: var(--theme-accent);
+}

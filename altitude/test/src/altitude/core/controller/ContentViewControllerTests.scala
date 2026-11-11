@@ -46,7 +46,7 @@ import altitude.core.routes.decorators
     }
   }
 
-  test("Content requires a login and a repository the user owns") {
+  test("Content requires a login and a repository the user can see") {
 
     /**
      * Setup:
@@ -64,7 +64,8 @@ import altitude.core.routes.decorators
     login()
 
     val stranger = testContext.persistUser()
-    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    val strangersRepo = testContext.persistRepository()
+    testContext.grant(stranger, strangersRepo)
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/2.jpg"))
@@ -82,6 +83,57 @@ import altitude.core.routes.decorators
         requests
           .get(previewUrl(host, strangersRepo.persistedId, foreign.persistedId), cookies = testContext.cookies, check = false)
           .statusCode shouldBe 404
+    }
+  }
+
+  test("An original, a preview and a face of another repository of the user's are 404s, signed or not") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, and a second repository of theirs (they hold a grant in both) holding an imported image with
+     * a Person's Face on it, its files and the Face's images stored.
+     *
+     * Assertions:
+     *
+     * Asked for through the first repository, the image's original, its preview and the Face's image are plain-text 404s, with
+     * the session's cookie and by a URL the server signed for that path alike, and none serves a byte of the other repository's.
+     * Through the second repository the three are served.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    val otherRepo = testContext.persistRepository()
+    testContext.grant(testContext.user, otherRepo)
+    testApp.service.repository.switchContextToRepository(otherRepo)
+    val foreign = testContext.persistAsset(repository = Some(otherRepo))
+    val person = testApp.service.person.addPerson(altitude.core.models.Person())
+    val face = testContext.addTestFace(person, foreign, altitude.test.TestContext.unitVector(1), withFiles = true)
+    testApp.service.repository.switchContextToRepository(repo)
+
+    withServer(App) {
+      host =>
+        val items = List(
+          Const.DataStore.FILE -> foreign.persistedId,
+          Const.DataStore.PREVIEW -> foreign.persistedId,
+          Const.DataStore.FACE -> face.persistedId)
+
+        for ((dataType, itemId) <- items) withClue(s"[$dataType]: ") {
+          val own = requests.get(contentUrl(host, otherRepo.persistedId, dataType, itemId), cookies = testContext.cookies)
+          own.statusCode shouldBe 200
+
+          for (
+            response <- List(
+              requests.get(contentUrl(host, repoId, dataType, itemId), cookies = testContext.cookies, check = false),
+              requests.get(signedUrl(host, repoId, dataType, itemId), check = false)
+            )
+          ) {
+            response.statusCode shouldBe 404
+            response.headers("content-type") shouldBe Seq("text/plain")
+            response.text() shouldBe "Not found"
+          }
+        }
     }
   }
 
@@ -438,7 +490,8 @@ import altitude.core.routes.decorators
     login()
 
     val stranger = testContext.persistUser()
-    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    val strangersRepo = testContext.persistRepository()
+    testContext.grant(stranger, strangersRepo)
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/2.jpg"))

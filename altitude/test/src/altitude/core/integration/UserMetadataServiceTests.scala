@@ -1,5 +1,6 @@
 package altitude.core.integration
 
+import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.contain
 import org.scalatest.matchers.must.Matchers.empty
@@ -7,7 +8,10 @@ import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.{ should, shouldBe, shouldNot }
 
 import altitude.core.Altitude
+import altitude.core.Api
+import altitude.core.Const
 import altitude.core.DuplicateException
+import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.dao.jdbc.BaseDao
@@ -268,6 +272,29 @@ import altitude.core.util.Util
     }
   }
 
+  test("Metadata set on an unknown asset, and a field deleted by an unknown ID, are not found") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field, and an ID that no asset or field has.
+     *
+     * Assertions:
+     *
+     * Setting metadata on the unknown asset and deleting a field by the unknown ID are each a `NotFoundException`, never a write
+     * that changes nothing; reading the unknown asset's metadata is not found too. The field is still there.
+     */
+    val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
+    val unknownId = BaseDao.genId
+
+    intercept[NotFoundException] {
+      testApp.service.metadata.setMetadata(unknownId, UserMetadata(Map(field.persistedId -> Set("value"))))
+    }
+    intercept[NotFoundException](testApp.service.metadata.getMetadata(unknownId))
+    intercept[NotFoundException](testApp.service.metadata.deleteFieldById(unknownId))
+    testApp.service.metadata.getFieldById(field.persistedId).persistedId shouldBe field.persistedId
+  }
+
   test("Get all fields for a repo") {
 
     /**
@@ -315,6 +342,116 @@ import altitude.core.util.Util
     intercept[DuplicateException] {
       testApp.service.metadata.addField(UserMetadataField(name = fieldName, fieldType = FieldType.KEYWORD))
     }
+  }
+
+  test("A field name longer than 250 characters once in NFC, or whose name key is too long, is refused") {
+
+    /**
+     * Setup:
+     *
+     * A repository with no metadata fields.
+     *
+     * Assertions:
+     *
+     * Adding a field named 250 of U+FB2C (250 characters as typed, 750 in NFC) fails validation with the name field's too-long
+     * error, and one named 100 of U+FDFA (whose name key NFKC spells out to 3300 bytes) with the name key error. The repository
+     * still has no fields.
+     */
+    val max = Api.Constraints.MAX_METADATA_FIELD_NAME_LENGTH
+    val tooLong = Const.Msg.Err.VALUE_TOO_LONG.format(max)
+
+    for ((name, message) <- List(lengthenedByNfc(max) -> tooLong, longKeyName(100) -> Const.Msg.Err.NAME_KEY_TOO_LONG)) {
+      refusesName(Api.Field.Metadata.Field.NAME, message) {
+        testApp.service.metadata.addField(UserMetadataField(name = name, fieldType = FieldType.KEYWORD))
+      }
+    }
+
+    testApp.service.metadata.getAllFields shouldBe empty
+  }
+
+  test("The metadata JSON lists every field by name key, each with its ID, name and type") {
+
+    /**
+     * Setup:
+     *
+     * Five KEYWORD fields, "Charlie", "Ｂeta" with a full-width "B", "alpha", "Strasz" and "Straße", and an asset holding a value
+     * in "Charlie" alone.
+     *
+     * Assertions:
+     *
+     * The asset's metadata JSON lists all five fields in the order of their name keys: "alpha", "Ｂeta", "Charlie", "Straße"
+     * ("strasse") and "Strasz", the field with a value and the fields without alike. Each field reads as its ID, name and type,
+     * with no name key.
+     *
+     * Edge cases:
+     *
+     * A letter-by-letter case-insensitive comparison would put "Ｂeta" last and "Strasz" before "Straße".
+     */
+    val names = List("Charlie", "\uFF22eta", "alpha", "Strasz", "Stra\u00DFe")
+    val fields =
+      names.map(name => testApp.service.metadata.addField(UserMetadataField(name = name, fieldType = FieldType.KEYWORD)))
+    val asset: Asset = testContext.persistAsset()
+    testApp.service.metadata.addMetadataValue(asset.persistedId, fields.head.persistedId, "a value")
+
+    val json = testApp.service.metadata.toJson(testApp.service.metadata.getMetadata(asset.persistedId))
+    val listed = json.arr.map(_(FieldConst.MetadataField.FIELD))
+
+    listed.map(_(FieldConst.MetadataField.NAME).str).toList shouldBe
+      List("alpha", "\uFF22eta", "Charlie", "Stra\u00DFe", "Strasz")
+    listed.foreach(_.obj.keySet shouldBe Set(FieldConst.ID, FieldConst.MetadataField.NAME, FieldConst.MetadataField.FIELD_TYPE))
+  }
+
+  test("Field names that differ only by case fold, canonical form or compatibility form are duplicates") {
+
+    /**
+     * Setup:
+     *
+     * Three KEYWORD fields, "Straße", "Café" with a precomposed "é" and "Summer".
+     *
+     * Assertions:
+     *
+     * Adding a field named "STRASSE" (the case fold of "ß"), "Café" with an "e" and a combining accent (the canonical form) or
+     * "Ｓummer" with a full-width "S" (the compatibility form) is a duplicate, whatever its type.
+     */
+    val clashes = List("Stra\u00DFe" -> "STRASSE", "Caf\u00E9" -> "Cafe\u0301", "Summer" -> "\uFF33ummer")
+
+    for ((name, clash) <- clashes) withClue(s"[$clash]: ") {
+      testApp.service.metadata.addField(UserMetadataField(name = name, fieldType = FieldType.KEYWORD))
+      intercept[DuplicateException] {
+        testApp.service.metadata.addField(UserMetadataField(name = clash, fieldType = FieldType.TEXT))
+      }
+    }
+  }
+
+  test("A field name is stored in NFC, and its key does not depend on the default locale") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field added as "Café" typed with a combining accent, and a field "Istanbul" added under a Turkish default locale.
+     *
+     * Assertions:
+     *
+     * The field is returned and reads back as "Café" with a precomposed "é". Adding "Istanbul" again under the root locale is a
+     * duplicate: the Turkish locale's dotless "ı" never reaches the key.
+     *
+     * Edge cases:
+     *
+     * A name with a full-width letter keeps it: the stored name is not folded.
+     */
+    def addField(name: String): UserMetadataField =
+      testApp.service.metadata.addField(UserMetadataField(name = name, fieldType = FieldType.KEYWORD))
+
+    val field = addField("Cafe\u0301")
+    field.name shouldBe "Caf\u00E9"
+    testApp.service.metadata.getFieldById(field.persistedId).name shouldBe "Caf\u00E9"
+
+    withDefaultLocale(Locale.forLanguageTag("tr"))(addField("Istanbul"))
+    withDefaultLocale(Locale.ROOT) {
+      intercept[DuplicateException](addField("Istanbul"))
+    }
+
+    addField("\uFF33ummer").name shouldBe "\uFF33ummer"
   }
 
   test("Metadata added initially should be present") {
@@ -685,5 +822,68 @@ import altitude.core.util.Util
     }
 
     testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value) shouldBe values.toSet
+  }
+
+  test("Keyword values that differ only by case fold, canonical form or compatibility form are one value") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field on one asset holding "Straße", "Café" with a precomposed "é", "Summer" and "indigo".
+     *
+     * Assertions:
+     *
+     * Adding "STRASSE" (the case fold of "ß"), "Café" with an "e" and a combining accent (the canonical form) or "Ｓummer" with a
+     * full-width "S" (the compatibility form) fails validation as a duplicate, and the field keeps its four values.
+     *
+     * Edge cases:
+     *
+     * "INDIGO" added under a Turkish default locale, whose lowercase of "I" is a dotless "ı", is a duplicate too.
+     */
+    val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
+    val asset: Asset = testContext.persistAsset()
+    val values = List("Stra\u00DFe", "Caf\u00E9", "Summer", "indigo")
+    values.foreach(testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, _))
+
+    List("STRASSE", "Cafe\u0301", "\uFF33ummer").foreach {
+      clash =>
+        withClue(s"[$clash]: ") {
+          intercept[ValidationException] {
+            testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, clash)
+          }
+        }
+    }
+
+    withDefaultLocale(Locale.forLanguageTag("tr")) {
+      intercept[ValidationException] {
+        testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, "INDIGO")
+      }
+    }
+
+    testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value) shouldBe values.toSet
+  }
+
+  test("A metadata value is stored in NFC and keeps its compatibility forms") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD and a TEXT field on one asset, given "Café" typed with a combining accent and "Ｓummer" with a full-width "S".
+     *
+     * Assertions:
+     *
+     * Both fields read back "Café" with a precomposed "é" and "Ｓummer" as typed: the stored value is not folded.
+     */
+    val keyword = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
+    val text = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.TEXT))
+    val asset: Asset = testContext.persistAsset()
+
+    for (field <- List(keyword, text)) withClue(s"[${field.fieldType}]: ") {
+      testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, "Cafe\u0301")
+      testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, "\uFF33ummer")
+
+      testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value) shouldBe
+        Set("Caf\u00E9", "\uFF33ummer")
+    }
   }
 }

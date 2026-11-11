@@ -21,6 +21,8 @@ import altitude.core.routes.web.SettingsController
 import altitude.core.routes.web.SetupController
 import altitude.core.routes.web.StaticController
 import altitude.core.routes.web.StyleGuideController
+import altitude.core.routes.web.UsersController
+import altitude.core.routes.web.partial.AccountInfoController
 import altitude.core.routes.web.partial.AlbumActionController
 import altitude.core.routes.web.partial.AssetActionController
 import altitude.core.routes.web.partial.CurationActionController
@@ -28,12 +30,14 @@ import altitude.core.routes.web.partial.FolderActionController
 import altitude.core.routes.web.partial.LibraryActionController
 import altitude.core.routes.web.partial.LocationActionController
 import altitude.core.routes.web.partial.NavController
+import altitude.core.routes.web.partial.OwnPasswordController
 import altitude.core.routes.web.partial.PeopleActionController
 import altitude.core.routes.web.partial.SearchResultsController
 import altitude.core.routes.web.partial.SettingsFormController
 import altitude.core.routes.web.partial.SetupFormController
 import altitude.core.routes.web.partial.TrashActionController
 import altitude.core.routes.web.partial.TriageController
+import altitude.core.routes.web.partial.UserActionController
 import altitude.core.routes.web.partial.ViewSettingsActionController
 
 object App extends cask.Main:
@@ -88,6 +92,7 @@ object App extends cask.Main:
     new SetupController,
     new ImportController,
     new SettingsController,
+    new UsersController,
     new ContentViewController,
 
     // partials
@@ -95,6 +100,9 @@ object App extends cask.Main:
     new SettingsFormController,
     new NavController,
     new LibraryActionController,
+    new UserActionController,
+    new OwnPasswordController,
+    new AccountInfoController,
     new AlbumActionController,
     new LocationActionController,
     new AssetActionController,

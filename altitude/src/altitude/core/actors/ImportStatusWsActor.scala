@@ -9,10 +9,12 @@ import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import altitude.core.AltitudeActorSystem
 import altitude.core.DuplicateException
 import altitude.core.ImageException
+import altitude.core.ImporterUnavailableException
 import altitude.core.StorageException
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.VideoException
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalid
+import altitude.core.service.AccountVersions
 
 object ImportStatusWsActor:
   sealed trait Command
@@ -21,6 +23,16 @@ object ImportStatusWsActor:
     extends AltitudeActorSystem.Command
     with Command
   final case class RemoveClient(userId: String, client: WsChannelActor) extends AltitudeActorSystem.Command with Command
+
+  /**
+   * Closes every socket of the account and forgets them: its versions changed (`AccountVersions`), so what opened them may hold
+   * no more. A change closes them with 1013 (try again later), which the page's client reconnects on, its handshake checking the
+   * login again (refused for an account deactivated or deleted); a revocation with 1008 (policy violation), which it does not.
+   */
+  final case class CloseAllFor(userId: String, change: AccountVersions.Change) extends AltitudeActorSystem.Command with Command
+
+  private val TRY_AGAIN_LATER = 1013
+  private val POLICY_VIOLATION = 1008
 
   private val successStatusTickerTemplate = "<div id=\"statusText\">%s</div>"
   private val warningStatusTickerTemplate = "<div id=\"statusText\" class=\"warning\">%s</div>"
@@ -69,6 +81,9 @@ class ImportStatusWsActor(context: ActorContext[ImportStatusWsActor.Command])
                         errorStatusTickerTemplate.format(s"Error importing $fileName: Cannot decode video")
                       case Some(_: StorageException) =>
                         errorStatusTickerTemplate.format(s"Error importing $fileName: Storage error")
+                      // Its message is one of two fixed texts (Const.Msg.Err.IMPORTER_GONE, IMPORTER_DEACTIVATED)
+                      case Some(unavailable: ImporterUnavailableException) =>
+                        errorStatusTickerTemplate.format(s"Error importing $fileName: ${unavailable.getMessage}")
                       // An exception's message may carry paths or SQL, so a cause not named above is shown by its class alone
                       case cause =>
                         val name = cause.fold("Unknown error")(_.getClass.getSimpleName)
@@ -78,6 +93,17 @@ class ImportStatusWsActor(context: ActorContext[ImportStatusWsActor.Command])
 
                 client.send(cask.Ws.Text(wsContent))
             }
+        }
+        Behaviors.same
+
+      case CloseAllFor(userId, change) =>
+        val (code, reason) = change match
+          case AccountVersions.Change.Bumped => (TRY_AGAIN_LATER, "Account changed")
+          case AccountVersions.Change.Revoked => (POLICY_VIOLATION, "Session revoked")
+        userToWsClientLookup.remove(userId).toList.flatten.foreach {
+          client =>
+            context.log.debug(s"Closing client $client of user $userId: $reason")
+            client.send(cask.Ws.Close(code, reason))
         }
         Behaviors.same
 

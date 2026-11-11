@@ -8,7 +8,7 @@ case class MetadataFieldRow[T[_]](
     id: T[String],
     repositoryId: T[String],
     name: T[String],
-    nameLc: T[String],
+    nameKey: T[String],
     fieldType: T[String],
     createdAt: T[Option[OffsetDateTime]],
     updatedAt: T[Option[OffsetDateTime]])

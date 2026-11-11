@@ -9,6 +9,9 @@ object Api:
     val MAX_NAME_LENGTH = 80
     val MIN_NAME_LENGTH = 2
 
+    val MAX_USERNAME_LENGTH = 32
+    val MIN_USERNAME_LENGTH = 3
+
     val MAX_PASSWORD_LENGTH = 50
     val MIN_PASSWORD_LENGTH = 8
 
@@ -23,6 +26,8 @@ object Api:
 
     val MAX_LOCATION_NAME_LENGTH = 250
     val MIN_LOCATION_NAME_LENGTH = 1
+
+    val MAX_METADATA_FIELD_NAME_LENGTH = 250
 
   object Field:
     val USER_ID = "userId"
@@ -63,6 +68,29 @@ object Api:
 
     object Library:
       val NAME = "name"
+
+    // The account forms of the Users page (htmx/account_form, htmx/set_password_dialog) and the own password dialog
+    // (htmx/own_password_dialog). `libraryIds` holds the Libraries given, `permissions` a "<Library ID>:<Permission>" per
+    // Permission given in one, `newLibraryPermissions` the Permission names of the new-Library grant.
+    object User:
+      val ACCOUNT_ID = "accountId"
+      val NAME = "name"
+      val USERNAME = "username"
+      val EMAIL = "email"
+      val PASSWORD = "password"
+      // The Add User form's password typed again, which must match it
+      val PASSWORD2 = "password2"
+      val ACCOUNT_TYPE = "accountType"
+      val LIBRARY_IDS = "libraryIds"
+      val PERMISSIONS = "permissions"
+      val CAN_CREATE_LIBRARIES = "canCreateLibraries"
+      val GRANTS_NEW_LIBRARIES = "grantsNewLibraries"
+      val NEW_LIBRARY_PERMISSIONS = "newLibraryPermissions"
+      val CURRENT_PASSWORD = "currentPassword"
+      val NEW_PASSWORD = "newPassword"
+      val NEW_PASSWORD2 = "newPassword2"
+      // The state an Admin's edit form was opened over (UserService.editState), which its save carries back
+      val OPENED_STATE = "openedState"
 
     object Location:
       val LOCATION_ID = "locationId"
@@ -159,6 +187,7 @@ object Api:
     object Setup:
       val ADMIN_EMAIL = "adminEmail"
       val ADMIN_NAME = "adminName"
+      val ADMIN_USERNAME = "adminUsername"
       val REPOSITORY_NAME = "repositoryName"
       val PASSWORD = "password"
       val PASSWORD2 = "password2"

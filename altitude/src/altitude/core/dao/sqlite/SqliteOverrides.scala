@@ -2,6 +2,7 @@ package altitude.core.dao.sqlite
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -40,7 +41,11 @@ trait SqliteOverrides:
   // An instant is stored as its UTC wall clock and handed back verbatim, as `getDateTimeField` does for the raw paths
   override protected def toLocalDateTime(value: OffsetDateTime): LocalDateTime = value.toLocalDateTime
 
+  override def instantOf(value: LocalDateTime): Instant = value.toInstant(ZoneOffset.UTC)
+
   override protected def jsonFunc = "?"
+
+  override protected def jsonText(column: String, key: String): String = s"json_extract($column, '$$.$key')"
 
   override protected def nativeBool(value: Boolean): Any =
     if value then "1" else "0"
@@ -99,6 +104,8 @@ trait SqliteOverrides:
     res("id")
 
   override val forUpdate: String = "" // SQLITE does not support row-level locking, so no need for "FOR UPDATE"
+
+  override val forKeyShare: String = ""
 
   override protected def advisoryLock(key: String): Unit = () // The one write connection serializes the writers
 

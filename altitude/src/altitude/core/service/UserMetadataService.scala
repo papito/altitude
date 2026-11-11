@@ -8,10 +8,8 @@ import altitude.core.dao.AssetDao
 import altitude.core.dao.UserMetadataFieldDao
 import altitude.core.models._
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.NameKey
 import altitude.core.util.Query
-
-object UserMetadataService:
-  final private val VALID_BOOLEAN_VALUES: Set[String] = Set("0", "1", "true", "false")
 
 class UserMetadataService(val app: Altitude):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -20,27 +18,30 @@ class UserMetadataService(val app: Altitude):
   private val metadataFieldDao: UserMetadataFieldDao = app.DAO.metadataField
   private val assetDao: AssetDao = app.DAO.asset
 
+  /**
+   * Adds the field under its name in NFC once the name passes the name rule (`Validators.validName`, a `ValidationException`); a
+   * field whose name key the repository already holds is a `DuplicateException`
+   */
   def addField(metadataField: UserMetadataField): UserMetadataField =
+    val name =
+      Validators.validName(metadataField.name, Api.Field.Metadata.Field.NAME, Api.Constraints.MAX_METADATA_FIELD_NAME_LENGTH)
+    val field = metadataField.copy(name = name)
+
     txManager.withTransaction {
-      val existing = metadataFieldDao.query(
-        new Query(
-          params = Map(
-            FieldConst.MetadataField.NAME_LC -> metadataField.nameLowercase
-          )).withRepository())
+      val existing = metadataFieldDao.query(new Query().add(FieldConst.MetadataField.NAME_KEY -> field.nameKey))
 
       if existing.nonEmpty then
-        logger.debug(s"Duplicate found for field [${metadataField.name}]")
+        logger.debug(s"Duplicate found for field [${field.name}]")
         throw DuplicateException()
 
-      logger.debug(s"Adding metadata field [${metadataField.name}] of type [${metadataField.fieldType}]")
-      metadataFieldDao.add(metadataField)
+      logger.debug(s"Adding metadata field [${field.name}] of type [${field.fieldType}]")
+      metadataFieldDao.add(field)
     }
 
   /** Returns a lookup map (by ID) of all configured fields in this repository */
   def getAllFields: Map[String, UserMetadataField] =
     txManager.asReadOnly {
-      val q: Query = new Query().withRepository()
-      val allFields = metadataFieldDao.query(q).records
+      val allFields = metadataFieldDao.query(new Query()).records
 
       allFields.map(metadataField => metadataField.persistedId -> metadataField).toMap
     }
@@ -50,27 +51,27 @@ class UserMetadataService(val app: Altitude):
       metadataFieldDao.getById(id)
     }
 
+  /** A field of another repository, or none, is a `NotFoundException` */
   def deleteFieldById(id: String): Int =
     txManager.withTransaction {
       logger.debug(s"Deleting metadata field [$id]")
-      metadataFieldDao.deleteById(id)
+      BaseService.requireFound(metadataFieldDao.tableName, id, metadataFieldDao.deleteById(id))
     }
 
+  /** The asset's metadata, empty when it has none; an asset of another repository, or none, is a `NotFoundException` */
   def getMetadata(assetId: String): UserMetadata =
     txManager.asReadOnly {
-      // return the metadata or a new empty one if blank
-      assetDao.getUserMetadata(assetId) match {
-        case Some(metadata) => metadata
-        case None => UserMetadata()
-      }
+      assetDao.getUserMetadata(assetId)
     }
 
+  /** Replaces the asset's metadata; an asset of another repository, or none, is a `NotFoundException` */
   def setMetadata(assetId: String, metadata: UserMetadata): Unit =
     logger.debug(s"Setting metadata for asset [$assetId]: $metadata")
 
     txManager.withTransaction {
       val cleanMetadata = cleanAndValidate(metadata)
-      assetDao.setUserMetadata(assetId = assetId, metadata = cleanMetadata)
+      val updated = assetDao.setUserMetadata(assetId = assetId, metadata = cleanMetadata)
+      BaseService.requireFound(assetDao.tableName, assetId, updated): Unit
     }
 
   // OPTIMIZE: this cleans and validates existing values (the ones that have IDs)
@@ -83,7 +84,8 @@ class UserMetadataService(val app: Altitude):
       /** If the cleaned metadata does not have fields found in the original - those are empty and should be deleted */
       val deletedFields = metadata.data.keys.filterNot(cleanMetadata.data.keys.toSet.contains).toSet
 
-      assetDao.updateMetadata(assetId, cleanMetadata, deletedFields)
+      val updated = assetDao.updateMetadata(assetId, cleanMetadata, deletedFields)
+      BaseService.requireFound(assetDao.tableName, assetId, updated): Unit
     }
 
   def addMetadataValue(assetId: String, fieldId: String, newValue: Any): Unit =
@@ -247,7 +249,8 @@ class UserMetadataService(val app: Altitude):
       (res, m) =>
         val fieldId = m._1
         val field: UserMetadataField = fields(fieldId)
-        val mdVals: Set[UserMetadataValue] = m._2
+        // every value is stored in NFC, so a value typed with a combining accent and one typed precomposed read back alike
+        val mdVals: Set[UserMetadataValue] = m._2.map(mdVal => UserMetadataValue(mdVal.id, NameKey.normalized(mdVal.value)))
 
         val trimmed: Set[UserMetadataValue] = field.fieldType match {
           case FieldType.KEYWORD =>
@@ -332,45 +335,27 @@ class UserMetadataService(val app: Altitude):
    * We get out: [ VALUES -> values[] FIELD_TYPE -> ID -> field id NAME -> field name FIELD_TYPE -> field type
    *
    * VALUES -> values[] FIELD_TYPE -> ID -> field id NAME -> field name FIELD_TYPE -> field type ]
+   *
+   * Every field is listed, with its values or with none, in the order of the fields' name keys ([[UserMetadataField.nameKey]]).
    */
   def toJson(metadata: UserMetadata, allMetadataFields: Option[Map[String, UserMetadataField]] = None): ujson.Arr =
     txManager.asReadOnly {
       val allFields = if allMetadataFields.isDefined then allMetadataFields.get else getAllFields
 
       def toJsonEntry(field: UserMetadataField, mdVals: Set[UserMetadataValue]): ujson.Obj =
-        val fieldJson = ujson.Obj(field.toJson.obj)
-        fieldJson.obj.remove(FieldConst.UPDATED_AT)
-        fieldJson.obj.remove(FieldConst.CREATED_AT)
-        fieldJson.obj.remove(FieldConst.MetadataField.NAME_LC)
         ujson.Obj(
-          FieldConst.MetadataField.FIELD -> (fieldJson: ujson.Value),
+          FieldConst.MetadataField.FIELD -> field.toJson,
           FieldConst.VALUES -> ujson.Arr(mdVals.toSeq.map(v => v.toJson: ujson.Value)*)
         )
 
-      val res = metadata.data.foldLeft(Seq[ujson.Value]()) {
-        (res, m) =>
-          val fieldId = m._1
-          val field: UserMetadataField = allFields(fieldId)
-          res :+ toJsonEntry(field, m._2)
-      }
+      val withValues = metadata.data.toSeq.map((fieldId, mdVals) => allFields(fieldId) -> mdVals)
+      val withoutValues =
+        allFields.values.filterNot(field => metadata.contains(field.persistedId)).map(_ -> Set.empty[UserMetadataValue])
 
-      val emptyFields = allFields
-        .filterNot {
-          case (fieldId, _) =>
-            metadata.contains(fieldId)
-        }
-        .map {
-          case (fieldId, _) =>
-            val field: UserMetadataField = allFields(fieldId)
-            toJsonEntry(field, Set[UserMetadataValue]())
-        }
-
-      val sorted = (res ++ emptyFields).sortWith {
-        (left, right) =>
-          val leftFieldName: String = left(FieldConst.MetadataField.FIELD)(FieldConst.MetadataField.NAME).str
-          val rightFieldName: String = right(FieldConst.MetadataField.FIELD)(FieldConst.MetadataField.NAME).str
-          leftFieldName.compareToIgnoreCase(rightFieldName) < 1
-      }
+      // By name key, the order of names, and by ID among fields of one key, so the order is total
+      val sorted = (withValues ++ withoutValues)
+        .sortBy((field, _) => (field.nameKey, field.persistedId))
+        .map((field, mdVals) => toJsonEntry(field, mdVals))
 
       ujson.Arr(sorted*)
     }
@@ -401,7 +386,7 @@ class UserMetadataService(val app: Altitude):
             case FieldType.KEYWORD => None // everything is allowed
             case FieldType.TEXT => None // everything is allowed
             case FieldType.BOOL => // only values that we recognize as booleans
-              if UserMetadataService.VALID_BOOLEAN_VALUES.contains(mdVal.value.toLowerCase) then None
+              if UserMetadataValue.asBoolean(mdVal.value).isDefined then None
               else Some(mdVal.value)
             case FieldType.DATETIME => None // TODO: Add datetime validation if needed
           }

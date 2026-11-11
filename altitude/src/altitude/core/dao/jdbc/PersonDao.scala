@@ -82,10 +82,11 @@ abstract class PersonDao(override val config: Config) extends BaseDao[Person] wi
     if person.name.isDefined then PersonService.normalizedName(person.name.get)
     else s"${PersonService.UNKNOWN_NAME_PREFIX} $sequenceNum"
 
-  // The name key, or "unknown 0042" etc
+  // The name key, or "unknown 0042" etc: the name key of the prefix, so the reserved-name rule (PersonService.isReservedName)
+  // keeps every named person's key apart from it
   protected def getPersonSortName(person: Person, sequenceNum: Long): String =
     if person.name.isDefined then PersonService.nameKey(person.name.get)
-    else f"${PersonService.UNKNOWN_NAME_PREFIX.toLowerCase} $sequenceNum%04d"
+    else f"${PersonService.nameKey(PersonService.UNKNOWN_NAME_PREFIX)} $sequenceNum%04d"
 
   def getAll: Map[String, Person] =
     val sql = """SELECT *

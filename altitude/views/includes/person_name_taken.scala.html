@@ -1,4 +1,6 @@
 @import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.models.Permission
 @import altitude.core.models.Person
 
 @(person: Person, holder: Person, errorId: String, pane: Option[String] = None)
@@ -10,10 +12,13 @@
    names the row (`errorId`) so its field can be described by it. The rename dialog passes its `pane`, which the offer
    sends on to the Merge people modal: that modal replaces the dialog, button included, and returns focus to the pane's
    pencil of the renamed person instead (htmx/merge_people_modal). The inline editor passes none: its button stays in the
-   page and takes the focus back. *@
+   page and takes the focus back. The offer is Organize's, as merging People is: without it the row says the name is taken
+   and offers nothing. *@
 <div id="@{ errorId }" class="error">
     @{ (if (holder.isHidden) Const.Msg.Err.PERSON_NAME_TAKEN_BY_HIDDEN else Const.Msg.Err.PERSON_NAME_TAKEN).format(holder.name.get) }
+    @if(RequestContext.holds(Permission.Organize)) {
     <button type="button"
             class="action-button small"
             @@click="$dispatch(window.Const.events.confirmPersonMerge, { mergeSourceId: '@{ person.persistedId }', mergeDestId: '@{ holder.persistedId }', keepDirection: true@for(p <- pane) {, pane: '@{ p }'} })">@{ Const.UI.MERGE_INTO_PERSON.format(holder.name.get) }</button>
+    }
 </div>

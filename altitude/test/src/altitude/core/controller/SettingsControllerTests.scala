@@ -6,6 +6,7 @@ import org.scalatest.matchers.should.Matchers.{ be, include, not, should, should
 
 import altitude.core.App
 import altitude.core.models.AccountType
+import altitude.core.models.Permissions
 import altitude.core.models.Settings
 
 /**
@@ -40,13 +41,13 @@ import altitude.core.models.Settings
     /**
      * Setup:
      *
-     * A repository owned by an Admin, logged in.
+     * An Admin, logged in to a repository.
      *
      * Assertions:
      *
      * The page answers 200 with the form, a Setting's label and its name as a field, and the nav carries the Settings link.
      */
-    val repoId = loginAs(AccountType.Admin)
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
 
     withServer(App) {
       host =>
@@ -65,16 +66,16 @@ import altitude.core.models.Settings
     /**
      * Setup:
      *
-     * A repository owned by a User, then one owned by a Guest, each logged in.
+     * A User, then a Guest, each logged in to a repository it holds a grant in.
      *
      * Assertions:
      *
      * The page answers 403 as plain text for a browser request and as JSON for a request that accepts JSON; the save route is
-     * refused the same way. A User's own pages carry no Settings link in the nav.
+     * refused the same way. The main page carries no Settings link in the nav for either.
      */
     for (accountType <- List(AccountType.User, AccountType.Guest)) {
       testContext = new TestContext(testApp)
-      val repoId = loginAs(accountType)
+      val repoId = loginAs(accountType, Permissions.none)
 
       withServer(App) {
         host =>
@@ -90,15 +91,15 @@ import altitude.core.models.Settings
             maxRedirects = 0)
           api.statusCode shouldBe 403
           api.headers("content-type").head should include("application/json")
-          ujson.read(api.text())("error").str shouldBe "Forbidden"
+          ujson.read(api.text())("error").str shouldBe "Admin only"
 
           val saved = save(host, repoId, ujson.Obj(Settings.FACE_YUNET_CONFIDENCE_THRESHOLD -> "0.9"))
           saved.statusCode shouldBe 403
           storedValue(Settings.FACE_YUNET_CONFIDENCE_THRESHOLD) shouldBe "0.85"
 
-          val importPage = requests.get(s"$host/pipeline/r/$repoId", cookies = testContext.cookies, check = false)
-          importPage.statusCode shouldBe 200
-          (importPage.text() should not).include(s"""href="/settings/r/$repoId"""")
+          val mainPage = requests.get(s"$host/r/$repoId", cookies = testContext.cookies, check = false)
+          mainPage.statusCode shouldBe 200
+          (mainPage.text() should not).include(s"""href="/settings/r/$repoId"""")
       }
     }
   }
@@ -137,7 +138,7 @@ import altitude.core.models.Settings
      * The answer is a validation replacement (retargeted to the form), naming both errors beside their fields and keeping the
      * submitted values in those fields; neither row changed.
      */
-    val repoId = loginAs(AccountType.Admin)
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
 
     withServer(App) {
       host =>
@@ -175,7 +176,7 @@ import altitude.core.models.Settings
      * The answer is the form itself (no retarget) carrying the success event and the saved values; the rows hold them; a Setting
      * that was not submitted keeps its value. An unchecked flag is saved as false.
      */
-    val repoId = loginAs(AccountType.Admin)
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
 
     withServer(App) {
       host =>
@@ -216,7 +217,7 @@ import altitude.core.models.Settings
      * The boolean and the number are stored as text; the array is answered as a validation replacement naming the field, and
      * nothing is written.
      */
-    val repoId = loginAs(AccountType.Admin)
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
 
     withServer(App) {
       host =>
@@ -246,7 +247,7 @@ import altitude.core.models.Settings
      *
      * The re-rendered form carries the notice with both values; saving the running value back removes it.
      */
-    val repoId = loginAs(AccountType.Admin)
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
 
     withServer(App) {
       host =>
@@ -271,7 +272,7 @@ import altitude.core.models.Settings
      * The page carries the running line, the one note of the form. The save's answer still carries it, since the saved value runs
      * only from the next start, and renders it between the restart notice and the field's help.
      */
-    val repoId = loginAs(AccountType.Admin)
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
 
     withServer(App) {
       host =>
@@ -300,7 +301,7 @@ import altitude.core.models.Settings
      *
      * Neither PostgreSQL-only Setting is on the page; an Operations Setting of both engines is.
      */
-    val repoId = loginAs(AccountType.Admin)
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
 
     withServer(App) {
       host =>

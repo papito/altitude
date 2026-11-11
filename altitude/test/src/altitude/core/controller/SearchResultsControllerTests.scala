@@ -259,6 +259,68 @@ import altitude.core.util.Util
     }
   }
 
+  test("Under Curate own, a Sequence's Curate counts the frames the account owns alone") {
+
+    /**
+     * Setup:
+     *
+     * A User holding Curate own alone, logged in; in triage, a Sequence of two of its frames, and a Sequence of one of its frames
+     * and two another account owns; read grouped by Sequence.
+     *
+     * Assertions:
+     *
+     * The first Sequence has its Curate button; the second, whose three frames shown leave one the User may curate, has none, as
+     * Curation would show it too few frames.
+     *
+     * Edge cases:
+     *
+     * A User holding Curate all is offered Curate on both.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    testContext.grant(
+      testContext.user,
+      testContext.repository,
+      altitude.core.models.Permissions.of(altitude.core.models.Permission.CurateOwn))
+    login()
+
+    withServer(App) {
+      host =>
+        val mine = inSequence(persistFrame("2026-09-06T10:00:00", "a.jpg"), persistFrame("2026-09-06T10:00:01", "b.jpg"))
+        val ownInMixed = persistFrame("2026-09-07T10:00:00", "c.jpg")
+        val theirs = List(persistFrame("2026-09-07T10:00:01", "d.jpg"), persistFrame("2026-09-07T10:00:02", "e.jpg"))
+        // Persisted once the frames are, which the test context's one account persists
+        val other = testContext.persistUser()
+        testApp.txManager.withTransaction {
+          for (frame <- theirs)
+            testApp.DAO.asset
+              .updateByBySql("UPDATE asset SET owner_user_id = ? WHERE id = ?", List(other.persistedId, frame.persistedId))
+        }
+        val mixed = inSequence(ownInMixed :: theirs*)
+        val params = Map(Api.Field.Search.VIEW -> "triage", Api.Field.Search.GROUP_BY -> "sequence")
+
+        val html = htmlSearch(host, repoId, params).text()
+        html should include(curateButton(mine))
+        html should include(header(mixed))
+        (html should not).include(curateButton(mixed))
+
+        val curator = testContext.persistUser()
+        testContext.grant(
+          curator,
+          testApp.service.repository.getById(repoId),
+          altitude.core.models.Permissions.of(altitude.core.models.Permission.CurateAll))
+        val all = requests
+          .get(
+            s"$host/htmx/search/r/$repoId",
+            params = params,
+            headers = Map("Accept-Encoding" -> "identity"),
+            cookies = cookiesOf(host, curator))
+          .text()
+        all should include(curateButton(mine))
+        all should include(curateButton(mixed))
+    }
+  }
+
   test("The Group menu offers Sequence in Triage alone, and a Sequence grouping elsewhere is no grouping") {
 
     /**
@@ -1040,7 +1102,8 @@ import altitude.core.util.Util
     login()
 
     val stranger = testContext.persistUser()
-    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    val strangersRepo = testContext.persistRepository()
+    testContext.grant(stranger, strangersRepo)
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign = testContext.persistAsset(repository = Some(strangersRepo), user = Some(stranger))
@@ -1372,6 +1435,49 @@ import altitude.core.util.Util
           val response = htmlSearch(host, repoId, triage ++ shape + (Api.Field.Search.SUBSET -> subset))
           response.statusCode shouldBe 400
           response.headers("content-type").head should include("text/plain")
+        }
+    }
+  }
+
+  test("A search scoped to an unknown or another repository's Person, folder, album or Location is a 404") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with an asset, and a second repository of theirs with the Person "Eve", the folder "Eve's
+     * folder", the album "Eve's album" and the Location "Eve's place".
+     *
+     * Assertions:
+     *
+     * Through the first repository, a search scoped to each of the four, or to an ID of each kind that does not exist, answers a
+     * plain-text 404 that names none of them, in the grid layout and in the map layout.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        testContext.insertAsset(testContext.makeAsset(repository = Some(repo)))
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val scopes = List(
+          Api.Field.Search.PERSON_ID -> testApp.service.person.addPerson(Person(name = Some("Eve"))).persistedId,
+          Api.Field.Search.FOLDER_ID -> testApp.service.folder.add("Eve's folder").persistedId,
+          Api.Field.Search.ALBUM_ID -> testApp.service.album.add("Eve's album").persistedId,
+          Api.Field.Search.LOCATION_ID -> testApp.service.location.addLocation("Eve's place", 1, 2).persistedId
+        )
+        testApp.service.repository.switchContextToRepository(repo)
+
+        for (
+          (param, foreignId) <- scopes;
+          id <- List(java.util.UUID.randomUUID.toString, foreignId);
+          layout <- List(Const.Search.Layout.GRID, Const.Search.Layout.MAP)
+        ) withClue(s"$param=$id $layout: ") {
+          val response = htmlSearch(host, repoId, Map(param -> id, Api.Field.Search.LAYOUT -> layout))
+          response.statusCode shouldBe 404
+          response.headers("content-type") shouldBe Seq("text/plain")
+          (response.text() should not).include("Eve")
         }
     }
   }

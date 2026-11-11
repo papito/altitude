@@ -1,5 +1,6 @@
 @import altitude.core.Const
 @import altitude.core.RequestContext
+@import altitude.core.models.AccountType
 @import altitude.core.models.Stats
 
 @* The style guide (dev only, StyleGuideController). `scanJson` is the source scan (StyleGuideScan): the `styleGuide`
@@ -258,7 +259,10 @@
              <code>--theme-neutral-3</code> and <code>--theme-neutral-4</code> on hover; it shows only while the cell is
              hovered or holds keyboard focus (<code>:focus-visible</code>), and always where nothing hovers, on a touch
              screen, and opens the rename dialog as a popover anchored to it. A name that wraps is centered line by
-             line. Hover a specimen, or Tab into it, to see the pencil.</p>
+             line. Hover a specimen, or Tab into it, to see the pencil. A Person with no cover shows the no-cover
+             placeholder (<code>.no-cover</code>, core.css) in the face's box: <code>fa-user</code> in
+             <code>--theme-neutral-3</code> at <code>--font-size-xl</code> on <code>--theme-secondary</code>, as it does,
+             at the size and shape of the face there, in the results title and the merge modal.</p>
           @* The People tab's cells, hand-written to htmx/people_list's markup inside the tab's ID, which the rules of
              static/css/htmx/people.css are scoped by, with --face-box set as htmx/people sets it. No drag-drop or dropzone
              class and no search trigger, so nothing binds to them, and the pencils request nothing *@
@@ -282,6 +286,15 @@
                   <span>
                     <a href="#" class="unknown">Unknown 4<span class="count"> (2)</span><span class="visually-hidden">, hidden</span></a>
                     <button type="button" class="rename" aria-label="Rename Unknown 4"><i class="fas fa-edit" aria-hidden="true"></i></button>
+                  </span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="image"><span class="no-cover"><i class="fas fa-user" aria-hidden="true"></i></span></div>
+                <div class="name">
+                  <span>
+                    <a href="#">Bob<span class="count"> (1)</span></a>
+                    <button type="button" class="rename" aria-label="Rename Bob"><i class="fas fa-edit" aria-hidden="true"></i></button>
                   </span>
                 </div>
               </div>
@@ -537,13 +550,23 @@
         <section id="navigation-tabs">
           <h2>Navigation &amp; tabs</h2>
           <p>The nav above is the live one. The brand is the chevron and the name on a primary-to-accent gradient, in
-             <code>--font-nav</code> at <code>--font-size-xl</code>. A nav entry is <code>.menu</code>, at
+             <code>--font-nav</code> at <code>--font-size-xl</code>; the login page shows it above its form at
+             <code>--font-size-display</code>. A nav entry is <code>.menu</code>, at
              <code>--font-size-medium</code>; the server marks the entry of the page shown with
              <code>aria-current="page"</code> (the include's <code>current</code>, which a nav reload passes again), a
              count is a <code>.count</code> pill inside the label, and an entry with nothing behind it is
              <code>empty</code> and not a link. The <code>.search</code> cell between Browse and Triage is as wide as an
              entry and holds the quick search form at its own width: no border, a magnifier, a clear control while
-             there is text, and an accent glow for focus. The last cell is the theme switch, <code>.menu.theme-switch</code>, an entry's width and icon
+             there is text, and an accent glow for focus. Before the last cell, the account's cell (<code>.menu.account</code>,
+             <code>includes/account_menu</code>, the cell the nav renders) holds one target, a <code>.nav-menu-trigger</code>
+             showing the <code>fa-user-circle</code> icon at <code>--font-size-large</code> in the account type's color,
+             <code>--account-type-color</code>, which <code>data-account-type</code> sets: an Admin's
+             <code>--error-color</code>, a User's <code>--success-color</code>, a Guest's <code>--info-color</code>; then
+             <code>@@username</code> in the entry's lettering, cut with an ellipsis at
+             <code>--account-username-max-width</code>. It is named "Account: &lt;username&gt; (&lt;type&gt;)" and opens the
+             account info dialog below itself, right-aligned, <code>--account-info-width</code> wide, a
+             <code>--border-band</code> of the type's color across its top, whose actions are Change password… and Log out.
+             The specimen opens the real dialog, the logged-in account's, so its Log out logs out. The last cell is the theme switch, <code>.menu.theme-switch</code>, an entry's width and icon
              only: the sun in the dark theme and the moon in the light one, the theme a press goes to, remembered for every page. The specimen is live. A tab is the link itself, selected through
              <code>aria-selected</code>.</p>
           <p>The Browse cell holds two targets (<code>includes/library_menu</code>): Browse, a link to the current Library's
@@ -583,8 +606,16 @@
             </div>
             <div class="menu triage"><a href="#navigation-tabs"><i class="fas fa-medkit"></i><span>.count<span class="count">37</span></span></a></div>
             <div class="menu triage empty"><i class="fas fa-medkit"></i><span>.menu.empty</span></div>
+            @includes.html.account_menu("styleGuideAccountMenuBtn", s"/htmx/account/r/${RequestContext.getRepository.persistedId}/dialogs/info")(play.twirl.api.HtmlFormat.empty)
             <button type="button" class="menu theme-switch" data-app-theme-switch title="Toggle light and dark theme" aria-label="Toggle light and dark theme"><i class="fas fa-sun" aria-hidden="true"></i><i class="fas fa-moon" aria-hidden="true"></i></button>
           </nav>
+
+          @* The account menu's icon in each account type's color *@
+          <p class="sg-account-types">
+          @for(accountType <- AccountType.values) {
+            <span data-account-type="@accountType"><i class="fas fa-user-circle" aria-hidden="true"></i> @accountType</span>
+          }
+          </p>
 
           <div role="tablist">
             <a role="tab" aria-selected="true" href="#navigation-tabs"><i class="fas fa-folder"></i> Selected</a>

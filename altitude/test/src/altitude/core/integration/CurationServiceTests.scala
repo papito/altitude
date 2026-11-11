@@ -594,18 +594,25 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The engine's plan names `asset_sequence` for all five statements, so the toolbar's count, read after every mutation, costs
-     * the rows that carry a Sequence and not the library. The queue's statement names it twice, once for the grouped rows and
-     * once for the cover its correlated subquery reads per Sequence, so no cover costs a scan of the library either.
+     * The engine's plan names `asset_sequence` for all five statements, the first four also as an account that curates its own
+     * frames alone reads them, so the toolbar's count, read after every mutation, costs the rows that carry a Sequence and not
+     * the library. The queue's statement names it twice, once for the grouped rows and once for the cover its correlated subquery
+     * reads per Sequence, so no cover costs a scan of the library either.
      */
     val frames = burst(0)
     val dao = testApp.DAO.asset.asInstanceOf[AssetDao]
     val plans = atScale(seedCopies(frames.head.persistedId, copies = 5000, folders = 1)) {
+      // Each as an account that curates everyone's frames reads it, then as one that curates its own alone
+      val owner = Some(frames.head.ownerUserId)
       List(
-        dao.sequencesToCurateStatement,
-        dao.countSequencesToCurateStatement,
+        dao.sequencesToCurateStatement(),
+        dao.sequencesToCurateStatement(owner),
+        dao.countSequencesToCurateStatement(),
+        dao.countSequencesToCurateStatement(owner),
         dao.sequenceFramesStatement(sequenceOf(frames), MAX_FRAMES),
+        dao.sequenceFramesStatement(sequenceOf(frames), MAX_FRAMES, owner),
         dao.countSequenceFramesStatement(sequenceOf(frames)),
+        dao.countSequenceFramesStatement(sequenceOf(frames), owner),
         dao.liveSequenceMembersStatement(Set(sequenceOf(frames)))
       ).map((sql, values) => lookupPlanOf(sql, values))
     }
@@ -881,7 +888,7 @@ import altitude.core.service.FaceDetectionService
     curation.queue().map(_.members) shouldBe List(2)
   }
 
-  test("A resolve or a reopen with no Picks, overlapping lists or a Pick that is not live is refused") {
+  test("A resolve or a reopen with no Picks, overlapping lists or a Pick that is not live is refused, an unknown one not found") {
 
     /**
      * Setup:
@@ -891,8 +898,9 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * Each is an `IllegalOperationException`, since a resolve with no live Pick would recycle the set and keep nothing. Nothing
-     * has changed: the two frames are out of the trash and in the Sequence, in the queue.
+     * Each is an `IllegalOperationException`, since a resolve with no live Pick would recycle the set and keep nothing, except a
+     * Pick in another repository or one that names no asset, which is a `NotFoundException`: every ID is read in the repository
+     * first. Nothing has changed: the two frames are out of the trash and in the Sequence, in the queue.
      */
     val frames = burst(0, frames = 3)
     val sequenceId = sequenceOf(frames)
@@ -908,12 +916,12 @@ import altitude.core.service.FaceDetectionService
       () => curation.resolve(Set.empty, Set.empty),
       () => curation.resolve(Set(first), Set(first, second)),
       () => curation.resolve(Set(inTrash), Set(first)),
-      () => curation.resolve(Set(foreign), Set(first)),
-      () => curation.resolve(Set(first, "no-such-asset"), Set(second)),
       () => curation.reopen(Set.empty, Set(inTrash), Map.empty),
       () => curation.reopen(Set(first), Set(first), Map.empty),
       () => curation.reopen(Set(first), Set(inTrash), Map(second -> sequenceId))
     ).foreach(call => an[IllegalOperationException] should be thrownBy call())
+    an[NotFoundException] should be thrownBy curation.resolve(Set(foreign), Set(first))
+    an[NotFoundException] should be thrownBy curation.resolve(Set(first, "no-such-asset"), Set(second))
 
     stored(frames.head).isRecycled shouldBe false
     stored(frames(1)).isRecycled shouldBe false

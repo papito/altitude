@@ -9,8 +9,10 @@ import scala.util.Try
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.Validators
+import altitude.core.models.Permission
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requirePermission
 
 /**
  * Curation's partials: the modal's shell, the rows of its queue, and the fragment of a Curation set from one Sequence or a
@@ -20,17 +22,20 @@ class CurationActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/curation"
 
   @requireLogin()
+  @requirePermission(Permission.CurateOwn, Permission.CurateAll)
   @cask.get(f"/$prefix/r/:repoId")
   def shell(repoId: String)(using request: Request): Response[String] = htmlResponse(htmx.html.curation())
 
   /** The queue's rows, which the shell's Sequence rail lists, in the order Curation walks them */
   @requireLogin()
+  @requirePermission(Permission.CurateOwn, Permission.CurateAll)
   @cask.get(f"/$prefix/r/:repoId/queue")
   def queue(repoId: String)(using request: Request): Response[String] =
     htmlResponse(htmx.html.curation_queue(App.altitude.service.curation.queue()))
 
   /** No content when too few frames are left: a queue's Sequence gone meanwhile is passed over without comment */
   @requireLogin()
+  @requirePermission(Permission.CurateOwn, Permission.CurateAll)
   @cask.get(f"/$prefix/r/:repoId/sequence/:sequenceId")
   def sequenceSet(repoId: String, sequenceId: String)(using request: Request): Response[String] =
     if !Validators.isUuid(sequenceId) then return textError(Const.Msg.Err.VALUE_NOT_A_UUID, 400)
@@ -44,6 +49,7 @@ class CurationActionController(using logger: Logger) extends BaseController:
    * frames left is a fragment saying so, not silence.
    */
   @requireLogin()
+  @requirePermission(Permission.CurateOwn, Permission.CurateAll)
   @cask.post(f"/$prefix/r/:repoId/selection")
   def selectionSet(repoId: String)(using request: Request): Response[String] =
     Try(selectionIds(unscrubbedJson.get)).toOption match

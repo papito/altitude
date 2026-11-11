@@ -1,6 +1,7 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.TestContext
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.concurrent.Eventually
@@ -31,23 +32,29 @@ import altitude.core.util.Query
     Eventually.eventually(Eventually.timeout(Span(60, Seconds)), Eventually.interval(Span(100, Millis)))(f)
 
   /** Has the database refuse to delete the asset's row, as a failing statement would, until the returned cleanup runs */
-  private def refuseDeleting(assetId: String): () => Unit = {
+  private def refuseDeleting(assetId: String): () => Unit = refuse("DELETE", "asset", assetId)
+
+  /** Has the database refuse to change the Person's cover, as a failing statement would, until the returned cleanup runs */
+  private def refuseMovingCover(personId: String): () => Unit = refuse("UPDATE OF cover_face_id", "person", personId)
+
+  /** Has the database refuse `event` (`DELETE`, `UPDATE OF <column>`) on the row of `table` with the ID until the cleanup runs */
+  private def refuse(event: String, table: String, rowId: String): () => Unit = {
     val (create, drop) = testApp.dataSourceType match {
       case Const.DbEngineName.POSTGRES =>
         (
           List(
-            "CREATE FUNCTION refuse_asset_delete() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'Refused by the test'; END $$ " +
+            "CREATE FUNCTION refused_by_test() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'Refused by the test'; END $$ " +
               "LANGUAGE plpgsql",
-            s"CREATE TRIGGER refuse_asset_delete BEFORE DELETE ON asset FOR EACH ROW WHEN (OLD.id = '$assetId') " +
-              "EXECUTE FUNCTION refuse_asset_delete()"
+            s"CREATE TRIGGER refused_by_test BEFORE $event ON $table FOR EACH ROW WHEN (OLD.id = '$rowId') " +
+              "EXECUTE FUNCTION refused_by_test()"
           ),
-          List("DROP TRIGGER refuse_asset_delete ON asset", "DROP FUNCTION refuse_asset_delete()"))
+          List(s"DROP TRIGGER refused_by_test ON $table", "DROP FUNCTION refused_by_test()"))
       case _ =>
         (
           List(
-            s"CREATE TRIGGER refuse_asset_delete BEFORE DELETE ON asset WHEN OLD.id = '$assetId' " +
+            s"CREATE TRIGGER refused_by_test BEFORE $event ON $table WHEN OLD.id = '$rowId' " +
               "BEGIN SELECT RAISE(ABORT, 'Refused by the test'); END"),
-          List("DROP TRIGGER refuse_asset_delete"))
+          List("DROP TRIGGER refused_by_test"))
     }
 
     testApp.txManager.withTransaction(create.foreach(update(_)))
@@ -76,7 +83,7 @@ import altitude.core.util.Query
         asset
     }
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source = Source.fromIterator(() => recycledAssets.iterator).map((_, pipelineContext))
 
     val pipelineResFuture: Future[Seq[TAssetWithContext]] = testApp.service.purgePipeline.run(source, VoidAssetSink())
@@ -106,9 +113,8 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Every face of the three people is gone from the database, and all four of its images from the file store, except each
-     * person's cover face, whose images a purge keeps. The decoy's faces, in assets outside the purge, keep their records and
-     * images.
+     * Every face of the three people is gone from the database, and all four of its images from the file store, each person's
+     * cover face included. The decoy's faces, in assets outside the purge, keep their records and images.
      */
     val assetsPerPerson = 3
     val totalPeople = 3
@@ -127,7 +133,7 @@ import altitude.core.util.Query
     val personIdToFaceMap: Map[String, List[Face]] =
       people.map(person => person.persistedId -> testApp.service.person.getPersonFaces(person.persistedId)).toMap
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
 
     val pipelineResFuture: Future[Seq[TAssetWithContext]] = testApp.service.purgePipeline.run(source, VoidAssetSink())
@@ -136,11 +142,8 @@ import altitude.core.util.Query
     for (person <- people) {
       val personFaces = personIdToFaceMap(person.persistedId)
 
-      // cover face was assigned to person record AFTER it had been persisted, so get it from the DB
-      val personCoverFaceId = (testApp.service.person.getById(person.persistedId): Person).coverFaceId.getOrElse("")
-
       // Check that all faces for the asset are gone in DB and file store.
-      for (face <- personFaces if face.persistedId != personCoverFaceId) {
+      for (face <- personFaces) {
         intercept[NotFoundException] {
           testApp.service.person.getFaceById(face.persistedId)
         }
@@ -192,7 +195,7 @@ import altitude.core.util.Query
 
     val survivor = testContext.persistAsset()
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
 
     Await.result(testApp.service.purgePipeline.run(source, VoidAssetSink()), Duration.Inf)
@@ -210,42 +213,108 @@ import altitude.core.util.Query
     testApp.service.fileStore.getAssetById(survivor.persistedId)
   }
 
-  test("Purging an asset does not delete a face asset that is marked as COVER") {
+  /** Recycles the assets and marks them for purging, as a purge request leaves them before the purge queue takes them */
+  private def markForPurging(assets: Asset*): Unit = {
+    testApp.service.library.recycleAssets(assets.map(_.persistedId).toSet)
+    assets.foreach(asset => testApp.service.asset.updateById(asset.persistedId, Map(FieldConst.Asset.IS_PURGED -> true)))
+  }
+
+  /** Runs the assets through the purge pipeline, and waits for it */
+  private def purge(assets: Asset*): Unit = {
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
+    val source = Source(assets.toList).map((_, pipelineContext))
+    Await.result(testApp.service.purgePipeline.run(source, VoidAssetSink()), Duration.Inf)
+  }
+
+  /** Whether any of the four images of the face is in the file store */
+  private def hasFaceFiles(face: Face): Boolean =
+    List(
+      () => testApp.service.fileStore.getDisplayFaceById(face.persistedId),
+      () => testApp.service.fileStore.getAlignedGreyscaleFaceById(face.persistedId),
+      () => testApp.service.fileStore.getAlignedFaceById(face.persistedId),
+      () => testApp.service.fileStore.getDetectedFaceById(face.persistedId)
+    ).exists {
+      read =>
+        try { read(); true }
+        catch { case _: NotFoundException => false }
+    }
+
+  test("Purging an asset that holds a Person's cover gives them their best Face left, and the old cover's files go") {
 
     /**
      * Setup:
      *
-     * One person with a face in each of three assets, the first face set as the person's cover; all three assets are purged.
+     * A Person with Faces on three assets: the first, their cover, at a detection score of 0.9, the second at 0.5 and the third
+     * at 0.7, its asset marked for purging. A second Person whose only Face, their cover, is on the first asset. The first asset,
+     * marked for purging, goes through the purge pipeline.
      *
      * Assertions:
      *
-     * The cover face's record goes with its asset, but all four of its images stay in the file store.
+     * The first Person's cover is their Face on the second asset, the best of those on an asset not marked for purging, and the
+     * second Person has no cover. The old covers' rows are gone, and so are all four images of each.
+     *
+     * Edge cases:
+     *
+     * The third asset's Face scores higher than the new cover, but its asset is marked for purging.
      */
-    val assetsPerPerson = 3
-    val person = testApp.service.person.addPerson(Person())
-    testContext.addTestFacesAndAssets(person, assetCount = assetsPerPerson)
+    val added = testApp.service.person.addPerson(Person())
+    val assets = List.fill(3)(testContext.insertAsset())
+    val faces = assets.zip(List(0.9, 0.5, 0.7)).zipWithIndex.map {
+      case ((asset, score), n) =>
+        testContext.addTestFace(
+          testApp.service.person.getById(added.persistedId),
+          asset,
+          TestContext.unitVector(n),
+          detectionScore = score,
+          withFiles = true)
+    }
+    val alone = testApp.service.person.addPerson(Person())
+    val aloneCover = testContext.addTestFace(alone, assets.head, TestContext.unitVector(9), x1 = 50, withFiles = true)
+    testApp.service.person.getById(added.persistedId).coverFaceId shouldBe Some(faces.head.persistedId)
+    testApp.service.person.getById(alone.persistedId).coverFaceId shouldBe Some(aloneCover.persistedId)
 
-    // this face binary data should NOT be purged
-    val coverFace = testApp.service.person.getPersonFaces(person.persistedId).head
-    testApp.service.person.setFaceAsCover(person, coverFace)
+    markForPurging(assets.head, assets(2))
+    purge(assets.head)
 
-    val assets: List[Asset] = testApp.service.asset.queryAll(new Query()).records
+    testApp.service.person.getById(added.persistedId).coverFaceId shouldBe Some(faces(1).persistedId)
+    testApp.service.person.getById(alone.persistedId).coverFaceId shouldBe None
+    List(faces.head, aloneCover).foreach {
+      face =>
+        intercept[NotFoundException](testApp.service.person.getFaceById(face.persistedId))
+        hasFaceFiles(face) shouldBe false
+    }
+  }
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
-    val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
+  test("A purge of several assets that hold a Person's best Faces repicks their cover onto none of them") {
 
-    val pipelineResFuture: Future[Seq[TAssetWithContext]] = testApp.service.purgePipeline.run(source, VoidAssetSink())
-    Await.result(pipelineResFuture, Duration.Inf)
-
-    // Face record will be deleted according to cascade rules, but the binary data should still be there
-    intercept[NotFoundException] {
-      testApp.service.person.getFaceById(coverFace.persistedId)
+    /**
+     * Setup:
+     *
+     * A Person with Faces on three assets at detection scores of 0.9 (their cover), 0.8 and 0.3. The first two assets are marked
+     * for purging together, and the first goes through the purge pipeline, then the second.
+     *
+     * Assertions:
+     *
+     * Once the first asset is purged, while the second still waits for the queue, the Person's cover is their Face on the third
+     * asset, not the better one on the second; it stays there once the second is purged.
+     */
+    val added = testApp.service.person.addPerson(Person())
+    val assets = List.fill(3)(testContext.insertAsset())
+    val faces = assets.zip(List(0.9, 0.8, 0.3)).zipWithIndex.map {
+      case ((asset, score), n) =>
+        testContext.addTestFace(
+          testApp.service.person.getById(added.persistedId),
+          asset,
+          TestContext.unitVector(n),
+          detectionScore = score)
     }
 
-    testApp.service.fileStore.getDisplayFaceById(coverFace.persistedId)
-    testApp.service.fileStore.getAlignedGreyscaleFaceById(coverFace.persistedId)
-    testApp.service.fileStore.getAlignedFaceById(coverFace.persistedId)
-    testApp.service.fileStore.getDetectedFaceById(coverFace.persistedId)
+    markForPurging(assets.head, assets(1))
+    purge(assets.head)
+    testApp.service.person.getById(added.persistedId).coverFaceId shouldBe Some(faces(2).persistedId)
+
+    purge(assets(1))
+    testApp.service.person.getById(added.persistedId).coverFaceId shouldBe Some(faces(2).persistedId)
   }
 
   test("Purging assets should only delete face data for the purged assets") {
@@ -268,7 +337,7 @@ import altitude.core.util.Query
     testApp.service.library.recycleAssets(Set(recycledAsset.persistedId))
 
     // purgeRecycleBin() only queues the purge, so the asset runs straight through the pipeline, which can be awaited
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val purgeSource = Source.single((recycledAsset, pipelineContext))
     Await.result(testApp.service.purgePipeline.run(purgeSource, VoidAssetSink()), Duration.Inf)
 
@@ -396,6 +465,54 @@ import altitude.core.util.Query
     left.map(_.persistedId) shouldBe List(refused.persistedId)
   }
 
+  test("An asset whose covers cannot be moved off its Faces stays whole and purge-pending, and is purged once queued again") {
+
+    /**
+     * Setup:
+     *
+     * A Person with Faces on two assets: the first, their cover, at a detection score of 0.9, with its files, on an asset that is
+     * recycled and marked for purging; the second at 0.5. The database refuses to change the Person's cover while the first asset
+     * goes through the purge pipeline; then the refusal is lifted and the startup job queues the purge-pending assets again.
+     *
+     * Assertions:
+     *
+     * While the cover cannot move, the purge leaves the asset whole: its row, still marked for purging, its file, and the cover
+     * Face's row and images, with the Person's cover still on it. Once queued again, the Person's cover is their Face on the
+     * second asset, and the asset's row and file and the old cover's row and images are gone.
+     */
+    val added = testApp.service.person.addPerson(Person())
+    val purged = testContext.persistAsset()
+    val cover = testContext.addTestFace(added, purged, TestContext.unitVector(1), detectionScore = 0.9, withFiles = true)
+    val next = testContext.addTestFace(
+      testApp.service.person.getById(added.persistedId),
+      testContext.insertAsset(),
+      TestContext.unitVector(2),
+      detectionScore = 0.5)
+    testApp.service.person.getById(added.persistedId).coverFaceId shouldBe Some(cover.persistedId)
+    markForPurging(purged)
+
+    val allowMovingCover = refuseMovingCover(added.persistedId)
+    try purge(purged)
+    finally allowMovingCover()
+
+    val pending = new Query().add(FieldConst.ID -> purged.persistedId).add(FieldConst.Asset.IS_PURGED -> true)
+    testApp.service.asset.queryAll(pending).records.map(_.persistedId) shouldBe List(purged.persistedId)
+    testApp.service.fileStore.getAssetById(purged.persistedId)
+    testApp.service.person.getFaceById(cover.persistedId)
+    hasFaceFiles(cover) shouldBe true
+    testApp.service.person.getById(added.persistedId).coverFaceId shouldBe Some(cover.persistedId)
+
+    testApp.service.library.requeuePurgePending()
+
+    eventually {
+      intercept[NotFoundException](testApp.service.asset.getById(purged.persistedId))
+    }
+    intercept[NotFoundException](testApp.service.fileStore.getAssetById(purged.persistedId))
+    intercept[NotFoundException](testApp.service.person.getFaceById(cover.persistedId))
+    hasFaceFiles(cover) shouldBe false
+    testApp.service.person.getById(added.persistedId).coverFaceId shouldBe Some(next.persistedId)
+  }
+
   test("An asset left marked for purging is purged once the startup job queues it again") {
 
     /**
@@ -407,6 +524,10 @@ import altitude.core.util.Query
      * Assertions:
      *
      * The asset's row, file and preview are deleted.
+     *
+     * Edge cases:
+     *
+     * The job queues the asset with no account, since no request did and a Library has no owner, and the purge needs none.
      */
     val asset = testContext.persistAsset()
     testApp.service.library.recycleAssets(Set(asset.persistedId))

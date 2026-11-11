@@ -2,6 +2,7 @@
 @import altitude.core.models.ListedPeople
 @import altitude.core.models.ListedPerson
 @import altitude.core.Const
+@import altitude.core.models.Permission
 
 @(listed: ListedPeople, pane: String)
 
@@ -14,7 +15,8 @@
    so to assistive tech in a `.visually-hidden` ", hidden" after the number: the link is named by its content, the name,
    the number, which is not displayed in Triage and so is no part of the name there, and then "hidden". An Unmatched
    person is told apart by its
-   orange "Unknown N" name. The face's link and the name link are search triggers for the person; in Triage a person with no
+   orange "Unknown N" name. A person with no cover (no Face left to be one) shows the no-cover placeholder (`.no-cover`,
+   core.css) in place of the face. The face's link and the name link are search triggers for the person; in Triage a person with no
    triaged assets gets the scope dialog instead (js/search-results/search-triggers.js), a popover dialog anchored to the
    name link whichever of the two was clicked: the name link is `personLink-<pane>-<id>` with that `anchor-name`, the pane
    in the ID for the reason the pencil's has it, and both links name it in `data-app-dialog-anchor`, so the dialog sits
@@ -24,7 +26,7 @@
    requests the rename dialog
    (htmx/rename_person_dialog) into the popover host, anchored to itself: its ID carries `pane`, the pane the list is for,
    so the pencils of a person listed in both panes are two anchors, and the dialog's return-focus selector finds the copy
-   a reload renders. With no one listed, one line
+   a reload renders; it is Edit Metadata's, rendered only for the account holding it. With no one listed, one line
    of text and no grid: that everyone is only in triaged items when the buckets hold people the triage switch left off
    (`leftOffByTriage`), and otherwise that no one is in the buckets. *@
 
@@ -43,7 +45,10 @@
                data-app-search="click"
                data-app-search-person-id="@{person.persistedId}"
                data-app-dialog-anchor="@{linkId}">
-            <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{person.coverFaceId}">
+            @person.coverFaceId match {
+            case Some(cover) => {<img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{cover}">}
+            case None => {<span class="no-cover"><i class="fas fa-user" aria-hidden="true"></i></span>}
+            }
             </a>
             @if(person.isHidden) {
             <i class="fas fa-eye-slash hidden-badge" aria-hidden="true"></i>
@@ -62,6 +67,7 @@
                    data-app-dialog-anchor="@{linkId}">
                     @{person.name.getOrElse("")}<span class="count"> (@{visibleCount})</span>@if(person.isHidden) {<span class="visually-hidden">, hidden</span>}
                 </a>
+                @if(RequestContext.holds(Permission.EditMetadata)) {
                 @defining(s"personRenameCtrl-$pane-${person.persistedId}") { renameCtrlId =>
                 <button type="button"
                         class="rename"
@@ -74,6 +80,7 @@
                         hx-trigger="click"
                         hx-vals='{"personId": "@{person.persistedId}", "pane": "@{pane}"}'
                         data-app-dialog-anchor="@{renameCtrlId}"><i class="fas fa-edit" aria-hidden="true"></i></button>
+                }
                 }
             </span>
         </div>

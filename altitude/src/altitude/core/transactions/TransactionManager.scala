@@ -11,6 +11,7 @@ import org.sqlite.SQLiteConfig
 import org.sqlite.SQLiteConnection
 import org.sqlite.SQLiteDataSource
 
+import scala.collection.mutable.ListBuffer
 import scala.util.control.NonFatal
 
 import altitude.core.Const
@@ -50,6 +51,9 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
 
   // Whether an enclosing `withFaceVector` of this thread has set the transaction up for searching face vectors
   private val isFaceVectorSetUp = new ThreadVariable(false)
+
+  // The actions `afterCommit` registered in the thread's outermost transaction, which runs them once it has committed
+  private val afterCommitActions = new ThreadVariable[Option[ListBuffer[() => Unit]]](None)
 
   // Whether the pools were opened, so that a manager that never ran a transaction has nothing to close
   @volatile private var isOpen = false
@@ -155,23 +159,46 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
     if isInTransaction then f else transaction(readOnly = true)(f)
 
   /**
+   * Runs `action` once the thread's outermost transaction has committed, with no connection held, or at once outside a
+   * transaction; a transaction that rolls back, which every read transaction does, drops it. For what must not be seen to happen
+   * unless the change it reports does, such as a log line. An action that throws is logged at WARN and does not fail the
+   * committed transaction, nor stop the actions after it.
+   */
+  def afterCommit(action: => Unit): Unit =
+    afterCommitActions.value match
+      case Some(actions) => actions += (() => action)
+      case None => action
+
+  /**
    * Runs `f` in a transaction of its own, on a connection the thread holds until `f` ends. A write is committed; a read has
    * nothing to keep and is rolled back, as is a transaction that failed.
    */
   private def transaction[A](readOnly: Boolean)(f: => A): A =
     val conn = connection(readOnly)
+    val actions = ListBuffer[() => Unit]()
 
-    try
-      val res = RequestContext.conn.withValue(Some(conn))(f)
-      if readOnly then rollback(conn) else conn.commit()
-      res
-    catch
-      case ex: Exception =>
-        rollback(conn)
-        throw ex
-    finally
-      // Returns the connection to its pool
-      conn.close()
+    val res =
+      try
+        val res = RequestContext.conn.withValue(Some(conn))(afterCommitActions.withValue(Some(actions))(f))
+        if readOnly then rollback(conn) else conn.commit()
+        res
+      catch
+        case ex: Exception =>
+          rollback(conn)
+          throw ex
+      finally
+        // Returns the connection to its pool
+        conn.close()
+
+    if !readOnly then runAfterCommit(actions.toList)
+    res
+
+  private def runAfterCommit(actions: List[() => Unit]): Unit =
+    actions.foreach {
+      action =>
+        try action()
+        catch case NonFatal(ex) => logger.warn(s"An action after a commit failed: ${ex.getMessage}", ex)
+    }
 
   /** A failure is logged, never thrown: the caller gets the failure of the transaction, not of its rollback */
   private def rollback(conn: Connection): Unit =

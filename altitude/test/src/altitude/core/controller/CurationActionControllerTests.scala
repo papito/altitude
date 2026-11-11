@@ -716,7 +716,8 @@ import altitude.core.service.FaceDetectionService
     login()
 
     val stranger = testContext.persistUser()
-    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    val strangersRepo = testContext.persistRepository()
+    testContext.grant(stranger, strangersRepo)
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign =
@@ -733,7 +734,7 @@ import altitude.core.service.FaceDetectionService
     }
   }
 
-  test("Every route answers a repository the user does not own with a 404") {
+  test("Every route answers a repository the user cannot see with a 404") {
 
     /**
      * Setup:
@@ -749,7 +750,8 @@ import altitude.core.service.FaceDetectionService
     login()
 
     val stranger = testContext.persistUser()
-    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    val strangersRepo = testContext.persistRepository()
+    testContext.grant(stranger, strangersRepo)
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign =

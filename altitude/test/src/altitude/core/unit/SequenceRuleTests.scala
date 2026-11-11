@@ -6,6 +6,7 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers.*
 
+import altitude.core.models.AccountSnapshot
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.CaptureDateSource
@@ -45,7 +46,8 @@ import altitude.core.util.SequenceRule
    */
   private val frame = Asset(
     id = Some("frame-1"),
-    userId = "u",
+    ownerUserId = "u",
+    originalOwner = AccountSnapshot("u", "U", "u", "u@example.com"),
     assetType = AssetType("image", "jpeg", "image/jpeg"),
     fileName = "burst-1.jpg",
     checksum = "a" * 64,

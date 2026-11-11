@@ -1,6 +1,6 @@
 # Readiness for live use
 
-What a self-hosted digital asset manager like Altitude (images and video; tens of thousands of assets; repositories with View, Edit and Admin roles) needs before live use, and where the code stands on each item. It covers security, data safety and operations, not the product feature set.
+What a self-hosted digital asset manager like Altitude (images and video; tens of thousands of assets; Libraries reached by Admins, and by Users and Guests through Permissions granted per Library) needs before live use, and where the code stands on each item. It covers security, data safety and operations, not the product feature set.
 
 "Ready for live use" comes down to two things:
 
@@ -40,20 +40,20 @@ The core is excellent: search, the import pipeline, crash recovery, content serv
 |---|---|---|
 | [Web security](#web-security) | 6 | Output escaping, SQL and content serving are strong. One stored XSS, and no security headers on pages. |
 | [Video](#video) | 5 | Import and seeking are excellent. Only H.264 plays everywhere, and a video that cannot play fails with a snackbar. |
-| [Login and sessions](#login-and-sessions) | 4 | bcrypt, no timing leak, strict cookies. A session cannot be revoked, there is no account recovery, and two setups at once can race. |
-| [Permissions](#permissions) | 4 | Content, search and map are scoped to the repository and tested. The base service layer reaches entities by bare ID, which another account could exploit once one exists. |
+| [Login and sessions](#login-and-sessions) | 4 | bcrypt, no timing leak, strict cookies. An account change or a password change reaches every session of the account at its next request, but logout does not revoke a token, there is no account recovery, and two setups at once can race. |
+| [Permissions](#permissions) | 7 | Every read and write by ID is scoped to the repository by default, the schema refuses a reference into another repository, every route declares who may call it, and one test covers every route for every account type. The Users page grants them, within the creator's ceiling. |
 | [Malicious files](#malicious-files) | 4 | Types come from the content and storage paths are UUIDs. No size caps, no image-size cap, decoders in the server process. |
 | [Data safety](#data-safety) | 3 | Crash recovery is excellent. A 32-bit duplicate hash, no schema migrations in use, no backup story. |
 | [Running and upgrading](#running-and-upgrading) | 3 | Search benchmarked at 1M assets. No Docker image, no releases, accepted uploads lost on restart, stack traces in errors. |
 | Strongly preferred: data and operations ([Library and media](#library-and-media), [Operations and hygiene](#operations-and-hygiene)) | 3 | Time handling is good. No export, no mobile layout, no HEIC. |
-| [User management](#user-management) | 2 | Only first-run setup creates an account, and roles are not enforced. |
+| [User management](#user-management) | 2 | The Users page adds, edits, deactivates and deletes accounts and grants their Permissions per Library, with an audit log of the account events. No account recovery for the last Admin, no groups. |
 | Strongly preferred: identity, sharing and hygiene ([Identity and access](#identity-and-access), [Sharing with clients](#sharing-with-clients), [Operations and hygiene](#operations-and-hygiene)) | 2 | The URL-signing code is solid, but nothing creates share links. No CI, SECURITY.md or LICENSE file. |
 
 On a separate scale, how well the design leaves room for the [optional](#optional--later) and [newer](#newer-options-worth-a-look) options: **6 / 10**. Clean extension points for the file store and queries; the design assumes one server process.
 
 Foundations to build on, beyond the items below:
 
-- Clean layering: a store trait, one query funnel ([SearchQueries] `matching`), repository scoping in the queries, and a Scalameta test ([TransactionBoundaryTests]) that enforces transaction boundaries.
+- Clean layering: a store trait, one query funnel ([SearchQueries] `matching`), repository scoping by default in the DAOs and in the queries, backed by foreign keys, and a Scalameta test ([TransactionBoundaryTests]) that enforces transaction boundaries.
 - The same code on SQLite (WAL, sqlite-vector) and PostgreSQL 18, with snapshot-consistent reads under time limits.
 - pgvector HNSW over `halfvec` as a partial index on enrolled faces, with `iterative_scan = relaxed_order`; ArcFace quality tiers.
 - Keyset cursors with search fingerprints and capped counts.
@@ -69,19 +69,21 @@ Foundations to build on, beyond the items below:
 - ✅ Passwords are hashed with bcrypt at cost 10 ([Util] `hashPassword`).
 - [ ] bcrypt rather than Argon2id, through jBCrypt 0.4 (2015, unmaintained). The 50-character limit ([Api] `MAX_PASSWORD_LENGTH`) is tight for passphrases, and a non-ASCII password can pass bcrypt's 72-byte cutoff.
   - Fix: Argon2id through Bouncy Castle (already a dependency), rehashing on the next login.
-- ✅ A login for an unknown email checks a dummy hash of the same cost, and both failures answer the same 401, so accounts cannot be enumerated ([UserService] `loginAndSetUser`, [LoginControllerTests]).
+- ✅ A login is a username or an email address, folded with `NameKey.of` and compared to the key column (an "@" makes it an email). A login naming no account checks a dummy hash of the same cost, and it, a wrong password and a deactivated account answer the same 401, so accounts cannot be enumerated ([UserService] `loginAndSetUser`, [LoginControllerTests]). The password check only reads; the last login time and an audit event, a failure's with the client IP, are written after it in a short transaction of their own ([UserServiceTests]).
 - ✅ Session cookies are `HttpOnly`, `Secure` and `SameSite=Strict`, identical everywhere they are set ([SessionController], [SetupFormController]). Login issues a new token. Tokens are PASETO v2.local: encrypted and authenticated, with no algorithm confusion. Logout is POST-only.
 - [ ] `Secure` is always on, so plain-HTTP LAN access (`http://nas:8080`) never gets a cookie and login loops. Nothing documents this.
   - Fix: document HTTPS through a reverse proxy (see the install item under [Running and upgrading](#running-and-upgrading)).
-- [ ] Sessions cannot be revoked. A token lives 7 days ([Const] `MEMBER_ME_COOKIE_EXPIRATION_DAYS`), and the user and role are rebuilt from its claims without reading the database ([PasetoService] `validateTokenAndGetUser`). Logout only clears the cookie ([UserService] `logout` is a no-op), so a copied token, or a deleted or demoted account, keeps working for up to 7 days. There is no idle timeout or sliding renewal. The key is random per process ([PasetoService] `secretKey`), so every restart logs everyone out. [HIGH]
-  - Fix: server-side sessions: a `session` table of random IDs stored hashed, with `last_seen` for idle expiry and an absolute cap. Revoke on logout, password change, role change and deletion, and load the account from the database per request. This is also the base for personal API tokens, "log out everywhere" and more than one server process.
+- ✅ A change to an account reaches its sessions at their next request. The token carries the account, its type, its Create Libraries flag, its grants and the version of the account it was minted at, and is read with no database query ([PasetoService] `readToken`); an in-memory map of the process holds each account's current and revoked-below versions ([AccountVersions]). A token below the current version is rebuilt from the database and its cookie replaced, keeping its expiry; one of an account deactivated or deleted since, a stale Bearer token, and one below the revoked-below version are refused ([UserService] `checkToken`, [LoginTokenTests], [LoginControllerTests]). The refusal clears the cookie only for a token that will never be good again (it does not decrypt or has expired, or its account is gone or deactivated), so a request in flight while an account changes its own password cannot log the changer out. An htmx request with no login is a 401 carrying `HX-Redirect` to the login for the page it came from, and the client sends the window to the login on any 401, htmx's or axios's. A token is judged and rebuilt against one snapshot of its account's versions, so a revocation that lands meanwhile leaves the rebuilt token refused; a login reads the version once the account is named and checks again, under the account's row lock, that the password hash is the one it checked. Every account write bumps the version once committed ([RepositoryService] `setGrant` and `replaceGrants`; [UserService] `create`, `update`, `deactivate`, `reactivate` and `delete`), and a password change, an Admin's or the account's own, `revoke`s every token of the account; the session that changed its own password is given a new token in the same answer ([OwnPasswordController] `renewedSession`, [UsersControllerTests]). An open import status socket of the account closes on either ([ImportStatusWsActor] `CloseAllFor`): on a bump with 1013, so the page reconnects and its handshake checks the login again, refused for an account deactivated or deleted; on a revocation with 1008, which it does not reconnect on ([ImportControllerTests]). A refused session cookie is cleared by the answer that refuses it.
+- [ ] Logout does not revoke the token: it only clears the cookie ([UserService] `logout` is a no-op), so a copied token keeps working for up to 7 days ([Const] `MEMBER_ME_COOKIE_EXPIRATION_DAYS`) unless its account changes. There is no idle timeout or sliding renewal. The key is random per process ([PasetoService] `secretKey`), so every restart logs everyone out, and the version map is in memory, so it does not serve more than one server process. [MEDIUM]
+  - Fix: revoke on logout through the version map (per token, a `jti` with a short denylist, rather than every session of the account); or server-side sessions, a `session` table of random IDs stored hashed, with `last_seen` for idle expiry and an absolute cap, which is also the base for personal API tokens, "log out everywhere" and more than one server process.
 - ✅ The setup form is refused once the instance is initialized ([SetupFormController]).
 - [ ] Setup can be won by whoever reaches a fresh instance first: there is no setup token. A check-then-act race on an in-memory flag lets two concurrent submissions create two admins; the flag flips before the commit ([SystemService] `initializeSystem`, [SystemMetadataDao] `setInitialized`). The setup test is commented out ([test gap](test-coverage.md#user-creation-and-password-authentication)). [MEDIUM]
   - Fix: a one-time setup token printed to the log on an uninitialized start; atomic initialization (`UPDATE … WHERE is_initialized = false`, checking the row count).
-- [ ] No account recovery. There is no admin reset, no self-service password change, and no CLI or env-var way in; recovering a locked-out Admin means editing the bcrypt hash in the database. [CRITICAL]
-  - Fix: a CLI (`java -jar altitude.jar reset-admin-password <email>`) or a startup env var that resets an Admin's password; the admin reset and self-service change under [User management](#user-management).
-- [ ] The dev login bypass works in any environment. [UserService] `getDevUser` reads `dev.user` and `dev.password` directly, not through `Environment.devSwitch` like every other `dev.*` key, and `requireLogin` checks it before the token ([decorators] `requireLogin`), so with those keys set every request is that user. A misspelled or unknown `ENV` falls back to dev ([Environment] `CURRENT`), which also reads `application-dev.conf`. [HIGH]
-  - Fix: read `dev.user` through `devSwitch`; refuse to start on an unknown `ENV`.
+- [ ] No way back in for the last Admin. An Admin sets any account's password and every account changes its own ([User management](#user-management)), but an instance whose only Admin forgets the password has no CLI or env-var way in; it means editing the bcrypt hash in the database. [HIGH]
+  - Fix: a CLI (`java -jar altitude.jar reset-admin-password <email>`) or a startup env var that resets an Admin's password.
+- ✅ The dev login bypass is read through `Environment.devSetting`, the text counterpart of `devSwitch` ([UserService] `devCredentials`): `dev.user` and `dev.password` take effect only under `ENV=dev`, and are ignored with a WARN at startup anywhere else (`EnvironmentTests`). A dev login that fails is not retried for 30 seconds.
+- [ ] A misspelled or unknown `ENV` falls back to dev ([Environment] `CURRENT`), which also reads `application-dev.conf` and turns the dev bypass on when it is set there. [HIGH]
+  - Fix: refuse to start on an unknown `ENV`.
 - ✅ The post-login redirect is validated and unit-tested.
 - [ ] `redirect` is decoded twice ([SessionController] `decodedRedirect`), so `/%2509/evil.com` becomes `/\t/evil.com`, which passes the check; browsers drop the tab and land on `//evil.com`. (unconfirmed) [LOW]
   - Fix: decode once and reject control characters.
@@ -91,31 +93,22 @@ Login rate limiting is under [Identity and access](#identity-and-access).
 
 ### Permissions
 
-As built, each repository has one owner (`repository.owner_account_id` in [all.sql]) and there is no membership table. `AccountType` is Admin, User or Guest and gates only the Settings screen and the creation of a Library. An Admin may own several Libraries, creating them from the nav's Library menu ([LibraryActionController]), but the app has one account, so the cross-repository holes below become reachable only once a second account exists.
+As built, a Library has no owner: an Admin reaches every Library by its account type, and anyone else a Library it holds a grant in (`repository_grant` in [all.sql]: an account, a Library and a bitmask of the nine Permissions, [RepositoryService] `setGrant`, at most 35 per account, what the login token fits). Every Permission is enforced, and the Users page writes the grants ([User management](#user-management)).
 
-- ✅ One login and ownership gate for `/r/:repoId` ([decorators] `requireLogin`, `ownedRepositoryOnly`); a foreign repository answers the same 404 as a missing one. The request context is cleared on pooled threads ([decorators] `repoContext`).
-- ✅ Routes without login are deliberate: `/`, `/login`, `/logout`, `/api/logout`, `/setup`, `/htmx/setup` (refused once initialized), `/api/health`, `/static/` and `/assets/:name`. The exception is the import-status WebSocket below.
-- [ ] Entities fetched by ID are not scoped to the repository. [BaseService] `getById`, `updateById` and `deleteById`, and [BaseDao] `getById`, have no repository predicate. Once a second account exists, its owner, given another repository's IDs, can: [CRITICAL]
-  - read **asset detail** (`…/modals/asset-detail/:id`) as full JSON, including `extractedMetadata` and GPS;
-  - on **people**, read the name and the edit-name, cover-face and merge modals; edit the name (ID taken from the body), hide, show, mark as a bad match and set the cover; and merge, which moves the other repository's faces through an unscoped `faceDao.updateByQuery` ([PeopleActionController], [SearchResultsController] `personOf`, [FaceDao] `getTopFaces`, [PersonService] `merge`);
-  - on **folders**, open the rename and delete dialogs ([FolderActionController]), rename and move ([FolderService] `move`), and add under a foreign parent. Deleting a foreign folder is a no-op, because `updateByQuery` adds the repository;
-  - on **albums**, hard-delete ([AlbumService] `deleteById`) and remove memberships ([AlbumDao] `removeAssets`); reading by ID, renaming and adding to a foreign album are closed by the scoped `AlbumService.getById`;
-  - move assets into a foreign folder: the destination is not checked ([LibraryService] `moveAssetsToFolder`).
-
-  Scoped already, each with a foreign-ID 404 test: the Detail panel (`…/detail-panel/:assetId`, [AssetService] `detailOf`, [AssetActionControllerTests]), a person's results title (`…/p/:personId/title`, [PersonService] `getInRepository`, [PeopleActionControllerTests]), and the Face corrections and the assignable list, which read the Face through [FaceDao] `getInRepository`.
-
-  Fix: scope by default: `BaseService.getById`, `updateById` and `deleteById` add the repository the way `query` and `updateByQuery` already do. Scope `FaceDao.getTopFaces`, `AlbumDao.removeAssets` and `getAssetIds`, the face update in `PersonService.merge` and `FolderDao.getById`, and check destination folders. Locations are the model to copy: a scoped `getById`, foreign IDs answered 404, tested ([LocationServiceTests]).
-- ✅ Originals, previews and faces sit behind the repository gate in a per-repository file layout ([FileSystemStoreService]), and are served `private`, `nosniff` and `sandbox` ([ContentViewController] `withContentHeaders`). The folder layout protects them, not the query: the `asset.getById` in `getContent` is unscoped, which the item above closes.
+- ✅ One login and access gate for `/r/:repoId` ([decorators] `requireLogin`, `accessibleRepositoryOnly`): an Admin passes for every Library, anyone else for one its login token carries a grant in, with no database query; a Library the account cannot see answers the same 404 as a missing one. The token's Permissions in the Library are put in the request context (`RequestContext.permissions`), which the gates after it and the services read (below). The request context is cleared on pooled threads ([decorators] `repoContext`).
+- ✅ Routes without login are deliberate: `/`, `/login`, `/logout`, `/api/logout`, `/setup`, `/htmx/setup` (refused once initialized), `/api/health`, `/static/` and `/assets/:name`.
+- ✅ Every read and write by ID is scoped to the context repository by default ([BaseDao] `repositoryScoped`; six DAOs opt out: those of the four tables with no repository, and those of the grants and the audit log, which are read across Libraries), hand-written statements on a repository's tables carry the repository, and a write by ID that matches no row of the repository is `NotFoundException` ([BaseService]). A reference a request names is read in the repository before it is written: a destination or parent folder ([LibraryService] `moveAssetsToFolder`, [FolderService] `add`) and a cover Face, which must also be the Person's and on no asset marked for purging ([PersonService] `setFaceAsCover`). Another repository's ID gets the 404 an unknown one gets and names nothing of it ([BaseController] `answering`, `answeringJson`). The schema backs it up ([all.sql], both engines): `repository_id` is `NOT NULL` on every table of a repository, and the references between a repository's rows are foreign keys over the repository and the ID, so the database refuses one into another repository; a Person's cover is a single-column key, its repository checked in code. Tested on both engines ([RepositoryIsolationTests]) and over every route ([RouteTableTests]).
+- ✅ Originals, previews and faces sit behind the repository gate in a per-repository file layout ([FileSystemStoreService]), and are served `private`, `nosniff` and `sandbox` ([ContentViewController] `withContentHeaders`). The reads behind them are scoped too: another repository's original, preview or face is a 404, signed or not ([ContentViewControllerTests]).
 - ✅ Search results, counts, map pins and GPS all read one `matching` relation ([SearchQueries]); name resolution is scoped ([SearchDao] `searchNames`); tested ([SearchMapTests]). Facets and autocomplete do not exist.
 - ✅ People lists are scoped ([PersonDao]).
 - ✅ Bulk asset actions use scoped locking selects ([AssetControllerTests], [LibraryServiceRecycleTests]). Exports and zip downloads do not exist yet (see [Library and media](#library-and-media)).
-- [ ] Background-job results: the import-status WebSocket (`@cask.websocket("/import/status")` in [ImportController]) has no `@requireLogin` and takes `userId` from the query string, so anyone with an account ID can watch that account's imports, file names included, from any origin. [MEDIUM]
-  - Fix: put it behind `requireLogin`, take the user from the request context, and check `Origin` on the handshake. [Test gap](test-coverage.md#import-orchestration-and-asynchronous-processing).
+- ✅ Background-job results: the import-status WebSocket ([ImportController] `pipelineStatus`) takes the account from the login token, never from the request, and refuses a handshake with no login with a 401 ([ImportControllerTests], [RouteTableTests]). A handshake whose `Origin` is not the server's own (an http or https URL whose host and port, as written, are the `Host` header's) is refused with a 403 ([decorators] `isSameOriginOrNone`), so a page of another site cannot open it with a visitor's session, even where a browser would send the `SameSite=Strict` cookie. A handshake with no `Origin` is let through to the login check: every browser sends one, so only a client that is no browser omits it, and such a client holds the session token itself. The check trusts the `Host` header, so a reverse proxy must pass it through unchanged.
 - ✅ IDs are UUIDv4 ([BaseDao] `genId`). Hard to guess is not authorized, though: IDs travel in signed URLs, logs and the DOM, so the scoping item above is what blocks ID guessing.
-- [ ] The permission matrix is not tested. Foreign-repository tests exist for content, search, map, asset recycling, Locations, the Detail panel and a person's results title, but none for the other people routes, faces, albums, folders, the asset-detail JSON or the WebSocket, and no test that every route requires login. [CRITICAL]
-  - Fix: the [repository isolation](test-coverage.md#repository-isolation-and-shared-service-transactions), [albums](test-coverage.md#albums-and-membership) and [people](test-coverage.md#people-face-ownership-and-merges) gaps in test-coverage.md, including one table-driven test over `App.allRoutes`.
-- [ ] Role rules (a repository can't lose its last admin, an admin can't demote themselves) have nothing to guard until roles exist; see [User management](#user-management).
-- [ ] Removing access does not take effect at once: that needs server-side sessions ([Login and sessions](#login-and-sessions)) and revocable share links ([Sharing with clients](#sharing-with-clients)).
+- ✅ Every route declares who may call it, by a decorator after `requireLogin` that reads the token's Permissions in the path's Library, with no database query ([decorators]): `requirePermission` (one Permission, or any of several), `requireMember` (no Guest: the Triage partials), `requireAccountCreator` (an Admin or the holder of Create Users or Create Guests in any Library: the Users page and Add User), `requireLibraryCreator` (an Admin or the Create Libraries flag) and `requireAdmin`; each refuses with one 403 (`decorators.forbidden`: `{"error": ...}` in JSON, as a service's refusal is too). Organize gates every move and every folder, album, Location and People write, merges of People included, Edit Metadata a Face's Person and a Person's name, a Curate Permission all of Curation, Purge both purges, Import the Import page and uploads. A Guest sees Browse alone: a route that takes the view as a parameter (the main page, the search, the map, the People list) refuses it Triage, the Trash and the triaged assets, a route that takes an asset's ID (the Detail panel, the asset-detail modal, the asset's page, its Preview and original) answers it a triaged or recycled asset as an unknown one, and the import status WebSocket refuses its handshake ([decorators] `refusedView`, `visibleOnly`).
+- ✅ The rules that depend on the asset are checked in the service, in the transaction of the write, over the assets read in the Library first, so another Library's ID stays a 404 ([AssetRules]): Curate own reaches only the account's own assets (`owner_user_id`), a sorted asset takes Recycle to recycle, a triaged one a Curate Permission, and a restore, from the trash or by a move out of it, takes what recycling would; deleting a folder that holds assets recycles them under the same rule; a Curation reopen checks every triaged Pick, in the trash or not, and a resolve and a reopen read every ID they are sent before any check, so a foreign or unknown ID is a 404 even beside a refused one. One refused asset fails the whole operation with `ForbiddenException`, a 403 through `answering` and `answeringJson` ([AssetPermissionTests], both engines; [PermissionControllerTests]). Curation shows Curate own without Curate all its own frames alone, so a set never holds one it could not resolve, and judges a Sequence complete over those frames, so another account's frames do not keep it in the queue. The controls follow the same bitmask: the nav, the batch operations (Recycle by the view: Recycle in Browse, a Curate Permission in Triage; Curate Selected in Browse with Recycle too), the explorer's menus, drag and drop, the Detail panel's corrections, Curation's entry points and the Trash render or bind an action only where the account holds its Permission.
+- ✅ The permission matrix is tested route by route ([RouteTableTests]): each row says who may call its route and must be what the route's decorators declare, read off the instances cask builds from the annotations; a route that changes a Library and declares no gate fails it. Every route is sent a request by an Admin, a Guest, a User holding no Permission, a User holding every Permission, a User with the Create Libraries flag and, for a route that needs a Permission, a User holding all but it and a User holding each alone, and answers 403 exactly where its row refuses. An account with no grant in a Library gets a 404 on every route of it, every route but the public ones refuses an anonymous request, and every route answers another repository's IDs, of a Library the user holds every Permission in too, as it answers unknown ones, changing nothing.
+- ✅ One active Admin is always left. An Admin cannot deactivate, delete or demote its own account, and every Admin's write locks the active Admins' rows first and checks, under that lock, that the actor is one of them: the actor is an active Admin and never the one it removes, so two Admins removing each other at once leave one, the second refused as no longer an Admin ([UserService] `update`, `deactivate`, `delete` and `setPassword` over [UserDao] `lockActiveAdmins`). [AccountManagementTests] (both engines) runs four such races, the second write waiting on the first's lock: deactivate × deactivate, demote × demote, delete × delete, and a demotion × a delete of its actor; each was proved red on PostgreSQL with `lockActiveAdmins` replaced by an unlocked read in the method under test (`deactivate`, `update`, `delete`, `delete` respectively). `setPassword`'s use of the lock is not raced by a test. A creator's row is locked too, and a creator deactivated since its login creates nothing.
+- ✅ A change of access takes effect at the session's next request: a grant, and every account write, bumps the account's version, and the token is rebuilt from the database ([Login and sessions](#login-and-sessions)). Share links, once they exist, need revoking of their own ([Sharing with clients](#sharing-with-clients)).
 - [ ] Upload cancellation is a global map keyed by an ID from non-secure `Random` ([ImportController] `uploadCancelRequest`). The repository cache is never invalidated ([RepositoryService] `getById`). [LOW]
 
 ### Web security
@@ -198,7 +191,7 @@ Accepted uploads lost on restart are under [Running and upgrading](#running-and-
 - [ ] Server errors return stack traces. [App] does not override cask's `debugMode`, which defaults to `true`, so an unhandled exception's stack trace, with any SQL and paths in it, goes to the client. A refused upload throws out of `Await.result` and becomes such a 500. [HIGH]
   - Fix: `debugMode = false` outside dev, and an error handler that logs and answers a generic page or JSON.
 - ✅ Logs keep signatures, tokens and decoded CRLF out: the request logger skips `/content`, so `sig` never appears ([decorators] `requestResponseLogger`).
-- [ ] Logs are not production-ready. [logback.xml] logs to the console only, at `root=DEBUG` (third-party libraries included), with time but no date, ANSI colours and no rotation. `REQUEST_ID` is never cleared from the MDC ([decorators] `requestResponseLogger`). `/import/status?userId=` is logged. logback is declared twice, as 1.5.16 and 1.5.14 ([build.mill]). [LOW]
+- [ ] Logs are not production-ready. [logback.xml] logs to the console only, at `root=DEBUG` (third-party libraries included), with time but no date, ANSI colours and no rotation. `REQUEST_ID` is never cleared from the MDC ([decorators] `requestResponseLogger`). logback is declared twice, as 1.5.16 and 1.5.14 ([build.mill]). [LOW]
   - Fix: a prod logback profile: dated timestamps, no ANSI, logback's `JsonEncoder`, stdout or a rolling file, root at INFO.
 - [ ] The health check always answers `{"status":"ok"}` ([HealthController]), with no database, queue or disk check. [MEDIUM]
   - Fix: `/livez` and `/readyz` with a database ping, queue state and free disk.
@@ -212,16 +205,16 @@ Accepted uploads lost on restart are under [Running and upgrading](#running-and-
 
 ### User management
 
-- [ ] None of the basics exist. Only setup creates an account ([SystemService] `initializeSystem` calls [UserService] `add`). There is no create, disable (`account` has no enabled column), delete, admin password reset or self-service password change ([UserDao] has only `addUser`, `getPasswordHashByEmail` and `getByEmail`). A second account means hand-writing an `account` row with a bcrypt hash. [CRITICAL]
-  - Fix: an Admin Users screen (create, disable through `disabled_at`, reset, set role) and a self-service password change, both on server-side sessions so they take effect at once.
-- ✅ Emails are unique case-insensitively (`account_01` on `lower(email)`), tested. The role column and its CHECK exist.
+- ✅ The Users page manages accounts (`/users/r/:repoId`, [UsersController], [UserActionController]): an Admin, or an account holding Create Users or Create Guests in any Library, adds accounts through the Add User modal; an Admin edits any account (name, username, email, type, grants, the Create Libraries flag and the new-Library grant), sets its password, deactivates, reactivates and deletes it. Anyone else sees the accounts it created, read-only. Every write is [UserService]'s, in one transaction with its audit event, and bumps the account's version, or revokes its tokens for a password and a deactivation, so a reactivated account logs in again ([AccountManagementTests], both engines; [UsersControllerTests]). An Admin's edit is saved only over the state its form was opened over (another Admin's change, or a new Library's grant, since then refuses it with a form error), compared under the account's row lock. Account and Library IDs a request names are UUIDs or a 400.
+- ✅ A creator who is no Admin gives only what it may pass on: a User where it holds Create Users, a Guest where it holds Create Guests, with no Permission it does not hold there, and never an Admin, the Create Libraries flag or the new-Library grant (its switch or its Permissions). The service refuses anything above that ceiling with a 403 whatever the form sends, reading the creator's grants in the write's transaction; the modal does not render it ([UserService] `create`). It sees the accounts it created, an Admin's promotion of one hiding it.
+- ✅ Accepted exposure: a creator who is no Admin can tell whether an email address or a username is taken by an account it cannot see, since the Add User form says so on the field (`EMAIL_TAKEN`, `USERNAME_TAKEN`). The creator needs the message to pick another, and Admins choose who holds Create Users and Create Guests.
+- ✅ An email address and a username each name one account whatever their case or Unicode form (`account_01` on `email_key`, `account_02` on `username_key`, the name keys folded in Scala, never by SQL), and a login compares the key column of what it names, so the lookup and the index cannot differ; tested on both engines, two adds racing on one username included ([UserServiceTests]). A taken one is refused on its field in the form ([AccountManagementTests]). A username keeps to one rule, 3 to 32 ASCII letters, digits, `.`, `_` and `-`, so it never holds an "@" ([User] `validUsername`, applied by [UserService] `add` and `create` and the setup form).
 - ✅ `requireAdmin` is correct and tested ([decorators] `requireAdmin`, [SettingsControllerTests]).
-- [ ] Roles grant nothing different. `AccountType` is Admin, User or Guest ([AccountType]), and only setup assigns one ([SetupFormController]). `requireAdmin` guards only the Settings page, its form and the nav link, and the New library dialog and its save ([LibraryActionController]), whose Library menu entry the nav renders for an Admin alone; nothing else reads `accountType`, so a Guest can upload, recycle and purge like anyone else. A role change would wait for the token to expire. [MEDIUM]
-- [ ] A repository cannot be shared: access is ownership alone ([decorators] `ownedRepositoryOnly`), so nobody can see who has access. [MEDIUM]
-  - Fix: `repository_member(repository_id, account_id, role)` with View, Edit and Admin, enforced where `ownedRepositoryOnly` checks today, with last-admin and self-demotion guards; Guest removed or defined as View.
-- [ ] Deleting an account deletes its library. `owner_account_id … ON DELETE CASCADE` ([all.sql]), and 12 tables cascade from `repository`, so deleting an account row wipes every repository it owns and leaves its files orphaned on disk. Nothing documents this. [HIGH]
-  - Fix: the owner foreign key as `RESTRICT`, with deletion requiring a transfer or archive first.
-- ✅ A second account lands in a Library of its own. Login and `/` open the account's last active Library, read from the database (the token carries none), while the account owns it, and otherwise the first Library it owns by name, which is recorded ([RepositoryService] `landingRepositoryOf`, [SessionController], [IndexController]). An account that owns no Library is answered a plain-text 404, "There is no library to open", not a 500; only an Admin creates a Library, for themselves, so such an account stays there until a Library can be shared with it (above).
+- ✅ The account types and the Permissions are enforced ([Permissions](#permissions)): `requireAdmin` guards the Settings page, its form and the Admin's account writes, `requireLibraryCreator` the New library dialog and its save ([LibraryActionController]), for an Admin or an account with the Create Libraries flag, and a Guest sees Browse alone. A type change by an Admin takes effect at the account's next request: to Admin its grants go, to Guest it keeps its Libraries with no Permission.
+- ✅ A creator who is no Admin holds every Permission in the Library it creates, and a Library created grants every account whose new-Library switch is on the Permissions the Admin chose for it; an account at its bound of grants is skipped with a WARN, so another account's bound never fails a create, and a creator at its own bound is refused with the bound under the dialog's field, creating no Library ([RepositoryService] `addRepository`, [RepositoryServiceTests], [LibraryActionControllerTests]).
+- ✅ Deleting an account never deletes a Library, and keeps every asset: in one transaction its assets in every Library become the deleting Admin's, its grants go and the accounts it created lose their creator; the importer record of each asset keeps naming it ([UserService] `delete`; `asset.owner_user_id` refuses a delete that would leave an asset without an owner, [all.sql]; [AccountManagementTests]). An edit of an account rewrites the importer records of the assets it imported, in every Library.
+- ✅ A second account lands in a Library it can see. Login and `/` open the account's last active Library, read from the database (the token carries none), while the account can see it, and otherwise the first Library it can see by name, which is recorded ([RepositoryService] `landingRepositoryOf`, [SessionController], [IndexController]). An account that can see no Library is answered a plain-text 404, "There is no library to open", not a 500.
+- ✅ An import in flight escapes no account write. The importer record is built from the account as stored when the import inserts the asset, in the insert's transaction, which share-locks the account's row ([LibraryService] `persistAndIndex`, [UserService] `lockImporter`), so an update or a delete of the account waits for the insert and then reaches its asset; a file whose account was deleted or deactivated while it waited fails with a clear import error, "The account that imported this file no longer exists" or "is deactivated" ([AssetImportServiceTests], both engines). Accepted: such a file is dropped, not given to the deleting Admin.
 - [ ] `User.forgetMe` is a leftover `println` stub ([User]). [LOW]
 
 ### Sharing with clients
@@ -233,8 +226,8 @@ Accepted uploads lost on restart are under [Running and upgrading](#running-and-
   - Fix: a `share_link` table: asset or album scope, expiry with a server-side maximum, optional password, revoked flag. Sign `linkId|path` with a key ID for rotation.
 - [ ] Shared originals carry their EXIF and GPS. Previews and face crops are re-encoded WebP without metadata, but a signed original is served as stored. Effort: S–M.
   - Fix: serve shares without metadata by default. `requireLoginOrSignature` ([decorators]) already tells shares from owners, so a watermark could also apply to shares only.
-- [ ] No audit log. A failed login is a WARN without the client's IP ([SessionController]), a successful one only a DEBUG; a refused repository, a non-Admin and a bad signature are WARNs ([decorators]). Nothing is persisted, and there is no Admin view. Effort: M.
-  - Fix: an append-only audit table written from the service layer (login success and failure with IP, role changes, recycle and purge, settings saves, share creation), with an Admin view. Log auth events at INFO now.
+- [ ] The audit log records the account events alone. The append-only `audit_event` table holds each with its actor and target as snapshots, in the transaction of its change, logged at INFO once that commits ([AuditService] `record`, [AuditServiceTests]): logins, successful and failed, with the client IP ([UserService] `loginAndSetUser`), and accounts created, edited, deactivated, reactivated and deleted, Permission and type changes and passwords set, with the client IP of the request ([UserService], [AccountManagementTests]). Nothing else is recorded: a refused repository, a non-Admin and a bad signature are WARNs ([decorators]), and recycling, purging, Settings saves and shares are not audited. There is no Admin view. Effort: M.
+  - Fix: record recycle and purge, settings saves and share creation, with an Admin view.
 
 ### Video
 
@@ -267,15 +260,15 @@ Decoder limits and timeouts are under [Malicious files](#malicious-files).
 
 ### Identity and access
 
-- [ ] Nothing slows password guessing: each guess is a bcrypt check (a CPU cost too), and the failed-login WARN has no IP ([SessionController]), so fail2ban cannot use it. [HIGH]
-  - Fix: rate limiting per IP and per account (an in-process token bucket, or Bucket4j), with failures logged with the client IP.
+- [ ] Nothing slows password guessing: each guess is a bcrypt check (a CPU cost too). A failed login is logged at WARN with the client IP ([SessionController]) and recorded in the audit log ([UserService] `loginAndSetUser`), so fail2ban can use the log (the typed login escaped and cut to 64 characters, so it cannot forge a line); behind a reverse proxy the IP is the proxy's, since `X-Forwarded-For` is not read. Every failed login also adds an `audit_event` row, with up to 64 characters of the login as typed: the table grows without bound under guessing, and a password typed into the login field by mistake is kept in it. A login with a control character is a failed login, never looked up. A wrong current password given to change one's own password is not slowed either: it is logged at WARN and recorded as a failed change with the client IP ([UserService] `changeOwnPassword`), so a stolen session cannot guess the password unseen, but it can guess. [HIGH]
+  - Fix: rate limiting per IP and per account (an in-process token bucket, or Bucket4j), over logins and own password changes, which also bounds the audit rows; retention for failed-login events.
 - [ ] No 2FA: `account` has only `password_hash`, and there is no credential table and no WebAuthn route. Effort: M.
   - Fix: passkeys as the main login through Yubico java-webauthn-server or webauthn4j, with TOTP as a fallback.
 - [ ] No OIDC or SSO: `/login` ([SessionController]) is the only login, with no identity provider and no trusted forward-auth header mode. Effort: M.
   - Fix: OIDC for Pocket ID, Authelia, Authentik or Keycloak, with just-in-time provisioning; it also hands 2FA and recovery to the provider. The seam is there: [PasetoService] `createToken` does not care how the user was verified.
-- [ ] No personal API tokens. A Bearer header is accepted ([decorators] `AUTH_HEADER_NAME`) but carries the same per-process key and 7-day claims, so it dies on restart, with no scopes, listing or revocation, and it is [untested](test-coverage.md#session-token-creation-and-validation). Effort: M.
+- [ ] No personal API tokens. A Bearer header is accepted ([decorators] `authenticate`) but carries the same per-process key and 7-day claims, so it dies on restart and on any change to its account (a stale Bearer token cannot be replaced, so it is refused), with no scopes or listing ([LoginControllerTests]). Effort: M.
   - Fix: after server-side sessions: hashed opaque tokens, or PASETO v4 with a `jti` checked against the database and a persisted key; name, scopes such as `repo:read` and `upload`, expiry, last used, revoke. Newer: Biscuit tokens for capability-style scopes.
-- [ ] No groups. They need repository membership first. Effort: L.
+- [ ] No groups: Permissions are granted per account and Library, and no set of accounts shares a grant. Effort: L.
 
 ### Library and media
 
@@ -368,9 +361,9 @@ Entries leave this list when their items close.
 
 **This week** (cheap, removes a lot of risk):
 
-- Escape the import ticker ([Web security](#web-security)) and put login on its WebSocket ([Permissions](#permissions)).
+- Escape the import ticker ([Web security](#web-security)).
 - `debugMode = false` and an error handler ([Running and upgrading](#running-and-upgrading)).
-- `dev.user` through `devSwitch`; refuse to start on an unknown `ENV` ([Login and sessions](#login-and-sessions)).
+- Refuse to start on an unknown `ENV` ([Login and sessions](#login-and-sessions)).
 - A shutdown hook that calls `cleanup()` ([Running and upgrading](#running-and-upgrading)).
 - One security-headers decorator and a `Sec-Fetch-Site` check on writes ([Web security](#web-security)).
 - Undertow size caps and a max-pixels Setting ([Malicious files](#malicious-files)).
@@ -387,9 +380,7 @@ Entries leave this list when their items close.
 **Before clients:**
 
 - Server-side sessions ([Login and sessions](#login-and-sessions)).
-- Repository scoping by default, and a test over every route ([Permissions](#permissions)).
-- User management and roles per repository ([User management](#user-management)).
-- Share links and an audit log ([Sharing with clients](#sharing-with-clients)).
+- Share links, and an audit log beyond the account events ([Sharing with clients](#sharing-with-clients)).
 - A video fallback (poster and download), then remuxing and an H.264 or AV1 proxy queue ([Video](#video)).
 
 **Later**, including the newer options: passkeys or OIDC through Pocket ID; decoders out of process (libvips) or in a WASM sandbox; HEIC through libheif; a strict CSP with Alpine's CSP build and Trusted Types; the OpenTelemetry Java agent; cosign and SLSA provenance; tus through Uppy; XMP sidecar export; a mobile layout.
@@ -411,9 +402,7 @@ Entries leave this list when their items close.
 [Const]: ../altitude/src/altitude/core/Const.scala
 [Environment]: ../altitude/src/altitude/core/Environment.scala
 [ImportStatusWsActor]: ../altitude/src/altitude/core/actors/ImportStatusWsActor.scala
-[AlbumDao]: ../altitude/src/altitude/core/dao/jdbc/AlbumDao.scala
 [BaseDao]: ../altitude/src/altitude/core/dao/jdbc/BaseDao.scala
-[FaceDao]: ../altitude/src/altitude/core/dao/jdbc/FaceDao.scala
 [PersonDao]: ../altitude/src/altitude/core/dao/jdbc/PersonDao.scala
 [SearchDao]: ../altitude/src/altitude/core/dao/jdbc/SearchDao.scala
 [SystemMetadataDao]: ../altitude/src/altitude/core/dao/jdbc/SystemMetadataDao.scala
@@ -430,20 +419,31 @@ Entries leave this list when their items close.
 [QueuedPipeline]: ../altitude/src/altitude/core/pipeline/QueuedPipeline.scala
 [CheckDuplicateFlow]: ../altitude/src/altitude/core/pipeline/flows/CheckDuplicateFlow.scala
 [ExtractMetadataFlow]: ../altitude/src/altitude/core/pipeline/flows/ExtractMetadataFlow.scala
+[BaseController]: ../altitude/src/altitude/core/routes/BaseController.scala
 [decorators]: ../altitude/src/altitude/core/routes/decorators.scala
+[AssetRules]: ../altitude/src/altitude/core/service/AssetRules.scala
+[AssetPermissionTests]: ../altitude/test/src/altitude/core/integration/AssetPermissionTests.scala
+[PermissionControllerTests]: ../altitude/test/src/altitude/core/controller/PermissionControllerTests.scala
 [RangeStreaming]: ../altitude/src/altitude/core/routes/RangeStreaming.scala
 [HealthController]: ../altitude/src/altitude/core/routes/api/HealthController.scala
 [ContentViewController]: ../altitude/src/altitude/core/routes/web/ContentViewController.scala
 [ImportController]: ../altitude/src/altitude/core/routes/web/ImportController.scala
 [IndexController]: ../altitude/src/altitude/core/routes/web/IndexController.scala
 [SessionController]: ../altitude/src/altitude/core/routes/web/SessionController.scala
-[FolderActionController]: ../altitude/src/altitude/core/routes/web/partial/FolderActionController.scala
 [PeopleActionController]: ../altitude/src/altitude/core/routes/web/partial/PeopleActionController.scala
 [SearchResultsController]: ../altitude/src/altitude/core/routes/web/partial/SearchResultsController.scala
 [SetupFormController]: ../altitude/src/altitude/core/routes/web/partial/SetupFormController.scala
 [LibraryActionController]: ../altitude/src/altitude/core/routes/web/partial/LibraryActionController.scala
-[AlbumService]: ../altitude/src/altitude/core/service/AlbumService.scala
+[OwnPasswordController]: ../altitude/src/altitude/core/routes/web/partial/OwnPasswordController.scala
+[UserActionController]: ../altitude/src/altitude/core/routes/web/partial/UserActionController.scala
+[UsersController]: ../altitude/src/altitude/core/routes/web/UsersController.scala
+[AccountManagementTests]: ../altitude/test/src/altitude/core/integration/AccountManagementTests.scala
+[AssetImportServiceTests]: ../altitude/test/src/altitude/core/integration/AssetImportServiceTests.scala
+[UsersControllerTests]: ../altitude/test/src/altitude/core/controller/UsersControllerTests.scala
+[LibraryActionControllerTests]: ../altitude/test/src/altitude/core/controller/LibraryActionControllerTests.scala
+[AccountVersions]: ../altitude/src/altitude/core/service/AccountVersions.scala
 [AssetService]: ../altitude/src/altitude/core/service/AssetService.scala
+[AuditService]: ../altitude/src/altitude/core/service/AuditService.scala
 [BaseService]: ../altitude/src/altitude/core/service/BaseService.scala
 [ContentSigner]: ../altitude/src/altitude/core/service/ContentSigner.scala
 [FolderService]: ../altitude/src/altitude/core/service/FolderService.scala
@@ -470,13 +470,19 @@ Entries leave this list when their items close.
 [Util]: ../altitude/src/altitude/core/util/Util.scala
 [AssetControllerTests]: ../altitude/test/src/altitude/core/controller/AssetControllerTests.scala
 [ContentViewControllerTests]: ../altitude/test/src/altitude/core/controller/ContentViewControllerTests.scala
+[LoginTokenTests]: ../altitude/test/src/altitude/core/integration/LoginTokenTests.scala
+[ImportControllerTests]: ../altitude/test/src/altitude/core/controller/ImportControllerTests.scala
 [LoginControllerTests]: ../altitude/test/src/altitude/core/controller/LoginControllerTests.scala
+[RouteTableTests]: ../altitude/test/src/altitude/core/controller/RouteTableTests.scala
 [SettingsControllerTests]: ../altitude/test/src/altitude/core/controller/SettingsControllerTests.scala
 [ImportPipelineServiceTests]: ../altitude/test/src/altitude/core/integration/ImportPipelineServiceTests.scala
 [LibraryServicePruneTests]: ../altitude/test/src/altitude/core/integration/LibraryServicePruneTests.scala
 [LibraryServiceRecycleTests]: ../altitude/test/src/altitude/core/integration/LibraryServiceRecycleTests.scala
-[LocationServiceTests]: ../altitude/test/src/altitude/core/integration/LocationServiceTests.scala
 [PurgePipelineServiceTests]: ../altitude/test/src/altitude/core/integration/PurgePipelineServiceTests.scala
+[RepositoryIsolationTests]: ../altitude/test/src/altitude/core/integration/RepositoryIsolationTests.scala
+[RepositoryServiceTests]: ../altitude/test/src/altitude/core/integration/RepositoryServiceTests.scala
+[UserServiceTests]: ../altitude/test/src/altitude/core/integration/UserServiceTests.scala
+[AuditServiceTests]: ../altitude/test/src/altitude/core/integration/AuditServiceTests.scala
 [SearchMapTests]: ../altitude/test/src/altitude/core/integration/SearchMapTests.scala
 [TransactionBoundaryTests]: ../altitude/test/src/altitude/core/unit/TransactionBoundaryTests.scala
 [TestVideos]: ../altitude/test/src/altitude/test/TestVideos.scala

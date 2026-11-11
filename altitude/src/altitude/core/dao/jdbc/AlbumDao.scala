@@ -37,11 +37,11 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
     val id = album.id.getOrElse(BaseDao.genId)
 
     val sql = s"""
-        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Album.NAME}, ${FieldConst.Album.NAME_LC})
+        INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Album.NAME}, ${FieldConst.Album.NAME_KEY})
              VALUES (?, ?, ?, ?)
     """
 
-    addRecord(sql, List(id, RequestContext.getRepository.persistedId, album.name, album.nameLowercase))
+    addRecord(sql, List(id, RequestContext.getRepository.persistedId, album.name, album.nameKey))
     album.copy(id = Some(id))
 
   override def getAll: List[Album] =
@@ -53,7 +53,7 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
       ) AS ${FieldConst.Album.NUM_OF_ASSETS}
         FROM $tableName a
        WHERE a.${FieldConst.REPO_ID} = ?
-       ORDER BY a.${FieldConst.Album.NAME_LC}
+       ORDER BY a.${FieldConst.Album.NAME_KEY}
     """
 
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
@@ -83,11 +83,12 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
   override def removeAssets(albumId: String, assetIds: Set[String]): Int =
     val sql = s"""
       DELETE FROM $membershipTable
-       WHERE ${FieldConst.Album.ALBUM_ID} = ?
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Album.ALBUM_ID} = ?
          AND ${FieldConst.Album.ASSET_ID} $inIdSet
     """
 
-    updateByBySql(sql, List(albumId, idSet(assetIds)))
+    updateByBySql(sql, List(RequestContext.getRepository.persistedId, albumId, idSet(assetIds)))
 
   override def removeAssetsFromAllAlbums(assetIds: Set[String]): Int =
     val sql = s"""
@@ -102,10 +103,13 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
     val sql = s"""
       SELECT ${FieldConst.Album.ASSET_ID}
         FROM $membershipTable
-       WHERE ${FieldConst.Album.ALBUM_ID} = ?
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Album.ALBUM_ID} = ?
     """
 
-    manyBySqlQuery(sql, List(albumId)).map(_(FieldConst.Album.ASSET_ID).asInstanceOf[String]).toSet
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, albumId))
+      .map(_(FieldConst.Album.ASSET_ID).asInstanceOf[String])
+      .toSet
 
   override def getAlbumsOfAsset(assetId: String): List[Album] =
     val sql = s"""
@@ -114,7 +118,7 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
              JOIN $membershipTable aa ON aa.${FieldConst.Album.ALBUM_ID} = a.${FieldConst.ID}
        WHERE aa.${FieldConst.REPO_ID} = ?
          AND aa.${FieldConst.Album.ASSET_ID} = ?
-       ORDER BY a.${FieldConst.Album.NAME_LC}
+       ORDER BY a.${FieldConst.Album.NAME_KEY}
     """
 
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).map(makeModel)

@@ -33,6 +33,7 @@ import altitude.core.dao.sql.tables._
       AlbumRow -> DbApi.renderSql(AlbumRow.select, Db.config, dialect),
       AlbumAssetRow -> DbApi.renderSql(AlbumAssetRow.select, Db.config, dialect),
       AssetRow -> DbApi.renderSql(AssetRow.select, Db.config, dialect),
+      AuditEventRow -> DbApi.renderSql(AuditEventRow.select, Db.config, dialect),
       FaceRow -> DbApi.renderSql(FaceRow.select, Db.config, dialect),
       FolderRow -> DbApi.renderSql(FolderRow.select, Db.config, dialect),
       LocationRow -> DbApi.renderSql(LocationRow.select, Db.config, dialect),
@@ -41,6 +42,7 @@ import altitude.core.dao.sql.tables._
       MetadataParameterRow -> DbApi.renderSql(MetadataParameterRow.select, Db.config, dialect),
       PersonRow -> DbApi.renderSql(PersonRow.select, Db.config, dialect),
       RepositoryRow -> DbApi.renderSql(RepositoryRow.select, Db.config, dialect),
+      RepositoryGrantRow -> DbApi.renderSql(RepositoryGrantRow.select, Db.config, dialect),
       SearchDocumentRow -> DbApi.renderSql(SearchDocumentRow.select, Db.config, dialect),
       StatRow -> DbApi.renderSql(StatRow.select, Db.config, dialect),
       SystemRow -> DbApi.renderSql(SystemRow.select, Db.config, dialect)
@@ -54,7 +56,7 @@ import altitude.core.dao.sql.tables._
     /**
      * Setup:
      *
-     * The rendered `SELECT` of each of the 16 row classes on both engines, and the `CREATE TABLE` columns parsed from each
+     * The rendered `SELECT` of each of the 17 row classes on both engines, and the `CREATE TABLE` columns parsed from each
      * engine's `all.sql`, with PostgreSQL's inherited `_core` columns folded in.
      *
      * Assertions:
@@ -118,7 +120,8 @@ import altitude.core.dao.sql.tables._
     // The columns `makeModel` reads, and which `toModel` therefore has to read too
     val modelColumns = Set(
       "id",
-      "user_id",
+      "owner_user_id",
+      "original_owner",
       "filename",
       "checksum",
       "media_type",

@@ -54,12 +54,31 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       sharpness = getDoubleField(rec(FieldConst.Face.SHARPNESS))
     )
 
-  // Reads `face_02` backwards and stops at the limit: no count of the person's faces and no sort of them
-  override def getTopFaces(personId: String, limit: Int): List[Face] =
-    import dialect.*
+  override def getTopFaces(personId: String, limit: Int): List[Face] = coverCandidates(personId, Set.empty, limit)
 
-    val top = FaceRow.select.filter(_.personId `=` personId).sortBy(_.id).asc.sortBy(_.detectionScore).desc.take(limit)
-    Db.read(dialect)(_.run(top)).map(toModel).toList
+  override def getBestCoverCandidate(personId: String, excludedAssetIds: Set[String]): Option[Face] =
+    coverCandidates(personId, excludedAssetIds, limit = 1).headOption
+
+  /**
+   * The person's Faces a cover can be: on none of `excludedAssetIds` and on no asset marked for purging, by detection score, best
+   * first, then by ID, no more than `limit`. They come from `face_02`, which leads with the person and orders them by detection
+   * score, so the read stops at the limit, each Face's asset probed by its key.
+   */
+  private def coverCandidates(personId: String, excludedAssetIds: Set[String], limit: Int): List[Face] =
+    val sql = s"""
+        SELECT face.*
+          FROM face, asset
+         WHERE face.repository_id = ?
+           AND face.person_id = ?
+           AND NOT (face.asset_id $inIdSet)
+           AND asset.id = face.asset_id
+           AND asset.${FieldConst.Asset.IS_PURGED} = FALSE
+         ORDER BY face.detection_score DESC, face.id
+         LIMIT ?
+      """
+
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, personId, idSet(excludedAssetIds), limit))
+      .map(makeModel)
 
   // Reads `face_01`, which leads with the asset
   override def getAllAssetFaces(assetId: String): List[Face] =
@@ -104,13 +123,6 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       sql,
       List(RequestContext.getRepository.persistedId, personId, otherPersonId, "video", personId, otherPersonId)
     ).map(makeModel)
-
-  override def getInRepository(faceId: String): Option[Face] =
-    import dialect.*
-
-    val repositoryId = RequestContext.getRepository.persistedId
-    val one = FaceRow.select.filter(face => face.id `=` faceId && face.repositoryId `=` repositoryId)
-    Db.read(dialect)(_.run(one)).headOption.map(toModel)
 
   def getAssetFaces(assetId: String): List[Face] =
     visibleFaces("= ?", assetId)

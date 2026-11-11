@@ -17,11 +17,13 @@
  * assets (`dragdrop/albums.js`). Albums are pointers only: nothing here moves or changes an asset.
  */
 import { Const } from "../constants.js"
+import { context } from "../context.js"
 import { http } from "../http/client.js"
 import { buildAssetCountEl, setAssetCount } from "./asset-count.js"
 import {
     buildContextMenuCtrl,
     buildModalTriggerCtrl,
+    buildNoMenuCell,
 } from "./context-menu-markup.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
@@ -157,6 +159,8 @@ function _render(albums, repoId) {
 function _ensureAddControls(repoId) {
     const actionsEl = document.getElementById("albumActions")
     if (actionsEl.childElementCount > 0) return
+    // Adding an album is Organize's: without it both hosts stay empty
+    if (!context.holds(Const.permission.organize)) return
 
     const url = `/htmx/album/r/${repoId}/dialogs/add-album`
 
@@ -277,9 +281,13 @@ function _makeSearchTrigger(el, albumId) {
 /**
  * The album's ⋯ menu cell (see `buildContextMenuCtrl`): Rename and Delete, each loading a
  * popover dialog. `albumMenuCtrl-<id>` is the trigger the rename dialog
- * returns focus to.
+ * returns focus to. Both are Organize's, so an account without it gets the empty cell.
  */
 function _buildMenuCtrl(album, repoId) {
+    if (!context.holds(Const.permission.organize)) {
+        return buildNoMenuCell()
+    }
+
     const actions = [
         { label: "Rename", dialog: "rename-album" },
         { label: "Delete", dialog: "delete-album" },

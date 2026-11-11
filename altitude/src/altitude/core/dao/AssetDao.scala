@@ -1,6 +1,7 @@
 package altitude.core.dao
 
 import altitude.core.dao.jdbc.BaseDao
+import altitude.core.models.AccountSnapshot
 import altitude.core.models.Asset
 import altitude.core.models.Histogram
 import altitude.core.models.QueuedSequence
@@ -10,9 +11,11 @@ import altitude.core.util.Query
 import altitude.core.util.QueryResult
 
 trait AssetDao extends BaseDao[Asset]:
-  def getUserMetadata(assetId: String): Option[UserMetadata]
+  /** The asset's user metadata, empty when it has none; an asset of another repository, or none, is a `NotFoundException` */
+  def getUserMetadata(assetId: String): UserMetadata
 
-  def setUserMetadata(assetId: String, metadata: UserMetadata): Unit
+  /** Replaces the asset's user metadata; how many rows changed: 0 for an asset of another repository, or none */
+  def setUserMetadata(assetId: String, metadata: UserMetadata): Int
 
   def queryNotRecycled(q: Query): QueryResult[Asset]
 
@@ -40,7 +43,11 @@ trait AssetDao extends BaseDao[Asset]:
   /** The recycled assets among the IDs, or the whole recycle bin */
   def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset]
 
-  def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit
+  /**
+   * Merges the metadata into the asset's, the `deletedFields` dropped; how many rows changed. An asset of another repository, or
+   * none, is a `NotFoundException`.
+   */
+  def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Int
 
   /**
    * Sets the completion flag of the context repository's asset and, in the same update, stores the Image quality, the perceptual
@@ -91,20 +98,32 @@ trait AssetDao extends BaseDao[Asset]:
    * The queue of Curation: the context repository's Sequences with at least `Const.Curation.MIN_FRAMES` frames completed and out
    * of the trash, counted over those frames alone, the oldest first capture first, a Sequence with none (an undated one) last on
    * both engines, and then by ID, each with its cover, the first of those frames in capture order. Read through `asset_sequence`.
+   * With an `owner`, every frame counted, and the cover, is one of that account's assets (`owner_user_id`): the queue of an
+   * account that curates its own assets alone.
    */
-  def getSequencesToCurate(): List[QueuedSequence]
+  def getSequencesToCurate(owner: Option[String] = None): List[QueuedSequence]
 
   /** How many Sequences [[getSequencesToCurate]] holds, read from the database */
-  def countSequencesToCurate(): Int
+  def countSequencesToCurate(owner: Option[String] = None): Int
 
   /**
    * The first `limit` of a Sequence's frames in the context repository, completed and out of the trash, in capture order (a frame
-   * with no capture time last, then by import time and ID, as `CurationRule` orders them), through `asset_sequence`
+   * with no capture time last, then by import time and ID, as `CurationRule` orders them), through `asset_sequence`; with an
+   * `owner`, that account's frames alone
    */
-  def getSequenceFrames(sequenceId: String, limit: Int): List[Asset]
+  def getSequenceFrames(sequenceId: String, limit: Int, owner: Option[String] = None): List[Asset]
 
-  /** How many frames of a Sequence are in the context repository, completed and out of the trash, through `asset_sequence` */
-  def countSequenceFrames(sequenceId: String): Int
+  /**
+   * How many frames of a Sequence are in the context repository, completed and out of the trash, through `asset_sequence`; with
+   * an `owner`, that account's frames alone
+   */
+  def countSequenceFrames(sequenceId: String, owner: Option[String] = None): Int
+
+  /**
+   * [[countSequenceFrames]] of several Sequences in one statement, one account's frames alone: Sequence ID to its count, a
+   * Sequence with none of them left out
+   */
+  def countOwnedSequenceFrames(sequenceIds: Set[String], owner: String): Map[String, Int]
 
   /**
    * Makes the context repository's writers of Sequences (`SequenceService.assign`, `CurationService.resolve` and `reopen`) take
@@ -129,3 +148,20 @@ trait AssetDao extends BaseDao[Asset]:
 
   /** Moves every member of the Sequences to the one; how many rows changed */
   def repointSequences(fromIds: Set[String], toId: String): Int
+
+  /*
+   * An account's assets in every Library at once: the only statements on a Library's table that carry no `repository_id`, each run
+   * in the transaction of the account write it serves (`UserService`). Nothing else may reach `asset` without its Library.
+   */
+
+  /** How many assets the account owns, in every Library, recycled ones included: what a delete of the account moves */
+  def countOwnedBy(accountId: String): Int
+
+  /** Gives every asset the account owns, in every Library, to `toAccountId`: a delete of the account; how many rows changed */
+  def reassignOwner(fromAccountId: String, toAccountId: String): Int
+
+  /**
+   * Rewrites the importer record (`original_owner`) of every asset whose record names the account, in every Library and whoever
+   * owns it now, to `snapshot`: an update of the account; how many rows changed
+   */
+  def rewriteImporterRecords(snapshot: AccountSnapshot): Int
