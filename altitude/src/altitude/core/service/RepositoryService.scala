@@ -43,8 +43,13 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
    * (`Repository.validName`, whose `ValidationException` this passes on). A Library has no owner: it belongs to the server, an
    * Admin reaches it by type and anyone else by a grant. A name whose name key another Library holds fails with a
    * `DuplicateException` saying so: `repository_01` decides it, so of two adds racing on one name, one fails.
+   *
+   * In the same transaction, every account whose new-Library switch is on is granted its new-Library Permissions in the Library
+   * (`grantNewLibrary`), and `creatorId`, the account creating it from the New library dialog, unless it is an Admin, is granted
+   * every Permission: a creator already at its bound of grants fails the whole add with `IllegalOperationException`
+   * (`TOO_MANY_GRANTS`), so no Library is left that its creator cannot open.
    */
-  def addRepository(name: String, fileStoreType: String): Repository =
+  def addRepository(name: String, fileStoreType: String, creatorId: Option[String] = None): Repository =
     val id = BaseDao.genId
 
     val repoToSave = Repository(
@@ -54,6 +59,16 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       fileStoreType = fileStoreType
     )
 
+    // The add switches the request's Library to the new one, which a refusal rolls back: the caller's is put back then, so the
+    // answer to the refusal (the New library dialog again) still names the Library it was opened from
+    val previousContext = RequestContext.repository.value
+    try addRepositoryInContext(repoToSave, creatorId)
+    catch
+      case e: Throwable =>
+        RequestContext.repository.value = previousContext
+        throw e
+
+  private def addRepositoryInContext(repoToSave: Repository, creatorId: Option[String]): Repository =
     txManager.withTransaction {
       val repo: Repository =
         try dao.add(repoToSave)
@@ -85,8 +100,34 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       app.service.stats.createStat(Stats.RECYCLED_BYTES)
       logger.debug(s"Created repository [$repo]")
 
+      grantNewLibrary(repo, creatorId)
       repo
     }
+
+  /**
+   * The grants of a Library just created: those of the accounts whose new-Library switch is on, each with its new-Library
+   * Permissions, and the creator's, every Permission for one that is no Admin (by its stored type). An account refused a grant
+   * (one at its bound of grants) is skipped with a WARN, so creating a Library never fails for another account's bound; the
+   * creator's refusal fails the add. Each grant bumps its account's version once the add commits (`setGrant`).
+   */
+  private def grantNewLibrary(repo: Repository, creatorId: Option[String]): Unit =
+    // Every account granted is locked in one pass, in ID order, before any grant is written: two creates at once, each granting
+    // the other's creator, take the rows in one order, so neither holds one the other waits on while it waits
+    val locked = app.DAO.user.lockGrantees(creatorId)
+    val creator = creatorId.flatMap(id => locked.find(_.id.contains(id))).filter(_.accountType != AccountType.Admin)
+
+    locked
+      .filter(_.grantsNewLibraries)
+      .filterNot(account => account.accountType == AccountType.Admin || creator.exists(_.id == account.id))
+      .foreach {
+        account =>
+          try setGrant(account.persistedId, repo.persistedId, account.newLibraryPermissions)
+          catch
+            case e: IllegalOperationException =>
+              logger.warn(s"Account [${account.persistedId}] not granted the new library [${repo.persistedId}]: ${e.getMessage}")
+      }
+
+    creator.foreach(account => setGrant(account.persistedId, repo.persistedId, Permissions.all))
 
   /**
    * The Libraries `account` can see, by name: case-insensitive and natural ("Client 2" before "Client 10"). Every Library for an
@@ -111,17 +152,10 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
   def setGrant(accountId: String, repositoryId: String, permissions: Permissions): Unit =
     txManager.withTransaction {
       val account = app.DAO.user.lockById(accountId)
-      dao.getById(repositoryId)
-
-      account.accountType match
-        case AccountType.Admin =>
-          throw IllegalOperationException("An Admin holds every Permission in every Library with no grant")
-        case AccountType.Guest if !permissions.isEmpty => throw IllegalOperationException("A Guest holds no Permission")
-        case _ =>
+      checkGrant(account, repositoryId, permissions)
 
       val held = grantDao.getByAccount(accountId)
-      if !held.exists(_.repositoryId == repositoryId) && held.size >= RepositoryService.MAX_GRANTS_PER_ACCOUNT then
-        throw IllegalOperationException(C.Msg.Err.TOO_MANY_GRANTS.format(RepositoryService.MAX_GRANTS_PER_ACCOUNT))
+      if !held.exists(_.repositoryId == repositoryId) && held.size >= RepositoryService.MAX_GRANTS_PER_ACCOUNT then throwTooMany()
 
       grantDao.setGrant(accountId, repositoryId, permissions)
 
@@ -129,6 +163,46 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
         logger.info(s"Account [$accountId] granted $permissions in [$repositoryId]")
         app.service.accountVersions.bump(accountId)
       }
+    }
+
+  /**
+   * Replaces the account's grants with `grants`, Library ID to Permissions, in one transaction: the grants it held elsewhere go,
+   * and an Admin is left with none. Each grant is held to the rules of [[setGrant]] (a stored Library, no grant to an Admin, no
+   * Permission to a Guest, at most `MAX_GRANTS_PER_ACCOUNT`), the account's row locked first, and any refusal writes nothing.
+   * Once committed, the account's version is bumped.
+   */
+  def replaceGrants(accountId: String, grants: Map[String, Permissions]): Unit =
+    txManager.withTransaction {
+      val account = app.DAO.user.lockById(accountId)
+      grants.foreach((repositoryId, permissions) => checkGrant(account, repositoryId, permissions))
+      if grants.size > RepositoryService.MAX_GRANTS_PER_ACCOUNT then throwTooMany()
+
+      grantDao.deleteByAccount(accountId)
+      grants.foreach((repositoryId, permissions) => grantDao.setGrant(accountId, repositoryId, permissions))
+
+      txManager.afterCommit {
+        logger.info(s"Account [$accountId] holds grants in [${grants.size}] libraries")
+        app.service.accountVersions.bump(accountId)
+      }
+    }
+
+  // A grant to the account, as stored, in the Library: refused for an unknown Library (`NotFoundException`), to an Admin, who
+  // holds every Permission in every Library with no grant, and of a Permission to a Guest, who holds none
+  private def checkGrant(account: User, repositoryId: String, permissions: Permissions): Unit =
+    dao.getById(repositoryId)
+    account.accountType match
+      case AccountType.Admin =>
+        throw IllegalOperationException("An Admin holds every Permission in every Library with no grant")
+      case AccountType.Guest if !permissions.isEmpty => throw IllegalOperationException("A Guest holds no Permission")
+      case _ =>
+
+  private def throwTooMany(): Nothing =
+    throw IllegalOperationException(C.Msg.Err.TOO_MANY_GRANTS.format(RepositoryService.MAX_GRANTS_PER_ACCOUNT))
+
+  /** The account's grants, Library ID to its Permissions there: what it may pass on to an account it creates */
+  def getGrants(account: User): Map[String, Permissions] =
+    txManager.asReadOnly {
+      grantDao.getByAccount(account.persistedId).map(grant => grant.repositoryId -> grant.permissions).toMap
     }
 
   /** The account's Permissions in the Library, None when it holds no grant there */

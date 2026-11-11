@@ -45,8 +45,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The account reads back by its ID with every field as added: active, never logged in, and with no last active Library. The
-     * stored `email_key` and `username_key` are the name keys (`NameKey.of`) of the address and the username.
+     * The account reads back by its ID with every field as added, and the time it was added: active, never logged in, and with no
+     * last active Library. The stored `email_key` and `username_key` are the name keys (`NameKey.of`) of the address and the
+     * username.
      */
     val creator = testContext.users.head
     val model = testContext
@@ -61,7 +62,9 @@ import altitude.core.util.Util
       )
     val user: User = testContext.persistUser(Some(model))
 
-    testApp.service.user.getById(user.persistedId) shouldEqual model.copy(id = user.id)
+    val stored = testApp.service.user.getById(user.persistedId)
+    stored.copy(createdAt = None) shouldEqual model.copy(id = user.id)
+    stored.createdAt.isDefined shouldBe true
     user.isActive shouldBe true
     user.lastLoginAt shouldBe None
 

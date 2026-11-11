@@ -40,6 +40,9 @@ object FieldConst:
     val NEW_LIBRARY_PERMISSIONS = "new_library_permissions"
     val CREATED_BY_ACCOUNT_ID = "created_by_account_id"
     val LAST_LOGIN_AT = "last_login_at"
+    // The keys of the account rules' errors for what has no column of its own: the password, and the grants (repository_grant)
+    val PASSWORD = "password"
+    val GRANTS = "grants"
 
   object RepositoryGrant:
     val ACCOUNT_ID = "account_id"

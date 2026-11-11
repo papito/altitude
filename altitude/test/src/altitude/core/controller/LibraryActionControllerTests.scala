@@ -1,13 +1,18 @@
 package altitude.core.controller
 
 import altitude.test.TestContext
+import org.scalatest.Assertions.fail
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe }
 
 import altitude.core.Api
 import altitude.core.App
+import altitude.core.Const as C
 import altitude.core.models.AccountType
+import altitude.core.models.Permission
 import altitude.core.models.Permissions
+import altitude.core.service.RepositoryService
+import altitude.core.util.Util
 
 /**
  * The New library dialog: an Admin's dialog and create, the redirect to the new Library's Import page, the Library name rule's
@@ -153,6 +158,63 @@ import altitude.core.models.Permissions
           .get(s"$host/pipeline/r/${created.persistedId}", cookies = testContext.cookies, check = false)
           .statusCode shouldBe 200
         lastActiveRepoIdOf(admin) shouldBe Some(created.persistedId)
+    }
+  }
+
+  test("A User with the Create Libraries flag creates a Library and opens it, holding every Permission there") {
+
+    /**
+     * Setup:
+     *
+     * A User with the Create Libraries flag, logged in to a Library it holds Import in; it creates a Library.
+     *
+     * Assertions:
+     *
+     * The create sends the browser to the new Library's Import page, which answers 200 with the same session: the creator holds
+     * every Permission in the Library it created, and its session picks the grant up at its next request.
+     */
+    val account = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
+    val repoId = testContext.persistRepository().persistedId
+    testContext.grant(account, testContext.repository, Permissions.of(Permission.Import))
+    login()
+
+    withServer(App) {
+      host =>
+        val response = create(host, repoId, s"Created by a User ${Util.randomStr(6)}")
+        val created = response.headers.get("hx-redirect").map(_.head).getOrElse(fail("no HX-Redirect"))
+
+        val page = requests.get(s"$host$created", cookies = testContext.cookies, check = false, maxRedirects = 0)
+        page.statusCode shouldBe 200
+        val createdId = created.stripPrefix("/pipeline/r/")
+        testApp.service.repository.getGrant(account, createdId) shouldBe Some(Permissions.all)
+    }
+  }
+
+  test("A creator already holding as many grants as an account may re-renders the form with the bound, and creates nothing") {
+
+    /**
+     * Setup:
+     *
+     * A User with the Create Libraries flag, logged in, holding grants in as many Libraries as an account may.
+     *
+     * Assertions:
+     *
+     * Its create answers with the dialog's form in place of the submitted one, `TOO_MANY_GRANTS` under the field and the typed
+     * name kept, posting again to the Library it was opened from; no Library is added.
+     */
+    val account = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
+    val repoId = testContext.persistRepository().persistedId
+    testContext.grant(account, testContext.repository)
+    for (_ <- 2 to RepositoryService.MAX_GRANTS_PER_ACCOUNT) testContext.grant(account, testContext.persistRepository())
+    login()
+    val before = allLibraryNames
+
+    withServer(App) {
+      host =>
+        val refused = create(host, repoId, "One Too Many")
+        assertRefused(refused, C.Msg.Err.TOO_MANY_GRANTS.format(RepositoryService.MAX_GRANTS_PER_ACCOUNT), "One Too Many")
+        refused.text() should include(s"""hx-post="/htmx/library/r/$repoId/new"""")
+        allLibraryNames shouldBe before
     }
   }
 

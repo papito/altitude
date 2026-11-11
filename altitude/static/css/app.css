@@ -4,6 +4,7 @@
 @import "pages/setup.css";
 @import "pages/pipeline.css";
 @import "pages/style_guide.css";
+@import "pages/users.css";
 @import "includes/batch_ops.css";
 @import "includes/search_results.css";
 @import "includes/results_title.css";
@@ -32,4 +33,5 @@
 @import "htmx/triage_summary.css";
 @import "htmx/triage_scope_dialog.css";
 @import "htmx/new_library_dialog.css";
+@import "htmx/own_password_dialog.css";
 @import "htmx/quick_view_modal.css";

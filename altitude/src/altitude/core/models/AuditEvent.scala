@@ -12,6 +12,8 @@ enum AuditEventType(val dbValue: String):
   case AccountReactivated extends AuditEventType("account_reactivated")
   case AccountDeleted extends AuditEventType("account_deleted")
   case PasswordSet extends AuditEventType("password_set")
+  // An account's change of its own password refused for a wrong current password
+  case PasswordChangeFailed extends AuditEventType("password_change_failed")
   case LoginSucceeded extends AuditEventType("login_succeeded")
   case LoginFailed extends AuditEventType("login_failed")
 

@@ -7,6 +7,7 @@ import java.time.Instant
 import org.slf4j.Logger
 
 import altitude.core.App
+import altitude.core.routes.BaseController
 import altitude.core.util.Util
 
 object SessionController:
@@ -53,7 +54,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
   @cask.postForm("/login")
   def doLogin(login: String, password: String, redirect: Option[String] = None)(using request: Request): cask.Response[String] =
     logger.trace(s"Login attempt for [${Util.printable(login, 64)}]")
-    val clientIp = Option(request.exchange.getSourceAddress).map(_.getAddress.getHostAddress)
+    val clientIp = BaseController.clientIpOf(request)
 
     App.altitude.service.user.loginAndSetUser(login, password, clientIp) match {
       case Some((user, token, expiresAt)) =>

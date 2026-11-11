@@ -16,8 +16,9 @@
 
 @* Every nav is rendered behind a login, so the account is always here. An entry shows only where the account may open what it
    leads to, by the Permissions of the login token in this Library (`RequestContext.holds`): Triage and Trash for a member (a
-   Guest sees Browse alone), Import for the holder of Import, New library for an Admin or the holder of the Create Libraries
-   flag, Settings for an Admin. The Users entry comes with the Users page. *@
+   Guest sees Browse alone), Import for the holder of Import, Users for the holder of Create Users or Create Guests (an Admin
+   holds both), New library for an Admin or the holder of the Create Libraries flag, Settings for an Admin. The account menu,
+   every account's, changes its password and logs out. *@
 @isAdmin = @{ RequestContext.getAccount.accountType == AccountType.Admin }
 
 @libraryMenuHostId = @{ "libraryMenuHost" }
@@ -72,6 +73,12 @@
 </div>
 }
 
+@if(RequestContext.holds(Permission.CreateUsers, Permission.CreateGuests)) {
+<div class="menu users"@currentAttr(Const.NavEntry.USERS)>
+    <a href="/users/r/@repoId"><i class="fas fa-users"></i><span>Users</span></a>
+</div>
+}
+
 @* Settings are an Admin's alone *@
 @if(isAdmin) {
 <div class="menu settings"@currentAttr(Const.NavEntry.SETTINGS)>
@@ -100,6 +107,23 @@
         <a href="/style-guide/r/@repoId"><i class="fas fa-swatchbook"></i><span>Style Guide</span></a>
     </div>
 }
+
+@* The account menu, its trigger an icon named after the account's username, as the theme switch beside it is an icon: Change
+   password, a popover dialog below the trigger, and Log out, which
+   posts the empty form beside the menu, which takes no room *@
+<div class="menu account">
+    @includes.html.menu_ctrl("accountMenuBtn", "accountMenu", s"Account: ${RequestContext.getAccount.username}", "nav-menu-trigger") {
+        <i class="fas fa-user-circle" aria-hidden="true"></i>
+    } {
+        <button type="button"
+                hx-get="/htmx/account/dialogs/password"
+                hx-target="#popoverContent"
+                hx-swap="innerHTML"
+                data-app-dialog-anchor="accountMenuBtn">Change password…</button>
+        <button type="submit" form="logoutForm">Log out</button>
+    }
+    <form id="logoutForm" method="post" action="/logout"></form>
+</div>
 
 @* The theme switch, always the last cell. The stylesheet shows one of its two icons (js/global.js handles the click) *@
 <button type="button" class="menu theme-switch" data-app-theme-switch title="Toggle light and dark theme" aria-label="Toggle light and dark theme"><i class="fas fa-sun" aria-hidden="true"></i><i class="fas fa-moon" aria-hidden="true"></i></button>

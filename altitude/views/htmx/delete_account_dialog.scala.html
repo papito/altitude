@@ -1,0 +1,35 @@
+@import altitude.core.Api
+@import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.models.User
+
+@* The Delete dialog of an account card's ⋯ menu on the Users page (GET /htmx/users/r/:repoId/dialogs/delete, an Admin's), a
+   popover dialog below the card's trigger, naming how many assets of the account, in every Library, become the Admin's. The
+   delete is for good. As every Delete confirmation, it leaves initial focus on the close control, so opening it cannot press
+   its destructive button. *@
+@(account: User, assets: Int)
+
+<div id="deleteAccount"
+     x-data
+     data-app-fragment="modal"
+     data-app-modal-title="@{ Const.UI.DELETE_USER_DIALOG_TITLE.format(account.name) }"
+     data-app-dialog-return-focus="#addUserBtn"
+     data-app-success-event="ACCOUNTS_CHANGED_EVENT">
+    <p>
+        @account.name (@@@account.username) is deleted for good.
+        @if(assets == 0) {
+            They own no assets.
+        } else {
+            @{ if (assets == 1) "Their 1 asset moves" else s"Their $assets assets move" } to you, in every Library.
+        }
+    </p>
+    <div class="actions">
+        <button type="button"
+                class="action-button error"
+                hx-delete="/htmx/users/r/@{ RequestContext.getRepository.persistedId }/account"
+                hx-vals='{"@{Api.Field.User.ACCOUNT_ID}": "@account.persistedId"}'
+                hx-swap="none"
+                hx-trigger="click">Delete</button>
+        <button type="button" class="action-button" x-on:click="$store.modal.close()">Cancel</button>
+    </div>
+</div>

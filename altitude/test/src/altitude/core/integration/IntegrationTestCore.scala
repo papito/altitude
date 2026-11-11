@@ -105,6 +105,12 @@ abstract class IntegrationTestCore
     testApp.isInitialized = false
     testContext = new TestContext(testApp)
 
+    // A bundle's database keeps every test's accounts, and a Library created grants every account whose new-Library switch is on:
+    // no switch outlives the test that turned it on
+    testApp.txManager.withTransaction {
+      new QueryRunner().update(RequestContext.getConn, "UPDATE account SET grants_new_libraries = ?", Boolean.box(false))
+    }
+
     // Every integration test starts with one repository and one account (a User holding no grant, which a test grants if it
     // needs access), since every asset has an owner. Tests then create more repositories and accounts to test the boundaries
     // between them.

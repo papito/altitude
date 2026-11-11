@@ -1,0 +1,28 @@
+@* A ⋯ menu rendered by the server, the markup `buildContextMenuCtrl` (js/common/context-menu-markup.js) builds on the client:
+   the `contextMenu` component's root, its trigger (a button showing `trigger`, named `label`, opening the panel by
+   `popovertarget`, and named as an anchor after its ID, so a popover dialog its actions request opens below it) and the
+   native `popover="auto"` panel holding `actions`, the menu's buttons. An account card's menu on the Users page
+   (htmx/user_accounts) and the nav's account menu (includes/nav) use it. `align` is "center" for a panel centered under its
+   trigger. *@
+@(triggerId: String, panelId: String, label: String, triggerClass: String = "menu-trigger", align: Option[String] = None)(trigger: Html)(actions: Html)
+
+<div class="menu-ctrl" x-data="contextMenu" x-on:focusout="handleFocusOut"@for(a <- align){ data-menu-align="@a"}>
+    <button type="button"
+            id="@triggerId"
+            class="@triggerClass"
+            popovertarget="@panelId"
+            x-ref="trigger"
+            style="anchor-name: --@triggerId"
+            aria-label="@label"
+            title="@label">@trigger</button>
+    <div class="context-menu"
+         id="@panelId"
+         popover="auto"
+         tabindex="-1"
+         x-ref="panel"
+         x-on:beforetoggle="handleBeforeToggle"
+         x-on:toggle="handleToggle"
+         x-on:keydown="handleKeydown">
+        <div class="actions">@actions</div>
+    </div>
+</div>

@@ -268,6 +268,9 @@ CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_process
 CREATE INDEX asset_sequence ON asset (sequence_id) WHERE sequence_id IS NOT NULL;
 -- An account's assets, in every Library: the key from the account, which a delete of an account checks
 CREATE INDEX asset_owner ON asset (owner_user_id);
+-- The assets an account imported, in every Library, by the ID of their importer record: the rewrite of the records when the
+-- account changes (AssetDao.rewriteImporterRecords)
+CREATE INDEX asset_importer ON asset ((original_owner->>'id'));
 
 CREATE SEQUENCE person_label;
 

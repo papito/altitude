@@ -35,7 +35,8 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
       newLibraryPermissions = Permissions(row.newLibraryPermissions),
       createdByAccountId = row.createdByAccountId,
       lastLoginAt = row.lastLoginAt.map(toLocalDateTime),
-      lastActiveRepoId = row.lastActiveRepoId
+      lastActiveRepoId = row.lastActiveRepoId,
+      createdAt = row.createdAt.map(toLocalDateTime)
     )
 
   override def getWithPasswordHash(key: String, byEmail: Boolean): Option[(User, String)] =
@@ -50,9 +51,70 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
     manyBySqlQuery(s"SELECT * FROM account WHERE ${FieldConst.ID} = ? $forUpdate", List(id)).headOption
       .map(row => (makeModel(row), row(FieldConst.User.PASSWORD_HASH).asInstanceOf[String]))
 
+  override def getAll: List[User] =
+    import dialect.*
+    Db.read(dialect)(_.run(AccountRow.select)).map(toModel).toList
+
+  override def getCreatedBy(accountId: String): List[User] =
+    manyBySqlQuery(s"SELECT * FROM account WHERE ${FieldConst.User.CREATED_BY_ACCOUNT_ID} = ?", List(accountId)).map(makeModel)
+
+  override def lockGrantees(creatorId: Option[String]): List[User] =
+    val creator = creatorId.fold("")(_ => s" OR ${FieldConst.ID} = ?")
+    val sql = s"""
+      SELECT * FROM account
+       WHERE ${FieldConst.User.GRANTS_NEW_LIBRARIES} = ?$creator
+       ORDER BY ${FieldConst.ID} $forUpdate
+    """
+    manyBySqlQuery(sql, nativeBool(true) :: creatorId.toList).map(makeModel)
+
+  override def lockActiveAdmins(): List[User] =
+    val sql = s"""
+      SELECT * FROM account
+       WHERE ${FieldConst.User.ACCOUNT_TYPE} = ? AND ${FieldConst.User.IS_ACTIVE} = ?
+       ORDER BY ${FieldConst.ID} $forUpdate
+    """
+    manyBySqlQuery(sql, List(AccountType.Admin.toString, nativeBool(true))).map(makeModel)
+
+  override def update(account: User): Int =
+    val sql = s"""
+      UPDATE account
+         SET ${FieldConst.User.EMAIL} = ?, ${FieldConst.User.EMAIL_KEY} = ?, ${FieldConst.User.USERNAME} = ?,
+             ${FieldConst.User.USERNAME_KEY} = ?, ${FieldConst.User.NAME} = ?, ${FieldConst.User.ACCOUNT_TYPE} = ?,
+             ${FieldConst.User.CAN_CREATE_LIBRARIES} = ?, ${FieldConst.User.GRANTS_NEW_LIBRARIES} = ?,
+             ${FieldConst.User.NEW_LIBRARY_PERMISSIONS} = ?, ${FieldConst.UPDATED_AT} = ?
+       WHERE ${FieldConst.ID} = ?
+    """
+    updateByBySql(
+      sql,
+      List(
+        account.email,
+        account.emailKey,
+        account.username,
+        account.usernameKey,
+        account.name,
+        account.accountType.toString,
+        nativeBool(account.canCreateLibraries),
+        nativeBool(account.grantsNewLibraries),
+        account.newLibraryPermissions.mask,
+        now,
+        account.persistedId
+      )
+    )
+
+  override def setActive(id: String, active: Boolean): Int =
+    val sql = s"UPDATE account SET ${FieldConst.User.IS_ACTIVE} = ?, ${FieldConst.UPDATED_AT} = ? WHERE ${FieldConst.ID} = ?"
+    updateByBySql(sql, List(nativeBool(active), now, id))
+
+  override def setPasswordHash(id: String, passwordHash: String): Int =
+    val sql = s"UPDATE account SET ${FieldConst.User.PASSWORD_HASH} = ?, ${FieldConst.UPDATED_AT} = ? WHERE ${FieldConst.ID} = ?"
+    updateByBySql(sql, List(passwordHash, now, id))
+
+  // The bind value of the current moment, for `updated_at` and `last_login_at`
+  private def now: Any = nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC))
+
   override def recordLogin(id: String): Unit =
     val sql = s"UPDATE account SET ${FieldConst.User.LAST_LOGIN_AT} = ? WHERE ${FieldConst.ID} = ?"
-    updateByBySql(sql, List(nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC)), id)): Unit
+    updateByBySql(sql, List(now, id)): Unit
 
   override protected def makeModel(rec: Map[String, AnyRef]): User =
     User(
@@ -67,7 +129,8 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
       newLibraryPermissions = Permissions(getIntField(rec(FieldConst.User.NEW_LIBRARY_PERMISSIONS))),
       createdByAccountId = Option(rec(FieldConst.User.CREATED_BY_ACCOUNT_ID).asInstanceOf[String]),
       lastLoginAt = getDateTimeField(rec.get(FieldConst.User.LAST_LOGIN_AT)),
-      lastActiveRepoId = Option(rec(FieldConst.User.LAST_ACTIVE_REPO_ID).asInstanceOf[String])
+      lastActiveRepoId = Option(rec(FieldConst.User.LAST_ACTIVE_REPO_ID).asInstanceOf[String]),
+      createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT))
     )
 
   /** The email address and the username are written beside their name keys; a key another account holds fails the insert */
@@ -112,4 +175,4 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
          WHERE ${FieldConst.ID} = ? AND ${FieldConst.User.LAST_ACTIVE_REPO_ID} IS DISTINCT FROM ?
     """
 
-    updateByBySql(sql, List(repoId, nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC)), userId, repoId)) > 0
+    updateByBySql(sql, List(repoId, now, userId, repoId)) > 0

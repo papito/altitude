@@ -15,6 +15,12 @@ import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.RestoreResult
 import altitude.core.routes.decorators.forbidden
 
+object BaseController:
+
+  /** The address the request came from, which an account event records (`AuditService`) */
+  def clientIpOf(request: Request): Option[String] =
+    Option(request.exchange.getSourceAddress).map(_.getAddress.getHostAddress)
+
 abstract class BaseController(using logger: Logger) extends cask.Routes:
 
   /**

@@ -555,7 +555,10 @@
              count is a <code>.count</code> pill inside the label, and an entry with nothing behind it is
              <code>empty</code> and not a link. The <code>.search</code> cell between Browse and Triage is as wide as an
              entry and holds the quick search form at its own width: no border, a magnifier, a clear control while
-             there is text, and an accent glow for focus. The last cell is the theme switch, <code>.menu.theme-switch</code>, an entry's width and icon
+             there is text, and an accent glow for focus. Before the last cell, the account menu (<code>.menu.account</code>,
+             a server-rendered ⋯ menu, <code>includes/menu_ctrl</code>) is a <code>.nav-menu-trigger</code> showing the
+             account icon alone at <code>--font-size-large</code>, named after the username, whose panel holds Change
+             password… and Log out; the specimen's actions lead here. The last cell is the theme switch, <code>.menu.theme-switch</code>, an entry's width and icon
              only: the sun in the dark theme and the moon in the light one, the theme a press goes to, remembered for every page. The specimen is live. A tab is the link itself, selected through
              <code>aria-selected</code>.</p>
           <p>The Browse cell holds two targets (<code>includes/library_menu</code>): Browse, a link to the current Library's
@@ -595,6 +598,14 @@
             </div>
             <div class="menu triage"><a href="#navigation-tabs"><i class="fas fa-medkit"></i><span>.count<span class="count">37</span></span></a></div>
             <div class="menu triage empty"><i class="fas fa-medkit"></i><span>.menu.empty</span></div>
+            <div class="menu account">
+              @includes.html.menu_ctrl("styleGuideAccountMenuBtn", "styleGuideAccountMenu", "Account: specimen", "nav-menu-trigger") {
+                <i class="fas fa-user-circle" aria-hidden="true"></i>
+              } {
+                <a href="#navigation-tabs">Change password…</a>
+                <a href="#navigation-tabs">Log out</a>
+              }
+            </div>
             <button type="button" class="menu theme-switch" data-app-theme-switch title="Toggle light and dark theme" aria-label="Toggle light and dark theme"><i class="fas fa-sun" aria-hidden="true"></i><i class="fas fa-moon" aria-hidden="true"></i></button>
           </nav>
 

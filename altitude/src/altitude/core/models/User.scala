@@ -84,7 +84,8 @@ object User:
  * An account (`CONTEXT.md`). The email address and the username each name one account under their name keys ([[emailKey]] and
  * [[usernameKey]], `NameKey.of`), which `account_01` and `account_02` keep unique and a login compares; the username keeps to
  * [[User.validUsername]]. `canCreateLibraries` is the Create Libraries flag; `grantsNewLibraries` and `newLibraryPermissions` are
- * the new-Library grant: with the switch on, a Library created later grants the account those Permissions.
+ * the new-Library grant: with the switch on, a Library created later grants the account those Permissions. `createdAt` is when
+ * the account was added, as stored; a model about to be added has none.
  */
 case class User(
     id: Option[String] = None,
@@ -98,9 +99,11 @@ case class User(
     newLibraryPermissions: Permissions = Permissions.none,
     createdByAccountId: Option[String] = None,
     lastLoginAt: Option[LocalDateTime] = None,
-    lastActiveRepoId: Option[String] = None)
-  extends BaseModel
-  with NoDates:
+    lastActiveRepoId: Option[String] = None,
+    createdAt: Option[LocalDateTime] = None)
+  extends BaseModel:
+
+  val updatedAt: Option[LocalDateTime] = None
 
   /** The name key `account_01` keeps unique, and a login by email compares */
   lazy val emailKey: String = NameKey.of(email)

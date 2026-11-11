@@ -22,6 +22,37 @@ trait UserDao extends BaseDao[User]:
   def lockById(id: String): User =
     lockWithPasswordHash(id).map(_._1).getOrElse(throw altitude.core.NotFoundException(s"No account [$id]"))
 
+  /** Every account, in no particular order */
+  def getAll: List[User]
+
+  /** The accounts `accountId` created, in no particular order */
+  def getCreatedBy(accountId: String): List[User]
+
+  /**
+   * The accounts a Library created now grants access to, those whose new-Library switch is on and its creator, their rows locked
+   * in ID order until the transaction ends (on PostgreSQL), in one statement
+   */
+  def lockGrantees(creatorId: Option[String]): List[User]
+
+  /**
+   * The active Admins, their rows locked in ID order until the transaction ends (on PostgreSQL; SQLite's writers take turns
+   * anyway): a write that may leave fewer of them takes this first, so two such writes take turns, and the second counts what the
+   * first left
+   */
+  def lockActiveAdmins(): List[User]
+
+  /**
+   * Writes the account's email address, username (each beside its name key), name, account type, Create Libraries flag and
+   * new-Library grant, stamping `updated_at`; how many rows changed. A key another account holds fails the update.
+   */
+  def update(account: User): Int
+
+  /** Activates or deactivates the account, stamping `updated_at`; how many rows changed */
+  def setActive(id: String, active: Boolean): Int
+
+  /** Replaces the account's password hash, stamping `updated_at`; how many rows changed */
+  def setPasswordHash(id: String, passwordHash: String): Int
+
   /** Stamps the account's last login with the current time; an account change it is not, so `updated_at` stays */
   def recordLogin(id: String): Unit
 

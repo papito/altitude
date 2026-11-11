@@ -6,7 +6,7 @@ import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.not
-import org.scalatest.matchers.should.Matchers.{ an, contain, should, shouldBe, shouldEqual, thrownBy }
+import org.scalatest.matchers.should.Matchers.{ an, contain, empty, should, shouldBe, shouldEqual, thrownBy }
 
 import altitude.core.Altitude
 import altitude.core.Const as C
@@ -14,6 +14,7 @@ import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
+import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.AccountType
@@ -22,6 +23,7 @@ import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.Repository
 import altitude.core.models.User
+import altitude.core.service.RepositoryService
 import altitude.core.util.NameKey
 import altitude.core.util.NaturalOrder
 import altitude.core.util.Util
@@ -496,4 +498,169 @@ import altitude.core.util.Util
     testApp.service.repository.landingRepositoryOf(user) shouldBe None
     testApp.service.user.getById(user.persistedId).lastActiveRepoId shouldBe None
   }
+
+  /** An account whose new-Library switch is on, with `permissions` for a new Library */
+  private def grantingNewLibraries(accountType: AccountType, permissions: Permissions): User =
+    testContext.persistUser(
+      Some(
+        testContext
+          .makeUser()
+          .copy(accountType = accountType, grantsNewLibraries = true, newLibraryPermissions = permissions)))
+
+  test(
+    "A Library created grants its creator every Permission, and every account whose switch is on its new-Library Permissions") {
+
+    /**
+     * Setup:
+     *
+     * A User with the Create Libraries flag, a User and a Guest whose new-Library switch is on (Import and Curate own for the
+     * User, access alone for the Guest), a User whose switch is off, and an Admin with the switch on. The first User creates a
+     * Library, then the Admin creates another.
+     *
+     * Assertions:
+     *
+     * In the first Library the creator holds every Permission, the User with the switch on Import and Curate own, and the Guest
+     * access alone; the User with the switch off and the Admin hold no grant. The versions of the accounts granted were bumped.
+     * In the Admin's Library the two accounts with the switch on hold their grants, and the Admin, who sees it by type, none.
+     */
+    val creator = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
+    val user = grantingNewLibraries(AccountType.User, Permissions.of(Permission.Import, Permission.CurateOwn))
+    val guest = grantingNewLibraries(AccountType.Guest, Permissions.none)
+    val switchedOff = testContext.persistUser()
+    val admin = testContext.persistUser(
+      Some(testContext.makeAdminUser().copy(grantsNewLibraries = true, newLibraryPermissions = Permissions.all)))
+    def versionOf(account: User) = testApp.service.accountVersions.current(account.persistedId)
+    val versionsBefore = List(creator, user, guest).map(versionOf)
+
+    val library = testApp.service.repository.addRepository(
+      s"Created ${Util.randomStr()}",
+      C.StorageEngineName.FS,
+      creatorId = Some(creator.persistedId))
+
+    def grantIn(library: Repository, account: User) = testApp.service.repository.getGrant(account, library.persistedId)
+    grantIn(library, creator) shouldBe Some(Permissions.all)
+    grantIn(library, user) shouldBe Some(Permissions.of(Permission.Import, Permission.CurateOwn))
+    grantIn(library, guest) shouldBe Some(Permissions.none)
+    grantIn(library, switchedOff) shouldBe None
+    grantIn(library, admin) shouldBe None
+    List(creator, user, guest).map(versionOf).zip(versionsBefore).foreach((after, before) => after should be > before)
+
+    val adminsLibrary = testApp.service.repository.addRepository(
+      s"Created ${Util.randomStr()}",
+      C.StorageEngineName.FS,
+      creatorId = Some(admin.persistedId))
+    grantIn(adminsLibrary, user) shouldBe Some(Permissions.of(Permission.Import, Permission.CurateOwn))
+    grantIn(adminsLibrary, guest) shouldBe Some(Permissions.none)
+    grantIn(adminsLibrary, admin) shouldBe None
+  }
+
+  test("An account at its bound of grants is skipped by a new Library; a creator at its bound creates none") {
+
+    /**
+     * Setup:
+     *
+     * A User whose new-Library switch is on and a User with the Create Libraries flag, each holding grants in as many Libraries
+     * as the bound allows. Another account creates a Library, then the User with the flag tries to.
+     *
+     * Assertions:
+     *
+     * The first Library is created, and the User at its bound is not granted it. The creator at its bound is refused with
+     * `IllegalOperationException` (`TOO_MANY_GRANTS`), no Library of the name it gave exists, and the request's Library is still
+     * the one it was before the refused add.
+     */
+    val full = grantingNewLibraries(AccountType.User, Permissions.of(Permission.Import))
+    val creator = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
+    for (_ <- 1 to RepositoryService.MAX_GRANTS_PER_ACCOUNT) {
+      val library = addLibrary(s"Bound ${Util.randomStr()}")
+      testContext.grant(full, library)
+      testContext.grant(creator, library)
+    }
+
+    val library = addLibrary(s"Past the bound ${Util.randomStr()}")
+    testApp.service.repository.getGrant(full, library.persistedId) shouldBe None
+
+    val name = s"Refused ${Util.randomStr()}"
+    intercept[IllegalOperationException] {
+      testApp.service.repository.addRepository(name, C.StorageEngineName.FS, creatorId = Some(creator.persistedId))
+    }.getMessage shouldBe C.Msg.Err.TOO_MANY_GRANTS.format(RepositoryService.MAX_GRANTS_PER_ACCOUNT)
+    librariesKeyed(NameKey.of(name)) shouldBe empty
+    RequestContext.getRepository.persistedId shouldBe library.persistedId
+  }
+
+  if (testApp.dataSourceType == C.DbEngineName.POSTGRES)
+    test("Two Libraries created at once, each granting the other's creator, lock their accounts in one order and both commit") {
+
+      /**
+       * Setup:
+       *
+       * Two accounts whose new-Library switch is on, the first and the second as the switch's read lists them, and a third with
+       * the Create Libraries flag. A transaction holds the first account's row. The third account creates a Library, which waits
+       * for that row; then the first account creates one, which waits too, having taken whatever came before it. Then the holding
+       * transaction ends.
+       *
+       * Assertions:
+       *
+       * Both creates commit and neither fails: each takes the rows of the accounts it grants in one pass, in ID order, so the two
+       * cannot wait on each other. In the first Library the first account holds its new-Library Permissions, in the second every
+       * Permission, and the second account holds its new-Library Permissions in both.
+       */
+      val candidates = List.fill(2)(testContext.persistUser(
+        Some(testContext.makeUser().copy(grantsNewLibraries = true, newLibraryPermissions = Permissions.of(Permission.Import)))))
+      // The order an unordered read of the switch lists them in, which is the order a create took them in when it read them so
+      val listed = testApp.txManager.asReadOnly {
+        query("SELECT id FROM account WHERE grants_new_libraries = ?", Boolean.box(true)).map(_("id").toString.trim)
+      }
+      val List(first, second) = candidates.sortBy(account => listed.indexOf(account.persistedId))
+      val third = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
+
+      val backends = new java.util.concurrent.ConcurrentHashMap[String, AnyRef]()
+      def isWaiting(who: String): Boolean =
+        Option(backends.get(who)).exists {
+          pid =>
+            testApp.txManager.asReadOnly {
+              query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?", pid).exists(_("wait_event_type") == "Lock")
+            }
+        }
+      def creating(who: String, creator: User, name: String) =
+        onAnotherThread {
+          testApp.txManager.withTransaction {
+            backends.put(who, query("SELECT pg_backend_pid() AS pid").head("pid"))
+            testApp.service.repository.addRepository(name, C.StorageEngineName.FS, creatorId = Some(creator.persistedId)): Unit
+          }
+        }
+      def eventually(condition: => Boolean): Unit =
+        org.scalatest.concurrent.Eventually.eventually(
+          org.scalatest.concurrent.Eventually.timeout(org.scalatest.time.Span(30, org.scalatest.time.Seconds)),
+          org.scalatest.concurrent.Eventually.interval(org.scalatest.time.Span(20, org.scalatest.time.Millis))
+        ) {
+          condition shouldBe true
+        }
+
+      val release = new java.util.concurrent.CountDownLatch(1)
+      val holding = new java.util.concurrent.CountDownLatch(1)
+      val (holder, _) = onAnotherThread {
+        testApp.txManager.withTransaction {
+          testApp.DAO.user.lockById(first.persistedId)
+          holding.countDown()
+          release.await(30, java.util.concurrent.TimeUnit.SECONDS): Unit
+        }
+      }
+      holding.await(30, java.util.concurrent.TimeUnit.SECONDS) shouldBe true
+
+      val (thirdName, firstName) = (s"By the third ${Util.randomStr()}", s"By the first ${Util.randomStr()}")
+      val (byThird, thirdFailure) = creating("third", third, thirdName)
+      eventually(isWaiting("third"))
+      val (byFirst, firstFailure) = creating("first", first, firstName)
+      eventually(isWaiting("first"))
+      release.countDown()
+      List(holder, byThird, byFirst).foreach(_.join())
+
+      thirdFailure.get shouldBe None
+      firstFailure.get shouldBe None
+      val (thirdLibrary, firstLibrary) = (librariesKeyed(NameKey.of(thirdName)).head, librariesKeyed(NameKey.of(firstName)).head)
+      testApp.service.repository.getGrant(first, thirdLibrary.persistedId) shouldBe Some(Permissions.of(Permission.Import))
+      testApp.service.repository.getGrant(first, firstLibrary.persistedId) shouldBe Some(Permissions.all)
+      for (library <- List(thirdLibrary, firstLibrary))
+        testApp.service.repository.getGrant(second, library.persistedId) shouldBe Some(Permissions.of(Permission.Import))
+    }
 }

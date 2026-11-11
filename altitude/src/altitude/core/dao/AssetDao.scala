@@ -1,6 +1,7 @@
 package altitude.core.dao
 
 import altitude.core.dao.jdbc.BaseDao
+import altitude.core.models.AccountSnapshot
 import altitude.core.models.Asset
 import altitude.core.models.Histogram
 import altitude.core.models.QueuedSequence
@@ -141,3 +142,20 @@ trait AssetDao extends BaseDao[Asset]:
 
   /** Moves every member of the Sequences to the one; how many rows changed */
   def repointSequences(fromIds: Set[String], toId: String): Int
+
+  /*
+   * An account's assets in every Library at once: the only statements on a Library's table that carry no `repository_id`, each run
+   * in the transaction of the account write it serves (`UserService`). Nothing else may reach `asset` without its Library.
+   */
+
+  /** How many assets the account owns, in every Library, recycled ones included: what a delete of the account moves */
+  def countOwnedBy(accountId: String): Int
+
+  /** Gives every asset the account owns, in every Library, to `toAccountId`: a delete of the account; how many rows changed */
+  def reassignOwner(fromAccountId: String, toAccountId: String): Int
+
+  /**
+   * Rewrites the importer record (`original_owner`) of every asset whose record names the account, in every Library and whoever
+   * owns it now, to `snapshot`: an update of the account; how many rows changed
+   */
+  def rewriteImporterRecords(snapshot: AccountSnapshot): Int

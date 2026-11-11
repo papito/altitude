@@ -113,6 +113,7 @@ object Const:
     val TRASH: String = Search.View.TRASHBIN
     val IMPORT = "import"
     val SETTINGS = "settings"
+    val USERS = "users"
     val STYLE_GUIDE = "style-guide"
 
   object Security:
@@ -164,6 +165,16 @@ object Const:
       val USERNAME_RULE = "Use 3 to 32 letters, digits, dots, underscores or hyphens"
       // A grant past the number of Libraries a login token has room for (RepositoryService.MAX_GRANTS_PER_ACCOUNT)
       val TOO_MANY_GRANTS = "An account can be given access to at most %s libraries"
+      // The account rules of UserService's writes: a User or a Guest sees at least one Library; an address or a username another
+      // account holds; a password outside Api.Constraints.MIN_/MAX_PASSWORD_LENGTH; the current password of a change, wrong
+      val LIBRARY_REQUIRED = "Choose at least one library"
+      val ACCOUNT_TYPE_REQUIRED = "Choose an account type"
+      val EMAIL_TAKEN = "Another account has this email address"
+      val USERNAME_TAKEN = "Another account has this username"
+      val PASSWORD_LENGTH = "Use %s to %s characters"
+      val WRONG_PASSWORD = "This is not your current password"
+      // An Admin's own account, which it cannot deactivate, delete or take the Admin type from
+      val OWN_ACCOUNT = "You cannot deactivate, delete or demote your own account"
       val INVALID_CONTENT_TYPE = "Invalid content type"
       // A JSON route's body that is not JSON, or not a JSON object
       val MALFORMED_JSON = "The request body is not a JSON object"
@@ -197,6 +208,11 @@ object Const:
       val FORBIDDEN_ADMIN = "Admin only"
       val FORBIDDEN_GUEST = "not for a Guest"
       val FORBIDDEN_LIBRARY_CREATOR = "creating a library needs the Create Libraries flag"
+      // An account a creator who is no Admin may not give: an Admin, the Create Libraries flag or the new-Library grant, a
+      // Library where it holds no Create Users (for a User) or Create Guests (for a Guest), or a Permission it does not hold there
+      // An account deactivated since its login, whose write is refused
+      val FORBIDDEN_INACTIVE = "the account is deactivated"
+      val FORBIDDEN_CEILING = "an account can be given only the libraries and Permissions its creator may pass on"
       // An operation refused for assets the account's Permissions do not reach (AssetRules): the action and how many
       val FORBIDDEN_ASSETS = "You do not hold the Permission to %s %d of these assets"
       // A Face correction onto the Face's own Person: a move (PersonService.moveFace), or a merge of the Face's Person into
@@ -259,3 +275,10 @@ object Const:
     val NEW_LIBRARY_DIALOG_TITLE = "New library"
     // The nav's Library menu's last entry, for an Admin, which opens the New library dialog
     val NEW_LIBRARY_OPTION = "New library…"
+    // The Users page's dialogs (htmx/account_form, set_password_dialog, delete_account_dialog), and the own password dialog of
+    // the nav's account menu (htmx/own_password_dialog); an edit and the two account dialogs are titled by the account's name
+    val ADD_USER_DIALOG_TITLE = "Add User"
+    val EDIT_USER_DIALOG_TITLE = "Edit %s"
+    val SET_PASSWORD_DIALOG_TITLE = "Set the password of %s"
+    val DELETE_USER_DIALOG_TITLE = "Delete %s"
+    val CHANGE_PASSWORD_DIALOG_TITLE = "Change password"

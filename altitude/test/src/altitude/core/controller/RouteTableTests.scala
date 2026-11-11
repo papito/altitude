@@ -183,6 +183,12 @@ import altitude.core.routes.decorators.requirePermission
 
   private val SCRUBBED_CATEGORY = "the Location dialogs' shared scrubber trims it, and the route reads no category"
 
+  // Account management reaches every account, and gives Libraries of the whole instance
+  private val ACCOUNT = "an account, which belongs to no Library: an Admin reaches every one by its ID"
+  private val ACCOUNT_FORM =
+    "an account (an Admin's edit) and the Libraries it is given, any of the instance's, which the service holds to the creator's " +
+      "ceiling, refusing an unknown Library as one above it"
+
   /** Every route of the app, each answering another repository's IDs as it would an unknown ID */
   private val table: List[Row] = List(
     // Public: what runs before or without a login
@@ -521,6 +527,22 @@ import altitude.core.routes.decorators.requirePermission
     none(POST, "/htmx/settings/r/:repoId").forAdmins,
     none(GET, "/htmx/library/r/:repoId/dialogs/new").forLibraryCreators,
     none(POST, "/htmx/library/r/:repoId/new").forLibraryCreators,
+    // Users and the own password
+    none(GET, "/users/r/:repoId").needs(Permission.CreateUsers, Permission.CreateGuests),
+    none(GET, "/htmx/users/r/:repoId/accounts").needs(Permission.CreateUsers, Permission.CreateGuests),
+    none(GET, "/htmx/users/r/:repoId/dialogs/add").needs(Permission.CreateUsers, Permission.CreateGuests),
+    Row(POST, "/htmx/users/r/:repoId/add", Ids.NotEntity(Set("accountId", "libraryIds"), ACCOUNT_FORM))
+      .needs(Permission.CreateUsers, Permission.CreateGuests),
+    Row(GET, "/htmx/users/r/:repoId/dialogs/edit", Ids.NotEntity(Set("accountId"), ACCOUNT)).forAdmins,
+    Row(PUT, "/htmx/users/r/:repoId/edit", Ids.NotEntity(Set("accountId", "libraryIds"), ACCOUNT_FORM)).forAdmins,
+    Row(GET, "/htmx/users/r/:repoId/dialogs/set-password", Ids.NotEntity(Set("accountId"), ACCOUNT)).forAdmins,
+    Row(PUT, "/htmx/users/r/:repoId/password", Ids.NotEntity(Set("accountId"), ACCOUNT)).forAdmins,
+    Row(PUT, "/htmx/users/r/:repoId/deactivate", Ids.NotEntity(Set("accountId"), ACCOUNT)).forAdmins,
+    Row(PUT, "/htmx/users/r/:repoId/reactivate", Ids.NotEntity(Set("accountId"), ACCOUNT)).forAdmins,
+    Row(GET, "/htmx/users/r/:repoId/dialogs/delete", Ids.NotEntity(Set("accountId"), ACCOUNT)).forAdmins,
+    Row(DELETE, "/htmx/users/r/:repoId/account", Ids.NotEntity(Set("accountId"), ACCOUNT)).forAdmins,
+    none(GET, "/htmx/account/dialogs/password"),
+    none(PUT, "/htmx/account/password"),
     // Curation
     none(GET, "/api/curation/r/:repoId/count").needs(Permission.CurateOwn, Permission.CurateAll),
     probed(POST, "/api/curation/r/:repoId/resolve") {

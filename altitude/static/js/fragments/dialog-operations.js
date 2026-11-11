@@ -21,13 +21,12 @@
  */
 import { Const } from "../constants.js"
 import {
-    getRequestPath,
     getResponseHeader,
     getResponseRetarget,
-    getResponseStatus,
     getResponseText,
     isRequestSuccessful,
 } from "../common/htmx-events.js"
+import { reportRequestFailure } from "../common/request-failure.js"
 import { showErrorSnackBar, showWarningSnackBar } from "../common/snackbar.js"
 import { parseFragmentDetail, readSuccessEvent } from "./helpers.js"
 
@@ -100,9 +99,7 @@ export function settleDialogOperation(event, { dispatch }) {
 
     if (!isRequestSuccessful(event)) {
         // Error bodies are never swapped (htmx `noSwap` config), so feedback comes from here
-        showErrorSnackBar(
-            `Error for request to ${getRequestPath(event)}. HTTP ${getResponseStatus(event)}`,
-        )
+        reportRequestFailure(event)
         return true
     }
 

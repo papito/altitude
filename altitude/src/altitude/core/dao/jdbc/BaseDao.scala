@@ -103,6 +103,12 @@ abstract class BaseDao[Model <: BaseModel]:
   // if supported, DB function to store native JSON data
   protected def jsonFunc: String
 
+  /**
+   * The text of a top-level key of a JSON object column, spelled as an index on it is (`asset_importer`), so a statement that
+   * compares it reads the index: `(column->>'key')` on PostgreSQL, `json_extract(column, '$.key')` on SQLite
+   */
+  protected def jsonText(column: String, key: String): String
+
   protected def nativeBool(value: Boolean): Any
 
   /**

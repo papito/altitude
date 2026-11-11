@@ -626,6 +626,23 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     """
     updateByBySql(sql, List(toId, RequestContext.getRepository.persistedId, idSet(fromIds)))
 
+  // The three statements of an account across Libraries carry no repository_id: altitude/AGENTS.md, **Repository scoping**
+  override def countOwnedBy(accountId: String): Int =
+    val sql = s"SELECT COUNT(*) AS assets FROM asset WHERE ${FieldConst.Asset.OWNER_USER_ID} = ?"
+    getLongField(executeAndGetOne(sql, List(accountId))("assets")).get.toInt
+
+  override def reassignOwner(fromAccountId: String, toAccountId: String): Int =
+    val sql = s"UPDATE asset SET ${FieldConst.Asset.OWNER_USER_ID} = ? WHERE ${FieldConst.Asset.OWNER_USER_ID} = ?"
+    updateByBySql(sql, List(toAccountId, fromAccountId))
+
+  override def rewriteImporterRecords(snapshot: AccountSnapshot): Int =
+    val sql = s"""
+      UPDATE asset
+         SET ${FieldConst.Asset.ORIGINAL_OWNER} = $jsonFunc
+       WHERE ${jsonText(FieldConst.Asset.ORIGINAL_OWNER, "id")} = ?
+    """
+    updateByBySql(sql, List(ujson.write(snapshot.toJson), snapshot.id))
+
   def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Int =
     val existingMetadata = getUserMetadata(assetId)
     logger.trace(s"Updating $existingMetadata with $metadata")

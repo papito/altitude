@@ -170,7 +170,8 @@ object decorators:
    * the account cannot see is answered as not found, as any foreign entity is: an Admin sees every one, anyone else one its token
    * carries a grant in, so the gate reads no database. The token's Permissions in the path's Library (every one for an Admin;
    * none for anyone else with no Library in the path) are put in `RequestContext.permissions`. A token rebuilt from the database
-   * is set as the cookie of the answer, whatever it is.
+   * is set as the cookie of the answer, unless the answer sets the session cookie itself: an endpoint that mints a token (a
+   * password change) mints it after the rebuild, which its change made stale.
    */
   class requireLogin extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -179,7 +180,10 @@ object decorators:
           val answer =
             accessibleRepositoryOnly(req, login.claims)(delegate(req, Map("request" -> req, "user" -> login.claims.account)))
           val cookies = renewedCookies(login)
-          if cookies.isEmpty then answer else answer.transform { case v: Raw => v.copy(cookies = v.cookies ++ cookies) }
+          // An answer that sets the session cookie itself (a password changed, whose new token the rebuilt one predates) keeps it
+          def setsSession(v: Raw) = v.cookies.exists(_.name == SessionController.AUTH_COOKIE_NAME)
+          if cookies.isEmpty then answer
+          else answer.transform { case v: Raw => if setsSession(v) then v else v.copy(cookies = v.cookies ++ cookies) }
         case Left(noLogin) => handleUnauthenticated(req, noLogin.cookies)
 
     /**

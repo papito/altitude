@@ -123,6 +123,12 @@
     --quick-view-width: 60rem;
     --quick-view-preview-size: 8rem;
     --quick-view-previews-max-height: 32rem;
+    --users-page-max-width: 75rem;
+    --account-card-width: 17rem;
+    --account-avatar-size: 2.5rem;
+    --account-form-width: 66rem;
+    --account-form-body-max-height: calc(100dvh - 16rem);
+    --permission-column-width: 4.4rem;
 
     --success-color: light-dark(#297612, #87d575);
     --warning-color: light-dark(#976212, #ebb16b);
@@ -442,6 +448,19 @@ nav .nav-menu-trigger .choice {
         margin-right: var(--space-3);
         color: hsl(from currentColor h s l / 0.6);
     }
+}
+
+/* The account menu's cell (includes/nav): as wide as its trigger, an icon whose padding is the cell's */
+nav .menu.account {
+    flex: 0 0 auto;
+    align-self: stretch;
+    padding: 0;
+    font-size: var(--font-size-large);
+}
+
+/* Log out's form, empty: its button is in the menu, and the quick search's `nav form` rule would draw it */
+nav .menu.account form {
+    display: none;
 }
 
 /* A panel in the nav takes the page's text rather than its entry's: the nav font, lowercase, the current entry's accent and

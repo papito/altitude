@@ -42,6 +42,8 @@ trait SqliteOverrides:
 
   override protected def jsonFunc = "?"
 
+  override protected def jsonText(column: String, key: String): String = s"json_extract($column, '$$.$key')"
+
   override protected def nativeBool(value: Boolean): Any =
     if value then "1" else "0"
 

@@ -53,6 +53,8 @@ trait PostgresOverrides:
 
   override protected def jsonFunc = "CAST(? as jsonb)"
 
+  override protected def jsonText(column: String, key: String): String = s"($column->>'$key')"
+
   override protected def nativeBool(value: Boolean): Any =
     if value then true else false
 

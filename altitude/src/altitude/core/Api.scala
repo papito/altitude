@@ -69,6 +69,25 @@ object Api:
     object Library:
       val NAME = "name"
 
+    // The account forms of the Users page (htmx/account_form, htmx/set_password_dialog) and the own password dialog
+    // (htmx/own_password_dialog). `libraryIds` holds the Libraries given, `permissions` a "<Library ID>:<Permission>" per
+    // Permission given in one, `newLibraryPermissions` the Permission names of the new-Library grant.
+    object User:
+      val ACCOUNT_ID = "accountId"
+      val NAME = "name"
+      val USERNAME = "username"
+      val EMAIL = "email"
+      val PASSWORD = "password"
+      val ACCOUNT_TYPE = "accountType"
+      val LIBRARY_IDS = "libraryIds"
+      val PERMISSIONS = "permissions"
+      val CAN_CREATE_LIBRARIES = "canCreateLibraries"
+      val GRANTS_NEW_LIBRARIES = "grantsNewLibraries"
+      val NEW_LIBRARY_PERMISSIONS = "newLibraryPermissions"
+      val CURRENT_PASSWORD = "currentPassword"
+      val NEW_PASSWORD = "newPassword"
+      val NEW_PASSWORD2 = "newPassword2"
+
     object Location:
       val LOCATION_ID = "locationId"
       val NAME = "name"

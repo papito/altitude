@@ -43,6 +43,15 @@ abstract class RepositoryGrantDao(override val config: Config)
     """
     addRecord(sql, List(accountId, repositoryId, permissions.mask))
 
+  override def deleteByAccount(accountId: String): Int =
+    updateByBySql(s"DELETE FROM $tableName WHERE ${FieldConst.RepositoryGrant.ACCOUNT_ID} = ?", List(accountId))
+
+  override def getByAccounts(accountIds: Set[String]): List[RepositoryGrant] =
+    if accountIds.isEmpty then Nil
+    else
+      val sql = s"SELECT * FROM $tableName WHERE ${FieldConst.RepositoryGrant.ACCOUNT_ID} $inIdSet"
+      manyBySqlQuery(sql, List(idSet(accountIds))).map(makeModel)
+
   override def getByAccount(accountId: String): List[RepositoryGrant] =
     import dialect.*
     Db.read(dialect)(_.run(table.select.filter(_.accountId === accountId))).map(toModel).toList

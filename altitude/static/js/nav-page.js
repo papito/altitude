@@ -3,14 +3,16 @@ import { contextMenu } from "./alpine/components/context-menu.js"
 import { ensureChoiceMenus } from "./common/choice-menus.js"
 import { findFragmentRoots } from "./fragments/helpers.js"
 import { hydrateModalFragment } from "./fragments/modal.js"
+import { registerAccountListeners } from "./listeners/account.js"
 import { registerDialogListeners } from "./listeners/dialogs.js"
 import { registerHtmxRequestListeners } from "./listeners/htmx-requests.js"
 import { registerHtmlCommonBindings } from "./stores/html-common.js"
 
 /**
  * Starts a page that carries the nav and `html_common` outside the main app: Import
- * (`upload-form-page.js`) and Settings (`settings-page.js`). What such a page shares is the nav's
- * Library menu and the dialog it opens, New library:
+ * (`upload-form-page.js`), Settings (`settings-page.js`) and Users (`users-page.js`). What such a
+ * page shares is the nav's menus and the dialogs they open: the Library menu's New library, and the
+ * account menu's Change password, whose outcome `listeners/account.js` confirms:
  *
  * - Alpine, with what `html_common` binds (`registerHtmlCommonBindings`: the modal hosts, the
  *   snackbar's stacks, `x-trap`) and the `contextMenu` component of the menu's control;
@@ -45,6 +47,7 @@ export function startNavPage() {
 
     registerHtmxRequestListeners(app)
     registerDialogListeners(app)
+    registerAccountListeners()
 
     // Built before Alpine starts, whose first pass then initializes the menu's component
     ensureChoiceMenus(document)
