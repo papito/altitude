@@ -40,10 +40,11 @@ class SessionController(using logger: Logger) extends cask.Routes:
 
         // Determine where to redirect after successful login
         // Validate redirect URL to prevent open redirect vulnerabilities
+        // Without one, the Library the user lands in; `/` tells a user who owns none so
         val decodedRedirect = redirect.map(java.net.URLDecoder.decode(_, "UTF-8"))
         val redirectUrl = decodedRedirect
           .filter(SessionController.isValidRedirectUrl)
-          .getOrElse(s"/r/${user.lastActiveRepoId.get}")
+          .getOrElse(App.altitude.service.repository.landingRepositoryOf(user).fold("/")(repo => s"/r/${repo.persistedId}"))
 
         // Redirect to the original URL or home page with auth cookie set
         cask.Response(

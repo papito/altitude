@@ -16,7 +16,10 @@ import { isModalOpenRequest } from "../common/modal.js"
  *
  * - a failed response (HTTP 400 and above; the body is never swapped, see the `noSwap` config)
  *   is reported through the snackbar, so nothing fails silently - not even a page continuous
- *   scroll requested with no visible control behind it;
+ *   scroll requested with no visible control behind it. The one exception is a request whose
+ *   element declares `data-app-silent-failure`: a poll, whose next tick tries again, and which
+ *   would otherwise report a server answering 5xx while it restarts on every tick (a request
+ *   that gets no response at all never reaches this listener: htmx fires `htmx:error` instead);
  * - a validation replacement (`HX-Retarget: this`, `BaseController.dialogFormValidationResponse`)
  *   is swapped in and announces nothing: the form came back with its errors;
  * - a successful response dispatches the success event the issuing element declares
@@ -35,18 +38,20 @@ export function registerHtmxRequestListeners(app) {
             return
         }
 
+        const sourceEl = getRequestSource(event)
+
         if (!isRequestSuccessful(event)) {
-            showErrorSnackBar(
-                `Error for request to ${getRequestPath(event)}. HTTP ${getResponseStatus(event)}`,
-            )
+            if (!sourceEl?.hasAttribute?.("data-app-silent-failure")) {
+                showErrorSnackBar(
+                    `Error for request to ${getRequestPath(event)}. HTTP ${getResponseStatus(event)}`,
+                )
+            }
             return
         }
 
         if (getResponseRetarget(event)) {
             return
         }
-
-        const sourceEl = getRequestSource(event)
 
         if (sourceEl?.matches?.('[role="tab"]')) {
             selectTab(sourceEl)

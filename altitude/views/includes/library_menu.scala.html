@@ -1,0 +1,35 @@
+@import altitude.core.Const
+@import altitude.core.models.Repository
+
+@* The nav's Browse cell (includes/nav, and the style guide's specimen): Browse, a link to `browseHref`, the current Library's
+   main page with no search, then the Library menu's host, a choice menu that js/common/choice-menus.js builds into a trigger
+   showing the current Library's name alone (`data-choice-menu-choice-only`) and its panel. Its options are the `libraries`
+   given (the account's own, by name), each a link to `href` of it, the one `currentId` names checked; a link's title is the
+   full name, which the trigger and the panel cut with an ellipsis. For an Admin, `newLibraryDialogUrl` adds a separator and the
+   New library entry, an action that requests the dialog into the popover dialog host, below the trigger. `hx-preserve` keeps
+   the built control through a nav reload, which renders the host empty (`emptyHost`, includes/nav); an open panel stays open
+   only where the browser moves the control with `moveBefore`, so the Import page's polling reload skips a tick while the panel
+   or the dialog is open (pipeline.scala.html). A name is a flex item in the trigger and a grid item in its entry, so it is a
+   bidi paragraph of its own and never reorders the text beside it. *@
+@(hostId: String,
+  browseHref: String,
+  libraries: Seq[Repository],
+  currentId: String,
+  newLibraryDialogUrl: Option[String],
+  href: Repository => String = library => s"/r/${library.persistedId}",
+  emptyHost: Boolean = false)
+
+<a href="@browseHref"><i class="fas fa-database"></i><span>Browse</span></a>
+@if(emptyHost) {
+<div id="@hostId" hx-preserve></div>
+} else {
+<div id="@hostId" data-choice-menu="Library" data-choice-menu-choice-only data-choice-menu-trigger-class="nav-menu-trigger" hx-preserve>
+    @for(library <- libraries) {
+    <a href="@href(library)" title="@library.name"@if(library.persistedId == currentId){ aria-checked="true"}><span>@library.name</span></a>
+    }
+    @for(url <- newLibraryDialogUrl) {
+    <hr>
+    <button type="button" hx-get="@url" hx-target="#popoverContent" hx-swap="innerHTML">@Const.UI.NEW_LIBRARY_OPTION</button>
+    }
+</div>
+}

@@ -45,7 +45,7 @@
 
 <html lang="en">
   <head>
-    <title>ALTITUDE - Style Guide</title>
+    @includes.html.page_title(Some("Style Guide"))
 
     @includes.html.header_common()
     @* The app start binds drag and drop through `interact`, and the sample dialog posts JSON *@
@@ -522,10 +522,34 @@
              there is text, and an accent glow for focus. The last cell is the theme switch, <code>.menu.theme-switch</code>, an entry's width and icon
              only: the sun in the dark theme and the moon in the light one, the theme a press goes to, remembered for every page. The specimen is live. A tab is the link itself, selected through
              <code>aria-selected</code>.</p>
+          <p>The Browse cell holds two targets (<code>includes/library_menu</code>): Browse, a link to the current Library's
+             main page with no search, and the Library menu's trigger (<code>.nav-menu-trigger</code>), a dot and the
+             current Library in its own case, cut with an ellipsis at <code>--library-name-max-width</code> with the whole
+             name as the title, and a caret; each glows on its own hover. Its panel takes
+             the page's text, not the entry's, and lists the account's Libraries by name, each a link cut the same way, the
+             current one checked; for an Admin a separator in <code>--popover-border-color</code> follows, then New library…,
+             an action that opens the New library dialog below the trigger. The specimen's current Library has a long name;
+             its links lead here, and its New library opens the dialog as a taken name leaves it, whose Create applies the
+             Library name rule and creates nothing.</p>
           <nav aria-label="Navigation specimen">
             <div class="brand"><a href="#navigation-tabs"><i class="fas fa-chevron-up"></i><span>Altitude</span></a></div>
             <div class="menu"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>.menu</span></a></div>
             <div class="menu" aria-current="page"><a href="#navigation-tabs"><i class="fas fa-database"></i><span>aria-current</span></a></div>
+            @* The Library menu as includes/nav renders it, over a Library of a long name and another; its links lead here, and
+               New library opens the style guide's New library sample (StyleGuideController), which creates nothing *@
+            @defining(RequestContext.getRepository) { library =>
+            <div class="menu repository" aria-current="page">
+              @includes.html.library_menu(
+                  hostId = "styleGuideLibraryMenuHost",
+                  browseHref = "#navigation-tabs",
+                  libraries = Seq(
+                      library.copy(id = Some("styleGuideOtherLibrary"), name = "Client 2"),
+                      library.copy(name = "Riverside Community Arts Foundation: Annual Report Photography, 2026")),
+                  currentId = library.persistedId,
+                  newLibraryDialogUrl = Some(s"/htmx/style-guide/r/${library.persistedId}/dialogs/new-library"),
+                  href = _ => "#navigation-tabs")
+            </div>
+            }
             <div class="search">
               <form role="search" @@submit.prevent>
                 <i class="fas fa-search"></i>

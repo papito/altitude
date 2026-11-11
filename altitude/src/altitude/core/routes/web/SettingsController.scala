@@ -5,6 +5,7 @@ import org.slf4j.Logger
 
 import altitude.core.App
 import altitude.core.routes.BaseController
+import altitude.core.routes.decorators.rememberRepository
 import altitude.core.routes.decorators.requireAdmin
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.routes.web.partial.SettingsFormController
@@ -14,6 +15,7 @@ class SettingsController(using logger: Logger) extends BaseController:
 
   @requireLogin()
   @requireAdmin()
+  @rememberRepository()
   @cask.get("/settings/r/:repoId")
   def page(repoId: String): Response[String] =
     val stats = App.altitude.service.stats.getStats

@@ -170,6 +170,18 @@ object Const:
       val PERSON_NAME_TAKEN_BY_HIDDEN = "%s already exists and is hidden."
       // A rename a unique index refused with no live holder of the name to offer: merged away meanwhile, or another constraint
       val PERSON_NAME_ALREADY_EXISTS = "Person by that name already exists"
+      // The Library name rule (Repository.validName), shared by setup and the New library dialog; the bounds are
+      // Api.Constraints.MIN_/MAX_REPOSITORY_NAME_LENGTH
+      val LIBRARY_NAME_REQUIRED = "Enter a name for the library"
+      val LIBRARY_NAME_TOO_SHORT = "Use at least %s characters"
+      val LIBRARY_NAME_TOO_LONG = "Use at most %s characters"
+      val LIBRARY_NAME_CONTROL_CHARACTERS = "Remove the control characters"
+      // A Library name whose name key another Library holds (repository_01), named as it was submitted, once normalized
+      val LIBRARY_NAME_TAKEN = "A library named “%s” already exists"
+      // `/` for an account that owns no Library to land in
+      val NO_LIBRARY = "There is no library to open"
+      // A page of a Library that does not exist or that the account does not own (decorators.requireLogin): one text for both
+      val LIBRARY_NOT_FOUND = "Library not found"
       // A Face correction (PersonService.moveFace) onto the Face's own Person
       val FACE_ALREADY_THEIRS = "The face is already this person's"
       // A Face correction's body naming neither a person nor a name, or both
@@ -211,3 +223,6 @@ object Const:
     val MERGE_INTO_PERSON = "Merge into %s…"
     val CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE = "Change cover image"
     val QUICK_VIEW_DIALOG_TITLE = "Quick view"
+    val NEW_LIBRARY_DIALOG_TITLE = "New library"
+    // The nav's Library menu's last entry, for an Admin, which opens the New library dialog
+    val NEW_LIBRARY_OPTION = "New library…"

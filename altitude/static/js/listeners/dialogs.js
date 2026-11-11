@@ -43,7 +43,8 @@ export function registerDialogListeners(app) {
                 showErrorSnackBar(
                     `Could not open dialog: HTTP ${ctx.response.status}`,
                 )
-                app.detailUrl.openFailed()
+                // Asset detail's URL, on the main page alone (`nav-page.js` has none)
+                app.detailUrl?.openFailed()
             },
             // The Triage scope route's answer for a Person or a Location with triaged assets: no
             // dialog, the trigger searches

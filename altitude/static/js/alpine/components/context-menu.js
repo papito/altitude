@@ -1,6 +1,6 @@
 /**
  * Alpine coordination for folder, album, and Location menus, the View settings popover and the
- * choice menus (Group, Sort).
+ * choice menus (Group, Sort, Dock side, the nav's Browse).
  *
  * The component root is the `.menu-ctrl` cell (the View settings `.dialog-trigger-ctrl`, a choice menu's
  * `.choice-menu-ctrl`) built by `common/context-menu-markup.js`: it holds the trigger (`x-ref="trigger"`, opening the
@@ -10,8 +10,8 @@
  *
  * Entity menus hold actions that open popover dialogs (`common/modal.js`). Only View settings has a
  * dialog host (`x-ref="dialog"`), cleared when its panel closes so a later open loads fresh
- * settings. A choice menu (`data-menu-kind="choice"`) holds options that run a search; picking one
- * closes the menu.
+ * settings. A choice menu (`data-menu-kind="choice"`) holds options that run a search or are links
+ * (the nav's Library menu), and may end with actions opening dialogs; picking any closes the menu.
  *
  * The browser owns visibility. It toggles the panel from the trigger, dismisses it on a click
  * anywhere outside, and reports every change through `beforetoggle`/`toggle`. This component
@@ -31,6 +31,9 @@
 import { placeAnchoredPanel } from "../../common/anchored-panel.js"
 
 const OPEN_MENU_SELECTOR = ".context-menu:popover-open"
+
+// A menu's actions: its buttons, and the links of a choice menu whose options lead to another page
+const ACTION_SELECTOR = ".actions :is(button, a[href])"
 
 /** The ⋯ control that opens `panel`: the button in the same menu cell that targets it. */
 export function getContextMenuTrigger(panel) {
@@ -118,13 +121,11 @@ export function contextMenu() {
             }
         },
 
-        /** The panel's actions that can take focus: its buttons, less the disabled ones */
+        /** The panel's actions that can take focus: its buttons and links, less the disabled buttons */
         actions() {
             return Array.from(
-                this.$refs.panel.querySelectorAll(
-                    ".actions button:not(:disabled)",
-                ),
-            )
+                this.$refs.panel.querySelectorAll(ACTION_SELECTOR),
+            ).filter((actionEl) => !actionEl.disabled)
         },
 
         /**
@@ -142,7 +143,9 @@ export function contextMenu() {
 
         /**
          * Down and Up move focus through the actions, wrapping; Home and End jump to the ends.
-         * Enter and Space are the focused button's own. Other keys pass, Escape to `global.js`.
+         * Enter and Space are the focused button's own; on a link, which takes Enter alone, Space
+         * follows it too, so every option of a choice menu is picked with either key. Other keys
+         * pass, Escape to `global.js`.
          */
         handleKeydown(event) {
             const actions = this.actions()
@@ -151,6 +154,12 @@ export function contextMenu() {
             }
 
             const current = actions.indexOf(document.activeElement)
+            if (event.key === " " && actions[current]?.matches("a")) {
+                event.preventDefault()
+                actions[current].click()
+                return
+            }
+
             let next
             if (event.key === "ArrowDown") {
                 next = (current + 1) % actions.length
@@ -169,11 +178,12 @@ export function contextMenu() {
         },
 
         /**
-         * Picking a choice menu's option closes the menu; the option's own search trigger runs
-         * on the same click, and the results it brings back carry a new control showing the choice.
+         * Picking a choice menu's option or action closes the menu: the option's own search
+         * trigger runs on the same click, and the results it brings back carry a new control
+         * showing the choice; a link loads its page; an action's dialog opens below the trigger.
          */
         handleActionClick(event) {
-            if (!event.target.closest(".actions button")) {
+            if (!event.target.closest(ACTION_SELECTOR)) {
                 return
             }
 

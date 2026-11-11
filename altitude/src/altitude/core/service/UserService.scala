@@ -102,10 +102,22 @@ class UserService(val app: Altitude) extends BaseService[User]:
   def getByToken(token: String): Option[User] =
     getUserFromToken(token)
 
-  def setLastActiveRepoId(user: User, repoId: String): Unit =
-    txManager.withTransaction {
-      logger.trace(s"Setting the last active repository of user [${user.persistedId}] to [$repoId]")
-      dao.updateById(user.persistedId, Map(FieldConst.User.LAST_ACTIVE_REPO_ID -> repoId))
+  /**
+   * Records `repoId` as the user's last active Library, the one login and `/` open next
+   * (`RepositoryService.landingRepositoryOf`). Whether it wrote. Every page load of a Library calls it, so it reads the recorded
+   * Library first, in a read-only transaction, and opens a write transaction only when that differs: a load of the Library
+   * recorded already takes no write lock (on SQLite, the one write connection). The write is still the conditional UPDATE, so of
+   * two loads racing, the second writes nothing.
+   */
+  def rememberLastActiveRepository(user: User, repoId: String): Boolean =
+    val recorded = txManager.asReadOnly {
+      dao.getById(user.persistedId).lastActiveRepoId
+    }
+
+    !recorded.contains(repoId) && txManager.withTransaction {
+      val written = dao.rememberLastActiveRepository(user.persistedId, repoId)
+      if written then logger.debug(s"Recorded [$repoId] as the last active repository of user [${user.persistedId}]")
+      written
     }
 
   // The dev user's ID once its password has checked out: every request asks for the dev user, a page of thumbnails included,
@@ -114,8 +126,8 @@ class UserService(val app: Altitude) extends BaseService[User]:
 
   /**
    * The user that `dev.user` and `dev.password` log in, made the request's account, or None when they are not set or do not log
-   * in. The password is checked until it first succeeds; after that the user is read by ID, so a change to it (its last active
-   * repository) is seen, and a user that is gone is logged in again.
+   * in. The password is checked until it first succeeds; after that the user is read by ID, so a change to it is seen, and a user
+   * that is gone is logged in again.
    */
   def getDevUser: Option[User] =
     val devEmail: String = App.altitude.config.getString(Const.Conf.DEV_USER)

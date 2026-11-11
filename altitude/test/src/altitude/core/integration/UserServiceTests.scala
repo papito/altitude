@@ -42,22 +42,39 @@ import altitude.core.util.Util
     user.id shouldEqual storedUser.id
   }
 
-  test("Can set user active repository") {
+  test("Remembering a Library writes the account only when it is not the one recorded") {
 
     /**
      * Setup:
      *
-     * A new regular user and the common setup's repository.
+     * A new User with no last active Library, the common setup's Library and a second one.
      *
      * Assertions:
      *
-     * The repository is stored as the user's last active one: reading the user back yields its ID.
+     * Remembering the first Library records it, reports a write and stamps the account's update time. Remembering it again
+     * reports no write and leaves the update time as it was (cleared beforehand, so a write would show). Remembering the second
+     * Library records it and reports a write.
      */
     val user: User = testContext.persistUser()
-    testApp.service.user.setLastActiveRepoId(user, testContext.repository.persistedId)
+    val first = testContext.repository.persistedId
+    val second = testContext.persistRepository(Some(user)).persistedId
 
-    val storedUser: User = testApp.service.user.getById(user.persistedId)
-    storedUser.lastActiveRepoId shouldEqual Some(testContext.repository.persistedId)
+    def updatedAt: Option[AnyRef] = testApp.txManager.asReadOnly {
+      Option(query("SELECT updated_at FROM account WHERE id = ?", user.persistedId).head("updated_at"))
+    }
+    def lastActive: Option[String] = testApp.service.user.getById(user.persistedId).lastActiveRepoId
+
+    testApp.service.user.rememberLastActiveRepository(user, first) shouldBe true
+    lastActive shouldBe Some(first)
+    updatedAt should not be empty
+
+    testApp.txManager.withTransaction(update("UPDATE account SET updated_at = NULL WHERE id = ?", user.persistedId))
+    testApp.service.user.rememberLastActiveRepository(user, first) shouldBe false
+    lastActive shouldBe Some(first)
+    updatedAt shouldBe None
+
+    testApp.service.user.rememberLastActiveRepository(user, second) shouldBe true
+    lastActive shouldBe Some(second)
   }
 
   test("Check valid user password") {
@@ -195,6 +212,44 @@ import altitude.core.util.Util
         writing.await(5, TimeUnit.SECONDS) shouldEqual true
         val login = Future(testApp.service.user.loginAndSetUser(userModel.email, password))
         Await.result(login, 5.seconds) should not be None
+      } finally {
+        release.countDown()
+        writer.join()
+      }
+    }
+
+    test("Remembering the Library recorded already does not wait for the SQLite write connection") {
+
+      /**
+       * Setup:
+       *
+       * A User whose last active Library is the common setup's, and a write transaction on a thread of its own that holds
+       * SQLite's single write connection until the test releases it.
+       *
+       * Assertions:
+       *
+       * While the write connection is held, remembering the recorded Library again completes within a few seconds and reports no
+       * write, since it only reads the account to find there is nothing to write.
+       */
+      val user: User = testContext.persistUser()
+      val repoId = testContext.repository.persistedId
+      testApp.service.user.rememberLastActiveRepository(user, repoId) shouldBe true
+
+      val writing = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+      // A write transaction on a thread of its own holds the one write connection until released
+      val writer = new Thread(
+        () =>
+          testApp.txManager.withTransaction {
+            writing.countDown()
+            release.await(30, TimeUnit.SECONDS): Unit
+          })
+      writer.start()
+
+      try {
+        writing.await(5, TimeUnit.SECONDS) shouldEqual true
+        val remember = Future(testApp.service.user.rememberLastActiveRepository(user, repoId))
+        Await.result(remember, 5.seconds) shouldBe false
       } finally {
         release.countDown()
         writer.join()

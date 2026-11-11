@@ -43,7 +43,7 @@
     }
     case TriageScope.InFolder(folder, count) => {
         @dialog(folder.name,
-                f"This folder has $count%,d results in the repository",
+                f"This folder has $count%,d results in the library",
                 Some(("Show in new tab", Api.Field.Search.FOLDER_ID, folder.persistedId)),
                 Some(folder.persistedId))
     }

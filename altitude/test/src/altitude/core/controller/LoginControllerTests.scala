@@ -18,7 +18,8 @@ import altitude.core.App
      *
      * Assertions:
      *
-     * Logging in with the user's email and password redirects, and the session cookie it sets opens the repository's main page.
+     * Logging in with the user's email and password redirects, and the session cookie it sets opens the repository's main page,
+     * titled with its name.
      */
     testContext.persistRepository()
     testApp.app.isInitialized = true
@@ -42,7 +43,7 @@ import altitude.core.App
         )
 
         indexResponse.statusCode shouldBe 200
-        indexResponse.text() should include("<title>ALTITUDE</title>")
+        indexResponse.text() should include(s"<title>\u2068${testContext.repository.name}\u2069 · Altitude</title>")
     }
   }
 
@@ -69,6 +70,59 @@ import altitude.core.App
 
         loginStatus("blah", "blahblahblah") shouldBe 401
         loginStatus(testContext.user.email, s"wrong${TestContext.USER_PASSWORD}") shouldBe 401
+    }
+  }
+
+  /** Where a login with the test context's user's password sends them */
+  private def loginLocation(host: String): Seq[String] = {
+    val response = requests.post(
+      s"$host/login",
+      maxRedirects = 0,
+      check = false,
+      data = Map("login" -> testContext.user.email, "password" -> TestContext.USER_PASSWORD))
+    response.statusCode shouldBe 302
+    response.headers("location")
+  }
+
+  test("A login lands in the last active Library") {
+
+    /**
+     * Setup:
+     *
+     * A user with Libraries A, B and C, B recorded as the last active one.
+     *
+     * Assertions:
+     *
+     * The login redirects to B, neither the first Library by name nor the newest.
+     */
+    val user = testContext.persistUser()
+    addLibrary("Library A", user)
+    val b = addLibrary("Library B", user)
+    addLibrary("Library C", user)
+    testApp.service.user.rememberLastActiveRepository(user, b.persistedId)
+
+    withServer(App)(host => loginLocation(host) shouldBe Seq(s"/r/${b.persistedId}"))
+  }
+
+  test("A login without a last active Library lands in the first owned by name and records it") {
+
+    /**
+     * Setup:
+     *
+     * A user with Libraries "Client 10" and "Client 2", the second added last, and no last active Library.
+     *
+     * Assertions:
+     *
+     * The login redirects to "Client 2" rather than failing, and records it as the last active one.
+     */
+    val user = testContext.persistUser()
+    addLibrary("Client 10", user)
+    val firstByName = addLibrary("Client 2", user)
+
+    withServer(App) {
+      host =>
+        loginLocation(host) shouldBe Seq(s"/r/${firstByName.persistedId}")
+        lastActiveRepoIdOf(user) shouldBe Some(firstByName.persistedId)
     }
   }
 }

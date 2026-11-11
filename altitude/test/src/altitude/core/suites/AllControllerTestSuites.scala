@@ -13,6 +13,7 @@ import altitude.core.controller.FolderActionControllerTests
 import altitude.core.controller.FolderControllerTests
 import altitude.core.controller.HealthControllerTests
 import altitude.core.controller.IndexControllerTests
+import altitude.core.controller.LibraryActionControllerTests
 import altitude.core.controller.LocationActionControllerTests
 import altitude.core.controller.LocationControllerTests
 import altitude.core.controller.LoginControllerTests
@@ -20,6 +21,7 @@ import altitude.core.controller.MapControllerTests
 import altitude.core.controller.PeopleActionControllerTests
 import altitude.core.controller.SearchResultsControllerTests
 import altitude.core.controller.SettingsControllerTests
+import altitude.core.controller.SetupFormControllerTests
 import altitude.core.controller.StaticControllerTests
 import altitude.core.controller.StyleGuideControllerTests
 import altitude.core.controller.TriageControllerTests
@@ -28,6 +30,7 @@ abstract class AllControllerTestSuites
   extends Suites(
     new HealthControllerTests(),
     new IndexControllerTests(),
+    new LibraryActionControllerTests(),
     new AssetControllerTests(),
     new AssetActionControllerTests(),
     new LoginControllerTests(),
@@ -44,6 +47,7 @@ abstract class AllControllerTestSuites
     new PeopleActionControllerTests(),
     new SearchResultsControllerTests(),
     new SettingsControllerTests(),
+    new SetupFormControllerTests(),
     new StaticControllerTests(),
     new StyleGuideControllerTests(),
     new TriageControllerTests()

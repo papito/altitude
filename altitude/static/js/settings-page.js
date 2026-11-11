@@ -1,29 +1,17 @@
-import { Alpine } from "./lib/alpine.esm.min.js"
 import { Const } from "./constants.js"
-import { registerHtmlCommonBindings } from "./stores/html-common.js"
-import { registerHtmxRequestListeners } from "./listeners/htmx-requests.js"
 import { registerSettingsListeners } from "./listeners/settings.js"
+import { startNavPage } from "./nav-page.js"
 
 /**
  * The Settings page. Its one form submits through htmx, so its outcome follows the one rule for every request
  * (`listeners/htmx-requests.js`): a failure goes to the snackbar, a validation replacement swaps the form back in with its
- * errors, a save dispatches the form's declared success event. The page has no fragments to hydrate, so the app handed to
- * that rule is only what it reads.
+ * errors, a save dispatches the form's declared success event.
  *
- * The page starts Alpine for what `html_common` renders (`registerHtmlCommonBindings`: the modal hosts, asset detail's
- * spinner, the snackbar's stacks and `x-trap`), not for the nav or the form, which carry no bindings.
+ * The page starts as every page with the nav outside the main app does (`startNavPage`): Alpine for what `html_common`
+ * renders and for the nav's Library menu, and the dialog wiring of the New library dialog that menu opens. The form carries no
+ * bindings.
  */
-registerHtmlCommonBindings()
-Alpine.start()
-
-const app = {
-    dispatch(eventName, detail = {}) {
-        document.body.dispatchEvent(new CustomEvent(eventName, { detail }))
-    },
-    hydrateFragments() {},
-}
-
-registerHtmxRequestListeners(app)
+startNavPage()
 registerSettingsListeners()
 
 // Reset fills a field with its default and clears its error mark; the error text stays until Save answers. Delegated, so it

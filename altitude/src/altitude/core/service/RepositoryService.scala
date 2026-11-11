@@ -1,5 +1,8 @@
 package altitude.core.service
 
+import java.sql.SQLException
+
+import altitude.core.{ Const => C }
 import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
@@ -11,8 +14,10 @@ import altitude.core.models.Repository
 import altitude.core.models.Stats
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.NaturalOrder
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
+import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
 class RepositoryService(val app: Altitude) extends BaseService[Repository]:
   protected val dao: RepositoryDao = app.DAO.repository
@@ -28,19 +33,30 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       dao.query(query)
     }
 
+  /**
+   * Adds a Library owned by `owner`, with its root folder and stats, under its name as the Library name rule normalizes it
+   * (`Repository.validName`, whose `ValidationException` this passes on). A name whose name key another Library holds, any
+   * owner's, fails with a `DuplicateException` saying so: `repository_01` decides it, so of two adds racing on one name, one
+   * fails.
+   */
   def addRepository(name: String, fileStoreType: String, owner: User): Repository =
     val id = BaseDao.genId
 
     val repoToSave = Repository(
       id = Some(id),
-      name = name,
+      name = Repository.validName(name),
       ownerAccountId = owner.persistedId,
       rootFolderId = BaseDao.genId,
       fileStoreType = fileStoreType
     )
 
     txManager.withTransaction {
-      val repo: Repository = super.add(repoToSave)
+      val repo: Repository =
+        try dao.add(repoToSave)
+        catch
+          case e: SQLException =>
+            logger.debug(s"Adding repository [${repoToSave.name}] failed: ${e.getMessage}")
+            throw newDuplicateExceptionOrRethrow(e, Some(C.Msg.Err.LIBRARY_NAME_TAKEN.format(repoToSave.name)))
 
       // we must force the context to the new repository because following operations depend on this
       switchContextToRepository(repo)
@@ -68,11 +84,33 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       repo
     }
 
-  /*
-   * Right now there is just one repo - we will deal with multiple once later.
+  /** The Libraries `account` owns, by name: case-insensitive and natural ("Client 2" before "Client 10") */
+  def getOwnedBy(account: User): List[Repository] =
+    txManager
+      .asReadOnly {
+        dao.getOwnedBy(account.persistedId)
+      }
+      .sortBy(_.name)(using NaturalOrder)
+
+  /**
+   * The Library login and `/` open for `user`: the last active one, read from the database (the login token does not carry it),
+   * while it exists and `user` owns it. Otherwise the first Library `user` owns by name, which is recorded as the last active
+   * one, and None when `user` owns none. The reads take no write lock; only a fallback writes.
    */
-  def getDefaultRepository: Repository =
-    getAll.head
+  def landingRepositoryOf(user: User): Option[Repository] =
+    val (lastActiveId, owned) = txManager.asReadOnly {
+      (app.service.user.getById(user.persistedId).lastActiveRepoId, getOwnedBy(user))
+    }
+
+    lastActiveId.flatMap(id => owned.find(_.persistedId == id)).orElse {
+      val first = owned.headOption
+      first.foreach {
+        repo =>
+          logger.debug(s"User [${user.persistedId}] lands in [${repo.persistedId}], the first owned: last active [$lastActiveId]")
+          app.service.user.rememberLastActiveRepository(user, repo.persistedId)
+      }
+      first
+    }
 
   def getAll: List[Repository] =
     txManager.asReadOnly {

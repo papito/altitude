@@ -1,0 +1,9 @@
+@import altitude.core.RequestContext
+
+@* The browser tab title of a page of a Library: "<page> · <Library> · Altitude", or "<Library> · Altitude" on the main page,
+   which passes no `page`. The Library is the request's, so each tab names its own. A title holds no markup to isolate the
+   name with, so the name sits between FIRST STRONG ISOLATE and POP DIRECTIONAL ISOLATE (U+2068, U+2069): a right-to-left
+   name neither sets the title's direction nor reorders the text beside it. *@
+@(page: Option[String] = None)
+
+<title>@for(name <- page){@name · }@{ s"\u2068${RequestContext.getRepository.name}\u2069" } · Altitude</title>

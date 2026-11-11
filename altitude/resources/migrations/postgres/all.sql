@@ -78,12 +78,17 @@ CREATE UNIQUE INDEX account_01 ON account (lower(email));
 CREATE TABLE repository (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   name TEXT NOT NULL,
+  name_lc TEXT NOT NULL,
   description TEXT,
   owner_account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE CASCADE,
   root_folder_id CHAR(36) COLLATE "C" NOT NULL,
   file_store_type VARCHAR NOT NULL,
   file_store_config jsonb
 ) INHERITS (_core);
+
+-- repository_01: a Library's name is unique instance-wide, across owners, under its name key (Repository.nameLowercase: the
+-- normalized name lowercased in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
+CREATE UNIQUE INDEX repository_01 ON repository (name_lc);
 
 CREATE TABLE stats (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,

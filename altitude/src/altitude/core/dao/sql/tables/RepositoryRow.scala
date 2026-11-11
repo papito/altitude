@@ -5,11 +5,13 @@ import scalasql.Table
 
 /**
  * The `repository` table. `fileStoreConfig` is `jsonb` on PostgreSQL and `TEXT` on SQLite; pgJDBC hands a `jsonb` column out as
- * its JSON text, which is what the model parses, so both read as a plain string.
+ * its JSON text, which is what the model parses, so both read as a plain string. `nameLc` is the name key `repository_01` keeps
+ * unique, written by `RepositoryDao.add` and never read back: the model derives it from the name.
  */
 case class RepositoryRow[T[_]](
     id: T[String],
     name: T[String],
+    nameLc: T[String],
     description: T[Option[String]],
     ownerAccountId: T[String],
     rootFolderId: T[String],

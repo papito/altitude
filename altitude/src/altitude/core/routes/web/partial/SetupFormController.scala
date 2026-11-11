@@ -8,10 +8,12 @@ import altitude.core.{ Const => C }
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.DataScrubber
+import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.AccountType
+import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.routes.BaseController
 import altitude.core.routes.web.SessionController
@@ -19,9 +21,10 @@ import altitude.core.routes.web.SessionController
 class SetupFormController(using logger: Logger) extends BaseController:
   private val prefix = "htmx"
 
+  // The Library name is neither scrubbed nor checked by the request validator: the Library name rule normalizes and checks it
+  // (Repository.validName), and a trim here would drop the control characters at its ends that the rule refuses
   private val dataScrubber = DataScrubber(
     trim = List(
-      Api.Field.Setup.REPOSITORY_NAME,
       Api.Field.Setup.ADMIN_EMAIL,
       Api.Field.Setup.ADMIN_NAME,
       Api.Field.Setup.PASSWORD,
@@ -32,20 +35,17 @@ class SetupFormController(using logger: Logger) extends BaseController:
 
   private val apiRequestValidator = ApiRequestValidator(
     required = List(
-      Api.Field.Setup.REPOSITORY_NAME,
       Api.Field.Setup.ADMIN_EMAIL,
       Api.Field.Setup.ADMIN_NAME,
       Api.Field.Setup.PASSWORD,
       Api.Field.Setup.PASSWORD2
     ),
     maxLengths = Map(
-      Api.Field.Setup.REPOSITORY_NAME -> Api.Constraints.MAX_REPOSITORY_NAME_LENGTH,
       Api.Field.Setup.ADMIN_EMAIL -> Api.Constraints.MAX_EMAIL_LENGTH,
       Api.Field.Setup.ADMIN_NAME -> Api.Constraints.MAX_NAME_LENGTH,
       Api.Field.Setup.PASSWORD -> Api.Constraints.MAX_PASSWORD_LENGTH
     ),
     minLengths = Map(
-      Api.Field.Setup.REPOSITORY_NAME -> Api.Constraints.MIN_REPOSITORY_NAME_LENGTH,
       Api.Field.Setup.ADMIN_EMAIL -> Api.Constraints.MIN_EMAIL_LENGTH,
       Api.Field.Setup.ADMIN_NAME -> Api.Constraints.MIN_NAME_LENGTH,
       Api.Field.Setup.PASSWORD -> Api.Constraints.MIN_PASSWORD_LENGTH
@@ -98,6 +98,14 @@ class SetupFormController(using logger: Logger) extends BaseController:
             Api.Field.Setup.PASSWORD -> C.Msg.Err.PASSWORDS_DO_NOT_MATCH
           )
 
+      // The Library name rule's error, beside the request validator's; addRepository applies the rule again, to the same effect
+      try Repository.validName(repositoryName)
+      catch
+        case ex: ValidationException =>
+          ex.errors.get(FieldConst.Repository.NAME).foreach {
+            error => validationException.errors += (Api.Field.Setup.REPOSITORY_NAME -> error)
+          }
+
       // If we have errors, return form with errors
       if validationException.errors.nonEmpty then
         val payload = "<!doctype html>" + htmx.html.setup_form(jsonIn, validationException.errors.toMap)
@@ -110,13 +118,12 @@ class SetupFormController(using logger: Logger) extends BaseController:
           accountType = AccountType.Admin
         )
 
-        val (admin, repo) = App.altitude.service.system.initializeSystem(
+        // The Library is recorded as the Admin's last active one when the redirect loads its page
+        val (_, repo) = App.altitude.service.system.initializeSystem(
           repositoryName = repositoryName,
           adminModel = userModel,
           password = password
         )
-
-        App.altitude.service.user.setLastActiveRepoId(admin, repo.persistedId)
 
         // Auto-login the newly created admin user
         val adminUser = RequestContext.getAccount
