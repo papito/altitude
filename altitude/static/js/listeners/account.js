@@ -2,7 +2,7 @@ import { Const } from "../constants.js"
 import { showSuccessSnackBar } from "../common/snackbar.js"
 
 /**
- * The nav's account menu, on every page that has the nav: a password the account changed is
+ * The account info dialog's Change password, on every page that has the nav: a password the account changed is
  * confirmed through the snackbar (the answer set the session's new token), and the page's
  * WebSocket feeds are connected again. The change revoked the account's sessions, which closed
  * their sockets with 1008, a code `hx-ws` does not reconnect on (the Import page's status feed);

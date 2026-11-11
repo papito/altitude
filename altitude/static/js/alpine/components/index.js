@@ -13,7 +13,7 @@ window.initDateGroupSelectable = initDateGroupSelectable
 // Referenced as `x-data="contextMenu"` by the folder tree and album list renderers
 Alpine.data("contextMenu", contextMenu)
 
-// Referenced as `x-data="localTime"` by htmx/account_info_dialog.scala.html, which the nav's account menu opens
+// Referenced as `x-data="localTime"` by htmx/account_info_dialog.scala.html, which the nav's account trigger opens
 Alpine.data("localTime", localTime)
 
 // Referenced as `x-data="viewSettings"` by htmx/view_settings_dialog.scala.html

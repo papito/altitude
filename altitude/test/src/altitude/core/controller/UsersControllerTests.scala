@@ -195,9 +195,12 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The main page's nav carries the Users entry, linking to the Users page of its Library, for the Admin and the holder of
-     * Create Guests, and not for the other two. Every nav carries the account menu in its account type's color, its trigger
-     * showing the username and named after it and the type, with Change password, and the info button requesting the account info
-     * dialog of the Library.
+     * Create Guests, and not for the other two. Every nav carries the account's cell in its account type's color, its trigger
+     * showing the username, named after it and the type, and requesting the account info dialog of the Library.
+     *
+     * Edge cases:
+     *
+     * The nav holds no account menu and no info button: Change password and Log out are the dialog's.
      */
     val callers = List(
       (AccountType.Admin, Permissions.all, true),
@@ -219,8 +222,9 @@ import altitude.core.util.Util
           page should include(s"""<div class="menu account" data-account-type="$accountType">""")
           page should include(s"""aria-label="Account: ${testContext.user.username} ($accountType)"""")
           page should include(s"""<span class="username">@${testContext.user.username}</span>""")
-          page should include("Change password…")
           page should include(s"""hx-get="/htmx/account/r/$repoId/dialogs/info"""")
+          (page should not).include("Change password…")
+          (page should not).include("accountInfoBtn")
       }
     }
   }
@@ -520,7 +524,8 @@ import altitude.core.util.Util
      * The User's dialog, a popover dialog in its type's color, names the account (name, username and email address), its type
      * with the type's description, the three Permissions it holds in this Library, its two Libraries and twelve Permissions with
      * each Library's Permissions and this one marked, no Create Libraries, and as instants for the browser to show in its zone
-     * the account's addition, its last login and when this session's token expires.
+     * the account's addition, its last login and when this session's token expires; then Change password, requesting its dialog,
+     * and Log out, submitting the nav's logout form.
      *
      * Edge cases:
      *
@@ -563,6 +568,8 @@ import altitude.core.util.Util
         dialog should include(s"""<time datetime="${times.createdAt.get}"""")
         dialog should include(s"""<time datetime="${times.lastLoginAt.get}"""")
         dialog should include(s"""<time datetime="$expiresAt"""")
+        dialog should include("""hx-get="/htmx/account/dialogs/password"""")
+        dialog should include("""<button type="submit" class="action-button" form="logoutForm">Log out</button>""")
     }
 
     testContext = new altitude.test.TestContext(testApp)

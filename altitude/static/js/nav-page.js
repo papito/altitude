@@ -13,7 +13,7 @@ import { registerHtmlCommonBindings } from "./stores/html-common.js"
  * Starts a page that carries the nav and `html_common` outside the main app: Import
  * (`upload-form-page.js`), Settings (`settings-page.js`) and Users (`users-page.js`). What such a
  * page shares is the nav's menus and the dialogs they open: the Library menu's New library, and the
- * account menu's Change password, whose outcome `listeners/account.js` confirms, and account info:
+ * account info dialog, whose Change password's outcome `listeners/account.js` confirms:
  *
  * - Alpine, with what `html_common` binds (`registerHtmlCommonBindings`: the modal hosts, the
  *   snackbar's stacks, `x-trap`), the `contextMenu` component of the menu's control and the
@@ -34,7 +34,7 @@ export function startNavPage() {
     registerHtmlCommonBindings()
     // Referenced as `x-data="contextMenu"` by the control `common/context-menu-markup.js` builds
     Alpine.data("contextMenu", contextMenu)
-    // Referenced as `x-data="localTime"` by the account info dialog the nav's info button opens
+    // Referenced as `x-data="localTime"` by the account info dialog the nav's account trigger opens
     Alpine.data("localTime", localTime)
 
     const app = {

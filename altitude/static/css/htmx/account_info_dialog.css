@@ -1,6 +1,7 @@
-/* The account info dialog (htmx/account_info_dialog), a popover dialog right-aligned below the nav's info button, a band of
-   the account type's color across its top. Its lists share one label column (subgrid), so the values line up from the email
-   address to the session's expiry, and each section opens under a hairline */
+/* The account info dialog (htmx/account_info_dialog), a popover dialog right-aligned below the nav's account trigger, a band
+   of the account type's color across its top. Its lists share one label column (subgrid), so the values line up from the
+   email address to the session's expiry, and each section opens under a hairline; the account's actions close it at the
+   right */
 #popoverDialog:has(#accountInfo) {
   position-area: bottom span-left;
   border-top: var(--border-band) var(--account-type-color);
@@ -110,4 +111,11 @@
   border-radius: var(--chip-border-radius);
   background-color: hsl(from var(--theme-accent) h s l / 0.2);
   font-size: var(--font-size-small);
+}
+
+#accountInfo .actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
 }

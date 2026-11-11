@@ -2,14 +2,14 @@
    the `contextMenu` component's root, its trigger (a button showing `trigger`, named `label`, opening the panel by
    `popovertarget`, and named as an anchor after its ID, so a popover dialog its actions request opens below it) and the
    native `popover="auto"` panel holding `actions`, the menu's buttons. An account card's menu on the Users page
-   (htmx/user_accounts) and the nav's account menu (includes/nav) use it. `align` is "center" for a panel centered under its
+   (htmx/user_accounts) uses it. `align` is "center" for a panel centered under its
    trigger. *@
-@(triggerId: String, panelId: String, label: String, triggerClass: String = "menu-trigger", align: Option[String] = None)(trigger: Html)(actions: Html)
+@(triggerId: String, panelId: String, label: String, align: Option[String] = None)(trigger: Html)(actions: Html)
 
 <div class="menu-ctrl" x-data="contextMenu" x-on:focusout="handleFocusOut"@for(a <- align){ data-menu-align="@a"}>
     <button type="button"
             id="@triggerId"
-            class="@triggerClass"
+            class="menu-trigger"
             popovertarget="@panelId"
             x-ref="trigger"
             style="anchor-name: --@triggerId"

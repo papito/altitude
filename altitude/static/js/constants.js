@@ -85,7 +85,7 @@ export const Const = {
         settingsSaved: "SETTINGS_SAVED_EVENT",
         // An account was added, changed or deleted on the Users page; `detail.message` says which. The page reloads its cards
         accountsChanged: "ACCOUNTS_CHANGED_EVENT",
-        // The account changed its own password (the nav's account menu); the session carries on with the new token
+        // The account changed its own password (the account info dialog's Change password); the session carries on with the new token
         passwordChanged: "PASSWORD_CHANGED_EVENT",
         // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
         dockSideChanged: "DOCK_SIDE_CHANGED_EVENT",

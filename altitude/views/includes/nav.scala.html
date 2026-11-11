@@ -17,8 +17,9 @@
 @* Every nav is rendered behind a login, so the account is always here. An entry shows only where the account may open what it
    leads to, by the Permissions of the login token in this Library (`RequestContext.holds`): Triage and Trash for a member (a
    Guest sees Browse alone), Import for the holder of Import, Users for the holder of Create Users or Create Guests in any
-   Library, which the token's grants say (`RequestContext.createsAccounts`; an Admin holds both), New library for an Admin or the holder of the Create Libraries flag, Settings for an Admin. The account menu,
-   every account's, says who is logged in and of which type, changes its password, logs out, and opens the account info dialog. *@
+   Library, which the token's grants say (`RequestContext.createsAccounts`; an Admin holds both), New library for an Admin or the holder of the Create Libraries flag, Settings for an Admin. The account's
+   cell, every account's, says who is logged in and of which type, and opens the account info dialog, which changes the password
+   and logs out. *@
 @isAdmin = @{ RequestContext.getAccount.accountType == AccountType.Admin }
 
 @libraryMenuHostId = @{ "libraryMenuHost" }
@@ -108,17 +109,10 @@
     </div>
 }
 
-@* The account menu (includes/account_menu), its trigger the icon in the account type's color and the username: Change password,
-   a popover dialog below the trigger, and Log out, which posts the empty form beside the menu, which takes no room; then the
-   info button, which opens the account info dialog of this Library below itself *@
-@includes.html.account_menu("accountMenuBtn", "accountMenu", "accountInfoBtn", s"/htmx/account/r/$repoId/dialogs/info") {
-    <button type="button"
-            hx-get="/htmx/account/dialogs/password"
-            hx-target="#popoverContent"
-            hx-swap="innerHTML"
-            data-app-dialog-anchor="accountMenuBtn">Change password…</button>
-    <button type="submit" form="logoutForm">Log out</button>
-} {
+@* The account's cell (includes/account_menu), its trigger the icon in the account type's color and the username, which opens
+   the account info dialog of this Library below itself: its Change password opens that dialog below the trigger, and its Log
+   out posts the empty form beside the trigger, which takes no room *@
+@includes.html.account_menu("accountMenuBtn", s"/htmx/account/r/$repoId/dialogs/info") {
     <form id="logoutForm" method="post" action="/logout"></form>
 }
 

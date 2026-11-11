@@ -556,18 +556,16 @@
              count is a <code>.count</code> pill inside the label, and an entry with nothing behind it is
              <code>empty</code> and not a link. The <code>.search</code> cell between Browse and Triage is as wide as an
              entry and holds the quick search form at its own width: no border, a magnifier, a clear control while
-             there is text, and an accent glow for focus. Before the last cell, the account menu (<code>.menu.account</code>,
-             <code>includes/account_menu</code>, the cell the nav renders) holds two targets. Its ⋯ menu
-             (<code>includes/menu_ctrl</code>) is a <code>.nav-menu-trigger</code> showing the <code>fa-user-circle</code>
-             icon at <code>--font-size-large</code> in the account type's color, <code>--account-type-color</code>, which
-             <code>data-account-type</code> sets: an Admin's <code>--error-color</code>, a User's
-             <code>--success-color</code>, a Guest's <code>--info-color</code>; then <code>@@username</code> in the entry's
-             lettering, cut with an ellipsis at <code>--account-username-max-width</code>. It is named "Account:
-             &lt;username&gt; (&lt;type&gt;)", and its panel holds Change password… and Log out, which in the specimen lead
-             here. The info button after it (<code>.account-info</code>, <code>fa-info-circle</code> in
-             <code>--theme-neutral-3</code> at 0.6) opens the account info dialog below itself, right-aligned,
-             <code>--account-info-width</code> wide, a <code>--border-band</code> of the type's color across its top; the
-             specimen's opens the real one, the logged-in account's. The last cell is the theme switch, <code>.menu.theme-switch</code>, an entry's width and icon
+             there is text, and an accent glow for focus. Before the last cell, the account's cell (<code>.menu.account</code>,
+             <code>includes/account_menu</code>, the cell the nav renders) holds one target, a <code>.nav-menu-trigger</code>
+             showing the <code>fa-user-circle</code> icon at <code>--font-size-large</code> in the account type's color,
+             <code>--account-type-color</code>, which <code>data-account-type</code> sets: an Admin's
+             <code>--error-color</code>, a User's <code>--success-color</code>, a Guest's <code>--info-color</code>; then
+             <code>@@username</code> in the entry's lettering, cut with an ellipsis at
+             <code>--account-username-max-width</code>. It is named "Account: &lt;username&gt; (&lt;type&gt;)" and opens the
+             account info dialog below itself, right-aligned, <code>--account-info-width</code> wide, a
+             <code>--border-band</code> of the type's color across its top, whose actions are Change password… and Log out.
+             The specimen opens the real dialog, the logged-in account's, so its Log out logs out. The last cell is the theme switch, <code>.menu.theme-switch</code>, an entry's width and icon
              only: the sun in the dark theme and the moon in the light one, the theme a press goes to, remembered for every page. The specimen is live. A tab is the link itself, selected through
              <code>aria-selected</code>.</p>
           <p>The Browse cell holds two targets (<code>includes/library_menu</code>): Browse, a link to the current Library's
@@ -607,10 +605,7 @@
             </div>
             <div class="menu triage"><a href="#navigation-tabs"><i class="fas fa-medkit"></i><span>.count<span class="count">37</span></span></a></div>
             <div class="menu triage empty"><i class="fas fa-medkit"></i><span>.menu.empty</span></div>
-            @includes.html.account_menu("styleGuideAccountMenuBtn", "styleGuideAccountMenu", "styleGuideAccountInfoBtn", s"/htmx/account/r/${RequestContext.getRepository.persistedId}/dialogs/info") {
-                <a href="#navigation-tabs">Change password…</a>
-                <a href="#navigation-tabs">Log out</a>
-            }(play.twirl.api.HtmlFormat.empty)
+            @includes.html.account_menu("styleGuideAccountMenuBtn", s"/htmx/account/r/${RequestContext.getRepository.persistedId}/dialogs/info")(play.twirl.api.HtmlFormat.empty)
             <button type="button" class="menu theme-switch" data-app-theme-switch title="Toggle light and dark theme" aria-label="Toggle light and dark theme"><i class="fas fa-sun" aria-hidden="true"></i><i class="fas fa-moon" aria-hidden="true"></i></button>
           </nav>
 

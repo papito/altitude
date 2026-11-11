@@ -8,14 +8,16 @@
 @import altitude.core.service.UserService.AccountTimes
 @import altitude.core.util.Util
 
-@* The account info dialog of the nav's account menu (GET /htmx/account/r/:repoId/dialogs/info, any account's), a popover dialog
-   right-aligned below the menu's info button, a band of the account type's color across its top: the account (its name,
+@* The account info dialog (GET /htmx/account/r/:repoId/dialogs/info, any account's), which the nav's account trigger opens: a
+   popover dialog right-aligned below the trigger, a band of the account type's color across its top: the account (its name,
    username and email address), its type with the type's description, then under Access its Permissions in the Library of the
    page (chips of those held; "Every Permission" for an Admin, "Access only" for none) and its Libraries
    (includes/account_libraries, this one marked), under Abilities the Create Libraries flag, and under Account when it was added,
    when it last logged in (any session of it) and when this session's token expires, each a `<time>` the page shows in the
    viewer's zone (`localTime`, js/alpine/components/local-time.js) and holding its UTC text until then. Everything but the
-   Libraries' names and the two stored times comes from the login token. Styled by static/css/htmx/account_info_dialog.css. *@
+   Libraries' names and the two stored times comes from the login token. Its actions are the account's: Change password, which
+   replaces it with the Change password dialog below the nav's trigger (`#accountMenuBtn`), and Log out, which submits the nav's
+   `#logoutForm`. Styled by static/css/htmx/account_info_dialog.css. *@
 @(account: User, libraries: List[(Repository, Permissions)], times: AccountTimes, expiresAt: Option[Instant])
 
 @here = @{ RequestContext.getRepository }
@@ -63,4 +65,13 @@
             <dt>Session expires</dt><dd>@moment(expiresAt, withTime = true)</dd>
         </dl>
     </section>
+    <div class="actions">
+        <button type="button"
+                class="action-button"
+                hx-get="/htmx/account/dialogs/password"
+                hx-target="#popoverContent"
+                hx-swap="innerHTML"
+                data-app-dialog-anchor="accountMenuBtn">Change password…</button>
+        <button type="submit" class="action-button" form="logoutForm">Log out</button>
+    </div>
 </div>

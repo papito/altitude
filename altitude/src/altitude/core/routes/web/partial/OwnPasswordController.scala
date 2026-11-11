@@ -28,8 +28,8 @@ object OwnPasswordController:
       .toSeq
 
 /**
- * Every account's change of its own password, from the nav's account menu: the current password and the new one twice. The routes
- * name no Library, since a password is the account's, so any account logged in reaches them.
+ * Every account's change of its own password, from the account info dialog the nav opens: the current password and the new one
+ * twice. The routes name no Library, since a password is the account's, so any account logged in reaches them.
  */
 class OwnPasswordController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/account"

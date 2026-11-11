@@ -284,7 +284,7 @@ object Const:
     // The nav's Library menu's last entry, for an Admin, which opens the New library dialog
     val NEW_LIBRARY_OPTION = "New library…"
     // The Users page's dialogs (htmx/account_form, set_password_dialog, delete_account_dialog), and the own password dialog of
-    // the nav's account menu (htmx/own_password_dialog); an edit and the two account dialogs are titled by the account's name
+    // the account info dialog (htmx/own_password_dialog); an edit and the two account dialogs are titled by the account's name
     val ADD_USER_DIALOG_TITLE = "Add User"
     val EDIT_USER_DIALOG_TITLE = "Edit %s"
     val SET_PASSWORD_DIALOG_TITLE = "Set the password of %s"

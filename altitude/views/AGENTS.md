@@ -598,7 +598,7 @@ membership change applied) arrives as JSON in the `App-Success-Detail` response 
 `dialog-operations.js` merges over the declared detail. The one attribute that describes the host is
 `data-app-modal-title`, the title either host shows. Folder, album, Location, and category actions, including the Add
 controls, are **popover dialogs**, and so are the Triage explorer's scope dialog, the Users page's Set password and
-Delete dialogs and the account menu's Change password and account info dialog; Add location, Add to location, the people dialogs, the purge
+Delete dialogs, the account info dialog and its Change password; Add location, Add to location, the people dialogs, the purge
 confirmation, Quick view and the Users page's Add User and edit form are **modal dialogs**. Only View settings is an
 **inline dialog** (`data-app-fragment="inline-dialog"`, see **Context menus**); its switches apply
 immediately without submitting an operation.
@@ -2394,39 +2394,38 @@ server renders from the include's `current` parameter, a `Const.NavEntry` key: t
 search from), and `import`, `settings` and `style-guide`, which those templates pass as constants. The marked entry is
 `--theme-accent` text, bold, on the accent at 0.16 alpha. Nothing marks an entry client-side, so a reload of the nav
 passes `current` again (below); the style guide's navigation section holds the specimen. The last cell, at the right edge after
-Style Guide, or after Settings where that entry is not shown, then the account menu, is the theme switch: a `button.menu.theme-switch`, as wide as an entry and
+Style Guide, or after Settings where that entry is not shown, then the account cell, is the theme switch: a `button.menu.theme-switch`, as wide as an entry and
 its whole cell the target, icon only with the accessible name "Toggle light and dark theme". It shows `fa-sun` in the dark theme and
 `fa-moon` in the light one, the theme a press goes to, in `--theme-neutral-3`, glowing in its own color on hover. CSS picks the
 icon from `data-theme` on `<html>`, so a nav reload needs no client step, and the one delegated click in `global.js` (`[data-app-theme-switch]`)
 works on every page, those without Alpine included. See **Themes**.
 
-The **account menu** (`.menu.account`, `includes/account_menu`, which the style guide's specimen renders too), every
+The **account cell** (`.menu.account`, `includes/account_menu`, which the style guide's specimen renders too), every
 account's, sits before the theme switch and says who is logged in. The cell carries the account's type in
 `data-account-type`, which sets `--account-type-color` (`core.css`): an Admin's `--error-color`, a User's
-`--success-color`, a Guest's `--info-color`. It holds two targets, each with its padding and its own hover glow: a ⋯ menu
-rendered by the server (`includes/menu_ctrl`, the markup `buildContextMenuCtrl` builds, its `contextMenu` component started
-by the page), its trigger a `.nav-menu-trigger` showing the `fa-user-circle` icon at `--font-size-large` in the type's
-color, then `@username` in the entry's lettering (`--font-nav`, lowercase), cut with an ellipsis at
+`--success-color`, a Guest's `--info-color`. Its one target, the cell's padding its own, is a `.nav-menu-trigger`
+(`#accountMenuBtn`, `aria-haspopup="dialog"`) showing the `fa-user-circle` icon at `--font-size-large` in the type's color,
+then `@username` in the entry's lettering (`--font-nav`, lowercase), cut with an ellipsis at
 `--account-username-max-width`, named "Account: <username> (<type>)" and titled so, since the color alone does not say the
-type; and the info button (`.account-info`, `#accountInfoBtn`, `fa-info-circle` in `--theme-neutral-3` at 0.6 alpha),
-which requests the **account info dialog** (`htmx/account_info_dialog`, `GET /htmx/account/r/<the Library>/dialogs/info`)
-into the popover host below itself. That dialog is right-aligned with the button (`position-area: bottom span-left` on
-`#popoverDialog:has(#accountInfo)`), `--account-info-width` wide, a `--border-band` of the type's color across its top (the
-host takes the type of the account it shows); it is titled "Your account" and reads, in one label column (a subgrid): the
-account's `fa-user-circle` in the type's color at the glyph's 2.5em, its name and `@username`, its email address and type
-(a chip in the type's color, then the type's description, `AccountType.description`, which the Add User form's type cards
-show too), then under Access its Permissions in this Library (chips as the Add User form's checked ones; "Every
-Permission" for an Admin, "Access only" for none) and its Libraries (`includes/account_libraries`, as an account card shows
-them, this Library marked), under Abilities Create Libraries, and under Account Member since, Last login and Session
-expires. Each time is a `<time datetime>` holding its UTC text (`Util.utcText`), which the `localTime` component
-(`js/alpine/components/local-time.js`, registered by `alpine/components/index.js` and `nav-page.js`) shows in the
-viewer's zone and locale. The menu's actions: "Change password…", which requests the Change password dialog
-(`htmx/own_password_dialog`, `GET /htmx/account/dialogs/password`) into the popover host below the trigger, and "Log out", a
-submit button of the empty `#logoutForm` (`POST /logout`) beside the menu, which a rule of the account cell hides (the quick
-search's `nav form` rule would draw it). The dialog asks for the current password and the new one twice, and posts JSON to
-`PUT /htmx/account/password`; a refusal comes back as the form with the error under its field and nothing typed kept, and
-a change answers with the session's new cookie and `PASSWORD_CHANGED_EVENT`, which `listeners/account.js` confirms in the
-snackbar. The style guide's navigation section holds its specimen, whose actions lead to the section and request nothing.
+type. It glows on hover and requests the **account info dialog** (`htmx/account_info_dialog`, `GET /htmx/account/r/<the
+Library>/dialogs/info`) into the popover host below itself. That dialog is right-aligned with the trigger
+(`position-area: bottom span-left` on `#popoverDialog:has(#accountInfo)`), `--account-info-width` wide, a `--border-band`
+of the type's color across its top (the host takes the type of the account it shows); it is titled "Your account" and
+reads, in one label column (a subgrid): the account's `fa-user-circle` in the type's color at the glyph's 2.5em, its name
+and `@username`, its email address and type (a chip in the type's color, then the type's description,
+`AccountType.description`, which the Add User form's type cards show too), then under Access its Permissions in this
+Library (chips as the Add User form's checked ones; "Every Permission" for an Admin, "Access only" for none) and its
+Libraries (`includes/account_libraries`, as an account card shows them, this Library marked), under Abilities Create
+Libraries, and under Account Member since, Last login and Session expires. Each time is a `<time datetime>` holding its UTC
+text (`Util.utcText`), which the `localTime` component (`js/alpine/components/local-time.js`, registered by
+`alpine/components/index.js` and `nav-page.js`) shows in the viewer's zone and locale. Its actions, at the right under the
+lists, are the account's: "Change password…", which requests the Change password dialog (`htmx/own_password_dialog`, `GET
+/htmx/account/dialogs/password`), replacing it in the popover host below the trigger, and "Log out", a submit button of the
+empty `#logoutForm` (`POST /logout`) beside the trigger, which a rule of the account cell hides (the quick search's `nav
+form` rule would draw it). The Change password dialog asks for the current password and the new one twice, and posts
+JSON to `PUT /htmx/account/password`; a refusal comes back as the form with the error under its field and nothing typed
+kept, and a change answers with the session's new cookie and `PASSWORD_CHANGED_EVENT`, which `listeners/account.js`
+confirms in the snackbar. The style guide's navigation section holds its specimen, which opens the real dialog.
 A Users entry (`.menu.users`, `fa-users`) follows Import for an Admin and the holder of Create Users or Create Guests in
 any Library, linking to the Users page of the current Library (**Users page**).
 
@@ -2466,7 +2465,7 @@ builds or binds a control. Where each control follows:
 
 - The nav (`includes/nav`): Triage and Trash for a member, Import for Import, Users for Create Users or Create Guests in any
   Library (`RequestContext.createsAccounts`, from the token's grants), New library for an Admin or the Create Libraries
-  flag, Settings for an Admin. A Guest's nav is Browse, the search, the Library menu, the account menu and the theme switch.
+  flag, Settings for an Admin. A Guest's nav is Browse, the search, the Library menu, the account cell and the theme switch.
 - The batch operations (`includes/batch_ops`, given the page's `view`): Move, Add to album, Remove from album, Add to
   location and Remove from location for Organize; Recycle by `recyclesIn(view)`; the Trash's Restore by `restores`, since the
   Trash holds assets recycled from a folder and from Triage alike, the server checking each (Curate own reaching only the
@@ -2864,8 +2863,9 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/settings.scala.html` | The Settings page: nav, `main` with the form, `html_common` |
 | `views/users.scala.html`, `views/htmx/user_accounts.scala.html` | The Users page: nav, the header (title, filter box, Add User) on the `usersPage` component, and the account cards under their three tabs, each with its ⋯ menu for an Admin; styled by `static/css/pages/users.css` |
 | `views/htmx/account_form.scala.html` | The Add User modal and the edit form: identity, account type cards, the Admin's switches, the Permission matrix of the creator's ceiling, on the `accountForm` component |
-| `views/htmx/set_password_dialog.scala.html`, `delete_account_dialog.scala.html`, `own_password_dialog.scala.html` | The Users page's Set password and Delete popover dialogs, and the account menu's Change password dialog (`static/css/htmx/own_password_dialog.css`) |
-| `views/includes/menu_ctrl.scala.html`, `password_field.scala.html` | A ⋯ menu rendered by the server (an account card's, the nav's account menu), and a new password's field with Generate and Show |
+| `views/htmx/set_password_dialog.scala.html`, `delete_account_dialog.scala.html`, `own_password_dialog.scala.html` | The Users page's Set password and Delete popover dialogs, and the account info dialog's Change password dialog (`static/css/htmx/own_password_dialog.css`) |
+| `views/includes/menu_ctrl.scala.html`, `password_field.scala.html` | A ⋯ menu rendered by the server (an account card's), and a new password's field with Generate and Show |
+| `views/includes/account_menu.scala.html`, `views/htmx/account_info_dialog.scala.html`, `views/includes/account_libraries.scala.html` | The nav's account cell (the type's color, the username) and the account info dialog it opens, with Change password and Log out; an account's Libraries, which the dialog and an account card share |
 | `static/js/users-page.js`, `static/js/alpine/components/users-page.js`, `account-form.js`, `password-field.js` | The Users page's module and components: the tab and filter, the account form's type and matrix toggles, a password's Generate and Show |
 | `static/js/listeners/account.js` | `PASSWORD_CHANGED_EVENT` on every page with the nav, `ACCOUNTS_CHANGED_EVENT` on the Users page (the snackbar, then the cards read again) |
 | `static/js/common/name-key.js` | `nameKey` and `partialMatchKey`, the server's name fold in the browser: the Change combobox's and the Users page filter's |
