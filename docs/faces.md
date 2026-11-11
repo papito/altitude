@@ -208,7 +208,9 @@ Browse scoped to them in a new tab, and Close (**The explorer in Triage** and **
 A merge reloads the tab and confirms in the snackbar, and runs no search of its own, in Browse and Triage alike: results
 that are neither person's stay as they are, results scoped to the source, who is gone, become the destination's in the
 same view, and results scoped to the destination are read again with the Faces the merge gave it (**Event Flow** in
-`views/AGENTS.md`).
+`views/AGENTS.md`). A merge from the Detail panel reloads the tab and confirms in the snackbar too, and searches only on
+closing Asset detail, and only when the results are scoped to the merged person: they become the destination's then,
+while every other result, the destination's included, stays as it is (**Detail panel** in `views/AGENTS.md`).
 
 The Triage summary above the Triage explorer's tabs counts, among other things, the assets in triage that have an
 **Unknown person** (the glossary's term): a triaged asset outside the trash with a Face of a Person who has no name and is
@@ -241,7 +243,11 @@ The tab's actions:
   (`GET /htmx/people/r/:repoId/dialogs/rename-person`, `PUT /htmx/people/r/:repoId/p/:personId/rename`, answering an
   empty success or the dialog's form again). The two dialog routes find the person through
   `PersonService.getInRepository`, so an unknown person, or another repository's, is a 404. Either rename reloads the
-  People tab, since naming an Unmatched person makes them Matched.
+  People tab, since naming an Unmatched person makes them Matched. A person with no name can also be named from the
+  Detail panel, by Change on a Face of theirs with a new name, which calls `updateName` too, and merged there into a named
+  person (**Corrections**). A name another live person holds is never a new name there, since typing it makes that
+  person's option the active one (a merge, or with "This face only" on a move); a holder who took it meanwhile makes the
+  name a 400 with no offer to merge.
 - **Cover face**: `getPersonFaces` (by detection score) offers the candidates, `setFaceAsCover` picks one.
 - **Hide / show**: display only; the person's faces still match.
 - **Bad match** (`markAsBadMatch`): the person is taken out of listings and their faces out of the match candidates.
@@ -250,14 +256,22 @@ The tab's actions:
   The merged name is decided from the two stored rows, not the models passed in: an unnamed destination with a named,
   live source takes the source's `name`, its name key as `name_for_sort`, and `is_named`; otherwise the destination, named
   or not, keeps all three. A source no longer live (merged away or a bad match) gives no name; a merge of one is not
-  refused. The source is soft-deleted first, so `person_01` never sees the name on two live people.
+  refused. The source is soft-deleted first, so `person_01` never sees the name on two live people. The Detail panel's
+  Change merges through it as well, a person with no name into a named one (**Corrections**).
 
 ### Corrections
 
-Asset detail's People section (the glossary's Detail panel) acts on one Face at a time, never on a Person as a whole: Remove
-deletes a Face, Change gives it to another Person. Each is one `PersonService` transaction followed by a file purge, and
-each follows the count rule above: a Face leaving an asset lowers its Person's `num_of_faces` only if they have no other
-Face on it, and a Face arriving raises the target's only if they had none (`FaceDao.hasFaceOfPerson`).
+Asset detail's People section (the glossary's Detail panel) acts on the selected Face: Remove deletes it, Change gives it
+to another Person. For a Face of a Person with no name (`is_named` false, Hidden or not), Change acts on that Person as a
+whole unless its "This face only" switch is on: a new name names them, and a named Person picked merges them into that
+Person, so every asset of theirs follows, not just the one shown (**Name** and **Merge** below). A nameless Person picked
+still gets this Face alone, so two nameless people are never merged from the panel (the People tab's drag and drop does
+it), and a named Person's Face always moves alone, so the panel never renames a named Person or merges them away (the
+results title and the People tab's pencil rename them).
+Each correction is one `PersonService` transaction. Remove and a move are followed by a file purge, and each follows the
+count rule above: a Face leaving an asset lowers its Person's `num_of_faces` only if they have no other Face on it, and a
+Face arriving raises the target's only if they had none (`FaceDao.hasFaceOfPerson`). A name changes no count, and a merge
+recounts the destination as every merge does.
 
 - **Remove** (`removeFace(faceId)`): the Person is locked (`lockAndGetLive`), the Face re-read and its row deleted; the
   cover, if it was this Face, becomes the Person's remaining Face with the highest detection score (`getTopFaces`); a
@@ -275,24 +289,54 @@ Face on it, and a Face arriving raises the target's only if they had none (`Face
   at a time; the target counts the asset if they had no Face on it and takes the Face as cover only if they have none (a
   new Person's cover is the moved Face). On a Video where the target already has a Face, the lower-quality of the two
   (the target's own on a tie) is deleted as Remove deletes it, and a cover that pointed at it moves to the survivor.
+- **Name** (`nameFacePerson(faceId, personId, name)`): names the Face's Person through `updateName`, as the tab's **Name**
+  does, so the same Person, with their ID, cover and count, carries the name on every asset of theirs.
+- **Merge** (`mergeFacePerson(faceId, personId, destId)`): merges the Face's Person into the named Person `destId` through
+  `merge(dest, source)`, as the tab's **Merge** does: every Face of theirs becomes the destination's, whose ID, name and
+  Hidden state stay, and the source is soft-deleted.
+
+  Both answer a `FacePersonChange(face, before, after)`: the Face, its Person as they were, with the name they had, and the
+  Person who has the Face now, the same Person named or the destination. `personId` is the Person the client showed with
+  the Face, checked rather than read from the Face: the Face may have been given to someone else since the panel was
+  rendered, and the name must not land on, nor the merge take, whoever has it now. In one transaction (`withTransaction`
+  joins the outer one, so `updateName` and `merge` run inside it) the Person is locked, with the destination in ID order
+  for a merge (`lockAndGetLive`, each of them live in this repository), the Face is re-read under the lock (`lockedFace`,
+  as Remove and Change re-read it, so it must still be that Person's and on a live asset), and the Person, read again,
+  must still have no name. Beyond that and a merge's named destination they add no rule of their own: a held name is
+  `updateName`'s refusal, and `merge` keeps the destination's name. Each logs on DEBUG.
 - **Last Face**: a Person is deleted only when no Face row of theirs remains. Faces on assets in the trash are rows, so a
   Person whose every live Face was removed stays, counting zero, until the trash is purged.
-- **Locks**: a correction locks the Face's people (`lockAndGetLive`, ID order) and reads its asset without a lock, while a
+- **Locks**: a correction locks the people it touches (`lockAndGetLive`, ID order: the Face's Person and the target or the
+  destination) and reads its asset without a lock, while a
   recycle or restore locks its assets first (`AssetDao.lockAssets`) and their people after (`lockAssetPeople`): assets, then
   people, in every transaction that locks both, so none waits on another in a cycle, and a recycle counts an asset's people
   only once a correction holding one of them has ended.
 - **Refusals**: a Face of a recycled asset is an `IllegalOperationException` (the section is read-only in the trash); a
   Face gone, or moved by a request that held the lock first, is a `NotFoundException`; the Face's own Person a
-  `ValidationException`, as is a reserved name.
+  `ValidationException`, as is a reserved name. A Name or a Merge refuses as well, changing nothing: a Face no longer
+  `personId`'s, or a Person or destination no longer live or of another repository, is a `NotFoundException`; a Person
+  who has a name by now (`Const.Msg.Err.FACE_PERSON_NAMED_SINCE`, "This person has a name now"), a destination with no
+  name (`MERGE_INTO_NAMELESS`, "Merge into a person with a name", which the panel never offers) and the Person themselves
+  as the destination (`FACE_ALREADY_THEIRS`, checked before the transaction) are a `ValidationException`; a name another
+  live Person holds is `person_01`'s `DuplicateException`.
 
 The routes (`AssetActionController`, under `requireLogin`, each logging the correction on INFO):
 `PUT /htmx/asset/r/:repoId/face/:faceId/person` with a JSON body naming `personId` or `name` (one of the two; the name
-trimmed and held to the name editor's length rules), and `DELETE /htmx/asset/r/:repoId/face/:faceId`. Both answer the
+trimmed and held to the name editor's length rules); for a Face's Person as a whole,
+`PUT /htmx/asset/r/:repoId/face/:faceId/person/name` with `{personId, name}` (both required, `personId` a UUID, the name
+trimmed and held to the same rules) and `PUT /htmx/asset/r/:repoId/face/:faceId/person/merge` with
+`{personId, destPersonId}` (both required UUIDs); and `DELETE /htmx/asset/r/:repoId/face/:faceId`. Each answers the
 asset's People section (`htmx/detail_panel_people`: one row per Face with its Person, bad matches left out, Hidden
 marked, by `x1` for an image and by Frame time for a Video, `PersonService.getAssetFacesForDetail`), its root carrying
-the result message (`Const.Msg.FaceCorrection`) and, when a Person was deleted, their ID and the line that says so; a
-refused correction is a plain-text 400 (the body or the target), 404 (gone or moved) or 409 (in the trash), which the
-client answers by reloading the section. The controls, the Change combobox and what the client does with an answer are
+the result message (`Const.Msg.FaceCorrection`: `MOVED`, `REMOVED`, and for a name `NAMED`, "%s is now %s", and for a
+merge `MERGED`, "%s merged into %s", both by the name the Person had), when a Person was deleted their ID and the line
+that says so, and after a merge the merged Person's ID (`data-app-merged-person-id`) and the destination's
+(`data-app-merged-into-id`). A refused correction is a plain-text 400 (the body, the target, a reserved name, a Person
+named meanwhile, a nameless destination, or a name another live Person holds, whose `DuplicateException` the name route
+catches and answers with `PERSON_NAME_ALREADY_EXISTS`, "Person by that name already exists", offering no merge), a 404
+(the Face gone or moved, a Person or destination no longer live or of another repository) or a 409 (in the trash). The
+client shows a 400's message and changes nothing, and reloads the section on a 404 or 409. The controls, the Change
+combobox and what the client does with an answer are
 under **Detail panel** in `altitude/views/AGENTS.md`. `PeopleActionController` serves the Change combobox's options,
 `GET /htmx/people/r/:repoId/assignable` (`getAssignable`: the live people who are not a bad match, named first, then by
 `name_for_sort`, Hidden among them and marked; `htmx/assignable_people`), with the Suggested group below when asked with
@@ -351,8 +395,8 @@ and the Video rules on clips synthesized by [TestVideos](../altitude/test/src/al
 [FaceClusteringTests](../altitude/test/src/altitude/core/unit/FaceClusteringTests.scala) covers the pure clustering;
 [FaceCorrectionTests](../altitude/test/src/altitude/core/integration/FaceCorrectionTests.scala) covers Remove and
 Change on both engines, their four races included (`contend`: two moves of one Person's Faces on an asset, a move of a Face
-a concurrent request removed, two moves to one new name, and a recycle of an asset during a removal of a Face on it), and
-the suggested people of a Face, and
+a concurrent request removed, two moves to one new name, and a recycle of an asset during a removal of a Face on it), the
+Name and Merge of a Face's Person with their refusals, and the suggested people of a Face, and
 [AssetActionControllerTests](../altitude/test/src/altitude/core/controller/AssetActionControllerTests.scala) their
 routes, [PeopleActionControllerTests](../altitude/test/src/altitude/core/controller/PeopleActionControllerTests.scala) the
 assignable list with its Suggested group.
