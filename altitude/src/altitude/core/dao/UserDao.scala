@@ -22,6 +22,12 @@ trait UserDao extends BaseDao[User]:
   def lockById(id: String): User =
     lockWithPasswordHash(id).map(_._1).getOrElse(throw altitude.core.NotFoundException(s"No account [$id]"))
 
+  /**
+   * The account by ID, its row share-locked against a delete or a locking write of it (`FOR KEY SHARE` on PostgreSQL) until the
+   * transaction ends, as the import's insert of an asset it owns needs it to stay; None when there is no such account
+   */
+  def lockAsImporter(id: String): Option[User]
+
   /** Every account, in no particular order */
   def getAll: List[User]
 

@@ -45,9 +45,8 @@ import altitude.core.util.JsonCodec
      *
      * Assertions:
      *
-     * Import and Purge are the mask 257, hold exactly those two and list them in order; adding Recycle and taking Import away
-     * give Recycle and Purge. Every Permission is the mask 511 and none is 0, which is empty. The JSON of a set is its bare mask,
-     * and reads back as the same set.
+     * Import and Purge are the mask 257, hold exactly those two and list them in order. Every Permission is the mask 511 and none
+     * is 0, which is empty. The JSON of a set is its bare mask, and reads back as the same set.
      *
      * Edge cases:
      *
@@ -59,7 +58,6 @@ import altitude.core.util.JsonCodec
     importAndPurge.has(Permission.Import) shouldBe true
     importAndPurge.has(Permission.Recycle) shouldBe false
     importAndPurge.toList shouldBe List(Permission.Import, Permission.Purge)
-    (importAndPurge + Permission.Recycle - Permission.Import) shouldBe Permissions.of(Permission.Recycle, Permission.Purge)
 
     Permissions.all.mask shouldBe 511
     Permissions.none.mask shouldBe 0

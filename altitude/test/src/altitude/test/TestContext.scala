@@ -147,6 +147,10 @@ class TestContext(val testApp: Altitude) {
   def grant(account: User, repository: Repository, permissions: Permissions = Permissions.all): Unit =
     testApp.service.repository.setGrant(account.persistedId, repository.persistedId, permissions)
 
+  /** The account's Permissions in the Library as stored, None when it holds no grant there: the grant table read through its DAO */
+  def grantOf(account: User, repositoryId: String): Option[Permissions] =
+    testApp.txManager.asReadOnly(testApp.DAO.repositoryGrant.getGrant(account.persistedId, repositoryId)).map(_.permissions)
+
   def makeAsset(
       repository: Option[Repository] = None,
       filename: String = Util.randomStr(50),

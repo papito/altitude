@@ -12,6 +12,7 @@ import altitude.core.dao.RepositoryDao
 import altitude.core.dao.RepositoryGrantDao
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.AccountType
+import altitude.core.models.AuditEventType
 import altitude.core.models.Folder
 import altitude.core.models.Permissions
 import altitude.core.models.Repository
@@ -108,26 +109,41 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
    * The grants of a Library just created: those of the accounts whose new-Library switch is on, each with its new-Library
    * Permissions, and the creator's, every Permission for one that is no Admin (by its stored type). An account refused a grant
    * (one at its bound of grants) is skipped with a WARN, so creating a Library never fails for another account's bound; the
-   * creator's refusal fails the add. Each grant bumps its account's version once the add commits (`setGrant`).
+   * creator's refusal fails the add. Each grant is recorded as a change of Permissions, acted by the creator (none for a Library
+   * added with no creator, as setup adds one), and bumps its account's version once the add commits (`setGrant`).
    */
   private def grantNewLibrary(repo: Repository, creatorId: Option[String]): Unit =
-    // Every account granted is locked in one pass, in ID order, before any grant is written: two creates at once, each granting
-    // the other's creator, take the rows in one order, so neither holds one the other waits on while it waits
+    // The rows are locked in the one order of every account write: the active Admins' first, in ID order (`lockActiveAdmins`, as
+    // an Admin's account write takes them), then every account granted in one pass, in ID order, before any grant is written.
+    // An Admin creating the Library is among the grantees' rows, so without the Admins first it could hold a grantee's row while
+    // waiting on its own, which an Admin's edit of that grantee holds while it waits on the grantee; and two creates at once,
+    // each granting the other's creator, take the rows in one order, so neither holds one the other waits on while it waits.
+    app.DAO.user.lockActiveAdmins()
     val locked = app.DAO.user.lockGrantees(creatorId)
-    val creator = creatorId.flatMap(id => locked.find(_.id.contains(id))).filter(_.accountType != AccountType.Admin)
+    val actor = creatorId.flatMap(id => locked.find(_.id.contains(id)))
+    val creator = actor.filter(_.accountType != AccountType.Admin)
+
+    def grant(account: User, permissions: Permissions): Unit =
+      setGrant(account.persistedId, repo.persistedId, permissions)
+      app.service.audit.record(
+        AuditEventType.PermissionsChanged,
+        actor = actor,
+        target = Some(account),
+        detail = ujson.Obj("library" -> repo.persistedId, "permissions" -> ujson.Arr.from(permissions.toList.map(_.toString)))
+      ): Unit
 
     locked
       .filter(_.grantsNewLibraries)
       .filterNot(account => account.accountType == AccountType.Admin || creator.exists(_.id == account.id))
       .foreach {
         account =>
-          try setGrant(account.persistedId, repo.persistedId, account.newLibraryPermissions)
+          try grant(account, account.newLibraryPermissions)
           catch
             case e: IllegalOperationException =>
               logger.warn(s"Account [${account.persistedId}] not granted the new library [${repo.persistedId}]: ${e.getMessage}")
       }
 
-    creator.foreach(account => setGrant(account.persistedId, repo.persistedId, Permissions.all))
+    creator.foreach(grant(_, Permissions.all))
 
   /**
    * The Libraries `account` can see, by name: case-insensitive and natural ("Client 2" before "Client 10"). Every Library for an
@@ -203,12 +219,6 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
   def getGrants(account: User): Map[String, Permissions] =
     txManager.asReadOnly {
       grantDao.getByAccount(account.persistedId).map(grant => grant.repositoryId -> grant.permissions).toMap
-    }
-
-  /** The account's Permissions in the Library, None when it holds no grant there */
-  def getGrant(account: User, repositoryId: String): Option[Permissions] =
-    txManager.asReadOnly {
-      grantDao.getGrant(account.persistedId, repositoryId).map(_.permissions)
     }
 
   /**

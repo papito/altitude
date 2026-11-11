@@ -54,7 +54,8 @@ class LibraryService(val app: Altitude):
 
   /**
    * The asset of a staged file: its media type by content, its checksum (the file's SHA-256, streamed), its size, and the context
-   * account as its owner and in its importer record; the pipeline owns the file from here
+   * account as its owner and in its importer record, which [[persistAndIndex]] builds again from the account as stored when it
+   * inserts the asset; the pipeline owns the file from here
    */
   def stagedFileToAsset(fileName: String, staged: Path): AssetWithData =
     val importer = RequestContext.getAccount
@@ -88,10 +89,16 @@ class LibraryService(val app: Altitude):
       case (Right(invalid), _) => throw invalid.cause.getOrElse(new Exception("Unknown error"))
     }
 
-  /** The import pipeline's index stage: the asset persisted and its Search document written, together or not at all */
+  /**
+   * The import pipeline's index stage: the asset persisted and its Search document written, together or not at all. Its importer
+   * record is built here from the importing account as stored now (`UserService.lockImporter`), not as it was at upload, so an
+   * account change made while the file waited in the pipeline is in it, or rewrites it once the insert commits; an account gone
+   * or deactivated by then fails the file with `ImporterUnavailableException`.
+   */
   def persistAndIndex(asset: Asset): Asset =
     txManager.withTransaction {
-      val persisted = app.service.asset.add(asset)
+      val importer = app.service.user.lockImporter(asset.ownerUserId)
+      val persisted = app.service.asset.add(asset.copy(originalOwner = AccountSnapshot.of(importer)))
       app.service.search.indexAsset(persisted)
       logger.trace(s"Persisted and indexed asset [${persisted.persistedId}]")
       persisted

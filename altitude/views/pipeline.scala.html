@@ -28,6 +28,8 @@
       </div>
 
       <div id="importLog">
+        @* Shown once the status feed gives up reconnecting (js/import-status.js) *@
+        <p id="importStatusLost" class="notice warning" hidden>The import status stopped. Reload the page to reconnect.</p>
         @* Each status message from the server is a full <div id="statusText"> that replaces the current one *@
         <div hx-ws:connect="/import/status"
              hx-target="#statusText"

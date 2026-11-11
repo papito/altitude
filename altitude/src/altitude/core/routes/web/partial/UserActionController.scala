@@ -11,17 +11,20 @@ import altitude.core.App
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.ValidationException
+import altitude.core.Validators
 import altitude.core.models.AccountType
 import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.routes.BaseController
+import altitude.core.routes.decorators.requireAccountCreator
 import altitude.core.routes.decorators.requireAdmin
 import altitude.core.routes.decorators.requireLogin
-import altitude.core.routes.decorators.requirePermission
 import altitude.core.service.RepositoryService
+import altitude.core.service.UserService
 import altitude.core.util.NaturalOrder
+import altitude.core.util.Util
 
 object UserActionController:
 
@@ -49,7 +52,19 @@ object UserActionController:
   // Permission names as the form and its component spell them (`Permission` cases)
   private def names(permissions: Permissions): ujson.Arr = ujson.Arr.from(permissions.toList.map(_.toString))
 
-  /** What the account form shows: an account's values, as stored or as submitted */
+  /**
+   * An account's or a Library's ID as a request names it: a UUID, or a `ValidationException` (a 400 through `answering`), so no
+   * other text reaches a statement or a log line
+   */
+  def uuid(id: String): String =
+    if !Validators.isUuid(id) then throw ValidationException(C.Msg.Err.VALUE_NOT_A_UUID)
+    id
+
+  /**
+   * What the account form shows: an account's values, as stored or as submitted. `storedName` is the account's name as stored,
+   * which an edit's title names whatever name is typed; `openedState` the state an edit was opened over
+   * (`UserService.editState`).
+   */
   final case class AccountForm(
       accountId: Option[String] = None,
       name: String = "",
@@ -60,7 +75,9 @@ object UserActionController:
       grants: Map[String, Permissions] = Map.empty,
       canCreateLibraries: Boolean = false,
       grantsNewLibraries: Boolean = false,
-      newLibraryPermissions: Permissions = Permissions.of(Permission.Import, Permission.CurateOwn)):
+      newLibraryPermissions: Permissions = AccountForm.PRESET,
+      openedState: Option[String] = None,
+      storedName: Option[String] = None):
 
     /** The account these values describe, for the service: a type is chosen by now */
     def toUser: User =
@@ -75,7 +92,11 @@ object UserActionController:
         newLibraryPermissions = newLibraryPermissions
       )
 
-    /** The state the form's Alpine component starts from (`js/alpine/components/account-form.js`), with the creator's ceiling */
+    /**
+     * The state the form's Alpine component starts from (`js/alpine/components/account-form.js`), with the creator's ceiling and
+     * the preset of Permissions a User given a Library starts with. With the new-Library switch off, its chips show the preset,
+     * as the form submits none then, for the switch to turn on with.
+     */
     def stateJson(ceiling: Ceiling): String =
       ujson.write(
         ujson.Obj(
@@ -84,7 +105,8 @@ object UserActionController:
           "permissions" -> ujson.Obj.from(grants.toSeq.map((id, held) => id -> names(held))),
           "canCreateLibraries" -> canCreateLibraries,
           "grantsNewLibraries" -> grantsNewLibraries,
-          "newLibraryPermissions" -> names(newLibraryPermissions),
+          "newLibraryPermissions" -> names(if grantsNewLibraries then newLibraryPermissions else AccountForm.PRESET),
+          "preset" -> names(AccountForm.PRESET),
           "ceiling" -> ujson.Obj.from(ceiling.libraries.map {
             row =>
               row.library.persistedId -> ujson.Obj(
@@ -97,9 +119,15 @@ object UserActionController:
 
   object AccountForm:
 
-    /** The form of a stored account and its grants, as an edit opens it */
-    def ofAccount(account: User, grants: Map[String, Permissions]): AccountForm =
+    /** What a User given access to a Library holds there before anything else is checked, and a new-Library grant's start */
+    val PRESET: Permissions = Permissions.of(Permission.Import, Permission.CurateOwn)
+
+    /** The form of a stored account and its grants, as an edit opens it, carrying the state it was opened over */
+    def ofAccount(opened: UserService.EditForm): AccountForm =
+      val (account, grants) = (opened.account, opened.grants)
       AccountForm(
+        openedState = Some(opened.state),
+        storedName = Some(account.name),
         accountId = account.id,
         name = account.name,
         username = account.username,
@@ -108,9 +136,7 @@ object UserActionController:
         grants = grants,
         canCreateLibraries = account.canCreateLibraries,
         grantsNewLibraries = account.grantsNewLibraries,
-        newLibraryPermissions =
-          if account.grantsNewLibraries || account.accountType == AccountType.Guest then account.newLibraryPermissions
-          else AccountForm().newLibraryPermissions
+        newLibraryPermissions = account.newLibraryPermissions
       )
 
     /**
@@ -134,13 +160,13 @@ object UserActionController:
       val granted = texts(Api.Field.User.PERMISSIONS).map {
         value =>
           value.split(':') match
-            case Array(libraryId, name) => libraryId -> permission(name)
+            case Array(libraryId, name) => uuid(libraryId) -> permission(name)
             case _ => throw ValidationException(C.Msg.Err.INCORRECT_VALUE_TYPE)
       }
-      val libraryIds = texts(Api.Field.User.LIBRARY_IDS) ++ granted.map(_._1)
+      val libraryIds = texts(Api.Field.User.LIBRARY_IDS).map(uuid) ++ granted.map(_._1)
 
       AccountForm(
-        accountId = Option(text(Api.Field.User.ACCOUNT_ID)).filter(_.nonEmpty),
+        accountId = Option(text(Api.Field.User.ACCOUNT_ID)).filter(_.nonEmpty).map(uuid),
         name = text(Api.Field.User.NAME),
         username = text(Api.Field.User.USERNAME).trim,
         email = text(Api.Field.User.EMAIL).trim,
@@ -151,7 +177,8 @@ object UserActionController:
         }.toMap,
         canCreateLibraries = text(Api.Field.User.CAN_CREATE_LIBRARIES) == "true",
         grantsNewLibraries = text(Api.Field.User.GRANTS_NEW_LIBRARIES) == "true",
-        newLibraryPermissions = Permissions.of(texts(Api.Field.User.NEW_LIBRARY_PERMISSIONS).map(permission)*)
+        newLibraryPermissions = Permissions.of(texts(Api.Field.User.NEW_LIBRARY_PERMISSIONS).map(permission)*),
+        openedState = Option(text(Api.Field.User.OPENED_STATE)).filter(_.nonEmpty)
       )
 
   /** The form field of each key the account rules name an error by (`User.valid`, `UserService`) */
@@ -161,7 +188,8 @@ object UserActionController:
     FieldConst.User.EMAIL -> Api.Field.User.EMAIL,
     FieldConst.User.PASSWORD -> Api.Field.User.PASSWORD,
     FieldConst.User.ACCOUNT_TYPE -> Api.Field.User.ACCOUNT_TYPE,
-    FieldConst.User.GRANTS -> Api.Field.User.LIBRARY_IDS
+    FieldConst.User.GRANTS -> Api.Field.User.LIBRARY_IDS,
+    FieldConst.User.OPENED_STATE -> Api.Field.User.OPENED_STATE
   )
 
   /** An account card of the Users page: the account, and the Libraries it holds a grant in that the viewer sees, by name */
@@ -169,12 +197,12 @@ object UserActionController:
 
   /**
    * The tab the Users page opens on: the first, of Admins, Users and Guests, that holds a card; with none, Users, or Guests for a
-   * viewer who may create Guests alone in the request's Library
+   * viewer who may create Guests alone, in whichever Library
    */
   def startTab(cards: List[AccountCard]): AccountType =
     List(AccountType.Admin, AccountType.User, AccountType.Guest)
       .find(accountType => cards.exists(_.account.accountType == accountType))
-      .getOrElse(if RequestContext.holds(Permission.CreateUsers) then AccountType.User else AccountType.Guest)
+      .getOrElse(if RequestContext.holdsAnywhere(Permission.CreateUsers) then AccountType.User else AccountType.Guest)
 
   /**
    * The account cards `viewer` sees (`UserService.accountsVisibleTo`: every account for an Admin, the ones it created for anyone
@@ -209,9 +237,9 @@ object UserActionController:
 
 /**
  * The dialogs and writes of the Users page (`UsersController`): its account cards, the Add User modal and its create, for an
- * Admin or a holder of Create Users or Create Guests in the Library; an account's edit, password, deactivation, reactivation and
- * delete, an Admin's alone. The account rules and the ceiling are `UserService`'s; a refusal of a field comes back as the
- * dialog's form with the error under the field, a refusal above the ceiling as a 403.
+ * Admin or a holder of Create Users or Create Guests in any Library (`requireAccountCreator`); an account's edit, password,
+ * deactivation, reactivation and delete, an Admin's alone. The account rules and the ceiling are `UserService`'s; a refusal of a
+ * field comes back as the dialog's form with the error under the field, a refusal above the ceiling as a 403.
  */
 class UserActionController(using logger: Logger) extends BaseController:
   import UserActionController.*
@@ -222,13 +250,13 @@ class UserActionController(using logger: Logger) extends BaseController:
 
   /** The account cards of the Users page, under their three tabs, as the viewer sees them */
   @requireLogin()
-  @requirePermission(Permission.CreateUsers, Permission.CreateGuests)
+  @requireAccountCreator()
   @cask.get(f"/$prefix/r/:repoId/accounts")
   def htmxAccounts(repoId: String)(using request: Request): Response[String] =
     htmlResponse(UserActionController.accounts(RequestContext.getAccount))
 
   @requireLogin()
-  @requirePermission(Permission.CreateUsers, Permission.CreateGuests)
+  @requireAccountCreator()
   @cask.get(f"/$prefix/r/:repoId/dialogs/add")
   def showAddDialog(repoId: String)(using request: Request): Response[String] =
     val ceiling = ceilingOf(RequestContext.getAccount)
@@ -241,7 +269,7 @@ class UserActionController(using logger: Logger) extends BaseController:
     val grants = here.map {
       row =>
         val preset =
-          if accountType.contains(AccountType.User) then Permissions.of(Permission.Import, Permission.CurateOwn)
+          if accountType.contains(AccountType.User) then AccountForm.PRESET
           else Permissions.none
         row.library.persistedId -> Permissions(preset.mask & row.permissions.mask)
     }.toMap
@@ -252,7 +280,7 @@ class UserActionController(using logger: Logger) extends BaseController:
    * A field the account rules refuse comes back as the form, with the values submitted and the error under the field.
    */
   @requireLogin()
-  @requirePermission(Permission.CreateUsers, Permission.CreateGuests)
+  @requireAccountCreator()
   @cask.post(f"/$prefix/r/:repoId/add")
   def htmxAdd(repoId: String)(using request: Request): Response[String] =
     answering {
@@ -271,9 +299,8 @@ class UserActionController(using logger: Logger) extends BaseController:
   @cask.get(f"/$prefix/r/:repoId/dialogs/edit")
   def showEditDialog(repoId: String, accountId: String)(using request: Request): Response[String] =
     answering {
-      val account = users.getById(accountId)
-      val grants = App.altitude.service.repository.getGrants(account)
-      htmlResponse(htmx.html.account_form(AccountForm.ofAccount(account, grants), ceilingOf(RequestContext.getAccount)))
+      val opened = AccountForm.ofAccount(users.openForEdit(uuid(accountId)))
+      htmlResponse(htmx.html.account_form(opened, ceilingOf(RequestContext.getAccount)))
     }
 
   /** An Admin's change to an account, through the same form as Add User, its password aside */
@@ -285,9 +312,17 @@ class UserActionController(using logger: Logger) extends BaseController:
       val admin = RequestContext.getAccount
       val form = AccountForm.submittedIn(unscrubbedJson.get)
       val accountId = form.accountId.getOrElse(throw ValidationException(C.Msg.Err.VALUE_REQUIRED))
-      submitted(form, ceilingOf(admin)) {
+      // The title names the account as stored, whatever name was typed
+      submitted(form.copy(storedName = Some(users.getById(accountId).name)), ceilingOf(admin)) {
         val account = form.toUser.copy(id = Some(accountId))
-        val updated = users.update(admin.persistedId, account, form.grants, BaseController.clientIpOf(request))
+        // A form with no state was opened over none, which no account's matches: its save is refused as one over a change
+        val updated =
+          users.update(
+            admin.persistedId,
+            account,
+            form.grants,
+            form.openedState.getOrElse(""),
+            BaseController.clientIpOf(request))
         dialogSuccessResponse(ujson.Obj("message" -> s"${updated.name} saved"))
       }
     }
@@ -297,7 +332,7 @@ class UserActionController(using logger: Logger) extends BaseController:
   @cask.get(f"/$prefix/r/:repoId/dialogs/set-password")
   def showSetPasswordDialog(repoId: String, accountId: String)(using request: Request): Response[String] =
     answering {
-      htmlResponse(htmx.html.set_password_dialog(users.getById(accountId)))
+      htmlResponse(htmx.html.set_password_dialog(users.getById(uuid(accountId))))
     }
 
   /**
@@ -311,7 +346,7 @@ class UserActionController(using logger: Logger) extends BaseController:
     answering {
       val admin = RequestContext.getAccount
       val json = unscrubbedJson.get
-      val accountId = json.obj.get(Api.Field.User.ACCOUNT_ID).flatMap(_.strOpt).getOrElse("")
+      val accountId = accountIdOf(json)
       val password = json.obj.get(Api.Field.User.PASSWORD).flatMap(_.strOpt).getOrElse("")
       val account = users.getById(accountId)
       try
@@ -351,7 +386,7 @@ class UserActionController(using logger: Logger) extends BaseController:
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete")
   def showDeleteDialog(repoId: String, accountId: String)(using request: Request): Response[String] =
     answering {
-      val account = users.getById(accountId)
+      val account = users.getById(uuid(accountId))
       htmlResponse(htmx.html.delete_account_dialog(account, users.countOwnedAssets(accountId)))
     }
 
@@ -361,14 +396,16 @@ class UserActionController(using logger: Logger) extends BaseController:
   def htmxDelete(repoId: String, accountId: String)(using request: Request): Response[String] =
     answering {
       val admin = RequestContext.getAccount
-      val account = users.getById(accountId)
+      val account = users.getById(uuid(accountId))
       val moved = users.delete(admin.persistedId, accountId, BaseController.clientIpOf(request))
-      logger.info(s"Account [${admin.persistedId}] deleted account [$accountId]; [$moved] assets moved to it")
+      logger.info(
+        s"Account [${admin.persistedId}] deleted account [${Util.printable(accountId, 36)}]; [$moved] assets moved to it")
       dialogSuccessResponse(ujson.Obj("message" -> s"${account.name} deleted"))
     }
 
+  // The account a write's body names, a UUID
   private def accountIdOf(json: ujson.Obj): String =
-    json.obj.get(Api.Field.User.ACCOUNT_ID).flatMap(_.strOpt).getOrElse(throw ValidationException(C.Msg.Err.VALUE_REQUIRED))
+    uuid(json.obj.get(Api.Field.User.ACCOUNT_ID).flatMap(_.strOpt).getOrElse(throw ValidationException(C.Msg.Err.VALUE_REQUIRED)))
 
   /**
    * Runs a submitted account form's write, or answers the form again with the values submitted and the error of every field the

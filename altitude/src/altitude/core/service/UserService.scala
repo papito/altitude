@@ -32,8 +32,35 @@ object UserService:
     case Current(claims: TokenClaims)
     // Minted before a change to the account: its claims rebuilt from the database, and the token that replaces it
     case Renewed(claims: TokenClaims, token: String)
-    // Not a token the server minted, expired, revoked, stale where it cannot be replaced, or of an account deactivated or deleted
-    case Refused
+    // Not a token the server minted, expired, revoked, stale where it cannot be replaced, or of an account deactivated or deleted.
+    // `clearsCookie` when the token will never be good again (it does not decrypt or has expired, or its account is gone or
+    // deactivated), so the answer clears the session cookie; a token refused only for being revoked or stale leaves it, since the
+    // browser may hold a newer token by now (a request in flight while its account changed its own password)
+    case Refused(clearsCookie: Boolean)
+
+  /**
+   * An account as an Admin's edit form opens it: the account, its grants, and `state`, the fingerprint of the two
+   * ([[editState]]), which the form carries back to [[UserService.update]]
+   */
+  final case class EditForm(account: User, grants: Map[String, Permissions], state: String)
+
+  /**
+   * The fingerprint of what an Admin's edit shows of an account: its name, username, email address, type, Create Libraries flag
+   * and new-Library grant, and its grants. Any change to them, another Admin's edit or a grant a new Library gave, changes it; a
+   * write that touches none of them (a login, the last active Library) does not.
+   */
+  def editState(account: User, grants: Map[String, Permissions]): String =
+    val fields = List(
+      account.name,
+      account.username,
+      account.email,
+      account.accountType.toString,
+      account.canCreateLibraries.toString,
+      account.grantsNewLibraries.toString,
+      account.newLibraryPermissions.mask.toString
+    ) ++ grants.toList.sortBy(_._1).map((repositoryId, permissions) => s"$repositoryId:${permissions.mask}")
+    // A NUL separates the fields, as none of them holds one
+    altitude.core.util.Sha256.hex(fields.mkString("\u0000").getBytes(java.nio.charset.StandardCharsets.UTF_8))
 
   // A bcrypt hash of no password anyone has, checked for a login that names no account, so that answer takes as long as a wrong
   // password's and does not tell whether the account exists
@@ -139,10 +166,15 @@ class UserService(val app: Altitude) extends BaseService[User]:
    * account is still active; a stale token that cannot be replaced (a Bearer header), one of an account deactivated or deleted
    * since, and one minted before its account's tokens were revoked, are refused. The token is judged and rebuilt against one
    * snapshot of the account's versions, so a revocation that lands meanwhile leaves the rebuilt token below it.
+   *
+   * A refusal clears the session cookie only for a token that will never be good again: one that does not decrypt or has expired,
+   * or whose account is gone or deactivated. A revoked cookie token's account is read to tell (the one read of a revocation,
+   * which a deactivation is too); a token refused only for being revoked (a password change, whose new token the browser may hold
+   * by now) or stale where it cannot be replaced leaves the cookie as it is.
    */
   def checkToken(token: String, renewable: Boolean): UserService.TokenCheck =
     app.service.paseto.readToken(token) match
-      case None => UserService.TokenCheck.Refused
+      case None => UserService.TokenCheck.Refused(clearsCookie = true)
       case Some(claims) =>
         val id = claims.account.persistedId
         val snapshot = versions.snapshot(id)
@@ -152,19 +184,26 @@ class UserService(val app: Altitude) extends BaseService[User]:
             UserService.TokenCheck.Current(claims)
           case AccountVersions.Standing.Revoked =>
             logger.info(s"Refused a revoked token of account [$id]")
-            UserService.TokenCheck.Refused
+            UserService.TokenCheck.Refused(clearsCookie = renewable && !isActive(id))
           case AccountVersions.Standing.Stale if !renewable =>
             logger.info(s"Refused a stale token of account [$id] that cannot be replaced")
-            UserService.TokenCheck.Refused
+            UserService.TokenCheck.Refused(clearsCookie = false)
           case AccountVersions.Standing.Stale =>
             renew(claims, snapshot) match
               case None =>
                 logger.info(s"Refused a stale token of account [$id], which is deactivated or gone")
-                UserService.TokenCheck.Refused
+                UserService.TokenCheck.Refused(clearsCookie = true)
               case Some((fresh, renewed)) =>
                 logger.debug(s"Rebuilt the token of account [$id] at version [${snapshot.current}]")
                 switchContextToUser(fresh.account)
                 UserService.TokenCheck.Renewed(fresh, renewed)
+
+  // Whether the account exists and is active, as stored
+  private def isActive(accountId: String): Boolean =
+    txManager.asReadOnly {
+      try dao.getById(accountId).isActive
+      catch case _: NotFoundException => false
+    }
 
   /**
    * The claims of a stale token rebuilt from the database, with its expiry, at the current version of `at`, the snapshot its
@@ -276,22 +315,34 @@ class UserService(val app: Altitude) extends BaseService[User]:
    * Admins' rows are locked first (`lockActiveAdmins`) and the actor must be one of them, so two demotions at once take turns and
    * the second, by an Admin the first demoted, is refused: one active Admin is always left. A change of the name, username or
    * email address rewrites the importer record of every asset the account imported, in every Library
-   * (`AssetDao.rewriteImporterRecords`). The account as stored.
+   * (`AssetDao.rewriteImporterRecords`). `openedState` is the state the Admin's form was opened over ([[openForEdit]],
+   * `UserService.editState`): a save over an account changed since (by another Admin, or granted a new Library) is a
+   * `ValidationException` (`ACCOUNT_CHANGED`) that writes nothing, compared under the account's row lock. The account as stored.
    */
-  def update(actorId: String, model: User, grants: Map[String, Permissions], clientIp: Option[String] = None): User =
+  def update(
+      actorId: String,
+      model: User,
+      grants: Map[String, Permissions],
+      openedState: String,
+      clientIp: Option[String] = None): User =
     val (account, accountGrants) = valid(model, grants, None)
 
     txManager.withTransaction {
       val admins = dao.lockActiveAdmins()
       val actor = activeAdmin(actorId, admins)
       val stored = dao.lockById(account.persistedId)
+      // Read under the account's row lock, which every write of the account and of its grants takes (a new Library's grant
+      // included), so the state compared is the one the save replaces
+      val heldGrants = grantsOf(stored.persistedId)
+      if UserService.editState(stored, heldGrants) != openedState then
+        logger.info(s"Account [$actorId] saved account [${stored.persistedId}] over a change since its form was opened")
+        throw fieldError(FieldConst.User.OPENED_STATE, Const.Msg.Err.ACCOUNT_CHANGED)
       val typeChanged = stored.accountType != account.accountType
 
       if typeChanged && stored.accountType == AccountType.Admin && stored.id == actor.id then
         throw fieldError(FieldConst.User.ACCOUNT_TYPE, Const.Msg.Err.OWN_ACCOUNT)
 
       whileKeysFree(dao.update(account))
-      val heldGrants = grantDao.getByAccount(stored.persistedId).map(grant => grant.repositoryId -> grant.permissions).toMap
       // Bumps the account's version once committed, so the update needs no bump of its own
       app.service.repository.replaceGrants(stored.persistedId, accountGrants)
 
@@ -328,7 +379,22 @@ class UserService(val app: Altitude) extends BaseService[User]:
       dao.getById(stored.persistedId)
     }
 
-  /** An Admin deactivates an account: it can do nothing until it is reactivated. Refused as [[delete]] is. */
+  /** The account as an Admin's edit form opens it, with its grants and their state, read in one transaction */
+  def openForEdit(accountId: String): UserService.EditForm =
+    txManager.asReadOnly {
+      val account = dao.getById(accountId)
+      val grants = grantsOf(accountId)
+      UserService.EditForm(account, grants, UserService.editState(account, grants))
+    }
+
+  // The account's grants, Library ID to Permissions, read in the caller's transaction
+  private def grantsOf(accountId: String): Map[String, Permissions] =
+    grantDao.getByAccount(accountId).map(grant => grant.repositoryId -> grant.permissions).toMap
+
+  /**
+   * An Admin deactivates an account: it can do nothing until it is reactivated, and every token of it is refused for good
+   * (`AccountVersions.revoke`), so once reactivated it logs in again. Refused as [[delete]] is.
+   */
   def deactivate(actorId: String, accountId: String, clientIp: Option[String] = None): Unit =
     changeActive(actorId, accountId, active = false, clientIp)
 
@@ -351,7 +417,9 @@ class UserService(val app: Altitude) extends BaseService[User]:
           actor = Some(actor),
           target = Some(target),
           clientIp = clientIp)
-        txManager.afterCommit(versions.bump(accountId))
+        // A deactivation refuses the account's tokens for good, so a reactivated account logs in again; a reactivation only
+        // makes them stale, there being none left to rebuild
+        txManager.afterCommit(if active then versions.bump(accountId) else versions.revoke(accountId))
     }
 
   /**
@@ -378,6 +446,19 @@ class UserService(val app: Altitude) extends BaseService[User]:
         clientIp = clientIp)
       txManager.afterCommit(versions.bump(accountId))
       moved
+    }
+
+  /**
+   * The account an imported file is inserted for, as stored now, its row share-locked until the insert's transaction ends
+   * (`UserDao.lockAsImporter`), so a delete or an update of the account waits for the insert and then sees its asset; an account
+   * gone or deactivated by then is an `ImporterUnavailableException` saying which
+   */
+  def lockImporter(accountId: String): User =
+    txManager.withTransaction {
+      dao.lockAsImporter(accountId) match
+        case None => throw ImporterUnavailableException(Const.Msg.Err.IMPORTER_GONE)
+        case Some(account) if !account.isActive => throw ImporterUnavailableException(Const.Msg.Err.IMPORTER_DEACTIVATED)
+        case Some(account) => account
     }
 
   /** How many assets the account owns, in every Library: what deleting it moves to the Admin (`AssetDao.countOwnedBy`) */
@@ -558,7 +639,8 @@ class UserService(val app: Altitude) extends BaseService[User]:
     grants.foreach {
       (repositoryId, permissions) =>
         val within = held.get(repositoryId).exists(own => own.has(needed) && (permissions.mask & ~own.mask) == 0)
-        if !within then refuse(s"$permissions in [$repositoryId]")
+        // The ID is the request's, escaped for the log line
+        if !within then refuse(s"$permissions in [${Util.printable(repositoryId, 36)}]")
     }
 
   /** The acting Admin among the active Admins locked, or a `ForbiddenException` for an account that is no longer one */

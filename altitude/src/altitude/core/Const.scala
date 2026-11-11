@@ -153,7 +153,7 @@ object Const:
       val VALUE_TOO_SHORT = "Value should be at least %s characters long"
       // A name within its length whose name key passes NameKey.MAX_KEY_BYTES: compatibility characters NFKC spells out at length
       val NAME_KEY_TOO_LONG = "Value is too long: some of its characters stand for several"
-      val VALUE_NOT_AN_EMAIL = "This is a clown email"
+      val VALUE_NOT_AN_EMAIL = "Enter a valid email address"
       val VALUE_NOT_A_UUID = "This is not a valid UUID"
       val VALIDATION_ERROR = "Validation error"
       val VALIDATION_ERRORS = "There are validation errors in: %s"
@@ -164,15 +164,21 @@ object Const:
       // The username rule (User.validUsername); the bounds are Api.Constraints.MIN_/MAX_USERNAME_LENGTH
       val USERNAME_RULE = "Use 3 to 32 letters, digits, dots, underscores or hyphens"
       // A grant past the number of Libraries a login token has room for (RepositoryService.MAX_GRANTS_PER_ACCOUNT)
-      val TOO_MANY_GRANTS = "An account can be given access to at most %s libraries"
+      val TOO_MANY_GRANTS = "An account can be given access to at most %s Libraries"
       // The account rules of UserService's writes: a User or a Guest sees at least one Library; an address or a username another
       // account holds; a password outside Api.Constraints.MIN_/MAX_PASSWORD_LENGTH; the current password of a change, wrong
-      val LIBRARY_REQUIRED = "Choose at least one library"
+      val LIBRARY_REQUIRED = "Choose at least one Library"
       val ACCOUNT_TYPE_REQUIRED = "Choose an account type"
       val EMAIL_TAKEN = "Another account has this email address"
       val USERNAME_TAKEN = "Another account has this username"
       val PASSWORD_LENGTH = "Use %s to %s characters"
       val WRONG_PASSWORD = "This is not your current password"
+      // An Admin's edit saved over an account changed since its form was opened (UserService.update): another Admin's edit, a
+      // grant a new Library gave it
+      val ACCOUNT_CHANGED = "This account was changed since you opened it. Reopen it to see the change."
+      // A file whose importing account is gone or deactivated when the import inserts it (LibraryService.persistAndIndex)
+      val IMPORTER_GONE = "The account that imported this file no longer exists"
+      val IMPORTER_DEACTIVATED = "The account that imported this file is deactivated"
       // An Admin's own account, which it cannot deactivate, delete or take the Admin type from
       val OWN_ACCOUNT = "You cannot deactivate, delete or demote your own account"
       val INVALID_CONTENT_TYPE = "Invalid content type"
@@ -207,12 +213,14 @@ object Const:
       val FORBIDDEN_PERMISSION = "needs the %s Permission"
       val FORBIDDEN_ADMIN = "Admin only"
       val FORBIDDEN_GUEST = "not for a Guest"
-      val FORBIDDEN_LIBRARY_CREATOR = "creating a library needs the Create Libraries flag"
+      val FORBIDDEN_LIBRARY_CREATOR = "creating a Library needs the Create Libraries flag"
+      // An account that holds neither Create Users nor Create Guests in any Library (requireAccountCreator)
+      val FORBIDDEN_ACCOUNT_CREATOR = "needs the Create Users or Create Guests Permission in a Library"
       // An account a creator who is no Admin may not give: an Admin, the Create Libraries flag or the new-Library grant, a
       // Library where it holds no Create Users (for a User) or Create Guests (for a Guest), or a Permission it does not hold there
       // An account deactivated since its login, whose write is refused
       val FORBIDDEN_INACTIVE = "the account is deactivated"
-      val FORBIDDEN_CEILING = "an account can be given only the libraries and Permissions its creator may pass on"
+      val FORBIDDEN_CEILING = "an account can be given only the Libraries and Permissions its creator may pass on"
       // An operation refused for assets the account's Permissions do not reach (AssetRules): the action and how many
       val FORBIDDEN_ASSETS = "You do not hold the Permission to %s %d of these assets"
       // A Face correction onto the Face's own Person: a move (PersonService.moveFace), or a merge of the Face's Person into

@@ -15,8 +15,9 @@ import altitude.core.service.RepositoryService
 import altitude.core.util.Util
 
 /**
- * The New library dialog: an Admin's dialog and create, the redirect to the new Library's Import page, the Library name rule's
- * errors under the field, and the refusals of a User, a Guest and an anonymous request.
+ * The New library dialog: an Admin's dialog and create, the redirect to the new Library's Import page, a User with the Create
+ * Libraries flag creating a Library and holding every Permission there, a creator already at its bound of grants, the Library
+ * name rule's errors under the field, and the refusals of a User and a Guest without the flag and of an anonymous request.
  */
 @DoNotDiscover class LibraryActionControllerTests extends ControllerTestCore {
 
@@ -186,7 +187,7 @@ import altitude.core.util.Util
         val page = requests.get(s"$host$created", cookies = testContext.cookies, check = false, maxRedirects = 0)
         page.statusCode shouldBe 200
         val createdId = created.stripPrefix("/pipeline/r/")
-        testApp.service.repository.getGrant(account, createdId) shouldBe Some(Permissions.all)
+        testContext.grantOf(account, createdId) shouldBe Some(Permissions.all)
     }
   }
 

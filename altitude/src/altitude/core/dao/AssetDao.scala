@@ -120,6 +120,12 @@ trait AssetDao extends BaseDao[Asset]:
   def countSequenceFrames(sequenceId: String, owner: Option[String] = None): Int
 
   /**
+   * [[countSequenceFrames]] of several Sequences in one statement, one account's frames alone: Sequence ID to its count, a
+   * Sequence with none of them left out
+   */
+  def countOwnedSequenceFrames(sequenceIds: Set[String], owner: String): Map[String, Int]
+
+  /**
    * Makes the context repository's writers of Sequences (`SequenceService.assign`, `CurationService.resolve` and `reopen`) take
    * turns, until the transaction ends. Row locks cannot do it: a frame completing is in no row a resolve's locking read finds
    * until it commits, however long that statement waits on another row, and neither writer locks all its rows in one ordered pass

@@ -21,9 +21,11 @@
    number in `data-count`, which is what the client decrements as cells leave the grid.
 
    A Sequence's header with two frames or more has a Curate button, opening Curation on that one Sequence: all its frames still out
-   of the trash, even under a search showing only some of them. The client removes it when its count falls under two, or when
+   of the trash, even under a search showing only some of them. With Curate own alone, `curatable` counts the frames of each
+   Sequence Curation would show the account, its own (`CurationService.curatableFrameCounts`), and the button needs two of them
+   too; None counts every account's. The client removes it when its count falls under two, or when
    Curation clears the Sequence (js/search-results/date-groups.js), finding it by `data-app-sequence-id`. *@
-@(results: GroupedSearchResult, isContinuousScroll: Boolean = false)
+@(results: GroupedSearchResult, isContinuousScroll: Boolean = false, curatable: Option[Map[String, Int]] = None)
 
 @* The position (group, cell) of the page's last cell, found once: a List's size is a walk of the list *@
 @defining(results.groups.lastOption.map(group => (results.groups.size - 1, group.assets.size - 1))) { lastCell =>
@@ -46,7 +48,7 @@
   }
   <span class="count" data-count="@{group.total}">@{Util.humanReadableItemCount(group.total)}</span>
   @group.key match {
-    case SearchGroupKey.Sequence(Some(sequenceId), _) if group.total >= Const.Curation.MIN_FRAMES && RequestContext.holds(Permission.CurateOwn, Permission.CurateAll) => {<button type="button" class="action-button small" data-app-sequence-id="@{sequenceId}" data-min-frames="@{Const.Curation.MIN_FRAMES}" @@click="$dispatch(window.Const.events.curateRequested, { sequenceId: $el.dataset.appSequenceId })">Curate</button>}
+    case SearchGroupKey.Sequence(Some(sequenceId), _) if group.total >= Const.Curation.MIN_FRAMES && RequestContext.holds(Permission.CurateOwn, Permission.CurateAll) && curatable.forall(_.getOrElse(sequenceId, 0) >= Const.Curation.MIN_FRAMES) => {<button type="button" class="action-button small" data-app-sequence-id="@{sequenceId}" data-min-frames="@{Const.Curation.MIN_FRAMES}" @@click="$dispatch(window.Const.events.curateRequested, { sequenceId: $el.dataset.appSequenceId })">Curate</button>}
     case _ => {}
   }
 </div>

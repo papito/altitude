@@ -51,6 +51,9 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
     manyBySqlQuery(s"SELECT * FROM account WHERE ${FieldConst.ID} = ? $forUpdate", List(id)).headOption
       .map(row => (makeModel(row), row(FieldConst.User.PASSWORD_HASH).asInstanceOf[String]))
 
+  override def lockAsImporter(id: String): Option[User] =
+    manyBySqlQuery(s"SELECT * FROM account WHERE ${FieldConst.ID} = ? $forKeyShare", List(id)).headOption.map(makeModel)
+
   override def getAll: List[User] =
     import dialect.*
     Db.read(dialect)(_.run(AccountRow.select)).map(toModel).toList

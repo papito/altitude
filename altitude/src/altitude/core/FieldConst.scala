@@ -43,6 +43,8 @@ object FieldConst:
     // The keys of the account rules' errors for what has no column of its own: the password, and the grants (repository_grant)
     val PASSWORD = "password"
     val GRANTS = "grants"
+    // The error of an Admin's edit saved over an account changed since its form was opened (UserService.update)
+    val OPENED_STATE = "opened_state"
 
   object RepositoryGrant:
     val ACCOUNT_ID = "account_id"

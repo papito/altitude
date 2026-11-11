@@ -136,7 +136,8 @@ class SetupFormController(using logger: Logger) extends BaseController:
         val (_, repo) = App.altitude.service.system.initializeSystem(
           repositoryName = repositoryName,
           adminModel = userModel,
-          password = password
+          password = password,
+          clientIp = BaseController.clientIpOf(request)
         )
 
         // Auto-login the newly created admin user

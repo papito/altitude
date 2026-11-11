@@ -299,7 +299,7 @@ import altitude.core.util.Util
 
     for (library <- List(usersLibrary, nobodys)) {
       canSee(admin, library) shouldBe true
-      testApp.service.repository.getGrant(admin, library.persistedId) shouldBe None
+      testContext.grantOf(admin, library.persistedId) shouldBe None
     }
   }
 
@@ -325,8 +325,7 @@ import altitude.core.util.Util
     testContext.grant(user, library, Permissions.of(Permission.Import))
     testContext.grant(user, library, Permissions.of(Permission.Recycle, Permission.Purge))
 
-    testApp.service.repository.getGrant(user, library.persistedId) shouldBe Some(
-      Permissions.of(Permission.Recycle, Permission.Purge))
+    testContext.grantOf(user, library.persistedId) shouldBe Some(Permissions.of(Permission.Recycle, Permission.Purge))
     testApp.txManager.asReadOnly {
       query("SELECT account_id FROM repository_grant WHERE repository_id = ?", library.persistedId).size
     } shouldBe 1
@@ -335,11 +334,11 @@ import altitude.core.util.Util
     val guest = testContext.persistUser(Some(testContext.makeUser().copy(accountType = AccountType.Guest)))
     intercept[IllegalOperationException](testContext.grant(admin, library))
     intercept[IllegalOperationException](testContext.grant(guest, library, Permissions.of(Permission.Import)))
-    testApp.service.repository.getGrant(admin, library.persistedId) shouldBe None
-    testApp.service.repository.getGrant(guest, library.persistedId) shouldBe None
+    testContext.grantOf(admin, library.persistedId) shouldBe None
+    testContext.grantOf(guest, library.persistedId) shouldBe None
 
     testContext.grant(guest, library, Permissions.none)
-    testApp.service.repository.getGrant(guest, library.persistedId) shouldBe Some(Permissions.none)
+    testContext.grantOf(guest, library.persistedId) shouldBe Some(Permissions.none)
     canSee(guest, library) shouldBe true
   }
 
@@ -537,7 +536,7 @@ import altitude.core.util.Util
       C.StorageEngineName.FS,
       creatorId = Some(creator.persistedId))
 
-    def grantIn(library: Repository, account: User) = testApp.service.repository.getGrant(account, library.persistedId)
+    def grantIn(library: Repository, account: User) = testContext.grantOf(account, library.persistedId)
     grantIn(library, creator) shouldBe Some(Permissions.all)
     grantIn(library, user) shouldBe Some(Permissions.of(Permission.Import, Permission.CurateOwn))
     grantIn(library, guest) shouldBe Some(Permissions.none)
@@ -577,7 +576,7 @@ import altitude.core.util.Util
     }
 
     val library = addLibrary(s"Past the bound ${Util.randomStr()}")
-    testApp.service.repository.getGrant(full, library.persistedId) shouldBe None
+    testContext.grantOf(full, library.persistedId) shouldBe None
 
     val name = s"Refused ${Util.randomStr()}"
     intercept[IllegalOperationException] {
@@ -658,9 +657,90 @@ import altitude.core.util.Util
       thirdFailure.get shouldBe None
       firstFailure.get shouldBe None
       val (thirdLibrary, firstLibrary) = (librariesKeyed(NameKey.of(thirdName)).head, librariesKeyed(NameKey.of(firstName)).head)
-      testApp.service.repository.getGrant(first, thirdLibrary.persistedId) shouldBe Some(Permissions.of(Permission.Import))
-      testApp.service.repository.getGrant(first, firstLibrary.persistedId) shouldBe Some(Permissions.all)
+      testContext.grantOf(first, thirdLibrary.persistedId) shouldBe Some(Permissions.of(Permission.Import))
+      testContext.grantOf(first, firstLibrary.persistedId) shouldBe Some(Permissions.all)
       for (library <- List(thirdLibrary, firstLibrary))
-        testApp.service.repository.getGrant(second, library.persistedId) shouldBe Some(Permissions.of(Permission.Import))
+        testContext.grantOf(second, library.persistedId) shouldBe Some(Permissions.of(Permission.Import))
+    }
+
+  if (testApp.dataSourceType == C.DbEngineName.POSTGRES)
+    test("An Admin creating a Library while another Admin edits an account it grants take the rows in one order") {
+
+      /**
+       * Setup:
+       *
+       * Two Admins, the creator and the editor, and a User holding Import in a Library, whose new-Library switch is on and whose
+       * ID sorts before the creator's. The editor's transaction takes the active Admins' rows, as an Admin's edit does first, and
+       * holds them until the creator's create of a Library waits; then the editor renames the User in it.
+       *
+       * Assertions:
+       *
+       * Both commit and neither fails: the create takes the active Admins' rows before the rows of the accounts it grants, as
+       * every account write does, so it holds no grantee's row while it waits on the editor. The User is renamed, and holds its
+       * new-Library Permissions in the new Library.
+       */
+      val creator = persistAdmin()
+      val editor = persistAdmin()
+      def sortsFirst(account: User): Boolean =
+        testApp.txManager.asReadOnly {
+          query("SELECT id FROM account WHERE id IN (?, ?) ORDER BY id", account.persistedId, creator.persistedId)
+            .head("id")
+            .toString
+            .trim
+        } == account.persistedId
+      val user = Iterator
+        .continually(testContext.persistUser(Some(
+          testContext.makeUser().copy(grantsNewLibraries = true, newLibraryPermissions = Permissions.of(Permission.Import)))))
+        .find(sortsFirst)
+        .get
+      // An account edit keeps a User in at least one Library
+      testContext.grant(user, testContext.repository, Permissions.of(Permission.Import))
+      val users = testApp.service.user
+      val opened = users.openForEdit(user.persistedId)
+
+      val backends = new java.util.concurrent.ConcurrentHashMap[String, AnyRef]()
+      def isWaiting(who: String): Boolean =
+        Option(backends.get(who)).exists {
+          pid =>
+            testApp.txManager.asReadOnly {
+              query("SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?", pid).exists(_("wait_event_type") == "Lock")
+            }
+        }
+      def eventually(condition: => Boolean): Unit =
+        org.scalatest.concurrent.Eventually.eventually(
+          org.scalatest.concurrent.Eventually.timeout(org.scalatest.time.Span(30, org.scalatest.time.Seconds)),
+          org.scalatest.concurrent.Eventually.interval(org.scalatest.time.Span(20, org.scalatest.time.Millis))
+        ) {
+          condition shouldBe true
+        }
+
+      val holding = new java.util.concurrent.CountDownLatch(1)
+      val go = new java.util.concurrent.CountDownLatch(1)
+      val (editing, editFailure) = onAnotherThread {
+        testApp.txManager.withTransaction {
+          testApp.DAO.user.lockActiveAdmins()
+          holding.countDown()
+          go.await(30, java.util.concurrent.TimeUnit.SECONDS)
+          users.update(editor.persistedId, user.copy(name = "Renamed Grantee"), opened.grants, opened.state): Unit
+        }
+      }
+      holding.await(30, java.util.concurrent.TimeUnit.SECONDS) shouldBe true
+
+      val name = s"By an Admin ${Util.randomStr()}"
+      val (creating, createFailure) = onAnotherThread {
+        testApp.txManager.withTransaction {
+          backends.put("creator", query("SELECT pg_backend_pid() AS pid").head("pid"))
+          testApp.service.repository.addRepository(name, C.StorageEngineName.FS, creatorId = Some(creator.persistedId)): Unit
+        }
+      }
+      eventually(isWaiting("creator"))
+      go.countDown()
+      List(editing, creating).foreach(_.join())
+
+      editFailure.get shouldBe None
+      createFailure.get shouldBe None
+      testApp.service.user.getById(user.persistedId).name shouldBe "Renamed Grantee"
+      testContext.grantOf(user, librariesKeyed(NameKey.of(name)).head.persistedId) shouldBe Some(
+        Permissions.of(Permission.Import))
     }
 }

@@ -6,17 +6,15 @@ export const Const = {
     },
 
     /**
-     * The Permissions a control may need, by the names `Permission` gives them on the server and the
-     * main page's body lists in `data-app-permissions` (js/context.js `holds`)
+     * The Permissions a script's control may need, by the names `Permission` gives them on the
+     * server and the main page's body lists in `data-app-permissions` (js/context.js `holds`): those
+     * a script asks about; a template's controls follow the rest on the server
      */
     permission: {
-        import: "Import",
         curateOwn: "CurateOwn",
         curateAll: "CurateAll",
         organize: "Organize",
-        editMetadata: "EditMetadata",
         recycle: "Recycle",
-        purge: "Purge",
     },
 
     // Where the explorer sits against the results, as `data-dock-side` on <html> names it

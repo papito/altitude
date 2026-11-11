@@ -11,10 +11,16 @@ import org.slf4j.LoggerFactory
 import scala.jdk.CollectionConverters.*
 
 import altitude.core.Altitude
+import altitude.core.Const as C
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.models.AccountSnapshot
+import altitude.core.models.AccountType
+import altitude.core.models.AuditEvent
 import altitude.core.models.AuditEventType
+import altitude.core.models.Permission
+import altitude.core.models.Permissions
+import altitude.core.models.User
 import altitude.core.service.AuditService
 
 @DoNotDiscover class AuditServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
@@ -43,6 +49,17 @@ import altitude.core.service.AuditService
     appender = None
     lines
   }
+
+  /** The stored event with the ID, read through the DAO: the service reads no event */
+  private def storedEvent(id: String): AuditEvent = testApp.txManager.asReadOnly(testApp.DAO.auditEvent.getById(id))
+
+  /** The stored events of `event` naming the account as their target, oldest first */
+  private def eventsOn(account: User, event: AuditEventType): List[AuditEvent] =
+    testApp.txManager.asReadOnly {
+      query("SELECT id FROM audit_event WHERE event = ? ORDER BY created_at", event.dbValue)
+        .map(row => testApp.DAO.auditEvent.getById(row("id").toString.trim))
+        .filter(_.target.exists(_.id == account.persistedId))
+    }
 
   test("An event is stored with its actor and target as they were, with no Library in the context") {
 
@@ -74,7 +91,7 @@ import altitude.core.service.AuditService
     )
     testApp.service.user.updateById(user.persistedId, Map("name" -> "Renamed"))
 
-    val stored = testApp.service.audit.getById(recorded.persistedId)
+    val stored = storedEvent(recorded.persistedId)
     stored.event shouldBe AuditEventType.AccountEdited
     stored.actor shouldBe Some(AccountSnapshot(admin.persistedId, admin.name, admin.username, admin.email))
     stored.target shouldBe Some(AccountSnapshot(user.persistedId, user.name, user.username, user.email))
@@ -87,7 +104,7 @@ import altitude.core.service.AuditService
       actor = None,
       detail = ujson.Obj("login" -> "nobody"),
       clientIp = Some("192.0.2.8"))
-    val storedFailure = testApp.service.audit.getById(failedLogin.persistedId)
+    val storedFailure = storedEvent(failedLogin.persistedId)
     storedFailure.actor shouldBe None
     storedFailure.target shouldBe None
     storedFailure.detail shouldBe ujson.Obj("login" -> "nobody")
@@ -122,8 +139,74 @@ import altitude.core.service.AuditService
       }
     }
 
-    an[NotFoundException] should be thrownBy testApp.service.audit.getById(rolledBackId.get)
-    testApp.service.audit.getById(committedId.get).event shouldBe AuditEventType.PasswordSet
+    an[NotFoundException] should be thrownBy storedEvent(rolledBackId.get)
+    storedEvent(committedId.get).event shouldBe AuditEventType.PasswordSet
     logged.count(_.contains("password_set")) shouldBe 1
+  }
+
+  test("Setting the system up records the creation of its Admin") {
+
+    /**
+     * Setup:
+     *
+     * A system initialization with a new Admin, a Library and a password, from a client IP.
+     *
+     * Assertions:
+     *
+     * One account creation is recorded on the new Admin, acted by the Admin itself, with its account type, the setup named in its
+     * detail, and the client IP.
+     */
+    RequestContext.clear()
+    val (admin, _) = testApp.service.system.initializeSystem(
+      repositoryName = s"Set up ${altitude.core.util.Util.randomStr()}",
+      adminModel = testContext.makeAdminUser(),
+      password = "password3000",
+      clientIp = Some("192.0.2.10")
+    )
+
+    val List(created) = eventsOn(admin, AuditEventType.AccountCreated)
+    created.actor.map(_.id) shouldBe Some(admin.persistedId)
+    created.detail shouldBe ujson.Obj("accountType" -> AccountType.Admin.toString, "setup" -> true)
+    created.clientIp shouldBe Some("192.0.2.10")
+  }
+
+  test("Each grant a new Library gives is recorded as a change of Permissions, acted by the Library's creator") {
+
+    /**
+     * Setup:
+     *
+     * A User whose new-Library switch is on with Import, and a User with the Create Libraries flag, who creates a Library.
+     *
+     * Assertions:
+     *
+     * Each of the two accounts has one change of Permissions recorded, acted by the creator, naming the new Library with the
+     * Permissions it was given there: Import for the first, every Permission for the creator.
+     *
+     * Edge cases:
+     *
+     * A Library added with no creator (as setup adds one) records its grants with no actor.
+     */
+    val switchedOn = testContext.persistUser(
+      Some(testContext.makeUser().copy(grantsNewLibraries = true, newLibraryPermissions = Permissions.of(Permission.Import))))
+    val creator = testContext.persistUser(Some(testContext.makeUser().copy(canCreateLibraries = true)))
+
+    val library = testApp.service.repository.addRepository(
+      s"Granted ${altitude.core.util.Util.randomStr()}",
+      C.StorageEngineName.FS,
+      creatorId = Some(creator.persistedId))
+
+    def detail(permissions: Permissions) =
+      ujson.Obj("library" -> library.persistedId, "permissions" -> ujson.Arr.from(permissions.toList.map(_.toString)))
+    val List(granted) = eventsOn(switchedOn, AuditEventType.PermissionsChanged)
+    granted.actor.map(_.id) shouldBe Some(creator.persistedId)
+    granted.detail shouldBe detail(Permissions.of(Permission.Import))
+    val List(own) = eventsOn(creator, AuditEventType.PermissionsChanged)
+    own.actor.map(_.id) shouldBe Some(creator.persistedId)
+    own.detail shouldBe detail(Permissions.all)
+
+    testApp.service.repository.addRepository(s"Granted ${altitude.core.util.Util.randomStr()}", C.StorageEngineName.FS)
+    val actors = eventsOn(switchedOn, AuditEventType.PermissionsChanged).map(_.actor.map(_.id))
+    actors.size shouldBe 2
+    actors.toSet shouldBe Set(Some(creator.persistedId), None)
   }
 }

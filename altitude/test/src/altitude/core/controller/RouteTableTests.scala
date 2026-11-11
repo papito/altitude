@@ -21,6 +21,7 @@ import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.Person
 import altitude.core.models.Repository
+import altitude.core.routes.decorators.requireAccountCreator
 import altitude.core.routes.decorators.requireAdmin
 import altitude.core.routes.decorators.requireLibraryCreator
 import altitude.core.routes.decorators.requireLogin
@@ -39,7 +40,8 @@ import altitude.core.routes.decorators.requirePermission
    * Who may call a route: anyone, for the reason given; any account logged in, and with access to the Library of the path when it
    * names one, as `requireLogin` checks it, or as the route checks it itself, for the reason given (`LoginInRoute`); a member, an
    * account that is no Guest (`requireMember`); the holder of any one of `anyOf` in the path's Library (`requirePermission`); an
-   * Admin or an account with the Create Libraries flag (`requireLibraryCreator`); an Admin alone (`requireAdmin`).
+   * Admin or the holder of Create Users or Create Guests in any Library (`requireAccountCreator`); an Admin or an account with
+   * the Create Libraries flag (`requireLibraryCreator`); an Admin alone (`requireAdmin`).
    */
   private enum Access:
     case Public(reason: String)
@@ -47,14 +49,20 @@ import altitude.core.routes.decorators.requirePermission
     case LoginInRoute(reason: String)
     case Member
     case Holder(anyOf: Set[Permission])
+    case AccountCreator
     case LibraryCreator
     case Admin
 
-    /** Whether an account of `accountType` holding `permissions` in the Library, with the Create Libraries flag or not, may call */
+    /**
+     * Whether an account of `accountType` holding `permissions` in the Library, with the Create Libraries flag or not, may call;
+     * the account holds no grant elsewhere, so a create Permission held in any Library is one held in this one
+     */
     def allows(accountType: AccountType, permissions: Permissions, canCreateLibraries: Boolean): Boolean = this match {
       case Public(_) | Login | LoginInRoute(_) => true
       case Member => accountType != AccountType.Guest
       case Holder(anyOf) => accountType == AccountType.Admin || anyOf.exists(permissions.has)
+      case AccountCreator =>
+        accountType == AccountType.Admin || Access.creates.exists(permissions.has)
       case LibraryCreator => accountType == AccountType.Admin || canCreateLibraries
       case Admin => accountType == AccountType.Admin
     }
@@ -64,6 +72,10 @@ import altitude.core.routes.decorators.requirePermission
       case Public(_) | LoginInRoute(_) => None
       case access => Some(access)
     }
+
+  private object Access:
+    // The Permissions any one of which, in any Library, opens the Users page (`requireAccountCreator`)
+    val creates: Set[Permission] = Set(Permission.CreateUsers, Permission.CreateGuests)
 
   /**
    * What a route takes: no entity ID at all, a parameter that names no row of a repository (with the reason), or entity IDs,
@@ -109,6 +121,8 @@ import altitude.core.routes.decorators.requirePermission
     def forMembers: Row = copy(access = Access.Member)
 
     def forLibraryCreators: Row = copy(access = Access.LibraryCreator)
+
+    def forAccountCreators: Row = copy(access = Access.AccountCreator)
 
     def forAdmins: Row = copy(access = Access.Admin)
   }
@@ -528,11 +542,10 @@ import altitude.core.routes.decorators.requirePermission
     none(GET, "/htmx/library/r/:repoId/dialogs/new").forLibraryCreators,
     none(POST, "/htmx/library/r/:repoId/new").forLibraryCreators,
     // Users and the own password
-    none(GET, "/users/r/:repoId").needs(Permission.CreateUsers, Permission.CreateGuests),
-    none(GET, "/htmx/users/r/:repoId/accounts").needs(Permission.CreateUsers, Permission.CreateGuests),
-    none(GET, "/htmx/users/r/:repoId/dialogs/add").needs(Permission.CreateUsers, Permission.CreateGuests),
-    Row(POST, "/htmx/users/r/:repoId/add", Ids.NotEntity(Set("accountId", "libraryIds"), ACCOUNT_FORM))
-      .needs(Permission.CreateUsers, Permission.CreateGuests),
+    none(GET, "/users/r/:repoId").forAccountCreators,
+    none(GET, "/htmx/users/r/:repoId/accounts").forAccountCreators,
+    none(GET, "/htmx/users/r/:repoId/dialogs/add").forAccountCreators,
+    Row(POST, "/htmx/users/r/:repoId/add", Ids.NotEntity(Set("accountId", "libraryIds"), ACCOUNT_FORM)).forAccountCreators,
     Row(GET, "/htmx/users/r/:repoId/dialogs/edit", Ids.NotEntity(Set("accountId"), ACCOUNT)).forAdmins,
     Row(PUT, "/htmx/users/r/:repoId/edit", Ids.NotEntity(Set("accountId", "libraryIds"), ACCOUNT_FORM)).forAdmins,
     Row(GET, "/htmx/users/r/:repoId/dialogs/set-password", Ids.NotEntity(Set("accountId"), ACCOUNT)).forAdmins,
@@ -548,16 +561,10 @@ import altitude.core.routes.decorators.requirePermission
     probed(POST, "/api/curation/r/:repoId/resolve") {
       fx =>
         List(
+          Probe(404, body = json(Api.Field.Curation.KEEP_IDS -> ids(fx.frames.head), Api.Field.Curation.RECYCLE_IDS -> ids())),
           Probe(
-            400,
-            body = json(Api.Field.Curation.KEEP_IDS -> ids(fx.frames.head), Api.Field.Curation.RECYCLE_IDS -> ids()),
-            why = "a Pick that is no live asset of the repository is refused, as the set would be recycled with nothing kept"
-          ),
-          Probe(
-            200,
-            body = json(Api.Field.Curation.KEEP_IDS -> ids(fx.myAsset), Api.Field.Curation.RECYCLE_IDS -> ids(fx.frames*)),
-            why = "recycling leaves out assets that are not the repository's"
-          )
+            404,
+            body = json(Api.Field.Curation.KEEP_IDS -> ids(fx.myAsset), Api.Field.Curation.RECYCLE_IDS -> ids(fx.frames*)))
         )
     }.needs(Permission.CurateOwn, Permission.CurateAll),
     probed(POST, "/api/curation/r/:repoId/reopen") {
@@ -571,13 +578,12 @@ import altitude.core.routes.decorators.requirePermission
               Api.Field.Curation.SEQUENCE_OF -> ujson.Obj())
           ),
           Probe(
-            200,
+            404,
             body = json(
               Api.Field.Curation.KEEP_IDS -> ids(fx.frames.head),
               Api.Field.Curation.RECYCLE_IDS -> ids(),
               Api.Field.Curation.SEQUENCE_OF -> ujson.Obj(fx.frames.head -> fx.sequence)
-            ),
-            why = "a Pick that is no asset of the repository is put back in no Sequence"
+            )
           )
         )
     }.needs(Permission.CurateOwn, Permission.CurateAll),
@@ -672,6 +678,7 @@ import altitude.core.routes.decorators.requirePermission
         .collectFirst {
           case _: requireAdmin => Access.Admin
           case _: requireLibraryCreator => Access.LibraryCreator
+          case _: requireAccountCreator => Access.AccountCreator
           case gate: requirePermission => Access.Holder(gate.anyOf)
           case _: requireMember => Access.Member
         }
@@ -865,9 +872,10 @@ import altitude.core.routes.decorators.requirePermission
      * Assertions:
      *
      * The access of every row is what its route's decorators declare: `requireAdmin` an Admin, `requireLibraryCreator` the Create
-     * Libraries flag, `requirePermission` the holder of any one of its Permissions, `requireMember` a member, and `requireLogin`
-     * alone (or `requireLoginOrSignature`) any account with access to the Library. A route that changes something in a Library
-     * (any method but GET under `/r/:repoId`) declares a member, a Permission, the Create Libraries flag or an Admin.
+     * Libraries flag, `requireAccountCreator` the holder of Create Users or Create Guests in any Library, `requirePermission` the
+     * holder of any one of its Permissions, `requireMember` a member, and `requireLogin` alone (or `requireLoginOrSignature`) any
+     * account with access to the Library. A route that changes something in a Library (any method but GET under `/r/:repoId`)
+     * declares a member, a Permission, the Create Libraries flag or an Admin.
      *
      * Edge cases:
      *
@@ -898,8 +906,9 @@ import altitude.core.routes.decorators.requirePermission
      *
      * Each account's request to each route is answered 403 exactly when the row refuses the account: a route for members refuses
      * the Guest, a route that needs any of several Permissions refuses the Guest and the User holding none of them and lets each
-     * of them through alone, a route for an Admin refuses every User and the Guest, and creating a Library refuses every account
-     * but an Admin and the User with the flag. A route any account with access calls refuses no one.
+     * of them through alone, a route for an Admin refuses every User and the Guest, the Users page and its Add User refuse every
+     * account but an Admin and a holder of Create Users or Create Guests, and creating a Library refuses every account but an
+     * Admin and the User with the flag. A route any account with access calls refuses no one.
      *
      * Edge cases:
      *
@@ -923,11 +932,15 @@ import altitude.core.routes.decorators.requirePermission
             }
           )
 
+        // A User holding every Permission but `anyOf`, and one holding each of them alone
+        def holding(anyOf: Set[Permission]): List[(AccountType, Permissions, Boolean)] =
+          (AccountType.User, Permissions(Permissions.all.mask & ~Permissions.of(anyOf.toSeq*).mask), false) ::
+            anyOf.toList.map(permission => (AccountType.User, Permissions.of(permission), false))
+
         for (row <- table if row.method != WEBSOCKET) withClue(s"[${row.method} ${row.path}] ") {
           val holders: List[(AccountType, Permissions, Boolean)] = row.access match {
-            case Access.Holder(anyOf) =>
-              (AccountType.User, Permissions(Permissions.all.mask & ~Permissions.of(anyOf.toSeq*).mask), false) ::
-                anyOf.toList.map(permission => (AccountType.User, Permissions.of(permission), false))
+            case Access.Holder(anyOf) => holding(anyOf)
+            case Access.AccountCreator => holding(Access.creates)
             case _ => Nil
           }
           val callers = List(
@@ -1055,9 +1068,9 @@ import altitude.core.routes.decorators.requirePermission
      *
      * The routes that do not answer 404 by design: a dialog's form that shows a field error (adding a folder under the parent, an
      * album or Location chosen in the batch dialogs, a category chosen for a Location), the empty add-folder dialog, Curation's
-     * set of a Sequence (204), moving a folder under the parent (400), the batch operations and Curation, which leave out assets
-     * that are not the repository's (and refuse a Pick that is none), the map, which is empty for a scope the repository does not
-     * hold, and the library page, which reads neither ID it is given.
+     * set of a Sequence (204), moving a folder under the parent (400), the batch operations and Curation's selection, which leave
+     * out assets that are not the repository's, the map, which is empty for a scope the repository does not hold, and the library
+     * page, which reads neither ID it is given.
      */
     val mine = testApp.service.repository.getById(loginAs(AccountType.User, Permissions.all))
 

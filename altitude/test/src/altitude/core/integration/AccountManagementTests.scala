@@ -64,6 +64,9 @@ import altitude.core.util.Util
 
   private def version(account: User): Long = testApp.service.accountVersions.current(account.persistedId)
 
+  /** The state an Admin's edit form opens the account over, which its save carries back */
+  private def stateOf(account: User): String = users.openForEdit(account.persistedId).state
+
   /** An asset `owner` imported into `library`, the context left on the first Library of the test */
   private def assetIn(library: Repository, owner: User): Asset = {
     switchContextRepo(library)
@@ -140,7 +143,7 @@ import altitude.core.util.Util
      *
      * Edge cases:
      *
-     * An Admin needs no Library.
+     * An Admin needs no Library, and a User given exactly as many Libraries as the bound is created holding each of them.
      */
     val admin = persistAdmin()
     val library = addLibrary()
@@ -163,6 +166,9 @@ import altitude.core.util.Util
     } shouldBe empty
 
     users.create(admin.persistedId, model(AccountType.Admin), "password 1", Map.empty).accountType shouldBe AccountType.Admin
+
+    val atBound = List.fill(RepositoryService.MAX_GRANTS_PER_ACCOUNT)(addLibrary().persistedId -> Permissions.none).toMap
+    grantsOf(users.create(admin.persistedId, model(), "password 1", atBound)) shouldBe atBound
   }
 
   test("An email address or a username another account holds is refused on its field, on a create and on an update") {
@@ -190,7 +196,7 @@ import altitude.core.util.Util
 
     val other = users.create(admin.persistedId, model(), "password 1", grants)
     intercept[ValidationException] {
-      users.update(admin.persistedId, other.copy(username = user.username), grants)
+      users.update(admin.persistedId, other.copy(username = user.username), grants, stateOf(other))
     }.errors(FieldConst.User.USERNAME) shouldBe C.Msg.Err.USERNAME_TAKEN
     users.getById(other.persistedId).username shouldBe other.username
   }
@@ -303,7 +309,7 @@ import altitude.core.util.Util
       name = "Renamed Person",
       username = s"renamed.${Util.randomStr(6)}",
       email = s"r.${Util.randomStr(6)}@example.com")
-    users.update(admin.persistedId, changed, Map(first.persistedId -> Permissions.of(Permission.Import)))
+    users.update(admin.persistedId, changed, Map(first.persistedId -> Permissions.of(Permission.Import)), stateOf(user))
 
     val owners = ownership(mine :+ handedOver :+ others*)
     for (asset <- mine) owners(asset.persistedId) shouldBe (user.persistedId, AccountSnapshot.of(changed))
@@ -337,17 +343,18 @@ import altitude.core.util.Util
       Map(first.persistedId -> Permissions.of(Permission.Import), second.persistedId -> Permissions.of(Permission.Organize))
     val user = users.create(admin.persistedId, model(), "password 1", held)
 
-    users.update(admin.persistedId, user.copy(accountType = AccountType.Guest), held)
+    users.update(admin.persistedId, user.copy(accountType = AccountType.Guest), held, stateOf(user))
     grantsOf(user) shouldBe Map(first.persistedId -> Permissions.none, second.persistedId -> Permissions.none)
 
-    users.update(admin.persistedId, user.copy(accountType = AccountType.Admin), held)
+    users.update(admin.persistedId, user.copy(accountType = AccountType.Admin), held, stateOf(user))
     grantsOf(user) shouldBe empty
     users.getById(user.persistedId).accountType shouldBe AccountType.Admin
 
     users.update(
       admin.persistedId,
       user.copy(accountType = AccountType.User),
-      Map(second.persistedId -> Permissions.of(Permission.Import)))
+      Map(second.persistedId -> Permissions.of(Permission.Import)),
+      stateOf(user))
     grantsOf(user) shouldBe Map(second.persistedId -> Permissions.of(Permission.Import))
     eventsOn(user).count(_ == AuditEventType.AccountTypeChanged.dbValue) shouldBe 3
   }
@@ -370,7 +377,11 @@ import altitude.core.util.Util
     val library = addLibrary()
     val user = users.create(admin.persistedId, model(), "password 1", Map(library.persistedId -> Permissions.all))
 
-    a[ForbiddenException] should be thrownBy users.update(user.persistedId, otherAdmin.copy(name = "Taken Over"), Map.empty)
+    a[ForbiddenException] should be thrownBy users.update(
+      user.persistedId,
+      otherAdmin.copy(name = "Taken Over"),
+      Map.empty,
+      stateOf(otherAdmin))
     a[ForbiddenException] should be thrownBy users.deactivate(user.persistedId, otherAdmin.persistedId)
     a[ForbiddenException] should be thrownBy users.delete(user.persistedId, otherAdmin.persistedId)
     a[ForbiddenException] should be thrownBy users.setPassword(user.persistedId, otherAdmin.persistedId, "taken over")
@@ -378,7 +389,11 @@ import altitude.core.util.Util
     logsIn(otherAdmin, TestContext.USER_PASSWORD) shouldBe true
 
     intercept[ValidationException] {
-      users.update(admin.persistedId, admin.copy(accountType = AccountType.User), Map(library.persistedId -> Permissions.all))
+      users.update(
+        admin.persistedId,
+        admin.copy(accountType = AccountType.User),
+        Map(library.persistedId -> Permissions.all),
+        stateOf(admin))
     }.errors(FieldConst.User.ACCOUNT_TYPE) shouldBe C.Msg.Err.OWN_ACCOUNT
     users.getById(admin.persistedId).accountType shouldBe AccountType.Admin
   }
@@ -388,17 +403,23 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin and a User with access to a Library; the Admin deactivates the User, then reactivates it; then tries to deactivate
-     * and to delete its own account.
+     * An Admin and a User with access to a Library, logged in; the Admin deactivates the User, then reactivates it; then tries to
+     * deactivate and to delete its own account.
      *
      * Assertions:
      *
      * Deactivated, the User's login is refused and its claims are gone, and its version was bumped; reactivated, it logs in
      * again. Both changes are recorded. The Admin's own deactivation and deletion are each an `IllegalOperationException`
      * (`OWN_ACCOUNT`), and it stays active.
+     *
+     * Edge cases:
+     *
+     * The token the User held before its deactivation stays refused once it is reactivated: a deactivation revokes the account's
+     * tokens, so the reactivated account logs in again.
      */
     val admin = persistAdmin()
     val user = users.create(admin.persistedId, model(), "password 1", Map(addLibrary().persistedId -> Permissions.none))
+    val token = users.loginAndSetUser(user.username, "password 1").get._2
     val before = version(user)
 
     users.deactivate(admin.persistedId, user.persistedId)
@@ -407,6 +428,7 @@ import altitude.core.util.Util
     version(user) should be > before
 
     users.reactivate(admin.persistedId, user.persistedId)
+    users.checkToken(token, renewable = true) shouldBe TokenCheck.Refused(clearsCookie = false)
     logsIn(user, "password 1") shouldBe true
     (eventsOn(user) should contain).allOf(AuditEventType.AccountDeactivated.dbValue, AuditEventType.AccountReactivated.dbValue)
 
@@ -487,6 +509,190 @@ import altitude.core.util.Util
     }
 
     testApp.txManager.withTransaction(testApp.DAO.user.lockActiveAdmins()).map(_.persistedId) shouldBe List(admin.persistedId)
+  }
+
+  test(
+    "A change of the name, the username or the email address alone rewrites the importer records; every edit bumps the version") {
+
+    /**
+     * Setup:
+     *
+     * An Admin, a Library, and a User holding Import there who imported an asset into it. The Admin changes the User's name
+     * alone, then its username alone, then its email address alone, then its Create Libraries flag alone, each with its grants as
+     * they are.
+     *
+     * Assertions:
+     *
+     * After each change of a name, the asset's importer record names the account as it is now, the other two fields as they were
+     * before. Every one of the four edits raises the account's version, the flag's included, which changes no importer record.
+     */
+    val admin = persistAdmin()
+    val library = addLibrary()
+    val grants = Map(library.persistedId -> Permissions.of(Permission.Import))
+    var account = users.create(admin.persistedId, model(), "password 1", grants)
+    val asset = assetIn(library, account)
+
+    val edits: List[(String, User => User)] = List(
+      "name" -> (_.copy(name = s"Renamed ${Util.randomStr(6)}")),
+      "username" -> (_.copy(username = s"renamed.${Util.randomStr(6)}")),
+      "email" -> (_.copy(email = s"r.${Util.randomStr(6)}@example.com")),
+      "flag" -> (_.copy(canCreateLibraries = true))
+    )
+    for ((field, edit) <- edits) withClue(s"[$field]: ") {
+      val before = version(account)
+      val changed = edit(account)
+      users.update(admin.persistedId, changed, grants, stateOf(account))
+
+      ownership(asset)(asset.persistedId) shouldBe (account.persistedId, AccountSnapshot.of(changed))
+      version(account) should be > before
+      account = changed
+    }
+    users.getById(account.persistedId).canCreateLibraries shouldBe true
+  }
+
+  test("Two Admins demoting each other at once leave one of them an Admin") {
+
+    /**
+     * Setup:
+     *
+     * Two active Admins, and no other; each makes the other a User from a transaction of its own, the first holding its
+     * transaction open until the second waits for it.
+     *
+     * Assertions:
+     *
+     * The second is refused once the first commits (the second Admin is no longer an Admin, so it may act no more), and the first
+     * Admin is the one active Admin left.
+     */
+    // On PostgreSQL, without the lock of the active Admins' rows both would read two Admins and both would commit
+    testApp.txManager.withTransaction(update("UPDATE account SET is_active = ? WHERE account_type = 'Admin'", Boolean.box(false)))
+    val (admin, otherAdmin) = (persistAdmin(), persistAdmin())
+    val grants = Map(addLibrary().persistedId -> Permissions.none)
+    val (adminState, otherState) = (stateOf(admin), stateOf(otherAdmin))
+
+    intercept[ForbiddenException] {
+      contend(
+        first = users.update(admin.persistedId, otherAdmin.copy(accountType = AccountType.User), grants, otherState): Unit,
+        second = users.update(otherAdmin.persistedId, admin.copy(accountType = AccountType.User), grants, adminState): Unit
+      )
+    }
+
+    testApp.txManager.withTransaction(testApp.DAO.user.lockActiveAdmins()).map(_.persistedId) shouldBe List(admin.persistedId)
+  }
+
+  test("Two Admins deleting each other at once leave one of them") {
+
+    /**
+     * Setup:
+     *
+     * Two active Admins, and no other; each deletes the other from a transaction of its own, the first holding its transaction
+     * open until the second waits for it.
+     *
+     * Assertions:
+     *
+     * The second is refused once the first commits (the second Admin is gone, so it may act no more), and the first Admin is the
+     * one active Admin left.
+     */
+    testApp.txManager.withTransaction(update("UPDATE account SET is_active = ? WHERE account_type = 'Admin'", Boolean.box(false)))
+    val (admin, otherAdmin) = (persistAdmin(), persistAdmin())
+
+    intercept[ForbiddenException] {
+      contend(
+        first = users.delete(admin.persistedId, otherAdmin.persistedId): Unit,
+        second = users.delete(otherAdmin.persistedId, admin.persistedId): Unit)
+    }
+
+    testApp.txManager.withTransaction(testApp.DAO.user.lockActiveAdmins()).map(_.persistedId) shouldBe List(admin.persistedId)
+  }
+
+  test("An Admin demoting another while that one deletes it leaves one of them an Admin") {
+
+    /**
+     * Setup:
+     *
+     * Two active Admins, and no other; the first makes the second a User from a transaction of its own, holding it open until the
+     * second, deleting the first from another transaction, waits for it.
+     *
+     * Assertions:
+     *
+     * The delete is refused once the demotion commits (its actor is no longer an Admin), and the first Admin is the one active
+     * Admin left, its account still there.
+     */
+    testApp.txManager.withTransaction(update("UPDATE account SET is_active = ? WHERE account_type = 'Admin'", Boolean.box(false)))
+    val (admin, otherAdmin) = (persistAdmin(), persistAdmin())
+    val grants = Map(addLibrary().persistedId -> Permissions.none)
+    val otherState = stateOf(otherAdmin)
+
+    intercept[ForbiddenException] {
+      contend(
+        first = users.update(admin.persistedId, otherAdmin.copy(accountType = AccountType.User), grants, otherState): Unit,
+        second = users.delete(otherAdmin.persistedId, admin.persistedId): Unit
+      )
+    }
+
+    testApp.txManager.withTransaction(testApp.DAO.user.lockActiveAdmins()).map(_.persistedId) shouldBe List(admin.persistedId)
+  }
+
+  test("An edit saved over an account another Admin changed since the form was opened is refused, and changes nothing") {
+
+    /**
+     * Setup:
+     *
+     * Two Admins, a Library, and a User holding Import there. Both Admins open the User's edit form; the second saves the User
+     * with Organize added; then the first saves it renamed, from the form it opened before.
+     *
+     * Assertions:
+     *
+     * The first Admin's save is a `ValidationException` (`ACCOUNT_CHANGED`) and writes nothing: the User keeps its name and the
+     * second Admin's grant. Saved again from a form opened now, the rename goes through.
+     */
+    val admin = persistAdmin()
+    val otherAdmin = persistAdmin()
+    val library = addLibrary()
+    val user =
+      users.create(admin.persistedId, model(), "password 1", Map(library.persistedId -> Permissions.of(Permission.Import)))
+    val opened = stateOf(user)
+    val both = Map(library.persistedId -> Permissions.of(Permission.Import, Permission.Organize))
+
+    users.update(otherAdmin.persistedId, user, both, opened)
+    val refused = intercept[ValidationException] {
+      users.update(admin.persistedId, user.copy(name = "Renamed User"), Map(library.persistedId -> Permissions.none), opened)
+    }
+    refused.message shouldBe C.Msg.Err.ACCOUNT_CHANGED
+    users.getById(user.persistedId).name shouldBe user.name
+    grantsOf(user) shouldBe both
+
+    users.update(admin.persistedId, user.copy(name = "Renamed User"), both, stateOf(user))
+    users.getById(user.persistedId).name shouldBe "Renamed User"
+  }
+
+  test("An edit saved over an account granted a new Library since the form was opened is refused") {
+
+    /**
+     * Setup:
+     *
+     * An Admin, a Library, and a User holding Import there whose new-Library switch is on. The Admin opens the User's edit form;
+     * then a Library is created, which grants the User access to it; then the Admin saves the form, its grants as it showed them.
+     *
+     * Assertions:
+     *
+     * The save is a `ValidationException` (`ACCOUNT_CHANGED`), and the User keeps the new Library's grant.
+     */
+    val admin = persistAdmin()
+    val library = addLibrary()
+    val shown = Map(library.persistedId -> Permissions.of(Permission.Import))
+    val user = users.create(
+      admin.persistedId,
+      model().copy(grantsNewLibraries = true, newLibraryPermissions = Permissions.of(Permission.Import)),
+      "password 1",
+      shown)
+    val opened = stateOf(user)
+
+    val added = addLibrary()
+    grantsOf(user).keySet should contain(added.persistedId)
+
+    intercept[ValidationException](users.update(admin.persistedId, user, shown, opened)).message shouldBe
+      C.Msg.Err.ACCOUNT_CHANGED
+    grantsOf(user).keySet should contain(added.persistedId)
   }
 
   test("A creator deactivated since its login creates nothing") {
@@ -576,7 +782,7 @@ import altitude.core.util.Util
     users.setPassword(admin.persistedId, user.persistedId, "password 2")
     logsIn(user, "password 1") shouldBe false
     logsIn(user, "password 2") shouldBe true
-    users.checkToken(token, renewable = true) shouldBe TokenCheck.Refused
+    users.checkToken(token, renewable = true) shouldBe TokenCheck.Refused(clearsCookie = false)
     eventsOn(user) should contain(AuditEventType.PasswordSet.dbValue)
   }
 
@@ -619,7 +825,7 @@ import altitude.core.util.Util
     users.changeOwnPassword(user.persistedId, "password 1", "password 2", "current", "new")
     logsIn(user, "password 2") shouldBe true
     logsIn(user, "password 1") shouldBe false
-    users.checkToken(token, renewable = true) shouldBe TokenCheck.Refused
+    users.checkToken(token, renewable = true) shouldBe TokenCheck.Refused(clearsCookie = false)
     val fresh = users.claimsOf(user.persistedId).get
     users.checkToken(testApp.service.paseto.createToken(fresh), renewable = false) shouldBe
       TokenCheck.Current(fresh)
@@ -647,7 +853,11 @@ import altitude.core.util.Util
     val creator =
       users.create(admin.persistedId, model(), "password 1", Map(first.persistedId -> Permissions.of(Permission.CreateUsers)))
     val created = users.create(creator.persistedId, model(), "password 1", Map(first.persistedId -> Permissions.none))
-    users.update(admin.persistedId, created, Map(first.persistedId -> Permissions.none, second.persistedId -> Permissions.none))
+    users.update(
+      admin.persistedId,
+      created,
+      Map(first.persistedId -> Permissions.none, second.persistedId -> Permissions.none),
+      stateOf(created))
     val adminsOwn = users.create(admin.persistedId, model(), "password 1", Map(second.persistedId -> Permissions.none))
 
     val forAdmin =
@@ -658,7 +868,7 @@ import altitude.core.util.Util
     users.accountsVisibleTo(creator).map((account, grants) => account.persistedId -> grants.map(_.repositoryId)) shouldBe
       List(created.persistedId -> List(first.persistedId))
 
-    users.update(admin.persistedId, created.copy(accountType = AccountType.Admin), Map.empty)
+    users.update(admin.persistedId, created.copy(accountType = AccountType.Admin), Map.empty, stateOf(created))
     users.accountsVisibleTo(creator) shouldBe empty
     users.accountsVisibleTo(admin).map(_._1.persistedId) should contain(created.persistedId)
   }

@@ -110,9 +110,9 @@ object decorators:
                 logger.trace(s"User authenticated: ${claims.account.persistedId}")
                 Right(Login(claims, None))
               case TokenCheck.Renewed(claims, renewed) => Right(Login(claims, Some(renewed)))
-              case TokenCheck.Refused =>
+              case TokenCheck.Refused(clearsCookie) =>
                 logger.warn("Invalid, expired, revoked or stale token")
-                Left(NoLogin(if fromCookie then Seq(SessionController.clearedAuthCookie) else Nil))
+                Left(NoLogin(if fromCookie && clearsCookie then Seq(SessionController.clearedAuthCookie) else Nil))
 
   /**
    * Whether a WebSocket handshake comes from a page of this server, or from a client that is no browser: true when it has no
@@ -165,13 +165,14 @@ object decorators:
       Result.Success(Response(Const.Msg.Err.LIBRARY_NOT_FOUND, statusCode = 404, headers = Seq("Content-Type" -> "text/plain")))
 
   /**
-   * Decorator that requires a login (`authenticate`) for the endpoint. Without one, an API request is answered 401 and any other
-   * redirected to the login page, either answer clearing a session cookie whose token was refused. A repository in the path that
-   * the account cannot see is answered as not found, as any foreign entity is: an Admin sees every one, anyone else one its token
-   * carries a grant in, so the gate reads no database. The token's Permissions in the path's Library (every one for an Admin;
-   * none for anyone else with no Library in the path) are put in `RequestContext.permissions`. A token rebuilt from the database
-   * is set as the cookie of the answer, unless the answer sets the session cookie itself: an endpoint that mints a token (a
-   * password change) mints it after the rebuild, which its change made stale.
+   * Decorator that requires a login (`authenticate`) for the endpoint. Without one, an htmx request is answered 401 with
+   * `HX-Redirect` to the login, an API request 401, and any other redirected to the login page, each answer clearing a session
+   * cookie whose token will never be good again (`TokenCheck.Refused`). A repository in the path that the account cannot see is
+   * answered as not found, as any foreign entity is: an Admin sees every one, anyone else one its token carries a grant in, so
+   * the gate reads no database. The token's Permissions in the path's Library (every one for an Admin; none for anyone else with
+   * no Library in the path) are put in `RequestContext.permissions`, and its grants in every Library in `RequestContext.grants`.
+   * A token rebuilt from the database is set as the cookie of the answer, unless the answer sets the session cookie itself: an
+   * endpoint that mints a token (a password change) mints it after the rebuild, which its change made stale.
    */
   class requireLogin extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -192,6 +193,7 @@ object decorators:
      */
     private def accessibleRepositoryOnly(req: cask.Request, claims: TokenClaims)(endpoint: => Result[Raw]): Result[Raw] =
       val account = claims.account
+      RequestContext.grants.value = claims.grants
       RequestContext.repository.value match
         case Some(repo) =>
           claims.permissionsIn(repo.persistedId) match
@@ -206,8 +208,20 @@ object decorators:
             if account.accountType == AccountType.Admin then Permissions.all else Permissions.none
           existingRepositoryOnly(req)(endpoint)
 
+    /**
+     * The answer to a request with no login. An htmx request (`HX-Request`) is a 401 carrying `HX-Redirect` to the login, with
+     * the page it was sent from (`HX-Current-URL`, its path and query alone) to come back to: a redirect would be followed by the
+     * browser's fetch and the login page swapped in as the partial. An API request is a JSON 401, and any other a redirect to the
+     * login with the request's own URL. Each carries `cookies`, a refused session's cleared cookie.
+     */
     private def handleUnauthenticated(req: cask.Request, cookies: Seq[Cookie]): Result[Raw] =
-      if isApiRequest(req) then
+      if Option(req.exchange.getRequestHeaders.getFirst("HX-Request")).contains("true") then
+        val toLogin = pageOf(req).fold("/login")(page => s"/login?redirect=${java.net.URLEncoder.encode(page, "UTF-8")}")
+        val (body, contentType) =
+          if isApiRequest(req) then ("""{"error": "Unauthorized", "message": "Authentication required"}""", "application/json")
+          else ("Unauthorized", "text/plain")
+        Result.Success(Response(body, 401, Seq("Content-Type" -> contentType, "HX-Redirect" -> toLogin), cookies = cookies))
+      else if isApiRequest(req) then
         Result.Success(
           Response(
             """{"error": "Unauthorized", "message": "Authentication required"}""",
@@ -228,6 +242,19 @@ object decorators:
             headers = Seq("Location" -> s"/login?redirect=$originalUrl"),
             cookies = cookies
           ))
+
+  /**
+   * The page an htmx request was sent from, as its `HX-Current-URL` names it: its path and query, which the login comes back to;
+   * None when the header is missing, is no URL, or has no absolute path
+   */
+  private def pageOf(req: cask.Request): Option[String] =
+    Option(req.exchange.getRequestHeaders.getFirst("HX-Current-URL")).flatMap {
+      url =>
+        try
+          val uri = java.net.URI(url)
+          Option(uri.getRawPath).filter(_.startsWith("/")).map(path => path + Option(uri.getRawQuery).fold("")("?" + _))
+        catch case _: java.net.URISyntaxException => None
+    }
 
   /**
    * Decorator for an endpoint that a signed URL may open without a login. A request with both `exp` and `sig` query parameters is
@@ -336,6 +363,17 @@ object decorators:
   class requireMember extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
       allowedOnly(req, delegate, "requireMember", Const.Msg.Err.FORBIDDEN_GUEST)(_.accountType != AccountType.Guest)
+
+  /**
+   * Decorator for the Users page and adding an account, applied after `requireLogin`: an Admin, or an account holding Create
+   * Users or Create Guests in any Library, read from its token's grants (`RequestContext.createsAccounts`), not only in the
+   * path's; anyone else is answered as `requireAdmin` answers a User. What the account may give is the creator's ceiling, which
+   * `UserService.create` holds it to.
+   */
+  class requireAccountCreator extends cask.RawDecorator:
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      allowedOnly(req, delegate, "requireAccountCreator", Const.Msg.Err.FORBIDDEN_ACCOUNT_CREATOR)(
+        _ => RequestContext.createsAccounts)
 
   /**
    * Decorator for creating a Library, applied after `requireLogin`: an Admin, or an account whose token carries the Create

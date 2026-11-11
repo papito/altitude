@@ -158,8 +158,10 @@ import altitude.core.models.Permissions
      * name of a Person as the editor's trigger. The User holding none gets none of them, but the nav's Triage and Trash entries,
      * and the Detail panel's People section is read-only. The Guest gets neither Triage nor Trash in the nav. Recycle follows the
      * view: the User holding Recycle alone gets it in Browse and not in Triage, the User holding Curate own alone in Triage and
-     * not in Browse. A rename to a taken name offers the merge into its holder only to a holder of Organize. New library in the
-     * nav's Library menu is the Admin's and the flagged User's, not the User's holding every Permission without the flag.
+     * not in Browse; Curate Selected is offered in Triage for a Curate Permission and in Browse only with Recycle as well, since
+     * the frames not picked are recycled. A rename to a taken name offers the merge into its holder only to a holder of Organize,
+     * and renames nobody. New library in the nav's Library menu is the Admin's and the flagged User's, not the User's holding
+     * every Permission without the flag.
      *
      * Edge cases:
      *
@@ -256,6 +258,19 @@ import altitude.core.models.Permissions
         withClue("Recycle, holding Curate own alone: ") {
           List(recycleOffered(curatorCookies, browse), recycleOffered(curatorCookies, triage)) shouldBe List(false, true)
         }
+        // Curating a selection recycles the frames not picked, which in Browse are sorted, and take Recycle too
+        def curateOffered(cookies: Map[String, java.net.HttpCookie], view: String) =
+          requests
+            .get(s"$host/r/$repoId", params = Map(Api.Field.Search.VIEW -> view), cookies = cookies)
+            .text()
+            .contains("batchCurateRequested")
+        withClue("Curate Selected, holding Curate own alone: ") {
+          List(curateOffered(curatorCookies, browse), curateOffered(curatorCookies, triage)) shouldBe List(false, true)
+        }
+        withClue("Curate Selected, holding Curate own and Recycle: ") {
+          val both = cookiesOf(host, account(AccountType.User, Permissions.of(Permission.CurateOwn, Permission.Recycle)))
+          List(curateOffered(both, browse), curateOffered(both, triage)) shouldBe List(true, true)
+        }
 
         def renamedToTaken(cookies: Map[String, java.net.HttpCookie]) =
           requests
@@ -271,7 +286,9 @@ import altitude.core.models.Permissions
         val editorAnswer = renamedToTaken(cookiesOf(host, editor))
         editorAnswer should include("Taken already exists")
         (editorAnswer should not).include(mergeOffer)
-        taken.persistedId should not be empty
+        // Neither rename went through: the name is taken
+        testApp.service.person.getById(person.persistedId).name should not be Some("Taken")
+        testApp.service.person.getById(taken.persistedId).name shouldBe Some("Taken")
     }
   }
 

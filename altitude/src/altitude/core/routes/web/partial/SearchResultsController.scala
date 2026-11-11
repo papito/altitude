@@ -11,9 +11,11 @@ import altitude.core.App
 import altitude.core.Const
 import altitude.core.NotFoundException
 import altitude.core.QueryTimeoutException
+import altitude.core.RequestContext
 import altitude.core.SearchCursorException
 import altitude.core.models.Folder
 import altitude.core.models.Location
+import altitude.core.models.Permission
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.SearchRequestParser
@@ -23,6 +25,7 @@ import altitude.core.util.GroupBy
 import altitude.core.util.GroupedSearchResult
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchGrouping
+import altitude.core.util.SearchGroupKey
 import altitude.core.util.SearchSort
 import altitude.core.util.SortDirection
 
@@ -198,11 +201,17 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           case ex: SearchCursorException => return textError(ex.getMessage, 400)
           case _: QueryTimeoutException => return timedOut
 
+      // With Curate own alone, a Sequence's Curate follows the frames Curation would show the account: its own
+      val sequenceIds = results.groups.map(_.key).collect { case SearchGroupKey.Sequence(Some(id), _) => id }.toSet
+      val curatable =
+        if sequenceIds.isEmpty || !RequestContext.holds(Permission.CurateOwn, Permission.CurateAll) then None
+        else App.altitude.service.curation.curatableFrameCounts(sequenceIds)
+
       if isContinuousScroll then
         // The continuation ran dry: results are live, and the images past the cursor may be gone by now
         if results.isEmpty then return noContentResponse
 
-        return htmlResponse(htmx.html.results_grid_grouped(results = results, isContinuousScroll = true))
+        return htmlResponse(htmx.html.results_grid_grouped(results = results, isContinuousScroll = true, curatable = curatable))
 
       return htmlResponse(
         includes.html.search_results(
@@ -210,7 +219,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           totalCap = searchQuery.totalCap,
           sort = results.sort,
           grouping = Some(results.grouping),
-          grid = htmx.html.results_grid_grouped(results = results),
+          grid = htmx.html.results_grid_grouped(results = results, curatable = curatable),
           person = person,
           folderPath = folderPath,
           album = album,

@@ -100,6 +100,8 @@ trait PostgresOverrides:
 
   override val forUpdate: String = "FOR UPDATE"
 
+  override val forKeyShare: String = "FOR KEY SHARE"
+
   override protected def advisoryLock(key: String): Unit =
     manyBySqlQuery("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", List(key)): Unit
 

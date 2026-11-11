@@ -8,7 +8,8 @@
    The count shows once; the buttons carry no count of their own.
    Move is a drag handle (js/dragdrop/batch-ops.js); a click on it explains that in a tooltip. A button shows only where the
    account holds the Permission its action needs in the page's `view` (`RequestContext.holds`): Organize for Move and the album
-   and Location buttons, a Curate Permission for Curate Selected, Purge for Purge, Recycle by the view
+   and Location buttons, a Curate Permission for Curate Selected (and Recycle with it outside Triage: the frames not picked are
+   recycled, and a sorted one takes Recycle), Purge for Purge, Recycle by the view
    (`RequestContext.recyclesIn`: Recycle in Browse, a Curate Permission in Triage), and Restore for Recycle or a Curate
    Permission (`RequestContext.restores`), the server checking each asset. *@
 @(view: String)
@@ -39,7 +40,7 @@
                 <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromLocation)"><i class="fas fa-minus-circle"></i>Remove from location</button>
             </template>
             }
-            @if(RequestContext.holds(Permission.CurateOwn, Permission.CurateAll)) {
+            @if(RequestContext.holds(Permission.CurateOwn, Permission.CurateAll) && (view == Const.Search.View.TRIAGE || RequestContext.holds(Permission.Recycle))) {
             @* Opens Curation on the selection, up to the cap it carries (js/listeners/curation.js) *@
             <button type="button" class="action-button curate" x-show="$store.selectedAssets.size > 1" data-max-selection="@{Const.Curation.MAX_SELECTION}" @@click="$dispatch(window.Const.events.batchCurateRequested)"><i class="fas fa-check-double"></i>Curate Selected</button>
             }

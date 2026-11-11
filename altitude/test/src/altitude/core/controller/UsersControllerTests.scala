@@ -136,7 +136,11 @@ import altitude.core.util.Util
     val mine = testApp.service.repository.getById(repoId)
     val hidden = library()
     val account = created(creator, AccountType.User, Map(repoId -> Permissions.none))
-    users.update(admin.persistedId, account, Map(repoId -> Permissions.none, hidden.persistedId -> Permissions.none))
+    users.update(
+      admin.persistedId,
+      account,
+      Map(repoId -> Permissions.none, hidden.persistedId -> Permissions.none),
+      users.openForEdit(account.persistedId).state)
     val adminsAccount = created(admin, AccountType.User, Map(repoId -> Permissions.none))
 
     withServer(App) {
@@ -164,7 +168,7 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The page opens on the Guests tab with no account, and again once the Guest is there; that tab's section is the one shown
-     * before the page's script runs.
+     * before the page's script runs. The empty tabs say so, naming their account type as the tab does ("No Admins").
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.CreateGuests))
 
@@ -175,6 +179,8 @@ import altitude.core.util.Util
         val page = get(s"$host/users/r/$repoId").text()
         page should include("""data-app-start-tab="Guest"""")
         (page should include).regex("""aria-label="Guests" x-show="isTab\('Guest'\)">""")
+        page should include("No Admins")
+        page should include("No Users")
     }
   }
 
@@ -262,7 +268,7 @@ import altitude.core.util.Util
      *
      * The form offers the User and Guest cards and no Admin card; a row for the first two Libraries and none for the third; the
      * columns of Import, Curate own and Create Users alone; no Create Libraries or new-Library grant; and in the second Library's
-     * row no Permission cell. The Library it was opened from starts checked, with Import and Curate own.
+     * row no Permission cell. The Library it was opened from starts checked, with Import and Curate own in the form's state.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import, Permission.CurateOwn, Permission.CreateUsers))
     val creator = testContext.user
@@ -286,6 +292,7 @@ import altitude.core.util.Util
         (form should not).include("switch-canCreateLibraries")
         (form should not).include("switch-grantsNewLibraries")
         form should include("&quot;access&quot;:[&quot;" + repoId)
+        form should include(s"&quot;permissions&quot;:{&quot;$repoId&quot;:[&quot;Import&quot;,&quot;CurateOwn&quot;]}")
     }
   }
 
@@ -330,7 +337,7 @@ import altitude.core.util.Util
 
         val account = users.accountsVisibleTo(testContext.user).map(_._1).find(_.username == username).get
         account.createdByAccountId shouldBe Some(testContext.user.persistedId)
-        testApp.service.repository.getGrant(account, repoId) shouldBe Some(Permissions.of(Permission.Import, Permission.Organize))
+        testContext.grantOf(account, repoId) shouldBe Some(Permissions.of(Permission.Import, Permission.Organize))
     }
   }
 
@@ -378,10 +385,12 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The edit form is the Add User form titled "Edit <name>", holding the User's values and no password field; its save renames
-     * the User. Set password answers 200, and the User's old password fails at login while the new one logs in. Deactivate
-     * refuses the User's session; Reactivate lets it log in again. The Delete dialog names the one asset that moves to the Admin;
-     * the delete answers 200, the account is gone and the asset is the Admin's.
+     * The edit form is the Add User form titled "Edit <name>", holding the User's values, the state it was opened over and no
+     * password field; its save, carrying that state, renames the User, and a second save of the same form, over the change the
+     * first made, comes back as the form with `ACCOUNT_CHANGED` and renames nothing. Set password answers 200, and the User's old
+     * password fails at login while the new one logs in, its session opening the Library. Deactivate refuses that session;
+     * Reactivate lets the User log in again. The Delete dialog names the one asset that moves to the Admin; the delete answers
+     * 200, the account is gone and the asset is the Admin's.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val admin = testContext.user
@@ -396,12 +405,22 @@ import altitude.core.util.Util
         form should include(s"""data-app-modal-title="Edit ${user.name}"""")
         form should include(s"""value="${user.username}"""")
         (form should not).include(s"""name="${Api.Field.User.PASSWORD}"""")
+        val opened = s"""name="${Api.Field.User.OPENED_STATE}" value="([0-9a-f]+)"""".r.findFirstMatchIn(form).get.group(1)
 
         val edited = merged(
           addBody(user.username, Map(testApp.service.repository.getById(repoId) -> List(Permission.Import))),
-          ujson.Obj(accountId -> user.persistedId, Api.Field.User.NAME -> "Renamed User", Api.Field.User.EMAIL -> user.email)
+          ujson.Obj(
+            accountId -> user.persistedId,
+            Api.Field.User.NAME -> "Renamed User",
+            Api.Field.User.EMAIL -> user.email,
+            Api.Field.User.OPENED_STATE -> opened)
         )
-        send("PUT", s"$base/edit", edited).statusCode shouldBe 200
+        val saved = send("PUT", s"$base/edit", edited)
+        (saved.statusCode, saved.headers.get("hx-retarget")) shouldBe (200, None)
+        users.getById(user.persistedId).name shouldBe "Renamed User"
+        val stale = send("PUT", s"$base/edit", merged(edited, ujson.Obj(Api.Field.User.NAME -> "Renamed Twice")))
+        stale.headers("hx-retarget") shouldBe Seq("this")
+        stale.text() should include(s"""<div class="error">${C.Msg.Err.ACCOUNT_CHANGED}</div>""")
         users.getById(user.persistedId).name shouldBe "Renamed User"
 
         send(
@@ -412,6 +431,7 @@ import altitude.core.util.Util
         val userCookies = requests
           .post(s"$host/login", data = Map("login" -> user.username, "password" -> "password 2"), maxRedirects = 0, check = false)
           .cookies
+        get(s"$host/r/$repoId", userCookies).statusCode shouldBe 200
 
         send("PUT", s"$base/deactivate", ujson.Obj(accountId -> user.persistedId)).statusCode shouldBe 204
         get(s"$host/r/$repoId", userCookies).statusCode shouldBe 302
@@ -524,6 +544,197 @@ import altitude.core.util.Util
         get(s"$host/r/$repoId", Map(SessionController.AUTH_COOKIE_NAME -> renewed)).statusCode shouldBe 200
         get(s"$host/r/$repoId", other).statusCode shouldBe 302
         users.loginAndSetUser(guest.username, "password 2").isDefined shouldBe true
+    }
+  }
+
+  test("Users opens for a holder of Create Users or Create Guests in any Library, from every Library it sees") {
+
+    /**
+     * Setup:
+     *
+     * A User holding Create Users in one Library and Import alone in a second, logged in; a second User holding Import in that
+     * second Library alone.
+     *
+     * Assertions:
+     *
+     * Through the second Library, where it holds neither create Permission, the first User's nav carries the Users entry, and the
+     * Users page, its cards and the Add User form answer 200; the form offers the first Library, where it may give access. The
+     * second User has no Users entry there, and is answered 403 by the page.
+     */
+    val first = testApp.service.repository.getById(loginAs(AccountType.User, Permissions.of(Permission.CreateUsers)))
+    val creator = testContext.user
+    val second = library()
+    testContext.grant(creator, second, Permissions.of(Permission.Import))
+    login()
+    val bystander = testContext.persistUser()
+    testContext.grant(bystander, second, Permissions.of(Permission.Import))
+    val repoId = second.persistedId
+
+    withServer(App) {
+      host =>
+        get(s"$host/r/$repoId").text() should include(s"""href="/users/r/$repoId"""")
+        get(s"$host/users/r/$repoId").statusCode shouldBe 200
+        get(s"$host/htmx/users/r/$repoId/accounts").statusCode shouldBe 200
+        val form = get(s"$host/htmx/users/r/$repoId/dialogs/add")
+        form.statusCode shouldBe 200
+        form.text() should include(s"""value="${first.persistedId}"""")
+
+        val bystanderCookies = cookiesOf(host, bystander)
+        (get(s"$host/r/$repoId", bystanderCookies).text() should not).include(s"""href="/users/r/$repoId"""")
+        get(s"$host/users/r/$repoId", bystanderCookies).statusCode shouldBe 403
+    }
+  }
+
+  test("An Admin's change of an account's flag or type reaches the account's open session at its next request") {
+
+    /**
+     * Setup:
+     *
+     * An Admin logged in to a Library, and a User holding every Permission there, logged in too. The Admin gives the User the
+     * Create Libraries flag through the edit form, then makes it a Guest.
+     *
+     * Assertions:
+     *
+     * Before the flag, the User's session is refused the New library dialog (403); after it, the same session opens it (200).
+     * Once a Guest, the same session is refused Triage (403), which it saw before.
+     */
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
+    val admin = testContext.user
+    val user = created(admin, AccountType.User, Map(repoId -> Permissions.all))
+    val mine = testApp.service.repository.getById(repoId)
+
+    withServer(App) {
+      host =>
+        val userCookies = requests
+          .post(s"$host/login", data = Map("login" -> user.username, "password" -> "password 1"), maxRedirects = 0, check = false)
+          .cookies
+        val newLibrary = s"$host/htmx/library/r/$repoId/dialogs/new"
+        val triage = s"$host/r/$repoId?${Api.Field.Search.VIEW}=${C.Search.View.TRIAGE}"
+        get(newLibrary, userCookies).statusCode shouldBe 403
+        get(triage, userCookies).statusCode shouldBe 200
+
+        def edit(more: ujson.Obj) =
+          send(
+            "PUT",
+            s"$host/htmx/users/r/$repoId/edit",
+            merged(
+              addBody(user.username, Map(mine -> Permission.values.toList)),
+              ujson.Obj.from(
+                ujson
+                  .Obj(
+                    Api.Field.User.ACCOUNT_ID -> user.persistedId,
+                    Api.Field.User.NAME -> user.name,
+                    Api.Field.User.EMAIL -> user.email,
+                    Api.Field.User.OPENED_STATE -> users.openForEdit(user.persistedId).state
+                  )
+                  .value ++ more.value)
+            )
+          ).headers.get("hx-retarget") shouldBe None
+
+        edit(ujson.Obj(Api.Field.User.CAN_CREATE_LIBRARIES -> "true"))
+        get(newLibrary, userCookies).statusCode shouldBe 200
+
+        edit(ujson.Obj(Api.Field.User.ACCOUNT_TYPE -> "Guest"))
+        get(triage, userCookies).statusCode shouldBe 403
+    }
+  }
+
+  test("A refused edit keeps the account's stored name in its title, and the new-Library chips' preset with the switch off") {
+
+    /**
+     * Setup:
+     *
+     * An Admin logged in to a Library, and a User it created there; the Admin saves the User's edit form with a name the account
+     * rules refuse and the new-Library switch off, whose chips the form then does not send.
+     *
+     * Assertions:
+     *
+     * The form comes back with the name's error, titled "Edit" and the User's stored name, not the name typed, and its state
+     * holds the new-Library preset, Import and Curate own, for the chips to show once the switch is turned on.
+     */
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
+    val user = created(testContext.user, AccountType.User, Map(repoId -> Permissions.none))
+
+    withServer(App) {
+      host =>
+        val refused = send(
+          "PUT",
+          s"$host/htmx/users/r/$repoId/edit",
+          merged(
+            addBody(user.username, Map(testApp.service.repository.getById(repoId) -> Nil)),
+            ujson.Obj(
+              Api.Field.User.ACCOUNT_ID -> user.persistedId,
+              Api.Field.User.NAME -> "x",
+              Api.Field.User.EMAIL -> user.email,
+              Api.Field.User.OPENED_STATE -> users.openForEdit(user.persistedId).state
+            )
+          )
+        )
+        refused.headers("hx-retarget") shouldBe Seq("this")
+        val form = refused.text()
+        form should include(s"""data-app-modal-title="Edit ${user.name}"""")
+        form should include("&quot;newLibraryPermissions&quot;:[&quot;Import&quot;,&quot;CurateOwn&quot;]")
+    }
+  }
+
+  test("The Users routes answer an account or Library ID that is no UUID with 400, and change nothing") {
+
+    /**
+     * Setup:
+     *
+     * An Admin logged in to a Library, and a User it created there.
+     *
+     * Assertions:
+     *
+     * An account ID that is no UUID is a 400 in the edit, Set password and Delete dialogs' query, in the delete's, and in the
+     * body of the edit, the password, the deactivation and the reactivation; a Library ID that is no UUID is a 400 among an added
+     * account's Libraries and in its Permissions. No account of the added username exists, and the User stays active.
+     */
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
+    val user = created(testContext.user, AccountType.User, Map(repoId -> Permissions.none))
+    val notUuid = "not-a-uuid\nforged"
+    val accountId = Api.Field.User.ACCOUNT_ID
+
+    withServer(App) {
+      host =>
+        val base = s"$host/htmx/users/r/$repoId"
+        for (dialog <- List("edit", "set-password", "delete")) withClue(s"[$dialog]: ") {
+          requests
+            .get(s"$base/dialogs/$dialog", params = Map(accountId -> notUuid), cookies = testContext.cookies, check = false)
+            .statusCode shouldBe 400
+        }
+        requests
+          .delete(
+            s"$base/account",
+            params = Map(accountId -> notUuid),
+            headers = Map("Accept-Encoding" -> "identity"),
+            cookies = testContext.cookies,
+            check = false)
+          .statusCode shouldBe 400
+        for (write <- List("password", "deactivate", "reactivate")) withClue(s"[$write]: ") {
+          send(
+            "PUT",
+            s"$base/$write",
+            ujson.Obj(accountId -> notUuid, Api.Field.User.PASSWORD -> "password 2")).statusCode shouldBe
+            400
+        }
+        val mine = testApp.service.repository.getById(repoId)
+        send(
+          "PUT",
+          s"$base/edit",
+          merged(addBody(user.username, Map(mine -> Nil)), ujson.Obj(accountId -> notUuid))).statusCode shouldBe
+          400
+
+        val username = s"n.${Util.randomStr(6)}"
+        val badLibrary = merged(addBody(username, Map.empty), ujson.Obj(Api.Field.User.LIBRARY_IDS -> ujson.Arr(notUuid)))
+        val badPermission =
+          merged(addBody(username, Map.empty), ujson.Obj(Api.Field.User.PERMISSIONS -> ujson.Arr(s"$notUuid:Import")))
+        send("POST", s"$base/add", badLibrary).statusCode shouldBe 400
+        send("POST", s"$base/add", badPermission).statusCode shouldBe 400
+        testApp.txManager.asReadOnly {
+          testApp.DAO.user.manyBySqlQuery("SELECT id FROM account WHERE username = ?", List(username))
+        } shouldBe empty
+        users.getById(user.persistedId).isActive shouldBe true
     }
   }
 }

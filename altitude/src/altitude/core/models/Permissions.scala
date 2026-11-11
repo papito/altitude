@@ -24,10 +24,6 @@ final case class Permissions(mask: Int):
 
   def has(permission: Permission): Boolean = (mask & permission.mask) != 0
 
-  def +(permission: Permission): Permissions = Permissions(mask | permission.mask)
-
-  def -(permission: Permission): Permissions = Permissions(mask & ~permission.mask)
-
   def isEmpty: Boolean = mask == 0
 
   /** Whether these Permissions curate the asset for the account `accountId`: Curate all, or Curate own on an asset it owns */

@@ -58,7 +58,7 @@
     case AccountType.Admin => "All"
     case _ if !account.grantsNewLibraries => "Off"
     case AccountType.Guest => "On"
-    case _ => s"On · ${if (account.newLibraryPermissions.isEmpty) "access only" else account.newLibraryPermissions.toList.map(_.label).mkString(", ")}"
+    case _ => s"On · ${if (account.newLibraryPermissions.isEmpty) "Access only" else account.newLibraryPermissions.toList.map(_.label).mkString(", ")}"
   }
 }
 
@@ -132,7 +132,7 @@
         </article>
         }
         @if(!cards.exists(_.account.accountType == accountType)) {
-        <p class="no-accounts">No @title.toLowerCase</p>
+        <p class="no-accounts">No @title</p>
         }
     </section>
     }

@@ -186,6 +186,13 @@ abstract class BaseDao[Model <: BaseModel]:
   protected val forUpdate: String
 
   /**
+   * The lock a row is read under so that it stays as it is until the transaction ends, without waiting on, or holding up, a write
+   * of it that leaves its key alone: `FOR KEY SHARE` on PostgreSQL, the lock a foreign key's check takes, which a delete of the
+   * row or a `FOR UPDATE` of it waits for; nothing on SQLite, whose one write connection serializes the writers
+   */
+  protected val forKeyShare: String
+
+  /**
    * Makes the transactions that take the same key take turns until they end, where row locks cannot: a row one of them will
    * insert is in no row the other can lock. `pg_advisory_xact_lock` on PostgreSQL, which conflicts with nothing else any
    * statement takes; nothing on SQLite, whose one write connection serializes the writers.

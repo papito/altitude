@@ -15,6 +15,7 @@ import scala.jdk.CollectionConverters.*
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.DuplicateException
+import altitude.core.ImporterUnavailableException
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.models.AccountSnapshot
 import altitude.core.models.Asset
@@ -333,6 +334,52 @@ import altitude.core.util.SearchQuery
       )
     }
     (testApp.service.asset.getById(imported.persistedId): Asset).ownerUserId shouldBe importer.persistedId
+  }
+
+  test(
+    "An import's importer record is the account as stored when its file is inserted; an account gone or deactivated fails it") {
+
+    /**
+     * Setup:
+     *
+     * Three Users, each the context account in turn, who each stage a JPEG as an upload does, before the import pipeline takes
+     * it. Then the first User's name changes in the database, the second User is deactivated and the third deleted, each by
+     * hand-written SQL, and each staged file is imported.
+     *
+     * Assertions:
+     *
+     * The first file's asset is the first User's, its importer record naming the account as it is stored now, with its new name.
+     * The second file fails with `ImporterUnavailableException` saying the account that imported it is deactivated, and the third
+     * saying it no longer exists; neither leaves an asset.
+     */
+    val List(renamed, deactivated, deleted) = List.fill(3)(testContext.persistUser())
+    def staged(account: altitude.core.models.User, file: String): AssetWithData = {
+      switchContextUser(account)
+      testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.getImportAsset(file))
+    }
+    val stagedFiles = List(renamed -> "images/1.jpg", deactivated -> "images/2.jpg", deleted -> "images/4.jpg").map {
+      (account, file) => account -> staged(account, file)
+    }
+
+    testApp.txManager.withTransaction {
+      update("UPDATE account SET name = ? WHERE id = ?", "Renamed Importer", renamed.persistedId)
+      update("UPDATE account SET is_active = ? WHERE id = ?", Boolean.box(false), deactivated.persistedId)
+      update("DELETE FROM account WHERE id = ?", deleted.persistedId)
+    }
+
+    def importAs(account: altitude.core.models.User): Asset = {
+      switchContextUser(account)
+      testApp.service.library.addAsset(stagedFiles.find(_._1 == account).get._2)
+    }
+    val imported = importAs(renamed)
+    imported.ownerUserId shouldBe renamed.persistedId
+    imported.originalOwner shouldBe AccountSnapshot(renamed.persistedId, "Renamed Importer", renamed.username, renamed.email)
+
+    intercept[ImporterUnavailableException](importAs(deactivated)).getMessage shouldBe Const.Msg.Err.IMPORTER_DEACTIVATED
+    intercept[ImporterUnavailableException](importAs(deleted)).getMessage shouldBe Const.Msg.Err.IMPORTER_GONE
+    testApp.txManager.asReadOnly {
+      query("SELECT id FROM asset WHERE owner_user_id = ? OR owner_user_id = ?", deactivated.persistedId, deleted.persistedId)
+    } shouldBe empty
   }
 
   test("Imported asset with metadata has media creation date set") {

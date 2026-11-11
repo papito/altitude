@@ -1,12 +1,10 @@
-// What a User given access to a Library holds there before anything else is checked
-const PRESET = ["Import", "CurateOwn"]
-
 /**
  * The Add User and Edit form of the Users page (`htmx/account_form`), on the form: the account type
  * chosen, the Libraries given and the Permissions in each, and the Admin's Create Libraries and
  * new-Library grant switches, starting from the state the server writes in `data-app-account-form`
- * (the values shown and the creator's ceiling: per Library whether it may give a User or a Guest
- * access there, and which Permissions). The matrix's toggles run here, with no request:
+ * (the values shown, the creator's ceiling: per Library whether it may give a User or a Guest
+ * access there, and which Permissions, and the preset a User given a Library starts with,
+ * `AccountForm.PRESET`). The matrix's toggles run here, with no request:
  *
  * - checking a Library's access, for a User, checks Import and Curate own there where the ceiling
  *   holds them; unchecking it clears its Permissions;
@@ -30,6 +28,7 @@ export function accountForm() {
         newLibraryPermissions: [],
         ceiling: {},
         maxLibraries: 0,
+        preset: [],
 
         init() {
             const state = JSON.parse(this.$el.dataset.appAccountForm)
@@ -41,6 +40,7 @@ export function accountForm() {
             this.newLibraryPermissions = state.newLibraryPermissions
             this.ceiling = state.ceiling
             this.maxLibraries = state.maxLibraries
+            this.preset = state.preset
         },
 
         isAdmin() {
@@ -133,7 +133,7 @@ export function accountForm() {
                 this.isUser() &&
                 (this.permissions[libraryId] ?? []).length === 0
             ) {
-                this.permissions[libraryId] = PRESET.filter((permission) =>
+                this.permissions[libraryId] = this.preset.filter((permission) =>
                     this.ceiling[libraryId].permissions.includes(permission),
                 )
             }

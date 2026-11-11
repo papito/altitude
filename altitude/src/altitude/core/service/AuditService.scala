@@ -44,9 +44,3 @@ class AuditService(val app: Altitude):
       txManager.afterCommit(logger.info(stored.toString))
       stored
     }
-
-  /** The event with the ID, `NotFoundException` when there is none */
-  def getById(id: String): AuditEvent =
-    txManager.asReadOnly {
-      dao.getById(id)
-    }

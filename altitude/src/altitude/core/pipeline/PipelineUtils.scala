@@ -11,6 +11,7 @@ import scala.util.control.NonFatal
 
 import altitude.core.DuplicateException
 import altitude.core.ImageException
+import altitude.core.ImporterUnavailableException
 import altitude.core.RequestContext
 import altitude.core.SamePersonDetectedTwiceException
 import altitude.core.UnsupportedMediaTypeException
@@ -44,7 +45,7 @@ object PipelineUtils:
   /** A cause a file can have for being dropped, which the user is told and the log records in one line, without a stack trace */
   def isExpectedDrop(cause: Throwable): Boolean = cause match
     case _: UnsupportedMediaTypeException | _: ImageException | _: VideoException | _: DuplicateException |
-        _: SamePersonDetectedTwiceException =>
+        _: SamePersonDetectedTwiceException | _: ImporterUnavailableException =>
       true
     case _ => false
 

@@ -46,7 +46,7 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
   def login(): Unit = {
     val account = testContext.user
     for (repository <- testContext.repositories.headOption if account.accountType != AccountType.Admin) {
-      if (testApp.service.repository.getGrant(account, repository.persistedId).isEmpty) {
+      if (testContext.grantOf(account, repository.persistedId).isEmpty) {
         val permissions = if (account.accountType == AccountType.Guest) Permissions.none else Permissions.all
         testContext.grant(account, repository, permissions)
       }

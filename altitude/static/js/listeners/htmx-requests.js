@@ -1,6 +1,7 @@
 import {
     getRequestSource,
     getResponseRetarget,
+    getResponseStatus,
     isRequestSuccessful,
 } from "../common/htmx-events.js"
 import { reportRequestFailure } from "../common/request-failure.js"
@@ -8,10 +9,15 @@ import { selectTab } from "../common/navigation.js"
 import { isDialogOperationRequest } from "../fragments/dialog-operations.js"
 import { readSuccessEvent } from "../fragments/helpers.js"
 import { isModalOpenRequest } from "../common/modal.js"
+import { goToLogin, isUnauthorized } from "../common/session.js"
 
 /**
  * What happens after any htmx request, whichever element issued it:
  *
+ * - a 401, a request refused for want of a login, sends the window to the login, whatever issued
+ *   it (a poll, a dialog's submit, a modal's open), and nothing else happens: no failure is
+ *   reported and no success announced (`common/session.js`; the server's `HX-Redirect` says the
+ *   same);
  * - a failed response (HTTP 400 and above; the body is never swapped, see the `noSwap` config)
  *   is reported through the snackbar (`common/request-failure.js`: a refusal worded for the user,
  *   a 403 or 409 in plain text, as its text), so nothing fails silently - not even a page continuous
@@ -33,6 +39,11 @@ import { isModalOpenRequest } from "../common/modal.js"
  */
 export function registerHtmxRequestListeners(app) {
     document.body.addEventListener("htmx:after:request", (event) => {
+        if (isUnauthorized(getResponseStatus(event))) {
+            goToLogin()
+            return
+        }
+
         if (isModalOpenRequest(event) || isDialogOperationRequest(event)) {
             return
         }

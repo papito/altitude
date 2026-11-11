@@ -470,6 +470,15 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     val (sql, values) = countSequenceFramesStatement(sequenceId, owner)
     getLongField(executeAndGetOne(sql, values)("frames")).get.toInt
 
+  override def countOwnedSequenceFrames(sequenceIds: Set[String], owner: String): Map[String, Int] =
+    if sequenceIds.isEmpty then return Map.empty
+
+    val (frames, values) = liveFramesOfSequences(inIdSet, Some(owner))
+    val sql = s"SELECT ${FieldConst.Asset.SEQUENCE_ID}, COUNT(*) AS frames $frames GROUP BY ${FieldConst.Asset.SEQUENCE_ID}"
+    manyBySqlQuery(sql, idSet(sequenceIds) :: values).map {
+      rec => rec(FieldConst.Asset.SEQUENCE_ID).toString.trim -> getLongField(rec("frames")).get.toInt
+    }.toMap
+
   /** The first capture of a Sequence's frames, which the queue is ordered by; none for an undated Sequence */
   private val firstCapture = s"MIN(${FieldConst.Asset.ORIGINAL_CREATED_AT})"
 

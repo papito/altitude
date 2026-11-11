@@ -9,6 +9,7 @@ import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import altitude.core.AltitudeActorSystem
 import altitude.core.DuplicateException
 import altitude.core.ImageException
+import altitude.core.ImporterUnavailableException
 import altitude.core.StorageException
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.VideoException
@@ -80,6 +81,9 @@ class ImportStatusWsActor(context: ActorContext[ImportStatusWsActor.Command])
                         errorStatusTickerTemplate.format(s"Error importing $fileName: Cannot decode video")
                       case Some(_: StorageException) =>
                         errorStatusTickerTemplate.format(s"Error importing $fileName: Storage error")
+                      // Its message is one of two fixed texts (Const.Msg.Err.IMPORTER_GONE, IMPORTER_DEACTIVATED)
+                      case Some(unavailable: ImporterUnavailableException) =>
+                        errorStatusTickerTemplate.format(s"Error importing $fileName: ${unavailable.getMessage}")
                       // An exception's message may carry paths or SQL, so a cause not named above is shown by its class alone
                       case cause =>
                         val name = cause.fold("Unknown error")(_.getClass.getSimpleName)

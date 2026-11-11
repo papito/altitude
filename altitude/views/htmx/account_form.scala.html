@@ -12,8 +12,9 @@
    not rendered at all. The `accountForm` component (js/alpine/components/account-form.js) holds the type and what is checked,
    starting from `data-app-account-form`, and runs the matrix's toggles with no request; the inputs it disables (a Guest's
    Permissions, an Admin's matrix, a row the type may not have) are not submitted. The body scrolls and the actions stay in
-   view. A refusal of a field comes back as this form with the values submitted and the error under the field; the server
-   refuses anything above the ceiling whatever is sent. *@
+   view. A refusal of a field comes back as this form with the values submitted and the error under the field, and an edit's
+   title names the account as stored; an edit carries the state it was opened over, and a save over a change made since comes
+   back with that error above the actions. The server refuses anything above the ceiling whatever is sent. *@
 @(form: AccountForm, ceiling: Ceiling, errors: Map[String, String] = Map.empty)
 
 @repoId = @{ RequestContext.getRepository.persistedId }
@@ -42,7 +43,7 @@
       x-data="accountForm"
       data-app-account-form="@form.stateJson(ceiling)"
       data-app-fragment="modal"
-      data-app-modal-title="@{ if (editing) Const.UI.EDIT_USER_DIALOG_TITLE.format(form.name) else Const.UI.ADD_USER_DIALOG_TITLE }"
+      data-app-modal-title="@{ if (editing) Const.UI.EDIT_USER_DIALOG_TITLE.format(form.storedName.getOrElse(form.name)) else Const.UI.ADD_USER_DIALOG_TITLE }"
       data-app-dialog-autofocus-selector="#field-accountName"
       data-app-success-event="ACCOUNTS_CHANGED_EVENT"
       hx-target="this"
@@ -53,6 +54,10 @@
 
     @for(accountId <- form.accountId) {
     <input type="hidden" name="@Api.Field.User.ACCOUNT_ID" value="@accountId">
+    }
+    @* The state the edit was opened over, which the save carries back: a save over a change made since is refused *@
+    @for(state <- form.openedState) {
+    <input type="hidden" name="@Api.Field.User.OPENED_STATE" value="@state">
     }
 
     <div class="account-form-body">
@@ -166,13 +171,17 @@
                     </tbody>
                 </table>
                 }
-                <p class="bound" x-show="atBound()" style="display: none">An account can be given access to at most @altitude.core.service.RepositoryService.MAX_GRANTS_PER_ACCOUNT libraries.</p>
+                <p class="bound" x-show="atBound()" style="display: none">An account can be given access to at most @altitude.core.service.RepositoryService.MAX_GRANTS_PER_ACCOUNT Libraries.</p>
                 @for(message <- errors.get(Api.Field.User.LIBRARY_IDS)) {
                 <div class="error">@message</div>
                 }
             </div>
         </section>
     </div>
+
+    @for(message <- errors.get(Api.Field.User.OPENED_STATE)) {
+    <div class="error">@message</div>
+    }
 
     <div class="actions">
         <button type="submit" class="action-button primary">@{ if (editing) "Save" else "Add User" }</button>

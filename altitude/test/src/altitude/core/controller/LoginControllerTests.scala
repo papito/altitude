@@ -407,4 +407,98 @@ import altitude.core.util.Util
         sessionCookieSet(s"/r/${library.persistedId}", Map.empty) shouldBe (302, None)
     }
   }
+
+  /** The session cookie an answer sets, as its value (quotes off) and Max-Age, if any */
+  private def sessionCookieOf(response: requests.Response): Option[(String, Long)] =
+    response.headers
+      .getOrElse("set-cookie", Nil)
+      .flatMap(header => HttpCookie.parse(header).asScala)
+      .find(_.getName == SessionController.AUTH_COOKIE_NAME)
+      .map(cookie => (cookie.getValue.stripPrefix("\"").stripSuffix("\""), cookie.getMaxAge))
+
+  test("An htmx request with no valid session is a 401 that sends the page it came from to the login") {
+
+    /**
+     * Setup:
+     *
+     * A User holding a grant in a Library; htmx requests (`HX-Request`) for the nav of the Library's Import page, sent from that
+     * page (`HX-Current-URL`, with a query), with a session cookie that holds no token the server minted, with no cookie, and
+     * with no `HX-Current-URL`.
+     *
+     * Assertions:
+     *
+     * Each is answered 401, never a redirect that htmx would follow and swap in, with `HX-Redirect` to the login carrying the
+     * page's own path and query (not the partial's) as its `redirect`; the forged cookie's answer clears the cookie, and the
+     * answer with no cookie sets none.
+     *
+     * Edge cases:
+     *
+     * Without `HX-Current-URL`, `HX-Redirect` is the login alone.
+     */
+    val user = testContext.persistUser()
+    val library = addLibrary("Library A", user)
+    val forged = Map(SessionController.AUTH_COOKIE_NAME -> HttpCookie(SessionController.AUTH_COOKIE_NAME, "v2.local.forged"))
+
+    withServer(App) {
+      host =>
+        val page = s"/pipeline/r/${library.persistedId}?tab=1"
+        def htmx(cookies: Map[String, HttpCookie], from: Option[String]) =
+          requests.get(
+            s"$host/htmx/nav/r/${library.persistedId}?current=import",
+            cookies = cookies,
+            headers = Map("HX-Request" -> "true") ++ from.map("HX-Current-URL" -> _),
+            maxRedirects = 0,
+            check = false
+          )
+
+        val toLogin = s"/login?redirect=${java.net.URLEncoder.encode(page, "UTF-8")}"
+        val refused = htmx(forged, Some(s"$host$page"))
+        refused.statusCode shouldBe 401
+        refused.headers.get("hx-redirect") shouldBe Some(Seq(toLogin))
+        sessionCookieOf(refused) shouldBe Some(("", 0L))
+
+        val anonymous = htmx(Map.empty, Some(s"$host$page"))
+        (anonymous.statusCode, anonymous.headers.get("hx-redirect")) shouldBe (401, Some(Seq(toLogin)))
+        sessionCookieOf(anonymous) shouldBe None
+
+        htmx(Map.empty, None).headers.get("hx-redirect") shouldBe Some(Seq("/login"))
+    }
+  }
+
+  test("A session refused for a revoked token keeps its cookie; one of a deactivated account has it cleared") {
+
+    /**
+     * Setup:
+     *
+     * Two logged-in Users holding a grant in a Library, both of whose tokens are revoked, as a password change does; the second
+     * is deactivated as well, by hand-written SQL.
+     *
+     * Assertions:
+     *
+     * Each session's next page request redirects to the login. The first's answer sets no cookie, so a token its browser was
+     * given meanwhile (the new one of a password change made in another request) is not cleared; the second's clears the session
+     * cookie, its account being able to do nothing.
+     */
+    val revoked = testContext.persistUser()
+    val deactivated = testContext.persistUser()
+    val library = testContext.persistRepository()
+    testContext.grant(revoked, library)
+    testContext.grant(deactivated, library)
+
+    withServer(App) {
+      host =>
+        val revokedCookies = loginBy(host, revoked.email)
+        val deactivatedCookies = loginBy(host, deactivated.email)
+        testApp.service.accountVersions.revoke(revoked.persistedId)
+        setActive(deactivated, active = false)
+        testApp.service.accountVersions.revoke(deactivated.persistedId)
+
+        def page(cookies: Map[String, HttpCookie]) =
+          requests.get(s"$host/r/${library.persistedId}", cookies = cookies, maxRedirects = 0, check = false)
+        val keeps = page(revokedCookies)
+        (keeps.statusCode, sessionCookieOf(keeps)) shouldBe (302, None)
+        val clears = page(deactivatedCookies)
+        (clears.statusCode, sessionCookieOf(clears)) shouldBe (302, Some(("", 0L)))
+    }
+  }
 }

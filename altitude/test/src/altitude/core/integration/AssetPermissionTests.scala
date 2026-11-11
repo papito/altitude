@@ -246,12 +246,13 @@ import altitude.core.util.Query
      * Assertions:
      *
      * Holding Curate own alone, the account's queue holds the first Sequence alone, counted by its own two frames; the first
-     * Sequence's set holds its two frames, the second has too few to compare, a selection of all six frames holds its three, and
-     * the Detail panel's set size of its frame in the first Sequence is two.
+     * Sequence's set holds its two frames, the second has too few to compare, a selection of all six frames holds its three, the
+     * Detail panel's set size of its frame in the first Sequence is two, and the grouped grid's counts of its frames are two and
+     * one, a Sequence with none of them left out.
      *
      * Edge cases:
      *
-     * Holding Curate all, the queue holds both Sequences with all their frames.
+     * Holding Curate all, the queue holds both Sequences with all their frames, and the grid needs no counts of its own.
      */
     val first = UUID.randomUUID.toString
     val second = UUID.randomUUID.toString
@@ -269,11 +270,87 @@ import altitude.core.util.Query
       curation.sequenceSet(second) shouldBe None
       frameIds(curation.selectionSet(ids(firstFrames ++ secondFrames*))) shouldBe ids(firstFrames.take(2) :+ secondFrames.head*)
       curation.setSizeOf(testApp.service.asset.getById(firstFrames.head.persistedId)) shouldBe Some(2)
+      curation.curatableFrameCounts(Set(first, second, UUID.randomUUID.toString)) shouldBe Some(Map(first -> 2, second -> 1))
     }
 
     as(Permission.CurateAll) {
       curation.queue().map(_.members).toSet shouldBe Set(3)
       curation.countQueue() shouldBe 2
+      curation.curatableFrameCounts(Set(first, second)) shouldBe None
     }
+  }
+
+  test("Under Curate own, a Sequence holding another account's frames leaves the queue once the account's own are resolved") {
+
+    /**
+     * Setup:
+     *
+     * A Sequence of three triaged frames of the context's account and two of another account. Holding Curate own, the account
+     * resolves its three frames: two Picks, and one recycled.
+     *
+     * Assertions:
+     *
+     * The Sequence leaves the account's queue: the set held every frame the account is shown, so its Picks leave the Sequence.
+     * The other account's two frames stay as they were, live and in the Sequence, and the other account, holding Curate own,
+     * still finds the Sequence in its queue with its two frames.
+     */
+    val sequenceId = UUID.randomUUID.toString
+    val List(keep1, keep2, drop) = List.fill(3)(mine(isTriaged = true))
+    val othersFrames = List(theirs(isTriaged = true), theirs(isTriaged = true))
+    testContext.setAssetSequence(List(keep1, keep2, drop) ++ othersFrames, sequenceId)
+    val curation = testApp.service.curation
+
+    as(Permission.CurateOwn) {
+      curation.queue().map(_.sequenceId) shouldBe List(sequenceId)
+      curation.resolve(ids(keep1, keep2), ids(drop)) shouldBe Map(
+        keep1.persistedId -> sequenceId,
+        keep2.persistedId -> sequenceId)
+      curation.queue() shouldBe empty
+    }
+
+    for (frame <- othersFrames) {
+      val stored: Asset = testApp.service.asset.getById(frame.persistedId)
+      (stored.sequenceId, stored.isRecycled) shouldBe (Some(sequenceId), false)
+    }
+    switchContextUser(other)
+    try
+      as(Permission.CurateOwn)(curation.queue().map(queued => queued.sequenceId -> queued.members)) shouldBe
+        List(sequenceId -> 2)
+    finally switchContextUser(me)
+  }
+
+  test("Curation answers a foreign or unknown ID as not found, even beside one the account may not curate") {
+
+    /**
+     * Setup:
+     *
+     * The context's account holding Curate own, a triaged frame of its own, a triaged frame of another account, and a triaged
+     * frame in another Library.
+     *
+     * Assertions:
+     *
+     * Each of these is a `NotFoundException`, never a `ForbiddenException`, and recycles or restores nothing: resolving with the
+     * other account's frame and the other Library's as Picks; resolving the account's own frame with the other account's and an
+     * unknown ID recycled; reopening with the other account's frame and the other Library's as Picks; reopening the account's own
+     * frame with the other account's and an unknown ID restored.
+     */
+    val own = mine(isTriaged = true)
+    val others = theirs(isTriaged = true)
+    val home = RequestContext.getRepository
+    val otherLibrary = testContext.persistRepository()
+    switchContextRepo(otherLibrary)
+    val foreign =
+      testContext.insertAsset(testContext.makeAsset(repository = Some(otherLibrary), user = Some(me), isTriaged = true))
+    switchContextRepo(home)
+    val unknown = UUID.randomUUID.toString
+    val curation = testApp.service.curation
+
+    as(Permission.CurateOwn) {
+      an[NotFoundException] should be thrownBy curation.resolve(ids(others, foreign), Set.empty)
+      an[NotFoundException] should be thrownBy curation.resolve(ids(own), ids(others) + unknown)
+      an[NotFoundException] should be thrownBy curation.reopen(ids(others, foreign), Set.empty, Map.empty)
+      an[NotFoundException] should be thrownBy curation.reopen(ids(own), ids(others) + unknown, Map.empty)
+    }
+    recycledIds shouldBe empty
   }
 }

@@ -152,7 +152,8 @@ import altitude.core.service.UserService.TokenCheck
      *
      * Assertions:
      *
-     * Both tokens are refused, renewable as they are: a rebuild finds no active account.
+     * Both tokens are refused, renewable as they are, and the refusal clears the session cookie: a rebuild finds no active
+     * account, and the token will never be good again.
      *
      * Edge cases:
      *
@@ -170,8 +171,8 @@ import altitude.core.service.UserService.TokenCheck
     testApp.txManager.withTransaction(update("DELETE FROM account WHERE id = ?", deleted.persistedId))
     testApp.service.accountVersions.bump(deleted.persistedId)
 
-    testApp.service.user.checkToken(deactivatedToken, renewable = true) shouldBe TokenCheck.Refused
-    testApp.service.user.checkToken(deletedToken, renewable = true) shouldBe TokenCheck.Refused
+    testApp.service.user.checkToken(deactivatedToken, renewable = true) shouldBe TokenCheck.Refused(clearsCookie = true)
+    testApp.service.user.checkToken(deletedToken, renewable = true) shouldBe TokenCheck.Refused(clearsCookie = true)
   }
 
   test("A token below the revoked-below version is refused; one minted after the revocation is current") {
@@ -179,19 +180,32 @@ import altitude.core.service.UserService.TokenCheck
     /**
      * Setup:
      *
-     * A logged-in User whose tokens are then revoked, as a password change does.
+     * A logged-in User whose tokens are then revoked, as a password change does; then a second User whose tokens are revoked and
+     * who is deactivated, by hand-written SQL.
      *
      * Assertions:
      *
-     * The earlier token is refused, renewable as it is, and a token from a new login checks as current.
+     * The earlier token is refused, renewable as it is, and a token from a new login checks as current. The refusal leaves the
+     * session cookie alone: the browser may hold the token the change minted by now (a request in flight while the account
+     * changed its own password), which a cleared cookie would log out.
+     *
+     * Edge cases:
+     *
+     * The deactivated User's revoked token is refused clearing the cookie, as a token of an account that can do nothing is.
      */
     val user = testContext.persistUser()
     val token = tokenOf(user)
 
     testApp.service.accountVersions.revoke(user.persistedId)
 
-    testApp.service.user.checkToken(token, renewable = true) shouldBe TokenCheck.Refused
+    testApp.service.user.checkToken(token, renewable = true) shouldBe TokenCheck.Refused(clearsCookie = false)
     testApp.service.user.checkToken(tokenOf(user), renewable = true) shouldBe a[TokenCheck.Current]
+
+    val deactivated = testContext.persistUser()
+    val deactivatedToken = tokenOf(deactivated)
+    testApp.service.accountVersions.revoke(deactivated.persistedId)
+    setActive(deactivated, active = false)
+    testApp.service.user.checkToken(deactivatedToken, renewable = true) shouldBe TokenCheck.Refused(clearsCookie = true)
   }
 
   test("A stale token that cannot be replaced, a Bearer token's, is refused") {
@@ -203,7 +217,8 @@ import altitude.core.service.UserService.TokenCheck
      *
      * Assertions:
      *
-     * The token, checked as one the server cannot replace, is refused; checked before the raise, it was current.
+     * The token, checked as one the server cannot replace, is refused, with no cookie to clear; checked before the raise, it was
+     * current.
      */
     val user = testContext.persistUser()
     val token = tokenOf(user)
@@ -211,7 +226,7 @@ import altitude.core.service.UserService.TokenCheck
 
     testApp.service.accountVersions.bump(user.persistedId)
 
-    testApp.service.user.checkToken(token, renewable = false) shouldBe TokenCheck.Refused
+    testApp.service.user.checkToken(token, renewable = false) shouldBe TokenCheck.Refused(clearsCookie = false)
   }
 
   test("A token that is not one the server minted is refused") {
@@ -223,15 +238,15 @@ import altitude.core.service.UserService.TokenCheck
      *
      * Assertions:
      *
-     * The changed token and an empty one are refused.
+     * The changed token and an empty one are refused, and the refusal clears the session cookie.
      */
     val token = tokenOf(testContext.persistUser())
     // The middle character carries 6 bits of the ciphertext, where the last may carry only padding
     val middle = token.length / 2
     val tampered = token.updated(middle, if token(middle) == 'A' then 'B' else 'A')
 
-    testApp.service.user.checkToken(tampered, renewable = true) shouldBe TokenCheck.Refused
-    testApp.service.user.checkToken("", renewable = true) shouldBe TokenCheck.Refused
+    testApp.service.user.checkToken(tampered, renewable = true) shouldBe TokenCheck.Refused(clearsCookie = true)
+    testApp.service.user.checkToken("", renewable = true) shouldBe TokenCheck.Refused(clearsCookie = true)
   }
 
   test("Granting past the bound is refused with a message; a held grant at the bound still changes") {
@@ -253,10 +268,10 @@ import altitude.core.service.UserService.TokenCheck
 
     val refused = intercept[IllegalOperationException](testContext.grant(user, extra))
     refused.getMessage shouldBe C.Msg.Err.TOO_MANY_GRANTS.format(RepositoryService.MAX_GRANTS_PER_ACCOUNT)
-    testApp.service.repository.getGrant(user, extra.persistedId) shouldBe None
+    testContext.grantOf(user, extra.persistedId) shouldBe None
 
     testContext.grant(user, libraries.head)
-    testApp.service.repository.getGrant(user, libraries.head.persistedId) shouldBe Some(Permissions.all)
+    testContext.grantOf(user, libraries.head.persistedId) shouldBe Some(Permissions.all)
   }
 
   test("Two grants racing at the bound leave the account at the bound") {
@@ -344,7 +359,7 @@ import altitude.core.service.UserService.TokenCheck
     testApp.service.accountVersions.revoke(user.persistedId)
     val (_, rebuilt) = testApp.service.user.renew(claimsOf(token), snapshot).get
 
-    testApp.service.user.checkToken(rebuilt, renewable = true) shouldBe TokenCheck.Refused
+    testApp.service.user.checkToken(rebuilt, renewable = true) shouldBe TokenCheck.Refused(clearsCookie = false)
   }
 
   test("A token longer than the cookie's budget is logged at ERROR") {

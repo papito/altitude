@@ -16,8 +16,8 @@
 
 @* Every nav is rendered behind a login, so the account is always here. An entry shows only where the account may open what it
    leads to, by the Permissions of the login token in this Library (`RequestContext.holds`): Triage and Trash for a member (a
-   Guest sees Browse alone), Import for the holder of Import, Users for the holder of Create Users or Create Guests (an Admin
-   holds both), New library for an Admin or the holder of the Create Libraries flag, Settings for an Admin. The account menu,
+   Guest sees Browse alone), Import for the holder of Import, Users for the holder of Create Users or Create Guests in any
+   Library, which the token's grants say (`RequestContext.createsAccounts`; an Admin holds both), New library for an Admin or the holder of the Create Libraries flag, Settings for an Admin. The account menu,
    every account's, changes its password and logs out. *@
 @isAdmin = @{ RequestContext.getAccount.accountType == AccountType.Admin }
 
@@ -27,7 +27,7 @@
     <a href="/"><i class="fas fa-chevron-up"></i><span>Altitude</span></a>
 </div>
 @* Browse goes to the current Library's main page with no search; the Library's name after it is the Library menu's trigger:
-   the Libraries the account can see, and New library for an Admin. A nav reload renders the menu's host empty, by its ID and
+   the Libraries the account can see, and New library for an Admin or the holder of the Create Libraries flag. A nav reload renders the menu's host empty, by its ID and
    `hx-preserve`: htmx swaps the page's built host back in for it, so a list would be read for nothing. *@
 <div class="menu repository"@currentAttr(Const.NavEntry.BROWSE)>
     @includes.html.library_menu(
@@ -73,7 +73,7 @@
 </div>
 }
 
-@if(RequestContext.holds(Permission.CreateUsers, Permission.CreateGuests)) {
+@if(RequestContext.createsAccounts) {
 <div class="menu users"@currentAttr(Const.NavEntry.USERS)>
     <a href="/users/r/@repoId"><i class="fas fa-users"></i><span>Users</span></a>
 </div>

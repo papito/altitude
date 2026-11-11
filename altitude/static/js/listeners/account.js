@@ -3,11 +3,31 @@ import { showSuccessSnackBar } from "../common/snackbar.js"
 
 /**
  * The nav's account menu, on every page that has the nav: a password the account changed is
- * confirmed through the snackbar (the answer set the session's new token)
+ * confirmed through the snackbar (the answer set the session's new token), and the page's
+ * WebSocket feeds are connected again. The change revoked the account's sessions, which closed
+ * their sockets with 1008, a code `hx-ws` does not reconnect on (the Import page's status feed);
+ * the new cookie is set by now, so a new handshake passes.
  */
 export function registerAccountListeners() {
     document.body.addEventListener(Const.events.passwordChanged, (event) => {
         showSuccessSnackBar(event.detail?.message ?? "Your password is changed")
+        reconnectSockets()
+    })
+}
+
+/**
+ * Connects every `hx-ws:connect` element of the page again: htmx swaps the element for a copy of
+ * itself, which cleans the old one up (its socket closed) and processes the copy, which connects
+ */
+function reconnectSockets() {
+    document.querySelectorAll("[hx-ws\\:connect]").forEach((el) => {
+        htmx.swap({
+            sourceElement: el,
+            target: el,
+            swap: "outerHTML",
+            text: el.outerHTML,
+            transition: false,
+        })
     })
 }
 

@@ -87,6 +87,8 @@ object Api:
       val CURRENT_PASSWORD = "currentPassword"
       val NEW_PASSWORD = "newPassword"
       val NEW_PASSWORD2 = "newPassword2"
+      // The state an Admin's edit form was opened over (UserService.editState), which its save carries back
+      val OPENED_STATE = "openedState"
 
     object Location:
       val LOCATION_ID = "locationId"

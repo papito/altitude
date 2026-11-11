@@ -259,6 +259,68 @@ import altitude.core.util.Util
     }
   }
 
+  test("Under Curate own, a Sequence's Curate counts the frames the account owns alone") {
+
+    /**
+     * Setup:
+     *
+     * A User holding Curate own alone, logged in; in triage, a Sequence of two of its frames, and a Sequence of one of its frames
+     * and two another account owns; read grouped by Sequence.
+     *
+     * Assertions:
+     *
+     * The first Sequence has its Curate button; the second, whose three frames shown leave one the User may curate, has none, as
+     * Curation would show it too few frames.
+     *
+     * Edge cases:
+     *
+     * A User holding Curate all is offered Curate on both.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    testContext.grant(
+      testContext.user,
+      testContext.repository,
+      altitude.core.models.Permissions.of(altitude.core.models.Permission.CurateOwn))
+    login()
+
+    withServer(App) {
+      host =>
+        val mine = inSequence(persistFrame("2026-09-06T10:00:00", "a.jpg"), persistFrame("2026-09-06T10:00:01", "b.jpg"))
+        val ownInMixed = persistFrame("2026-09-07T10:00:00", "c.jpg")
+        val theirs = List(persistFrame("2026-09-07T10:00:01", "d.jpg"), persistFrame("2026-09-07T10:00:02", "e.jpg"))
+        // Persisted once the frames are, which the test context's one account persists
+        val other = testContext.persistUser()
+        testApp.txManager.withTransaction {
+          for (frame <- theirs)
+            testApp.DAO.asset
+              .updateByBySql("UPDATE asset SET owner_user_id = ? WHERE id = ?", List(other.persistedId, frame.persistedId))
+        }
+        val mixed = inSequence(ownInMixed :: theirs*)
+        val params = Map(Api.Field.Search.VIEW -> "triage", Api.Field.Search.GROUP_BY -> "sequence")
+
+        val html = htmlSearch(host, repoId, params).text()
+        html should include(curateButton(mine))
+        html should include(header(mixed))
+        (html should not).include(curateButton(mixed))
+
+        val curator = testContext.persistUser()
+        testContext.grant(
+          curator,
+          testApp.service.repository.getById(repoId),
+          altitude.core.models.Permissions.of(altitude.core.models.Permission.CurateAll))
+        val all = requests
+          .get(
+            s"$host/htmx/search/r/$repoId",
+            params = params,
+            headers = Map("Accept-Encoding" -> "identity"),
+            cookies = cookiesOf(host, curator))
+          .text()
+        all should include(curateButton(mine))
+        all should include(curateButton(mixed))
+    }
+  }
+
   test("The Group menu offers Sequence in Triage alone, and a Sequence grouping elsewhere is no grouping") {
 
     /**

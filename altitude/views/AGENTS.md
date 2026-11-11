@@ -153,12 +153,12 @@ in either theme:
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
-| `js/upload-form-page.js`, `js/settings-page.js`, `js/users-page.js`, `js/nav-page.js` | the page modules of `pipeline.scala.html`, `settings.scala.html` and `users.scala.html`, and what they share. Each starts with `startNavPage()` (`nav-page.js`): Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store) and the `contextMenu` component, the htmx request rule and the dialog wiring (`listeners/dialogs.js`) with a minimal app, whose hydration is the `modal` fragments and the choice menus, and the nav's Library menu built; that is the nav's menus and the dialogs they open (New library, Change password, whose outcome `listeners/account.js` confirms). Then the import page's hydrates its upload form, Settings' registers its own listeners, and Users' registers its components first (`usersPage`, `accountForm`, `passwordField`) and its listener after; see **Settings screen** and **Users page** |
+| `js/upload-form-page.js`, `js/settings-page.js`, `js/users-page.js`, `js/nav-page.js` | the page modules of `pipeline.scala.html`, `settings.scala.html` and `users.scala.html`, and what they share. Each starts with `startNavPage()` (`nav-page.js`): Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store) and the `contextMenu` component, the htmx request rule and the dialog wiring (`listeners/dialogs.js`) with a minimal app, whose hydration is the `modal` fragments and the choice menus, and the nav's Library menu built; that is the nav's menus and the dialogs they open (New library, Change password, whose outcome `listeners/account.js` confirms, connecting the page's WebSocket feeds again). Then the import page's hydrates its upload form and registers the status feed's end (`js/import-status.js`), Settings' registers its own listeners, and Users' registers its components first (`usersPage`, `accountForm`, `passwordField`) and its listener after; see **Settings screen** and **Users page** |
 | `js/theme-boot.js` | a plain blocking script of `includes/header_common`'s head, on every page with a nav: declares the remembered theme on `<html>` before the first paint, from the key in its `data-key`; see **Themes** |
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's and the Detail panel's docks are made from), stored-state (a remembered object under one localStorage key that modules share: `readStoredObject` and `writeStoredFields`, which sets some fields and keeps the rest; the Detail panel's view is read and written through it by `detail-panel.js` and `dock.js`), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font), name-key (the server's name fold, `nameKey` and `partialMatchKey`: the Change combobox's and the Users page filter's), request-failure (a failed htmx request in the snackbar: a 403 or 409 refusal in plain text as its text, anything else by its path and status) |
+| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's and the Detail panel's docks are made from), stored-state (a remembered object under one localStorage key that modules share: `readStoredObject` and `writeStoredFields`, which sets some fields and keeps the rest; the Detail panel's view is read and written through it by `detail-panel.js` and `dock.js`), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font), name-key (the server's name fold, `nameKey` and `partialMatchKey`: the Change combobox's and the Users page filter's), request-failure (a failed htmx request in the snackbar: a 403 or 409 refusal in plain text as its text, a 401 nowhere, anything else by its path and status), session (a 401 sends the window to the login, back to the page: `goToLogin`) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell) and `face-combobox.js` (the Change combobox of a People row in the Detail panel); `index.js` registers them. The Users page's own, `users-page.js` (the tab and the filter), `account-form.js` (the account form's type and Permission matrix) and `password-field.js` (Generate and Show), are registered by its page module |
@@ -333,7 +333,12 @@ Two-layer event bus, both on `document.body`:
   `/import/status` with no query string: the server takes the account from the session cookie the
   handshake carries, refuses a handshake without a login with a 401 and one from another origin
   with a 403, and closes the account's sockets when the account changes (1013, which `hx-ws.js`
-  reconnects on, checking the login again) or its sessions are revoked (1008, which it does not). No Alpine
+  reconnects on, checking the login again) or its sessions are revoked (1008, which it does not: a password change, a
+  deactivation). The page connects its feed again after the account changes its own password (`js/listeners/account.js`
+  swaps the `hx-ws:connect` element for a copy, which htmx cleans up and processes again; the new cookie is set by then), and
+  stops reconnecting after `MAX_RECONNECTS` (5) failed reconnects in a row, by cancelling the next in
+  `htmx:ws:before:connection` (`js/import-status.js`; the vendored library is not patched), saying in the status area,
+  `#importStatusLost`, to reload. No Alpine
   compatibility shim is loaded: Alpine's mutation observer initializes swapped-in markup, and
   nothing calls `Alpine.initTree` on it.
 - Polling is declarative: the import page refreshes the nav with
@@ -343,6 +348,16 @@ Two-layer event bus, both on `document.body`:
   htmx 2 spelling `every 5s […]` parses, and its filter is silently dropped.
 - A request whose failure is not worth a report declares the boolean `data-app-silent-failure` on the element that
   issues it: `js/listeners/htmx-requests.js` then shows no error snackbar for its 4xx/5xx and does nothing else with it.
+- **Requests and a refused session**: a 401 (no session, or one expired, revoked, or of an account deactivated or deleted
+  since) sends the window to the login, to come back to the page (`js/common/session.js`, `goToLogin`): from any htmx
+  request, a silent poll and a dialog's submit included, in `js/listeners/htmx-requests.js` before anything else, and from
+  any axios call, by the interceptor of `js/http/client.js`. Nothing is reported (`reportRequestFailure` ignores a 401), and a
+  dialog's submit answered 401 fires no success event. The server answers an htmx request with no login 401 with
+  `HX-Redirect` to the same login (`decorators.requireLogin`), never with a redirect that htmx's fetch would follow and swap
+  in.
+- A refusal the server words reaches the user as its words: an htmx request's plain-text 403 or 409 through
+  `reportRequestFailure` (a modal's open too, `js/listeners/dialogs.js`), an axios call's JSON `{"error": ...}` through
+  `getHttpErrorMessage` (`js/http/client.js`).
   Only the import page's nav poll declares it: its next tick tries again, and a server answering 5xx while it restarts
   would otherwise raise an error every 5 s. A request that gets no response at all reaches no `htmx:after:request`
   listener (htmx fires `htmx:error`), so it is never reported there either way.
@@ -2090,7 +2105,7 @@ covers a select as it does an input; the page adds none. `includes/nav` shows th
 to an Admin only (`RequestContext.account`), so `NavController` requires login and both nav loads happen behind one.
 
 **Users page** — `users.scala.html` (`/users/r/:repoId`, `UsersController`, for an Admin or a holder of Create Users or
-Create Guests in the Library) is shaped like Settings: `header_common`, the nav (`current` `Const.NavEntry.USERS`), one
+Create Guests in any Library, `requireAccountCreator`, so it opens from every Library the account sees) is shaped like Settings: `header_common`, the nav (`current` `Const.NavEntry.USERS`), one
 `main`, `html_common`, `json-enc.js` and the page module `js/users-page.js`, which registers the page's components and
 starts as Settings does (`startNavPage()`). Its layout, cards and dialogs are styled by `static/css/pages/users.css`.
 `main` (`#users`) is capped at `--users-page-max-width` and centered, and is the `usersPage` component
@@ -2099,8 +2114,9 @@ starts as Settings does (`startNavPage()`). Its layout, cards and dialogs are st
 `.action-button.primary`) at the right, which requests the Add User modal into the general modal host. Under it,
 `htmx/user_accounts` (`#accounts`, also `GET /htmx/users/r/:repoId/accounts`): a `.toggle-group` of three buttons, Admins,
 Users and Guests, each with its count (`.tab-count`), `aria-pressed` bound to the tab (at first the one the server writes in `#accounts`' `data-app-start-tab`: the first holding a
-card, else Users, or Guests for a creator of Guests alone), then one section per
-tab, a grid of cards auto-filling the row at about `--account-card-width`, shown by `x-show`. The filter narrows the cards
+card, else Users, or Guests for a creator of Guests alone, in whichever Library), then one section per
+tab, a grid of cards auto-filling the row at about `--account-card-width`, shown by `x-show`; a tab with no card reads
+"No Admins", "No Users" or "No Guests". The filter narrows the cards
 with no request: each card carries its name, username and email address in `data-app-filter-text`, which `shows($el)`
 compares under the server's name fold (`common/name-key.js`, `partialMatchKey`). The cards are read again after every change
 the page makes: the dialogs and the menu entries declare `ACCOUNTS_CHANGED_EVENT`, whose listener (`listeners/account.js`)
@@ -2123,8 +2139,8 @@ the success event itself and closes the menu (`handleActionClick`); and Delete�
 destructive `.action-button.error` and its initial focus the close control. Neither Deactivate nor Delete is on the Admin's
 own card. Anyone else's cards have no menu.
 
-The **Add User modal** (`htmx/account_form`, `#accountForm`; also the edit form, titled "Edit <name>", with the account's ID
-hidden and no password) is a `modal` fragment of the general host, `--account-form-width` wide (`#modalContent:has(#accountForm)`),
+The **Add User modal** (`htmx/account_form`, `#accountForm`; also the edit form, titled "Edit <name>" by the name as stored
+whatever a refused save typed, with the account's ID and the state it was opened over hidden, and no password) is a `modal` fragment of the general host, `--account-form-width` wide (`#modalContent:has(#accountForm)`),
 one column whose body (`.account-form-body`) scrolls within `--account-form-body-max-height` while the actions, the submit
 (Add User, or Save) and Cancel, stay in view. Its fields: Name, Username and Email one per row, then to add a Password field
 with Generate (a random password of 20 characters from `crypto.getRandomValues`, shown) and Show (`includes/password_field`,
@@ -2137,8 +2153,9 @@ name (`libraryIds`), an All button, and one column per Permission in the order o
 its header a button spelling the Permission out, wrapped; a cell is a checkbox (`permissions`, "<Library ID>:<Permission>")
 where the creator holds that Permission there, and empty elsewhere: a Library or a Permission above a creator's ceiling is
 not rendered at all. The `accountForm` component (`js/alpine/components/account-form.js`) starts from the JSON in
-`data-app-account-form` (the values and the ceiling) and runs the toggles with no request: checking access, for a User,
-checks Import and Curate own where the ceiling holds them, and unchecking it clears its Permissions; checking a Permission
+`data-app-account-form` (the values, the ceiling, and `preset`, the Permissions a User given a Library starts with; with the
+new-Library switch off, the chips start from the preset too) and runs the toggles with no request: checking access, for a User,
+checks the preset, Import and Curate own, where the ceiling holds them, and unchecking it clears its Permissions; checking a Permission
 checks access; All checks every Permission of the row, or clears them once all are; a column's header checks its Permission
 in every Library chosen, or clears it once all hold it. The inputs follow the state through bindings, and what may not be
 sent is disabled, so the browser leaves it out of the form: a Guest's Permissions (the table's `.guest` class hides the
@@ -2146,7 +2163,8 @@ columns: a Guest gets the access column alone), an Admin's whole matrix (an Admi
 may not be given there (and hidden), and an unchecked Library once as many are checked as an account may hold, with a note
 naming the bound. The form posts JSON (`hx-json-enc`) to `POST /htmx/users/r/:repoId/add` or `PUT .../edit`; a refused field
 comes back as the validation replacement, the values submitted kept and the error under its field (the type's under the
-cards, the Libraries' under the matrix), and a saved one answers the success detail's message.
+cards, the Libraries' under the matrix), an edit saved over a change made since it was opened (another Admin's, a new
+Library's grant) comes back with `ACCOUNT_CHANGED` above the actions, and a saved one answers the success detail's message.
 
 **Setup background** — `setup.scala.html` (`/setup`, `SetupController`; the index redirects here until the repository
 exists) runs a full-screen animated scene behind the page, a top-down view of a jet over clouds and farmland. Its canvas,
@@ -2390,8 +2408,8 @@ search's `nav form` rule would draw it). The dialog asks for the current passwor
 `PUT /htmx/account/password`; a refusal comes back as the form with the error under its field and nothing typed kept, and
 a change answers with the session's new cookie and `PASSWORD_CHANGED_EVENT`, which `listeners/account.js` confirms in the
 snackbar. The style guide's navigation section holds its specimen, whose actions lead to the section and request nothing.
-A Users entry (`.menu.users`, `fa-users`) follows Import for the holder of Create Users or Create Guests, linking
-to the Users page of the current Library (**Users page**).
+A Users entry (`.menu.users`, `fa-users`) follows Import for an Admin and the holder of Create Users or Create Guests in
+any Library, linking to the Users page of the current Library (**Users page**).
 
 The Browse cell (`.menu.repository`, marked while Browse is shown) holds two targets side by side: **Browse**, a link
 like every entry's (the database icon and "Browse") to the current Library's main page with no search, `/r/<id>`, and
@@ -2427,12 +2445,14 @@ names), and marks `data-app-recycles` when the account may recycle what its view
 `context.holds(...)` or `context.recyclesHere()` (`js/context.js`, with `Const.permission` naming the Permissions) before it
 builds or binds a control. Where each control follows:
 
-- The nav (`includes/nav`): Triage and Trash for a member, Import for Import, Users for Create Users or Create Guests,
-  New library for an Admin or the Create Libraries flag, Settings for an Admin. A Guest's nav is Browse, the search, the Library menu and the theme switch.
+- The nav (`includes/nav`): Triage and Trash for a member, Import for Import, Users for Create Users or Create Guests in any
+  Library (`RequestContext.createsAccounts`, from the token's grants), New library for an Admin or the Create Libraries
+  flag, Settings for an Admin. A Guest's nav is Browse, the search, the Library menu, the account menu and the theme switch.
 - The batch operations (`includes/batch_ops`, given the page's `view`): Move, Add to album, Remove from album, Add to
   location and Remove from location for Organize; Recycle by `recyclesIn(view)`; the Trash's Restore by `restores`, since the
   Trash holds assets recycled from a folder and from Triage alike, the server checking each (Curate own reaching only the
-  account's own); Curate Selected for a Curate Permission; the Trash's Purge, and the toolbar's Purge recycle bin
+  account's own); Curate Selected for a Curate Permission, and outside Triage for Recycle too, since the frames not picked
+  are recycled and a sorted one takes Recycle; the Trash's Purge, and the toolbar's Purge recycle bin
   (`htmx/trashbin_header`), for Purge.
 - The explorer: the ⋯ menus and add buttons of the folder tree, the album list and the Location list
   (`js/common/folder-tree.js`, `album-list.js`, `location-list.js`) for Organize; without it a row's menu cell is the
@@ -2450,12 +2470,13 @@ builds or binds a control. Where each control follows:
   named one only for a holder of Organize, and otherwise moves this Face alone ("· this face"); its Curation row
   (`htmx/detail_panel`) for a Curate Permission.
 - Curation is a Curate Permission's, as its routes are: every way in (Triage's Curate button in `includes/search_results`,
-  a Sequence header's in `htmx/results_grid_grouped`, Curate Selected, the Detail panel's row, the `?curate=` address,
+  a Sequence header's in `htmx/results_grid_grouped`, which with Curate own alone needs two frames the account owns,
+  `CurationService.curatableFrameCounts`, Curate Selected (in Browse with Recycle too), the Detail panel's row, the `?curate=` address,
   which `js/listeners/curation.js` leaves alone without one) and the queue's count (`js/stores/sequences-to-curate.js`,
   which asks nothing without one). Inside, every control is offered: a set holds only the frames the account may curate,
   its own alone with Curate own (`AssetRules.curatedOwner`).
 
-- The Users page (**Users page**): Add User for a holder of Create Users or Create Guests, as the page itself; each card's ⋯
+- The Users page (**Users page**): Add User for a holder of Create Users or Create Guests in any Library, as the page itself; each card's ⋯
   menu for an Admin alone, without Deactivate and Delete on its own card; the Add User form renders nothing above the
   creator's ceiling.
 
@@ -2799,7 +2820,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/constants.js` | All string constants: events, attributes, store keys, view names |
 | `static/js/app.js` | thin bootstrap that exposes `initApp()` and starts `FrontendApp` |
 | `static/js/context.js` | `window.ctx` — repo ID (set once by `index.scala.html`) and metadata field settings |
-| `static/js/http/client.js` | shared axios client for non-HTMX requests; use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
+| `static/js/http/client.js` | shared axios client for non-HTMX requests (a 401 sends the window to the login; `getHttpErrorMessage` says a JSON refusal's reason); use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes (`Folder.find(id)`); owns branch expansion (`expand`, `expandAll`, `collapse` with descendant reset) |
 | `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
 | `static/js/common/modal.js` | owner of the four dialog hosts: `openModal`, `closeModal`, open identity (`isModalOpenActive`), the element that requested an open (`getModalOpenSource`), the control focus returns to (`openerOf`), an open answered 204 (`settleModalOpenRequest`'s `onNoContent`), the popover dialog's anchor and its own dismissals (`bindPopoverHost`), `setAssetDetailSize` (the size as shown, which the box is fitted from); a closing host leaves fullscreen |
