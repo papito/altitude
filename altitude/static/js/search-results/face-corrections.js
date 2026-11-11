@@ -10,12 +10,18 @@
  * whose label changes to the one it carries ("Remove (last click)"), and the second click, on the
  * same Face, sends `DELETE /htmx/asset/r/:repoId/face/:faceId`; a change of the selection disarms it
  * and puts the first label back. Change is the combobox's (`alpine/components/face-combobox.js`),
- * which announces a pick as `Const.events.facePersonPicked`; this module answers it with
- * `PUT /htmx/asset/r/:repoId/face/:faceId/person`, the body naming the Person or the new name.
+ * which announces a pick as `Const.events.facePersonPicked` with its `action`; this module answers
+ * it by the action: a move with `PUT /htmx/asset/r/:repoId/face/:faceId/person`, the body naming the
+ * Person or the new name; a name of the Face's Person as a whole with `PUT …/person/name`
+ * (`{ personId, name }`); a merge of the Face's Person into a named Person with `PUT …/person/merge`
+ * (`{ personId, destPersonId }`). The `personId` of the last two is the Person the panel showed with
+ * the Face, which the server checks, since the Face may have moved since.
  *
- * Either answers the asset's People section (200), which replaces the one shown, with the result
- * message and any deleted Person read from its root's data attributes; a 400 (the body, a reserved
- * name) is a message to show and nothing changes; a 404 (the Face gone or moved meanwhile) or a 409
+ * Each answers the asset's People section (200), which replaces the one shown, with the result
+ * message, any deleted Person and, after a merge, the merged Person and the Person they were merged
+ * into read from its root's data attributes; a name also tells the panel who was named. A 400 (the
+ * body, a reserved name, a name held by someone, a Person named meanwhile) is a message to show and
+ * nothing changes; a 404 (the Face gone or moved meanwhile, a merge target no longer live) or a 409
  * (the asset recycled meanwhile) means the section is stale: the panel reloads and the server's
  * message is shown. One request at a time per Face, so a second pick during one is dropped.
  */
@@ -53,8 +59,22 @@ export function createFaceCorrections({
         document.body.addEventListener(
             Const.events.facePersonPicked,
             (event) => {
-                const { faceId, personId, name } = event.detail
-                move(faceId, personId ? { personId } : { name })
+                const {
+                    faceId,
+                    action,
+                    personId,
+                    sourcePersonId,
+                    destPersonId,
+                    name,
+                } = event.detail
+
+                if (action === "name") {
+                    namePerson(faceId, sourcePersonId, name)
+                } else if (action === "merge") {
+                    mergePerson(faceId, sourcePersonId, destPersonId)
+                } else {
+                    move(faceId, personId ? { personId } : { name })
+                }
             },
         )
 
@@ -118,21 +138,41 @@ export function createFaceCorrections({
 
     /** Change: gives the Face to `target`, `{ personId }` or `{ name }` */
     function move(faceId, target) {
+        return send(faceId, () => putPerson(faceId, "", target))
+    }
+
+    /** Change, for a Face of a Person with no name: names that Person, `personId`, as a whole */
+    function namePerson(faceId, personId, name) {
+        return send(
+            faceId,
+            () => putPerson(faceId, "/name", { personId, name }),
+            { namedPersonId: personId },
+        )
+    }
+
+    /** Change, for a Face of a Person with no name: merges that Person, `personId`, into the named `destPersonId` */
+    function mergePerson(faceId, personId, destPersonId) {
         return send(faceId, () =>
-            http.put(
-                `/htmx/asset/r/${context.getRepoId()}/face/${faceId}/person`,
-                target,
-                { validateStatus: allowHttpStatuses(REFUSED, ...STALE) },
-            ),
+            putPerson(faceId, "/merge", { personId, destPersonId }),
+        )
+    }
+
+    /** The PUT of a Change: the Face's Person route, or its `/name` or `/merge` */
+    function putPerson(faceId, subPath, body) {
+        return http.put(
+            `/htmx/asset/r/${context.getRepoId()}/face/${faceId}/person${subPath}`,
+            body,
+            { validateStatus: allowHttpStatuses(REFUSED, ...STALE) },
         )
     }
 
     /**
      * Sends one correction of `faceId` and settles its answer: the People section for the panel to
-     * swap in, a refusal's message, or a stale section to reload. The row's controls are disabled
-     * while it runs.
+     * swap in, with `outcome` (what the request alone knows, such as who was named) beside what the
+     * section says, a refusal's message, or a stale section to reload. The row's controls are
+     * disabled while it runs.
      */
-    async function send(faceId, request) {
+    async function send(faceId, request, outcome = {}) {
         if (inFlight.has(faceId)) {
             return
         }
@@ -152,7 +192,7 @@ export function createFaceCorrections({
                 return
             }
 
-            afterEdit(parsePeopleSection(response.data))
+            afterEdit({ ...parsePeopleSection(response.data), ...outcome })
         } catch (error) {
             console.error(
                 `Error correcting a Face: ${getHttpErrorMessage(error)}`,
@@ -182,7 +222,8 @@ export function createFaceCorrections({
 
 /**
  * The People section a correction answers with (`htmx/detail_panel_people`): the section's element,
- * adopted into this document, with the result message and the deleted Person its root carries.
+ * adopted into this document, with what its root carries: the result message, the deleted Person,
+ * and after a merge the merged Person and the Person they were merged into.
  */
 export function parsePeopleSection(html) {
     const doc = new DOMParser().parseFromString(html, "text/html")
@@ -198,5 +239,9 @@ export function parsePeopleSection(html) {
         deletedPersonMessage:
             sectionEl.getAttribute(Const.attributes.deletedPersonMessage) ??
             null,
+        mergedPersonId:
+            sectionEl.getAttribute(Const.attributes.mergedPersonId) ?? null,
+        mergedIntoId:
+            sectionEl.getAttribute(Const.attributes.mergedIntoId) ?? null,
     }
 }

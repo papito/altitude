@@ -191,12 +191,33 @@
     }
 }
 
-/* The combobox (js/alpine/components/face-combobox.js): the input at the panel's size, with the X beside it that returns
-   the row to its buttons */
+/* The combobox (js/alpine/components/face-combobox.js): the input at the panel's size, then, for a Face of a Person with no
+   name, the "This face only" switch and its label at the input's size, then the X that returns the row to its buttons. A
+   flex row that wraps only where the container query below sends the switch to a line of its own */
 .detail-panel .people .face-combobox {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.detail-panel .people .face-combobox .face-only {
+    flex: none;
     display: flex;
     align-items: center;
     gap: var(--space-3);
+    font-size: var(--font-size-small);
+}
+
+/* Too narrow for the input to keep room beside the switch: the switch and its label take a line of their own above the
+   input and the X, so the listbox opening under the input never covers them. A container query takes no custom property, so
+   the width is written here: about what the switch, its label and the X take with an input of a dozen characters beside
+   them */
+@container (width < 20rem) {
+    .detail-panel .people .face-combobox .face-only {
+        order: -1;
+        flex-basis: 100%;
+    }
 }
 
 .detail-panel .people .face-combobox input {
@@ -304,6 +325,16 @@
 
 .face-listbox .hidden-mark {
     color: var(--theme-neutral-3);
+}
+
+/* What an option's pick does to the Face's Person, after the name ("· merge Unknown 7 (5 assets)", "· this face"), in the
+   secondary text color; the armed option's label, which a second pick answers, in Remove's warning color */
+.face-listbox .suffix {
+    color: var(--theme-neutral-3);
+}
+
+.face-listbox .armed {
+    color: var(--warning-color);
 }
 
 /* The Create row, offered for a name no Person has, in the link color with a plus in the cover's place */
