@@ -18,6 +18,7 @@ import altitude.core.unit.GeoLocationResolverTests
 import altitude.core.unit.ImageMeasurementTests
 import altitude.core.unit.ImageUtilTests
 import altitude.core.unit.ImportParallelismTests
+import altitude.core.unit.NameKeyTests
 import altitude.core.unit.NaturalOrderTests
 import altitude.core.unit.NetPoolTests
 import altitude.core.unit.PersonModelTests
@@ -63,6 +64,7 @@ abstract class AllUnitTestSuites
     new UrlServiceTests,
     new UtilTests,
     new NaturalOrderTests,
+    new NameKeyTests,
     new EnvironmentTests,
     new Sha256Tests,
     new NetPoolTests,
