@@ -10,6 +10,7 @@ import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe }
 import scala.jdk.CollectionConverters.*
 
 import altitude.core.App
+import altitude.core.Const as C
 import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.User
@@ -235,6 +236,45 @@ import altitude.core.util.Util
         val page = requests.get(s"$host/login").text()
         page should include("""<label for="login">Email or username</label>""")
         page should include("""id="login"""")
+    }
+  }
+
+  test("The login page is the app's, and a failed login says so and keeps the login typed, never the password") {
+
+    /**
+     * Setup:
+     *
+     * The login page, then a login with a wrong password sent with a page to come back to.
+     *
+     * Assertions:
+     *
+     * The page links the app's stylesheet, is titled, carries the brand and a "Log in" button, and shows no error. The failed
+     * login answers 401 with the page again: the generic `LOGIN_FAILED` error, the login as typed in its field, the page to come
+     * back to, and no trace of the password.
+     */
+    val user = testContext.persistUser()
+
+    withServer(App) {
+      host =>
+        val page = requests.get(s"$host/login").text()
+        page should include(s"""href="${altitude.core.Assets.appCss}"""")
+        page should include("<title>Log in · Altitude</title>")
+        page should include("""<body class="login">""")
+        page should include("""<div class="brand">""")
+        page should include("""<button type="submit" class="action-button primary">Log in</button>""")
+        (page should not).include(C.Msg.Err.LOGIN_FAILED)
+
+        val password = s"wrong${Util.randomStr(8)}"
+        val failed = requests.post(
+          s"$host/login",
+          maxRedirects = 0,
+          check = false,
+          data = Map("login" -> user.username, "password" -> password, "redirect" -> "/settings"))
+        failed.statusCode shouldBe 401
+        failed.text() should include(s"""<div class="error" role="alert">${C.Msg.Err.LOGIN_FAILED}</div>""")
+        failed.text() should include(s"""value="${user.username}"""")
+        failed.text() should include("""name="redirect" value="/settings"""")
+        (failed.text() should not).include(password)
     }
   }
 

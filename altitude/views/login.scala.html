@@ -1,18 +1,41 @@
-@(redirect: Option[String] = None)
+@import altitude.core.Const
 
-<p>Please login:</p>
+@* The login page (GET /login, and a refused POST /login), in the app's look and the theme the nav remembers: the brand above
+   one card, centered in the window, holding the login (an email address or a username) and the password, and Log in. A refused
+   login comes back with one error, the same whatever refused it (`LOGIN_FAILED`), the login as typed (`login`) and focus on the
+   password; `redirect` is the page to come back to. Styled by static/css/pages/login.css. *@
+@(redirect: Option[String] = None, login: String = "", failed: Boolean = false)
 
-<form action="/login" method="post">
-    <p>
-        <label for="login">Email or username</label><br>
-        <input type="text" id="login" name="login" autocomplete="username" autocapitalize="none" spellcheck="false"/><br>
-        <label for="password">Password</label><br>
-        <input type="password" id="password" name="password" autocomplete="current-password"/><br/>
-        @redirect.map { r =>
-        <input type="hidden" name="redirect" value="@r"/>
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <title>Log in · Altitude</title>
+
+    @includes.html.header_common()
+  </head>
+
+  <body class="login">
+    <main>
+      <div class="brand"><a href="/"><i class="fas fa-chevron-up" aria-hidden="true"></i><span>Altitude</span></a></div>
+
+      <form id="loginForm" action="/login" method="post">
+        @if(failed) {
+        <div class="error" role="alert">@Const.Msg.Err.LOGIN_FAILED</div>
         }
-    </p>
-    <p>
-        <input type="submit">
-    </p>
-</form>
+        <div>
+          <label for="login">Email or username</label>
+          <input type="text" id="login" name="login" value="@login" autocomplete="username" autocapitalize="none" spellcheck="false" required@if(login.isEmpty){ autofocus}>
+        </div>
+        <div>
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required@if(login.nonEmpty){ autofocus}>
+        </div>
+        @for(page <- redirect) {
+        <input type="hidden" name="redirect" value="@page">
+        }
+        <button type="submit" class="action-button primary">Log in</button>
+      </form>
+    </main>
+  </body>
+</html>

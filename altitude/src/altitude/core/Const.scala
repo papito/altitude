@@ -173,6 +173,8 @@ object Const:
       val USERNAME_TAKEN = "Another account has this username"
       val PASSWORD_LENGTH = "Use %s to %s characters"
       val WRONG_PASSWORD = "This is not your current password"
+      // A refused login, whatever refused it (an unknown login, a wrong password, a deactivated account), which it never says
+      val LOGIN_FAILED = "Wrong email, username or password"
       // An Admin's edit saved over an account changed since its form was opened (UserService.update): another Admin's edit, a
       // grant a new Library gave it
       val ACCOUNT_CHANGED = "This account was changed since you opened it. Reopen it to see the change."

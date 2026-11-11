@@ -129,6 +129,7 @@
     --account-avatar-size: 2.5rem;
     --account-username-max-width: 11rem;
     --account-info-width: 22rem;
+    --login-form-width: 20rem;
     --account-form-width: 66rem;
     --account-form-body-max-height: calc(100dvh - 16rem);
     --permission-column-width: 4.4rem;
@@ -297,9 +298,11 @@ nav .brand {
     flex: 0 0 var(--nav-brand-width);
 }
 
-nav .brand a {
+/* The brand: the nav's, and the login page's above its form */
+.brand a {
     display: flex;
     align-items: center;
+    text-decoration: none;
     gap: var(--space-3);
     font-family: var(--font-nav);
     font-size: var(--font-size-xl);
@@ -312,11 +315,11 @@ nav .brand a {
     transition: filter 0.25s ease;
 }
 
-nav .brand a:hover {
+.brand a:hover {
     filter: drop-shadow(0 0 8px hsl(from var(--theme-primary) h s l / 0.8));
 }
 
-nav .brand i {
+.brand i {
     color: var(--theme-accent);
 }
 
@@ -652,7 +655,7 @@ footer {
     font-size: var(--font-size-small);
 }
 
-:is(#popoverContent, #modalContent) label {
+:is(#popoverContent, #modalContent, #loginForm) label {
     display: block;
     margin-bottom: var(--space-2);
     font-size: var(--font-size-xs);

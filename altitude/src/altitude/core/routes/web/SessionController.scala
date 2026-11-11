@@ -79,8 +79,8 @@ class SessionController(using logger: Logger) extends cask.Routes:
       case None =>
         // The login as typed may carry a line break that forges a log line
         logger.warn(s"Failed login attempt for [${Util.printable(login, 64)}] from [${clientIp.getOrElse("unknown")}]")
-        // Return to login page with error, preserving the redirect parameter
-        val payload = "<!doctype html>" + html.login(redirect)
+        // The login page again, saying the login failed, with the login as typed and the page to come back to; never the password
+        val payload = "<!doctype html>" + html.login(redirect, login, failed = true)
         cask.Response(
           payload,
           statusCode = 401,
