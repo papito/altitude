@@ -51,13 +51,14 @@ import altitude.core.util.Util
   private def created(creator: User, accountType: AccountType, grants: Map[String, Permissions]): User =
     users.create(creator.persistedId, testContext.makeUser().copy(accountType = accountType), "password 1", grants)
 
-  /** The Add User form's body, a User given `permissions` in each of `libraries` */
+  /** The Add User form's body, a User given `permissions` in each of `libraries`, its password confirmed */
   private def addBody(username: String, libraries: Map[Repository, List[Permission]], accountType: String = "User"): ujson.Obj =
     ujson.Obj(
       Api.Field.User.NAME -> "Jane Doe",
       Api.Field.User.USERNAME -> username,
       Api.Field.User.EMAIL -> s"$username@example.com",
       Api.Field.User.PASSWORD -> "password 1",
+      Api.Field.User.PASSWORD2 -> "password 1",
       Api.Field.User.ACCOUNT_TYPE -> accountType,
       Api.Field.User.LIBRARY_IDS -> ujson.Arr.from(libraries.keys.map(_.persistedId)),
       Api.Field.User.PERMISSIONS -> ujson.Arr.from(
@@ -238,9 +239,9 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The form answers 200 in the general modal titled "Add User", with Name, Username, Email and Password, the three type cards,
-     * a row for each Library, a column for each of the nine Permissions, the Create Libraries switch and the new-Library grant's
-     * switch and chips.
+     * The form answers 200 in the general modal titled "Add User", with Name, Username, Email, Password and its confirmation, the
+     * three type cards, a row for each Library, a column for each of the nine Permissions, the Create Libraries switch and the
+     * new-Library grant's switch and chips.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val other = library()
@@ -252,7 +253,14 @@ import altitude.core.util.Util
         val form = response.text()
 
         form should include("""data-app-modal-title="Add User"""")
-        for (field <- List(Api.Field.User.NAME, Api.Field.User.USERNAME, Api.Field.User.EMAIL, Api.Field.User.PASSWORD))
+        for (
+          field <- List(
+            Api.Field.User.NAME,
+            Api.Field.User.USERNAME,
+            Api.Field.User.EMAIL,
+            Api.Field.User.PASSWORD,
+            Api.Field.User.PASSWORD2)
+        )
           form should include(s"""name="$field"""")
         for (accountType <- List("Admin", "User", "Guest")) form should include(s"""value="$accountType"""")
         for (library <- List(repoId, other.persistedId))
@@ -349,6 +357,48 @@ import altitude.core.util.Util
     }
   }
 
+  test("Add User refuses a password its confirmation does not match, beside the other fields' errors, and adds no account") {
+
+    /**
+     * Setup:
+     *
+     * An Admin logged in to a Library; a submission whose confirmation differs from its password and whose username the rule
+     * refuses, then one with a valid username and no confirmation, then one with the confirmation matching.
+     *
+     * Assertions:
+     *
+     * The first answers the form as a validation replacement with `PASSWORDS_DO_NOT_MATCH` under the confirmation beside the
+     * username rule's error, both passwords kept; the second with the mismatch alone; neither adds an account. The third adds it.
+     */
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
+    val mine = testApp.service.repository.getById(repoId)
+    val username = s"jane.${Util.randomStr(6)}"
+    def added = users.accountsVisibleTo(testContext.user).exists(_._1.username == username)
+    val mismatch = s"""<div class="error">${C.Msg.Err.PASSWORDS_DO_NOT_MATCH}</div>"""
+
+    withServer(App) {
+      host =>
+        val url = s"$host/htmx/users/r/$repoId/add"
+        val both =
+          send("POST", url, merged(addBody("a b", Map(mine -> Nil)), ujson.Obj(Api.Field.User.PASSWORD2 -> "password 2")))
+        both.statusCode shouldBe 200
+        both.headers("hx-retarget") shouldBe Seq("this")
+        both.text() should include(mismatch)
+        both.text() should include(s"""<div class="error">${C.Msg.Err.USERNAME_RULE}</div>""")
+        both.text() should include("""value="password 1"""")
+        both.text() should include("""value="password 2"""")
+
+        val unconfirmed = send("POST", url, ujson.Obj.from(addBody(username, Map(mine -> Nil)).value - Api.Field.User.PASSWORD2))
+        unconfirmed.headers("hx-retarget") shouldBe Seq("this")
+        unconfirmed.text() should include(mismatch)
+        (unconfirmed.text() should not).include(C.Msg.Err.USERNAME_RULE)
+        added shouldBe false
+
+        send("POST", url, addBody(username, Map(mine -> Nil))).headers.get("hx-retarget") shouldBe None
+        added shouldBe true
+    }
+  }
+
   test("Anything above a creator's ceiling is refused with 403, whatever the form sends, and adds no account") {
 
     /**
@@ -413,6 +463,7 @@ import altitude.core.util.Util
         form should include(s"""data-app-modal-title="Edit ${user.name}"""")
         form should include(s"""value="${user.username}"""")
         (form should not).include(s"""name="${Api.Field.User.PASSWORD}"""")
+        (form should not).include(s"""name="${Api.Field.User.PASSWORD2}"""")
         val opened = s"""name="${Api.Field.User.OPENED_STATE}" value="([0-9a-f]+)"""".r.findFirstMatchIn(form).get.group(1)
 
         val edited = merged(

@@ -63,7 +63,7 @@ object UserActionController:
   /**
    * What the account form shows: an account's values, as stored or as submitted. `storedName` is the account's name as stored,
    * which an edit's title names whatever name is typed; `openedState` the state an edit was opened over
-   * (`UserService.editState`).
+   * (`UserService.editState`); `passwordRepeat` an add's password typed again, which must match it.
    */
   final case class AccountForm(
       accountId: Option[String] = None,
@@ -71,6 +71,7 @@ object UserActionController:
       username: String = "",
       email: String = "",
       password: String = "",
+      passwordRepeat: String = "",
       accountType: Option[AccountType] = None,
       grants: Map[String, Permissions] = Map.empty,
       canCreateLibraries: Boolean = false,
@@ -171,6 +172,7 @@ object UserActionController:
         username = text(Api.Field.User.USERNAME).trim,
         email = text(Api.Field.User.EMAIL).trim,
         password = text(Api.Field.User.PASSWORD),
+        passwordRepeat = text(Api.Field.User.PASSWORD2),
         accountType = accountType,
         grants = libraryIds.distinct.map {
           libraryId => libraryId -> Permissions.of(granted.collect { case (`libraryId`, held) => held }*)
@@ -277,7 +279,8 @@ class UserActionController(using logger: Logger) extends BaseController:
 
   /**
    * Creates the account the Add User form describes, for the request's account, which `UserService.create` holds to its ceiling.
-   * A field the account rules refuse comes back as the form, with the values submitted and the error under the field.
+   * A field the account rules refuse, or a password its confirmation does not match, comes back as the form, with the values
+   * submitted and the error under the field.
    */
   @requireLogin()
   @requireAccountCreator()
@@ -409,8 +412,9 @@ class UserActionController(using logger: Logger) extends BaseController:
 
   /**
    * Runs a submitted account form's write, or answers the form again with the values submitted and the error of every field the
-   * account rules refuse: an unchosen type is refused here, before the service, which needs one, beside every other field's error
-   * the rules give (`UserService.fieldErrors`)
+   * account rules refuse. Two errors are the form's, refused here before the service: an unchosen type, which the service needs,
+   * and an add's password its confirmation does not match; either comes back beside every other field's error the rules give
+   * (`UserService.fieldErrors`).
    */
   private def submitted(form: AccountForm, ceiling: Ceiling)(write: => Response[String]): Response[String] =
     def again(errors: Map[String, String]): Response[String] =
@@ -418,11 +422,13 @@ class UserActionController(using logger: Logger) extends BaseController:
       logger.debug(s"Account form refused: ${fieldErrors.keys.mkString(", ")}")
       dialogFormValidationResponse("<!doctype html>" + htmx.html.account_form(form, ceiling, fieldErrors))
 
-    if form.accountType.isEmpty then
-      val password = Option.when(form.accountId.isEmpty)(form.password)
-      again(
-        users.fieldErrors(form.toUser, form.grants, password) +
-          (Api.Field.User.ACCOUNT_TYPE -> C.Msg.Err.ACCOUNT_TYPE_REQUIRED))
+    val adding = form.accountId.isEmpty
+    val formErrors =
+      Option.when(form.accountType.isEmpty)(Api.Field.User.ACCOUNT_TYPE -> C.Msg.Err.ACCOUNT_TYPE_REQUIRED).toMap ++
+        Option.when(adding && form.password != form.passwordRepeat)(Api.Field.User.PASSWORD2 -> C.Msg.Err.PASSWORDS_DO_NOT_MATCH)
+
+    if formErrors.nonEmpty then
+      again(users.fieldErrors(form.toUser, form.grants, Option.when(adding)(form.password)) ++ formErrors)
     else
       try write
       catch case ex: ValidationException if ex.errors.nonEmpty => again(ex.errors.toMap)

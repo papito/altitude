@@ -6,8 +6,8 @@
 @import altitude.core.routes.web.partial.UserActionController.Ceiling
 
 @* The Add User modal, and an account's edit (GET /htmx/users/r/:repoId/dialogs/add and /dialogs/edit), in the general modal
-   host, one column: the identity (Name, Username, Email and, to add, Password with Generate and Show), then the access: the
-   account type cards the creator may create, for an Admin creator the Create Libraries switch and the new-Library grant (a
+   host, one column: the identity (Name, Username, Email and, to add, Password with Generate and Show and its confirmation,
+   which must match it), then the access: the account type cards the creator may create, for an Admin creator the Create Libraries switch and the new-Library grant (a
    switch and its Permission chips), and the Permission matrix of the creator's ceiling: a Library or a Permission above it is
    not rendered at all. The `accountForm` component (js/alpine/components/account-form.js) holds the type and what is checked,
    starting from `data-app-account-form`, and runs the matrix's toggles with no request; the inputs it disables (a Guest's
@@ -58,9 +58,25 @@
             @field("field-accountUsername", Api.Field.User.USERNAME, "Username", form.username)
             @field("field-accountEmail", Api.Field.User.EMAIL, "Email", form.email, "email")
             @if(!editing) {
-            <div class="field">
-                <label for="field-accountPassword">Password</label>
-                @includes.html.password_field("field-accountPassword", Api.Field.User.PASSWORD, form.password, errors.get(Api.Field.User.PASSWORD))
+            @* The password and its confirmation, which must match: one `passwordField`, so Generate fills both and Show shows both *@
+            <div class="password-fields" x-data="passwordField">
+                <div class="field">
+                    <label for="field-accountPassword">Password</label>
+                    @includes.html.password_field("field-accountPassword", Api.Field.User.PASSWORD, form.password, errors.get(Api.Field.User.PASSWORD))
+                </div>
+                <div class="field">
+                    <label for="field-accountPassword2">Confirm password</label>
+                    <input type="password"
+                           id="field-accountPassword2"
+                           name="@Api.Field.User.PASSWORD2"
+                           value="@form.passwordRepeat"
+                           autocomplete="new-password"
+                           x-ref="repeat"
+                           x-bind:type="inputType()"@if(errors.contains(Api.Field.User.PASSWORD2)){ class="error"}>
+                    @for(message <- errors.get(Api.Field.User.PASSWORD2)) {
+                    <div class="error">@message</div>
+                    }
+                </div>
             </div>
             }
         </section>

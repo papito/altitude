@@ -6,9 +6,10 @@ const ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 /**
  * A new password's field with its Generate and Show buttons (`includes/password_field`), on the
- * Users page's Add User form and Set password dialog: Generate writes a random password from the
- * browser's cryptographic source into the field and shows it, so it can be copied and passed on;
- * Show shows or hides what the field holds.
+ * Users page's Add User form and Set password dialog, and the Add User form's confirmation field
+ * beside it (`x-ref="repeat"`, whose type binds to `inputType()` too): Generate writes a random
+ * password from the browser's cryptographic source into both and shows it, so it can be copied
+ * and passed on; Show shows or hides what both hold.
  */
 export function passwordField() {
     return {
@@ -40,6 +41,7 @@ export function passwordField() {
                 }
             }
             this.$refs.input.value = password
+            if (this.$refs.repeat) this.$refs.repeat.value = password
             this.shown = true
             this.$refs.input.focus()
         },

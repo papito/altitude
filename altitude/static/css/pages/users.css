@@ -327,6 +327,11 @@
 }
 
 /* The new password's field, with Generate and Show after it */
+/* The Add User form's password and its confirmation: one component's element, each field a row of the identity's grid */
+#accountForm .password-fields {
+  display: contents;
+}
+
 .password-field {
   display: grid;
   grid-template-columns: 1fr max-content max-content;

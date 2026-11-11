@@ -2145,8 +2145,12 @@ The **Add User modal** (`htmx/account_form`, `#accountForm`; also the edit form,
 whatever a refused save typed, with the account's ID and the state it was opened over hidden, and no password) is a `modal` fragment of the general host, `--account-form-width` wide (`#modalContent:has(#accountForm)`),
 one column whose body (`.account-form-body`) scrolls within `--account-form-body-max-height` while the actions, the submit
 (Add User, or Save) and Cancel, stay in view. Its fields: Name, Username and Email one per row, then to add a Password field
-with Generate (a random password of 20 characters from `crypto.getRandomValues`, shown) and Show (`includes/password_field`,
-the `passwordField` component). The account type is a row of cards (`.type-card`, a radio and a one-line description, the
+with Generate (a random password of 20 characters from `crypto.getRandomValues`, shown) and Show (`includes/password_field`),
+and Confirm password under it, both in one `passwordField` component's element (`.password-fields`, `display: contents`, so
+each stays a row of the identity's grid), so Generate fills both and Show shows both; the Set password dialog's form is that
+component's element itself. A confirmation that differs from the password comes back under its field
+(`PASSWORDS_DO_NOT_MATCH`, `Api.Field.User.PASSWORD2`), refused by the route before the service, beside every other field's
+error, both passwords kept. The account type is a row of cards (`.type-card`, a radio and a one-line description, the
 chosen one in the accent), only the types the creator may create. For an Admin creator, the Create Libraries switch (a User's)
 and the new-Library grant's switch, then its Permission chips (a User's; a Guest's grant is access alone), each switch a
 `.switch` button with a hidden input bound to it, which is disabled where the type may not have it. Then the **Permission

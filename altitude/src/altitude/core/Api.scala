@@ -78,6 +78,8 @@ object Api:
       val USERNAME = "username"
       val EMAIL = "email"
       val PASSWORD = "password"
+      // The Add User form's password typed again, which must match it
+      val PASSWORD2 = "password2"
       val ACCOUNT_TYPE = "accountType"
       val LIBRARY_IDS = "libraryIds"
       val PERMISSIONS = "permissions"
