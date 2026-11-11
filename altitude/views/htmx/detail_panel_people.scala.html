@@ -5,12 +5,14 @@
 @import altitude.core.models.Face
 @import altitude.core.models.Person
 
-@(asset: Asset, faces: List[(Face, Person)], message: Option[String] = None, deletedPerson: Option[Person] = None)
+@(asset: Asset, faces: List[(Face, Person)], message: Option[String] = None, deletedPerson: Option[Person] = None, merge: Option[(Person, Person)] = None)
 
 @* The People section of the Detail panel: one row per Face of the asset, in the order the server reads them
    (PersonService.getAssetFacesForDetail: by x for an image, by Frame time for a Video), bad matches left out. A row
    carries what the Face highlights and the corrections read: the Face, its Person and their name, the box in the
-   asset's pixels (x, y, width, height), the Frame time for a Face in a Video, and whether the Person is Hidden. The
+   asset's pixels (x, y, width, height), the Frame time for a Face in a Video, whether the Person is Hidden, and for the
+   combobox whether the Person is named (`data-person-named`) and their number of assets (`data-person-asset-count`,
+   `numOfFaces`: the assets outside the trash with a Face of theirs). The
    row's button (`data-app-face-row`) selects the Face, which js/search-results/detail-panel.js marks with `aria-pressed`
    and shows as a Face highlight. Under a selected row (detail_panel.css shows it by the button's `aria-pressed`) sit Search,
    the link to the Person's results in a new tab, which adds the triaged assets for an image in triage so that it is among them,
@@ -18,20 +20,33 @@
    (`x-data="faceCombobox"`, js/alpine/components/face-combobox.js: an input with role="combobox", an X back to the
    buttons, and the `role="listbox"` popover its options render into, anchored to the input), and Remove, whose label
    moves through two clicks, the second one removing (the one after the first click is on the button). The section is
-   swapped in whole by a correction's response (PUT /htmx/asset/r/:repoId/face/:faceId/person, DELETE
-   /htmx/asset/r/:repoId/face/:faceId), whose root then carries the result message for the snackbar and, for a Person
-   the correction deleted, their ID and the line the snackbar adds. For an asset in the trash the root is marked
+   swapped in whole by a correction's response (PUT /htmx/asset/r/:repoId/face/:faceId/person, its /name and /merge, which
+   name or merge the Face's Person as a whole, and DELETE /htmx/asset/r/:repoId/face/:faceId), whose root then carries the
+   result message for the snackbar, for a Person the correction deleted their ID and the line the snackbar adds, and after
+   a merge the merged Person's ID (`data-app-merged-person-id`) and the ID of the Person they were merged into
+   (`data-app-merged-into-id`). For an asset in the trash the root is marked
    read-only: Search alone is rendered, and the server refuses the corrections. The listbox opens with the Suggested group, the
    people nearest the Face (the component's `suggested`, rendered while nothing is typed, under a heading the group is
-   labelled by), then the list (`matches`); both render the same option. *@
+   labelled by), then the list (`matches`); both render the same option. For a Face of a Person with no name the
+   combobox acts on the whole Person: between the input and the X sits the "This face only" switch (a `.switch` and its
+   label, rendered for such a row alone and inside the component root, so focus moving to it keeps the listbox open),
+   each option's suffix after its name says what its pick does ("· merge Unknown 7 (5 assets)", "· this face"), the
+   Create row's label names the Person ("Name Unknown 7 'X' (5 assets)"), and a merge's first pick arms its option,
+   whose label becomes the question its second pick answers, which the visually hidden `role="status"` also says. The
+   switch's and label's `mousedown` is prevented and the label's click flips the switch through the component, so a
+   pointer leaves focus in the input. *@
 
-@* An option of the combobox's listbox for each Person of the component's `people` list: the cover, the name, the Hidden mark *@
+@* An option of the combobox's listbox for each Person of the component's `people` list: the cover, the name (or on the
+   armed option the question its second pick answers) with the suffix of what its pick does, the Hidden mark *@
 @personOptions(people: String) = {
 <template x-for="option in @people" :key="option.personId">
     <li role="option" :id="optionId(option.personId)" :aria-selected="isActive(option.personId)" :data-option-key="option.personId">
         <template x-if="option.coverUrl"><img :src="option.coverUrl" alt="" loading="lazy"></template>
         <template x-if="!option.coverUrl"><span class="no-cover"></span></template>
-        <span class="name" x-text="option.name"></span>
+        <span class="name">
+            <span :class="{ armed: isArmed(option.personId) }" x-text="optionLabel(option)"></span>
+            <span class="suffix" x-show="optionSuffix(option)" x-text="optionSuffix(option)"></span>
+        </span>
         <span class="hidden-mark" x-show="option.hidden">Hidden</span>
     </li>
 </template>
@@ -49,6 +64,10 @@
          @for(person <- deletedPerson) {
          data-app-deleted-person-id="@{person.persistedId}"
          data-app-deleted-person-message="@{Const.Msg.FaceCorrection.PERSON_REMOVED.format(person.name.getOrElse(""))}"
+         }
+         @for((mergedPerson, mergedInto) <- merge) {
+         data-app-merged-person-id="@{mergedPerson.persistedId}"
+         data-app-merged-into-id="@{mergedInto.persistedId}"
          }>
     @if(faces.isEmpty) {
     <p class="empty">No one in this @if(asset.assetType.mediaType == "video") {video} else {image}</p>
@@ -58,6 +77,8 @@
         <div data-face-id="@{face.persistedId}"
              data-person-id="@{person.persistedId}"
              data-person-name="@{person.name.getOrElse("")}"
+             @if(person.isNamed) { data-person-named="true" }
+             data-person-asset-count="@{person.numOfFaces}"
              @if(person.isHidden) { data-person-hidden="true" }
              data-face-box="@{face.x1},@{face.y1},@{face.width},@{face.height}"
              @for(time <- face.frameTimeMs) { data-frame-time-ms="@time" }>
@@ -100,7 +121,20 @@
                            :aria-activedescendant="activeOptionId"
                            x-on:input="onInput($event)"
                            x-on:keydown="onKeydown($event)">
+                    @if(!person.isNamed) {
+                    <span class="face-only">
+                        <button type="button"
+                                role="switch"
+                                class="switch"
+                                id="faceOnly-@{face.persistedId}"
+                                :aria-checked="faceOnly"
+                                x-on:mousedown.prevent
+                                x-on:click="toggleFaceOnly()"></button>
+                        <label for="faceOnly-@{face.persistedId}" x-on:mousedown.prevent x-on:click.prevent="toggleFaceOnly()">This face only</label>
+                    </span>
+                    }
                     <button type="button" class="cancel" aria-label="Cancel" title="Cancel" x-on:click="cancel()">&times;</button>
+                    <span class="visually-hidden" role="status" x-text="armedLabel"></span>
                     <ul class="face-listbox"
                         role="listbox"
                         popover="manual"

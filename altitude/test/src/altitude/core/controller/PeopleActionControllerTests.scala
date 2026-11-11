@@ -100,7 +100,8 @@ import altitude.core.models.Person
      * Assertions:
      *
      * The assignable list answers 200 with one option per person in the order adam, Mia, Zoe, then the unnamed people by sort
-     * name, Mia's marked hidden and each carrying its cover; the merged-away and the bad-match people are absent.
+     * name, Mia's marked hidden, the named people's marked named and the unnamed people's not, and each carrying its cover; the
+     * merged-away and the bad-match people are absent.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -128,6 +129,11 @@ import altitude.core.models.Person
         optionIds shouldBe List(adam, mia, zoe, unknown1, unknown2).map(_.persistedId)
         html should include(s"""data-person-id="${mia.persistedId}"""")
         """data-person-id="[^"]+"\s+data-person-name="Mia"\s+data-person-hidden""".r.findFirstIn(html).isDefined shouldBe true
+        // An option's opening tag, which carries whether its Person is named: the combobox's merge or move
+        def optionTag(person: Person): String =
+          s"""<li role="option"\\s+data-person-id="${person.persistedId}"[^>]*>""".r.findFirstIn(html).get
+        List(adam, mia, zoe).foreach(named => optionTag(named) should include("""data-person-named="true""""))
+        List(unknown1, unknown2).foreach(nameless => (optionTag(nameless) should not).include("data-person-named"))
         html should include(s"/${Const.DataStore.FACE}/${testApp.service.person.getById(adam.persistedId).coverFaceId.get}")
     }
   }

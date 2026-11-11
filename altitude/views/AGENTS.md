@@ -147,7 +147,7 @@ in either theme:
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), Curation's shell opening its host (`curation.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), the Triage summary's reload (`triage.js`), and the Settings form's save (`settings.js`, the success snackbar); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring, a 204 to an open handed back to its search trigger, and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
-| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), Asset detail's URL (`detail-url.js`: the address bar names the asset and the Detail panel's state, and Back closes it), Asset detail's fullscreen (`detail-fullscreen.js`: `f`, the toolbar's toggle and the player's button on the whole of Asset detail), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
+| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), a Person's results title read again after a rename or a correction (`person-title.js`), Asset detail's URL (`detail-url.js`: the address bar names the asset and the Detail panel's state, and Back closes it), Asset detail's fullscreen (`detail-fullscreen.js`: `f`, the toolbar's toggle and the player's button on the whole of Asset detail), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
@@ -237,8 +237,12 @@ Const.attributes.faceChange        // "data-app-face-change"  (a selected row's 
 Const.attributes.faceRemove        // "data-app-face-remove"  (a selected row's Remove, with its second label in `data-app-face-remove-label-last`)
 Const.attributes.readOnly          // "data-app-read-only"  (the People section of an asset in the trash: no correction)
 Const.attributes.resultMessage     // "data-app-result-message"  (a correction's result on the section it answers with; a deleted Person's ID and line in `data-app-deleted-person-id` and `-message`)
+Const.attributes.mergedPersonId    // "data-app-merged-person-id"  (on that root after a merge of a Face's Person: the merged Person)
+Const.attributes.mergedIntoId      // "data-app-merged-into-id"  (and the Person they were merged into)
 Const.attributes.faceId            // "data-face-id"  (a People row, a Face highlight and its badge)
 Const.attributes.personName        // "data-person-name"  (a People row's Person, with `data-person-hidden` when Hidden)
+Const.attributes.personNamed       // "data-person-named"  (a People row's Person, or an option's of the assignable people fragment, when named: the Change combobox's mode)
+Const.attributes.personAssetCount  // "data-person-asset-count"  (a People row's Person's number of assets, `numOfFaces`, which the Change combobox's labels show)
 Const.attributes.suggested         // "data-suggested"  (an option of the assignable people fragment in its Suggested group)
 Const.attributes.frameTimeMs       // "data-frame-time-ms"  (a People row of a Face in a Video)
 Const.attributes.detailDimensions  // "data-app-detail-dimensions"  (the Detail panel's dimensions row, which reads the shown element's size)
@@ -349,7 +353,7 @@ Batch ops escalate a single-asset drag to a batch when the asset is among the se
 `assetMoved`/`assetTrashed` handlers in `js/listeners/assets.js` re-dispatch
 `batchAssetsMoved`/`batchAssetsRecycled`. Person merge/name/cover-face events and the discard
 follow-up live in `js/listeners/people.js`: a merge, a hide, a show, a discard, a rename or a Face correction in the Detail panel
-announces `peopleChanged`, as does every asset mutation that goes through `refreshCounts()` in `js/assets/asset-actions.js`
+(a name or a merge of a Face's Person among them) announces `peopleChanged`, as does every asset mutation that goes through `refreshCounts()` in `js/assets/asset-actions.js`
 (a move, a recycle, a purge, a restore, a Curation change), since a person's number follows their assets. It has
 two listeners, neither reading a detail: the People tab, which reloads each pane with its own buckets (see **People
 tab**), and `js/listeners/triage.js`, which reloads the Triage summary in Triage, since any of those changes can change
@@ -357,9 +361,11 @@ what it counts: an asset leaving triage, a Person named or made Unknown (see **T
 `personNameEdited`, from the results title's inline name editor or from the rename dialog of a cell's pencil, carrying
 `personId` and, from the inline editor alone, `titleShowsName: true`. Its listener announces `peopleChanged` and patches
 no cell's text: a rename can move a person from Unmatched to Matched, and the list the server renders has them in the
-right bucket with the cell's number intact. When `#person` shows that person (`data-person-id`) it also reloads
-`#personName` from the name route (`GET /htmx/people/r/:repoId/p/:personId/name`), unless `titleShowsName` says the
-editor's own response is about to show the name there. Only a cover-face
+right bucket with the cell's number intact. When `#person` shows that person (`data-person-id`) it also reads the
+results title again (`reloadPersonTitle`, `js/search-results/person-title.js`: the title route,
+`GET /htmx/people/r/:repoId/p/:personId/title`, into `#person`, which the Detail panel's corrections use too), so the
+name and the Hide / Show link a name changes follow, unless `titleShowsName` says the editor's own response is about to
+show the name there. Only a cover-face
 change patches cells, every one of the person, found by `data-person-id` under `#people`; a purge of the recycle bin announces
 `trashPurged`, which refreshes the counts. `personMerged`'s listener announces `peopleChanged` and confirms in the
 snackbar, and runs no search of its own, in Browse and Triage alike: results that are neither person's stay as they
@@ -373,7 +379,10 @@ requested source, `#personRenameCtrl-<pane>-<personId>`, as its `data-app-dialog
 is a 400): the modal replaces the rename dialog, and the button that asked for it goes with the dialog, so without the
 selector a cancelled merge would leave focus on the body. A merge that completes takes the source's pencil out of the
 list, and focus then goes nowhere. A drop and the inline editor's offer send no `pane`, and focus returns to the control
-that asked.
+that asked. A name or a merge of a Face's Person from the Detail panel's Change is a Face correction, neither
+`personNameEdited` nor `personMerged`: the panel announces `peopleChanged` as for every correction, and itself reads the
+results title again after a name of the viewed Person, or searches the destination on closing after a merge of the
+viewed Person or into them (see **Detail panel**).
 
 ### Full action flow (drag-and-drop example)
 
@@ -1186,7 +1195,9 @@ picker's rules are in the select's, while the options take a rule of their own. 
 nav's quick search field, which keeps its own look. A setting that applies as it is flipped, with nothing to submit, is a `.switch` of the SWITCH
 section: a `button[role="switch"]` before its `<label for>` (a button is labelable, so the label's click flips it with no script), whose `aria-checked` an
 Alpine binding keeps in step with the setting; the track, `--switch-width` by `--switch-height`, takes `--theme-primary` when on, and the knob, a
-pseudo-element, slides across it. The View settings dialog's switches are the one use. Every rule of the section starts at `body:not(.setup)`, so the setup form's fields and error box are
+pseudo-element, slides across it. The View settings dialog's switches, the People tab's bucket switches and the Change combobox's "This face only"
+switch use it. The last is the one whose label does not flip it natively: focus has to stay in the combobox's input, so the switch's and the
+label's `mousedown` is prevented, and the label's click, prevented too, calls the component's `toggleFaceOnly` (see **Detail panel**). Every rule of the section starts at `body:not(.setup)`, so the setup form's fields and error box are
 `htmx/setup_form.css`'s alone; the login page loads no app stylesheet. The upload form's file input takes the field's
 box and keeps its own `--theme-neutral-2` fill (`htmx/upload_form.css`). A field keeps the width its page gives it,
 except in a popover dialog, whose form fills `--popover-form-width` with its action `--space-5` below its fields
@@ -1638,8 +1649,11 @@ beside it, and a `role="listbox"` manual popover (`.face-listbox`, in the top la
 anchored under the input by CSS anchor positioning with an anchor name per Face, as wide as the input, flipped above when
 there is no room below, capped at `--face-listbox-max-height` and scrolling. Opening loads the options once per opening
 from `GET /htmx/people/r/:repoId/assignable?faceId=…` (`assignablePeopleUrl`, the one place the URL is built), parses the
-fragment's `role="option"` rows wherever they sit (`parseAssignablePeople`) and filters them on the client as the user
-types, the first `MAX_SHOWN_OPTIONS` (50) matches rendered with lazy covers, Hidden marked; the server leaves the Face's own Person
+fragment's `role="option"` rows wherever they sit (`parseAssignablePeople`: each Person's ID, name, whether named, whether
+Hidden, cover and Suggested mark), and focuses the input once the combobox is drawn. The focus waits for the draw
+(`untilShown`): Alpine's `x-show` shows the combobox on the next animation frame (a timeout in a hidden tab), so options
+that loaded sooner would focus a hidden input, the focus would not take, the hidden Change button would lose it to the
+body, and that `focusout` would close the listbox. The options are filtered on the client as the user types, the first `MAX_SHOWN_OPTIONS` (50) matches rendered with lazy covers, Hidden marked; the server leaves the Face's own Person
 out of the options (`PersonService.assignablePeople`, one read for the group and the list).
 The fragment opens with the **Suggested** group (`docs/faces.md` **Corrections**: the people whose Faces are nearest the
 Face's vector, closest first, at most 3, each option marked `data-suggested` and left out of the list after it): while
@@ -1651,14 +1665,46 @@ and the suggested people are filtered with the rest, ahead of them. The server i
 component their one renderer; the group is absent when nobody is near enough, and the list works as before. A name no
 option has, within the server's name length rules (`Const.people.nameLength`), is offered as the Create row ("Create
 'Alice'"); an existing name in any case or Unicode form picks that Person instead. The Face's own Person is no option, so
-their name is offered as a Create row too, and the server refuses it as already theirs (a 400 in the error snackbar). Down and Up move the active option,
+their name is offered as a Create row too, and the server refuses it, as already theirs for a named Person and as a
+reserved name for a Person with no name (a 400 in the error snackbar). Down and Up move the active option,
 wrapping, through the group, the list and the Create row in that order, and reopen a closed listbox; Enter picks the
 active one, which before the arrows move it is the Person of the exact name, else the first match, else the Create row,
 and nothing while the input is empty; the pointer over an option makes it active;
-focus leaving the combobox closes the listbox and leaves the input. A pick is announced as `Const.events.facePersonPicked`
-(`faceId` with `personId` or `name`), which the corrections module answers with
-`PUT /htmx/asset/r/:repoId/face/:faceId/person`; the X announces `Const.events.faceChangeCancelled`, and the panel clears
-the selection and returns focus to the row. Escape with the listbox open closes it alone: `global.js` calls
+focus leaving the combobox's root closes the listbox and leaves the input (`onFocusOut`).
+
+The combobox has two modes, by the row's Person, which it reads from the row (`rowPerson`: `data-person-id`,
+`data-person-name`, `data-person-named`, and `data-person-asset-count`, the Person's `numOfFaces`). For a Face of a named
+Person every pick moves this Face only, and no switch is rendered. For a Face of a Person with no name, Hidden or not, a
+pick acts on the Person as a whole (`wholePerson`) unless the "This face only" switch is on (`faceOnly`, off at every
+opening and on `reset`, never remembered): a named option's suffix (`optionSuffix`, a `.suffix` after the name in
+`--theme-neutral-3`) reads "· merge Unknown 7 (5 assets)" and its pick merges the Person into that one; the Create row
+(`createLabel`) reads "Name Unknown 7 'Alice' (5 assets)" and names the Person, with no confirmation, since another name
+undoes it; and a nameless option reads "· this face" and still moves this Face only, since two nameless people are never
+merged from here. A count of one reads "1 asset". With the switch on every pick moves this Face only, as for a named
+Person's Face, and the labels are the plain ones. The switch (`.face-only`: a `.switch`, `button[role="switch"]` with
+`aria-checked` bound to `faceOnly`, and its `<label for>`, at `--font-size-small`, rendered for a nameless row alone) sits
+after the input and before the X; on a row narrower than 20rem (a container query) it takes a line of its own above
+them, so the listbox under the input, as wide as the input either way, never covers it. Both are inside the
+component's root, so Tab from the input reaches the switch with the listbox still open and Space flips it; a pointer press
+on either leaves focus in the input, so Enter still picks after a click: `mousedown` is prevented on both, and the label's
+click, prevented too, calls `toggleFaceOnly` in place of the label's native toggle (the `.switch` exception under
+**Forms**).
+
+A merge cannot be undone from the panel, so it takes two picks, as Remove takes two clicks: the first pick of a merge (a
+click on, or Enter over, a named option in whole-Person mode) makes the option active and arms it (`armedKey`), and its
+label (`optionLabel`, `armedLabel`) becomes "Merge Unknown 7 into Alice? Pick again" (`.armed`, in Remove's
+`--warning-color`) in place of the name and the suffix; a second pick of the armed option merges, and Asset detail stays
+open. Another active option (`setActive`, from the arrows or the pointer), typing, the switch, the listbox closing and
+`reset` disarm it. The active option's text changing under `aria-activedescendant` is not announced reliably, so a
+visually hidden `role="status"` in the component says `armedLabel`.
+
+A pick is announced as `Const.events.facePersonPicked` with `faceId` and an `action`: `"move"` with `personId` or `name`,
+`"name"` with `sourcePersonId` (the row's Person) and `name`, or `"merge"` with `sourcePersonId` and `destPersonId`. The
+corrections module answers a move with `PUT /htmx/asset/r/:repoId/face/:faceId/person`, a name with `PUT …/person/name`
+(`{ personId, name }`) and a merge with `PUT …/person/merge` (`{ personId, destPersonId }`), `personId` being the
+`sourcePersonId`, which the server checks since the Face may have moved since the section was rendered; all three go
+through one `send`, one request per Face, with the same refusal and stale handling. The X announces
+`Const.events.faceChangeCancelled`, and the panel clears the selection and returns focus to the row. Escape with the listbox open closes it alone: `global.js` calls
 `closeOpenFaceCombobox` before `closeModal`. The next Escape clears the selected Face (`clearSelectedFaceRow`, whatever the selection's source, focus to its row), so the row's actions and its highlight go, and only then does Escape close Asset detail. `m` and `p` in the input are the
 field's, as in every text field.
 
@@ -1666,19 +1712,38 @@ A correction answers the People section (`htmx/detail_panel_people`, 200), which
 whole for the shown one: the selection clears, the rows and the Face highlights are drawn again from the new rows (with
 `p` off nothing shows, with it on the remaining Faces), the result message from the root's `data-app-result-message` is a
 success snackbar, with the line of a Person the correction deleted (`data-app-deleted-person-message`) after it,
-`peopleChanged` reloads the People tab at once, and focus goes to the first row. A 400 (a reserved name) is the server's
-message in the error snackbar and nothing changes; a 404 or 409 (the Face gone or moved meanwhile, the asset recycled)
-means the section is stale: the message is shown and the panel loads the asset's details again (`reloadSection`). One
+`peopleChanged` reloads the People tab (and in Triage the Triage summary) at once, and focus goes to the first row. A name's result
+reads "Unknown 7 is now Alice" and a merge's "Unknown 7 merged into Alice"; a merge's root also carries the merged
+Person's ID (`data-app-merged-person-id`) and the destination's (`data-app-merged-into-id`), which `parsePeopleSection`
+reads, while who was named comes from the request (`send`'s `outcome`, `namedPersonId`), since the section does not say.
+A 400 (a reserved name, a name another Person took meanwhile) is the server's message in the error snackbar and nothing
+changes; a 404 or 409 (the Face gone or moved meanwhile, a merge's destination no longer live, the asset recycled, the
+Person named meanwhile) means the section is stale: the message is shown and the panel loads the asset's details again
+(`reloadSection`), so a row whose Person was named elsewhere comes back as a named Person's, with no switch. One
 correction at a time per Face. While viewing a Person (`searchParams.personId`), an asset they have no Face left on after
 a correction stays in Asset detail and is noted as leaving (`noteViewedPerson`; a later correction that gives them a Face
 back keeps it, unless they were deleted): on stepping away, once the step has picked its target (`showAsset` for another
 asset), or on closing (an `Alpine.effect` over the `modal` store), its cells leave the grid through
 `assetActions.removeAssetsFromGrid`, so the walk continues from the cells around them, and the results title is
-read again, as its Hide and Discard links depend on the count (`GET /htmx/people/r/:repoId/p/:personId/title` into `#person`), or, when the viewed Person was deleted, the
+read again, as its Hide and Discard links depend on the count (`reloadPersonTitle`: `GET /htmx/people/r/:repoId/p/:personId/title` into `#person`), or, when the viewed Person was deleted, the
 results go back to the whole repository (`runSearch` with an empty `personId`, as the title's × does). A detail opened from
 no cell (a map pin) has no cell to remove and still refreshes the title; a Search text result stays until the next search.
-The style guide's Panels & layout section holds a specimen of the actions under a selected row and of the combobox with
-its listbox.
+After a name or a merge of a Face's Person, the grid follows only when the viewed Person is the one changed or the
+merge's destination; naming or merging another Person changes nothing in it. The viewed Person named (`namedPersonId`)
+has the results title read again at once (`reloadPersonTitle`), which shows the name. The viewed Person merged away
+(`mergedPersonId`) leaves every cell of the grid the destination's, so the cells stay, the destination
+(`mergedInto`) stands in for the viewed Person in later corrections' `noteViewedPerson`, and on closing Asset detail, not
+on a step, the results become the destination's (`flushLeaving({ closing: true })` runs
+`runSearch({ params: { personId: mergedIntoId } })`), at once if Asset detail closed while the request was out; until
+then the title, still the merged Person's, is not read again, and that search replaces it. A merge into the viewed Person
+(`mergedIntoId`, as the People tab's merge into them) takes the same path: `mergedInto` is the viewed Person, and the
+search on closing reads their results again, so the grid gains the merged Person's assets, and the total and the
+title's count-dependent Hide and Discard links follow;
+a step leaves the grid and the title alone until then. A later correction that deletes the destination sends the
+results back to the whole repository, as for a deleted viewed Person.
+The style guide's Panels & layout section holds a specimen of the actions under a selected row, of the combobox with
+its listbox, and of a nameless Person's combobox with the "This face only" switch, an armed option, a merge option and a
+"· this face" one.
 
 **Curation** — The modal where the user keeps the best frames of a Curation set and recycles the rest. What sorts a set and
 what its outcome writes are under **Sequences and Image quality** in `altitude/AGENTS.md`, and the terms are the glossary's. It
@@ -2469,7 +2534,7 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   (`htmx/curation_set.css`) and the Sequence rail's
   rows (`htmx/curation_queue.css`), a done one and a current one side by side in `.sg-curation-queue`, are in Badges & states,
   where `.sg-curation-bundle` gives the row the rail's width, and the Detail panel's sections (`htmx/detail_panel.css`: a People
-  row, selected and not, Change and Remove under a selected row, the Change combobox with its listbox and its Suggested group,
+  row, selected and not, Change and Remove under a selected row, the Change combobox with its listbox and its Suggested group, and a nameless Person's combobox with its "This face only" switch and an armed, a merge and a "· this face" option,
   Details rows with the crumbs), the toolbar toggles and the Face highlights
   (`htmx/view_image_detail_modal.css`: a highlight and its badge over a stand-in for a photo, `.sg-face-highlights`) are in Panels &
   layout, in `.sg-detail-panel`, as are the People tab's cells (`htmx/people.css`: a named person's and a hidden Unmatched
@@ -2639,7 +2704,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/htmx/people.scala.html`, `people_list.scala.html` | The People tab's shell (the panes and their bucket switches, no list) and one pane's list for the buckets asked for, each cell with its name link and rename pencil, whose IDs carry the pane (`pane`); styled by `static/css/htmx/people.css` |
 | `views/htmx/rename_person_dialog.scala.html` | The popover dialog of a People cell's rename pencil: one field holding the name, focus returned to the pencil of its pane, `PERSON_NAME_EDITED_EVENT` on success, the error row or the offer to merge on a refusal |
 | `views/includes/person_name_taken.scala.html` | The error row of a rename to a name another live person holds, with its "Merge into X…" button; rendered by the inline name editor and the rename dialog, each naming the row (`errorId`) and supplying the `x-data` scope its button needs; the dialog also passes its `pane`, which the offer sends to the Merge people modal |
-| `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read; under each row, for a live asset, Change and Remove and the Change combobox's markup, its listbox rendering the Suggested group and then the list from one option block; a correction's response, its root carrying the result message and any deleted Person) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
+| `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read, and whether the Person is named and their number of assets, which the combobox reads; under each row, for a live asset, Change and Remove and the Change combobox's markup, with the "This face only" switch for a Person with no name, its listbox rendering the Suggested group and then the list from one option block, each option with its armed label and suffix; a correction's response, its root carrying the result message, any deleted Person and, after a merge, the merged Person and the destination) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
 | `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu; its grid and the highlights' look are `static/css/htmx/view_image_detail_modal.css` |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
@@ -2648,11 +2713,12 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/htmx/triage_summary.scala.html`, `triage_scope_dialog.scala.html`, `quick_view_modal.scala.html` | The Triage explorer's fragments (`TriageController`): the Triage summary above its tabs, the scope dialog of a folder, Person or Location, and Quick view of a folder; styled by `static/css/htmx/triage_summary.css`, `triage_scope_dialog.css` and `quick_view_modal.css` |
 | `static/js/search-results/search-input.js` | `bindSearchInput`: the nav's Search input (`#searchForm`), submitting and clearing `q` and following the store |
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal (the box fitted from the shown element's size, the Detail panel told of each asset and size shown), and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
-| `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing) |
+| `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing, the results title read again when the viewed Person is named, and the destination's results on closing when the viewed Person is merged away or merged into) |
 | `static/js/search-results/detail-url.js` | `createDetailUrl`: Asset detail's URL, its history entry and Back and Forward over it, the opening of the asset a URL names (`openAssetInLocation`), and the search URL held while it is open (see **Detail navigation**) |
 | `static/js/search-results/detail-fullscreen.js` | `createDetailFullscreen`: Asset detail in fullscreen (`toggle`, on `f` and the toolbar's toggle, which it removes where `document.fullscreenEnabled` is false), the player's `fullscreenElement` set to the host on each fragment (`attach`), the toggle's pressed state and the snackbar's stacks raised on `fullscreenchange` |
-| `static/js/search-results/face-corrections.js` | `createFaceCorrections`: Remove's two clicks and their reset, the Change pick's request, and what each answer means (the section to swap in, a message, a stale section to reload); `parsePeopleSection` |
-| `static/js/alpine/components/face-combobox.js` | the `faceCombobox` Alpine component of a People row's Change: the options loaded once per opening for the Face (`assignablePeopleUrl`, `parseAssignablePeople`), the Suggested group while nothing is typed, the rest filtered as typed, the Create row, the keys, the anchored listbox popover, the pick and the X announced as events; `closeOpenFaceCombobox` for Escape |
+| `static/js/search-results/person-title.js` | `reloadPersonTitle`: a Person's results title (`#person`) read again from the title route when it shows that Person, after a rename from a People cell's pencil and after a Detail panel correction |
+| `static/js/search-results/face-corrections.js` | `createFaceCorrections`: Remove's two clicks and their reset, the Change pick's request by its `action` (a move, or a name or a merge of the Face's Person), and what each answer means (the section to swap in, a message, a stale section to reload); `parsePeopleSection` |
+| `static/js/alpine/components/face-combobox.js` | the `faceCombobox` Alpine component of a People row's Change: the options loaded once per opening for the Face (`assignablePeopleUrl`, `parseAssignablePeople`), the Suggested group while nothing is typed, the rest filtered as typed, the Create row, the keys, the anchored listbox popover, the two modes by the row's Person with the "This face only" switch, the two-step merge (`armedKey`), the pick (with its `action`) and the X announced as events; `closeOpenFaceCombobox` for Escape |
 | `static/js/search-results/face-highlights.js` | `createFaceHighlights`: draws the Face highlights into `#faceHighlights` (`show`: a toggle button per Face placed by fractions of the shown size, its badge anchored to it; `clear`), and `FRAME_TIME_TOLERANCE_MS`, how far from its Frame time a Video's Face counts as current |
 | `static/js/common/dock.js` | `createDock`: a docked panel's side, share, divider (drag and keys), Dock side menu upkeep and remembered state, configured by the explorer's and the Detail panel's docks; `isVerticalAxis` |
 | `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid, and its Curate button (`removeCurateButtons`) |

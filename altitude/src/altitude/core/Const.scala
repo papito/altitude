@@ -168,7 +168,8 @@ object Const:
       // A rename to a name another live Person holds, named as that Person's name is stored (htmx/edit_person_name)
       val PERSON_NAME_TAKEN = "%s already exists."
       val PERSON_NAME_TAKEN_BY_HIDDEN = "%s already exists and is hidden."
-      // A rename a unique index refused with no live holder of the name to offer: merged away meanwhile, or another constraint
+      // A rename a unique index refused with no live holder of the name to offer: merged away meanwhile, or another constraint;
+      // and a name for a Face's Person (AssetActionController.nameFacePerson) that another live Person holds
       val PERSON_NAME_ALREADY_EXISTS = "Person by that name already exists"
       // The Library name rule (Repository.validName), shared by setup and the New library dialog; the bounds are
       // Api.Constraints.MIN_/MAX_REPOSITORY_NAME_LENGTH
@@ -182,18 +183,28 @@ object Const:
       val NO_LIBRARY = "There is no library to open"
       // A page of a Library that does not exist or that the account does not own (decorators.requireLogin): one text for both
       val LIBRARY_NOT_FOUND = "Library not found"
-      // A Face correction (PersonService.moveFace) onto the Face's own Person
+      // A Face correction onto the Face's own Person: a move (PersonService.moveFace), or a merge of the Face's Person into
+      // themselves (mergeFacePerson)
       val FACE_ALREADY_THEIRS = "The face is already this person's"
       // A Face correction's body naming neither a person nor a name, or both
       val FACE_TARGET_REQUIRED = "Name one person, by ID or by name"
       // A Face correction of a Face on an asset in the trash, which the panel shows read-only
       val FACE_OF_RECYCLED_ASSET = "The faces of an asset in the trash cannot be changed"
+      // A name or a merge of a Face's Person as a whole (PersonService.nameFacePerson, mergeFacePerson), offered only for a
+      // Person with no name, who has been named since the panel was shown
+      val FACE_PERSON_NAMED_SINCE = "This person has a name now"
+      // A merge of a Face's Person into a Person with no name, which the panel never offers
+      val MERGE_INTO_NAMELESS = "Merge into a person with a name"
 
     // What a Face correction did, named for the snackbar in the People section's data attributes (htmx/detail_panel_people)
     object FaceCorrection:
       val MOVED = "Moved to %s"
       val REMOVED = "Removed %s"
       val PERSON_REMOVED = "%s had no other faces and was removed"
+      // The Face's Person named, by the name they had and the new one
+      val NAMED = "%s is now %s"
+      // The Face's Person merged, by the name they had and the name of the Person they were merged into
+      val MERGED = "%s merged into %s"
 
   // Dialog titles: the folder and album rename/delete dialogs show inline in the entity's menu, the
   // people dialogs in the modal host, whose sizing is owned by CSS (`--modal-content-width` in

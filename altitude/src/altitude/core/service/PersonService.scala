@@ -80,6 +80,13 @@ object PersonService:
    */
   case class FaceMove(face: Face, source: Person, target: Person, sourceDeleted: Boolean)
 
+  /**
+   * What [[PersonService.nameFacePerson]] or [[PersonService.mergeFacePerson]] did to a Face's Person as a whole: the Face, its
+   * Person as they were before, with the name they had, and the Person who has the Face now, as they are after: the same Person
+   * named, or the Person they were merged into
+   */
+  case class FacePersonChange(face: Face, before: Person, after: Person)
+
 class PersonService(val app: Altitude) extends BaseService[Person]:
   import PersonService.*
 
@@ -167,62 +174,103 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    * locked first, so what this merge reads is what it acts on. The merged name is decided from the stored rows, not from the
    * models passed in, which may be stale: an unnamed destination takes the name of a named source that is still live (neither
    * merged away nor a bad match), with its name key as sort name and the named flag, and a named destination keeps its own. The
-   * source is soft-deleted before the destination takes its name, so `person_01` never sees the name on two live people.
+   * source is soft-deleted before the destination takes its name, so `person_01` never sees the name on two live people. On a
+   * Video where both had a Face, one Face per Person per Video holds, as at import and after a move ([[moveFace]]): the better
+   * Face stays and the other is deleted ([[keepOneFacePerVideo]]), its files going once committed.
    */
   def merge(dest: Person, source: Person): Person =
     if source == dest then throw IllegalArgumentException("Cannot merge a person with itself. That's perverse!")
 
-    txManager.withTransaction {
-      val liveIds: Set[String] = dao.lockAndGetLive(Set(dest.persistedId, source.persistedId))
-      val persistedDest: Person = dao.getById(dest.persistedId)
-      val persistedSource: Person = dao.getById(source.persistedId)
+    val (merged, lost) = txManager.withTransaction {
+      mergeLocked(dest, source)
+    }
+    purgeFaceFiles(lost)
+    merged
 
-      logger.debug(
-        s"Merging person [${persistedSource.persistedId}] ${persistedSource.name.get} " +
-          s"into [${persistedDest.persistedId}] ${persistedDest.name.get}")
-      val query = new Query().add(FieldConst.Face.PERSON_ID -> persistedSource.persistedId)
+  /**
+   * [[merge]] in the caller's transaction: the destination as they are after it, and the Faces the merge deleted, each with the
+   * destination, for `purgeFaceFiles` once the caller's transaction commits
+   */
+  private def mergeLocked(dest: Person, source: Person): (Person, List[(Face, Person)]) =
+    val liveIds: Set[String] = dao.lockAndGetLive(Set(dest.persistedId, source.persistedId))
+    val persistedDest: Person = dao.getById(dest.persistedId)
+    val persistedSource: Person = dao.getById(source.persistedId)
 
-      // faces from source are moved to the new person
-      faceDao.updateByQuery(query, Map(FieldConst.Face.PERSON_ID -> persistedDest.persistedId))
+    logger.debug(
+      s"Merging person [${persistedSource.persistedId}] ${persistedSource.name.get} " +
+        s"into [${persistedDest.persistedId}] ${persistedDest.name.get}")
 
-      updateById(
-        persistedSource.persistedId,
+    // Read before the Faces move, while each still says whose it is, which a tie between two of them needs
+    val sharedVideoFaces = faceDao.getFacesOnSharedVideos(persistedDest.persistedId, persistedSource.persistedId)
+
+    val query = new Query().add(FieldConst.Face.PERSON_ID -> persistedSource.persistedId)
+
+    // faces from source are moved to the new person
+    faceDao.updateByQuery(query, Map(FieldConst.Face.PERSON_ID -> persistedDest.persistedId))
+
+    updateById(
+      persistedSource.persistedId,
+      Map(
+        FieldConst.Person.NUM_OF_FACES -> 0,
+        FieldConst.Person.IS_DELETED -> true
+      )
+    )
+
+    // After the source is soft-deleted: the destination may then take a cover of theirs, `person_02` keeping a cover to one live
+    // person
+    val lostFaces = keepOneFacePerVideo(sharedVideoFaces, persistedDest, persistedSource)
+
+    // A source no longer live holds no name: another live person may hold it since
+    val takenName: Option[String] =
+      if !persistedDest.isNamed && persistedSource.isNamed && liveIds.contains(persistedSource.persistedId) then
+        persistedSource.name
+      else None
+
+    val recountQuery = new SearchQuery(
+      params = Map(FieldConst.Asset.IS_RECYCLED -> false),
+      personIds = Set(persistedDest.persistedId)
+    )
+
+    val mergedFaceCount = app.service.library.count(recountQuery)
+
+    val nameFields: Map[String, Any] = takenName match
+      case Some(name) =>
+        logger.debug(s"Person [${persistedDest.persistedId}] takes the name [$name] of the merged person")
         Map(
-          FieldConst.Person.NUM_OF_FACES -> 0,
-          FieldConst.Person.IS_DELETED -> true
+          FieldConst.Person.NAME -> name,
+          FieldConst.Person.NAME_FOR_SORT -> PersonService.nameKey(name),
+          FieldConst.Person.IS_NAMED -> true
         )
-      )
+      case None => Map.empty
 
-      // A source no longer live holds no name: another live person may hold it since
-      val takenName: Option[String] =
-        if !persistedDest.isNamed && persistedSource.isNamed && liveIds.contains(persistedSource.persistedId) then
-          persistedSource.name
-        else None
+    updateById(persistedDest.persistedId, Map(FieldConst.Person.NUM_OF_FACES -> mergedFaceCount) ++ nameFields)
 
-      val recountQuery = new SearchQuery(
-        params = Map(FieldConst.Asset.IS_RECYCLED -> false),
-        personIds = Set(persistedDest.persistedId)
-      )
+    // Read again, as the cover may have moved: a cover Face keeps its files, and the lost Faces' must go
+    val merged = dao.getById(persistedDest.persistedId)
+    (merged, lostFaces.map(_ -> merged))
 
-      val mergedFaceCount = app.service.library.count(recountQuery)
+  /**
+   * For a merge, given the two people's Faces on the Videos where both had one (read before the source's Faces moved): on each
+   * Video the Face of the higher quality stays, the destination's own on a tie as in [[moveFace]], and the others are deleted, as
+   * [[removeFace]] deletes a Face; a cover of either person that pointed at one of them moves to the survivor. The deleted Faces,
+   * whose files are to go once the merge commits.
+   */
+  private def keepOneFacePerVideo(faces: List[Face], dest: Person, source: Person): List[Face] =
+    faces.groupBy(_.assetId.get).toList.flatMap {
+      case (videoId, videoFaces) =>
+        val survivor = videoFaces.maxBy(face => (face.quality, face.personId.contains(dest.persistedId)))
+        val lost = videoFaces.filterNot(_.persistedId == survivor.persistedId)
 
-      val nameFields: Map[String, Any] = takenName match
-        case Some(name) =>
-          logger.debug(s"Person [${persistedDest.persistedId}] takes the name [$name] of the merged person")
-          Map(
-            FieldConst.Person.NAME -> name,
-            FieldConst.Person.NAME_FOR_SORT -> PersonService.nameKey(name),
-            FieldConst.Person.IS_NAMED -> true
-          )
-        case None => Map.empty
-
-      updateById(persistedDest.persistedId, Map(FieldConst.Person.NUM_OF_FACES -> mergedFaceCount) ++ nameFields)
-
-      persistedDest.copy(
-        numOfFaces = mergedFaceCount,
-        name = takenName.orElse(persistedDest.name),
-        isNamed = persistedDest.isNamed || takenName.isDefined
-      )
+        lost.foreach {
+          face =>
+            logger.debug(
+              s"Face [${face.persistedId}] loses to face [${survivor.persistedId}] in video [$videoId] on a merge; deleted")
+            faceDao.deleteById(face.persistedId)
+        }
+        List(dest, source).filter(person => lost.exists(face => person.coverFaceId.contains(face.persistedId))).foreach {
+          person => updateById(person.persistedId, Map(FieldConst.Person.COVER_FACE_ID -> survivor.persistedId))
+        }
+        lost
     }
 
   def getPersonFaces(personId: String, limit: Int = 50): List[Face] =
@@ -464,6 +512,70 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       case (face, person) => purgeFaceFiles(List(face -> person), deletedPeopleOf(move.source, move.sourceDeleted))
     }
     move
+
+  /**
+   * Names a Face's Person as a whole, as [[updateName]] names them: every asset of theirs follows. Only a Person with no name is
+   * named this way. `personId` is the Person the client showed with the Face, which is checked rather than read from the Face:
+   * the Face may have been given to someone else since the panel was rendered, and the name must not land on whoever has it now.
+   * One transaction: the name's lock is taken first (`lockName`), as a move to a name takes it, so a move creating a Person of
+   * that name meanwhile waits and then finds this one holding it rather than failing on `person_01`; then the Person is locked
+   * (`lockAndGetLive`) and the Face re-read under the lock, so a Face gone or given away is a `NotFoundException`, as is a Person
+   * no longer live, and a Face of a recycled asset an `IllegalOperationException`, as is a Person who has a name by now, since
+   * the panel showing them is stale. A reserved name is a `ValidationException`; a name another live Person holds, a
+   * `DuplicateException` (`person_01`).
+   */
+  def nameFacePerson(faceId: String, personId: String, name: String): FacePersonChange =
+    txManager.withTransaction {
+      // The name first and the people after, in the order a move to a name takes them
+      dao.lockName(nameKey(name))
+      val (face, person) = lockedNamelessFacePerson(faceId, personId, Set.empty)
+      val named = updateName(person, name)
+      logger.debug(s"Person [$personId] of face [$faceId] named [${named.name.get}], formerly [${person.name.get}]")
+      FacePersonChange(face, person, named)
+    }
+
+  /**
+   * Merges a Face's Person as a whole into a named Person (`destId`), as [[merge]] merges them: every Face of theirs becomes the
+   * destination's, whose ID, name and Hidden state stay. Only a Person with no name is merged this way, and only into a named
+   * Person. `personId` is the Person the client showed with the Face, which is checked rather than read from the Face: the Face
+   * may have been given to someone else since the panel was rendered, and that someone must not be merged in their place. One
+   * transaction: both people are locked (`lockAndGetLive`, in ID order) and the Face re-read under the lock, so a Face gone or
+   * given away is a `NotFoundException`, as is either Person no longer live or of another repository, and a Face of a recycled
+   * asset an `IllegalOperationException`, as is a Person who has a name by now, since the panel showing them is stale. A
+   * destination with no name and the Person themselves are a `ValidationException`. The Faces the merge deleted on Videos lose
+   * their files once the transaction commits.
+   */
+  def mergeFacePerson(faceId: String, personId: String, destId: String): FacePersonChange =
+    if destId == personId then throw ValidationException(C.Msg.Err.FACE_ALREADY_THEIRS)
+
+    val (change, lost) = txManager.withTransaction {
+      val (face, source) = lockedNamelessFacePerson(faceId, personId, Set(destId))
+      val dest = dao.getById(destId)
+      if !dest.isNamed then throw ValidationException(C.Msg.Err.MERGE_INTO_NAMELESS)
+
+      logger.debug(s"Merging person [$personId] of face [$faceId] into [$destId]")
+      val (merged, lost) = mergeLocked(dest, source)
+      (FacePersonChange(face, source, merged), lost)
+    }
+    purgeFaceFiles(lost)
+    change
+
+  /**
+   * For a change of a Face's Person as a whole: locks the Person and the `others` (`lockAndGetLive`, in ID order), each of whom
+   * must be live, re-reads the Face under the lock ([[lockedFace]]) and answers it with the Person, who must have no name still:
+   * one named since is an `IllegalOperationException`, as the client's section is stale
+   */
+  private def lockedNamelessFacePerson(faceId: String, personId: String, others: Set[String]): (Face, Person) =
+    val ids = others + personId
+    val notLive = ids -- dao.lockAndGetLive(ids)
+    if notLive.nonEmpty then throw NotFoundException(s"People [${notLive.mkString(",")}] are not live")
+
+    val (face, _) = lockedFace(faceId, personId)
+    val person = dao.getById(personId)
+    if person.isNamed then
+      logger.debug(s"Person [$personId] of face [$faceId] has a name by now: [${person.name.get}]")
+      throw IllegalOperationException(C.Msg.Err.FACE_PERSON_NAMED_SINCE)
+    (face, person)
 
   /** The Face as it is before anything is locked, to learn whom to lock; gone, it is not found */
   private def readFace(faceId: String): Face =

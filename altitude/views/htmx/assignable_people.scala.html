@@ -6,7 +6,8 @@
 
 @* The options of the Change combobox (GET /htmx/people/r/:repoId/assignable): the people a Face can be given to
    (PersonService.getAssignable: live, not a bad match, named first and then by sort name, Hidden people among them),
-   one option each with the Person's ID and name, the Hidden mark, their cover and their name. Asked with the Face
+   one option each with the Person's ID and name, whether named (`data-person-named`, which tells the combobox whether a
+   pick merges into them or moves the Face alone), the Hidden mark, their cover and their name. Asked with the Face
    (`faceId`), the Suggested group comes first: the people whose Faces are nearest the Face's own vector, closest first
    (PersonService.suggestedPeople), each option marked `data-suggested` and left out of the list after the group, so a
    Person is one option. The group is the ARIA listbox group pattern, its heading announced with its options. The
@@ -18,6 +19,7 @@
         data-person-id="@{person.persistedId}"
         data-person-name="@{person.name.getOrElse("")}"
         @if(person.isHidden) { data-person-hidden="true" }
+        @if(person.isNamed) { data-person-named="true" }
         @if(isSuggested) { data-suggested="true" }>
         @for(cover <- person.coverFaceId) {
         <img src="@{Util.contentUrl(Const.DataStore.FACE, cover)}" alt="" loading="lazy">

@@ -18,6 +18,12 @@ trait FaceDao extends BaseDao[Face]:
   /** Whether the person has a Face on the asset, in the context repository */
   def hasFaceOfPerson(assetId: String, personId: String): Boolean
 
+  /**
+   * The Faces of either person on the Videos where both have a Face, in the context repository, in no order: what a merge of the
+   * two chooses between to keep one Face per Person per Video
+   */
+  def getFacesOnSharedVideos(personId: String, otherPersonId: String): List[Face]
+
   /** The Face by ID if it is in the context repository; none for a Face gone or of another repository */
   def getInRepository(faceId: String): Option[Face]
 

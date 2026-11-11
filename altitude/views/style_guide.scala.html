@@ -306,7 +306,13 @@
              cover's place with the label in <code>--theme-primary-text</code>. While nothing is typed the listbox opens with
              the Suggested group (<code>.suggested</code>): the people nearest the Face under a heading
              (<code>.group-heading</code>) in the section headings' style, parted from the list by a hairline in
-             <code>--popover-border-color</code>; the specimen shows it beside the Create row, which a typed name brings. Under the panel's scrolling content the
+             <code>--popover-border-color</code>; the specimen shows it beside the Create row, which a typed name brings. For a Face
+             of a Person with no name, a <code>.switch</code> labelled "This face only" sits between the field and the ×, its label at
+             <code>--font-size-small</code> (on a line of its own above the field and the × when the panel is too narrow, so the listbox never covers it), and while it is off each option
+             says after its name what its pick does (<code>.suffix</code>, "· merge Unknown 7 (5 assets)" or "· this face") in
+             <code>--theme-neutral-3</code>, the Create row reads "Name Unknown 7 'Al' (5 assets)", and the option a first merge pick
+             armed reads "Merge Unknown 7 into Alice? Pick again" (<code>.armed</code>) in <code>--warning-color</code>, as Remove's
+             button does; the last specimen shows them with nothing typed. Under the panel's scrolling content the
              key legend (<code>.panel-keys</code>) keeps Asset detail's keys in view: two lines of key caps, Curation's hairline
              box, and their meanings in the footnote's color. The
              toolbar's toggles
@@ -345,6 +351,24 @@
                         <li role="option" aria-selected="true"><span class="sg-cover no-cover"></span><span class="name">Alice</span></li>
                         <li role="option" aria-selected="false"><span class="sg-cover no-cover"></span><span class="name">Alan</span><span class="hidden-mark">Hidden</span></li>
                         <li role="option" class="create" aria-selected="false"><i class="fas fa-plus" aria-hidden="true"></i><span class="name">Create 'Al'</span></li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div>
+                    <button type="button" class="face-row" aria-pressed="true"><span class="sg-cover"></span><span class="name">Unknown 7</span></button>
+                    <div class="face-actions">
+                      <div class="face-combobox">
+                        <input type="text" role="combobox" aria-label="Person" aria-expanded="true" aria-autocomplete="list" placeholder="Name" readonly>
+                        <span class="face-only">
+                          <button type="button" role="switch" class="switch" id="sgFaceOnly" aria-checked="false"></button>
+                          <label for="sgFaceOnly">This face only</label>
+                        </span>
+                        <button type="button" class="cancel" aria-label="Cancel" title="Cancel">&times;</button>
+                      </div>
+                      <ul class="face-listbox sg-face-listbox" role="listbox" aria-label="Whole person specimen">
+                        <li role="option" aria-selected="true"><span class="sg-cover no-cover"></span><span class="name"><span class="armed">Merge Unknown 7 into Alice? Pick again</span></span></li>
+                        <li role="option" aria-selected="false"><span class="sg-cover no-cover"></span><span class="name"><span>Alan</span> <span class="suffix">· merge Unknown 7 (5 assets)</span></span><span class="hidden-mark">Hidden</span></li>
+                        <li role="option" aria-selected="false"><span class="sg-cover no-cover"></span><span class="name"><span>Unknown 9</span> <span class="suffix">· this face</span></span></li>
                       </ul>
                     </div>
                   </div>

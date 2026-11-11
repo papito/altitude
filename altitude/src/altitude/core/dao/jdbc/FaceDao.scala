@@ -87,6 +87,24 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       .flatMap(rec => getVectorField(rec(FieldConst.Face.FEATURES)))
       .map(embedding => IArray.genericWrapArray(embedding.values).toArray)
 
+  // Each person's Faces come from `face_02`, which leads with the person and carries the asset
+  override def getFacesOnSharedVideos(personId: String, otherPersonId: String): List[Face] =
+    val sql = s"""
+        SELECT face.*
+          FROM face, asset
+         WHERE face.repository_id = ?
+           AND face.person_id IN (?, ?)
+           AND asset.id = face.asset_id
+           AND asset.${FieldConst.AssetType.MEDIA_TYPE} = ?
+           AND face.asset_id IN (SELECT mine.asset_id FROM face mine WHERE mine.person_id = ?)
+           AND face.asset_id IN (SELECT theirs.asset_id FROM face theirs WHERE theirs.person_id = ?)
+      """
+
+    manyBySqlQuery(
+      sql,
+      List(RequestContext.getRepository.persistedId, personId, otherPersonId, "video", personId, otherPersonId)
+    ).map(makeModel)
+
   override def getInRepository(faceId: String): Option[Face] =
     import dialect.*
 
