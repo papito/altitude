@@ -8,6 +8,8 @@ import scala.util.Random
 import scala.util.Try
 
 import altitude.core.Altitude
+import altitude.core.Const
+import altitude.core.DuplicateException
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.ValidationException
@@ -17,7 +19,10 @@ import altitude.core.models.Face
 import altitude.core.models.Person
 import altitude.core.service.PersonService.FaceTarget
 
-/** The Face corrections of Asset detail: `PersonService.removeFace` and `moveFace`, with the reads the Detail panel makes */
+/**
+ * The Face corrections of Asset detail: `PersonService.removeFace` and `moveFace`, the name and the merge of a Face's Person as a
+ * whole (`nameFacePerson`, `mergeFacePerson`), with the reads the Detail panel makes
+ */
 @DoNotDiscover class FaceCorrectionTests(override val testApp: Altitude) extends IntegrationTestCore {
 
   private val VIDEO = AssetType("video", "mp4", "video/mp4")
@@ -624,6 +629,228 @@ import altitude.core.service.PersonService.FaceTarget
     alice.numOfFaces shouldBe 2
     testApp.service.person.getFaceById(f1.persistedId).personId shouldBe Some(alice.persistedId)
     testApp.service.person.getFaceById(f2.persistedId).personId shouldBe Some(alice.persistedId)
+  }
+
+  /** Whether the Person is live in the context repository: neither merged away nor a bad match */
+  private def isLive(personId: String): Boolean = Try(testApp.service.person.getLiveInRepository(personId)).isSuccess
+
+  /** The Person IDs of the assets' Faces, as stored, hidden people's included */
+  private def faceOwners(assets: List[Asset]): Set[String] =
+    assets.flatMap(asset => testApp.service.person.getAssetFacesWithPeople(asset.persistedId)).map(_._2.persistedId).toSet
+
+  test("Naming a Face's Person names them as a whole, every asset of theirs following") {
+
+    /**
+     * Setup:
+     *
+     * A Person with no name and a Face on each of three assets.
+     *
+     * Assertions:
+     *
+     * Naming them "Andreea" through one Face keeps their ID and names them: the name, the named flag and the name key as sort
+     * name are stored, and the Faces of all three assets are still theirs, counting three. The answer holds the Face, the Person
+     * with the name they had and the Person named.
+     */
+    val p = person()
+    val assets = List.fill(3)(testContext.persistAsset())
+    val faces = assets.map(face(p, _))
+    val unknownName = getPerson(p.persistedId).name.get
+
+    val naming = testApp.service.person.nameFacePerson(faces(1).persistedId, p.persistedId, "Andreea")
+
+    naming.face.persistedId shouldBe faces(1).persistedId
+    naming.before.name shouldBe Some(unknownName)
+    naming.after.persistedId shouldBe p.persistedId
+    naming.after.name shouldBe Some("Andreea")
+    val named = getPerson(p.persistedId)
+    named.name shouldBe Some("Andreea")
+    named.isNamed shouldBe true
+    named.numOfFaces shouldBe 3
+    testApp.txManager.asReadOnly(query("SELECT name_for_sort FROM person WHERE id = ?", p.persistedId).head)(
+      "name_for_sort") shouldBe "andreea"
+    faceOwners(assets) shouldBe Set(p.persistedId)
+  }
+
+  test("Naming a Face's Person is refused when they have a name by now, or the name is held or reserved") {
+
+    /**
+     * Setup:
+     *
+     * A Person named "Andrei", and two People with no name, each with a Face. The first of them is named "Bob" after the panel
+     * was shown.
+     *
+     * Assertions:
+     *
+     * Naming the first through their Face is a validation error, and they keep "Bob". Naming the second "ANDREI", a name Andrei
+     * holds in another case, is a duplicate, and "Unknown 7" a validation error; the second keeps no name.
+     */
+    person(Some("Andrei"))
+    val namedSince = person()
+    val namedSinceFace = face(namedSince, testContext.persistAsset())
+    testApp.service.person.updateName(getPerson(namedSince.persistedId), "Bob")
+    val nameless = person()
+    val namelessFace = face(nameless, testContext.persistAsset())
+
+    intercept[ValidationException](
+      testApp.service.person.nameFacePerson(namedSinceFace.persistedId, namedSince.persistedId, "Carol")).message shouldBe
+      Const.Msg.Err.FACE_PERSON_NAMED_SINCE
+    getPerson(namedSince.persistedId).name shouldBe Some("Bob")
+
+    intercept[DuplicateException](testApp.service.person.nameFacePerson(namelessFace.persistedId, nameless.persistedId, "ANDREI"))
+    intercept[ValidationException](
+      testApp.service.person.nameFacePerson(namelessFace.persistedId, nameless.persistedId, "Unknown 7"))
+    getPerson(nameless.persistedId).isNamed shouldBe false
+  }
+
+  test("A Face given to someone else, or on an asset in the trash, has its Person neither named nor merged") {
+
+    /**
+     * Setup:
+     *
+     * Andrei, named, with a Face. A Person with no name and Faces on two assets: one Face is moved to a third Person after the
+     * panel was shown, and the other's asset is recycled.
+     *
+     * Assertions:
+     *
+     * Naming or merging the Person through the moved Face is not found, as the Face is no longer theirs; through the Face in the
+     * trash, an illegal operation. The Person keeps no name and stays live, and Andrei counts one asset.
+     */
+    val andrei = person(Some("Andrei"))
+    face(andrei, testContext.persistAsset())
+    val p = person()
+    val moved = face(p, testContext.persistAsset())
+    val trashed = testContext.persistAsset()
+    val inTrash = face(p, trashed)
+    val third = person()
+    face(third, testContext.persistAsset())
+    testApp.service.person.moveFace(moved.persistedId, FaceTarget.ExistingPerson(third.persistedId))
+    testApp.service.library.recycleAssets(Set(trashed.persistedId))
+
+    intercept[NotFoundException](testApp.service.person.nameFacePerson(moved.persistedId, p.persistedId, "Carol"))
+    intercept[NotFoundException](testApp.service.person.mergeFacePerson(moved.persistedId, p.persistedId, andrei.persistedId))
+    intercept[IllegalOperationException](testApp.service.person.nameFacePerson(inTrash.persistedId, p.persistedId, "Carol"))
+    intercept[IllegalOperationException](
+      testApp.service.person.mergeFacePerson(inTrash.persistedId, p.persistedId, andrei.persistedId))
+
+    getPerson(p.persistedId).isNamed shouldBe false
+    isLive(p.persistedId) shouldBe true
+    getPerson(andrei.persistedId).numOfFaces shouldBe 1
+  }
+
+  test("Merging a Face's Person gives every Face of theirs to a named Person, whose name and Hidden state stay") {
+
+    /**
+     * Setup:
+     *
+     * A Person with no name and a Face on each of three assets, and Andrei, named and hidden, with a Face on each of two others.
+     *
+     * Assertions:
+     *
+     * Merging the Person into Andrei through one Face merges them away (soft-deleted, so no longer live), gives every Face of the
+     * three assets to Andrei and counts five assets for him; he keeps his name and stays hidden. The answer holds the Face, the
+     * Person with the name they had and Andrei as he is after.
+     */
+    val source = person()
+    val sourceAssets = List.fill(3)(testContext.persistAsset())
+    val sourceFaces = sourceAssets.map(face(source, _))
+    val unknownName = getPerson(source.persistedId).name.get
+    val andrei = person(Some("Andrei"))
+    val andreiAssets = List.fill(2)(testContext.persistAsset())
+    andreiAssets.foreach(face(andrei, _))
+    testApp.service.person.setVisibility(andrei, isHidden = true)
+
+    val merge = testApp.service.person.mergeFacePerson(sourceFaces.head.persistedId, source.persistedId, andrei.persistedId)
+
+    merge.face.persistedId shouldBe sourceFaces.head.persistedId
+    merge.before.persistedId shouldBe source.persistedId
+    merge.before.name shouldBe Some(unknownName)
+    merge.after.persistedId shouldBe andrei.persistedId
+    merge.after.name shouldBe Some("Andrei")
+    isLive(source.persistedId) shouldBe false
+    faceOwners(sourceAssets ++ andreiAssets) shouldBe Set(andrei.persistedId)
+    val after = getPerson(andrei.persistedId)
+    after.numOfFaces shouldBe 5
+    after.name shouldBe Some("Andrei")
+    after.isNamed shouldBe true
+    after.isHidden shouldBe true
+  }
+
+  test("A Face's Person is not merged when they have a name by now, into a Person with no name, or into themselves") {
+
+    /**
+     * Setup:
+     *
+     * Andrei, named, with a Face; two People with no name, each with a Face; and a Person with no name with a Face who is named
+     * "Bob" after the panel was shown.
+     *
+     * Assertions:
+     *
+     * Merging Bob into Andrei, one Person with no name into the other, or a Person into themselves is each a validation error.
+     * Everyone stays live with their Faces, and Andrei counts one asset.
+     */
+    val andrei = person(Some("Andrei"))
+    face(andrei, testContext.persistAsset())
+    val nameless = person()
+    val namelessFace = face(nameless, testContext.persistAsset())
+    val namedSince = person()
+    val namedSinceFace = face(namedSince, testContext.persistAsset())
+    val otherNameless = person()
+    face(otherNameless, testContext.persistAsset())
+    testApp.service.person.updateName(getPerson(namedSince.persistedId), "Bob")
+
+    intercept[ValidationException](
+      testApp.service.person
+        .mergeFacePerson(namedSinceFace.persistedId, namedSince.persistedId, andrei.persistedId)).message shouldBe
+      Const.Msg.Err.FACE_PERSON_NAMED_SINCE
+    intercept[ValidationException](
+      testApp.service.person.mergeFacePerson(
+        namelessFace.persistedId,
+        nameless.persistedId,
+        otherNameless.persistedId)).message shouldBe Const.Msg.Err.MERGE_INTO_NAMELESS
+    intercept[ValidationException](
+      testApp.service.person.mergeFacePerson(namelessFace.persistedId, nameless.persistedId, nameless.persistedId))
+
+    List(andrei, nameless, namedSince, otherNameless).foreach(p => isLive(p.persistedId) shouldBe true)
+    testApp.service.person.getFaceById(namelessFace.persistedId).personId shouldBe Some(nameless.persistedId)
+    testApp.service.person.getFaceById(namedSinceFace.persistedId).personId shouldBe Some(namedSince.persistedId)
+    getPerson(andrei.persistedId).numOfFaces shouldBe 1
+  }
+
+  test("A Face's Person is not merged into a Person merged away, discarded or of another Library") {
+
+    /**
+     * Setup:
+     *
+     * A Person with no name with a Face; Tessa, named, merged into Andrei; Carl, named, discarded as a bad match; and Eve, named,
+     * in another Library of the same user.
+     *
+     * Assertions:
+     *
+     * Merging the Person into Tessa, Carl or Eve is not found, and so is an ID no Person has. The Person stays live with their
+     * Face.
+     */
+    val repo = testContext.repository
+    val p = person()
+    val f = face(p, testContext.persistAsset())
+    val andrei = person(Some("Andrei"))
+    face(andrei, testContext.persistAsset())
+    val tessa = person(Some("Tessa"))
+    face(tessa, testContext.persistAsset())
+    testApp.service.person.merge(dest = andrei, source = tessa)
+    val carl = person(Some("Carl"))
+    face(carl, testContext.persistAsset())
+    testApp.service.person.markAsBadMatch(carl)
+    val otherRepo = testContext.persistRepository()
+    testApp.service.repository.switchContextToRepository(otherRepo)
+    val eve = person(Some("Eve"))
+    testApp.service.repository.switchContextToRepository(repo)
+
+    List(tessa.persistedId, carl.persistedId, eve.persistedId, java.util.UUID.randomUUID.toString).foreach {
+      destId => intercept[NotFoundException](testApp.service.person.mergeFacePerson(f.persistedId, p.persistedId, destId))
+    }
+
+    isLive(p.persistedId) shouldBe true
+    testApp.service.person.getFaceById(f.persistedId).personId shouldBe Some(p.persistedId)
   }
 
   test("The Detail panel's Faces of an asset leave out bad matches and come in reading order, or by Frame time") {

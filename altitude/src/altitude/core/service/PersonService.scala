@@ -80,6 +80,13 @@ object PersonService:
    */
   case class FaceMove(face: Face, source: Person, target: Person, sourceDeleted: Boolean)
 
+  /**
+   * What [[PersonService.nameFacePerson]] or [[PersonService.mergeFacePerson]] did to a Face's Person as a whole: the Face, its
+   * Person as they were before, with the name they had, and the Person who has the Face now, as they are after: the same Person
+   * named, or the Person they were merged into
+   */
+  case class FacePersonChange(face: Face, before: Person, after: Person)
+
 class PersonService(val app: Altitude) extends BaseService[Person]:
   import PersonService.*
 
@@ -464,6 +471,61 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       case (face, person) => purgeFaceFiles(List(face -> person), deletedPeopleOf(move.source, move.sourceDeleted))
     }
     move
+
+  /**
+   * Names a Face's Person as a whole, as [[updateName]] names them: every asset of theirs follows. Only a Person with no name is
+   * named this way. `personId` is the Person the client showed with the Face, which is checked rather than read from the Face:
+   * the Face may have been given to someone else since the panel was rendered, and the name must not land on whoever has it now.
+   * One transaction: the Person is locked (`lockAndGetLive`) and the Face re-read under the lock, so a Face gone or given away is
+   * a `NotFoundException`, as is a Person no longer live, and a Face of a recycled asset an `IllegalOperationException`. A Person
+   * who has a name by now, or a reserved name, is a `ValidationException`; a name another live Person holds, a
+   * `DuplicateException` (`person_01`).
+   */
+  def nameFacePerson(faceId: String, personId: String, name: String): FacePersonChange =
+    txManager.withTransaction {
+      val (face, person) = lockedNamelessFacePerson(faceId, personId, Set.empty)
+      val named = updateName(person, name)
+      logger.debug(s"Person [$personId] of face [$faceId] named [${named.name.get}], formerly [${person.name.get}]")
+      FacePersonChange(face, person, named)
+    }
+
+  /**
+   * Merges a Face's Person as a whole into a named Person (`destId`), as [[merge]] merges them: every Face of theirs becomes the
+   * destination's, whose ID, name and Hidden state stay. Only a Person with no name is merged this way, and only into a named
+   * Person. `personId` is the Person the client showed with the Face, which is checked rather than read from the Face: the Face
+   * may have been given to someone else since the panel was rendered, and that someone must not be merged in their place. One
+   * transaction: both people are locked (`lockAndGetLive`, in ID order) and the Face re-read under the lock, so a Face gone or
+   * given away is a `NotFoundException`, as is either Person no longer live or of another repository, and a Face of a recycled
+   * asset an `IllegalOperationException`. A Person who has a name by now, a destination with no name and the Person themselves
+   * are a `ValidationException`.
+   */
+  def mergeFacePerson(faceId: String, personId: String, destId: String): FacePersonChange =
+    if destId == personId then throw ValidationException(C.Msg.Err.FACE_ALREADY_THEIRS)
+
+    txManager.withTransaction {
+      val (face, source) = lockedNamelessFacePerson(faceId, personId, Set(destId))
+      val dest = dao.getById(destId)
+      if !dest.isNamed then throw ValidationException(C.Msg.Err.MERGE_INTO_NAMELESS)
+
+      logger.debug(s"Merging person [$personId] of face [$faceId] into [$destId]")
+      FacePersonChange(face, source, merge(dest, source))
+    }
+
+  /**
+   * For a change of a Face's Person as a whole: locks the Person and the `others` (`lockAndGetLive`, in ID order), each of whom
+   * must be live, re-reads the Face under the lock ([[lockedFace]]) and answers it with the Person, who must have no name still
+   */
+  private def lockedNamelessFacePerson(faceId: String, personId: String, others: Set[String]): (Face, Person) =
+    val ids = others + personId
+    val notLive = ids -- dao.lockAndGetLive(ids)
+    if notLive.nonEmpty then throw NotFoundException(s"People [${notLive.mkString(",")}] are not live")
+
+    val (face, _) = lockedFace(faceId, personId)
+    val person = dao.getById(personId)
+    if person.isNamed then
+      logger.debug(s"Person [$personId] of face [$faceId] has a name by now: [${person.name.get}]")
+      throw ValidationException(C.Msg.Err.FACE_PERSON_NAMED_SINCE)
+    (face, person)
 
   /** The Face as it is before anything is locked, to learn whom to lock; gone, it is not found */
   private def readFace(faceId: String): Face =

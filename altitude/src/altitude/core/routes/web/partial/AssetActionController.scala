@@ -8,6 +8,7 @@ import altitude.core.{ Const => C }
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.DataScrubber
+import altitude.core.DuplicateException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Asset
@@ -18,6 +19,11 @@ import altitude.core.service.PersonService.FaceTarget
 
 class AssetActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/asset"
+
+  // A name given to a Face's Person, or to the Person a Face is given to, is trimmed and held to the name editor's length rules
+  private val nameScrubber = DataScrubber(trim = List(Api.Field.Person.NAME))
+  private val nameMaxLength = Map(Api.Field.Person.NAME -> Api.Constraints.MAX_NAME_LENGTH)
+  private val nameMinLength = Map(Api.Field.Person.NAME -> Api.Constraints.MIN_NAME_LENGTH)
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/asset-detail/:assetId")
@@ -60,7 +66,7 @@ class AssetActionController(using logger: Logger) extends BaseController:
   @cask.put(f"/$prefix/r/:repoId/face/:faceId/person")
   def changeFacePerson(repoId: String, faceId: String)(using request: Request): Response[String] =
     answering {
-      val json: ujson.Obj = DataScrubber(trim = List(Api.Field.Person.NAME)).scrub(unscrubbedJson.get)
+      val json: ujson.Obj = nameScrubber.scrub(unscrubbedJson.get)
       val personId = json.obj.get(Api.Field.PERSON_ID).flatMap(_.strOpt).filter(_.nonEmpty)
       val name = json.obj.get(Api.Field.Person.NAME).flatMap(_.strOpt).filter(_.nonEmpty)
 
@@ -69,10 +75,7 @@ class AssetActionController(using logger: Logger) extends BaseController:
           ApiRequestValidator(uuid = List(Api.Field.PERSON_ID)).validate(json)
           FaceTarget.ExistingPerson(id)
         case (None, Some(personName)) =>
-          ApiRequestValidator(
-            maxLengths = Map(Api.Field.Person.NAME -> Api.Constraints.MAX_NAME_LENGTH),
-            minLengths = Map(Api.Field.Person.NAME -> Api.Constraints.MIN_NAME_LENGTH)
-          ).validate(json)
+          ApiRequestValidator(maxLengths = nameMaxLength, minLengths = nameMinLength).validate(json)
           FaceTarget.Named(personName)
         case _ => throw ValidationException(C.Msg.Err.FACE_TARGET_REQUIRED)
 
@@ -85,6 +88,69 @@ class AssetActionController(using logger: Logger) extends BaseController:
         move.face.assetId.get,
         C.Msg.FaceCorrection.MOVED.format(move.target.name.getOrElse("")),
         Option.when(move.sourceDeleted)(move.source))
+    }
+
+  /**
+   * Name: names the Face's Person as a whole (`PersonService.nameFacePerson`), the body's `personId` being the Person the panel
+   * showed with the Face and its `name` the new name, and answers the asset's People section with the result in its data
+   * attributes. A body that is not a JSON object, a `personId` that is not a UUID, a name outside the length rules of the name
+   * editor, a reserved name, a name another live Person holds or a Person who has a name by now is a 400; a Face gone or given to
+   * someone else meanwhile, or a Person no longer live, a 404; a Face of an asset in the trash a 409.
+   */
+  @requireLogin()
+  @cask.put(f"/$prefix/r/:repoId/face/:faceId/person/name")
+  def nameFacePerson(repoId: String, faceId: String)(using request: Request): Response[String] =
+    answering {
+      val json: ujson.Obj = nameScrubber.scrub(unscrubbedJson.get)
+      ApiRequestValidator(
+        required = List(Api.Field.PERSON_ID, Api.Field.Person.NAME),
+        uuid = List(Api.Field.PERSON_ID),
+        maxLengths = nameMaxLength,
+        minLengths = nameMinLength
+      ).validate(json)
+      val personId = json(Api.Field.PERSON_ID).str
+      val name = json(Api.Field.Person.NAME).str
+
+      try
+        val naming = App.altitude.service.person.nameFacePerson(faceId, personId, name)
+        logger.info(
+          s"Named person [$personId] [${naming.after.name.get}], formerly [${naming.before.name.get}], " +
+            s"from face [$faceId] of asset [${naming.face.assetId.get}]")
+
+        peopleSection(naming.face.assetId.get, C.Msg.FaceCorrection.NAMED.format(naming.before.name.get, naming.after.name.get))
+      catch
+        case _: DuplicateException =>
+          logger.debug(s"Name [$name] for person [$personId] of face [$faceId] is held by another person")
+          textError(C.Msg.Err.PERSON_NAME_ALREADY_EXISTS, 400)
+    }
+
+  /**
+   * Merge: merges the Face's Person as a whole into a named Person (`PersonService.mergeFacePerson`), the body's `personId` being
+   * the Person the panel showed with the Face and its `destPersonId` the Person they are merged into, and answers the asset's
+   * People section with the result in its data attributes, the merged Person's ID and the destination's among them. A body that
+   * is not a JSON object, an ID that is not a UUID, a Person who has a name by now, a destination with no name or the Person
+   * themselves is a 400; a Face gone or given to someone else meanwhile, or a Person or destination no longer live or of another
+   * Library, a 404; a Face of an asset in the trash a 409.
+   */
+  @requireLogin()
+  @cask.put(f"/$prefix/r/:repoId/face/:faceId/person/merge")
+  def mergeFacePerson(repoId: String, faceId: String)(using request: Request): Response[String] =
+    answering {
+      val json: ujson.Obj = unscrubbedJson.get
+      val ids = List(Api.Field.PERSON_ID, Api.Field.Person.DEST_PERSON_ID)
+      ApiRequestValidator(required = ids, uuid = ids).validate(json)
+      val personId = json(Api.Field.PERSON_ID).str
+      val destId = json(Api.Field.Person.DEST_PERSON_ID).str
+
+      val merge = App.altitude.service.person.mergeFacePerson(faceId, personId, destId)
+      logger.info(
+        s"Merged person [$personId] [${merge.before.name.get}] into [$destId] [${merge.after.name.get}] " +
+          s"from face [$faceId] of asset [${merge.face.assetId.get}]")
+
+      peopleSection(
+        merge.face.assetId.get,
+        C.Msg.FaceCorrection.MERGED.format(merge.before.name.get, merge.after.name.get),
+        merge = Some(merge.before -> merge.after))
     }
 
   /**
@@ -106,11 +172,18 @@ class AssetActionController(using logger: Logger) extends BaseController:
         Option.when(removal.personDeleted)(removal.person))
     }
 
-  /** The People section after a correction, its root carrying the message and any Person the correction deleted */
-  private def peopleSection(assetId: String, message: String, deletedPerson: Option[Person]): Response[String] =
+  /**
+   * The People section after a correction, its root carrying the message, any Person the correction deleted and, after a merge,
+   * the merged Person and the Person they were merged into
+   */
+  private def peopleSection(
+      assetId: String,
+      message: String,
+      deletedPerson: Option[Person] = None,
+      merge: Option[(Person, Person)] = None): Response[String] =
     val asset: Asset = App.altitude.service.asset.getById(assetId)
     val faces = App.altitude.service.person.getAssetFacesForDetail(assetId)
-    val payload = "<!doctype html>" + htmx.html.detail_panel_people(asset, faces, Some(message), deletedPerson)
+    val payload = "<!doctype html>" + htmx.html.detail_panel_people(asset, faces, Some(message), deletedPerson, merge)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   initialize()

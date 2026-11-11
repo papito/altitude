@@ -171,11 +171,14 @@ export const Const = {
         faceRemove: "data-app-face-remove",
         faceRemoveLastLabel: "data-app-face-remove-label-last",
         // The People section's root (htmx/detail_panel_people): read-only in the trash, and after a correction the result
-        // message for the snackbar and, when a Person was deleted, their ID and the line that says so
+        // message for the snackbar, when a Person was deleted their ID and the line that says so, and after a merge of the
+        // Face's Person the merged Person's ID and the ID of the Person they were merged into
         readOnly: "data-app-read-only",
         resultMessage: "data-app-result-message",
         deletedPersonId: "data-app-deleted-person-id",
         deletedPersonMessage: "data-app-deleted-person-message",
+        mergedPersonId: "data-app-merged-person-id",
+        mergedIntoId: "data-app-merged-into-id",
         // The Detail panel's dimensions row, which reads the shown element's size (htmx/detail_panel)
         detailDimensions: "data-app-detail-dimensions",
         // The Asset detail fragment while the Detail panel is open (view_image_detail_modal.css lays the grid out from it),

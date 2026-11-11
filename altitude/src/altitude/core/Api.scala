@@ -122,6 +122,7 @@ object Api:
       val MERGE_DEST_PERSON = "mergeDestPerson"
       // do not delete - used in templates but not references in Scala code
       val SRC_PERSON_ID = "srcPersonId"
+      // The Person a Face's Person is merged into (AssetActionController.mergeFacePerson)
       val DEST_PERSON_ID = "destPersonId"
 
     object Search:

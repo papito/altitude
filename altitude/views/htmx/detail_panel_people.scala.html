@@ -5,7 +5,7 @@
 @import altitude.core.models.Face
 @import altitude.core.models.Person
 
-@(asset: Asset, faces: List[(Face, Person)], message: Option[String] = None, deletedPerson: Option[Person] = None)
+@(asset: Asset, faces: List[(Face, Person)], message: Option[String] = None, deletedPerson: Option[Person] = None, merge: Option[(Person, Person)] = None)
 
 @* The People section of the Detail panel: one row per Face of the asset, in the order the server reads them
    (PersonService.getAssetFacesForDetail: by x for an image, by Frame time for a Video), bad matches left out. A row
@@ -18,9 +18,11 @@
    (`x-data="faceCombobox"`, js/alpine/components/face-combobox.js: an input with role="combobox", an X back to the
    buttons, and the `role="listbox"` popover its options render into, anchored to the input), and Remove, whose label
    moves through two clicks, the second one removing (the one after the first click is on the button). The section is
-   swapped in whole by a correction's response (PUT /htmx/asset/r/:repoId/face/:faceId/person, DELETE
-   /htmx/asset/r/:repoId/face/:faceId), whose root then carries the result message for the snackbar and, for a Person
-   the correction deleted, their ID and the line the snackbar adds. For an asset in the trash the root is marked
+   swapped in whole by a correction's response (PUT /htmx/asset/r/:repoId/face/:faceId/person, its /name and /merge, which
+   name or merge the Face's Person as a whole, and DELETE /htmx/asset/r/:repoId/face/:faceId), whose root then carries the
+   result message for the snackbar, for a Person the correction deleted their ID and the line the snackbar adds, and after
+   a merge the merged Person's ID (`data-app-merged-person-id`) and the ID of the Person they were merged into
+   (`data-app-merged-into-id`). For an asset in the trash the root is marked
    read-only: Search alone is rendered, and the server refuses the corrections. The listbox opens with the Suggested group, the
    people nearest the Face (the component's `suggested`, rendered while nothing is typed, under a heading the group is
    labelled by), then the list (`matches`); both render the same option. *@
@@ -49,6 +51,10 @@
          @for(person <- deletedPerson) {
          data-app-deleted-person-id="@{person.persistedId}"
          data-app-deleted-person-message="@{Const.Msg.FaceCorrection.PERSON_REMOVED.format(person.name.getOrElse(""))}"
+         }
+         @for((mergedPerson, mergedInto) <- merge) {
+         data-app-merged-person-id="@{mergedPerson.persistedId}"
+         data-app-merged-into-id="@{mergedInto.persistedId}"
          }>
     @if(faces.isEmpty) {
     <p class="empty">No one in this @if(asset.assetType.mediaType == "video") {video} else {image}</p>
