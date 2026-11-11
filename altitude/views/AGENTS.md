@@ -2479,7 +2479,10 @@ builds or binds a control. Where each control follows:
 - The explorer: the ⋯ menus and add buttons of the folder tree, the album list and the Location list
   (`js/common/folder-tree.js`, `album-list.js`, `location-list.js`) for Organize; without it a row's menu cell is the
   empty `buildNoMenuCell` (`js/common/context-menu-markup.js`), so the row's other cells keep their grid columns, and the
-  add hosts stay empty. A folder's Delete is offered with Recycle too, unless the folder holds no asset (its recursive
+  add hosts stay empty; in their place each tab opens with a warning saying why (`includes/cannot_organize`, a
+  `.notice.warning` as far above the list as the add controls are): "You cannot create folders as you do not have the
+  Permission to organize this Library", and the same for albums and Locations (`Const.UI.CANNOT_ORGANIZE`), a Guest's tabs
+  included. A folder's Delete is offered with Recycle too, unless the folder holds no asset (its recursive
   `numOfAssets` as the tree read it), since deleting recycles what it holds; the server refuses a delete the count went stale
   for. A Person's rename pencil (`htmx/people_list`) and the results title's name, the inline editor's trigger
   (`htmx/view_person_name`, plain text without it), for Edit Metadata; the results title's cover choice and Hide / Show /

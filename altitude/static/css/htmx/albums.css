@@ -31,15 +31,16 @@
 }
 
 /* The add button sits centered at the top of the explorer. Both rules are scoped to the shown
-   state, because a display of their own would override the `hidden` attribute the renderer toggles */
-#albumActions:not([hidden]) {
+   state, because a display of their own would override the `hidden` attribute the renderer toggles, and to a host holding its
+   controls: an account without Organize gets them empty (includes/cannot_organize says why), and they take no room */
+#albumActions:not([hidden], :empty) {
     display: grid;
     justify-items: center;
     margin-bottom: var(--control-vertical-space);
 }
 
 /* Empty state: the one control, centered in the explorer */
-#noAlbums:not([hidden]) {
+#noAlbums:not([hidden], :empty) {
     display: grid;
     place-items: center;
     min-height: 60vh;

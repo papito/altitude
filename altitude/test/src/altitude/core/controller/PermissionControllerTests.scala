@@ -5,6 +5,7 @@ import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.Api
 import altitude.core.App
+import altitude.core.Const as C
 import altitude.core.models.AccountType
 import altitude.core.models.Asset
 import altitude.core.models.Permission
@@ -289,6 +290,40 @@ import altitude.core.models.Permissions
         // Neither rename went through: the name is taken
         testApp.service.person.getById(person.persistedId).name should not be Some("Taken")
         testApp.service.person.getById(taken.persistedId).name shouldBe Some("Taken")
+    }
+  }
+
+  test("The folder, album and Location tabs say why there is nothing to add to an account without Organize") {
+
+    /**
+     * Setup:
+     *
+     * A User holding every Permission but Organize, a User holding Organize alone, and a Guest, each logged in to a Library.
+     *
+     * Assertions:
+     *
+     * For the first User and the Guest, each tab opens with a warning naming what it cannot create: folders, albums or Locations,
+     * as it may not organize the Library. The holder of Organize's tabs carry none.
+     */
+    val tabs = List("folder" -> "folders", "album" -> "albums", "location" -> "Locations")
+    val callers = List(
+      (AccountType.User, Permissions(Permissions.all.mask & ~Permission.Organize.mask), true),
+      (AccountType.User, Permissions.of(Permission.Organize), false),
+      (AccountType.Guest, Permissions.none, true)
+    )
+    for ((accountType, permissions, warned) <- callers) withClue(s"[$accountType $permissions]: ") {
+      testContext = new altitude.test.TestContext(testApp)
+      val repoId = loginAs(accountType, permissions)
+
+      withServer(App) {
+        host =>
+          for ((path, things) <- tabs) withClue(s"[$path]: ") {
+            val tab = requests.get(s"$host/htmx/$path/r/$repoId/tab", cookies = testContext.cookies, check = false)
+            tab.statusCode shouldBe 200
+            val warning = s"""<p class="notice warning cannot-organize">${C.UI.CANNOT_ORGANIZE.format(things)}</p>"""
+            tab.text().contains(warning) shouldBe warned
+          }
+      }
     }
   }
 

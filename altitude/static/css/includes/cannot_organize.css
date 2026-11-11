@@ -1,0 +1,5 @@
+/* An explorer tab's warning for an account without Organize (includes/cannot_organize), which stands where the tab's add
+   controls would: as far above the list as they are */
+.cannot-organize {
+  margin-bottom: var(--control-vertical-space);
+}

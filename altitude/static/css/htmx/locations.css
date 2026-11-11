@@ -138,8 +138,9 @@
 }
 
 /* The two add buttons sit centered at the top of the explorer. Both rules are scoped to the shown
-   state, because a display of their own would override the `hidden` attribute the renderer toggles */
-#locationActions:not([hidden]) {
+   state, because a display of their own would override the `hidden` attribute the renderer toggles, and to a host holding its
+   controls: an account without Organize gets them empty (includes/cannot_organize says why), and they take no room */
+#locationActions:not([hidden], :empty) {
     display: flex;
     justify-content: center;
     gap: var(--control-vertical-space);
@@ -147,7 +148,7 @@
 }
 
 /* Empty state: the one control, centered in the explorer */
-#noLocations:not([hidden]) {
+#noLocations:not([hidden], :empty) {
     display: grid;
     place-items: center;
     min-height: 60vh;

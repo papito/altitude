@@ -291,3 +291,6 @@ object Const:
     val DELETE_USER_DIALOG_TITLE = "Delete %s"
     val CHANGE_PASSWORD_DIALOG_TITLE = "Change password"
     val ACCOUNT_INFO_DIALOG_TITLE = "Your account"
+    // The warning the folder, album and Location tabs open with for an account without Organize, which has nothing to add there:
+    // "folders", "albums" or "Locations"
+    val CANNOT_ORGANIZE = "You cannot create %s as you do not have the Permission to organize this Library"
