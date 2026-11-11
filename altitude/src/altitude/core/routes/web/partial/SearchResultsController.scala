@@ -327,7 +327,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     textError(Const.Msg.Err.SEARCH_TIMED_OUT, 503)
 
   private def personOf(personId: Option[String]): Person =
-    personId.map(App.altitude.service.person.getInRepository).orNull
+    personId.map(App.altitude.service.person.getById).orNull
 
   /**
    * The folder scope as a breadcrumb reads it: the top-level folder first, the folder itself last. The repository root is the
@@ -335,7 +335,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    */
   private def folderPathOf(folderId: Option[String]): List[Folder] =
     val folders = App.altitude.service.folder
-    folderId.filterNot(folders.isRootFolder).map(id => folders.getAncestors(id) :+ folders.getInRepository(id)).getOrElse(Nil)
+    folderId.filterNot(folders.isRootFolder).map(id => folders.getAncestors(id) :+ folders.getById(id)).getOrElse(Nil)
 
   /** The Location scope with its category's name, which the typed read leaves out */
   private def locationOf(locationId: Option[String]): Option[Location] =

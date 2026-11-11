@@ -127,20 +127,20 @@ class LibraryService(val app: Altitude):
           Option.when(app.service.asset.queryAll(unfinished).nonEmpty) {
             // Locks the people of its faces first
             app.service.person.moveCoversOff(Set(assetId))
-            val facesWithPeople = app.service.person.getAssetFacesWithPeople(assetId)
+            val faces = app.service.person.getAllAssetFaces(assetId)
             app.service.person.recycleFacesForAssets(Set(assetId))
             app.service.asset.deleteByQuery(unfinished)
-            val deletedPeople = app.service.person.deletePeopleWithoutFaces(facesWithPeople.map(_._2.persistedId).toSet)
-            (facesWithPeople, deletedPeople)
+            val deletedPeople = app.service.person.deletePeopleWithoutFaces(faces.map(_.personId.get).toSet)
+            (faces, deletedPeople)
           }
         }
 
         discarded.foreach {
-          case (facesWithPeople, deletedPeople) =>
-            app.service.person.purgeFaceFiles(facesWithPeople.map(_._1))
+          case (faces, deletedPeople) =>
+            app.service.person.purgeFaceFiles(faces)
             app.service.fileStore.purgeAssetById(assetId)
             logger.debug(
-              s"Discarded the import of asset [$assetId]: ${facesWithPeople.size} faces, ${deletedPeople.size} people it started")
+              s"Discarded the import of asset [$assetId]: ${faces.size} faces, ${deletedPeople.size} people it started")
         }
     }
 
@@ -254,7 +254,7 @@ class LibraryService(val app: Altitude):
     if app.service.folder.isRootFolder(id) then throw IllegalOperationException("Cannot delete the root folder")
 
     txManager.withTransaction {
-      val folder: Folder = app.service.folder.getInRepository(id)
+      val folder: Folder = app.service.folder.getById(id)
       logger.debug(s"Deleting folder $folder")
 
       val children = app.service.folder.getChildrenRecursive(id)
@@ -340,7 +340,7 @@ class LibraryService(val app: Altitude):
     if destFolderId == null then throw IllegalOperationException("Destination folder ID cannot be null")
 
     txManager.withTransaction {
-      app.service.folder.getInRepository(destFolderId): Unit
+      app.service.folder.getById(destFolderId): Unit
       val assetsToMove = app.service.asset.getAssetsToMove(assetIds)
 
       logger.debug(s"Moving assets [${assetIds.mkString(",")}] to folder [$destFolderId] " + assetsToMove.length)

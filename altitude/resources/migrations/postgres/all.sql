@@ -377,6 +377,8 @@ CREATE TABLE metadata_parameter (
 
 -- The purge cascade and clearing an asset's parameters
 CREATE INDEX metadata_parameter_01 ON metadata_parameter (asset_id);
+-- The cascade from a deleted metadata field
+CREATE INDEX metadata_parameter_02 ON metadata_parameter (field_id);
 
 -- body holds words already split by the application, so the vector takes them as they are: no stemming, no stop words
 CREATE TABLE search_document (

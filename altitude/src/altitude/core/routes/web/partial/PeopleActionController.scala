@@ -12,7 +12,6 @@ import altitude.core.DataScrubber
 import altitude.core.DuplicateException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
-import altitude.core.models.Face
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
@@ -76,7 +75,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   @cask.get(f"/$prefix/r/:repoId/p/:personId/title")
   def showPersonTitle(repoId: String, personId: String)(using request: Request): Response[String] =
     answering {
-      val person: Person = App.altitude.service.person.getInRepository(personId)
+      val person: Person = App.altitude.service.person.getById(personId)
       val payload = "<!doctype html>" + htmx.html.person_inner(person = person)
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
     }
@@ -107,11 +106,8 @@ class PeopleActionController(using logger: Logger) extends BaseController:
   @cask.put(f"/$prefix/r/:repoId/p/:personId/cover-image")
   def setCoverImage(repoId: String, personId: String, faceId: String)(using request: Request): Response[String] =
     answering {
-      val person: Person = App.altitude.service.person.getById(personId)
-      val face: Face = App.altitude.service.person.getFaceById(faceId)
-
       logger.trace(s"Setting cover image for person $personId to face $faceId")
-      val updatedPerson = App.altitude.service.person.setFaceAsCover(person, face)
+      val updatedPerson = App.altitude.service.person.setFaceAsCover(personId, faceId)
 
       htmlResponse(htmx.html.person_inner(person = updatedPerson))
     }

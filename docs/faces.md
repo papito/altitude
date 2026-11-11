@@ -176,7 +176,9 @@ while it held, from a snapshot in which its Face still existed, the count would 
 The faces themselves go with the asset on purge, and their files with them. Before their rows go, each person whose
 cover is one of them, live or merged away, takes their best Face on another asset not marked for purging
 (`PersonService.moveCoversOff`, `FaceDao.getBestCoverCandidate`: the highest detection score, then the ID), or no cover
-when none is left, under the people's locks (`PersonDao.lockAssetPeople`). An import the pipeline drops, or one a crash
+when none is left, under the people's locks (`PersonDao.lockAssetPeople`). An asset whose covers cannot be moved goes no
+further down the purge (`DeletePersonFilesFlow`): its row, files and Faces stay, purge-pending, for the startup job to
+queue again, so the cover's key (below) never drops a cover without a repick. An import the pipeline drops, or one a crash
 cut off (pruned at startup), is undone (`LibraryService.discardImport`): a cover on one of its faces moves off it as on
 purge, the assets it added to the counts are given back, its faces and their files go, and a person it started, left with
 no face, is deleted. Moving a live asset between folders or out of triage does not touch the counts.
@@ -255,16 +257,18 @@ The tab's actions:
   pencil on the person's cell in the People tab opens as a popover, in Browse and in Triage
   (`GET /htmx/people/r/:repoId/dialogs/rename-person`, `PUT /htmx/people/r/:repoId/p/:personId/rename`, answering an
   empty success or the dialog's form again). The two dialog routes find the person through
-  `PersonService.getInRepository`, so an unknown person, or another repository's, is a 404. Either rename reloads the
-  People tab, since naming an Unmatched person makes them Matched. A person with no name can also be named from the
+  `PersonService.getLiveInRepository`, so an unknown person, another repository's, or one merged away or discarded as a
+  bad match, is a 404. Either rename reloads the People tab, since naming an Unmatched person makes them Matched. A person
+  with no name can also be named from the
   Detail panel, by Change on a Face of theirs with a new name, which calls `updateName` too, and merged there into a named
   person (**Corrections**). A name another live person holds is never a new name there, since typing it makes that
   person's option the active one (a merge, or with "This face only" on a move); a holder who took it meanwhile makes the
   name a 400 with no offer to merge.
 - **Cover face**: the choose-cover modal offers `getPersonFaces` (by detection score, none on an asset marked for
-  purging), and `setFaceAsCover` sets one under the person's lock (`lockAndGetLive`): a Face of another person, or one on
-  an asset marked for purging, is refused (`ValidationException`, a plain-text 400 saying why), and a Face of another
-  repository, or an unknown one, is not found (a 404), the cover staying as it was.
+  purging), and `setFaceAsCover(personId, faceId)` sets one under the person's lock (`lockAndGetLive`) and answers the
+  person read again: a Face of another person, or one on an asset marked for purging, is refused (`ValidationException`,
+  a plain-text 400 saying why), and a person or a Face of another repository, or an unknown one, is not found (a 404),
+  the cover staying as it was.
 - **Hide / show**: display only; the person's faces still match.
 - **Bad match** (`markAsBadMatch`): the person is taken out of listings and their faces out of the match candidates.
 - **Merge** (`merge(dest, source)`): the source's faces move to the destination, the source is soft-deleted, and the
@@ -277,6 +281,10 @@ The tab's actions:
   before the Faces move), the higher-quality Face stays, the destination's own on a tie as for a move, and the other is
   deleted as Remove deletes it (`keepOneFacePerVideo`), after the source is soft-deleted, so a cover of either person that
   pointed at it can move to the survivor, which `person_02` allows. The deleted Faces' files go once the merge commits.
+  A destination with no cover (a named person whose Faces all went) takes the source's cover, as it is once the Videos
+  are settled, or, when the source has none or it is on an asset marked for purging, their best Face
+  (`FaceDao.getBestCoverCandidate`); it is written with the recount, after the source is soft-deleted, so `person_02`
+  never sees one cover on two live people.
   An image may hold two Faces of one person, so
   a merge keeps both there, and the recount counts the asset once. The Detail panel's Change merges through it as well,
   a person with no name into a named one (**Corrections**).

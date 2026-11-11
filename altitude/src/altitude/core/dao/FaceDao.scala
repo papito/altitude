@@ -24,9 +24,6 @@ trait FaceDao extends BaseDao[Face]:
    */
   def getFacesOnSharedVideos(personId: String, otherPersonId: String): List[Face]
 
-  /** The Face by ID if it is in the context repository; none for a Face gone or of another repository */
-  def getInRepository(faceId: String): Option[Face]
-
   /**
    * A person's faces by detection score, best first and then by ID, no more than `limit` of them, in the context repository: none
    * for another repository's person. A Face on an asset marked for purging is left out, since it can no longer be a cover

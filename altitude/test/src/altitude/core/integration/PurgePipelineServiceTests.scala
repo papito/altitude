@@ -32,23 +32,29 @@ import altitude.core.util.Query
     Eventually.eventually(Eventually.timeout(Span(60, Seconds)), Eventually.interval(Span(100, Millis)))(f)
 
   /** Has the database refuse to delete the asset's row, as a failing statement would, until the returned cleanup runs */
-  private def refuseDeleting(assetId: String): () => Unit = {
+  private def refuseDeleting(assetId: String): () => Unit = refuse("DELETE", "asset", assetId)
+
+  /** Has the database refuse to change the Person's cover, as a failing statement would, until the returned cleanup runs */
+  private def refuseMovingCover(personId: String): () => Unit = refuse("UPDATE OF cover_face_id", "person", personId)
+
+  /** Has the database refuse `event` (`DELETE`, `UPDATE OF <column>`) on the row of `table` with the ID until the cleanup runs */
+  private def refuse(event: String, table: String, rowId: String): () => Unit = {
     val (create, drop) = testApp.dataSourceType match {
       case Const.DbEngineName.POSTGRES =>
         (
           List(
-            "CREATE FUNCTION refuse_asset_delete() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'Refused by the test'; END $$ " +
+            "CREATE FUNCTION refused_by_test() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'Refused by the test'; END $$ " +
               "LANGUAGE plpgsql",
-            s"CREATE TRIGGER refuse_asset_delete BEFORE DELETE ON asset FOR EACH ROW WHEN (OLD.id = '$assetId') " +
-              "EXECUTE FUNCTION refuse_asset_delete()"
+            s"CREATE TRIGGER refused_by_test BEFORE $event ON $table FOR EACH ROW WHEN (OLD.id = '$rowId') " +
+              "EXECUTE FUNCTION refused_by_test()"
           ),
-          List("DROP TRIGGER refuse_asset_delete ON asset", "DROP FUNCTION refuse_asset_delete()"))
+          List(s"DROP TRIGGER refused_by_test ON $table", "DROP FUNCTION refused_by_test()"))
       case _ =>
         (
           List(
-            s"CREATE TRIGGER refuse_asset_delete BEFORE DELETE ON asset WHEN OLD.id = '$assetId' " +
+            s"CREATE TRIGGER refused_by_test BEFORE $event ON $table WHEN OLD.id = '$rowId' " +
               "BEGIN SELECT RAISE(ABORT, 'Refused by the test'); END"),
-          List("DROP TRIGGER refuse_asset_delete"))
+          List("DROP TRIGGER refused_by_test"))
     }
 
     testApp.txManager.withTransaction(create.foreach(update(_)))
@@ -457,6 +463,54 @@ import altitude.core.util.Query
     intercept[NotFoundException](testApp.service.fileStore.getAssetById(next.persistedId))
     val left = testApp.service.asset.queryRecycled(new Query().add(FieldConst.Asset.IS_PURGED -> true)).records
     left.map(_.persistedId) shouldBe List(refused.persistedId)
+  }
+
+  test("An asset whose covers cannot be moved off its Faces stays whole and purge-pending, and is purged once queued again") {
+
+    /**
+     * Setup:
+     *
+     * A Person with Faces on two assets: the first, their cover, at a detection score of 0.9, with its files, on an asset that is
+     * recycled and marked for purging; the second at 0.5. The database refuses to change the Person's cover while the first asset
+     * goes through the purge pipeline; then the refusal is lifted and the startup job queues the purge-pending assets again.
+     *
+     * Assertions:
+     *
+     * While the cover cannot move, the purge leaves the asset whole: its row, still marked for purging, its file, and the cover
+     * Face's row and images, with the Person's cover still on it. Once queued again, the Person's cover is their Face on the
+     * second asset, and the asset's row and file and the old cover's row and images are gone.
+     */
+    val added = testApp.service.person.addPerson(Person())
+    val purged = testContext.persistAsset()
+    val cover = testContext.addTestFace(added, purged, TestContext.unitVector(1), detectionScore = 0.9, withFiles = true)
+    val next = testContext.addTestFace(
+      testApp.service.person.getById(added.persistedId),
+      testContext.insertAsset(),
+      TestContext.unitVector(2),
+      detectionScore = 0.5)
+    testApp.service.person.getById(added.persistedId).coverFaceId shouldBe Some(cover.persistedId)
+    markForPurging(purged)
+
+    val allowMovingCover = refuseMovingCover(added.persistedId)
+    try purge(purged)
+    finally allowMovingCover()
+
+    val pending = new Query().add(FieldConst.ID -> purged.persistedId).add(FieldConst.Asset.IS_PURGED -> true)
+    testApp.service.asset.queryAll(pending).records.map(_.persistedId) shouldBe List(purged.persistedId)
+    testApp.service.fileStore.getAssetById(purged.persistedId)
+    testApp.service.person.getFaceById(cover.persistedId)
+    hasFaceFiles(cover) shouldBe true
+    testApp.service.person.getById(added.persistedId).coverFaceId shouldBe Some(cover.persistedId)
+
+    testApp.service.library.requeuePurgePending()
+
+    eventually {
+      intercept[NotFoundException](testApp.service.asset.getById(purged.persistedId))
+    }
+    intercept[NotFoundException](testApp.service.fileStore.getAssetById(purged.persistedId))
+    intercept[NotFoundException](testApp.service.person.getFaceById(cover.persistedId))
+    hasFaceFiles(cover) shouldBe false
+    testApp.service.person.getById(added.persistedId).coverFaceId shouldBe Some(next.persistedId)
   }
 
   test("An asset left marked for purging is purged once the startup job queues it again") {

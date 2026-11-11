@@ -8,7 +8,7 @@ import altitude.core.models.UserMetadata
 
 class AssetDao(override val config: Config) extends altitude.core.dao.jdbc.AssetDao(config) with PostgresOverrides:
 
-  override def getUserMetadata(assetId: String): Option[UserMetadata] =
+  override def getUserMetadata(assetId: String): UserMetadata =
     val sql = s"""
       SELECT (${FieldConst.Asset.USER_METADATA}#>>'{}')::text AS ${FieldConst.Asset.USER_METADATA}
          FROM asset
@@ -17,6 +17,4 @@ class AssetDao(override val config: Config) extends altitude.core.dao.jdbc.Asset
       """
 
     val rec = executeAndGetOne(sql, List(assetId, RequestContext.getRepository.persistedId))
-    val metadataJson = getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA))
-    val metadata = UserMetadata.fromJson(metadataJson)
-    Some(metadata)
+    UserMetadata.fromJson(getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA)))

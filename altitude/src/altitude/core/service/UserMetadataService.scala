@@ -45,27 +45,27 @@ class UserMetadataService(val app: Altitude):
       metadataFieldDao.getById(id)
     }
 
+  /** A field of another repository, or none, is a `NotFoundException` */
   def deleteFieldById(id: String): Int =
     txManager.withTransaction {
       logger.debug(s"Deleting metadata field [$id]")
-      metadataFieldDao.deleteById(id)
+      BaseService.requireFound(metadataFieldDao.tableName, id, metadataFieldDao.deleteById(id))
     }
 
+  /** The asset's metadata, empty when it has none; an asset of another repository, or none, is a `NotFoundException` */
   def getMetadata(assetId: String): UserMetadata =
     txManager.asReadOnly {
-      // return the metadata or a new empty one if blank
-      assetDao.getUserMetadata(assetId) match {
-        case Some(metadata) => metadata
-        case None => UserMetadata()
-      }
+      assetDao.getUserMetadata(assetId)
     }
 
+  /** Replaces the asset's metadata; an asset of another repository, or none, is a `NotFoundException` */
   def setMetadata(assetId: String, metadata: UserMetadata): Unit =
     logger.debug(s"Setting metadata for asset [$assetId]: $metadata")
 
     txManager.withTransaction {
       val cleanMetadata = cleanAndValidate(metadata)
-      assetDao.setUserMetadata(assetId = assetId, metadata = cleanMetadata)
+      val updated = assetDao.setUserMetadata(assetId = assetId, metadata = cleanMetadata)
+      BaseService.requireFound(assetDao.tableName, assetId, updated): Unit
     }
 
   // OPTIMIZE: this cleans and validates existing values (the ones that have IDs)
@@ -78,7 +78,8 @@ class UserMetadataService(val app: Altitude):
       /** If the cleaned metadata does not have fields found in the original - those are empty and should be deleted */
       val deletedFields = metadata.data.keys.filterNot(cleanMetadata.data.keys.toSet.contains).toSet
 
-      assetDao.updateMetadata(assetId, cleanMetadata, deletedFields)
+      val updated = assetDao.updateMetadata(assetId, cleanMetadata, deletedFields)
+      BaseService.requireFound(assetDao.tableName, assetId, updated): Unit
     }
 
   def addMetadataValue(assetId: String, fieldId: String, newValue: Any): Unit =

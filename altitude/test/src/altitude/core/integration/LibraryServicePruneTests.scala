@@ -163,7 +163,7 @@ import altitude.core.util.SearchQuery
     val cutOff = testApp.service.library.persistAndIndex(testContext.makeAsset())
     val cover =
       testContext.addTestFace(person, cutOff, TestContext.unitVector(3), detectionScore = 0.9, withFiles = true)
-    testApp.service.person.setFaceAsCover(person, cover)
+    testApp.service.person.setFaceAsCover(added.persistedId, cover.persistedId)
 
     testApp.service.library.discardImport(cutOff)
 

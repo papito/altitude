@@ -10,10 +10,11 @@ import altitude.core.util.Query
 import altitude.core.util.QueryResult
 
 trait AssetDao extends BaseDao[Asset]:
-  /** The asset's user metadata; an asset of another repository, or none, is a `NotFoundException` */
-  def getUserMetadata(assetId: String): Option[UserMetadata]
+  /** The asset's user metadata, empty when it has none; an asset of another repository, or none, is a `NotFoundException` */
+  def getUserMetadata(assetId: String): UserMetadata
 
-  def setUserMetadata(assetId: String, metadata: UserMetadata): Unit
+  /** Replaces the asset's user metadata; how many rows changed: 0 for an asset of another repository, or none */
+  def setUserMetadata(assetId: String, metadata: UserMetadata): Int
 
   def queryNotRecycled(q: Query): QueryResult[Asset]
 
@@ -41,7 +42,11 @@ trait AssetDao extends BaseDao[Asset]:
   /** The recycled assets among the IDs, or the whole recycle bin */
   def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset]
 
-  def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit
+  /**
+   * Merges the metadata into the asset's, the `deletedFields` dropped; how many rows changed. An asset of another repository, or
+   * none, is a `NotFoundException`.
+   */
+  def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Int
 
   /**
    * Sets the completion flag of the context repository's asset and, in the same update, stores the Image quality, the perceptual

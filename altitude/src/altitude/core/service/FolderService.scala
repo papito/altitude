@@ -21,7 +21,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
    */
   def add(name: String, parentId: Option[String] = None): Folder =
     txManager.withTransaction {
-      val _parentId = parentId.map(getInRepository(_).persistedId).getOrElse(RequestContext.getRepository.rootFolderId)
+      val _parentId = parentId.map(getById(_).persistedId).getOrElse(RequestContext.getRepository.rootFolderId)
       val folder = Folder(name = name.trim, parentId = _parentId)
       app.service.folder.add(folder)
     }
@@ -72,12 +72,6 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       children = children,
       numOfChildren = children.length,
       numOfAssets = directCounts.getOrElse(folder.persistedId, 0) + children.map(_.numOfAssets).sum)
-
-  /** The folder by ID when it is in the context repository; another repository's, or none, is not found */
-  def getInRepository(folderId: String): Folder =
-    query(new Query().add(FieldConst.ID -> folderId)).records.headOption.getOrElse {
-      throw NotFoundException(s"Folder [$folderId] not found")
-    }
 
   def isRootFolder(id: String): Boolean =
     id == contextRepo.rootFolderId

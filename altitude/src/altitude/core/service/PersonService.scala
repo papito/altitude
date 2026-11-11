@@ -108,12 +108,6 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       faceDao.getById(faceId)
     }
 
-  /** The Person by ID when they are in the context repository, live or not; another repository's, or none, is not found */
-  def getInRepository(personId: String): Person =
-    query(new Query().add(FieldConst.ID -> personId)).records.headOption.getOrElse {
-      throw NotFoundException(s"Person [$personId] not found")
-    }
-
   /**
    * The Person by ID when they are live in the context repository, hidden or not: one merged away or marked as a bad match is not
    * found, as another repository's or none is
@@ -178,7 +172,9 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    * merged away nor a bad match), with its name key as sort name and the named flag, and a named destination keeps its own. The
    * source is soft-deleted before the destination takes its name, so `person_01` never sees the name on two live people. On a
    * Video where both had a Face, one Face per Person per Video holds, as at import and after a move ([[moveFace]]): the better
-   * Face stays and the other is deleted ([[keepOneFacePerVideo]]), its files going once committed.
+   * Face stays and the other is deleted ([[keepOneFacePerVideo]]), its files going once committed. A destination with no cover
+   * takes the source's cover, or their best Face when the source has none or it is on an asset marked for purging; it is written
+   * after the source is soft-deleted, so `person_02` never sees the cover on two live people.
    */
   def merge(dest: Person, source: Person): Person =
     if source == dest then throw IllegalArgumentException("Cannot merge a person with itself. That's perverse!")
@@ -245,7 +241,21 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
         )
       case None => Map.empty
 
-    updateById(persistedDest.persistedId, Map(FieldConst.Person.NUM_OF_FACES -> mergedFaceCount) ++ nameFields)
+    val coverFields: Map[String, Any] =
+      if persistedDest.coverFaceId.nonEmpty then Map.empty
+      else
+        // The source's cover as it is now: one lost on a Video has moved to the survivor, which the destination holds
+        val sourceCover = dao
+          .getById(persistedSource.persistedId)
+          .coverFaceId
+          .flatMap(faceId => faceDao.getByIds(Set(faceId)).headOption)
+          .filter(face => face.personId.contains(persistedDest.persistedId) && !isOnAssetMarkedForPurging(face))
+        val cover = sourceCover.orElse(faceDao.getBestCoverCandidate(persistedDest.persistedId, Set.empty))
+        logger.debug(
+          s"Person [${persistedDest.persistedId}], who has no cover, takes [${cover.map(_.persistedId).getOrElse("none")}]")
+        Map(FieldConst.Person.COVER_FACE_ID -> cover.map(_.persistedId))
+
+    updateById(persistedDest.persistedId, Map(FieldConst.Person.NUM_OF_FACES -> mergedFaceCount) ++ nameFields ++ coverFields)
 
     // Read again, as the name, the count and the cover may have changed
     (dao.getById(persistedDest.persistedId), lostFaces)
@@ -323,7 +333,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
   /**
    * Every face of an asset, each with its person, whoever that is (hidden and bad-match people included), read in one snapshot so
-   * a merge cannot come between the two: what deleting the asset's faces takes with it
+   * a merge cannot come between the two
    */
   def getAssetFacesWithPeople(assetId: String): List[(Face, Person)] =
     txManager.asReadOnly {
@@ -422,7 +432,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    */
   def suggestedPeople(faceId: String): List[Person] =
     txManager.withFaceVectorReadOnly {
-      suggestedFor(readFace(faceId))
+      suggestedFor(faceDao.getById(faceId))
     }
 
   /** [[suggestedPeople]] for a Face read in the caller's transaction, which is set up for searching face vectors */
@@ -446,7 +456,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    */
   def assignablePeople(faceId: Option[String]): AssignablePeople =
     txManager.withFaceVectorReadOnly {
-      val face = faceId.map(readFace)
+      val face = faceId.map(faceDao.getById)
       val suggested = face.fold(List.empty[Person])(suggestedFor)
       val leftOut = suggested.map(_.persistedId).toSet ++ face.map(_.personId.get)
       AssignablePeople(suggested, getAssignable.filterNot(person => leftOut.contains(person.persistedId)))
@@ -461,7 +471,8 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    */
   def removeFace(faceId: String): FaceRemoval =
     val removal = txManager.withTransaction {
-      val personId = readFace(faceId).personId.get
+      // The Face as it is before anything is locked, to learn whom to lock
+      val personId = faceDao.getById(faceId).personId.get
       dao.lockAndGetLive(Set(personId)): Unit
       val (face, _) = lockedFace(faceId, personId)
       // Read before the Face goes: the cover's key sets a cover that was this Face to NULL, and settling repicks it from this
@@ -490,7 +501,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    */
   def moveFace(faceId: String, target: FaceTarget): FaceMove =
     val (move, loser) = txManager.withTransaction {
-      val sourceId = readFace(faceId).personId.get
+      val sourceId = faceDao.getById(faceId).personId.get
       val targetId = target match
         case FaceTarget.ExistingPerson(personId) => personId
         case FaceTarget.Named(name) => personIdForName(name)
@@ -607,18 +618,13 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       throw IllegalOperationException(C.Msg.Err.FACE_PERSON_NAMED_SINCE)
     (face, person)
 
-  /** The Face as it is before anything is locked, to learn whom to lock; gone, it is not found */
-  private def readFace(faceId: String): Face =
-    faceDao.getInRepository(faceId).getOrElse(throw NotFoundException(s"Face [$faceId] not found"))
-
   /**
    * The Face re-read under its Person's lock, with its asset: gone, or given to another Person meanwhile, it is not found; on an
    * asset in the trash, it is left alone
    */
   private def lockedFace(faceId: String, personId: String): (Face, Asset) =
-    val face = faceDao.getInRepository(faceId).filter(_.personId.contains(personId)).getOrElse {
-      throw NotFoundException(s"Face [$faceId] of person [$personId] not found")
-    }
+    val face = faceDao.getById(faceId)
+    if !face.personId.contains(personId) then throw NotFoundException(s"Face [$faceId] of person [$personId] not found")
     val asset: Asset = app.service.asset.getById(face.assetId.get)
     if asset.isRecycled then throw IllegalOperationException(C.Msg.Err.FACE_OF_RECYCLED_ASSET)
     (face, asset)
@@ -669,31 +675,34 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       qRes.records
 
   /**
-   * Makes the Face the Person's cover. Under the Person's lock, so a purge moving covers off the Face's asset waits or is waited
-   * for ([[moveCoversOff]]): the Person must be of the context repository, and the Face too (`NotFoundException`), the Face the
-   * Person's own and on an asset not marked for purging (`ValidationException`), since a cover never rests on a Face about to go.
+   * Makes the Face the Person's cover, and answers the Person as they are after. Under the Person's lock, so a purge moving
+   * covers off the Face's asset waits or is waited for ([[moveCoversOff]]): the Person must be of the context repository, and the
+   * Face too (`NotFoundException`), the Face the Person's own and on an asset not marked for purging (`ValidationException`),
+   * since a cover never rests on a Face about to go.
    */
-  def setFaceAsCover(person: Person, face: Face): Person =
+  def setFaceAsCover(personId: String, faceId: String): Person =
     txManager.withTransaction {
-      val personId = person.persistedId
-      val faceId = face.persistedId
       dao.lockAndGetLive(Set(personId)): Unit
-      dao.getById(personId)
+      dao.getById(personId): Unit
 
-      val stored = faceDao.getInRepository(faceId).getOrElse(throw NotFoundException(s"Face [$faceId] not found"))
+      val stored = faceDao.getById(faceId)
       if !stored.personId.contains(personId) then
         logger.debug(s"Refusing face [$faceId] of person [${stored.personId.get}] as the cover of person [$personId]")
         throw ValidationException(C.Msg.Err.COVER_FACE_NOT_THEIRS)
 
-      val purging = new Query().add(FieldConst.ID -> stored.assetId.get).add(FieldConst.Asset.IS_PURGED -> true)
-      if app.service.asset.queryAll(purging).nonEmpty then
+      if isOnAssetMarkedForPurging(stored) then
         logger.debug(s"Refusing face [$faceId] as a cover: its asset [${stored.assetId.get}] is marked for purging")
         throw ValidationException(C.Msg.Err.COVER_FACE_PURGING)
 
       logger.debug(s"Setting the cover of person [$personId] to face [$faceId]")
       updateById(personId, Map(FieldConst.Person.COVER_FACE_ID -> faceId))
-      person.copy(coverFaceId = Some(faceId))
+      dao.getById(personId)
     }
+
+  /** Whether the Face's asset is marked for purging: a cover never rests on a Face about to go */
+  private def isOnAssetMarkedForPurging(face: Face): Boolean =
+    val purging = new Query().add(FieldConst.ID -> face.assetId.get).add(FieldConst.Asset.IS_PURGED -> true)
+    app.service.asset.queryAll(purging).nonEmpty
 
   /**
    * Names the person, the name stored in NFC and its name key as sort name. A name of an unnamed person's form is a

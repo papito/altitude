@@ -35,12 +35,6 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
       renamed
     }
 
-  override def deleteById(id: String): Int =
-    txManager.withTransaction {
-      logger.debug(s"Deleting album [$id]")
-      super.deleteById(id)
-    }
-
   def addAssets(albumId: String, assetIds: Set[String]): Int =
     if assetIds.isEmpty then return 0
 

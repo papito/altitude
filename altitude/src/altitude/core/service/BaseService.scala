@@ -16,6 +16,16 @@ import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
+object BaseService:
+
+  /**
+   * A write by ID that changed nothing found nothing: another repository's ID is answered as an unknown one. For a service that
+   * calls a DAO's write directly, outside the generic ones.
+   */
+  def requireFound(tableName: String, id: String, count: Int): Int =
+    if count == 0 then throw NotFoundException(s"Cannot find record in '$tableName' with ID [$id]")
+    count
+
 /**
  * The generic reads and writes over one DAO. The DAO limits each to the context repository unless its table has none
  * (`BaseDao.repositoryScoped`), so another repository's ID is not found here, exactly as an unknown one.
@@ -49,7 +59,7 @@ abstract class BaseService[Model <: BaseModel]:
       val updated =
         try dao.updateById(id, data)
         catch case e: SQLException => throw newDuplicateExceptionOrRethrow(e)
-      requireFound(id, updated)
+      BaseService.requireFound(dao.tableName, id, updated)
     }
 
   def updateByQuery(query: Query, data: Map[String, Any]): Int =
@@ -77,7 +87,7 @@ abstract class BaseService[Model <: BaseModel]:
   /** `NotFoundException` when no row has the ID: none at all, or none of the context repository */
   def deleteById(id: String): Int =
     txManager.withTransaction {
-      requireFound(id, dao.deleteById(id))
+      BaseService.requireFound(dao.tableName, id, dao.deleteById(id))
     }
 
   def deleteByQuery(query: Query): Int =
@@ -88,10 +98,5 @@ abstract class BaseService[Model <: BaseModel]:
   /** `NotFoundException` when no row has the ID: none at all, or none of the context repository */
   def increment(id: String, field: String, count: Int = 1): Unit =
     txManager.withTransaction {
-      requireFound(id, dao.increment(id, field, count)): Unit
+      BaseService.requireFound(dao.tableName, id, dao.increment(id, field, count)): Unit
     }
-
-  /** A write by ID that changed nothing found nothing: another repository's ID is answered as an unknown one */
-  private def requireFound(id: String, count: Int): Int =
-    if count == 0 then throw NotFoundException(s"Cannot find record in '${dao.tableName}' with ID [$id]")
-    count

@@ -125,7 +125,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   override def queryAll(q: Query): QueryResult[Asset] =
     queryRecords(q)
 
-  override def getUserMetadata(assetId: String): Option[UserMetadata] =
+  override def getUserMetadata(assetId: String): UserMetadata =
     val sql = s"""
       SELECT ${FieldConst.Asset.USER_METADATA}
          FROM asset
@@ -134,9 +134,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       """
 
     val rec = executeAndGetOne(sql, List(assetId, RequestContext.getRepository.persistedId))
-    val userMetadataJson = getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA))
-    val userMetadata = UserMetadata.fromJson(userMetadataJson)
-    Some(userMetadata)
+    UserMetadata.fromJson(getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA)))
 
   override def add(asset: Asset): Asset =
     val sql = s"""
@@ -195,7 +193,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     addRecord(sql, sqlVals)
     asset.copy(id = Some(id))
 
-  override def setUserMetadata(assetId: String, userMetadata: UserMetadata): Unit =
+  override def setUserMetadata(assetId: String, userMetadata: UserMetadata): Int =
     BaseDao.incrWriteQueryCount()
 
     val metadataWithIds = UserMetadata.withIds(userMetadata)
@@ -600,11 +598,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     """
     updateByBySql(sql, List(toId, RequestContext.getRepository.persistedId, idSet(fromIds)))
 
-  def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Unit =
-    val existingMetadata = getUserMetadata(assetId) match
-      case Some(m) => m
-      case None => UserMetadata()
-
+  def updateMetadata(assetId: String, metadata: UserMetadata, deletedFields: Set[String]): Int =
+    val existingMetadata = getUserMetadata(assetId)
     logger.trace(s"Updating $existingMetadata with $metadata")
     val newData = (existingMetadata.data ++ metadata.data).filterNot(m => deletedFields.contains(m._1))
     val newMetadata = new UserMetadata(newData)

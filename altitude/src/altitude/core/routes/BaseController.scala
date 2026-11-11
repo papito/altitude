@@ -89,20 +89,25 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
   def answering(f: => Response[String]): Response[String] =
     try f
     catch
-      case ex: ValidationException =>
-        textError(if ex.message.nonEmpty then ex.message else ex.errors.values.mkString(", "), 400)
+      case ex: ValidationException => textError(whyInvalid(ex), 400)
       case ex: NotFoundException => textError(ex.getMessage, 404)
       case ex: IllegalOperationException => textError(ex.getMessage, 409)
 
   /**
-   * [[answering]] for a JSON route, in the `{"error": ...}` shape (`jsonError`): something not found, an unknown ID or another
-   * repository's, is a 404 and a refused operation (`IllegalOperationException`) a 400; any other failure is the route's own.
+   * [[answering]] for a JSON route, in the `{"error": ...}` shape (`jsonError`): a bad request (`ValidationException`, saying why
+   * as [[answering]] says it) and a refused operation (`IllegalOperationException`) are a 400, and something not found, an
+   * unknown ID or another repository's, a 404; any other failure is the route's own.
    */
   def answeringJson(f: => Response[String]): Response[String] =
     try f
     catch
+      case ex: ValidationException => jsonError(whyInvalid(ex), 400)
       case ex: NotFoundException => jsonError(ex.getMessage, 404)
       case ex: IllegalOperationException => jsonError(ex.getMessage, 400)
+
+  /** What a bad request says: its message, or its field errors when it has none */
+  private def whyInvalid(ex: ValidationException): String =
+    if ex.message.nonEmpty then ex.message else ex.errors.values.mkString(", ")
 
   /**
    * Response for a dialog form that failed validation: the rendered form (with errors and the submitted values) replaces the

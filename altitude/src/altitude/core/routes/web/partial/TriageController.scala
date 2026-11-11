@@ -108,7 +108,7 @@ class TriageController(using logger: Logger) extends BaseController:
   private def describedFolder(id: String): Folder =
     if App.altitude.service.folder.isRootFolder(id) then
       throw ValidationException("The root folder is the whole repository: there is nothing to describe")
-    App.altitude.service.folder.getInRepository(id)
+    App.altitude.service.folder.getById(id)
 
   private def countInTriage(personId: Option[String] = None, locationId: Option[String] = None): Int =
     App.altitude.service.library.count(scope(Const.Search.View.TRIAGE, None, personId, locationId).query())

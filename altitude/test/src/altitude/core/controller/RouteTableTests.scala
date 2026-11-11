@@ -1,10 +1,15 @@
 package altitude.core.controller
 
 import altitude.test.TestContext
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.UUID
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
+import scala.jdk.CollectionConverters.*
+import scala.meta.*
 import scala.util.matching.Regex
 
 import altitude.core.Api
@@ -47,8 +52,20 @@ import altitude.core.models.Repository
     def sent: String = (path.values ++ query.values ++ body.map(ujson.write(_))).mkString(" ")
   }
 
-  private case class Row(method: String, path: String, ids: Ids, access: Access = Access.Login) {
+  /**
+   * A route: its method, its path, the IDs it takes and who may call it. `ignored` names the ID fields the route's code names
+   * through `Api.Field` but does not act on (one it writes into its answer, or one a helper it shares with other routes handles),
+   * each with why.
+   */
+  private case class Row(
+      method: String,
+      path: String,
+      ids: Ids,
+      access: Access = Access.Login,
+      ignored: Map[String, String] = Map.empty) {
     def key: (String, String) = (method, path)
+
+    def ignoring(fields: (String, String)*): Row = copy(ignored = ignored ++ fields)
   }
 
   /**
@@ -113,6 +130,8 @@ import altitude.core.models.Repository
   private def probed(method: String, path: String)(probes: Fixtures => List[Probe]): Row = Row(method, path, Ids.Probed(probes))
 
   private val publicRoute = Access.Public
+
+  private val SCRUBBED_CATEGORY = "the Location dialogs' shared scrubber trims it, and the route reads no category"
 
   /** Every route of the app, each answering another repository's IDs as it would an unknown ID */
   private val table: List[Row] = List(
@@ -361,7 +380,8 @@ import altitude.core.models.Repository
     none(GET, "/htmx/location/r/:repoId/dialogs/add-to-location"),
     probed(GET, "/htmx/location/r/:repoId/dialogs/rename-location")(fx => List(Probe(404, query = Map("id" -> fx.location)))),
     probed(GET, "/htmx/location/r/:repoId/dialogs/delete-location")(fx => List(Probe(404, query = Map("id" -> fx.location)))),
-    probed(GET, "/htmx/location/r/:repoId/dialogs/move-location")(fx => List(Probe(404, query = Map("id" -> fx.location)))),
+    probed(GET, "/htmx/location/r/:repoId/dialogs/move-location")(fx => List(Probe(404, query = Map("id" -> fx.location))))
+      .ignoring(Api.Field.Location.CATEGORY_ID -> "written into the form as the Location's category, not read"),
     probed(POST, "/htmx/location/r/:repoId/add") {
       fx =>
         List(
@@ -375,10 +395,10 @@ import altitude.core.models.Repository
             why = "the dialog's form again, with the category's field error"
           ))
     },
-    none(POST, "/htmx/location/r/:repoId/add-category"),
+    none(POST, "/htmx/location/r/:repoId/add-category").ignoring(Api.Field.Location.CATEGORY_ID -> SCRUBBED_CATEGORY),
     probed(PUT, "/htmx/location/r/:repoId/rename") {
       fx => List(Probe(404, body = json(Api.Field.ID -> fx.location, Api.Field.Location.NAME -> "Renamed")))
-    },
+    }.ignoring(Api.Field.Location.CATEGORY_ID -> SCRUBBED_CATEGORY),
     probed(PUT, "/htmx/location/r/:repoId/move") {
       fx =>
         List(
@@ -404,7 +424,7 @@ import altitude.core.models.Repository
             why = "assets that are not the repository's are left out, and the success says none was added"
           )
         )
-    },
+    }.ignoring(Api.Field.Location.CATEGORY_ID -> SCRUBBED_CATEGORY),
     probed(DELETE, "/htmx/location/r/:repoId/")(fx => List(Probe(404, query = Map("id" -> fx.location)))),
     // Map
     probed(GET, "/api/map/r/:repoId/cells") {
@@ -545,12 +565,21 @@ import altitude.core.models.Repository
     probed(DELETE, "/htmx/people/r/:repoId/p/:personId")(fx => List(Probe(404, path = Map("personId" -> fx.person))))
   )
 
-  /** A route of the app as cask registers it: the method, the path and the names of the endpoint's parameters */
-  private case class Endpoint(method: String, path: String, params: List[String]) {
+  /**
+   * A route of the app as cask registers it: the method, the path, the names of the endpoint's parameters, and the controller
+   * class and method that answer it
+   */
+  private case class Endpoint(method: String, path: String, params: List[String], controller: String, handler: String) {
     def key: (String, String) = (method, path)
 
     /** The parameters that name a row: `id`, or any `...Id` but the repository's, which the path's own check covers */
-    def idParams: Set[String] = params.filter(name => name == "id" || name.endsWith("Id")).toSet - "repoId"
+    def idParams: Set[String] = params.filter(RouteTableTests.isIdName).toSet - "repoId"
+
+    /**
+     * The ID fields the route reads from its body: those its code names through `Api.Field` (see [[RouteTableTests.idFieldsOf]])
+     * that are no parameter of the endpoint, which reads its parameters from the path or the query
+     */
+    def bodyIdFields: Set[String] = RouteTableTests.idFieldsOf(controller, handler) -- params
   }
 
   private def endpoints: List[Endpoint] =
@@ -559,7 +588,15 @@ import altitude.core.models.Repository
         routes.caskMetadata.value.flatMap {
           metadata =>
             val params = metadata.entryPoint.argSignatures.flatten.map(_.name).toList
-            metadata.endpoint.methods.map(method => Endpoint(method.toUpperCase, metadata.endpoint.path, params))
+            metadata.endpoint.methods.map {
+              method =>
+                Endpoint(
+                  method.toUpperCase,
+                  metadata.endpoint.path,
+                  params,
+                  routes.getClass.getSimpleName,
+                  metadata.entryPoint.name)
+            }
         }
     }
 
@@ -626,19 +663,25 @@ import altitude.core.models.Repository
     )
   }
 
-  test("Every route is in the table, and every ID parameter of a route is probed") {
+  test("Every route is in the table, and every ID parameter and body ID field of a route is probed") {
 
     /**
      * Setup:
      *
-     * The routes of `App.allRoutes`, as cask registers them, and the table.
+     * The routes of `App.allRoutes`, as cask registers them, the table, and the controllers' sources, parsed with Scalameta.
      *
      * Assertions:
      *
      * Every route is a row of the table and every row is a route. A route with an ID parameter (`id` or a name ending in `Id`,
      * the repository's left out), in its path or its query, has a probe that sends each of them, or says why the parameter names
-     * no row. A row that says the route takes no entity ID has no such parameter. Every probe that expects an answer other than a
-     * 404 says why. An ID sent in a body cannot be read off the route's signature, so the rows list those probes by hand.
+     * no row. A route whose code names an ID field (`id`, or a name ending in `Id` or `Ids`) through `Api.Field`, in its method
+     * or in a member it reaches (the controller's, `BaseController`'s or an object's under `routes`), reads it from the body: a
+     * probe sends it in the body, or the row says why it names no row, or why the route does not act on it. A row that says the
+     * route takes no entity ID has no such parameter or field. Every probe that expects an answer other than a 404 says why.
+     *
+     * Edge cases:
+     *
+     * A field the row says the route does not act on is one its code names, so the row's reason cannot outlive the code.
      */
     val routes = endpoints
     val rows = table.map(row => row.key -> row).toMap
@@ -648,15 +691,20 @@ import altitude.core.models.Repository
     withClue("Rows that are no route: ")(table.map(_.key).filterNot(routes.map(_.key).toSet.contains) shouldBe empty)
 
     for (route <- routes; row <- rows.get(route.key)) withClue(s"[${route.method} ${route.path}]: ") {
+      row.ignored.keySet.diff(route.bodyIdFields) shouldBe empty
+      row.ignored.values.filter(_.isEmpty) shouldBe empty
+      val bodyIdFields = route.bodyIdFields -- row.ignored.keySet
+
       row.ids match {
-        case Ids.NoEntity => route.idParams shouldBe empty
+        case Ids.NoEntity => (route.idParams ++ bodyIdFields) shouldBe empty
         case Ids.NotEntity(params, reason) =>
-          route.idParams shouldBe params
+          (route.idParams ++ bodyIdFields) shouldBe params
           reason should not be empty
         case Ids.Probed(probes) =>
           val built = probes(placeholders)
           built should not be empty
           route.idParams.diff(built.flatMap(probe => probe.path.keySet ++ probe.query.keySet).toSet) shouldBe empty
+          bodyIdFields.diff(built.flatMap(_.body.toList.flatMap(_.obj.keySet)).toSet) shouldBe empty
           built.filter(_.status != 404).filter(_.why.isEmpty) shouldBe empty
       }
     }
@@ -804,5 +852,101 @@ import altitude.core.models.Repository
           case _ =>
         }
     }
+  }
+}
+
+object RouteTableTests {
+
+  /** A parameter or field that names a row: `id`, or a name ending in `Id`, or `Ids` for a list of them */
+  private def isIdName(name: String): Boolean = name == "id" || name.endsWith("Id") || name.endsWith("Ids")
+
+  /** A member of a controller's source, a method or a field, and the controller class it is in */
+  private case class Member(name: String, owner: Option[String], tree: Tree)
+
+  private lazy val sourceRoot: Path = Paths.get(sys.env("ALTITUDE_SOURCE_DIR")).resolve("altitude/core")
+
+  private def parse(path: Path): Tree =
+    dialects.Scala3(Input.VirtualFile(path.toString, Files.readString(path))).parse[Source].get
+
+  private def ancestors(tree: Tree): List[Tree] =
+    Iterator.iterate(tree.parent)(_.flatMap(_.parent)).takeWhile(_.isDefined).flatten.toList
+
+  /** The string constants of `Api` by their path, `Api.Field.Album.ALBUM_ID` being `List("Api", "Field", "Album", "ALBUM_ID")` */
+  private lazy val apiConstants: Map[List[String], String] =
+    parse(sourceRoot.resolve("Api.scala"))
+      .collect {
+        case value: Defn.Val =>
+          val objects = ancestors(value).collect { case obj: Defn.Object => obj.name.value }.reverse
+          (value.pats, value.rhs) match {
+            case (List(name: Pat.Var), Lit.String(constant)) => Some((objects :+ name.name.value) -> constant)
+            case _ => None
+          }
+      }
+      .flatten
+      .toMap
+
+  /** A member of a class or an object: a method or a field defined in its body, not in another member */
+  private def isMember(tree: Tree): Boolean =
+    ancestors(tree).find(t => t.is[Template] || t.is[Defn.Def] || t.is[Defn.Val] || t.is[Term]).exists(_.is[Template])
+
+  private def membersOf(tree: Tree): List[Member] = {
+    def owner(member: Tree) = ancestors(member).collectFirst { case cls: Defn.Class => cls.name.value }
+    tree.collect {
+      case method: Defn.Def if isMember(method) => List(Member(method.name.value, owner(method), method))
+      case field: Defn.Val if isMember(field) =>
+        field.pats.collect { case name: Pat.Var => Member(name.name.value, owner(field), field) }
+    }.flatten
+  }
+
+  /** Every member of the sources under `routes`: the controllers', `BaseController`'s and the objects', any controller's reach */
+  private lazy val routeMembers: List[Member] = {
+    val walk = Files.walk(sourceRoot.resolve("routes"))
+    try
+      walk.iterator.asScala
+        .filter(path => Files.isRegularFile(path) && path.toString.endsWith(".scala"))
+        .toList
+        .flatMap(path => membersOf(parse(path)))
+    finally walk.close()
+  }
+
+  /** The names of a select chain such as `Api.Field.Album.ALBUM_ID`, none for one that does not start from a name */
+  private def selectPath(term: Term): Option[List[String]] = term match {
+    case Term.Name(name) => Some(List(name))
+    case Term.Select(qual, Term.Name(name)) => selectPath(qual).map(_ :+ name)
+    case _ => None
+  }
+
+  /**
+   * The ID-shaped `Api.Field` values that the controller's method names (`id`, or a name ending in `Id` or `Ids`): in its own
+   * body and in every member of the controller, of `BaseController` or of an object under `routes` (a companion among them) that
+   * it reaches by name, transitively. A field aliasing part of `Api` (`private val fields = Api.Field.Curation`) is followed.
+   * Reading by name over-approximates what the method reaches, so a field the route names without acting on it is one its row
+   * says it ignores.
+   */
+  def idFieldsOf(controller: String, method: String): Set[String] = {
+    val members = routeMembers.filter(member => member.owner.forall(Set(controller, "BaseController").contains))
+    val byName = members.groupBy(_.name)
+    val aliases: Map[String, List[String]] = members.flatMap {
+      case Member(name, _, field: Defn.Val) =>
+        selectPath(field.rhs).filter(path => path.headOption.contains("Api")).map(name -> _)
+      case _ => None
+    }.toMap
+
+    def resolve(path: List[String]): Option[String] =
+      apiConstants.get(aliases.get(path.head).fold(path)(_ ++ path.tail))
+
+    def reached(pending: List[Member], seen: Set[Member]): Set[Member] = pending match {
+      case Nil => seen
+      case member :: rest if seen.contains(member) => reached(rest, seen)
+      case member :: rest =>
+        val names = member.tree.collect { case name: Term.Name => name.value }.toSet
+        reached(rest ++ names.toList.flatMap(byName.getOrElse(_, Nil)), seen + member)
+    }
+
+    val start = members.filter(member => member.name == method && member.owner.contains(controller))
+    require(start.nonEmpty, s"No method $method in $controller")
+    reached(start, Set.empty)
+      .flatMap(_.tree.collect { case select: Term.Select => selectPath(select).flatMap(resolve) }.flatten)
+      .filter(isIdName)
   }
 }

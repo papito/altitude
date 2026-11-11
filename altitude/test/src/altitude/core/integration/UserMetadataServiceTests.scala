@@ -268,6 +268,29 @@ import altitude.core.util.Util
     }
   }
 
+  test("Metadata set on an unknown asset, and a field deleted by an unknown ID, are not found") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field, and an ID that no asset or field has.
+     *
+     * Assertions:
+     *
+     * Setting metadata on the unknown asset and deleting a field by the unknown ID are each a `NotFoundException`, never a write
+     * that changes nothing; reading the unknown asset's metadata is not found too. The field is still there.
+     */
+    val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
+    val unknownId = BaseDao.genId
+
+    intercept[NotFoundException] {
+      testApp.service.metadata.setMetadata(unknownId, UserMetadata(Map(field.persistedId -> Set("value"))))
+    }
+    intercept[NotFoundException](testApp.service.metadata.getMetadata(unknownId))
+    intercept[NotFoundException](testApp.service.metadata.deleteFieldById(unknownId))
+    testApp.service.metadata.getFieldById(field.persistedId).persistedId shouldBe field.persistedId
+  }
+
   test("Get all fields for a repo") {
 
     /**

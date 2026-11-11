@@ -457,7 +457,7 @@ import altitude.core.util.QueryResult
     intercept[NotFoundException](testApp.service.person.setVisibility(theirs, isHidden = false))
     intercept[NotFoundException](testApp.service.person.markAsBadMatch(theirs))
     intercept[NotFoundException](testApp.service.person.updateName(theirs, "Changed"))
-    intercept[NotFoundException](testApp.service.person.setFaceAsCover(theirs, myFace))
+    intercept[NotFoundException](testApp.service.person.setFaceAsCover(theirId, myFace.persistedId))
     intercept[NotFoundException](testApp.service.person.merge(dest = mine, source = theirs))
     intercept[NotFoundException](testApp.service.person.merge(dest = theirs, source = mine))
 
@@ -475,9 +475,9 @@ import altitude.core.util.QueryResult
      *
      * Assertions:
      *
-     * From the first repository, the second repository's asset's metadata is not found, read or updated (with a value of the
-     * first repository's field), and its field is not found by ID; deleting the field deletes nothing. Every row of the second
-     * repository is as it was: the asset's metadata and the field.
+     * From the first repository, the second repository's asset's metadata is not found, read, updated or set (with a value of the
+     * first repository's field), and its field is not found by ID or deleted. Every row of the second repository is as it was:
+     * the asset's metadata and the field.
      */
     val repos = twoRepositories()
     val assetId = idOf(repos, "asset")
@@ -489,8 +489,11 @@ import altitude.core.util.QueryResult
     intercept[NotFoundException] {
       testApp.service.metadata.updateMetadata(assetId, UserMetadata(Map(myField.persistedId -> Set("changed"))))
     }
+    intercept[NotFoundException] {
+      testApp.service.metadata.setMetadata(assetId, UserMetadata(Map(myField.persistedId -> Set("changed"))))
+    }
     intercept[NotFoundException](testApp.service.metadata.getFieldById(fieldId))
-    testApp.service.metadata.deleteFieldById(fieldId) shouldBe 0
+    intercept[NotFoundException](testApp.service.metadata.deleteFieldById(fieldId))
 
     testContext.rowsOf(repos.second) shouldEqual before
   }
