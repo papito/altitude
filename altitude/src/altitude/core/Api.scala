@@ -24,6 +24,8 @@ object Api:
     val MAX_LOCATION_NAME_LENGTH = 250
     val MIN_LOCATION_NAME_LENGTH = 1
 
+    val MAX_METADATA_FIELD_NAME_LENGTH = 250
+
   object Field:
     val USER_ID = "userId"
     val ASSET_ID = "assetId"

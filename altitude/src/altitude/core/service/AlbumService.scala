@@ -1,10 +1,11 @@
 package altitude.core.service
 
 import altitude.core.Altitude
+import altitude.core.Api
 import altitude.core.FieldConst
+import altitude.core.Validators
 import altitude.core.dao.AlbumDao
 import altitude.core.models.Album
-import altitude.core.util.NameKey
 
 /**
  * Albums are flat, repository-scoped lists of pointers to assets. Nothing here touches an asset: adding to, removing from, or
@@ -14,10 +15,14 @@ import altitude.core.util.NameKey
 class AlbumService(val app: Altitude) extends BaseService[Album]:
   override protected val dao: AlbumDao = app.DAO.album
 
+  /** An album name as stored, once it passes the name rule (`Validators.validName`) */
+  private def validName(name: String): String =
+    Validators.validName(name, Api.Field.Album.NAME, Api.Constraints.MAX_ALBUM_NAME_LENGTH)
+
   def add(name: String): Album =
     txManager.withTransaction {
       logger.debug(s"Adding album [$name]")
-      add(Album(name = NameKey.normalized(name.trim)))
+      add(Album(name = validName(name.trim)))
     }
 
   def getAll: List[Album] =
@@ -29,7 +34,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
     txManager.withTransaction {
       val album: Album = getById(albumId)
       // The copy validates the new name the same way a new album is validated
-      val renamed = album.copy(name = NameKey.normalized(newName.trim))
+      val renamed = album.copy(name = validName(newName.trim))
 
       logger.debug(s"Renaming album [${album.name}] to [${renamed.name}]")
       updateById(albumId, Map(FieldConst.Album.NAME -> renamed.name, FieldConst.Album.NAME_KEY -> renamed.nameKey))

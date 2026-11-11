@@ -97,6 +97,8 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
     try App.altitude.service.folder.add(folderName, parentId = Some(parentId))
     catch
+      // The name rule the stored name is held to, once normalized (`Validators.validName`)
+      case ex: ValidationException => return responseWithValidationErrors(ex.errors.toMap, parentId = parentId)
       case ex: DuplicateException =>
         val message = ex.message.getOrElse("Folder name already exists at this level")
         return responseWithValidationErrors(Map(Api.Field.Folder.NAME -> message), parentId = parentId)
@@ -150,6 +152,8 @@ class FolderActionController(using logger: Logger) extends BaseController:
         App.altitude.service.folder.rename(folderId = folderId, newName = newName)
         cask.Response(newName, 200, Seq(("Content-Type", "text/html")))
       catch
+        // The name rule the stored name is held to, once normalized (`Validators.validName`)
+        case ex: ValidationException => responseWithValidationErrors(ex.errors.toMap, folderId = folderId)
         case ex: DuplicateException =>
           val message = ex.message.getOrElse("Folder name already exists at this level")
           responseWithValidationErrors(Map(Api.Field.Folder.NAME -> message), folderId = folderId)

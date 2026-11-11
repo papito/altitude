@@ -5,6 +5,8 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ shouldBe, shouldEqual }
 
 import altitude.core.Altitude
+import altitude.core.Api
+import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
@@ -64,6 +66,32 @@ import altitude.core.models.Repository
     category.kind shouldEqual LocationKind.Category
     category.latitude shouldEqual None
     category.longitude shouldEqual None
+  }
+
+  test("A Location or category name longer than 250 characters once in NFC, or whose name key is too long, is refused") {
+
+    /**
+     * Setup:
+     *
+     * A Location "Existing".
+     *
+     * Assertions:
+     *
+     * Adding a Location or a category, or renaming "Existing", to 250 of U+FB2C (250 characters as typed, 750 in NFC) fails
+     * validation with the name field's too-long error, and to 100 of U+FDFA (whose name key NFKC spells out to 3300 bytes) with
+     * the name key error. The repository keeps "Existing" alone.
+     */
+    val max = Api.Constraints.MAX_LOCATION_NAME_LENGTH
+    val existing: Location = addLocation("Existing")
+    val tooLong = Const.Msg.Err.VALUE_TOO_LONG.format(max)
+
+    for ((name, message) <- List(lengthenedByNfc(max) -> tooLong, longKeyName(100) -> Const.Msg.Err.NAME_KEY_TOO_LONG)) {
+      refusesName(Api.Field.Location.NAME, message)(addLocation(name))
+      refusesName(Api.Field.Location.NAME, message)(testApp.service.location.addCategory(name))
+      refusesName(Api.Field.Location.NAME, message)(testApp.service.location.rename(existing.persistedId, name))
+    }
+
+    listedNames shouldEqual List("Existing")
   }
 
   test("An asset's Locations are read in path order with their category names, and an asset in none has none") {

@@ -179,6 +179,55 @@ import altitude.core.models.Repository
     }
   }
 
+  test("A folder name the service refuses once in NFC replaces the dialog form in place, with the error") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with one folder, "to-rename", and a name of 250 U+FB2C posted to the add endpoint and put to
+     * the rename endpoint: 250 characters as typed, which the form's length check passes, and 750 in NFC.
+     *
+     * Assertions:
+     *
+     * Each response is its dialog's form carrying the too-long error, retargeted to replace the submitted form in place, and no
+     * folder is added or renamed.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    val max = Api.Constraints.MAX_FOLDER_NAME_LENGTH
+    // U+FB2C is a composition exclusion: three code points in NFC
+    val name = "\uFB2C" * max
+
+    withServer(App) {
+      host =>
+        val folder: Folder = testApp.service.folder.add("to-rename")
+        val added = folderRoute(
+          requests.post,
+          host,
+          repoId,
+          "add",
+          body =
+            Some(ujson.Obj(Api.Field.Folder.NAME -> name, Api.Field.Folder.PARENT_ID -> testContext.repository.rootFolderId)))
+        val renamed = folderRoute(
+          requests.put,
+          host,
+          repoId,
+          "rename",
+          body = Some(ujson.Obj(Api.Field.Folder.NAME -> name, Api.Field.ID -> folder.persistedId)))
+
+        for ((response, formId) <- List(added -> "addFolder", renamed -> "renameFolder")) withClue(s"[$formId]: ") {
+          response.statusCode shouldBe 200
+          response.headers("hx-retarget") shouldBe Seq("this")
+          response.text() should include(s"""id="$formId"""")
+          response.text() should include(Const.Msg.Err.VALUE_TOO_LONG.format(max))
+        }
+
+        testApp.service.folder.getById(folder.persistedId).name shouldBe "to-rename"
+        testApp.service.folder.getChildren(testContext.repository.rootFolderId).map(_.name) shouldBe List("to-rename")
+    }
+  }
+
   /** A request of a folder route, through the first repository, with the folder route's JSON body when it has one */
   private def folderRoute(
       method: requests.Requester,

@@ -5,6 +5,8 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ shouldBe, shouldEqual }
 
 import altitude.core.Altitude
+import altitude.core.Api
+import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
@@ -48,6 +50,32 @@ import altitude.core.util.SearchQuery
 
     val album: Album = testApp.service.album.add("  Summer 2024  ")
     album.name shouldEqual "Summer 2024"
+  }
+
+  test("An album name longer than 250 characters once in NFC, or whose name key is too long, is refused") {
+
+    /**
+     * Setup:
+     *
+     * An album "Existing".
+     *
+     * Assertions:
+     *
+     * Adding an album, creating one for a selection, or renaming "Existing", to 250 of U+FB2C (250 characters as typed, 750 in
+     * NFC) fails validation with the name field's too-long error, and to 100 of U+FDFA (whose name key NFKC spells out to 3300
+     * bytes) with the name key error. The repository keeps "Existing" alone.
+     */
+    val max = Api.Constraints.MAX_ALBUM_NAME_LENGTH
+    val existing: Album = testApp.service.album.add("Existing")
+    val tooLong = Const.Msg.Err.VALUE_TOO_LONG.format(max)
+
+    for ((name, message) <- List(lengthenedByNfc(max) -> tooLong, longKeyName(100) -> Const.Msg.Err.NAME_KEY_TOO_LONG)) {
+      refusesName(Api.Field.Album.NAME, message)(testApp.service.album.add(name))
+      refusesName(Api.Field.Album.NAME, message)(testApp.service.album.addAssetsToNewAlbum(name, Set.empty))
+      refusesName(Api.Field.Album.NAME, message)(testApp.service.album.rename(existing.persistedId, name))
+    }
+
+    testApp.service.album.getAll.map(_.name) shouldEqual List("Existing")
   }
 
   test("Album names are unique per repository, ignoring case") {

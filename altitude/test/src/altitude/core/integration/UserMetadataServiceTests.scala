@@ -8,7 +8,10 @@ import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.{ should, shouldBe, shouldNot }
 
 import altitude.core.Altitude
+import altitude.core.Api
+import altitude.core.Const
 import altitude.core.DuplicateException
+import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.dao.jdbc.BaseDao
@@ -339,6 +342,63 @@ import altitude.core.util.Util
     intercept[DuplicateException] {
       testApp.service.metadata.addField(UserMetadataField(name = fieldName, fieldType = FieldType.KEYWORD))
     }
+  }
+
+  test("A field name longer than 250 characters once in NFC, or whose name key is too long, is refused") {
+
+    /**
+     * Setup:
+     *
+     * A repository with no metadata fields.
+     *
+     * Assertions:
+     *
+     * Adding a field named 250 of U+FB2C (250 characters as typed, 750 in NFC) fails validation with the name field's too-long
+     * error, and one named 100 of U+FDFA (whose name key NFKC spells out to 3300 bytes) with the name key error. The repository
+     * still has no fields.
+     */
+    val max = Api.Constraints.MAX_METADATA_FIELD_NAME_LENGTH
+    val tooLong = Const.Msg.Err.VALUE_TOO_LONG.format(max)
+
+    for ((name, message) <- List(lengthenedByNfc(max) -> tooLong, longKeyName(100) -> Const.Msg.Err.NAME_KEY_TOO_LONG)) {
+      refusesName(Api.Field.Metadata.Field.NAME, message) {
+        testApp.service.metadata.addField(UserMetadataField(name = name, fieldType = FieldType.KEYWORD))
+      }
+    }
+
+    testApp.service.metadata.getAllFields shouldBe empty
+  }
+
+  test("The metadata JSON lists every field by name key, each with its ID, name and type") {
+
+    /**
+     * Setup:
+     *
+     * Five KEYWORD fields, "Charlie", "Ｂeta" with a full-width "B", "alpha", "Strasz" and "Straße", and an asset holding a value
+     * in "Charlie" alone.
+     *
+     * Assertions:
+     *
+     * The asset's metadata JSON lists all five fields in the order of their name keys: "alpha", "Ｂeta", "Charlie", "Straße"
+     * ("strasse") and "Strasz", the field with a value and the fields without alike. Each field reads as its ID, name and type,
+     * with no name key.
+     *
+     * Edge cases:
+     *
+     * A letter-by-letter case-insensitive comparison would put "Ｂeta" last and "Strasz" before "Straße".
+     */
+    val names = List("Charlie", "\uFF22eta", "alpha", "Strasz", "Stra\u00DFe")
+    val fields =
+      names.map(name => testApp.service.metadata.addField(UserMetadataField(name = name, fieldType = FieldType.KEYWORD)))
+    val asset: Asset = testContext.persistAsset()
+    testApp.service.metadata.addMetadataValue(asset.persistedId, fields.head.persistedId, "a value")
+
+    val json = testApp.service.metadata.toJson(testApp.service.metadata.getMetadata(asset.persistedId))
+    val listed = json.arr.map(_(FieldConst.MetadataField.FIELD))
+
+    listed.map(_(FieldConst.MetadataField.NAME).str).toList shouldBe
+      List("alpha", "\uFF22eta", "Charlie", "Stra\u00DFe", "Strasz")
+    listed.foreach(_.obj.keySet shouldBe Set(FieldConst.ID, FieldConst.MetadataField.NAME, FieldConst.MetadataField.FIELD_TYPE))
   }
 
   test("Field names that differ only by case fold, canonical form or compatibility form are duplicates") {

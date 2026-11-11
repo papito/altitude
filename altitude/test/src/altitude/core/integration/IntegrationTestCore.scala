@@ -214,6 +214,22 @@ abstract class IntegrationTestCore
     finally Locale.setDefault(previous)
   }
 
+  /**
+   * A name of `length` UTF-16 units, as a form counts it, that is three times as long in NFC: U+FB2C, a composition exclusion, is
+   * three code points once normalized
+   */
+  def lengthenedByNfc(length: Int): String = "\uFB2C" * length
+
+  /** A name of `length` characters whose name key is 33 UTF-8 bytes a character: NFKC spells U+FDFA out as 18 code points */
+  def longKeyName(length: Int): String = "\uFDFA" * length
+
+  /** Runs `f`, which must refuse a name with a `ValidationException` saying `message`, its own and the name field's (`field`) */
+  def refusesName(field: String, message: String)(f: => Any): Unit = {
+    val ex = intercept[ValidationException](f)
+    ex.errors.get(field) shouldBe Some(message)
+    ex.message shouldBe message
+  }
+
   /** The context repository's six stored stats by dimension, without the totals, which are summed on read */
   def storedStats: Map[String, Long] =
     testApp.service.stats.getStats.stats

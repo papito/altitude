@@ -11,9 +11,6 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.NameKey
 import altitude.core.util.Query
 
-object UserMetadataService:
-  final private val VALID_BOOLEAN_VALUES: Set[String] = Set("0", "1", "true", "false")
-
 class UserMetadataService(val app: Altitude):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -21,9 +18,14 @@ class UserMetadataService(val app: Altitude):
   private val metadataFieldDao: UserMetadataFieldDao = app.DAO.metadataField
   private val assetDao: AssetDao = app.DAO.asset
 
-  /** Adds the field under its name in NFC; a field whose name key the repository already holds is a `DuplicateException` */
+  /**
+   * Adds the field under its name in NFC once the name passes the name rule (`Validators.validName`, a `ValidationException`); a
+   * field whose name key the repository already holds is a `DuplicateException`
+   */
   def addField(metadataField: UserMetadataField): UserMetadataField =
-    val field = metadataField.copy(name = NameKey.normalized(metadataField.name))
+    val name =
+      Validators.validName(metadataField.name, Api.Field.Metadata.Field.NAME, Api.Constraints.MAX_METADATA_FIELD_NAME_LENGTH)
+    val field = metadataField.copy(name = name)
 
     txManager.withTransaction {
       val existing = metadataFieldDao.query(new Query().add(FieldConst.MetadataField.NAME_KEY -> field.nameKey))
@@ -333,45 +335,27 @@ class UserMetadataService(val app: Altitude):
    * We get out: [ VALUES -> values[] FIELD_TYPE -> ID -> field id NAME -> field name FIELD_TYPE -> field type
    *
    * VALUES -> values[] FIELD_TYPE -> ID -> field id NAME -> field name FIELD_TYPE -> field type ]
+   *
+   * Every field is listed, with its values or with none, in the order of the fields' name keys ([[UserMetadataField.nameKey]]).
    */
   def toJson(metadata: UserMetadata, allMetadataFields: Option[Map[String, UserMetadataField]] = None): ujson.Arr =
     txManager.asReadOnly {
       val allFields = if allMetadataFields.isDefined then allMetadataFields.get else getAllFields
 
       def toJsonEntry(field: UserMetadataField, mdVals: Set[UserMetadataValue]): ujson.Obj =
-        val fieldJson = ujson.Obj(field.toJson.obj)
-        fieldJson.obj.remove(FieldConst.UPDATED_AT)
-        fieldJson.obj.remove(FieldConst.CREATED_AT)
-        fieldJson.obj.remove(FieldConst.MetadataField.NAME_KEY)
         ujson.Obj(
-          FieldConst.MetadataField.FIELD -> (fieldJson: ujson.Value),
+          FieldConst.MetadataField.FIELD -> field.toJson,
           FieldConst.VALUES -> ujson.Arr(mdVals.toSeq.map(v => v.toJson: ujson.Value)*)
         )
 
-      val res = metadata.data.foldLeft(Seq[ujson.Value]()) {
-        (res, m) =>
-          val fieldId = m._1
-          val field: UserMetadataField = allFields(fieldId)
-          res :+ toJsonEntry(field, m._2)
-      }
+      val withValues = metadata.data.toSeq.map((fieldId, mdVals) => allFields(fieldId) -> mdVals)
+      val withoutValues =
+        allFields.values.filterNot(field => metadata.contains(field.persistedId)).map(_ -> Set.empty[UserMetadataValue])
 
-      val emptyFields = allFields
-        .filterNot {
-          case (fieldId, _) =>
-            metadata.contains(fieldId)
-        }
-        .map {
-          case (fieldId, _) =>
-            val field: UserMetadataField = allFields(fieldId)
-            toJsonEntry(field, Set[UserMetadataValue]())
-        }
-
-      val sorted = (res ++ emptyFields).sortWith {
-        (left, right) =>
-          val leftFieldName: String = left(FieldConst.MetadataField.FIELD)(FieldConst.MetadataField.NAME).str
-          val rightFieldName: String = right(FieldConst.MetadataField.FIELD)(FieldConst.MetadataField.NAME).str
-          leftFieldName.compareToIgnoreCase(rightFieldName) < 1
-      }
+      // By name key, the order of names, and by ID among fields of one key, so the order is total
+      val sorted = (withValues ++ withoutValues)
+        .sortBy((field, _) => (field.nameKey, field.persistedId))
+        .map((field, mdVals) => toJsonEntry(field, mdVals))
 
       ujson.Arr(sorted*)
     }
@@ -402,7 +386,7 @@ class UserMetadataService(val app: Altitude):
             case FieldType.KEYWORD => None // everything is allowed
             case FieldType.TEXT => None // everything is allowed
             case FieldType.BOOL => // only values that we recognize as booleans
-              if UserMetadataService.VALID_BOOLEAN_VALUES.contains(mdVal.value.toLowerCase) then None
+              if UserMetadataValue.asBoolean(mdVal.value).isDefined then None
               else Some(mdVal.value)
             case FieldType.DATETIME => None // TODO: Add datetime validation if needed
           }

@@ -14,6 +14,7 @@ import scalasql.core.SqlStr.SqlStringSyntax
 import scala.util.Random
 
 import altitude.core.Altitude
+import altitude.core.Api
 import altitude.core.Const
 import altitude.core.Const.FaceRecognition
 import altitude.core.Const.PeopleBucket
@@ -802,6 +803,38 @@ import altitude.core.util.Util
     }
 
     testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bob")
+  }
+
+  test("A person name is held to 2 to 80 characters once in NFC, and to a name key that is not too long") {
+
+    /**
+     * Setup:
+     *
+     * A live Person named "Bob", and an unnamed Person with a Face.
+     *
+     * Assertions:
+     *
+     * Renaming Bob, or moving the Face to a Person by name, to 80 of U+FB2C (80 characters as typed, 240 in NFC) fails validation
+     * with the name field's too-long error; to "e" and a combining accent (one character in NFC) with the too-short error; and to
+     * 70 of U+FDFA (whose name key NFKC spells out to 2310 bytes) with the name key error. Bob keeps his name, and the Face its
+     * Person.
+     */
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+    val unnamed: Person = testApp.service.person.addPerson(Person())
+    val face = testContext.addTestFace(unnamed, testContext.insertAsset(), TestContext.unitVector(1))
+    val refused = List(
+      lengthenedByNfc(Api.Constraints.MAX_NAME_LENGTH) -> Const.Msg.Err.VALUE_TOO_LONG.format(Api.Constraints.MAX_NAME_LENGTH),
+      "e\u0301" -> Const.Msg.Err.VALUE_TOO_SHORT.format(Api.Constraints.MIN_NAME_LENGTH),
+      longKeyName(70) -> Const.Msg.Err.NAME_KEY_TOO_LONG
+    )
+
+    for ((name, message) <- refused) withClue(s"[$name]: ") {
+      refusesName(Api.Field.Person.NAME, message)(testApp.service.person.updateName(bob, name))
+      refusesName(Api.Field.Person.NAME, message)(testApp.service.person.moveFace(face.persistedId, FaceTarget.Named(name)))
+    }
+
+    testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bob")
+    testApp.service.person.getFaceById(face.persistedId).personId shouldBe unnamed.id
   }
 
   test("Adding a named person stores its name in NFC and its name key as sort name") {

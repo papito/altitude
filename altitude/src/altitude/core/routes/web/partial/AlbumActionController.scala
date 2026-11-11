@@ -85,6 +85,8 @@ class AlbumActionController(using logger: Logger) extends BaseController:
 
     try App.altitude.service.album.add(jsonIn(Api.Field.Album.NAME).str)
     catch
+      // The name rule the stored name is held to, once normalized (`Validators.validName`)
+      case ex: ValidationException => return responseWithValidationErrors(ex.errors.toMap)
       case ex: DuplicateException =>
         return responseWithValidationErrors(Map(Api.Field.Album.NAME -> ex.message.getOrElse("Album name already exists")))
 
@@ -119,6 +121,8 @@ class AlbumActionController(using logger: Logger) extends BaseController:
         App.altitude.service.album.rename(albumId = albumId, newName = newName)
         cask.Response(newName, 200, Seq(("Content-Type", "text/html")))
       catch
+        // The name rule the stored name is held to, once normalized (`Validators.validName`)
+        case ex: ValidationException => responseWithValidationErrors(ex.errors.toMap, albumId = albumId)
         case ex: DuplicateException =>
           responseWithValidationErrors(
             Map(Api.Field.Album.NAME -> ex.message.getOrElse("Album name already exists")),

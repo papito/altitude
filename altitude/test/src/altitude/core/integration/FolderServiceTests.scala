@@ -8,6 +8,7 @@ import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shoul
 import scala.language.reflectiveCalls
 
 import altitude.core.Altitude
+import altitude.core.Api
 import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.IllegalOperationException
@@ -514,6 +515,40 @@ import altitude.core.models.Repository
     }
 
     testApp.service.folder.add("\uFF33ummer").name shouldBe "\uFF33ummer"
+  }
+
+  test("A folder name longer than 250 characters once in NFC, or whose name key is too long, is refused") {
+
+    /**
+     * Setup:
+     *
+     * A folder "Existing" at the root.
+     *
+     * Assertions:
+     *
+     * Adding a folder, or renaming "Existing", to 250 of U+FB2C (250 characters as typed, 750 in NFC) fails validation with the
+     * name field's too-long error, and to 100 of U+FDFA (whose name key NFKC spells out to 3300 bytes) with the name key error.
+     * "Existing" keeps its name.
+     *
+     * Edge cases:
+     *
+     * A name of 250 characters in NFC is accepted, counted in code points as the column counts them: 250 emoji, each two UTF-16
+     * units.
+     */
+    val max = Api.Constraints.MAX_FOLDER_NAME_LENGTH
+    val existing: Folder = testApp.service.folder.add("Existing")
+    val tooLong = Const.Msg.Err.VALUE_TOO_LONG.format(max)
+
+    refusesName(Api.Field.Folder.NAME, tooLong)(testApp.service.folder.add(lengthenedByNfc(max)))
+    refusesName(Api.Field.Folder.NAME, tooLong)(testApp.service.folder.rename(existing.persistedId, lengthenedByNfc(max)))
+    refusesName(Api.Field.Folder.NAME, Const.Msg.Err.NAME_KEY_TOO_LONG)(testApp.service.folder.add(longKeyName(100)))
+    refusesName(Api.Field.Folder.NAME, Const.Msg.Err.NAME_KEY_TOO_LONG) {
+      testApp.service.folder.rename(existing.persistedId, longKeyName(100))
+    }
+    testApp.service.folder.getById(existing.persistedId).name shouldBe "Existing"
+
+    val emoji = "\uD83D\uDE00" * max
+    testApp.service.folder.add(emoji).name shouldBe emoji
   }
 
   test("Illegal folder rename actions should throw") {

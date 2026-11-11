@@ -538,6 +538,36 @@ import altitude.core.util.*
     results.total shouldBe Some(2)
   }
 
+  test("A BOOL value given in any accepted form is indexed, and a filter on the flag finds it") {
+
+    /**
+     * Setup:
+     *
+     * A BOOL field; an asset imported with "1" in it, an asset given "TRUE" afterwards, and an asset given "0" afterwards.
+     *
+     * Assertions:
+     *
+     * Filtering the field by true finds the first two assets, and by false the third: every form the field accepts ("1", "0" and
+     * any case of "true" and "false") is indexed as the boolean it stands for. Each value reads back as it was given.
+     */
+    val field = testApp.service.metadata.addField(UserMetadataField(name = "flagged", fieldType = FieldType.BOOL))
+
+    val imported: Asset = testContext.persistAsset(metadata = UserMetadata(Map(field.persistedId -> Set("1"))))
+    val upper: Asset = testContext.persistAsset()
+    testApp.service.metadata.addMetadataValue(upper.persistedId, field.persistedId, "TRUE")
+    val zero: Asset = testContext.persistAsset()
+    testApp.service.metadata.addMetadataValue(zero.persistedId, field.persistedId, "0")
+
+    def flagged(flag: Boolean): Set[String] =
+      search(new SearchQuery(rpp = PAGE_SIZE, metadataFilters = Map(field.persistedId -> Query.EQUALS(flag)))).records
+        .map(_.persistedId)
+        .toSet
+
+    flagged(true) shouldBe Set(imported.persistedId, upper.persistedId)
+    flagged(false) shouldBe Set(zero.persistedId)
+    testApp.service.metadata.getMetadata(zero.persistedId)(field.persistedId).map(_.value) shouldBe Set("0")
+  }
+
   test("Search by wrong field type") {
 
     /**

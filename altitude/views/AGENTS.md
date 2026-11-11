@@ -1658,7 +1658,7 @@ fragment's `role="option"` rows wherever they sit (`parseAssignablePeople`: each
 Hidden, cover and Suggested mark), and focuses the input once the combobox is drawn. The focus waits for the draw
 (`untilShown`): Alpine's `x-show` shows the combobox on the next animation frame (a timeout in a hidden tab), so options
 that loaded sooner would focus a hidden input, the focus would not take, the hidden Change button would lose it to the
-body, and that `focusout` would close the listbox. The options are filtered on the client as the user types, the first `MAX_SHOWN_OPTIONS` (50) matches rendered with lazy covers, Hidden marked; the server leaves the Face's own Person
+body, and that `focusout` would close the listbox. The options are filtered on the client as the user types, the first `MAX_SHOWN_OPTIONS` (50) matches rendered with lazy covers, Hidden marked. An option matches when its name holds the query under the server's fold (`nameKey`, which mirrors `NameKey.of`) with every final sigma read as a plain one (`partialMatchKey`), on both sides: the fold ends a word with "ς", so "σοφοσ", typed on the way to "Σοφοσάκης", would otherwise be no part of it; the exact name is told by the name key itself, and `parseAssignablePeople` computes both forms of each option's name once; the server leaves the Face's own Person
 out of the options (`PersonService.assignablePeople`, one read for the group and the list).
 The fragment opens with the **Suggested** group (`docs/faces.md` **Corrections**: the people whose Faces are nearest the
 Face's vector, closest first, at most 3, each option marked `data-suggested` and left out of the list after it): while

@@ -150,6 +150,8 @@ object Const:
       val VALUE_CANNOT_BE_EMPTY = "Cannot be empty"
       val VALUE_TOO_LONG = "Value is longer than %s characters"
       val VALUE_TOO_SHORT = "Value should be at least %s characters long"
+      // A name within its length whose name key passes NameKey.MAX_KEY_BYTES: compatibility characters NFKC spells out at length
+      val NAME_KEY_TOO_LONG = "Value is too long: some of its characters stand for several"
       val VALUE_NOT_AN_EMAIL = "This is a clown email"
       val VALUE_NOT_A_UUID = "This is not a valid UUID"
       val VALIDATION_ERROR = "Validation error"

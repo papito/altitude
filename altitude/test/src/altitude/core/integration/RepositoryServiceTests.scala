@@ -59,7 +59,7 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The Library is returned and reads back with the name trimmed, each run of whitespace one space, and the "é" precomposed.
-     * Its stored name key is that name in lower case.
+     * Its stored name key is that name's name key (`NameKey.of`).
      *
      * Edge cases:
      *
@@ -86,14 +86,16 @@ import altitude.core.util.Util
      * Setup:
      *
      * Library names that are empty, only whitespace, one character, one character once composed ("e" and a combining accent), 81
-     * characters, ones holding a control character between words or at the end, ones holding an invisible format character (a
-     * zero-width space, a right-to-left override, a directional isolate pair, a byte order mark, a soft hyphen), and ones holding
-     * an unpaired surrogate, high or low.
+     * characters, 27 of U+FB2C (81 characters once in NFC), 70 of U+FDFA (a name key NFKC spells out to 2310 bytes), ones holding
+     * a control character between words or at the end, ones holding an invisible format character (a zero-width space, a
+     * right-to-left override, a directional isolate pair, a byte order mark, a soft hyphen), and ones holding an unpaired
+     * surrogate, high or low.
      *
      * Assertions:
      *
      * Each add fails with a `ValidationException` that gives the name field its error, the control characters' for the format
-     * characters and the unpaired surrogates too, and no Library is added.
+     * characters and the unpaired surrogates too, and the name key error for the name whose key is too long, and no Library is
+     * added.
      *
      * Edge cases:
      *
@@ -107,6 +109,8 @@ import altitude.core.util.Util
       "a" -> "Use at least 2 characters",
       "e\u0301" -> "Use at least 2 characters",
       "x" * 81 -> "Use at most 80 characters",
+      lengthenedByNfc(27) -> "Use at most 80 characters",
+      longKeyName(70) -> C.Msg.Err.NAME_KEY_TOO_LONG,
       "Client\u0007Smith" -> controls,
       s"Client ${Util.randomStr()}\u0000" -> controls,
       "Client\u200BSmith" -> controls,

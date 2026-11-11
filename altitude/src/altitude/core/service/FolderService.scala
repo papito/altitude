@@ -1,15 +1,16 @@
 package altitude.core.service
 
 import altitude.core.Altitude
+import altitude.core.Api
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.ValidationException
+import altitude.core.Validators
 import altitude.core.dao.FolderDao
 import altitude.core.models.Folder
-import altitude.core.util.NameKey
 import altitude.core.util.Query
 
 class FolderService(val app: Altitude) extends BaseService[Folder]:
@@ -23,9 +24,13 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
   def add(name: String, parentId: Option[String] = None): Folder =
     txManager.withTransaction {
       val _parentId = parentId.map(getById(_).persistedId).getOrElse(RequestContext.getRepository.rootFolderId)
-      val folder = Folder(name = NameKey.normalized(name.trim), parentId = _parentId)
+      val folder = Folder(name = validName(name.trim), parentId = _parentId)
       app.service.folder.add(folder)
     }
+
+  /** A folder name as stored, once it passes the name rule (`Validators.validName`) */
+  private def validName(name: String): String =
+    Validators.validName(name, Api.Field.Folder.NAME, Api.Constraints.MAX_FOLDER_NAME_LENGTH)
 
   override def add(folder: Folder): Folder =
     txManager.withTransaction {
@@ -138,7 +143,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       val folder: Folder = getById(folderId)
       logger.debug(s"Renaming folder [${folder.name}] to [$newName]")
 
-      val folderForUpdate: Folder = folder.copy(name = NameKey.normalized(newName))
+      val folderForUpdate: Folder = folder.copy(name = validName(newName))
 
       val data = Map(FieldConst.Folder.NAME -> folderForUpdate.name, FieldConst.Folder.NAME_KEY -> folderForUpdate.nameKey)
 

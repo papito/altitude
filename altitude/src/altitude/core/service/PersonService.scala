@@ -5,10 +5,12 @@ import java.text.Normalizer
 
 import altitude.core.{ Const => C }
 import altitude.core.Altitude
+import altitude.core.Api
 import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.ValidationException
+import altitude.core.Validators
 import altitude.core.dao.FaceDao
 import altitude.core.dao.PersonDao
 import altitude.core.models.Asset
@@ -629,11 +631,10 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
   /**
    * The live Person holding the name, or a Person created with it. The name's lock makes concurrent creators of one name take
-   * turns, so the second finds the first's Person. A name of an unnamed person's form is refused as a rename of it would be.
+   * turns, so the second finds the first's Person. A name the name rule refuses ([[validName]]) is refused as a rename to it is.
    */
   private def personIdForName(name: String): String =
-    val normalized = normalizedName(name)
-    if isReservedName(normalized) then throw ValidationException(C.Msg.Err.RESERVED_PERSON_NAME)
+    val normalized = validName(name)
 
     val key = nameKey(normalized)
     dao.lockName(key)
@@ -703,15 +704,11 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     app.service.asset.queryAll(purging).nonEmpty
 
   /**
-   * Names the person, the name stored in NFC and its name key as sort name. A name of an unnamed person's form is a
+   * Names the person, the name stored in NFC and its name key as sort name. A name the name rule refuses ([[validName]]) is a
    * `ValidationException`; a name another live person holds in any case or Unicode form, a `DuplicateException` (`person_01`).
    */
   def updateName(person: Person, newName: String): Person =
-    val name = PersonService.normalizedName(newName)
-
-    if PersonService.isReservedName(name) then
-      logger.debug(s"Refusing to rename person [${person.persistedId}] to the reserved name [$name]")
-      throw ValidationException(C.Msg.Err.RESERVED_PERSON_NAME)
+    val name = validName(newName)
 
     txManager.withTransaction {
       logger.debug(s"Renaming person [${person.persistedId}] to [$name]")
@@ -725,6 +722,20 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
       person.copy(name = Some(name), isNamed = true)
     }
+
+  /**
+   * A person's name as stored, once it passes the name rule: 2 to 80 characters once in NFC, with a name key that is not too long
+   * (`Validators.validName`), and not of an unnamed person's form ([[PersonService.isReservedName]]). Otherwise a
+   * `ValidationException` saying why.
+   */
+  private def validName(name: String): String =
+    val (min, max) = (Api.Constraints.MIN_NAME_LENGTH, Api.Constraints.MAX_NAME_LENGTH)
+    val normalized = Validators.validName(name, Api.Field.Person.NAME, maxLength = max, minLength = min)
+
+    if isReservedName(normalized) then
+      logger.debug(s"Refusing the reserved name [$normalized]")
+      throw ValidationException(C.Msg.Err.RESERVED_PERSON_NAME)
+    normalized
 
   /**
    * The live person holding a name in any case or Unicode form: the one `person_01` refuses the name for. A hidden person is

@@ -1,5 +1,6 @@
 package altitude.core.util
 
+import java.nio.charset.StandardCharsets
 import java.text.Normalizer
 import java.util.Locale
 
@@ -36,3 +37,16 @@ object NameKey:
     val compatible = Normalizer.normalize(name, Normalizer.Form.NFKC)
     val caseFolded = compatible.toLowerCase(Locale.ROOT).toUpperCase(Locale.ROOT).toLowerCase(Locale.ROOT)
     Normalizer.normalize(caseFolded, Normalizer.Form.NFKC)
+
+  /**
+   * The most UTF-8 bytes a name key may hold, so that every key fits the unique index that holds it: PostgreSQL's btree refuses
+   * an index row over 2704 bytes (SQLSTATE 54000), and the widest, `folder_02`, spends about 90 of them on the row header and the
+   * two IDs ahead of the key. A key is no longer than its name but for what the fold spells out: a name of the longest length the
+   * app allows (250 characters) has a key of at most 1250 bytes unless it holds compatibility characters, since no other
+   * character's key passes 5 bytes ("ᾀ" folds to "ἀι"); a compatibility character can stand for many (U+FDFA, one character, is a
+   * 33-byte key), and the index's compression is no bound to rely on.
+   */
+  val MAX_KEY_BYTES = 2000
+
+  /** Whether the name key of `name` is within [[MAX_KEY_BYTES]] */
+  def keyFits(name: String): Boolean = of(name).getBytes(StandardCharsets.UTF_8).length <= MAX_KEY_BYTES

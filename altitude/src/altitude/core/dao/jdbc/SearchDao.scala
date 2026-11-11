@@ -324,8 +324,8 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         // number
         if field.fieldType == FieldType.NUMBER then preparedStatement.setDouble(5, valueStr.toDouble)
         else preparedStatement.setNull(5, Types.DOUBLE)
-        // boolean
-        if field.fieldType == FieldType.BOOL then preparedStatement.setBoolean(6, valueStr.toBoolean)
+        // boolean, as the value stands for it in any form the field accepts ("1", "TRUE")
+        if field.fieldType == FieldType.BOOL then preparedStatement.setBoolean(6, UserMetadataValue.asBoolean(valueStr).get)
         else preparedStatement.setNull(6, Types.BOOLEAN)
         BaseDao.incrWriteQueryCount()
         preparedStatement.execute()

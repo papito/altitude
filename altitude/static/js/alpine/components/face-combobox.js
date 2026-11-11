@@ -79,21 +79,28 @@ export function assignablePeopleUrl({ repoId, faceId }) {
 /**
  * Reads the options out of the assignable people fragment (`htmx/assignable_people`), wherever they
  * sit in it: each option's Person, their name, whether named (`data-person-named`), whether Hidden,
- * their cover's URL, and whether the option is in the Suggested group (`data-suggested`).
+ * their cover's URL, and whether the option is in the Suggested group (`data-suggested`). Each
+ * option carries its name's two forms, computed once here rather than on every keystroke: its name
+ * key (`nameKey`, for the exact name) and its form for the substring match (`partialMatchKey`).
  */
 export function parseAssignablePeople(html) {
     const doc = new DOMParser().parseFromString(html, "text/html")
 
     return [...doc.querySelectorAll('[role="option"][data-person-id]')].map(
-        (optionEl) => ({
-            personId: optionEl.dataset.personId,
-            name: optionEl.dataset.personName ?? "",
-            named: optionEl.dataset.personNamed === "true",
-            hidden: optionEl.dataset.personHidden === "true",
-            suggested: optionEl.dataset.suggested !== undefined,
-            coverUrl:
-                optionEl.querySelector("img")?.getAttribute("src") ?? null,
-        }),
+        (optionEl) => {
+            const name = optionEl.dataset.personName ?? ""
+            return {
+                personId: optionEl.dataset.personId,
+                name,
+                nameKey: nameKey(name),
+                partialMatchKey: partialMatchKey(name),
+                named: optionEl.dataset.personNamed === "true",
+                hidden: optionEl.dataset.personHidden === "true",
+                suggested: optionEl.dataset.suggested !== undefined,
+                coverUrl:
+                    optionEl.querySelector("img")?.getAttribute("src") ?? null,
+            }
+        },
     )
 }
 
@@ -134,7 +141,7 @@ export function clearSelectedFaceRow() {
 /**
  * A name as the server compares names: trimmed, then the server's fold (`NameKey.of`), so "WEISS"
  * is "Weiß" and "σοφοσ" is "σοφος". The case mappings take no locale, as the server's take
- * `Locale.ROOT`; the server stays the authority.
+ * `Locale.ROOT`; the server stays the authority. Two names are one name when their keys are equal.
  */
 function nameKey(text) {
     return text
@@ -144,6 +151,17 @@ function nameKey(text) {
         .toUpperCase()
         .toLowerCase()
         .normalize("NFKC")
+}
+
+/**
+ * A name's form for finding a query within it: its name key with every final sigma (ς) read as a
+ * plain one (σ). The key's last lower step gives a sigma at the end of a word the final form, so a
+ * query that stops in mid-word on a sigma ("σοφοσ") ends in ς while the name it is part of
+ * ("Σοφοσάκης") has σ there; reading ς as σ on both sides makes the query a part of the name again.
+ * Only for the substring test: equality is the name key's.
+ */
+function partialMatchKey(text) {
+    return nameKey(text).replaceAll("ς", "σ")
 }
 
 /** "1 asset", "5 assets" */
@@ -227,16 +245,17 @@ export function faceCombobox() {
         /**
          * The options the query leaves, in the server's order (named first, then Unknowns), the first
          * few dozen: with nothing typed, the list under the Suggested group, which holds the rest;
-         * typed, every option, the suggested people ahead of the others
+         * typed, every option whose name holds the query in any case or Unicode form (`partialMatchKey`),
+         * the suggested people ahead of the others
          */
         get matches() {
-            const key = nameKey(this.query)
+            const key = partialMatchKey(this.query)
 
             return this.options
                 .filter((option) =>
                     key === ""
                         ? !option.suggested
-                        : nameKey(option.name).includes(key),
+                        : option.partialMatchKey.includes(key),
                 )
                 .slice(0, MAX_SHOWN_OPTIONS)
         },
@@ -255,7 +274,7 @@ export function faceCombobox() {
             }
 
             const key = nameKey(name)
-            return this.options.some((option) => nameKey(option.name) === key)
+            return this.options.some((option) => option.nameKey === key)
                 ? null
                 : name
         },
@@ -453,9 +472,7 @@ export function faceCombobox() {
                 return null
             }
 
-            const exact = this.matches.find(
-                (option) => nameKey(option.name) === key,
-            )
+            const exact = this.matches.find((option) => option.nameKey === key)
 
             return (
                 exact?.personId ??

@@ -41,8 +41,9 @@ object Repository:
   /**
    * The Library name rule, which setup and the New library dialog share through `RepositoryService.addRepository`: the name
    * normalized, or a `ValidationException` giving the name field (`FieldConst.Repository.NAME`) the first error of: a name is
-   * required, holds no control characters (`isControlCharacter`), and is 2 to 80 characters long once normalized (counted in code
-   * points, so an emoji is one).
+   * required, holds no control characters (`isControlCharacter`), is 2 to 80 characters long once normalized (counted in code
+   * points, so an emoji is one), and has a name key within `NameKey.MAX_KEY_BYTES`, as every keyed name has
+   * (`Validators.validName`).
    */
   def validName(name: String): String =
     val normalized = normalizedName(name)
@@ -54,6 +55,7 @@ object Repository:
       else if normalized.codePoints.anyMatch(isControlCharacter) then Some(C.Msg.Err.LIBRARY_NAME_CONTROL_CHARACTERS)
       else if length < min then Some(C.Msg.Err.LIBRARY_NAME_TOO_SHORT.format(min))
       else if length > max then Some(C.Msg.Err.LIBRARY_NAME_TOO_LONG.format(max))
+      else if !NameKey.keyFits(normalized) then Some(C.Msg.Err.NAME_KEY_TOO_LONG)
       else None
 
     error.foreach {
