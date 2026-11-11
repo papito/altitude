@@ -103,7 +103,8 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
 
     val counts = Db.read(dialect)(_.run(SearchQueries.folderCounts(searchDialect, RequestContext.getRepository.persistedId)))
     logger.trace(s"Counted the assets of ${counts.length} folders")
-    counts.toMap
+    // The assets in no folder (NULL: triaged ones) are no folder's
+    counts.collect { case (Some(folderId), count) => folderId -> count }.toMap
 
   override def cappedCount(query: SearchQuery): Int =
     import dialect.*

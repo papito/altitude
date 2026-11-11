@@ -1303,7 +1303,8 @@ import altitude.core.util.*
      *
      * Assertions:
      *
-     * The capped count's plan reads the asset through its primary key index.
+     * The capped count's plan reads the asset through a key that leads with its ID: the primary key, or the unique key over the
+     * ID and the repository that the foreign keys name, which the engine may take as well, both being a lookup by ID.
      */
     val template = importAsset("beach.jpg")
     val query = new SearchQuery(text = Some("beach"), params = browsingView)
@@ -1315,7 +1316,8 @@ import altitude.core.util.*
       planOf(SearchQueries.cappedCount(searchDialect, resolved, RequestContext.getRepository.persistedId))
     }
 
-    withClue(plan)(plan should include(if (isPostgres) "asset_pkey" else "sqlite_autoindex_asset_1"))
+    withClue(plan)(
+      (plan should include).regex(if (isPostgres) "asset_pkey|asset_id_repository_id_key" else "sqlite_autoindex_asset_[12]"))
   }
 
   test("The name sources of a Search text are read from their indexes alone") {

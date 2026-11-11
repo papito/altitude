@@ -291,8 +291,9 @@ import altitude.core.util.SearchQuery
      *
      * Assertions:
      *
-     * The plan finds the matching assets by their ID, from the memberships of the Locations in the box, and never passes over an
-     * index of the repository's assets.
+     * The plan finds the matching assets by their ID (the primary key, or the unique key over the ID and the repository that the
+     * foreign keys name), from the memberships of the Locations in the box, and never passes over an index of the repository's
+     * assets.
      */
     val location = addLocation("Paris")
     val member = testContext.persistAsset()
@@ -309,7 +310,7 @@ import altitude.core.util.SearchQuery
     val plan = atScale(seedCopies(template.persistedId, copies = 5000, folders = 500))(planOf(locations))
 
     withClue(plan) {
-      plan should include(if (isPostgres) "asset_pkey" else "sqlite_autoindex_asset_1")
+      (plan should include).regex(if (isPostgres) "asset_pkey|asset_id_repository_id_key" else "sqlite_autoindex_asset_[12]")
       (plan should not).include("asset_search_")
       (plan should not).include(if (isPostgres) "Seq Scan on asset" else "SCAN asset")
     }

@@ -1,10 +1,13 @@
 package altitude.core.integration
 
 import altitude.test.TestContext
+import java.sql.SQLException
+import java.util.UUID
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.Altitude
+import altitude.core.Const
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
@@ -490,5 +493,178 @@ import altitude.core.util.QueryResult
     testApp.service.metadata.deleteFieldById(fieldId) shouldBe 0
 
     testContext.rowsOf(repos.second) shouldEqual before
+  }
+
+  /** A constraint the database checks, as each engine reports its violation */
+  private enum Violation(val sqlState: String, val sqliteMessage: String):
+    case ForeignKey extends Violation("23503", "FOREIGN KEY constraint failed")
+    case NotNull extends Violation("23502", "NOT NULL constraint failed")
+
+  /** Runs a hand-written write in a transaction of its own, which the database refuses with a violation of `violation` */
+  private def refusedAs(violation: Violation)(sql: String, values: Any*): Unit = {
+    val ex = intercept[SQLException](testApp.txManager.withTransaction(update(sql, values*)))
+    testApp.dataSourceType match {
+      case Const.DbEngineName.POSTGRES => ex.getSQLState shouldBe violation.sqlState
+      case _ => ex.getMessage should include(violation.sqliteMessage)
+    }
+  }
+
+  /**
+   * In the first repository, a row of every scoped table: an asset with its Search document in a folder, an album and a Location
+   * holding it, a Person with a Face on it, and a metadata field with an indexed value on it. Its IDs by table.
+   */
+  private def rowsInFirst(repos: TwoRepositories): Map[String, String] = {
+    val asset = testContext.insertAsset(testContext.makeAsset(repository = Some(repos.first)))
+    val folder = testApp.service.folder.add("mine")
+    val album = testApp.service.album.add("mine")
+    testApp.service.album.addAssets(album.persistedId, Set(asset.persistedId))
+    val location = testApp.service.location.addLocation("mine", 1.0, 1.0)
+    testApp.service.location.addAssets(location.persistedId, Set(asset.persistedId))
+    val person = testApp.service.person.addPerson(Person())
+    val face = testContext.addTestFace(person, asset, TestContext.unitVector(3))
+    val field = testApp.service.metadata.addField(UserMetadataField(name = "mine", fieldType = FieldType.KEYWORD))
+    // Indexed, unlike `setMetadata`'s value, so it has a `metadata_parameter` row
+    testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, "value")
+
+    Map(
+      "asset" -> asset.persistedId,
+      "folder" -> folder.persistedId,
+      "album" -> album.persistedId,
+      "location" -> location.persistedId,
+      "person" -> person.persistedId,
+      "face" -> face.persistedId,
+      "metadata_field" -> field.persistedId
+    )
+  }
+
+  test("The database refuses a row that references another repository's row") {
+
+    /**
+     * Setup:
+     *
+     * Two repositories, each with an asset (with its Search document) in a folder, an album and a Location holding it, a Person
+     * with a Face on it and a metadata field with a value on it; the second also has a Location category.
+     *
+     * Assertions:
+     *
+     * A hand-written update of a row of the first repository that points one of its references at the second repository's row is
+     * refused by a foreign key violation, one per reference: a Face's asset and Person, an album membership's album and asset, a
+     * Location membership's Location and asset, a metadata value's asset and field, a Search document's asset, a Location's
+     * category, a folder's parent and an asset's folder. Every row of both repositories is as it was.
+     */
+    val repos = twoRepositories()
+    val mine = rowsInFirst(repos)
+    val first = repos.first.persistedId
+    switchContextRepo(repos.second)
+    val theirCategory = testApp.service.location.addCategory("their category")
+    switchContextRepo(repos.first)
+    val theirAsset = idOf(repos, "asset")
+    val firstBefore = testContext.rowsOf(repos.first)
+    val secondBefore = testContext.rowsOf(repos.second)
+
+    def foreignKey(sql: String, values: Any*): Unit = refusedAs(Violation.ForeignKey)(sql, values*)
+    foreignKey("UPDATE face SET asset_id = ? WHERE id = ?", theirAsset, mine("face"))
+    foreignKey("UPDATE face SET person_id = ? WHERE id = ?", idOf(repos, "person"), mine("face"))
+    foreignKey("UPDATE album_asset SET album_id = ? WHERE repository_id = ?", idOf(repos, "album"), first)
+    foreignKey("UPDATE album_asset SET asset_id = ? WHERE repository_id = ?", theirAsset, first)
+    foreignKey("UPDATE location_asset SET location_id = ? WHERE repository_id = ?", idOf(repos, "location"), first)
+    foreignKey("UPDATE location_asset SET asset_id = ? WHERE repository_id = ?", theirAsset, first)
+    foreignKey("UPDATE metadata_parameter SET asset_id = ? WHERE repository_id = ?", theirAsset, first)
+    foreignKey("UPDATE metadata_parameter SET field_id = ? WHERE repository_id = ?", idOf(repos, "metadata_field"), first)
+    foreignKey("UPDATE search_document SET asset_id = ? WHERE repository_id = ?", theirAsset, first)
+    foreignKey("UPDATE location SET category_id = ? WHERE id = ?", theirCategory.persistedId, mine("location"))
+    foreignKey("UPDATE folder SET parent_id = ? WHERE id = ?", idOf(repos, "folder"), mine("folder"))
+    foreignKey("UPDATE asset SET folder_id = ? WHERE id = ?", idOf(repos, "folder"), mine("asset"))
+
+    testContext.rowsOf(repos.first) shouldEqual firstBefore
+    testContext.rowsOf(repos.second) shouldEqual secondBefore
+  }
+
+  test("The database refuses a row of a scoped table with no repository") {
+
+    /**
+     * Setup:
+     *
+     * A repository with a row of every scoped table: an asset with its Search document, a folder, an album and a Location holding
+     * the asset, a Person with a Face on it, a metadata field with a value on it, and its stats.
+     *
+     * Assertions:
+     *
+     * A hand-written update that clears the repository of the table's rows is refused by a NOT NULL violation, for every scoped
+     * table, and every row is as it was.
+     */
+    val repos = twoRepositories()
+    rowsInFirst(repos)
+    val first = repos.first.persistedId
+    val before = testContext.rowsOf(repos.first)
+
+    TestContext.SCOPED_TABLES.foreach {
+      table =>
+        withClue(s"$table: ") {
+          refusedAs(Violation.NotNull)(s"UPDATE $table SET repository_id = NULL WHERE repository_id = ?", first)
+        }
+    }
+
+    testContext.rowsOf(repos.first) shouldEqual before
+  }
+
+  test("A triaged asset is stored in no folder, and its model reads an empty folder ID") {
+
+    /**
+     * Setup:
+     *
+     * A repository with a triaged asset, in no folder, and a sorted asset in its root folder.
+     *
+     * Assertions:
+     *
+     * The triaged asset's row holds no folder (NULL), which the asset's folder key does not check, and the asset read back has an
+     * empty folder ID, as the model has always had for an asset in no folder. The sorted asset's row and model hold the root
+     * folder. Once the triaged asset is moved into the root folder, its row holds that folder.
+     */
+    val triaged = testContext.insertAsset(testContext.makeAsset(isTriaged = true))
+    val sorted = testContext.insertAsset()
+    val rootFolderId = testContext.repository.rootFolderId
+
+    def storedFolderOf(asset: Asset): Option[String] = testApp.txManager.asReadOnly {
+      query("SELECT folder_id FROM asset WHERE id = ?", asset.persistedId).head
+        .get("folder_id")
+        .flatMap(Option(_))
+        .map(_.toString)
+    }
+
+    storedFolderOf(triaged) shouldBe None
+    (testApp.service.asset.getById(triaged.persistedId): Asset).folderId shouldBe ""
+    testApp.service.asset.queryAll(new Query().add(FieldConst.ID -> triaged.persistedId)).records.head.folderId shouldBe ""
+    storedFolderOf(sorted) shouldBe Some(rootFolderId)
+    (testApp.service.asset.getById(sorted.persistedId): Asset).folderId shouldBe rootFolderId
+
+    testApp.service.library.moveAssetsToFolder(Set(triaged.persistedId), rootFolderId)
+    storedFolderOf(triaged) shouldBe Some(rootFolderId)
+  }
+
+  test("A cover that is no Face is refused, and a cover Face deleted by hand leaves its Person with no cover") {
+
+    /**
+     * Setup:
+     *
+     * A repository with a Person whose cover is their one Face.
+     *
+     * Assertions:
+     *
+     * A hand-written update that sets the Person's cover to an ID that is no Face is refused by a foreign key violation, and the
+     * cover stays. Deleting the cover Face by hand, with no repick before it, leaves the Person with no cover.
+     */
+    val person = testApp.service.person.addPerson(Person())
+    val face = testContext.addTestFace(person, testContext.insertAsset(), TestContext.unitVector(1))
+    (testApp.service.person.getById(person.persistedId): Person).coverFaceId shouldBe Some(face.persistedId)
+
+    refusedAs(Violation.ForeignKey)(
+      "UPDATE person SET cover_face_id = ? WHERE id = ?",
+      UUID.randomUUID.toString,
+      person.persistedId)
+    (testApp.service.person.getById(person.persistedId): Person).coverFaceId shouldBe Some(face.persistedId)
+
+    testApp.txManager.withTransaction(update("DELETE FROM face WHERE id = ?", face.persistedId))
+    (testApp.service.person.getById(person.persistedId): Person).coverFaceId shouldBe None
   }
 }

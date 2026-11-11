@@ -464,9 +464,11 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       val personId = readFace(faceId).personId.get
       dao.lockAndGetLive(Set(personId)): Unit
       val (face, _) = lockedFace(faceId, personId)
+      // Read before the Face goes: the cover's key sets a cover that was this Face to NULL, and settling repicks it from this
+      val before = dao.getById(personId)
 
       faceDao.deleteById(face.persistedId)
-      val (person, deleted) = settleAfterFaceLeft(face, dao.getById(personId))
+      val (person, deleted) = settleAfterFaceLeft(face, before)
       logger.debug(s"Removed face [$faceId] of person [$personId] from asset [${face.assetId.get}]; person deleted: $deleted")
       FaceRemoval(face, person, deleted)
     }

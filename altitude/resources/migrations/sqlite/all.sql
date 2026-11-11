@@ -1,3 +1,9 @@
+-- A row of a repository's table holds its repository (repository_id NOT NULL), and a reference from one such row to another is
+-- a foreign key over (repository_id, <ref>_id), so the database refuses a reference into another repository. Each table such a
+-- key names has UNIQUE (id, repository_id) for it, led by the ID so that it never competes with the indexes that lead with the
+-- repository. A NULL reference is not checked. A person's cover is the one reference that is not such a key: a single column,
+-- at the person table.
+
 CREATE TABLE system (
   id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1), -- the one and only row: the key rejects a second, the check pins its id
   version INT NOT NULL,
@@ -103,6 +109,7 @@ CREATE TABLE asset (
   height INT NOT NULL DEFAULT 0,
   -- area size of the image in pixels (width * height)
   area_size INT NOT NULL,
+  -- NULL for an asset in no folder: a triaged one
   folder_id CHAR(36),
   filename TEXT NOT NULL,
   size_bytes BIGINT NOT NULL,
@@ -152,7 +159,10 @@ CREATE TABLE asset (
   dinov2_embedding BLOB,
   clip_embedding BLOB,
   extracted_metadata TEXT,
-  FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
+  UNIQUE (id, repository_id),
+  FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
+  -- No delete action, as no folder is ever deleted on its own (a deleted folder is recycled)
+  FOREIGN KEY (repository_id, folder_id) REFERENCES folder (repository_id, id)
 );
 
 -- One live asset per content in a repository; the recycle bin may hold any number of copies of it. A statement that binds the
@@ -199,7 +209,11 @@ CREATE TABLE person (
   -- this is taken from the person_label table, where its primary key is a sequence
   name TEXT NOT NULL,
   name_for_sort TEXT NOT NULL,
-  cover_face_id CHAR(36),
+  -- One of the person's own Faces, which the code checks (PersonService.setFaceAsCover); the key refuses one that is no Face.
+  -- A single column: a composite key's SET NULL would clear the person's repository_id too. Every path that deletes a cover
+  -- Face picks another cover first (PersonService.moveCoversOff), so the delete action only backs that up. NULL for a person
+  -- with no Face.
+  cover_face_id CHAR(36) REFERENCES face (id) ON DELETE SET NULL,
   -- The assets outside the trash on which the person has a face, triaged ones included (what a search for the person finds with triaged items shown), not the face rows
   num_of_faces INT NOT NULL DEFAULT 0,
   is_named TINYINT NOT NULL DEFAULT 0,
@@ -208,6 +222,7 @@ CREATE TABLE person (
   is_deleted TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
+  UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
@@ -225,6 +240,8 @@ CREATE UNIQUE INDEX person_02 ON person (cover_face_id)
 
 CREATE INDEX person_03 ON person (repository_id, is_bad_match, num_of_faces, is_hidden, is_named, name_for_sort)
     WHERE is_deleted = FALSE;
+-- Every person whose cover is a Face, a merged-away one included, for the cover's key when the Face is deleted
+CREATE INDEX person_04 ON person (cover_face_id);
 
 CREATE TABLE face (
   id CHAR(36) PRIMARY KEY,
@@ -250,8 +267,8 @@ CREATE TABLE face (
   sharpness REAL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
-  FOREIGN KEY (person_id) REFERENCES person (id) ON DELETE CASCADE,
-  FOREIGN KEY (asset_id) REFERENCES asset (id) ON DELETE CASCADE,
+  FOREIGN KEY (repository_id, person_id) REFERENCES person (repository_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
@@ -269,6 +286,7 @@ CREATE TABLE metadata_field (
   field_type VARCHAR(255) NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
+  UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
@@ -279,11 +297,15 @@ CREATE TABLE folder (
   repository_id CHAR(36) NOT NULL,
   name VARCHAR(255) NOT NULL,
   name_lc VARCHAR(255) NOT NULL,
+  -- The root folder is its own parent, which its insert satisfies: the key is checked once the row is in. No delete action, as
+  -- no folder is ever deleted on its own (a deleted folder is recycled).
   parent_id CHAR(36) NOT NULL,
   is_recycled TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
-  FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
+  UNIQUE (id, repository_id),
+  FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
+  FOREIGN KEY (repository_id, parent_id) REFERENCES folder (repository_id, id)
 );
 
 -- A folder's name is unique among its siblings; it also lists a repository's folders
@@ -298,6 +320,7 @@ CREATE TABLE album (
   name_lc VARCHAR(255) NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   updated_at DATETIME DEFAULT NULL,
+  UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE
 );
 
@@ -309,8 +332,8 @@ CREATE TABLE album_asset (
   asset_id CHAR(36) NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
-  FOREIGN KEY (album_id) REFERENCES album (id) ON DELETE CASCADE,
-  FOREIGN KEY (asset_id) REFERENCES asset (id) ON DELETE CASCADE
+  FOREIGN KEY (repository_id, album_id) REFERENCES album (repository_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
 );
 
 CREATE UNIQUE INDEX album_asset_01 ON album_asset (album_id, asset_id);
@@ -336,8 +359,9 @@ CREATE TABLE location (
   CHECK (kind <> 'location' OR (latitude IS NOT NULL AND longitude IS NOT NULL)),
   CHECK (latitude BETWEEN -90 AND 90),
   CHECK (longitude BETWEEN -180 AND 180),
+  UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
-  FOREIGN KEY (category_id) REFERENCES location (id)
+  FOREIGN KEY (repository_id, category_id) REFERENCES location (repository_id, id)
 );
 
 CREATE UNIQUE INDEX location_01 ON location (repository_id, name_lc);
@@ -350,8 +374,8 @@ CREATE TABLE location_asset (
   asset_id CHAR(36) NOT NULL,
   created_at DATETIME DEFAULT (datetime('now', 'utc')),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
-  FOREIGN KEY (location_id) REFERENCES location (id) ON DELETE CASCADE,
-  FOREIGN KEY (asset_id) REFERENCES asset (id) ON DELETE CASCADE
+  FOREIGN KEY (repository_id, location_id) REFERENCES location (repository_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
 );
 
 CREATE UNIQUE INDEX location_asset_01 ON location_asset (location_id, asset_id);
@@ -367,8 +391,8 @@ CREATE TABLE metadata_parameter (
   field_value_bool BOOLEAN,
   field_value_dt DATETIME,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
-  FOREIGN KEY (asset_id) REFERENCES asset (id) ON DELETE CASCADE,
-  FOREIGN KEY (field_id) REFERENCES metadata_field (id) ON DELETE CASCADE
+  FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (repository_id, field_id) REFERENCES metadata_field (repository_id, id) ON DELETE CASCADE
 );
 
 -- The purge cascade and clearing an asset's parameters
@@ -381,7 +405,7 @@ CREATE TABLE search_document (
   asset_id CHAR(36) NOT NULL,
   body TEXT NOT NULL,
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
-  FOREIGN KEY (asset_id) REFERENCES asset (id) ON DELETE CASCADE
+  FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
 );
 
 -- An asset has one document. Leading with the asset, it serves the purge cascade and the per-asset probes of Search text; the

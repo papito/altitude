@@ -10,8 +10,7 @@ import scalasql.Table
  * `originalCreatedAt` is the camera's wall clock with no zone; `createdAt` / `updatedAt` are instants. The two are different
  * kinds of value and are typed differently here so neither engine's mapper can confuse them.
  *
- * `folderId` is nullable in the schema but every row the application writes has one, and the model trims it - reading it as a
- * plain `String` keeps the raw path's behaviour exactly.
+ * `folderId` is NULL for an asset in no folder (a triaged one), whose model has an empty folder ID, as the raw path reads it.
  *
  * The Scene embeddings (`dinov2_embedding`, `clip_embedding`) are never carried back out of the database by a typed read, so the
  * row class does not even select them: they are bulky, and the one reader is the hand-written Sequence candidates' statement. The
@@ -31,7 +30,7 @@ case class AssetRow[T[_]](
     userMetadata: T[Option[String]],
     publicMetadata: T[Option[String]],
     extractedMetadata: T[Option[String]],
-    folderId: T[String],
+    folderId: T[Option[String]],
     filename: T[String],
     sizeBytes: T[Long],
     isTriaged: T[Boolean],

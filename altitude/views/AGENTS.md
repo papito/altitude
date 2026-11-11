@@ -926,7 +926,11 @@ items" flips, through a `$watch` on the store's `triaged` set up in `init()` (th
 `hx-sync="replace"` aborts a load of the pane still in flight, so the latest bucket set lands), and the response is
 `htmx/people_list`: the `.grid` of `.cell.drag-drop.dropzone` cells, each with `data-person-id` and no id, since a person
 may be in both panes, a hidden person's with an `fa-eye-slash` `.hidden-badge` in the image's corner and a
-`.visually-hidden` ", hidden" at the end of its name link, an Unmatched person told apart by its orange "Unknown N" name. The name link carries
+`.visually-hidden` ", hidden" at the end of its name link, an Unmatched person told apart by its orange "Unknown N" name.
+A person with no cover (no Face of theirs left to be one) shows the no-cover placeholder in the face's place: `.no-cover`
+(`core.css`), an `fa-user` in `--theme-neutral-3` at `--font-size-xl` on `--theme-secondary`, which each of its hosts sizes
+and rounds as it does the face: the cell, the results title's cover (where it opens the Choose cover face modal as the face
+does) and the Merge people modal (where it is an `img` role named as the face's `alt` is). The name link carries
 no `aria-label`: it is named by its content, the name, the number and then that text, "hidden". The face's link and the
 name link are both `data-app-search-person-id` triggers for the person. The name link is
 `#personLink-<pane>-<personId>`, with an inline `anchor-name: --<its id>`, and both links name it in
@@ -1347,7 +1351,8 @@ does not show through it while it sticks). The scopes:
   `data-app-success-event="PEOPLE_CHANGED_EVENT"` (the person id as the detail) as the Discard link declares
   `PERSON_MARKED_AS_BAD_MATCH_EVENT`, so `js/listeners/htmx-requests.js` announces a successful one and the People tab
   moves the person between its panes. The cover face (`.cover.drag-drop`, a `--person-avatar-size` circle
-  that opens the Choose cover face modal) comes before the text and the Hide / Show / Discard link (`.actions`) after it.
+  that opens the Choose cover face modal, or the no-cover placeholder for a person with none, which opens it too) comes
+  before the text and the Hide / Show / Discard link (`.actions`) after it.
   Which link shows depends on the person's whole count (`num_of_faces`), which is why the Detail panel reads the block's
   inside again after a Face correction (`GET /htmx/people/r/:repoId/p/:personId/title`). A person has no subtitle: the
   toolbar's Total says how many results there are. The title is `#personName`, the inline name editor's host: `htmx/view_person_name`

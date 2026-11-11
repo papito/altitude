@@ -93,9 +93,12 @@ object SearchQueries:
 
   /**
    * How many assets each folder of the repository holds itself, as (folder ID, count): the default view's matches grouped by
-   * folder, so a folder's count is what clicking it shows. It reads the capture-day index alone, which carries the folder.
+   * folder, so a folder's count is what clicking it shows; an asset in no folder (a triaged one) counts under none. It reads the
+   * capture-day index alone, which carries the folder.
    */
-  def folderCounts(engine: SearchDialect, repositoryId: String): Select[(Expr[String], Expr[Int]), (String, Int)] =
+  def folderCounts(
+      engine: SearchDialect,
+      repositoryId: String): Select[(Expr[Option[String]], Expr[Int]), (Option[String], Int)] =
     import engine.dialect.*
 
     val defaultView = new SearchQuery(params = Map(FieldConst.Asset.IS_RECYCLED -> false))
@@ -1088,7 +1091,8 @@ object SearchQueries:
       case SearchSource.Person => FaceRow.select.filter(face => inSet(face.personId)).map(_.assetId)
       case SearchSource.Location | SearchSource.Category =>
         LocationAssetRow.select.filter(link => inSet(link.locationId)).map(_.assetId)
-      case SearchSource.Folder => AssetRow.select.filter(asset => inSet(asset.folderId)).map(_.id)
+      case SearchSource.Folder =>
+        AssetRow.select.filter(asset => Columns.isInSet(asset.folderId, source.ids, engine.dialect)).map(_.id)
       case SearchSource.Album => AlbumAssetRow.select.filter(link => inSet(link.albumId)).map(_.assetId)
       case SearchSource.Document =>
         SearchDocumentRow.select

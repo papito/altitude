@@ -1531,14 +1531,15 @@ import altitude.core.util.Util
       seedCopies(template.persistedId, copies = 5000, folders = 1)
       // Every copy whose zero-padded number does not end in 0 is sorted, so the triage set is a tenth of the library
       update("UPDATE asset SET is_triaged = FALSE WHERE id <> ? AND substr(id, 36, 1) <> '0'", template.persistedId)
-      // A Face per copy, taken from the template's, none enrolled, which keeps them out of PostgreSQL's vector index
+      // A Face per copy, taken from the template's, none enrolled, which keeps them out of PostgreSQL's vector index; the copies
+      // alone, as the bundle's database holds every test's repositories
       update(
         """INSERT INTO face (id, repository_id, asset_id, person_id, x1, y1, width, height, detection_score, features, checksum,
           |                  quality, is_enrolled)
           |SELECT a.id, a.repository_id, a.id, t.person_id, t.x1, t.y1, t.width, t.height, t.detection_score, t.features, a.checksum,
           |       t.quality, FALSE
           |  FROM asset a CROSS JOIN face t
-          | WHERE t.asset_id = ? AND a.id <> t.asset_id""".stripMargin,
+          | WHERE t.asset_id = ? AND a.id <> t.asset_id AND a.repository_id = t.repository_id""".stripMargin,
         template.persistedId
       )
     }(lookupPlanOf(sql, values))

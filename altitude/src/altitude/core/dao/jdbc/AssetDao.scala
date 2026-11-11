@@ -52,7 +52,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       extractedMetadata = getJsonFromColumn(row.extractedMetadata.orNull): ExtractedMetadata,
       publicMetadata = getJsonFromColumn(row.publicMetadata.orNull): PublicMetadata,
       userMetadata = getJsonFromColumn(row.userMetadata.orNull): UserMetadata,
-      folderId = row.folderId.trim,
+      folderId = row.folderId.fold("")(_.trim),
       isRecycled = row.isRecycled,
       isTriaged = row.isTriaged,
       isPipelineProcessed = row.isPipelineProcessed,
@@ -89,7 +89,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       extractedMetadata = getJsonFromColumn(rec.get(FieldConst.Asset.EXTRACTED_METADATA).orNull): ExtractedMetadata,
       publicMetadata = getJsonFromColumn(rec(FieldConst.Asset.PUBLIC_METADATA)): PublicMetadata,
       userMetadata = getJsonFromColumn(rec.get(FieldConst.Asset.USER_METADATA).orNull): UserMetadata,
-      folderId = rec(FieldConst.Asset.FOLDER_ID).asInstanceOf[String].trim,
+      // An asset in no folder (a triaged one) holds NULL, which its key over the folder does not check; the model's is empty
+      folderId = Option(rec(FieldConst.Asset.FOLDER_ID)).fold("")(_.toString.trim),
       isRecycled = getBooleanField(rec(FieldConst.Asset.IS_RECYCLED)),
       isTriaged = getBooleanField(rec(FieldConst.Asset.IS_TRIAGED)),
       isPipelineProcessed = getBooleanField(rec(FieldConst.Asset.IS_PIPELINE_PROCESSED)),
@@ -172,7 +173,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       asset.assetType.mediaType,
       asset.assetType.mediaSubtype,
       asset.assetType.mime,
-      asset.folderId,
+      // An asset in no folder (an empty ID: a triaged one) is stored with NULL, which the folder key does not check
+      Option(asset.folderId).filter(_.nonEmpty).orNull,
       asset.isTriaged,
       capture,
       captureSource,

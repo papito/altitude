@@ -41,7 +41,7 @@ The core is excellent: search, the import pipeline, crash recovery, content serv
 | [Web security](#web-security) | 6 | Output escaping, SQL and content serving are strong. One stored XSS, and no security headers on pages. |
 | [Video](#video) | 5 | Import and seeking are excellent. Only H.264 plays everywhere, and a video that cannot play fails with a snackbar. |
 | [Login and sessions](#login-and-sessions) | 4 | bcrypt, no timing leak, strict cookies. A session cannot be revoked, there is no account recovery, and two setups at once can race. |
-| [Permissions](#permissions) | 4 | Content, search and map are scoped to the repository and tested. The base service layer reaches entities by bare ID, which another account could exploit once one exists. |
+| [Permissions](#permissions) | 7 | Every read and write by ID is scoped to the repository by default, the schema refuses a reference into another repository, and one test covers every route. The import-status WebSocket has no login, and roles are not enforced. |
 | [Malicious files](#malicious-files) | 4 | Types come from the content and storage paths are UUIDs. No size caps, no image-size cap, decoders in the server process. |
 | [Data safety](#data-safety) | 3 | Crash recovery is excellent. A 32-bit duplicate hash, no schema migrations in use, no backup story. |
 | [Running and upgrading](#running-and-upgrading) | 3 | Search benchmarked at 1M assets. No Docker image, no releases, accepted uploads lost on restart, stack traces in errors. |
@@ -53,7 +53,7 @@ On a separate scale, how well the design leaves room for the [optional](#optiona
 
 Foundations to build on, beyond the items below:
 
-- Clean layering: a store trait, one query funnel ([SearchQueries] `matching`), repository scoping in the queries, and a Scalameta test ([TransactionBoundaryTests]) that enforces transaction boundaries.
+- Clean layering: a store trait, one query funnel ([SearchQueries] `matching`), repository scoping by default in the DAOs and in the queries, backed by foreign keys, and a Scalameta test ([TransactionBoundaryTests]) that enforces transaction boundaries.
 - The same code on SQLite (WAL, sqlite-vector) and PostgreSQL 18, with snapshot-consistent reads under time limits.
 - pgvector HNSW over `halfvec` as a partial index on enrolled faces, with `iterative_scan = relaxed_order`; ArcFace quality tiers.
 - Keyset cursors with search fingerprints and capped counts.
@@ -91,29 +91,20 @@ Login rate limiting is under [Identity and access](#identity-and-access).
 
 ### Permissions
 
-As built, each repository has one owner (`repository.owner_account_id` in [all.sql]) and there is no membership table. `AccountType` is Admin, User or Guest and gates only the Settings screen and the creation of a Library. An Admin may own several Libraries, creating them from the nav's Library menu ([LibraryActionController]), but the app has one account, so the cross-repository holes below become reachable only once a second account exists.
+As built, each repository has one owner (`repository.owner_account_id` in [all.sql]) and there is no membership table. `AccountType` is Admin, User or Guest and gates only the Settings screen and the creation of a Library. An Admin may own several Libraries, creating them from the nav's Library menu ([LibraryActionController]), but the app has one account.
 
 - ✅ One login and ownership gate for `/r/:repoId` ([decorators] `requireLogin`, `ownedRepositoryOnly`); a foreign repository answers the same 404 as a missing one. The request context is cleared on pooled threads ([decorators] `repoContext`).
 - ✅ Routes without login are deliberate: `/`, `/login`, `/logout`, `/api/logout`, `/setup`, `/htmx/setup` (refused once initialized), `/api/health`, `/static/` and `/assets/:name`. The exception is the import-status WebSocket below.
-- [ ] Entities fetched by ID are not scoped to the repository. [BaseService] `getById`, `updateById` and `deleteById`, and [BaseDao] `getById`, have no repository predicate. Once a second account exists, its owner, given another repository's IDs, can: [CRITICAL]
-  - read **asset detail** (`…/modals/asset-detail/:id`) as full JSON, including `extractedMetadata` and GPS;
-  - on **people**, read the name and the edit-name, cover-face and merge modals; edit the name (ID taken from the body), hide, show, mark as a bad match and set the cover; and merge, which moves the other repository's faces through an unscoped `faceDao.updateByQuery` ([PeopleActionController], [SearchResultsController] `personOf`, [FaceDao] `getTopFaces`, [PersonService] `merge`);
-  - on **folders**, open the rename and delete dialogs ([FolderActionController]), rename and move ([FolderService] `move`), and add under a foreign parent. Deleting a foreign folder is a no-op, because `updateByQuery` adds the repository;
-  - on **albums**, hard-delete ([AlbumService] `deleteById`) and remove memberships ([AlbumDao] `removeAssets`); reading by ID, renaming and adding to a foreign album are closed by the scoped `AlbumService.getById`;
-  - move assets into a foreign folder: the destination is not checked ([LibraryService] `moveAssetsToFolder`).
-
-  Scoped already, each with a foreign-ID 404 test: the Detail panel (`…/detail-panel/:assetId`, [AssetService] `detailOf`, [AssetActionControllerTests]), a person's results title (`…/p/:personId/title`, [PersonService] `getInRepository`, [PeopleActionControllerTests]), and the Face corrections and the assignable list, which read the Face through [FaceDao] `getInRepository`.
-
-  Fix: scope by default: `BaseService.getById`, `updateById` and `deleteById` add the repository the way `query` and `updateByQuery` already do. Scope `FaceDao.getTopFaces`, `AlbumDao.removeAssets` and `getAssetIds`, the face update in `PersonService.merge` and `FolderDao.getById`, and check destination folders. Locations are the model to copy: a scoped `getById`, foreign IDs answered 404, tested ([LocationServiceTests]).
-- ✅ Originals, previews and faces sit behind the repository gate in a per-repository file layout ([FileSystemStoreService]), and are served `private`, `nosniff` and `sandbox` ([ContentViewController] `withContentHeaders`). The folder layout protects them, not the query: the `asset.getById` in `getContent` is unscoped, which the item above closes.
+- ✅ Every read and write by ID is scoped to the context repository by default ([BaseDao] `repositoryScoped`; the DAOs of the four tables with no repository opt out), hand-written statements on a repository's tables carry the repository, and a write by ID that matches no row of the repository is `NotFoundException` ([BaseService]). A reference a request names is read in the repository before it is written: a destination or parent folder ([LibraryService] `moveAssetsToFolder`, [FolderService] `add`) and a cover Face, which must also be the Person's and on no asset marked for purging ([PersonService] `setFaceAsCover`). Another repository's ID gets the 404 an unknown one gets and names nothing of it ([BaseController] `answering`, `answeringJson`). The schema backs it up ([all.sql], both engines): `repository_id` is `NOT NULL` on every table of a repository, and the references between a repository's rows are foreign keys over the repository and the ID, so the database refuses one into another repository; a Person's cover is a single-column key, its repository checked in code. Tested on both engines ([RepositoryIsolationTests]) and over every route ([RouteTableTests]).
+- ✅ Originals, previews and faces sit behind the repository gate in a per-repository file layout ([FileSystemStoreService]), and are served `private`, `nosniff` and `sandbox` ([ContentViewController] `withContentHeaders`). The reads behind them are scoped too: another repository's original, preview or face is a 404, signed or not ([ContentViewControllerTests]).
 - ✅ Search results, counts, map pins and GPS all read one `matching` relation ([SearchQueries]); name resolution is scoped ([SearchDao] `searchNames`); tested ([SearchMapTests]). Facets and autocomplete do not exist.
 - ✅ People lists are scoped ([PersonDao]).
 - ✅ Bulk asset actions use scoped locking selects ([AssetControllerTests], [LibraryServiceRecycleTests]). Exports and zip downloads do not exist yet (see [Library and media](#library-and-media)).
 - [ ] Background-job results: the import-status WebSocket (`@cask.websocket("/import/status")` in [ImportController]) has no `@requireLogin` and takes `userId` from the query string, so anyone with an account ID can watch that account's imports, file names included, from any origin. [MEDIUM]
   - Fix: put it behind `requireLogin`, take the user from the request context, and check `Origin` on the handshake. [Test gap](test-coverage.md#import-orchestration-and-asynchronous-processing).
 - ✅ IDs are UUIDv4 ([BaseDao] `genId`). Hard to guess is not authorized, though: IDs travel in signed URLs, logs and the DOM, so the scoping item above is what blocks ID guessing.
-- [ ] The permission matrix is not tested. Foreign-repository tests exist for content, search, map, asset recycling, Locations, the Detail panel and a person's results title, but none for the other people routes, faces, albums, folders, the asset-detail JSON or the WebSocket, and no test that every route requires login. [CRITICAL]
-  - Fix: the [repository isolation](test-coverage.md#repository-isolation-and-shared-service-transactions), [albums](test-coverage.md#albums-and-membership) and [people](test-coverage.md#people-face-ownership-and-merges) gaps in test-coverage.md, including one table-driven test over `App.allRoutes`.
+- [ ] The permission matrix is tested only in part. One table over `App.allRoutes` ([RouteTableTests]) checks that every route but the public ones refuses an anonymous request, and that every route answers another repository's IDs, of a Library the user also owns, as it answers unknown ones, changing nothing; a route missing from the table fails it. Not covered route by route: a Library of another account (the ownership gate is one decorator, [decorators] `requireLogin`, tested on some routes), the account types on every route (`requireAdmin` is tested on its own routes), and the WebSocket above. [MEDIUM]
+  - Fix: a second account in the route table, its Library's ID in every path, and a row per account type once roles exist ([User management](#user-management)).
 - [ ] Role rules (a repository can't lose its last admin, an admin can't demote themselves) have nothing to guard until roles exist; see [User management](#user-management).
 - [ ] Removing access does not take effect at once: that needs server-side sessions ([Login and sessions](#login-and-sessions)) and revocable share links ([Sharing with clients](#sharing-with-clients)).
 - [ ] Upload cancellation is a global map keyed by an ID from non-secure `Random` ([ImportController] `uploadCancelRequest`). The repository cache is never invalidated ([RepositoryService] `getById`). [LOW]
@@ -387,7 +378,6 @@ Entries leave this list when their items close.
 **Before clients:**
 
 - Server-side sessions ([Login and sessions](#login-and-sessions)).
-- Repository scoping by default, and a test over every route ([Permissions](#permissions)).
 - User management and roles per repository ([User management](#user-management)).
 - Share links and an audit log ([Sharing with clients](#sharing-with-clients)).
 - A video fallback (poster and download), then remuxing and an H.264 or AV1 proxy queue ([Video](#video)).
@@ -411,9 +401,7 @@ Entries leave this list when their items close.
 [Const]: ../altitude/src/altitude/core/Const.scala
 [Environment]: ../altitude/src/altitude/core/Environment.scala
 [ImportStatusWsActor]: ../altitude/src/altitude/core/actors/ImportStatusWsActor.scala
-[AlbumDao]: ../altitude/src/altitude/core/dao/jdbc/AlbumDao.scala
 [BaseDao]: ../altitude/src/altitude/core/dao/jdbc/BaseDao.scala
-[FaceDao]: ../altitude/src/altitude/core/dao/jdbc/FaceDao.scala
 [PersonDao]: ../altitude/src/altitude/core/dao/jdbc/PersonDao.scala
 [SearchDao]: ../altitude/src/altitude/core/dao/jdbc/SearchDao.scala
 [SystemMetadataDao]: ../altitude/src/altitude/core/dao/jdbc/SystemMetadataDao.scala
@@ -430,6 +418,7 @@ Entries leave this list when their items close.
 [QueuedPipeline]: ../altitude/src/altitude/core/pipeline/QueuedPipeline.scala
 [CheckDuplicateFlow]: ../altitude/src/altitude/core/pipeline/flows/CheckDuplicateFlow.scala
 [ExtractMetadataFlow]: ../altitude/src/altitude/core/pipeline/flows/ExtractMetadataFlow.scala
+[BaseController]: ../altitude/src/altitude/core/routes/BaseController.scala
 [decorators]: ../altitude/src/altitude/core/routes/decorators.scala
 [RangeStreaming]: ../altitude/src/altitude/core/routes/RangeStreaming.scala
 [HealthController]: ../altitude/src/altitude/core/routes/api/HealthController.scala
@@ -437,12 +426,10 @@ Entries leave this list when their items close.
 [ImportController]: ../altitude/src/altitude/core/routes/web/ImportController.scala
 [IndexController]: ../altitude/src/altitude/core/routes/web/IndexController.scala
 [SessionController]: ../altitude/src/altitude/core/routes/web/SessionController.scala
-[FolderActionController]: ../altitude/src/altitude/core/routes/web/partial/FolderActionController.scala
 [PeopleActionController]: ../altitude/src/altitude/core/routes/web/partial/PeopleActionController.scala
 [SearchResultsController]: ../altitude/src/altitude/core/routes/web/partial/SearchResultsController.scala
 [SetupFormController]: ../altitude/src/altitude/core/routes/web/partial/SetupFormController.scala
 [LibraryActionController]: ../altitude/src/altitude/core/routes/web/partial/LibraryActionController.scala
-[AlbumService]: ../altitude/src/altitude/core/service/AlbumService.scala
 [AssetService]: ../altitude/src/altitude/core/service/AssetService.scala
 [BaseService]: ../altitude/src/altitude/core/service/BaseService.scala
 [ContentSigner]: ../altitude/src/altitude/core/service/ContentSigner.scala
@@ -471,12 +458,13 @@ Entries leave this list when their items close.
 [AssetControllerTests]: ../altitude/test/src/altitude/core/controller/AssetControllerTests.scala
 [ContentViewControllerTests]: ../altitude/test/src/altitude/core/controller/ContentViewControllerTests.scala
 [LoginControllerTests]: ../altitude/test/src/altitude/core/controller/LoginControllerTests.scala
+[RouteTableTests]: ../altitude/test/src/altitude/core/controller/RouteTableTests.scala
 [SettingsControllerTests]: ../altitude/test/src/altitude/core/controller/SettingsControllerTests.scala
 [ImportPipelineServiceTests]: ../altitude/test/src/altitude/core/integration/ImportPipelineServiceTests.scala
 [LibraryServicePruneTests]: ../altitude/test/src/altitude/core/integration/LibraryServicePruneTests.scala
 [LibraryServiceRecycleTests]: ../altitude/test/src/altitude/core/integration/LibraryServiceRecycleTests.scala
-[LocationServiceTests]: ../altitude/test/src/altitude/core/integration/LocationServiceTests.scala
 [PurgePipelineServiceTests]: ../altitude/test/src/altitude/core/integration/PurgePipelineServiceTests.scala
+[RepositoryIsolationTests]: ../altitude/test/src/altitude/core/integration/RepositoryIsolationTests.scala
 [SearchMapTests]: ../altitude/test/src/altitude/core/integration/SearchMapTests.scala
 [TransactionBoundaryTests]: ../altitude/test/src/altitude/core/unit/TransactionBoundaryTests.scala
 [TestVideos]: ../altitude/test/src/altitude/test/TestVideos.scala

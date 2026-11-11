@@ -19,6 +19,7 @@ import altitude.core.controller.LocationControllerTests
 import altitude.core.controller.LoginControllerTests
 import altitude.core.controller.MapControllerTests
 import altitude.core.controller.PeopleActionControllerTests
+import altitude.core.controller.RouteTableTests
 import altitude.core.controller.SearchResultsControllerTests
 import altitude.core.controller.SettingsControllerTests
 import altitude.core.controller.SetupFormControllerTests
@@ -50,5 +51,6 @@ abstract class AllControllerTestSuites
     new SetupFormControllerTests(),
     new StaticControllerTests(),
     new StyleGuideControllerTests(),
-    new TriageControllerTests()
+    new TriageControllerTests(),
+    new RouteTableTests()
   )
