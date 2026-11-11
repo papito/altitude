@@ -1,5 +1,6 @@
 package altitude.core.integration
 
+import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.contain
 import org.scalatest.matchers.must.Matchers.empty
@@ -338,6 +339,59 @@ import altitude.core.util.Util
     intercept[DuplicateException] {
       testApp.service.metadata.addField(UserMetadataField(name = fieldName, fieldType = FieldType.KEYWORD))
     }
+  }
+
+  test("Field names that differ only by case fold, canonical form or compatibility form are duplicates") {
+
+    /**
+     * Setup:
+     *
+     * Three KEYWORD fields, "Straße", "Café" with a precomposed "é" and "Summer".
+     *
+     * Assertions:
+     *
+     * Adding a field named "STRASSE" (the case fold of "ß"), "Café" with an "e" and a combining accent (the canonical form) or
+     * "Ｓummer" with a full-width "S" (the compatibility form) is a duplicate, whatever its type.
+     */
+    val clashes = List("Stra\u00DFe" -> "STRASSE", "Caf\u00E9" -> "Cafe\u0301", "Summer" -> "\uFF33ummer")
+
+    for ((name, clash) <- clashes) withClue(s"[$clash]: ") {
+      testApp.service.metadata.addField(UserMetadataField(name = name, fieldType = FieldType.KEYWORD))
+      intercept[DuplicateException] {
+        testApp.service.metadata.addField(UserMetadataField(name = clash, fieldType = FieldType.TEXT))
+      }
+    }
+  }
+
+  test("A field name is stored in NFC, and its key does not depend on the default locale") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field added as "Café" typed with a combining accent, and a field "Istanbul" added under a Turkish default locale.
+     *
+     * Assertions:
+     *
+     * The field is returned and reads back as "Café" with a precomposed "é". Adding "Istanbul" again under the root locale is a
+     * duplicate: the Turkish locale's dotless "ı" never reaches the key.
+     *
+     * Edge cases:
+     *
+     * A name with a full-width letter keeps it: the stored name is not folded.
+     */
+    def addField(name: String): UserMetadataField =
+      testApp.service.metadata.addField(UserMetadataField(name = name, fieldType = FieldType.KEYWORD))
+
+    val field = addField("Cafe\u0301")
+    field.name shouldBe "Caf\u00E9"
+    testApp.service.metadata.getFieldById(field.persistedId).name shouldBe "Caf\u00E9"
+
+    withDefaultLocale(Locale.forLanguageTag("tr"))(addField("Istanbul"))
+    withDefaultLocale(Locale.ROOT) {
+      intercept[DuplicateException](addField("Istanbul"))
+    }
+
+    addField("\uFF33ummer").name shouldBe "\uFF33ummer"
   }
 
   test("Metadata added initially should be present") {

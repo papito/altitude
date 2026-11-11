@@ -84,7 +84,7 @@ CREATE UNIQUE INDEX account_01 ON account (lower(email));
 CREATE TABLE repository (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   name TEXT NOT NULL,
-  name_lc TEXT NOT NULL,
+  name_key TEXT NOT NULL,
   description TEXT,
   owner_account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE CASCADE,
   root_folder_id CHAR(36) COLLATE "C" NOT NULL,
@@ -92,9 +92,9 @@ CREATE TABLE repository (
   file_store_config jsonb
 ) INHERITS (_core);
 
--- repository_01: a Library's name is unique instance-wide, across owners, under its name key (Repository.nameLowercase: the
--- normalized name lowercased in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
-CREATE UNIQUE INDEX repository_01 ON repository (name_lc);
+-- repository_01: a Library's name is unique instance-wide, across owners, under its name key (Repository.nameKey: NameKey.of
+-- of the normalized name, folded in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
+CREATE UNIQUE INDEX repository_01 ON repository (name_key);
 
 CREATE TABLE stats (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
@@ -108,7 +108,7 @@ CREATE TABLE folder (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
-  name_lc VARCHAR(255) NOT NULL,
+  name_key TEXT NOT NULL,
   -- The root folder is its own parent, which its insert satisfies: the key is checked once the row is in. No delete action, as
   -- no folder is ever deleted on its own (a deleted folder is recycled).
   parent_id CHAR(36) COLLATE "C" NOT NULL,
@@ -118,7 +118,7 @@ CREATE TABLE folder (
 ) INHERITS (_core);
 
 -- A folder's name is unique among its siblings; it also lists a repository's folders
-CREATE UNIQUE INDEX folder_02 ON folder (repository_id, parent_id, name_lc);
+CREATE UNIQUE INDEX folder_02 ON folder (repository_id, parent_id, name_key);
 -- A folder's children, live or recycled
 CREATE INDEX folder_03 ON folder (parent_id, is_recycled);
 
@@ -297,22 +297,22 @@ CREATE TABLE metadata_field (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
-  name_lc VARCHAR(255) NOT NULL,
+  name_key TEXT NOT NULL,
   field_type VARCHAR(255) NOT NULL,
   UNIQUE (id, repository_id)
 ) INHERITS (_core);
 
-CREATE UNIQUE INDEX metadata_field_02 ON metadata_field (repository_id, name_lc);
+CREATE UNIQUE INDEX metadata_field_02 ON metadata_field (repository_id, name_key);
 
 CREATE TABLE album (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
-  name_lc VARCHAR(255) NOT NULL,
+  name_key TEXT NOT NULL,
   UNIQUE (id, repository_id)
 ) INHERITS (_core);
 
-CREATE UNIQUE INDEX album_01 ON album (repository_id, name_lc);
+CREATE UNIQUE INDEX album_01 ON album (repository_id, name_key);
 
 CREATE TABLE album_asset (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
@@ -335,7 +335,7 @@ CREATE TABLE location (
   category_id CHAR(36) COLLATE "C",
   kind VARCHAR(16) NOT NULL,
   name VARCHAR(255) NOT NULL,
-  name_lc VARCHAR(255) NOT NULL,
+  name_key TEXT NOT NULL,
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
   CHECK (kind IN ('category', 'location')),
@@ -347,7 +347,7 @@ CREATE TABLE location (
   FOREIGN KEY (repository_id, category_id) REFERENCES location (repository_id, id)
 ) INHERITS (_core);
 
-CREATE UNIQUE INDEX location_01 ON location (repository_id, name_lc);
+CREATE UNIQUE INDEX location_01 ON location (repository_id, name_key);
 -- A category's Locations: moving them to the top level, and the check that keeps a deleted category from orphaning one
 CREATE INDEX location_02 ON location (category_id, repository_id);
 

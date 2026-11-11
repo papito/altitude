@@ -1,8 +1,6 @@
 package altitude.core.models
 
-import java.text.Normalizer
 import java.time.LocalDateTime
-import java.util.Locale
 
 import altitude.core.{ Const => C }
 import altitude.core.Api
@@ -10,6 +8,7 @@ import altitude.core.FieldConst
 import altitude.core.ValidationException
 import altitude.core.util.JsonCodec
 import altitude.core.util.JsonCodec.given
+import altitude.core.util.NameKey
 
 object Repository:
   given JsonCodec.ReadWriter[Repository] = JsonCodec.macroRW
@@ -23,7 +22,7 @@ object Repository:
    * the same name typed precomposed are one name
    */
   def normalizedName(name: String): String =
-    Normalizer.normalize(WHITESPACE.split(name).filter(_.nonEmpty).mkString(" "), Normalizer.Form.NFC)
+    NameKey.normalized(WHITESPACE.split(name).filter(_.nonEmpty).mkString(" "))
 
   private val ZERO_WIDTH_NON_JOINER = 0x200c
   private val ZERO_WIDTH_JOINER = 0x200d
@@ -76,11 +75,8 @@ case class Repository(
     updatedAt: Option[LocalDateTime] = None)
   extends BaseModel:
 
-  /**
-   * The name key `repository_01` keeps unique instance-wide, folded here and not in SQL, since SQLite's `lower()` folds ASCII
-   * only. `Locale.ROOT` keeps "I" folding to "i" whatever the JVM's default locale.
-   */
-  val nameLowercase: String = name.toLowerCase(Locale.ROOT)
+  /** The name key `repository_01` keeps unique instance-wide (see [[NameKey]]) */
+  val nameKey: String = NameKey.of(name)
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 

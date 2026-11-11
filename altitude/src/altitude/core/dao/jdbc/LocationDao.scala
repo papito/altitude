@@ -49,7 +49,7 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
 
     val sql = s"""
         INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Location.CATEGORY_ID},
-                                ${FieldConst.Location.KIND}, ${FieldConst.Location.NAME}, ${FieldConst.Location.NAME_LC},
+                                ${FieldConst.Location.KIND}, ${FieldConst.Location.NAME}, ${FieldConst.Location.NAME_KEY},
                                 ${FieldConst.Location.LATITUDE}, ${FieldConst.Location.LONGITUDE})
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """
@@ -60,7 +60,7 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
       location.categoryId.orNull,
       location.kind.dbValue,
       location.name,
-      location.nameLowercase,
+      location.nameKey,
       location.latitude.orNull,
       location.longitude.orNull
     )
@@ -80,9 +80,9 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
         FROM $tableName l
              LEFT JOIN $tableName p ON p.${FieldConst.ID} = l.${FieldConst.Location.CATEGORY_ID}
        WHERE l.${FieldConst.REPO_ID} = ?
-       ORDER BY COALESCE(p.${FieldConst.Location.NAME_LC}, l.${FieldConst.Location.NAME_LC}),
+       ORDER BY COALESCE(p.${FieldConst.Location.NAME_KEY}, l.${FieldConst.Location.NAME_KEY}),
                 CASE WHEN l.${FieldConst.Location.CATEGORY_ID} IS NULL THEN 0 ELSE 1 END,
-                l.${FieldConst.Location.NAME_LC}
+                l.${FieldConst.Location.NAME_KEY}
     """
 
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId)).map(makeModel)
@@ -150,7 +150,7 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
              LEFT JOIN $tableName p ON p.${FieldConst.ID} = l.${FieldConst.Location.CATEGORY_ID}
        WHERE la.${FieldConst.REPO_ID} = ?
          AND la.${FieldConst.Location.ASSET_ID} = ?
-       ORDER BY COALESCE(p.${FieldConst.Location.NAME_LC}, l.${FieldConst.Location.NAME_LC}), l.${FieldConst.Location.NAME_LC}
+       ORDER BY COALESCE(p.${FieldConst.Location.NAME_KEY}, l.${FieldConst.Location.NAME_KEY}), l.${FieldConst.Location.NAME_KEY}
     """
 
     manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).map(makeModel)

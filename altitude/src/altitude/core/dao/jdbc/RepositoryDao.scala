@@ -52,7 +52,7 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao[Reposi
   override def add(repo: Repository): Repository =
     val sql = s"""
         INSERT INTO repository (
-             ${FieldConst.ID}, ${FieldConst.Repository.NAME}, ${FieldConst.Repository.NAME_LC},
+             ${FieldConst.ID}, ${FieldConst.Repository.NAME}, ${FieldConst.Repository.NAME_KEY},
              ${FieldConst.Repository.OWNER_ACCOUNT_ID}, ${FieldConst.Repository.FILE_STORE_TYPE},
              ${FieldConst.Repository.ROOT_FOLDER_ID},
              ${FieldConst.Repository.FILES_STORE_CONFIG})
@@ -66,7 +66,7 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao[Reposi
       List(
         id,
         repo.name,
-        repo.nameLowercase,
+        repo.nameKey,
         repo.ownerAccountId,
         repo.fileStoreType,
         repo.rootFolderId,

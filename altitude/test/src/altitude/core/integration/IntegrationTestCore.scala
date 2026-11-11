@@ -1,6 +1,7 @@
 package altitude.core.integration
 
 import altitude.test.{ IntegrationTestUtil, SwitchableSceneEmbedder, TestContext, TestFocus }
+import java.util.Locale
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
 import java.util.concurrent.atomic.AtomicReference
 import org.apache.commons.dbutils.QueryRunner
@@ -203,6 +204,14 @@ abstract class IntegrationTestCore
     testApp.settings.save(Map(name -> value))
     try f
     finally testApp.settings.save(Map(name -> testApp.settings.current.default(name)))
+  }
+
+  /** Runs `f` with the JVM's default locale set to `locale`, and sets the previous one back afterwards */
+  def withDefaultLocale[T](locale: Locale)(f: => T): T = {
+    val previous = Locale.getDefault
+    Locale.setDefault(locale)
+    try f
+    finally Locale.setDefault(previous)
   }
 
   /** The context repository's six stored stats by dimension, without the totals, which are summed on read */

@@ -3,6 +3,7 @@ package altitude.core.models
 import altitude.core.ValidationException
 import altitude.core.util.JsonCodec
 import altitude.core.util.JsonCodec.given
+import altitude.core.util.NameKey
 
 object Location:
   given JsonCodec.ReadWriter[Location] = JsonCodec.macroRW
@@ -10,7 +11,7 @@ object Location:
 
 /**
  * A row of the `location` table: a category (`kind` Category: a named container, one level deep, no pin, no assets) or a Location
- * (`kind` Location: a pin, optionally under a category). Both kinds share one case-insensitive name pool per repository.
+ * (`kind` Location: a pin, optionally under a category). Both kinds share one name pool per repository, under the name key.
  * Membership lives in `location_asset`; an asset can be in any number of Locations. `numOfAssets` and `categoryName` are computed
  * on read (`LocationDao.getAll`) and never stored.
  */
@@ -40,6 +41,7 @@ case class Location(
   if longitude.exists(lng => !(lng >= -180 && lng <= 180)) then
     throw ValidationException("Longitude must be between -180 and 180")
 
-  val nameLowercase: String = name.toLowerCase
+  /** The key `location_01` keeps unique per repository, across both kinds */
+  val nameKey: String = NameKey.of(name)
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]

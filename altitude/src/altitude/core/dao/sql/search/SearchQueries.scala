@@ -372,13 +372,13 @@ object SearchQueries:
    * and `unlocated` is the matches in no Location, which always come last as the "No location" group. Under the Relevance sort
    * both read `scored`, the matches with their Relevance computed once, as the day statement does.
    *
-   * Locations are in path order: the key is the category's lower-cased name and the Location's own joined by [[PATH_SEPARATOR]],
-   * or the Location's name alone at the top level - the order the sidebar lists them in - then the Location's ID as a
-   * deterministic tiebreaker, then the sort within the group, then the asset ID. A cursor whose anchor was in a Location slices
-   * `located` after it and lets `unlocated` fill the page only once `located` has run out, through the same guarded `LIMIT CASE`
-   * as the day statement's null slice; a cursor without a group key is already in the trailing group and slices `unlocated`
-   * alone. A group's count is the matching assets in that Location (or in none); the overall total on a first page is the number
-   * of matching assets, so the group counts may sum to more than it.
+   * Locations are in path order: the key is the category's name key and the Location's own joined by [[PATH_SEPARATOR]], or the
+   * Location's name alone at the top level - the order the sidebar lists them in - then the Location's ID as a deterministic
+   * tiebreaker, then the sort within the group, then the asset ID. A cursor whose anchor was in a Location slices `located` after
+   * it and lets `unlocated` fill the page only once `located` has run out, through the same guarded `LIMIT CASE` as the day
+   * statement's null slice; a cursor without a group key is already in the trailing group and slices `unlocated` alone. A group's
+   * count is the matching assets in that Location (or in none); the overall total on a first page is the number of matching
+   * assets, so the group counts may sum to more than it.
    */
   def groupedByLocation(engine: SearchDialect, query: SearchQuery, repositoryId: String): SqlStr =
     import engine.dialect.*
@@ -401,7 +401,7 @@ object SearchQueries:
         category: JoinNullable[LocationRow[Expr]]): SqlStr =
       val categoryName: Expr[Option[String]] = category.map(_.name)
       val pathKey =
-        Expr[String](implicit ctx => sql"COALESCE(${category.get.nameLc} || $PATH_SEPARATOR, '') || ${location.nameLc}")
+        Expr[String](implicit ctx => sql"COALESCE(${category.get.nameKey} || $PATH_SEPARATOR, '') || ${location.nameKey}")
 
       /** Rows strictly after the anchor: a later path key, or the anchor's own Location's rows after it by sort */
       def afterLocation(cursor: SearchCursor): Expr[Boolean] =

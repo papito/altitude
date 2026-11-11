@@ -1,5 +1,6 @@
 package altitude.core.integration
 
+import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ shouldBe, shouldEqual }
 
@@ -79,6 +80,67 @@ import altitude.core.util.SearchQuery
     // Changing only the casing of an album's own name is allowed
     testApp.service.album.rename(album.persistedId, "TRIP")
     (testApp.service.album.getById(album.persistedId): Album).name shouldEqual "TRIP"
+  }
+
+  test("Album names that differ only by case fold, canonical form or compatibility form are duplicates") {
+
+    /**
+     * Setup:
+     *
+     * Three albums, "Straße", "Café" with a precomposed "é" and "Summer", and a fourth, "Other", to rename.
+     *
+     * Assertions:
+     *
+     * Adding an album, or renaming "Other", to "STRASSE" (the case fold of "ß"), to "Café" with an "e" and a combining accent
+     * (the canonical form) or to "Ｓummer" with a full-width "S" (the compatibility form) is a duplicate.
+     *
+     * Edge cases:
+     *
+     * An album can be renamed to another form of its own name.
+     */
+    val other: Album = testApp.service.album.add("Other")
+    val clashes = List("Stra\u00DFe" -> "STRASSE", "Caf\u00E9" -> "Cafe\u0301", "Summer" -> "\uFF33ummer")
+
+    for ((name, clash) <- clashes) withClue(s"[$clash]: ") {
+      val album: Album = testApp.service.album.add(name)
+      intercept[DuplicateException](testApp.service.album.add(clash))
+      intercept[DuplicateException](testApp.service.album.rename(other.persistedId, clash))
+
+      testApp.service.album.rename(album.persistedId, clash)
+    }
+  }
+
+  test("An album name is stored in NFC, and its key does not depend on the default locale") {
+
+    /**
+     * Setup:
+     *
+     * An album added as "Café" and one renamed to "Crème", both typed with a combining accent; an album "Istanbul" added under a
+     * Turkish default locale.
+     *
+     * Assertions:
+     *
+     * The two albums read back as "Café" and "Crème" with precomposed letters. Adding "Istanbul" again under the root locale is a
+     * duplicate: the Turkish locale's dotless "ı" never reaches the key.
+     *
+     * Edge cases:
+     *
+     * A name with a full-width letter keeps it: the stored name is not folded.
+     */
+    val added: Album = testApp.service.album.add("Cafe\u0301")
+    val renamed: Album = testApp.service.album.add("before")
+    testApp.service.album.rename(renamed.persistedId, "Cre\u0300me")
+
+    added.name shouldBe "Caf\u00E9"
+    (testApp.service.album.getById(added.persistedId): Album).name shouldBe "Caf\u00E9"
+    (testApp.service.album.getById(renamed.persistedId): Album).name shouldBe "Cr\u00E8me"
+
+    withDefaultLocale(Locale.forLanguageTag("tr"))(testApp.service.album.add("Istanbul"))
+    withDefaultLocale(Locale.ROOT) {
+      intercept[DuplicateException](testApp.service.album.add("Istanbul"))
+    }
+
+    testApp.service.album.add("\uFF33ummer").name shouldBe "\uFF33ummer"
   }
 
   test("Albums are listed by name with their asset counts") {

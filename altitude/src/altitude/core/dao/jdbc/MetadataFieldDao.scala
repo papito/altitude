@@ -35,7 +35,7 @@ abstract class MetadataFieldDao(override val config: Config)
              ${FieldConst.ID},
              ${FieldConst.REPO_ID},
              ${FieldConst.MetadataField.NAME},
-             ${FieldConst.MetadataField.NAME_LC},
+             ${FieldConst.MetadataField.NAME_KEY},
              ${FieldConst.MetadataField.FIELD_TYPE})
             VALUES (?, ?, ?, ?, ?)
         """
@@ -47,7 +47,7 @@ abstract class MetadataFieldDao(override val config: Config)
         id,
         RequestContext.getRepository.persistedId,
         metadataField.name,
-        metadataField.nameLowercase,
+        metadataField.nameKey,
         metadataField.fieldType.toString)
 
     addRecord(sql, sqlVals)

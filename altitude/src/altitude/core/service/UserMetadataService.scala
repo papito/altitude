@@ -8,6 +8,7 @@ import altitude.core.dao.AssetDao
 import altitude.core.dao.UserMetadataFieldDao
 import altitude.core.models._
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.NameKey
 import altitude.core.util.Query
 
 object UserMetadataService:
@@ -20,16 +21,19 @@ class UserMetadataService(val app: Altitude):
   private val metadataFieldDao: UserMetadataFieldDao = app.DAO.metadataField
   private val assetDao: AssetDao = app.DAO.asset
 
+  /** Adds the field under its name in NFC; a field whose name key the repository already holds is a `DuplicateException` */
   def addField(metadataField: UserMetadataField): UserMetadataField =
+    val field = metadataField.copy(name = NameKey.normalized(metadataField.name))
+
     txManager.withTransaction {
-      val existing = metadataFieldDao.query(new Query().add(FieldConst.MetadataField.NAME_LC -> metadataField.nameLowercase))
+      val existing = metadataFieldDao.query(new Query().add(FieldConst.MetadataField.NAME_KEY -> field.nameKey))
 
       if existing.nonEmpty then
-        logger.debug(s"Duplicate found for field [${metadataField.name}]")
+        logger.debug(s"Duplicate found for field [${field.name}]")
         throw DuplicateException()
 
-      logger.debug(s"Adding metadata field [${metadataField.name}] of type [${metadataField.fieldType}]")
-      metadataFieldDao.add(metadataField)
+      logger.debug(s"Adding metadata field [${field.name}] of type [${field.fieldType}]")
+      metadataFieldDao.add(field)
     }
 
   /** Returns a lookup map (by ID) of all configured fields in this repository */
@@ -337,7 +341,7 @@ class UserMetadataService(val app: Altitude):
         val fieldJson = ujson.Obj(field.toJson.obj)
         fieldJson.obj.remove(FieldConst.UPDATED_AT)
         fieldJson.obj.remove(FieldConst.CREATED_AT)
-        fieldJson.obj.remove(FieldConst.MetadataField.NAME_LC)
+        fieldJson.obj.remove(FieldConst.MetadataField.NAME_KEY)
         ujson.Obj(
           FieldConst.MetadataField.FIELD -> (fieldJson: ujson.Value),
           FieldConst.VALUES -> ujson.Arr(mdVals.toSeq.map(v => v.toJson: ujson.Value)*)

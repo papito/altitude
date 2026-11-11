@@ -4,6 +4,7 @@ import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.dao.AlbumDao
 import altitude.core.models.Album
+import altitude.core.util.NameKey
 
 /**
  * Albums are flat, repository-scoped lists of pointers to assets. Nothing here touches an asset: adding to, removing from, or
@@ -16,7 +17,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
   def add(name: String): Album =
     txManager.withTransaction {
       logger.debug(s"Adding album [$name]")
-      add(Album(name = name.trim))
+      add(Album(name = NameKey.normalized(name.trim)))
     }
 
   def getAll: List[Album] =
@@ -28,10 +29,10 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
     txManager.withTransaction {
       val album: Album = getById(albumId)
       // The copy validates the new name the same way a new album is validated
-      val renamed = album.copy(name = newName.trim)
+      val renamed = album.copy(name = NameKey.normalized(newName.trim))
 
       logger.debug(s"Renaming album [${album.name}] to [${renamed.name}]")
-      updateById(albumId, Map(FieldConst.Album.NAME -> renamed.name, FieldConst.Album.NAME_LC -> renamed.nameLowercase))
+      updateById(albumId, Map(FieldConst.Album.NAME -> renamed.name, FieldConst.Album.NAME_KEY -> renamed.nameKey))
       renamed
     }
 

@@ -3,6 +3,7 @@ package altitude.core.models
 import altitude.core.ValidationException
 import altitude.core.util.JsonCodec
 import altitude.core.util.JsonCodec.given
+import altitude.core.util.NameKey
 
 object Folder:
   given JsonCodec.ReadWriter[Folder] = JsonCodec.macroRW
@@ -21,14 +22,15 @@ case class Folder(
 
   if name.isEmpty then throw ValidationException("Folder name cannot be empty")
 
-  val nameLowercase: String = name.toLowerCase
+  /** The key `folder_02` keeps unique among a folder's siblings */
+  val nameKey: String = NameKey.of(name)
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
 
   override def canEqual(other: Any): Boolean = other.isInstanceOf[Folder]
 
-  // Folders are equal by ID, parent and case-insensitive name, and hash by the same fields
-  private def equalityKey = (id, parentId, nameLowercase)
+  // Folders are equal by ID, parent and name key, and hash by the same fields
+  private def equalityKey = (id, parentId, nameKey)
 
   override def equals(that: Any): Boolean = that match
     case that: Folder => that.canEqual(this) && equalityKey == that.equalityKey

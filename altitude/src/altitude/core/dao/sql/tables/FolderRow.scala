@@ -8,7 +8,7 @@ case class FolderRow[T[_]](
     id: T[String],
     repositoryId: T[String],
     name: T[String],
-    nameLc: T[String],
+    nameKey: T[String],
     parentId: T[String],
     isRecycled: T[Boolean],
     createdAt: T[Option[OffsetDateTime]],

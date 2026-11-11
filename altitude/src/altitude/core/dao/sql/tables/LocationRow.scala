@@ -13,7 +13,7 @@ case class LocationRow[T[_]](
     categoryId: T[Option[String]],
     kind: T[String],
     name: T[String],
-    nameLc: T[String],
+    nameKey: T[String],
     latitude: T[Option[Double]],
     longitude: T[Option[Double]],
     createdAt: T[Option[OffsetDateTime]],

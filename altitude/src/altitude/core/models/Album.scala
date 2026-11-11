@@ -5,6 +5,7 @@ import java.time.LocalDateTime
 import altitude.core.ValidationException
 import altitude.core.util.JsonCodec
 import altitude.core.util.JsonCodec.given
+import altitude.core.util.NameKey
 
 object Album:
   given JsonCodec.ReadWriter[Album] = JsonCodec.macroRW
@@ -25,6 +26,7 @@ case class Album(
 
   if name.isEmpty then throw ValidationException("Album name cannot be empty")
 
-  val nameLowercase: String = name.toLowerCase
+  /** The key `album_01` keeps unique per repository */
+  val nameKey: String = NameKey.of(name)
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]

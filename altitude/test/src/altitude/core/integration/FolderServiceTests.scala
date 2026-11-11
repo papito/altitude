@@ -1,5 +1,6 @@
 package altitude.core.integration
 
+import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.contain
 import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shouldEqual, shouldNot }
@@ -449,6 +450,70 @@ import altitude.core.models.Repository
     intercept[DuplicateException] {
       testApp.service.folder.rename(folder1.persistedId, folder2.name)
     }
+  }
+
+  test("Sibling folder names that differ only by case fold, canonical form or compatibility form are duplicates") {
+
+    /**
+     * Setup:
+     *
+     * Three folders at the root, "Straße", "Café" with a precomposed "é" and "Summer", a fourth, "Other", to rename, and a folder
+     * "Parent" holding none of them.
+     *
+     * Assertions:
+     *
+     * Adding a sibling, or renaming "Other", to "STRASSE" (the case fold of "ß"), to "Café" with an "e" and a combining accent
+     * (the canonical form) or to "Ｓummer" with a full-width "S" (the compatibility form) is a duplicate.
+     *
+     * Edge cases:
+     *
+     * Each of those names is free under "Parent", and a folder can be renamed to another form of its own name.
+     */
+    val other: Folder = testApp.service.folder.add("Other")
+    val parent: Folder = testApp.service.folder.add("Parent")
+    val clashes = List("Stra\u00DFe" -> "STRASSE", "Caf\u00E9" -> "Cafe\u0301", "Summer" -> "\uFF33ummer")
+
+    for ((name, clash) <- clashes) withClue(s"[$clash]: ") {
+      val folder: Folder = testApp.service.folder.add(name)
+      intercept[DuplicateException](testApp.service.folder.add(clash))
+      intercept[DuplicateException](testApp.service.folder.rename(other.persistedId, clash))
+
+      testApp.service.folder.add(clash, parentId = parent.id)
+      testApp.service.folder.rename(folder.persistedId, clash)
+    }
+  }
+
+  test("A folder name is stored in NFC, and its key does not depend on the default locale") {
+
+    /**
+     * Setup:
+     *
+     * A folder added as "Café" and one renamed to "Crème", both typed with a combining accent; a folder "Istanbul" added under a
+     * Turkish default locale.
+     *
+     * Assertions:
+     *
+     * The two folders read back as "Café" and "Crème" with precomposed letters. Adding "Istanbul" again under the root locale is
+     * a duplicate: the Turkish locale's dotless "ı" never reaches the key.
+     *
+     * Edge cases:
+     *
+     * A name with a full-width letter keeps it: the stored name is not folded.
+     */
+    val added: Folder = testApp.service.folder.add("Cafe\u0301")
+    val renamed: Folder = testApp.service.folder.add("before")
+    testApp.service.folder.rename(renamed.persistedId, "Cre\u0300me")
+
+    added.name shouldBe "Caf\u00E9"
+    testApp.service.folder.getById(added.persistedId).name shouldBe "Caf\u00E9"
+    testApp.service.folder.getById(renamed.persistedId).name shouldBe "Cr\u00E8me"
+
+    withDefaultLocale(Locale.forLanguageTag("tr"))(testApp.service.folder.add("Istanbul"))
+    withDefaultLocale(Locale.ROOT) {
+      intercept[DuplicateException](testApp.service.folder.add("Istanbul"))
+    }
+
+    testApp.service.folder.add("\uFF33ummer").name shouldBe "\uFF33ummer"
   }
 
   test("Illegal folder rename actions should throw") {

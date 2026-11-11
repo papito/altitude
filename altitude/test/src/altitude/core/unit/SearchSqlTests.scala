@@ -853,7 +853,7 @@ import altitude.core.util.SortValue
           (if (position == "unlocated") 3 else if (position == "first") 5 else 4)
 
         if (position == "located") {
-          val pathKey = "COALESCE\\(location3\\.name_lc \\|\\| \\?, ''\\) \\|\\| location2\\.name_lc"
+          val pathKey = "COALESCE\\(location3\\.name_key \\|\\| \\?, ''\\) \\|\\| location2\\.name_key"
           s"\\($pathKey > \\? OR \\($pathKey = \\? AND \\(location2\\.id > \\? OR \\(location2\\.id = \\? AND ".r
             .findFirstIn(text)
             .isDefined shouldBe true
@@ -881,7 +881,7 @@ import altitude.core.util.SortValue
         grouping = Some(SearchGrouping(GroupBy.Location)))
       SearchQueries.groupedByLocation(dialect, query, "repo-1").toString.replaceAll("\\s+", " ")
 
-    val pathKey = "COALESCE(location3.name_lc || ?, '') || location2.name_lc"
+    val pathKey = "COALESCE(location3.name_key || ?, '') || location2.name_key"
     slice(PostgresSearchDialect).contains(
       s"ORDER BY $pathKey ASC, location2.id ASC, asset0.filename DESC, asset0.id ASC LIMIT 51") shouldBe true
     // The trailing group is ordered by the sort alone

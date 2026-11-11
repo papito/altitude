@@ -77,7 +77,7 @@ trait SearchPlans { self: IntegrationTestCore =>
 
     update(
       s"""WITH RECURSIVE g (n) AS (SELECT 0 UNION ALL SELECT n + 1 FROM g WHERE n < ${folders - 1})
-         |INSERT INTO folder (id, repository_id, name, name_lc, parent_id)
+         |INSERT INTO folder (id, repository_id, name, name_key, parent_id)
          |SELECT ${folderId("g.n")}, asset.repository_id, 'seeded ' || g.n, 'seeded ' || g.n, repository.root_folder_id
          |  FROM asset JOIN repository ON repository.id = asset.repository_id CROSS JOIN g
          | WHERE asset.id = ?""".stripMargin,

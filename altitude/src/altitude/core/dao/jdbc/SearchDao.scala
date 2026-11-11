@@ -294,7 +294,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         if metadataFields.contains(fieldId) then
           val field = metadataFields(fieldId)
           val values = m._2
-          logger.trace(s"Processing field [${field.nameLowercase}] with values [$values]")
+          logger.trace(s"Processing field [${field.nameKey}] with values [$values]")
           addParameters(asset = asset, field = field, values = values.map(_.value))
         else logger.error(s"Asset $asset contains metadata field ID [$fieldId] that is not part of field configuration!")
     }
@@ -306,7 +306,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
   /** One `metadata_parameter` row per value of a faceted field type; nothing for any other type */
   private def addParameters(asset: Asset, field: UserMetadataField, values: Set[String]): Unit =
     if !SearchDao.FACETED_FIELD_TYPES.contains(field.fieldType) then
-      logger.trace(s"Field [${field.nameLowercase}] of type ${field.fieldType} has no metadata parameters")
+      logger.trace(s"Field [${field.nameKey}] of type ${field.fieldType} has no metadata parameters")
       return
 
     logger.trace(s"INSERT SQL: ${SearchDao.VALUE_INSERT_SQL}. ARGS: ${values.toString}")

@@ -21,7 +21,7 @@ object FieldConst:
 
   object Repository:
     val NAME = "name"
-    val NAME_LC = "name_lc"
+    val NAME_KEY = "name_key"
     val OWNER_ACCOUNT_ID = "owner_account_id"
     val ROOT_FOLDER_ID = "root_folder_id"
     val FILE_STORE_TYPE = "file_store_type"
@@ -108,7 +108,7 @@ object FieldConst:
 
   object Folder:
     val NAME = "name"
-    val NAME_LC = "name_lc"
+    val NAME_KEY = "name_key"
     val PARENT_ID = "parent_id"
     val NUM_OF_ASSETS = "num_of_assets"
     val NUM_OF_CHILDREN = "num_of_children"
@@ -123,7 +123,7 @@ object FieldConst:
 
   object Album:
     val NAME = "name"
-    val NAME_LC = "name_lc"
+    val NAME_KEY = "name_key"
     val NUM_OF_ASSETS = "num_of_assets"
     val ALBUM_ID = "album_id"
     val ASSET_ID = "asset_id"
@@ -132,7 +132,7 @@ object FieldConst:
     val CATEGORY_ID = "category_id"
     val KIND = "kind"
     val NAME = "name"
-    val NAME_LC = "name_lc"
+    val NAME_KEY = "name_key"
     val LATITUDE = "latitude"
     val LONGITUDE = "longitude"
     val LOCATION_ID = "location_id"
@@ -151,7 +151,7 @@ object FieldConst:
 
   object MetadataField:
     val NAME = "name"
-    val NAME_LC = "name_lc"
+    val NAME_KEY = "name_key"
     val FIELD_TYPE = "field_type"
     val FIELD = "field"
 

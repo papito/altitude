@@ -70,13 +70,13 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
 
     val sql = s"""
         INSERT INTO $tableName (
-                      ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Folder.NAME}, ${FieldConst.Folder.NAME_LC}, ${FieldConst.Folder.PARENT_ID}
+                      ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Folder.NAME}, ${FieldConst.Folder.NAME_KEY}, ${FieldConst.Folder.PARENT_ID}
                     )
              VALUES (?, ? , ?, ?, ?)
     """
 
     val sqlVals: List[Any] =
-      List(id, RequestContext.getRepository.persistedId, folder.name, folder.nameLowercase, folder.parentId)
+      List(id, RequestContext.getRepository.persistedId, folder.name, folder.nameKey, folder.parentId)
 
     addRecord(sql, sqlVals)
     folder.copy(id = Some(id))
@@ -99,7 +99,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
      */
     val recursiveOrderByClause = getDataSourceType match
       case C.DbEngineName.POSTGRES => ""
-      case C.DbEngineName.SQLITE => "ORDER BY f.name_lc"
+      case C.DbEngineName.SQLITE => s"ORDER BY f.${FieldConst.Folder.NAME_KEY}"
 
     val sql = s"""
       WITH RECURSIVE children AS (
@@ -129,7 +129,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
        FROM children f
       WHERE f.level = 1
         AND f.id <> f.parent_id
-      ORDER BY f.name_lc
+      ORDER BY f.${FieldConst.Folder.NAME_KEY}
     """
 
     val repositoryId = RequestContext.getRepository.persistedId

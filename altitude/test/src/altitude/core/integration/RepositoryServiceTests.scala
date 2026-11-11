@@ -1,6 +1,7 @@
 package altitude.core.integration
 
 import altitude.core
+import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.not
@@ -14,6 +15,7 @@ import altitude.core.ValidationException
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Repository
 import altitude.core.models.User
+import altitude.core.util.NameKey
 import altitude.core.util.Util
 
 @DoNotDiscover class RepositoryServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
@@ -23,7 +25,7 @@ import altitude.core.util.Util
 
   /** The Libraries of the whole instance holding a name key: every bundle's tests add Libraries to one database */
   private def librariesKeyed(nameKey: String): List[Repository] =
-    testApp.service.repository.getAll.filter(_.nameLowercase == nameKey)
+    testApp.service.repository.getAll.filter(_.nameKey == nameKey)
 
   private def persistAdmin(): User = testContext.persistUser(Some(testContext.makeAdminUser()))
 
@@ -46,7 +48,7 @@ import altitude.core.util.Util
     storedRepo.updatedAt should be(None)
   }
 
-  test("A Library's name is stored trimmed, with its whitespace collapsed and in NFC, beside its lowercased key") {
+  test("A Library's name is stored trimmed, with its whitespace collapsed and in NFC, beside its name key") {
 
     /**
      * Setup:
@@ -57,7 +59,7 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The Library is returned and reads back with the name trimmed, each run of whitespace one space, and the "é" precomposed.
-     * Its stored name key is that name lowercased.
+     * Its stored name key is that name in lower case.
      *
      * Edge cases:
      *
@@ -71,10 +73,10 @@ import altitude.core.util.Util
     testApp.service.repository.getById(repo.persistedId).name shouldBe expected
 
     val storedKey = testApp.txManager.asReadOnly {
-      query(s"SELECT ${FieldConst.Repository.NAME_LC} FROM repository WHERE id = ?", repo.persistedId)
-        .head(FieldConst.Repository.NAME_LC)
+      query(s"SELECT ${FieldConst.Repository.NAME_KEY} FROM repository WHERE id = ?", repo.persistedId)
+        .head(FieldConst.Repository.NAME_KEY)
     }
-    storedKey shouldBe s"\u00F6land smith caf\u00E9 ${suffix.toLowerCase}"
+    storedKey shouldBe s"\u00F6land smith caf\u00E9 ${suffix.toLowerCase(Locale.ROOT)}"
   }
 
   test(
@@ -171,7 +173,34 @@ import altitude.core.util.Util
       }
     }
 
-    librariesKeyed(original.nameLowercase).map(_.persistedId) shouldBe List(original.persistedId)
+    librariesKeyed(original.nameKey).map(_.persistedId) shouldBe List(original.persistedId)
+  }
+
+  test("A second Library whose name differs only by case fold or compatibility form is a duplicate") {
+
+    /**
+     * Setup:
+     *
+     * An Admin's Library named "Weiß", under a random suffix.
+     *
+     * Assertions:
+     *
+     * Adding a Library named "WEISS" (the case fold of "ß") or "Ｗeiß" with a full-width "W" (the compatibility form), under the
+     * same suffix, fails with a `DuplicateException` saying a library of that name, as typed, already exists. The instance keeps
+     * one Library of that name.
+     */
+    val owner = persistAdmin()
+    val suffix = Util.randomStr()
+    val original = addLibrary(s"Wei\u00DF $suffix", owner)
+
+    for (name <- List(s"WEISS $suffix", s"\uFF37ei\u00DF $suffix")) {
+      withClue(s"[$name]: ") {
+        val ex = intercept[DuplicateException](addLibrary(name, owner))
+        ex.message shouldBe Some(s"A library named \u201C$name\u201D already exists")
+      }
+    }
+
+    librariesKeyed(original.nameKey).map(_.persistedId) shouldBe List(original.persistedId)
   }
 
   test("Two transactions adding one Library name at once leave one Library") {
@@ -198,7 +227,7 @@ import altitude.core.util.Util
       )
     }
 
-    val libraries = librariesKeyed(name.toLowerCase)
+    val libraries = librariesKeyed(NameKey.of(name))
     libraries.map(_.ownerAccountId) shouldBe List(owner.persistedId)
   }
 

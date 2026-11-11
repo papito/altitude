@@ -6,6 +6,7 @@ import altitude.core.IllegalOperationException
 import altitude.core.dao.LocationDao
 import altitude.core.models.Location
 import altitude.core.models.LocationKind
+import altitude.core.util.NameKey
 
 /**
  * Categories and Locations, one table and one name pool per repository (see [[Location]]). Like albums, nothing here touches an
@@ -22,7 +23,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       logger.debug(s"Adding location [$name] at [$latitude, $longitude]" + categoryId.fold("")(id => s" under [$id]"))
       add(
         Location(
-          name = name.trim,
+          name = NameKey.normalized(name.trim),
           kind = LocationKind.Location,
           categoryId = categoryId,
           latitude = Some(latitude),
@@ -32,7 +33,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
   def addCategory(name: String): Location =
     txManager.withTransaction {
       logger.debug(s"Adding location category [$name]")
-      add(Location(name = name.trim, kind = LocationKind.Category))
+      add(Location(name = NameKey.normalized(name.trim), kind = LocationKind.Category))
     }
 
   def getAll: List[Location] =
@@ -44,10 +45,10 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
     txManager.withTransaction {
       val location: Location = getById(id)
       // The copy validates the new name the same way a new row is validated
-      val renamed = location.copy(name = newName.trim)
+      val renamed = location.copy(name = NameKey.normalized(newName.trim))
 
       logger.debug(s"Renaming location [${location.name}] to [${renamed.name}]")
-      updateById(id, Map(FieldConst.Location.NAME -> renamed.name, FieldConst.Location.NAME_LC -> renamed.nameLowercase))
+      updateById(id, Map(FieldConst.Location.NAME -> renamed.name, FieldConst.Location.NAME_KEY -> renamed.nameKey))
       renamed
     }
 

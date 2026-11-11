@@ -9,6 +9,7 @@ import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.dao.FolderDao
 import altitude.core.models.Folder
+import altitude.core.util.NameKey
 import altitude.core.util.Query
 
 class FolderService(val app: Altitude) extends BaseService[Folder]:
@@ -22,7 +23,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
   def add(name: String, parentId: Option[String] = None): Folder =
     txManager.withTransaction {
       val _parentId = parentId.map(getById(_).persistedId).getOrElse(RequestContext.getRepository.rootFolderId)
-      val folder = Folder(name = name.trim, parentId = _parentId)
+      val folder = Folder(name = NameKey.normalized(name.trim), parentId = _parentId)
       app.service.folder.add(folder)
     }
 
@@ -65,7 +66,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       directCounts: Map[String, Int]): Folder =
     val children = childrenByParentId
       .getOrElse(folder.persistedId, Nil)
-      .sortBy(_.nameLowercase)
+      .sortBy(_.nameKey)
       .map(assembleTree(_, childrenByParentId, directCounts))
 
     folder.copy(
@@ -137,11 +138,9 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       val folder: Folder = getById(folderId)
       logger.debug(s"Renaming folder [${folder.name}] to [$newName]")
 
-      val folderForUpdate: Folder = folder.copy(
-        name = newName
-      )
+      val folderForUpdate: Folder = folder.copy(name = NameKey.normalized(newName))
 
-      val data = Map(FieldConst.Folder.NAME -> newName, FieldConst.Folder.NAME_LC -> newName.toLowerCase)
+      val data = Map(FieldConst.Folder.NAME -> folderForUpdate.name, FieldConst.Folder.NAME_KEY -> folderForUpdate.nameKey)
 
       updateById(folderId, data)
       folderForUpdate
