@@ -5,16 +5,13 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import scalasql.Sc
 import scalasql.Table
-import scalasql.core.Expr
 
 import altitude.core.FieldConst
-import altitude.core.NotFoundException
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.tables.AccountRow
 import altitude.core.models.AccountType
 import altitude.core.models.Permissions
 import altitude.core.models.User
-import altitude.core.util.NameKey
 
 abstract class UserDao(override val config: Config) extends BaseDao[User] with altitude.core.dao.UserDao:
   final override val tableName = "account"
@@ -41,29 +38,21 @@ abstract class UserDao(override val config: Config) extends BaseDao[User] with a
       lastActiveRepoId = row.lastActiveRepoId
     )
 
-  /**
-   * The password hash is deliberately not part of the `User` model, so it is read on its own. An unknown account is a
-   * `NotFoundException`, which is what the login path expects to catch.
-   */
-  override def getPasswordHashByEmail(email: String): String =
+  override def getWithPasswordHash(key: String, byEmail: Boolean): Option[(User, String)] =
     import dialect.*
 
-    Db.read(dialect)(_.run(AccountRow.select.filter(hasEmail(_, email)).map(_.passwordHash))).headOption.getOrElse(noAccount)
+    // The key column the unique index is declared on, so the lookup and the index cannot differ
+    Db.read(dialect)(_.run(AccountRow.select.filter(row => (if byEmail then row.emailKey else row.usernameKey) === key)))
+      .headOption
+      .map(row => (toModel(row), row.passwordHash))
 
-  override def getByEmail(email: String): User =
-    import dialect.*
+  override def lockWithPasswordHash(id: String): Option[(User, String)] =
+    manyBySqlQuery(s"SELECT * FROM account WHERE ${FieldConst.ID} = ? $forUpdate", List(id)).headOption
+      .map(row => (makeModel(row), row(FieldConst.User.PASSWORD_HASH).asInstanceOf[String]))
 
-    Db.read(dialect)(_.run(AccountRow.select.filter(hasEmail(_, email)))).headOption.map(toModel).getOrElse(noAccount)
-
-  /**
-   * An email address names an account whatever its case or Unicode form: its name key, folded here and never in SQL, against
-   * `email_key`, the column the unique index `account_01` is declared on, so the lookup and the index cannot differ
-   */
-  private def hasEmail(account: AccountRow[Expr], email: String): Expr[Boolean] =
-    import dialect.*
-    account.emailKey === NameKey.of(email)
-
-  private def noAccount: Nothing = throw NotFoundException("No account with that email address")
+  override def recordLogin(id: String): Unit =
+    val sql = s"UPDATE account SET ${FieldConst.User.LAST_LOGIN_AT} = ? WHERE ${FieldConst.ID} = ?"
+    updateByBySql(sql, List(nativeUtcTimestamp(OffsetDateTime.now(ZoneOffset.UTC)), id)): Unit
 
   override protected def makeModel(rec: Map[String, AnyRef]): User =
     User(

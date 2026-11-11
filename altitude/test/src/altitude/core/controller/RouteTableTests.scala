@@ -124,6 +124,8 @@ import altitude.core.models.Repository
   private val POST = "POST"
   private val PUT = "PUT"
   private val DELETE = "DELETE"
+  // A WebSocket's handshake, which cask routes as a method of its own
+  private val WEBSOCKET = "WEBSOCKET"
 
   private def json(fields: (String, ujson.Value)*): Option[ujson.Value] = Some(ujson.Obj.from(fields))
   private def ids(values: String*): ujson.Value = ujson.Arr.from(values.map(ujson.Str(_)))
@@ -147,12 +149,7 @@ import altitude.core.models.Repository
     none(POST, "/htmx/setup", publicRoute("setup runs before any account exists, and refuses once the instance is set up")),
     none(GET, "/static/", publicRoute("the app's own scripts, styles and fonts")),
     none(GET, "/assets/:name", publicRoute("the app's stylesheet bundle")),
-    Row(
-      "WEBSOCKET",
-      "/import/status",
-      Ids.NotEntity(Set("userId"), "out of scope: the WebSocket, which names its client by the account's ID"),
-      publicRoute("out of scope: the WebSocket")
-    ),
+    none(WEBSOCKET, "/import/status"),
     // Pages
     none(GET, "/"),
     probed(GET, "/r/:repoId") {
@@ -726,8 +723,8 @@ import altitude.core.models.Repository
      *
      * Edge cases:
      *
-     * The public routes, each with the reason it is public, are the login, logout, setup, the health check, the app's own static
-     * files and the WebSocket, which is out of scope here.
+     * The public routes, each with the reason it is public, are the login, logout, setup, the health check and the app's own
+     * static files. The import status WebSocket refuses an anonymous handshake with a 401.
      */
     val repoId = testContext.persistRepository().persistedId
 
@@ -735,8 +732,14 @@ import altitude.core.models.Repository
       host =>
         for (row <- table if row.access == Access.Login) withClue(s"[${row.method} ${row.path}]: ") {
           val values = pathParam.findAllMatchIn(row.path).map(_.group(1) -> UUID.randomUUID.toString).toMap
-          val response = send(host, row, Probe(0, path = values), repoId, cookies = Map.empty)
-          List(302, 401) should contain(response.statusCode)
+          val status =
+            if (row.method == WEBSOCKET)
+              ImportControllerTests
+                .importStatusHandshake(host, Map.empty, path = url("", row.path, repoId, values))
+                .left
+                .getOrElse(101)
+            else send(host, row, Probe(0, path = values), repoId, cookies = Map.empty).statusCode
+          List(302, 401) should contain(status)
         }
     }
   }

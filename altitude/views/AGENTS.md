@@ -326,7 +326,11 @@ Two-layer event bus, both on `document.body`:
   `hx-target` / `hx-swap`. Do not rely on a parent's attributes (add `:inherited` if you ever must).
 - Extensions activate by script inclusion, there is no `hx-ext`. Forms that post JSON carry the
   boolean `hx-json-enc` attribute (`json-enc.js`); the import status stream uses `hx-ws:connect`
-  with an explicit `hx-target` / `hx-swap` on the connection element (`hx-ws.js`). No Alpine
+  with an explicit `hx-target` / `hx-swap` on the connection element (`hx-ws.js`), to
+  `/import/status` with no query string: the server takes the account from the session cookie the
+  handshake carries, refuses a handshake without a login with a 401 and one from another origin
+  with a 403, and closes the account's sockets when the account changes (1013, which `hx-ws.js`
+  reconnects on, checking the login again) or its sessions are revoked (1008, which it does not). No Alpine
   compatibility shim is loaded: Alpine's mutation observer initializes swapped-in markup, and
   nothing calls `Alpine.initTree` on it.
 - Polling is declarative: the import page refreshes the nav with
@@ -1202,7 +1206,8 @@ Alpine binding keeps in step with the setting; the track, `--switch-width` by `-
 pseudo-element, slides across it. The View settings dialog's switches, the People tab's bucket switches and the Change combobox's "This face only"
 switch use it. The last is the one whose label does not flip it natively: focus has to stay in the combobox's input, so the switch's and the
 label's `mousedown` is prevented, and the label's click, prevented too, calls the component's `toggleFaceOnly` (see **Detail panel**). Every rule of the section starts at `body:not(.setup)`, so the setup form's fields and error box are
-`htmx/setup_form.css`'s alone; the login page loads no app stylesheet. The upload form's file input takes the field's
+`htmx/setup_form.css`'s alone; the login page loads no app stylesheet. Its login field, labelled "Email or username", takes either
+(`autocomplete="username"`), and its password field is labelled "Password". The upload form's file input takes the field's
 box and keeps its own `--theme-neutral-2` fill (`htmx/upload_form.css`). A field keeps the width its page gives it,
 except in a popover dialog, whose form fills `--popover-form-width` with its action `--space-5` below its fields
 (see **Modals**). A field in error carries the `error` class: the error fill
@@ -2092,7 +2097,8 @@ zero alpha, at the corners, over `backdrop-filter: blur(12px)`, so the center is
 `--setup-form-card-border`, the outline in the form's accent; a 6px `border-radius` (a radius, not a spacing, so a
 literal, as is the blur's); `--section-vertical-space` padding. Its first row, above the form, is the page's title, `#setupTitle` ("Altitude",
 uppercase, centered, in `--setup-form-accent`, the outline's color). The card and the form on it are a carve-out from the
-theme: `static/css/htmx/setup_form.css` styles the fields, their placeholder, hover, focus and error
+theme: the form asks for the Library name, then the Administrator's name, username (3 to 32 ASCII letters, digits, `.`, `_` and `-`,
+`User.validUsername`, whose error shows under the field), email and password twice; `static/css/htmx/setup_form.css` styles the fields, their placeholder, hover, focus and error
 states, the labels, the database type line and the full-width submit button from the `--setup-form-*` tokens alone, so the form keeps its
 palette whatever the theme colors become. The page's palette, the scene's `--setup-background-*` tokens and the form's
 `--setup-form-*` tokens, is declared at the top of `pages/setup.css` on `body:where(.setup)`: the page's own, not

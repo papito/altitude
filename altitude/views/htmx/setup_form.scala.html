@@ -37,6 +37,21 @@
         }
     </div>
     <div>
+        <label for="@{ Api.Field.Setup.ADMIN_USERNAME }">Administrator Username</label>
+        <input type="text"
+        autocomplete="off"
+        autocapitalize="none"
+        spellcheck="false"
+        id="@{ Api.Field.Setup.ADMIN_USERNAME }"
+        name="@{ Api.Field.Setup.ADMIN_USERNAME }"
+        value='@{ formJson.obj.get(Api.Field.Setup.ADMIN_USERNAME).flatMap(_.strOpt).getOrElse("") }'
+        minlength="@{ Api.Constraints.MIN_USERNAME_LENGTH }"
+        maxlength="@{ Api.Constraints.MAX_USERNAME_LENGTH }"/>
+        @if(fieldErrors.contains(Api.Field.Setup.ADMIN_USERNAME)) {
+            <div class="error">@{ fieldErrors(Api.Field.Setup.ADMIN_USERNAME) }</div>
+        }
+    </div>
+    <div>
         <label for="@{ Api.Field.Setup.ADMIN_EMAIL }">Administrator Email</label>
         <input type="email"
         autocomplete="off"

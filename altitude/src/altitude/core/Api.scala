@@ -9,6 +9,9 @@ object Api:
     val MAX_NAME_LENGTH = 80
     val MIN_NAME_LENGTH = 2
 
+    val MAX_USERNAME_LENGTH = 32
+    val MIN_USERNAME_LENGTH = 3
+
     val MAX_PASSWORD_LENGTH = 50
     val MIN_PASSWORD_LENGTH = 8
 
@@ -161,6 +164,7 @@ object Api:
     object Setup:
       val ADMIN_EMAIL = "adminEmail"
       val ADMIN_NAME = "adminName"
+      val ADMIN_USERNAME = "adminUsername"
       val REPOSITORY_NAME = "repositoryName"
       val PASSWORD = "password"
       val PASSWORD2 = "password2"

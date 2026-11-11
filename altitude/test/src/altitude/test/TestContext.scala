@@ -93,8 +93,9 @@ class TestContext(val testApp: Altitude) {
   // to maintain login state for controllers
   var cookies: Map[String, HttpCookie] = Map.empty
 
+  // An email address holds an "@", or a login with it is looked up as a username
   def makeUser(): User = User(
-    email = Util.randomStr(),
+    email = s"${Util.randomStr()}@example.com",
     username = Util.randomStr(),
     name = Util.randomStr(),
     accountType = AccountType.User

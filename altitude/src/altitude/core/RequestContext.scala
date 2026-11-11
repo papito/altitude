@@ -4,6 +4,7 @@ import java.sql.Connection
 
 import scala.util.DynamicVariable
 
+import altitude.core.models.Permissions
 import altitude.core.models.Repository
 import altitude.core.models.User
 
@@ -25,6 +26,9 @@ object RequestContext:
   val conn: ThreadVariable[Option[Connection]] = new ThreadVariable(None)
   val account: DynamicVariable[Option[User]] = new DynamicVariable(None)
   val repository: DynamicVariable[Option[Repository]] = new DynamicVariable(None)
+  // The account's Permissions in the repository of the request's path, from its login token (decorators.requireLogin): every one
+  // for an Admin, its grant's for anyone else, and none for anyone else when the path names no repository
+  val permissions: DynamicVariable[Permissions] = new DynamicVariable(Permissions.none)
   val readQueryCount: DynamicVariable[Int] = new DynamicVariable(0)
   val writeQueryCount: DynamicVariable[Int] = new DynamicVariable(0)
 
@@ -36,5 +40,6 @@ object RequestContext:
   def clear(): Unit =
     account.value = None
     repository.value = None
+    permissions.value = Permissions.none
     readQueryCount.value = 0
     writeQueryCount.value = 0

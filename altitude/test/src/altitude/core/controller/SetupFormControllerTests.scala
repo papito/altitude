@@ -1,10 +1,12 @@
 package altitude.core.controller
 
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe }
+import org.scalatest.matchers.must.Matchers.not
+import org.scalatest.matchers.should.Matchers.{ be, include, should, shouldBe }
 
 import altitude.core.Api
 import altitude.core.App
+import altitude.core.Const
 
 @DoNotDiscover class SetupFormControllerTests extends ControllerTestCore {
 
@@ -20,13 +22,14 @@ import altitude.core.App
     finally App.altitude.isInitialized = wasInitialized
   }
 
-  private def postSetup(host: String, libraryName: String): requests.Response = requests.post(
+  private def postSetup(host: String, libraryName: String, username: String = "admin"): requests.Response = requests.post(
     s"$host/htmx/setup",
     headers = Map("Content-Type" -> "application/json"),
     data = ujson.write(
       ujson.Obj(
         Api.Field.Setup.REPOSITORY_NAME -> libraryName,
         Api.Field.Setup.ADMIN_NAME -> "Administrator",
+        Api.Field.Setup.ADMIN_USERNAME -> username,
         Api.Field.Setup.ADMIN_EMAIL -> "admin@example.com",
         Api.Field.Setup.PASSWORD -> "password123",
         Api.Field.Setup.PASSWORD2 -> "password123"
@@ -82,6 +85,49 @@ import altitude.core.App
         response.headers.get("hx-redirect").map(_.head) shouldBe Some(s"/r/${testApp.service.repository.getAll.head.persistedId}")
 
         testApp.service.repository.getAll.map(_.name) shouldBe List("My Library")
+    }
+  }
+
+  test("Setup takes the Admin's username under the username rule, and the Admin logs in with it") {
+
+    /**
+     * Setup:
+     *
+     * A new installation, and setup forms valid but for the username: none, two characters, and one with a space; then a valid
+     * form whose username is "Chief.Admin" with spaces around it.
+     *
+     * Assertions:
+     *
+     * Each refused username answers the setup form with the error under the Username field (required, or the rule) and creates
+     * nothing. The valid form creates the Admin under the username "Chief.Admin", trimmed, and the Admin logs in with it in lower
+     * case.
+     */
+    onNewInstallation {
+      host =>
+        for (
+          (username, error) <- List(
+            "" -> Const.Msg.Err.VALUE_REQUIRED,
+            "ab" -> Const.Msg.Err.USERNAME_RULE,
+            "chief admin" -> Const.Msg.Err.USERNAME_RULE)
+        ) withClue(s"[$username]: ") {
+          val refused = postSetup(host, "My Library", username)
+          refused.statusCode shouldBe 200
+          refused.text() should include("""id="setupForm"""")
+          refused.text() should include(s"""<div class="error">$error</div>""")
+          testApp.service.system.readMetadata.isInitialized shouldBe false
+        }
+
+        val response = postSetup(host, "My Library", "  Chief.Admin ")
+        response.headers.get("hx-redirect") should not be None
+        testApp.service.repository.getAll.size shouldBe 1
+
+        val login = requests.post(
+          s"$host/login",
+          maxRedirects = 0,
+          check = false,
+          data = Map("login" -> "chief.admin", "password" -> "password123"))
+        login.statusCode shouldBe 302
+        login.headers("location") shouldBe Seq(s"/r/${testApp.service.repository.getAll.head.persistedId}")
     }
   }
 }

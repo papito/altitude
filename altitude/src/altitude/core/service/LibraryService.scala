@@ -76,7 +76,8 @@ class LibraryService(val app: Altitude):
     addAsset(dataAssetIn)
 
   def addAsset(dataAsset: AssetWithData): Asset =
-    val pipelineContext = PipelineContext(RequestContext.getRepository, Some(RequestContext.getAccount))
+    val pipelineContext =
+      PipelineContext(RequestContext.getRepository, Some(RequestContext.getAccount), RequestContext.permissions.value)
     val source: Source[(AssetWithData, PipelineContext), NotUsed] = Source.single((dataAsset, pipelineContext))
     val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] = app.service.importPipeline.run(source, AssetSeqOutputSink())
 

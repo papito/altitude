@@ -160,6 +160,10 @@ object Const:
       val DUPLICATE = "Duplicate"
       val INCORRECT_VALUE_TYPE = "Incorrect value type"
       val PASSWORDS_DO_NOT_MATCH = "Passwords do not match"
+      // The username rule (User.validUsername); the bounds are Api.Constraints.MIN_/MAX_USERNAME_LENGTH
+      val USERNAME_RULE = "Use 3 to 32 letters, digits, dots, underscores or hyphens"
+      // A grant past the number of Libraries a login token has room for (RepositoryService.MAX_GRANTS_PER_ACCOUNT)
+      val TOO_MANY_GRANTS = "An account can be given access to at most %s libraries"
       val INVALID_CONTENT_TYPE = "Invalid content type"
       // A JSON route's body that is not JSON, or not a JSON object
       val MALFORMED_JSON = "The request body is not a JSON object"

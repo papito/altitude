@@ -1,4 +1,5 @@
 package altitude.core.routes
+import cask.model.Cookie
 import cask.model.Response
 import cask.model.Response.Raw
 import cask.router.Result
@@ -18,8 +19,10 @@ import altitude.core.App
 import altitude.core.Const
 import altitude.core.RequestContext
 import altitude.core.models.AccountType
-import altitude.core.models.User
+import altitude.core.models.Permissions
+import altitude.core.models.TokenClaims
 import altitude.core.routes.web.SessionController
+import altitude.core.service.UserService.TokenCheck
 import altitude.core.util.MurmurHash
 import altitude.core.util.Util
 
@@ -67,17 +70,71 @@ object decorators:
   private val AUTH_HEADER_NAME = "Authorization"
   private val BEARER_PREFIX = "Bearer "
 
-  /** Extracts the authentication token from the request. Checks both the Authorization header (Bearer token) and cookies. */
-  def extractToken(req: cask.Request): Option[String] =
-    // First check Authorization header
-    val authHeader = Option(req.exchange.getRequestHeaders.getFirst(AUTH_HEADER_NAME))
-    authHeader.filter(_.startsWith(BEARER_PREFIX)).map(_.substring(BEARER_PREFIX.length)) match {
-      case Some(token) => Some(token)
+  /** A request's login: its claims, and the token that replaces the request's stale one, which the answer sets as the cookie */
+  final case class Login(claims: TokenClaims, renewedToken: Option[String])
+
+  /**
+   * A request with no login, and the cookies the answer that refuses it sets: the session cookie cleared when it held a token
+   * that was refused, so the browser stops sending it
+   */
+  final case class NoLogin(cookies: Seq[Cookie])
+
+  /**
+   * The request's login, its account made the request's: the dev user's (`UserService.getDevUser`), or that of the token of the
+   * Authorization header (Bearer) or, failing one, of the session cookie (`UserService.checkToken`). A stale cookie's token is
+   * rebuilt, to be replaced; a stale Bearer token, which the server cannot replace, is refused, as an invalid, expired or revoked
+   * token is, and the request has no login.
+   */
+  def authenticate(req: cask.Request): Either[NoLogin, Login] =
+    // Locally, the dev user bypasses the login, so a code change that the hot reload restarts the server for (a new token key)
+    // does not log the developer out
+    App.altitude.service.user.getDevUser match
+      case Some(claims) => Right(Login(claims, None))
       case None =>
-        // Fall back to cookie
-        val cookies = req.exchange.getRequestCookies
-        Option(cookies.get(SessionController.AUTH_COOKIE_NAME)).map(_.getValue)
-    }
+        val bearer = Option(req.exchange.getRequestHeaders.getFirst(AUTH_HEADER_NAME))
+          .filter(_.startsWith(BEARER_PREFIX))
+          .map(_.substring(BEARER_PREFIX.length))
+        val cookie = Option(req.exchange.getRequestCookie(SessionController.AUTH_COOKIE_NAME)).map(_.getValue)
+        // A Bearer header is the client's to send, so only a cookie's token can be replaced
+        bearer.map(_ -> false).orElse(cookie.map(_ -> true)) match
+          case None =>
+            logger.debug("No authentication token found")
+            Left(NoLogin(Nil))
+          case Some((token, fromCookie)) =>
+            App.altitude.service.user.checkToken(token, renewable = fromCookie) match
+              case TokenCheck.Current(claims) =>
+                logger.trace(s"User authenticated: ${claims.account.persistedId}")
+                Right(Login(claims, None))
+              case TokenCheck.Renewed(claims, renewed) => Right(Login(claims, Some(renewed)))
+              case TokenCheck.Refused =>
+                logger.warn("Invalid, expired, revoked or stale token")
+                Left(NoLogin(if fromCookie then Seq(SessionController.clearedAuthCookie) else Nil))
+
+  /**
+   * Whether a WebSocket handshake comes from a page of this server, or from a client that is no browser: true when it has no
+   * Origin (every browser sends one on a WebSocket handshake, so only another kind of client omits it, and it holds the session
+   * token itself), and when its Origin is an http or https URL whose host and port, as written, are the request's Host header's,
+   * case aside. A browser omits a scheme's default port from both, and a reverse proxy that keeps the Host header keeps them
+   * equal. Anything else (another site, another port, `null`, a malformed Origin) is false: a page of another site cannot open
+   * the socket with the visitor's session.
+   */
+  def isSameOriginOrNone(req: cask.Request): Boolean =
+    Option(req.exchange.getRequestHeaders.getFirst("Origin")) match
+      case None => true
+      case Some(origin) =>
+        val host = Option(req.exchange.getRequestHeaders.getFirst("Host"))
+        val authority =
+          try
+            val uri = java.net.URI(origin)
+            Option
+              .when(Set("http", "https").contains(Option(uri.getScheme).getOrElse("").toLowerCase))(uri.getRawAuthority)
+              .flatMap(Option(_))
+          catch case _: java.net.URISyntaxException => None
+        authority.exists(a => host.exists(_.equalsIgnoreCase(a)))
+
+  /** The session cookie that replaces the request's, when its token was rebuilt */
+  def renewedCookies(login: Login): Seq[Cookie] =
+    login.renewedToken.toSeq.map(token => SessionController.authCookie(token, login.claims.expiresAt))
 
   // An API request (one that accepts JSON, or an /api/ path) is answered in JSON
   private def isApiRequest(req: cask.Request): Boolean =
@@ -104,54 +161,51 @@ object decorators:
       Result.Success(Response(Const.Msg.Err.LIBRARY_NOT_FOUND, statusCode = 404, headers = Seq("Content-Type" -> "text/plain")))
 
   /**
-   * Decorator that requires a valid PASETO token for the endpoint. If the token is invalid or missing, returns a 401 Unauthorized
-   * response. For web requests, redirects to the login page. A repository in the path that the account cannot see (an Admin sees
-   * every one, anyone else one it holds a grant in) is answered as not found, as any foreign entity is.
+   * Decorator that requires a login (`authenticate`) for the endpoint. Without one, an API request is answered 401 and any other
+   * redirected to the login page, either answer clearing a session cookie whose token was refused. A repository in the path that
+   * the account cannot see is answered as not found, as any foreign entity is: an Admin sees every one, anyone else one its token
+   * carries a grant in, so the gate reads no database. The token's Permissions in the path's Library (every one for an Admin;
+   * none for anyone else with no Library in the path) are put in `RequestContext.permissions`. A token rebuilt from the database
+   * is set as the cookie of the answer, whatever it is.
    */
   class requireLogin extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
-      // locally, we want to allow bypassing authentication with a dev user for easier testing
-      // as hot reload is enabled, changes to the code will log out the dev user, so this is a way to test changes
-      // without needing to log in repeatedly when working with the frontend
-      val devUser = App.altitude.service.user.getDevUser
-
-      if devUser.isDefined then
-        return accessibleRepositoryOnly(req, devUser.get)(delegate(req, Map("request" -> req, "user" -> devUser)))
-
-      extractToken(req) match {
-        case Some(token) =>
-          App.altitude.service.user.getUserFromToken(token) match {
-            case Some(user) =>
-              logger.trace(s"User authenticated: ${user.email}")
-              accessibleRepositoryOnly(req, user)(delegate(req, Map("request" -> req, "user" -> user)))
-            case None =>
-              logger.warn("Invalid or expired token")
-              handleUnauthenticated(req)
-          }
-        case None =>
-          logger.debug("No authentication token found")
-          handleUnauthenticated(req)
-      }
+      authenticate(req) match
+        case Right(login) =>
+          val answer =
+            accessibleRepositoryOnly(req, login.claims)(delegate(req, Map("request" -> req, "user" -> login.claims.account)))
+          val cookies = renewedCookies(login)
+          if cookies.isEmpty then answer else answer.transform { case v: Raw => v.copy(cookies = v.cookies ++ cookies) }
+        case Left(noLogin) => handleUnauthenticated(req, noLogin.cookies)
 
     /**
-     * Runs `endpoint` unless the path names a repository that `user` cannot see or that does not exist: both are answered as not
-     * found, so the two cannot be told apart
+     * Runs `endpoint` unless the path names a repository that the token gives no access to or that does not exist: both are
+     * answered as not found, so the two cannot be told apart
      */
-    private def accessibleRepositoryOnly(req: cask.Request, user: User)(endpoint: => Result[Raw]): Result[Raw] =
+    private def accessibleRepositoryOnly(req: cask.Request, claims: TokenClaims)(endpoint: => Result[Raw]): Result[Raw] =
+      val account = claims.account
       RequestContext.repository.value match
-        // Reads the grant from the database for now; Task B reads it from the token's claims
-        case Some(repo) if !App.altitude.service.repository.isAccessibleTo(user, repo.persistedId) =>
-          logger.warn(s"User [${user.persistedId}] denied repository [${repo.persistedId}]: no access")
-          handleNotFound(req)
-        case _ => existingRepositoryOnly(req)(endpoint)
+        case Some(repo) =>
+          claims.permissionsIn(repo.persistedId) match
+            case Some(permissions) =>
+              RequestContext.permissions.value = permissions
+              endpoint
+            case None =>
+              logger.warn(s"User [${account.persistedId}] denied repository [${repo.persistedId}]: no access")
+              handleNotFound(req)
+        case None =>
+          RequestContext.permissions.value =
+            if account.accountType == AccountType.Admin then Permissions.all else Permissions.none
+          existingRepositoryOnly(req)(endpoint)
 
-    private def handleUnauthenticated(req: cask.Request): Result[Raw] =
+    private def handleUnauthenticated(req: cask.Request, cookies: Seq[Cookie]): Result[Raw] =
       if isApiRequest(req) then
         Result.Success(
           Response(
             """{"error": "Unauthorized", "message": "Authentication required"}""",
             statusCode = 401,
-            headers = Seq("Content-Type" -> "application/json")
+            headers = Seq("Content-Type" -> "application/json"),
+            cookies = cookies
           ))
       else
         // Redirect to login page for web requests, preserving the original URL
@@ -163,7 +217,8 @@ object decorators:
           Response(
             "",
             statusCode = 302,
-            headers = Seq("Location" -> s"/login?redirect=$originalUrl")
+            headers = Seq("Location" -> s"/login?redirect=$originalUrl"),
+            cookies = cookies
           ))
 
   /**
@@ -313,6 +368,10 @@ object decorators:
           // WebSocket connection - log connection initiation only
           logger.trace(s"WebSocket connected - $pathInfo in ${currentTimeMillis - startTime}ms")
           cask.router.Result.Success(response)
+        case cask.router.Result.Success(refused: cask.endpoints.WebsocketResult.Response[?]) =>
+          // A WebSocket handshake answered with a response rather than an upgrade, which is no Raw
+          logger.debug(s"WebSocket refused [${refused.value.statusCode}] - $pathInfo in ${currentTimeMillis - startTime}ms")
+          cask.router.Result.Success(refused)
         case cask.router.Result.Success(response) =>
           // Regular HTTP response
           logger.debug(s"Request END [${response.statusCode}] - $pathInfo in ${currentTimeMillis - startTime}ms")

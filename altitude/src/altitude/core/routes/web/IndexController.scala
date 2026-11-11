@@ -7,8 +7,9 @@ import org.slf4j.Logger
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.models.User
-import altitude.core.routes.decorators.extractToken
+import altitude.core.routes.decorators.authenticate
 import altitude.core.routes.decorators.rememberRepository
+import altitude.core.routes.decorators.renewedCookies
 import altitude.core.routes.decorators.requireLogin
 
 class IndexController(using logger: Logger, caskLogger: cask.Logger, context: castor.Context) extends cask.Routes:
@@ -18,25 +19,12 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
       logger.warn("App is not initialized, redirecting to setup")
       return Response("", 302, Seq("Location" -> "/setup"), Nil)
 
-    // Locally, we want to allow bypassing authentication with a dev user for easier testing.
-    // This is a slightly different version of the one in the requireLogin decorator as the decorator cannot be used for
-    // this endpoint.
-    val devUser = App.altitude.service.user.getDevUser
-
-    if devUser.isDefined then
-      logger.debug(s"User authenticated: ${devUser.get.email}")
-      return landing(devUser.get)
-
-    extractToken(request) match
-      case Some(token) =>
-        App.altitude.service.user.getUserFromToken(token) match
-          case Some(user) =>
-            logger.debug(s"User authenticated: ${user.email}")
-            landing(user)
-          case None =>
-            Response("", 302, Seq("Location" -> "/login"), Nil)
-      case None =>
-        Response("", 302, Seq("Location" -> "/login"), Nil)
+    authenticate(request) match
+      case Right(login) =>
+        logger.debug(s"User authenticated: ${login.claims.account.persistedId}")
+        val answer = landing(login.claims.account)
+        answer.copy(cookies = answer.cookies ++ renewedCookies(login))
+      case Left(noLogin) => Response("", 302, Seq("Location" -> "/login"), noLogin.cookies)
 
   /**
    * To the Library `user` lands in (`RepositoryService.landingRepositoryOf`). A user who can see none is told so in plain text,

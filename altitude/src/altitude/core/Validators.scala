@@ -13,6 +13,9 @@ object Validators:
 
   def isUuid(value: String): Boolean = uuidRegex.matches(value)
 
+  /** An email address of ASCII characters, as the request validator's `email` fields are held to */
+  def isEmail(value: String): Boolean = emailRegex.matches(value)
+
   /**
    * A name as it is stored ([[NameKey.normalized]]) once it passes its length rule, which is checked after normalization, since
    * NFC can lengthen a name (U+FB2C is three code points in NFC): `minLength` to `maxLength` characters, counted in code points

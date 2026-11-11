@@ -21,6 +21,17 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.NaturalOrder
 import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
+object RepositoryService:
+
+  /**
+   * How many Libraries a User or a Guest may be granted access to: every grant rides in the login token, which the session cookie
+   * carries, and a browser keeps at most 4096 bytes of a cookie. A grant costs about 57 bytes of token; the longest account a
+   * token describes (80 four-byte characters of name, which the token's JSON escapes to 12 bytes each, and the longest email
+   * address and username) costs about 1820 with none, so 37 fit with the cookie's name and attributes, and the bound keeps a
+   * margin below that (`LoginTokenTests`, "A token at the grant bound fits the session cookie").
+   */
+  val MAX_GRANTS_PER_ACCOUNT = 35
+
 class RepositoryService(val app: Altitude) extends BaseService[Repository]:
   protected val dao: RepositoryDao = app.DAO.repository
   private val grantDao: RepositoryGrantDao = app.DAO.repositoryGrant
@@ -89,32 +100,35 @@ class RepositoryService(val app: Altitude) extends BaseService[Repository]:
       .sortBy(_.name)(using NaturalOrder)
 
   /**
-   * Whether `account` can see the Library: an Admin can see every one, anyone else one it holds a grant in. Task B moves this to
-   * the grants in the login token; until then it reads the grant from the database.
-   */
-  def isAccessibleTo(account: User, repositoryId: String): Boolean =
-    account.accountType == AccountType.Admin || txManager.asReadOnly {
-      grantDao.getGrant(account.persistedId, repositoryId).isDefined
-    }
-
-  /**
    * Gives the account access to the Library with `permissions`, replacing what it held there. The account and the Library are
    * read in the write's transaction, so an unknown one is a `NotFoundException`, and the account's type is the stored one, not
    * that of a model the caller holds: an Admin holds every Permission in every Library with no grant, and a Guest holds none, so
-   * a grant to an Admin, or one with a Permission to a Guest, is an `IllegalOperationException`.
+   * a grant to an Admin, or one with a Permission to a Guest, is an `IllegalOperationException`. So is a grant in one Library
+   * more than an account may hold (`MAX_GRANTS_PER_ACCOUNT`, `TOO_MANY_GRANTS`); the account's row is locked first, so of two
+   * grants racing past the bound, the second counts the first's. Once committed, the account's version is bumped, so its sessions
+   * pick the grant up at their next request.
    */
   def setGrant(accountId: String, repositoryId: String, permissions: Permissions): Unit =
     txManager.withTransaction {
-      val account = app.service.user.getById(accountId)
+      val account = app.DAO.user.lockById(accountId)
       dao.getById(repositoryId)
 
       account.accountType match
         case AccountType.Admin =>
           throw IllegalOperationException("An Admin holds every Permission in every Library with no grant")
         case AccountType.Guest if !permissions.isEmpty => throw IllegalOperationException("A Guest holds no Permission")
-        case _ => grantDao.setGrant(accountId, repositoryId, permissions)
+        case _ =>
 
-      txManager.afterCommit(logger.info(s"Account [$accountId] granted $permissions in [$repositoryId]"))
+      val held = grantDao.getByAccount(accountId)
+      if !held.exists(_.repositoryId == repositoryId) && held.size >= RepositoryService.MAX_GRANTS_PER_ACCOUNT then
+        throw IllegalOperationException(C.Msg.Err.TOO_MANY_GRANTS.format(RepositoryService.MAX_GRANTS_PER_ACCOUNT))
+
+      grantDao.setGrant(accountId, repositoryId, permissions)
+
+      txManager.afterCommit {
+        logger.info(s"Account [$accountId] granted $permissions in [$repositoryId]")
+        app.service.accountVersions.bump(accountId)
+      }
     }
 
   /** The account's Permissions in the Library, None when it holds no grant there */

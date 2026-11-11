@@ -29,7 +29,7 @@
 
       <div id="importLog">
         @* Each status message from the server is a full <div id="statusText"> that replaces the current one *@
-        <div hx-ws:connect="/import/status?userId=@{ RequestContext.getAccount.id.get }"
+        <div hx-ws:connect="/import/status"
              hx-target="#statusText"
              hx-swap="outerHTML">
           <div id="statusText"></div>

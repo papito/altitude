@@ -95,6 +95,14 @@ object Util:
       val pre = ("KMGTPE").charAt(exp - 1)
       f"${bytes / Math.pow(unit, exp)}%.1f ${pre}B"
 
+  /**
+   * `text` as a log line or an audit record may carry text a client typed: each control character escaped as `\uXXXX`, so it
+   * cannot start a line of its own (CR, LF) or reach a column that refuses it (PostgreSQL refuses a NUL), and the result cut to
+   * `maxLength` characters
+   */
+  def printable(text: String, maxLength: Int): String =
+    text.flatMap(c => if c.isControl then f"\\u${c.toInt}%04x" else c.toString).take(maxLength)
+
   def randomStr(size: Int = 10): String = scala.util.Random.alphanumeric.take(size).mkString
 
   def hashPassword(password: String): String =

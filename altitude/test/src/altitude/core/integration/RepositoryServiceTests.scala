@@ -42,6 +42,10 @@ import altitude.core.util.Util
   private def librariesKeyed(nameKey: String): List[Repository] =
     testApp.service.repository.getAll.filter(_.nameKey == nameKey)
 
+  /** Whether the account's login token opens the Library, as the claims built for it from the database say */
+  private def canSee(account: User, library: Repository): Boolean =
+    testApp.service.user.claimsOf(account.persistedId).exists(_.permissionsIn(library.persistedId).isDefined)
+
   private def persistAdmin(): User = testContext.persistUser(Some(testContext.makeAdminUser()))
 
   test("create repository") {
@@ -268,8 +272,8 @@ import altitude.core.util.Util
     testApp.service.repository.getAccessibleTo(user).map(_.name) shouldBe
       List("alpha", "Client 2", "client 10", "Client 100").map(name => s"$prefix $name")
 
-    for (library <- granted) testApp.service.repository.isAccessibleTo(user, library.persistedId) shouldBe true
-    for (library <- List(guests, nobodys)) testApp.service.repository.isAccessibleTo(user, library.persistedId) shouldBe false
+    for (library <- granted) canSee(user, library) shouldBe true
+    for (library <- List(guests, nobodys)) canSee(user, library) shouldBe false
   }
 
   test("An Admin sees every Library, with no grant") {
@@ -292,7 +296,7 @@ import altitude.core.util.Util
       testApp.service.repository.getAll.sortBy(_.name)(using NaturalOrder).map(_.persistedId)
 
     for (library <- List(usersLibrary, nobodys)) {
-      testApp.service.repository.isAccessibleTo(admin, library.persistedId) shouldBe true
+      canSee(admin, library) shouldBe true
       testApp.service.repository.getGrant(admin, library.persistedId) shouldBe None
     }
   }
@@ -334,7 +338,7 @@ import altitude.core.util.Util
 
     testContext.grant(guest, library, Permissions.none)
     testApp.service.repository.getGrant(guest, library.persistedId) shouldBe Some(Permissions.none)
-    testApp.service.repository.isAccessibleTo(guest, library.persistedId) shouldBe true
+    canSee(guest, library) shouldBe true
   }
 
   test("Deleting an account deletes its grants and never a Library") {

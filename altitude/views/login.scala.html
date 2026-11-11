@@ -4,8 +4,10 @@
 
 <form action="/login" method="post">
     <p>
-        <input type="text" name="login"/><br>
-        <input type="password" name="password"/><br/>
+        <label for="login">Email or username</label><br>
+        <input type="text" id="login" name="login" autocomplete="username" autocapitalize="none" spellcheck="false"/><br>
+        <label for="password">Password</label><br>
+        <input type="password" id="password" name="password" autocomplete="current-password"/><br/>
         @redirect.map { r =>
         <input type="hidden" name="redirect" value="@r"/>
         }
