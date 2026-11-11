@@ -131,9 +131,19 @@ export function clearSelectedFaceRow() {
     return true
 }
 
-/** A name as the server compares names: trimmed, in NFC, lowercased (`PersonService.nameKey`) */
+/**
+ * A name as the server compares names: trimmed, then the server's fold (`NameKey.of`), so "WEISS"
+ * is "Weiß" and "σοφοσ" is "σοφος". The case mappings take no locale, as the server's take
+ * `Locale.ROOT`; the server stays the authority.
+ */
 function nameKey(text) {
-    return text.trim().normalize("NFC").toLowerCase()
+    return text
+        .trim()
+        .normalize("NFKC")
+        .toLowerCase()
+        .toUpperCase()
+        .toLowerCase()
+        .normalize("NFKC")
 }
 
 /** "1 asset", "5 assets" */

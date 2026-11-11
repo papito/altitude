@@ -29,6 +29,7 @@ import altitude.core.models.Face
 import altitude.core.models.Person
 import altitude.core.routes.SearchRequestParser
 import altitude.core.service.PersonService
+import altitude.core.service.PersonService.FaceTarget
 import altitude.core.util.Query
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSource
@@ -618,6 +619,43 @@ import altitude.core.util.Util
     row("name_for_sort") shouldBe precomposed("zoë")
   }
 
+  test("A live person's name in another case fold is refused to a rename, and a Face moved to it joins them") {
+
+    /**
+     * Setup:
+     *
+     * Live Persons named "Weiß" (with a Face), "σοφος" with a final sigma, and "Bob", and a source Person with two Faces.
+     *
+     * Assertions:
+     *
+     * Renaming Bob to "WEISS" or to "σοφοσ" with a plain sigma fails as a duplicate, and Bob keeps his name. Looking up "WEISS"
+     * finds Weiß, and moving a source Face to "WEISS" gives it to Weiß, who keeps her name and counts two assets, rather than
+     * creating a second Person.
+     */
+    val weiss: Person = testApp.service.person.addPerson(Person(name = Some("Weiß")))
+    testContext.addTestFace(weiss, testContext.insertAsset(), TestContext.unitVector(1))
+    testApp.service.person.addPerson(Person(name = Some("σοφος")))
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+    val source: Person = testApp.service.person.addPerson(Person())
+    val moved = testContext.addTestFace(source, testContext.insertAsset(), TestContext.unitVector(2))
+    testContext.addTestFace(
+      testApp.service.person.getById(source.persistedId),
+      testContext.insertAsset(),
+      TestContext.unitVector(3))
+
+    intercept[DuplicateException](testApp.service.person.updateName(bob, "WEISS"))
+    intercept[DuplicateException](testApp.service.person.updateName(bob, "σοφοσ"))
+    testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bob")
+
+    testApp.service.person.getLiveByNameKey("WEISS").map(_.persistedId) shouldBe Some(weiss.persistedId)
+
+    val move = testApp.service.person.moveFace(moved.persistedId, FaceTarget.Named("WEISS"))
+    move.target.persistedId shouldBe weiss.persistedId
+    val after: Person = testApp.service.person.getById(weiss.persistedId)
+    after.name shouldBe Some("Weiß")
+    after.numOfFaces shouldBe 2
+  }
+
   test("A person renamed to its own name in another case takes the new name") {
 
     /**
@@ -742,6 +780,30 @@ import altitude.core.util.Util
     testApp.service.person.updateName(bob, "Unknown Soldier").name shouldBe Some("Unknown Soldier")
   }
 
+  test("A person cannot be named as an unnamed person is in compatibility forms") {
+
+    /**
+     * Setup:
+     *
+     * A live Person named "Bob".
+     *
+     * Assertions:
+     *
+     * Renaming him "Unknown 42" with a full-width "U", or with the number in circled digits, fails validation with the
+     * reserved-name error, and he keeps his name: the name's compatibility forms fold to an unnamed person's form, which would
+     * otherwise reach the name key.
+     */
+    val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+
+    List("Ｕnknown 42", "Unknown ④②").foreach {
+      name =>
+        val ex = intercept[ValidationException](testApp.service.person.updateName(bob, name))
+        withClue(name)(ex.message shouldBe Const.Msg.Err.RESERVED_PERSON_NAME)
+    }
+
+    testApp.service.person.getById(bob.persistedId).name shouldBe Some("Bob")
+  }
+
   test("Adding a named person stores its name in NFC and its name key as sort name") {
 
     /**
@@ -778,11 +840,9 @@ import altitude.core.util.Util
      *
      * The name key of "INGRID" is "ingrid".
      */
-    val defaultLocale = Locale.getDefault
-    try
-      Locale.setDefault(Locale.forLanguageTag("tr"))
+    withDefaultLocale(Locale.forLanguageTag("tr")) {
       PersonService.nameKey("INGRID") shouldBe "ingrid"
-    finally Locale.setDefault(defaultLocale)
+    }
   }
 
   test("The live person holding a name is found by it, hidden or not") {

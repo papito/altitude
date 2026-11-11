@@ -25,6 +25,7 @@ import altitude.core.util.BoundingBox
 import altitude.core.util.GroupBy
 import altitude.core.util.GroupedSearchPage
 import altitude.core.util.GroupedSearchRow
+import altitude.core.util.NameKey
 import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchGroupKey
 import altitude.core.util.SearchName
@@ -317,8 +318,8 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
         preparedStatement.setString(1, RequestContext.getRepository.persistedId)
         preparedStatement.setString(2, asset.persistedId)
         preparedStatement.setString(3, field.persistedId)
-        // keyword
-        if field.fieldType == FieldType.KEYWORD then preparedStatement.setString(4, valueStr.toLowerCase)
+        // keyword, under its name key, which a keyword filter is folded to as well (`SearchQueries.valueMatch`)
+        if field.fieldType == FieldType.KEYWORD then preparedStatement.setString(4, NameKey.of(valueStr))
         else preparedStatement.setNull(4, Types.VARCHAR)
         // number
         if field.fieldType == FieldType.NUMBER then preparedStatement.setDouble(5, valueStr.toDouble)

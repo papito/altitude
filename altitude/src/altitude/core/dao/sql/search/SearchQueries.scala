@@ -27,6 +27,7 @@ import altitude.core.dao.sql.tables.PersonRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.models.LocationKind
 import altitude.core.util.BoundingBox
+import altitude.core.util.NameKey
 import altitude.core.util.Query
 import altitude.core.util.Query.QueryParam
 import altitude.core.util.ResolvedSearchGroup
@@ -1223,7 +1224,10 @@ object SearchQueries:
       .map(_._1)
       .contains(asset.id)
 
-  /** One metadata filter: the value goes into the column of its type, so searching a keyword field by number matches nothing */
+  /**
+   * One metadata filter: the value goes into the column of its type, so searching a keyword field by number matches nothing. A
+   * keyword is compared under its name key, as `field_value_kw` holds it, so it matches in any case or Unicode form.
+   */
   private def valueMatch(
       engine: SearchDialect,
       parameter: MetadataParameterRow[Expr],
@@ -1236,13 +1240,13 @@ object SearchQueries:
       case param: QueryParam => throw IllegalArgumentException(s"This type of parameter is not supported: ${param.paramType}")
       case other => other
 
-    val column = plain match
-      case _: String => parameter.fieldValueKw
-      case _: Boolean => parameter.fieldValueBool
-      case _: Number => parameter.fieldValueNum
+    val (column, compared) = plain match
+      case keyword: String => (parameter.fieldValueKw, NameKey.of(keyword))
+      case _: Boolean => (parameter.fieldValueBool, plain)
+      case _: Number => (parameter.fieldValueNum, plain)
       case other => throw IllegalArgumentException(s"This type of parameter is not supported: $other")
 
-    (parameter.fieldId `=` fieldId) && Columns.equalTo(column, plain, engine.dialect)
+    (parameter.fieldId `=` fieldId) && Columns.equalTo(column, compared, engine.dialect)
 
   /** Assets in any of the given folders themselves; a subtree is the caller's to expand */
   private def folderFilter(engine: SearchDialect, asset: AssetRow[Expr], folderIds: Set[String]): Expr[Boolean] =

@@ -2,7 +2,6 @@ package altitude.core.service
 
 import java.sql.SQLException
 import java.text.Normalizer
-import java.util.Locale
 
 import altitude.core.{ Const => C }
 import altitude.core.Altitude
@@ -18,6 +17,7 @@ import altitude.core.models.ListedPeople
 import altitude.core.models.ListedPerson
 import altitude.core.models.Person
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.NameKey
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SearchQuery
@@ -31,22 +31,20 @@ object PersonService:
   private val RESERVED_NAME = s"(?iU)\\s*$UNKNOWN_NAME_PREFIX\\s*\\d+\\s*".r
 
   /** A name as stored: NFC, so a name typed with a combining accent and the same name typed precomposed are one name */
-  def normalizedName(name: String): String = Normalizer.normalize(name, Normalizer.Form.NFC)
+  def normalizedName(name: String): String = NameKey.normalized(name)
 
   /**
-   * The name key: the folded form of a name that `person_01` keeps unique, stored as a named person's `name_for_sort`. The fold
-   * is done here and not in SQL, since SQLite's `lower()` folds ASCII only while PostgreSQL's folds by its collation.
-   * `Locale.ROOT` keeps "I" folding to "i" whatever the JVM's default locale. This is lowercasing and not a full Unicode case
-   * fold, so "Weiß" and "WEISS", or a Greek name with a final sigma and the same name with a plain one ("σοφος" and "σοφοσ"),
-   * keep different keys.
+   * The name key ([[NameKey.of]]): the folded form of a name that `person_01` keeps unique, stored as a named person's
+   * `name_for_sort`, so "Weiß" and "WEISS", or "σοφος" and "σοφοσ", are one name
    */
-  def nameKey(name: String): String = normalizedName(name).toLowerCase(Locale.ROOT)
+  def nameKey(name: String): String = NameKey.of(name)
 
   /**
    * Whether a name has an unnamed person's form, which no person may be given: an unnamed person's sort name (`unknown 0042`)
-   * would otherwise equal a named person's key, or sit beside it under another
+   * would otherwise equal a named person's key, or sit beside it under another. The form is matched in NFKC, as the key folds it,
+   * so a full-width "Ｕnknown 42" or one with circled digits is reserved too.
    */
-  def isReservedName(name: String): Boolean = RESERVED_NAME.matches(name)
+  def isReservedName(name: String): Boolean = RESERVED_NAME.matches(Normalizer.normalize(name, Normalizer.Form.NFKC))
 
   /** The most people the Change combobox's Suggested group holds ([[PersonService.suggestedPeople]]) */
   val SUGGESTED_PEOPLE = 3

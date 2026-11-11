@@ -763,4 +763,67 @@ import altitude.core.util.Util
 
     testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value) shouldBe values.toSet
   }
+
+  test("Keyword values that differ only by case fold, canonical form or compatibility form are one value") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field on one asset holding "Straße", "Café" with a precomposed "é", "Summer" and "indigo".
+     *
+     * Assertions:
+     *
+     * Adding "STRASSE" (the case fold of "ß"), "Café" with an "e" and a combining accent (the canonical form) or "Ｓummer" with a
+     * full-width "S" (the compatibility form) fails validation as a duplicate, and the field keeps its four values.
+     *
+     * Edge cases:
+     *
+     * "INDIGO" added under a Turkish default locale, whose lowercase of "I" is a dotless "ı", is a duplicate too.
+     */
+    val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
+    val asset: Asset = testContext.persistAsset()
+    val values = List("Stra\u00DFe", "Caf\u00E9", "Summer", "indigo")
+    values.foreach(testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, _))
+
+    List("STRASSE", "Cafe\u0301", "\uFF33ummer").foreach {
+      clash =>
+        withClue(s"[$clash]: ") {
+          intercept[ValidationException] {
+            testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, clash)
+          }
+        }
+    }
+
+    withDefaultLocale(Locale.forLanguageTag("tr")) {
+      intercept[ValidationException] {
+        testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, "INDIGO")
+      }
+    }
+
+    testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value) shouldBe values.toSet
+  }
+
+  test("A metadata value is stored in NFC and keeps its compatibility forms") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD and a TEXT field on one asset, given "Café" typed with a combining accent and "Ｓummer" with a full-width "S".
+     *
+     * Assertions:
+     *
+     * Both fields read back "Café" with a precomposed "é" and "Ｓummer" as typed: the stored value is not folded.
+     */
+    val keyword = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
+    val text = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.TEXT))
+    val asset: Asset = testContext.persistAsset()
+
+    for (field <- List(keyword, text)) withClue(s"[${field.fieldType}]: ") {
+      testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, "Cafe\u0301")
+      testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, "\uFF33ummer")
+
+      testApp.service.metadata.getMetadata(asset.persistedId)(field.persistedId).map(_.value) shouldBe
+        Set("Caf\u00E9", "\uFF33ummer")
+    }
+  }
 }

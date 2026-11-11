@@ -608,6 +608,37 @@ import altitude.core.util.*
     results.total shouldBe Some(2)
   }
 
+  test("A keyword filter finds its value in another case, canonical form or compatibility form") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field, an asset holding "Straße", "Café" typed with a combining accent and "Summer" in it, and an asset holding
+     * "Strand".
+     *
+     * Assertions:
+     *
+     * Filtering the field by "STRASSE" (the case fold of "ß"), "café" with a precomposed "é" (the canonical form), or "ＳUMMER"
+     * with a full-width "S" (the compatibility form) finds the first asset alone.
+     */
+    val field = testApp.service.metadata.addField(UserMetadataField(name = "field 1", fieldType = FieldType.KEYWORD))
+
+    val asset: Asset = testContext.persistAsset()
+    List("Straße", "Café", "Summer").foreach {
+      value => testApp.service.metadata.addMetadataValue(asset.persistedId, fieldId = field.persistedId, newValue = value)
+    }
+    val other: Asset = testContext.persistAsset()
+    testApp.service.metadata.addMetadataValue(other.persistedId, fieldId = field.persistedId, newValue = "Strand")
+
+    List("STRASSE", "café", "ＳUMMER").foreach {
+      filter =>
+        withClue(s"[$filter]: ") {
+          val results = search(new SearchQuery(rpp = PAGE_SIZE, metadataFilters = Map(field.persistedId -> filter)))
+          results.records.map(_.persistedId) shouldBe List(asset.persistedId)
+        }
+    }
+  }
+
   test("Updating and removing metadata values updates search index") {
 
     /**

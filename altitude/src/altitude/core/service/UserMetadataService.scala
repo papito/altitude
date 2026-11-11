@@ -247,7 +247,8 @@ class UserMetadataService(val app: Altitude):
       (res, m) =>
         val fieldId = m._1
         val field: UserMetadataField = fields(fieldId)
-        val mdVals: Set[UserMetadataValue] = m._2
+        // every value is stored in NFC, so a value typed with a combining accent and one typed precomposed read back alike
+        val mdVals: Set[UserMetadataValue] = m._2.map(mdVal => UserMetadataValue(mdVal.id, NameKey.normalized(mdVal.value)))
 
         val trimmed: Set[UserMetadataValue] = field.fieldType match {
           case FieldType.KEYWORD =>
