@@ -6,7 +6,7 @@
   formJson: ujson.Obj = ujson.Obj(),
   postUrl: String = s"/htmx/library/r/${RequestContext.getRepository.persistedId}/new")
 
-@* The New library dialog (GET /htmx/library/r/:repoId/dialogs/new, Admin only), a popover dialog the nav's Browse menu opens
+@* The New library dialog (GET /htmx/library/r/:repoId/dialogs/new, Admin only), a popover dialog the nav's Library menu opens
    below its trigger. Return or Create submits, and Cancel, Escape and the host's × dismiss it. A refused name comes back as a
    validation response replacing this form, with the typed name and the Library name rule's error; a created Library answers
    with HX-Redirect to its Import page. The field sets no length limits: the rule counts the name normalized, its spaces

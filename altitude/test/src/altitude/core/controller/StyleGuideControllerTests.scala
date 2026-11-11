@@ -142,7 +142,7 @@ object DevApp extends cask.Main:
      * Assertions:
      *
      * The page answers 200, holds the scan JSON element and an element for each section, and loads the two libraries the app
-     * start and the sample dialog need. Its Browse menu specimen offers New library, which opens the New library sample.
+     * start and the sample dialog need. Its Library menu specimen offers New library, which opens the New library sample.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId

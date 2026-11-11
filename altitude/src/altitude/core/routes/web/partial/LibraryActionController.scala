@@ -16,7 +16,7 @@ import altitude.core.routes.decorators.requireAdmin
 import altitude.core.routes.decorators.requireLogin
 
 /**
- * The New library dialog, an Admin's, opened from the nav's Browse menu: it creates a Library the Admin owns and sends the
+ * The New library dialog, an Admin's, opened from the nav's Library menu: it creates a Library the Admin owns and sends the
  * browser to its Import page. Both routes are scoped to the Library the dialog was opened from, as every partial is.
  */
 class LibraryActionController(using logger: Logger) extends BaseController:

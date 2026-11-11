@@ -11,7 +11,7 @@
     @includes.html.page_title(Some("Import"))
 
     @includes.html.header_common()
-    @* The New library dialog of the nav's Browse menu posts JSON *@
+    @* The New library dialog of the nav's Library menu posts JSON *@
     <script src="/static/js/lib/json-enc.js" defer></script>
   </head>
 
@@ -39,12 +39,12 @@
 
     <footer></footer>
 
-    @* The snackbar and the dialog hosts, for the New library dialog of the nav's Browse menu (js/nav-page.js) *@
+    @* The snackbar and the dialog hosts, for the New library dialog of the nav's Library menu (js/nav-page.js) *@
     @includes.html.html_common()
 
     @* Keeps the nav counts fresh while imports run; `current` keeps this page's entry marked. The filter (htmx 4 reads it
-       after the event's name) skips a tick while the page is hidden, and while the nav's Browse menu or the New library
-       dialog is open: the Browse menu's host is `hx-preserve` (includes/library_menu), which keeps an open panel open only
+       after the event's name) skips a tick while the page is hidden, and while the nav's Library menu or the New library
+       dialog is open: the Library menu's host is `hx-preserve` (includes/library_menu), which keeps an open panel open only
        where the browser has `moveBefore`. A failed tick is not reported (`data-app-silent-failure`): the next one tries
        again, and a server answering 5xx while it restarts would otherwise raise an error every 5 s *@
     <div hx-get="/htmx/nav/r/@{RequestContext.getRepository.persistedId}?current=@{Const.NavEntry.IMPORT}"

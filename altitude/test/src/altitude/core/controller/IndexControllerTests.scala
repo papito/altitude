@@ -303,21 +303,22 @@ import altitude.core.models.AccountType
     }
   }
 
-  /** The Browse menu's host in `page`: from its opening tag to the end of the host, which holds no other `div` */
+  /** The Library menu's host in `page`: from its opening tag to the end of the host, which holds no other `div` */
   private def browseMenu(page: String): String = {
-    val start = page.indexOf("""data-choice-menu="Browse"""")
+    val start = page.indexOf("""data-choice-menu="Library"""")
     start should be >= 0
     page.substring(start, page.indexOf("</div>", start))
   }
 
-  /** The Libraries a Browse menu lists, in order: each one's link, its title and whether it is checked */
+  /** The Libraries the Library menu lists, in order: each one's link, its title and whether it is checked */
   private def browseMenuOptions(page: String): List[(String, String, Boolean)] =
     """<a href="([^"]+)" title="([^"]*)"( aria-checked="true")?>""".r
       .findAllMatchIn(browseMenu(page))
       .map(m => (m.group(1), m.group(2), m.group(3) != null))
       .toList
 
-  test("The nav's Browse menu lists the account's Libraries by name, checks the current one, and offers an Admin New library") {
+  test(
+    "The nav's Browse links the current Library's main page, and its Library menu lists the account's Libraries and offers an Admin New library") {
 
     /**
      * Setup:
@@ -326,11 +327,12 @@ import altitude.core.models.AccountType
      *
      * Assertions:
      *
-     * On the main page of "client 2", its Import and Settings pages, the Browse cell holds the Browse choice menu (the database
-     * icon), which lists the Admin's Libraries by name, case-insensitively and naturally (Alpha, client 2, Client 10), each a
-     * link to its Library's main page titled with its name, with "client 2" alone checked; then a separator and "New library…",
-     * which requests the New library dialog of "client 2" into the popover dialog host. The main page's Browse cell keeps
-     * `aria-current="page"`.
+     * On the main page of "client 2", its Import and Settings pages, the Browse cell holds Browse, a link (the database icon) to
+     * the main page of "client 2" with no search, then the Library menu, a choice menu whose trigger shows the choice alone (the
+     * Library's name). It lists the Admin's Libraries by name, case-insensitively and naturally (Alpha, client 2, Client 10),
+     * each a link to its Library's main page titled with its name, with "client 2" alone checked; then a separator and "New
+     * library…", which requests the New library dialog of "client 2" into the popover dialog host. The main page's Browse cell
+     * keeps `aria-current="page"`.
      *
      * Edge cases:
      *
@@ -357,8 +359,12 @@ import altitude.core.models.AccountType
         mainPage should include("""<div class="menu repository" aria-current="page">""")
 
         for (page <- List(mainPage, get(s"pipeline/r/$repoId"), get(s"settings/r/$repoId"))) {
+          val browseLink =
+            s"""<div class="menu repository"[^>]*>\\s*<a href="/r/$repoId"><i class="fas fa-database"></i><span>Browse</span></a>""".r
+          browseLink.findFirstIn(page).isDefined shouldBe true
           val menu = browseMenu(page)
-          menu should include("""data-choice-menu-icon="fas fa-database"""")
+          menu should include("data-choice-menu-choice-only")
+          menu.contains("data-choice-menu-icon") shouldBe false
           browseMenuOptions(page) shouldBe List(
             (s"/r/${alpha.persistedId}", "Alpha", false),
             (s"/r/$repoId", "client 2", true),
@@ -372,7 +378,7 @@ import altitude.core.models.AccountType
     }
   }
 
-  test("A User's Browse menu lists their Library and offers no New library") {
+  test("A User's Library menu lists their Library and offers no New library") {
 
     /**
      * Setup:
@@ -381,7 +387,7 @@ import altitude.core.models.AccountType
      *
      * Assertions:
      *
-     * The main page lists the Library, checked, in the Browse menu, with no separator and no New library entry.
+     * The main page lists the Library, checked, in the Library menu, with no separator and no New library entry.
      */
     val repoId = loginAs(AccountType.User)
     val name = testContext.repository.name
@@ -396,7 +402,7 @@ import altitude.core.models.AccountType
     }
   }
 
-  test("A nav reload renders the Browse menu's host empty, for the page's built one to take its place") {
+  test("A nav reload renders the Library menu's host empty, for the page's built one to take its place, after the Browse link") {
 
     /**
      * Setup:
@@ -405,9 +411,9 @@ import altitude.core.models.AccountType
      *
      * Assertions:
      *
-     * A nav reload's Browse cell holds the Browse menu's host by its ID, `hx-preserve` and empty: no Library, no choice menu
-     * attributes and no New library entry, since htmx keeps the page's built host in its place and drops the one the reload
-     * carries.
+     * A nav reload's Browse cell holds the Browse link to the current Library's main page, then the Library menu's host by its
+     * ID, `hx-preserve` and empty: no Library, no choice menu attributes and no New library entry, since htmx keeps the page's
+     * built host in its place and drops the one the reload carries.
      */
     val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
     val repoId = addLibrary("Library A", admin).persistedId
@@ -419,7 +425,8 @@ import altitude.core.models.AccountType
         val response = requests.get(s"$host/htmx/nav/r/$repoId", cookies = testContext.cookies, check = false)
         response.statusCode shouldBe 200
         val nav = response.text()
-        val emptyHost = """<div class="menu repository">\s*<div id="libraryMenuHost" hx-preserve></div>\s*</div>""".r
+        val emptyHost =
+          s"""<div class="menu repository">\\s*<a href="/r/$repoId"><i class="fas fa-database"></i><span>Browse</span></a>\\s*<div id="libraryMenuHost" hx-preserve></div>\\s*</div>""".r
         emptyHost.findFirstIn(nav).isDefined shouldBe true
         nav.contains("data-choice-menu") shouldBe false
         nav.contains("Library A") shouldBe false

@@ -12,12 +12,12 @@
 | Concern | Decision |
 |---|---|
 | The word | **Library** in UI text and the glossary. The code keeps `Repository`. The setup form already says "Library name" |
-| The Browse cell | The whole cell is a choice menu trigger reading "Browse · <Library name> ▾", with the Browse icon. It keeps `aria-current="page"` while Browse is shown |
+| The Browse cell | Two targets: "Browse", with its icon, links to the current Library's main page with no search, and the current Library's name after it, "· <Library name> ▾", is the trigger of the Library menu, a choice menu. The cell keeps `aria-current="page"` while Browse is shown |
 | Menu entries | The Libraries the user owns, sorted by name: case-insensitive and natural ("Client 2" before "Client 10"), an accented letter beside its base letter ("Émile" before "Zoo"). Names only, with the current Library checked. A separator, then "New library…" |
-| Picking a Library | A page load of that Library's Browse (`/r/<id>`), with Browse's defaults. Picking the current Library goes back to its Browse from anywhere, the way the Browse link did |
+| Picking a Library | A page load of that Library's Browse (`/r/<id>`), with Browse's defaults. Picking the current Library goes back to its Browse from anywhere, as the Browse link does |
 | Long names | The trigger and the entries cut a long name with an ellipsis; the full name is the `title` |
 | Who creates | Admins only. "New library…" is rendered only for an Admin, and its routes refuse anyone else. The creator owns the new Library |
-| The dialog | A popover dialog, as Add album opens, anchored below the Browse cell and centered on it. Its title is "New library": one name field, Create and Cancel. Enter submits, Esc cancels, and focus returns to the trigger. Errors show under the field, and the values are kept |
+| The dialog | A popover dialog, as Add album opens, anchored below the Library menu's trigger and centered on it. Its title is "New library": one name field, Create and Cancel. Enter submits, Esc cancels, and focus returns to the trigger. Errors show under the field, and the values are kept |
 | Name normalization | Trim, collapse each run of whitespace to one space, then Unicode NFC. The name is stored that way |
 | Name validity | Required, 2 to 80 characters after normalization (`MIN_`/`MAX_REPOSITORY_NAME_LENGTH`), no control characters: ISO controls, invisible format characters (Unicode `Cf`: zero-width spaces, bidirectional overrides and isolates, byte order marks, soft hyphens, tags) other than the two join controls (ZWJ for emoji sequences, ZWNJ for Persian and the Indic scripts), and unpaired surrogates |
 | Name uniqueness | Instance-wide: across every owner, compared lowercased after normalization. "Client  Smith" and "client smith" are the same name. The database enforces it, so two creates racing on one name leave one Library |
@@ -109,7 +109,8 @@ front-end code and docs, checked in the app.
 ### D. The nav's Browse menu
 
 11. **The nav template (`includes/nav.scala.html`, `NavController`).**
-    - The Browse cell holds a choice menu host, `data-choice-menu="Browse"` with the database icon.
+    - The Browse cell holds the Browse link to `/r/<current id>`, then a choice menu host, `data-choice-menu="Library"` with
+      `data-choice-menu-choice-only`, whose trigger shows the current Library's name alone.
     - It has one option per owned Library: a `menuitemradio` that loads `/r/<id>`, with the current Library `aria-checked`. Then a
       separator and, for an Admin, the "New library…" dialog trigger, a plain `menuitem` that opens the popover dialog anchored
       to the trigger.

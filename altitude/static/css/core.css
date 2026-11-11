@@ -90,7 +90,7 @@
     --nav-brand-width: 12.5rem;
     --nav-search-width: 11.5rem;
     --nav-search-focus-width: 15.5rem;
-    /* The longest a Library's name runs in the nav's Browse menu, its trigger and its entries, before an ellipsis */
+    /* The longest a Library's name runs in the nav's Library menu, its trigger and its entries, before an ellipsis */
     --library-name-max-width: 16rem;
     /* The Browse entry's least width, wider than an entry's share of a laptop's nav, so the trigger shows some of the
        Library's name; a share of the viewport, so the nav still fits a narrow window */
@@ -385,29 +385,39 @@ nav .menu[aria-current="page"] {
     font-weight: var(--font-weight-bold);
 }
 
-/* The Browse entry is its menu's trigger, the whole cell (includes/library_menu): the cell's padding is the trigger's, and the
-   host and the control between them fill the cell. The cell takes an entry's share of the nav, and at least
-   --nav-browse-min-width, whatever the Library's name, which the trigger cuts to fit */
+/* The Browse cell (includes/library_menu) holds two targets side by side, centered: Browse, a link like every entry's, and the
+   Library menu's trigger, the current Library's name. The cell's padding is theirs, so each reaches the cell's top and bottom
+   edge, and each glows on its own hover. The cell takes an entry's share of the nav, and at least --nav-browse-min-width,
+   whatever the Library's name, which the trigger cuts to fit */
 nav .menu:has(> [data-choice-menu]) {
     align-self: stretch;
     min-width: var(--nav-browse-min-width);
     padding: 0;
+    gap: 0;
+}
+
+nav .menu:has(> [data-choice-menu]) > a {
+    flex: 0 0 auto;
+    align-self: stretch;
+    padding: var(--space-5) 0 var(--space-5) var(--space-3);
+}
+
+nav .menu:has(> [data-choice-menu]):hover > a:not(:hover) {
+    filter: none;
 }
 
 nav .menu > [data-choice-menu], nav .menu .choice-menu-ctrl {
     display: flex;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     align-self: stretch;
     min-width: 0;
 }
 
-/* The entry's label, then the current Library after a dot, cut with an ellipsis; the icon keeps an entry's distance from the
-   label (the gap and its margin make --space-6) */
+/* The current Library after a dot, cut with an ellipsis, and the caret */
 nav .nav-menu-trigger {
     display: flex;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     align-items: center;
-    justify-content: center;
     gap: var(--space-3);
     min-width: 0;
     padding: var(--space-5) var(--space-3);
@@ -417,14 +427,6 @@ nav .nav-menu-trigger {
     font: inherit;
     text-transform: inherit;
     cursor: pointer;
-}
-
-nav .nav-menu-trigger > i:first-child {
-    margin-right: var(--space-5);
-}
-
-nav .nav-menu-trigger .choice-name {
-    color: inherit;
 }
 
 /* The name is the user's, so it keeps its case */
@@ -452,7 +454,7 @@ nav .context-menu {
     text-transform: none;
 }
 
-/* A Library's name in the Browse menu's panel */
+/* A Library's name in the Library menu's panel */
 nav .context-menu .actions a > span {
     max-width: var(--library-name-max-width);
     overflow: hidden;
@@ -1037,7 +1039,7 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     display: none;
 }
 
-/* The separator between a choice menu's options and its actions (the Browse menu's New library), in the panel's edge color */
+/* The separator between a choice menu's options and its actions (the Library menu's New library), in the panel's edge color */
 .context-menu .actions hr {
     margin: var(--space-2) 0;
     border: none;

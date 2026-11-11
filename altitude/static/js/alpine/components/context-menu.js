@@ -11,7 +11,7 @@
  * Entity menus hold actions that open popover dialogs (`common/modal.js`). Only View settings has a
  * dialog host (`x-ref="dialog"`), cleared when its panel closes so a later open loads fresh
  * settings. A choice menu (`data-menu-kind="choice"`) holds options that run a search or are links
- * (the nav's Browse menu), and may end with actions opening dialogs; picking any closes the menu.
+ * (the nav's Library menu), and may end with actions opening dialogs; picking any closes the menu.
  *
  * The browser owns visibility. It toggles the panel from the trigger, dismisses it on a click
  * anywhere outside, and reports every change through `beforetoggle`/`toggle`. This component

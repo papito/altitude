@@ -10,7 +10,7 @@ import { registerHtmlCommonBindings } from "./stores/html-common.js"
 /**
  * Starts a page that carries the nav and `html_common` outside the main app: Import
  * (`upload-form-page.js`) and Settings (`settings-page.js`). What such a page shares is the nav's
- * Browse menu and the dialog it opens, New library:
+ * Library menu and the dialog it opens, New library:
  *
  * - Alpine, with what `html_common` binds (`registerHtmlCommonBindings`: the modal hosts, the
  *   snackbar's stacks, `x-trap`) and the `contextMenu` component of the menu's control;

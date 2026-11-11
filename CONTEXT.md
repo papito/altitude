@@ -34,8 +34,8 @@ _Avoid_: Parent, Folder, Group.
 
 **Choice menu**:
 A control that picks one of several values from a popover list, such as the
-results grid's Group and Sort, or the nav's Browse, which picks the Library; its
-trigger shows the current choice.
+results grid's Group and Sort, or the nav's Library menu, opened by the current
+Library's name beside Browse; its trigger shows the current choice.
 _Avoid_: Dropdown, Select (a select is a form's field).
 
 **Pin**:

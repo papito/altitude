@@ -13,7 +13,7 @@
  * The menus' actions and the Add buttons open popover dialogs, placed below the trigger that
  * summoned them (`common/modal.js`); Add location, whose map editor needs the room, opens a modal.
  * A choice menu's options are search triggers (`search-results/search-triggers.js`), or links (the
- * nav's Browse menu), and open nothing; its actions after a separator open dialogs as a ⋯ menu's
+ * nav's Library menu), and open nothing; its actions after a separator open dialogs as a ⋯ menu's
  * do. Every trigger built here carries `anchor-name: --<its id>` for that placement.
  */
 import { ModalHost } from "./modal.js"
@@ -160,7 +160,7 @@ export function buildDialogTriggerCtrl({
  * (`data-choice-menu-disabled`) and the trigger's class (`data-choice-menu-trigger-class`, else
  * `action-button small`), and holds one element per option, the current one
  * `aria-checked="true"`: a `button` carrying its own search trigger (Group, Sort), or a link
- * (`a[href]`, the nav's Browse menu), which the browser follows. The control is a trigger showing
+ * (`a[href]`, the nav's Library menu), which the browser follows. The control is a trigger showing
  * the menu's name and the current choice, with the checked option's `title` (a long name's whole
  * text), and the panel the options move into, a `role="menu"` of `menuitemradio` items. A
  * separator (`hr`) may follow the options, and after it the menu's actions: plain `menuitem`
@@ -177,6 +177,11 @@ export function buildDialogTriggerCtrl({
  * "Dock side: Left", so the choice is read without opening it. Such a menu is updated on the
  * client: whoever takes the pick re-checks the options and gives the trigger the new glyph and
  * name (`js/common/explorer-dock.js`).
+ *
+ * A choice-only host (`data-choice-menu-choice-only`, the nav's Library menu) sits beside a label
+ * the page shows on its own, the nav's Browse link: its trigger shows the current choice and the
+ * caret, with no icon or name, and its `aria-label` and `title` name the menu and the choice in
+ * full, "Library: Personal".
  */
 export function buildChoiceMenuCtrl(hostEl) {
     const hostId = hostEl.id
@@ -217,6 +222,13 @@ export function buildChoiceMenuCtrl(hostEl) {
         if (glyphEl) {
             btnEl.append(glyphEl.cloneNode(true))
         }
+    } else if ("choiceMenuChoiceOnly" in hostEl.dataset) {
+        // The choice and the caret alone, beside a label the page shows on its own (the nav's Browse link); the
+        // `aria-label` names the menu, so the trigger reads as more than the choice
+        const label = `${name}: ${checkedEl?.title || checkedEl?.textContent.trim() || ""}`
+        btnEl.setAttribute("aria-label", label)
+        btnEl.title = label
+        btnEl.append(_buildChoice(checkedEl), _buildChoiceCaret())
     } else {
         const iconEl = document.createElement("i")
         iconEl.className = hostEl.dataset.choiceMenuIcon
@@ -224,16 +236,15 @@ export function buildChoiceMenuCtrl(hostEl) {
         const nameEl = document.createElement("span")
         nameEl.className = "choice-name"
         nameEl.textContent = name
-        const choiceEl = document.createElement("span")
-        choiceEl.className = "choice"
-        choiceEl.textContent = checkedEl?.textContent.trim() ?? ""
         if (checkedEl?.title) {
             btnEl.title = checkedEl.title
         }
-        const caretEl = document.createElement("i")
-        caretEl.className = "fas fa-caret-down choice-caret"
-        caretEl.setAttribute("aria-hidden", "true")
-        btnEl.append(iconEl, nameEl, choiceEl, caretEl)
+        btnEl.append(
+            iconEl,
+            nameEl,
+            _buildChoice(checkedEl),
+            _buildChoiceCaret(),
+        )
     }
 
     const panelEl = _buildPanel({ panelId })
@@ -263,6 +274,21 @@ export function buildChoiceMenuCtrl(hostEl) {
     rootEl.append(btnEl, panelEl)
     hostEl.replaceChildren(rootEl)
     return rootEl
+}
+
+/** A choice menu trigger's text of the current choice, the checked option's */
+function _buildChoice(checkedEl) {
+    const choiceEl = document.createElement("span")
+    choiceEl.className = "choice"
+    choiceEl.textContent = checkedEl?.textContent.trim() ?? ""
+    return choiceEl
+}
+
+function _buildChoiceCaret() {
+    const caretEl = document.createElement("i")
+    caretEl.className = "fas fa-caret-down choice-caret"
+    caretEl.setAttribute("aria-hidden", "true")
+    return caretEl
 }
 
 function _buildLabeledButton({ triggerId, label, iconClass, buttonClass }) {

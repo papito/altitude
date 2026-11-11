@@ -12,7 +12,7 @@ class NavController(using logger: Logger) extends BaseController:
 
   /**
    * The nav with fresh counts. `current` is the entry of the page reloading it (a `Const.NavEntry` key), which the swap would
-   * otherwise unmark. The Browse menu's host comes empty (`reload`): the page keeps its own, `hx-preserve`.
+   * otherwise unmark. The Library menu's host comes empty (`reload`): the page keeps its own, `hx-preserve`.
    */
   @requireLogin()
   @cask.get(f"/$prefix/nav/r/:repoId")
