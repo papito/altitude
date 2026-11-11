@@ -7,11 +7,13 @@ import play.twirl.api.Html
 
 import altitude.core.{ Const => C }
 import altitude.core.Api
+import altitude.core.ForbiddenException
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.RestoreResult
+import altitude.core.routes.decorators.forbidden
 
 abstract class BaseController(using logger: Logger) extends cask.Routes:
 
@@ -83,25 +85,28 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
 
   /**
    * The answer of a route whose refusals are plain text the snackbar reports: a bad request (`ValidationException`, its message
-   * or its field errors) is a 400, something not found a 404 and a conflict (`IllegalOperationException`) a 409; any other
-   * failure is the route's own.
+   * or its field errors) is a 400, an asset the account's Permissions do not reach (`ForbiddenException`) a 403, something not
+   * found a 404 and a conflict (`IllegalOperationException`) a 409; any other failure is the route's own.
    */
   def answering(f: => Response[String]): Response[String] =
     try f
     catch
       case ex: ValidationException => textError(whyInvalid(ex), 400)
+      case ex: ForbiddenException => forbidden(ex.getMessage, json = false)
       case ex: NotFoundException => textError(ex.getMessage, 404)
       case ex: IllegalOperationException => textError(ex.getMessage, 409)
 
   /**
    * [[answering]] for a JSON route, in the `{"error": ...}` shape (`jsonError`): a bad request (`ValidationException`, saying why
-   * as [[answering]] says it) and a refused operation (`IllegalOperationException`) are a 400, and something not found, an
-   * unknown ID or another repository's, a 404; any other failure is the route's own.
+   * as [[answering]] says it) and a refused operation (`IllegalOperationException`) are a 400, an asset the account's Permissions
+   * do not reach (`ForbiddenException`) a 403, and something not found, an unknown ID or another repository's, a 404; any other
+   * failure is the route's own.
    */
   def answeringJson(f: => Response[String]): Response[String] =
     try f
     catch
       case ex: ValidationException => jsonError(whyInvalid(ex), 400)
+      case ex: ForbiddenException => forbidden(ex.getMessage, json = true)
       case ex: NotFoundException => jsonError(ex.getMessage, 404)
       case ex: IllegalOperationException => jsonError(ex.getMessage, 400)
 

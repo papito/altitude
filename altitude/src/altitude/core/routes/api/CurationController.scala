@@ -9,8 +9,10 @@ import scala.util.Try
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Validators
+import altitude.core.models.Permission
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requirePermission
 
 /** Curation's JSON API: the count of the queue the modal walks, and a Curation set's outcome and the Undo of it */
 class CurationController(using logger: Logger) extends BaseController:
@@ -19,12 +21,14 @@ class CurationController(using logger: Logger) extends BaseController:
 
   /** The number of Sequences in the queue, read from the database: the client never adds or subtracts */
   @requireLogin()
+  @requirePermission(Permission.CurateOwn, Permission.CurateAll)
   @cask.get(f"/$prefix/r/:repoId/count")
   def count(repoId: String)(using request: Request): Response[String] =
     jsonResponse(ujson.Obj(fields.COUNT -> App.altitude.service.curation.countQueue()))
 
   /** Keeps the Picks, recycles the others and answers with each Pick that left its Sequence, for Undo to post back to `reopen` */
   @requireLogin()
+  @requirePermission(Permission.CurateOwn, Permission.CurateAll)
   @cask.post(f"/$prefix/r/:repoId/resolve")
   def resolve(repoId: String)(using request: Request): Response[String] =
     Try {
@@ -40,6 +44,7 @@ class CurationController(using logger: Logger) extends BaseController:
 
   /** The Undo of a `resolve`, given its lists and its answer; a duplicate left in the trash is reported as a restore does */
   @requireLogin()
+  @requirePermission(Permission.CurateOwn, Permission.CurateAll)
   @cask.post(f"/$prefix/r/:repoId/reopen")
   def reopen(repoId: String)(using request: Request): Response[String] =
     Try {

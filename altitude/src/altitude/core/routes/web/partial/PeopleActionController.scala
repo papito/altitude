@@ -12,9 +12,12 @@ import altitude.core.DataScrubber
 import altitude.core.DuplicateException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
+import altitude.core.models.Permission
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
+import altitude.core.routes.decorators.refusedView
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requirePermission
 import altitude.core.service.PersonService
 
 class PeopleActionController(using logger: Logger) extends BaseController:
@@ -29,10 +32,10 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   /**
    * The list of the people in the People buckets named, comma-separated, by `buckets`, each with the number the tab shows; a name
-   * that is no bucket is a 400. Only `triaged=true` shows triaged items, the repository view's rule (`SearchRequestParser`), and
-   * a value that is no boolean is a 400. `pane` names the pane of the People tab the list is for (`Const.PeoplePane`, the Main
-   * pane when left out), which each rename pencil's ID carries, since a Person can be listed in both panes; a name that is no
-   * pane is a 400.
+   * that is no bucket is a 400. Only `triaged=true` shows triaged items, the repository view's rule (`SearchRequestParser`),
+   * which a Guest, who sees Browse alone, is refused with a 403 (`refusedView`), and a value that is no boolean is a 400. `pane`
+   * names the pane of the People tab the list is for (`Const.PeoplePane`, the Main pane when left out), which each rename
+   * pencil's ID carries, since a Person can be listed in both panes; a name that is no pane is a 400.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/list")
@@ -41,6 +44,9 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       buckets: String = Const.PeopleBucket.MATCHED,
       triaged: Option[Boolean] = None,
       pane: String = Const.PeoplePane.MAIN)(using request: Request): Response[String] =
+    refusedView(Const.Search.View.DEFAULT, triaged) match
+      case Some(refusal) => return refusal
+      case None =>
     val requested: Set[String] = App.altitude.service.person.parseBuckets(buckets)
     val unknown = requested -- Const.PeopleBucket.ALL
     if unknown.nonEmpty then return textError(s"Unknown People bucket: ${unknown.mkString(", ")}", 400)
@@ -59,6 +65,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
    * an unknown Face, or another repository's, is a 404
    */
   @requireLogin()
+  @requirePermission(Permission.EditMetadata)
   @cask.get(f"/$prefix/r/:repoId/assignable")
   def listAssignablePeople(repoId: String, faceId: Option[String] = None)(using request: Request): Response[String] =
     answering {
@@ -85,6 +92,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
    * refuses. An unknown person, or another repository's, is a 404
    */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/modals/choose-person-cover-face")
   def showChoosePersonCoverFaceModal(repoId: String, personId: String)(using request: Request): Response[String] =
     answering {
@@ -103,6 +111,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
    * or one on an asset marked for purging, is a plain-text 400 saying why
    */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/p/:personId/cover-image")
   def setCoverImage(repoId: String, personId: String, faceId: String)(using request: Request): Response[String] =
     answering {
@@ -114,6 +123,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   /** The inline name editor; an unknown person, or another repository's, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.EditMetadata)
   @cask.get(f"/$prefix/r/:repoId/p/:personId/name/edit")
   def showEditPersonName(repoId: String, personId: String)(using request: Request): Response[String] =
     answering {
@@ -127,6 +137,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
    * context repository (unknown, another repository's, merged away or a bad match) is a 404.
    */
   @requireLogin()
+  @requirePermission(Permission.EditMetadata)
   @cask.put(f"/$prefix/r/:repoId/p/:personId/name/edit")
   def editPersonName(repoId: String, personId: String)(using request: Request): Response[String] =
     answering {
@@ -144,6 +155,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
    * match) is a 404.
    */
   @requireLogin()
+  @requirePermission(Permission.EditMetadata)
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-person")
   def showRenamePersonDialog(repoId: String, personId: String, pane: String = Const.PeoplePane.MAIN)(using
       request: Request): Response[String] =
@@ -162,6 +174,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
    * Person who is not live in the context repository is a 404, as for the dialog.
    */
   @requireLogin()
+  @requirePermission(Permission.EditMetadata)
   @cask.put(f"/$prefix/r/:repoId/p/:personId/rename")
   def renamePersonInDialog(repoId: String, personId: String)(using request: Request): Response[String] =
     answering {
@@ -258,6 +271,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
    * for the modal. An unknown person, or another repository's, either of the two, is a 404.
    */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/modals/merge")
   def showMergePeopleModal(
       repoId: String,
@@ -289,6 +303,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   /** Merges the source into the destination; an unknown person, or another repository's, either of the two, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/src/:srcPersonId/dest/:destPersonId")
   def mergePeople(repoId: String, srcPersonId: String, destPersonId: String)(using request: Request): Response[String] =
     answering {
@@ -303,6 +318,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   /** An unknown person, or another repository's, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/p/:personId/hide")
   def hidePerson(repoId: String, personId: String)(using request: Request): Response[String] =
     answering {
@@ -316,6 +332,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   /** An unknown person, or another repository's, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.delete(f"/$prefix/r/:repoId/p/:personId")
   def discardPersonAsBadMatch(repoId: String, personId: String)(using request: Request): Response[String] =
     answering {
@@ -329,6 +346,7 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
   /** An unknown person, or another repository's, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/p/:personId/show")
   def showPerson(repoId: String, personId: String)(using request: Request): Response[String] =
     logger.trace(s"Showing person: $personId")

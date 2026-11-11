@@ -9,9 +9,12 @@ import altitude.core.Const
 import altitude.core.GeocoderException
 import altitude.core.IllegalOperationException
 import altitude.core.QueryTimeoutException
+import altitude.core.models.Permission
 import altitude.core.routes.BaseController
 import altitude.core.routes.SearchRequestParser
+import altitude.core.routes.decorators.refusedView
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requirePermission
 import altitude.core.util.BoundingBox
 
 /**
@@ -21,7 +24,8 @@ import altitude.core.util.BoundingBox
  * shape a grid (`sort`, `layout`, grouping, paging) are accepted and ignored (`cask.QueryParams`), and the `bbox` search filter
  * is ignored too. `bbox` is the crowded-pin panel's scope, and the map behind the panel keeps showing the whole search;
  * `viewport` is the map's own clipping box. A visible Location keeps its full matching membership count even when a member's own
- * GPS point is outside the viewport.
+ * GPS point is outside the viewport. A Guest's cells or bounds of Triage or the Trash, or of `triaged=true`, are a JSON 403
+ * (`refusedView`): it sees Browse alone.
  */
 class MapController(using logger: Logger) extends BaseController:
   private val prefix = "api/map"
@@ -42,6 +46,9 @@ class MapController(using logger: Logger) extends BaseController:
       triaged: Option[Boolean] = None,
       subset: Option[String] = None,
       params: cask.QueryParams /* allow unknown params */ )(using request: Request): Response[String] =
+    refusedView(view, triaged, json = true) match
+      case Some(refusal) => return refusal
+      case None =>
     val scope = mapScope(view, q, folderId, personId, albumId, locationId, triaged, subset) match
       case Left(message) => return jsonError(message, 400)
       case Right(scope) => scope
@@ -94,6 +101,9 @@ class MapController(using logger: Logger) extends BaseController:
       triaged: Option[Boolean] = None,
       subset: Option[String] = None,
       params: cask.QueryParams /* allow unknown params */ )(using request: Request): Response[String] =
+    refusedView(view, triaged, json = true) match
+      case Some(refusal) => return refusal
+      case None =>
     val scope = mapScope(view, q, folderId, personId, albumId, locationId, triaged, subset) match
       case Left(message) => return jsonError(message, 400)
       case Right(scope) => scope
@@ -112,6 +122,7 @@ class MapController(using logger: Logger) extends BaseController:
             "count" -> bounds.count)))
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/geocode")
   def geocode(repoId: String, q: String = "")(using request: Request): Response[String] =
     try

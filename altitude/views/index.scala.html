@@ -25,7 +25,10 @@
     <script src="/static/js/lib/json-enc.js" defer></script>
   </head>
 
-  <body class="index">
+  @* The Permissions the account holds in this Library, by name (`Permission`), from its login token, and whether it may recycle
+     what this view shows (`RequestContext.recyclesIn`): the controls the scripts build or bind (the explorer's menus and add
+     buttons, drag and drop, Curation's keys) follow them as the templates' do (`window.ctx.holds`, `recyclesHere`) *@
+  <body class="index" data-app-permissions="@{RequestContext.permissions.value.toList.mkString(" ")}"@if(RequestContext.recyclesIn(current)) { data-app-recycles}>
     <nav>
       @includes.html.nav(stats = stats, current = current)
     </nav>
@@ -124,7 +127,7 @@
     </main>
 
     <footer x-data>
-      @includes.html.batch_ops()
+      @includes.html.batch_ops(view = current)
     </footer>
 
     <script type="module">

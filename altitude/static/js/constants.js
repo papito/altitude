@@ -5,6 +5,20 @@ export const Const = {
         trashbin: "trashbin",
     },
 
+    /**
+     * The Permissions a control may need, by the names `Permission` gives them on the server and the
+     * main page's body lists in `data-app-permissions` (js/context.js `holds`)
+     */
+    permission: {
+        import: "Import",
+        curateOwn: "CurateOwn",
+        curateAll: "CurateAll",
+        organize: "Organize",
+        editMetadata: "EditMetadata",
+        recycle: "Recycle",
+        purge: "Purge",
+    },
+
     // Where the explorer sits against the results, as `data-dock-side` on <html> names it
     dockSides: {
         left: "left",

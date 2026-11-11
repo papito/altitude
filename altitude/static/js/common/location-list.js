@@ -34,11 +34,13 @@
  */
 import { closeOpenContextMenu } from "../alpine/components/context-menu.js"
 import { Const } from "../constants.js"
+import { context } from "../context.js"
 import { http } from "../http/client.js"
 import { buildAssetCountEl, setAssetCount } from "./asset-count.js"
 import {
     buildContextMenuCtrl,
     buildModalTriggerCtrl,
+    buildNoMenuCell,
 } from "./context-menu-markup.js"
 import { ModalHost } from "./modal.js"
 import { showErrorSnackBar } from "./snackbar.js"
@@ -197,6 +199,8 @@ function _render(locations, repoId) {
 function _ensureAddControls(repoId) {
     const actionsEl = document.getElementById("locationActions")
     if (actionsEl.childElementCount > 0) return
+    // Adding a Location or a category is Organize's: without it both hosts stay empty
+    if (!context.holds(Const.permission.organize)) return
 
     actionsEl.appendChild(
         buildModalTriggerCtrl({
@@ -578,9 +582,14 @@ function _makeSearchTrigger(el, locationId) {
 /**
  * The row's ⋯ menu cell (see `buildContextMenuCtrl`): Rename and Delete for both kinds, plus Move
  * to category for a Location, each loading a popover dialog.
- * `locationMenuCtrl-<id>` is the trigger the rename and move dialogs return focus to.
+ * `locationMenuCtrl-<id>` is the trigger the rename and move dialogs return focus to. Every action is
+ * Organize's, so an account without it gets the empty cell.
  */
 function _buildMenuCtrl(location, repoId) {
+    if (!context.holds(Const.permission.organize)) {
+        return buildNoMenuCell()
+    }
+
     const isCategory = location.kind === CATEGORY_KIND
     const actions = [
         { label: "Rename", dialog: "rename-location" },

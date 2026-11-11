@@ -2,10 +2,11 @@ package altitude.core.controller
 
 import altitude.test.{ TestContext, TestFocus }
 import io.undertow.Undertow
+import java.net.HttpCookie
 import org.scalatest.{ funsuite, BeforeAndAfterAll, BeforeAndAfterEach }
 import org.scalatest.matchers.should.Matchers.shouldBe
 
-import altitude.core.{ Altitude, App }
+import altitude.core.{ Altitude, App, RequestContext }
 import altitude.core.Const as C
 import altitude.core.models.{ AccountType, Permissions, Repository, User }
 import altitude.core.suites.SqliteSuiteBundle
@@ -18,6 +19,9 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
 
   override def beforeEach(): Unit = {
     testContext = new TestContext(testApp)
+    // The fixtures the test builds through the suite's instance act with every Permission; the server's requests read theirs
+    // from the login token
+    RequestContext.permissions.value = Permissions.all
 
     // The database is dirtied by the separate process (test server)
     // so we need to reset it before each test.
@@ -48,21 +52,22 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
       }
     }
 
-    withServer(App) {
-      host =>
-        val loginResponse = requests.post(
-          s"$host/login",
-          maxRedirects = 0,
-          check = false,
-          data = Map(
-            "login" -> testContext.user.email,
-            "password" -> TestContext.USER_PASSWORD
-          ))
+    withServer(App)(host => testContext.cookies = cookiesOf(host, account))
+  }
 
-        loginResponse.statusCode shouldBe 302
+  /** The session cookies of `account` logged in, with the test password, to the server at `host` */
+  def cookiesOf(host: String, account: User): Map[String, HttpCookie] = {
+    val loginResponse = requests.post(
+      s"$host/login",
+      maxRedirects = 0,
+      check = false,
+      data = Map(
+        "login" -> account.email,
+        "password" -> TestContext.USER_PASSWORD
+      ))
 
-        testContext.cookies = loginResponse.cookies
-    }
+    loginResponse.statusCode shouldBe 302
+    loginResponse.cookies
   }
 
   /**

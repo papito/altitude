@@ -13,13 +13,18 @@ import scala.jdk.CollectionConverters._
 
 import altitude.core.Api
 import altitude.core.App
+import altitude.core.Const
 import altitude.core.RequestContext
 import altitude.core.actors.ImportStatusWsActor
+import altitude.core.models.AccountType
+import altitude.core.models.Permission
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.routes.decorators.authenticate
+import altitude.core.routes.decorators.forbidden
 import altitude.core.routes.decorators.isSameOriginOrNone
 import altitude.core.routes.decorators.rememberRepository
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requirePermission
 import altitude.core.util.Util
 
 object ImportController:
@@ -30,6 +35,7 @@ object ImportController:
 
 class ImportController(using logger: Logger, caskLogger: cask.Logger, context: castor.Context) extends cask.Routes:
   @requireLogin()
+  @requirePermission(Permission.Import)
   @rememberRepository()
   @cask.get("/pipeline/r/:repoId")
   def pipeline(repoId: String): cask.Response[String] =
@@ -38,6 +44,7 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
+  @requirePermission(Permission.Import)
   @cask.post(s"/r/:repoId/upload/:${Api.Field.Upload.UPLOAD_ID}/cancel")
   def cancelUpload(repoId: String, uploadId: String): cask.Response[String] =
     logger.warn(s"CANCELLING upload ID: $uploadId for repo $repoId")
@@ -45,6 +52,7 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
     Response("", 200, Seq("Content-Type" -> "text/plain"), Nil)
 
   @requireLogin
+  @requirePermission(Permission.Import)
   @cask.postForm("/import/r/:repoId/upload/:uploadId")
   def uploadFilesForm(files: Seq[cask.FormEntry] = Seq.empty, repoId: String, uploadId: String)(using
       request: cask.Request): cask.Response[String] =
@@ -97,10 +105,10 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
    * The import status stream of the logged-in account: the account comes from the login (`decorators.authenticate`), never from
    * the request, so no one opens another account's feed. A handshake from a page of another origin is refused with a 403
    * (`decorators.isSameOriginOrNone`; one with no Origin, which no browser sends, is let through to the login check), and one
-   * with no login with a 401, which clears a session cookie whose token was refused. A RawDecorator cannot wrap a WebSocket
-   * endpoint, whose result is no response, so the login is checked here rather than by `requireLogin`. A stale token's rebuild is
-   * not set as a cookie, which the upgrade's answer cannot carry; the next page load sets it. The account's sockets close when
-   * its versions change (`ImportStatusWsActor.CloseAllFor`).
+   * with no login with a 401, which clears a session cookie whose token was refused, and a Guest's with a 403: a Guest imports
+   * nothing, so it has no feed. A RawDecorator cannot wrap a WebSocket endpoint, whose result is no response, so the login is
+   * checked here rather than by `requireLogin`. A stale token's rebuild is not set as a cookie, which the upgrade's answer cannot
+   * carry; the next page load sets it. The account's sockets close when its versions change (`ImportStatusWsActor.CloseAllFor`).
    */
   @cask.websocket("/import/status")
   def pipelineStatus()(using request: cask.Request): cask.WebsocketResult =
@@ -118,6 +126,9 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
             statusCode = 401,
             headers = Seq("Content-Type" -> "text/plain"),
             cookies = noLogin.cookies))
+      case Right(login) if login.claims.account.accountType == AccountType.Guest =>
+        logger.warn(s"Refused an import status handshake of Guest [${login.claims.account.persistedId}]")
+        WebsocketResult.Response(forbidden(Const.Msg.Err.FORBIDDEN_GUEST, json = false))
       case Right(login) =>
         val userId = login.claims.account.persistedId
         cask.WsHandler {

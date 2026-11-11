@@ -4,13 +4,17 @@ import cask.Request
 import cask.model.Response
 import org.slf4j.Logger
 
+import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.NotFoundException
 import altitude.core.models.User
 import altitude.core.routes.decorators.authenticate
+import altitude.core.routes.decorators.refusedView
 import altitude.core.routes.decorators.rememberRepository
 import altitude.core.routes.decorators.renewedCookies
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.visibleOnly
 
 class IndexController(using logger: Logger, caskLogger: cask.Logger, context: castor.Context) extends cask.Routes:
   @cask.get("/")
@@ -49,18 +53,29 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
     if !App.altitude.isInitialized then
       logger.warn("App is not initialized, redirecting to setup")
       Response("", 302, Seq("Location" -> "/setup"), Nil)
-    else mainPage(view.getOrElse(Const.Search.View.DEFAULT))
+    else
+      val shown = view.getOrElse(Const.Search.View.DEFAULT)
+      // The client seeds its search from the address, so a view the account does not see is refused here. A Guest sees Browse
+      // alone, without the triaged assets; the nav offers it nothing else
+      val triaged = params.value.get(Api.Field.Search.TRIAGED).flatMap(_.headOption).flatMap(_.toBooleanOption)
+      refusedView(shown, triaged).getOrElse(mainPage(shown))
 
   /**
    * The address of one asset: the main page, over whose default results the client opens Asset detail on the asset named by the
    * path (js/search-results/detail-url.js, which also reads the Detail panel's `panel` parameter). An unknown asset, or another
-   * repository's, is a 404 here, before any page is rendered around it.
+   * repository's, is a 404 here, before any page is rendered around it, and so is a triaged asset or one in the trash for a
+   * Guest, who sees Browse alone (`visibleOnly`).
    */
   @requireLogin()
   @rememberRepository()
   @cask.get("/r/:repoId/asset/:assetId")
   def assetView(repoId: String, assetId: String, params: cask.QueryParams /* allow unknown params */ ): cask.Response[String] =
-    if App.altitude.service.asset.isInRepository(assetId) then mainPage(Const.Search.View.DEFAULT)
+    val visible =
+      try
+        visibleOnly(App.altitude.service.asset.getById(assetId)): Unit
+        true
+      catch case _: NotFoundException => false
+    if visible then mainPage(Const.Search.View.DEFAULT)
     else cask.Response("Asset not found", 404, Seq(("Content-Type", "text/plain")))
 
   /** The nav marks the view asked for; the client reads the same parameter to seed its search */

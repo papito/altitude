@@ -17,10 +17,14 @@ import scala.util.control.NonFatal
 
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.models.AccountType
+import altitude.core.models.Asset
+import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.TokenClaims
+import altitude.core.models.User
 import altitude.core.routes.web.SessionController
 import altitude.core.service.UserService.TokenCheck
 import altitude.core.util.MurmurHash
@@ -262,26 +266,114 @@ object decorators:
             statusCode = 403,
             headers = Seq("Content-Type" -> "text/plain")))
 
+  /** The account `requireLogin` put in the context, which a decorator applied after it reads; it throws when there is none */
+  private def loggedIn(req: cask.Request, decorator: String): User =
+    RequestContext.account.value.getOrElse(
+      throw IllegalStateException(s"$decorator on ${req.exchange.getRequestPath} ran without requireLogin before it"))
+
+  /**
+   * Runs the endpoint when the account `requireLogin` put in the context is `allowed`, else answers 403, saying why (`why`) in
+   * JSON for an API request and in plain text otherwise: there is nowhere to redirect the account to. The access decorators below
+   * are all this, applied after `requireLogin`.
+   */
+  private def allowedOnly(req: cask.Request, delegate: cask.RawDecorator#Delegate, decorator: String, why: => String)(
+      allowed: User => Boolean): Result[Raw] =
+    val user = loggedIn(req, decorator)
+    // The innermost decorator's map fills the endpoint's extra parameter list, so the request travels on from here too
+    if allowed(user) then delegate(req, Map("request" -> req))
+    else
+      logger.warn(s"Account [${user.persistedId}] (${user.accountType}) refused ${req.exchange.getRequestPath}: $why")
+      val refusal = forbidden(why, json = isApiRequest(req))
+      Result.Success(Response(refusal.data, refusal.statusCode, refusal.headers))
+
+  /**
+   * The one 403 of a refusal for lack of a Permission, from a decorator, a route or a service (`ForbiddenException` through
+   * `BaseController.answering` and `answeringJson`): `{"error": why}` in JSON, the shape of every JSON route's refusal
+   * (`BaseController.jsonError`), and "Forbidden: why" in plain text otherwise
+   */
+  def forbidden(why: String, json: Boolean): Response[String] =
+    if json then Response(ujson.write(ujson.Obj("error" -> why)), 403, Seq("Content-Type" -> "application/json"))
+    else Response(s"Forbidden: $why", 403, Seq("Content-Type" -> "text/plain"))
+
   /**
    * Decorator for an Admin-only endpoint, applied after `requireLogin`, which has put the account in the context. A User or a
    * Guest is answered with 403, JSON for an API request and plain text otherwise; there is nowhere to redirect them to.
    */
   class requireAdmin extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
-      val user = RequestContext.account.value.getOrElse(
-        throw IllegalStateException(s"requireAdmin on ${req.exchange.getRequestPath} ran without requireLogin before it"))
+      allowedOnly(req, delegate, "requireAdmin", Const.Msg.Err.FORBIDDEN_ADMIN)(_.accountType == AccountType.Admin)
 
-      // The innermost decorator's map fills the endpoint's extra parameter list, so the request travels on from here too
-      if user.accountType == AccountType.Admin then delegate(req, Map("request" -> req))
-      else
-        logger.warn(s"Account [${user.persistedId}] (${user.accountType}) refused ${req.exchange.getRequestPath}: Admin only")
-        if isApiRequest(req) then
-          Result.Success(
-            Response(
-              """{"error": "Forbidden", "message": "Admin only"}""",
-              statusCode = 403,
-              headers = Seq("Content-Type" -> "application/json")))
-        else Result.Success(Response("Forbidden: Admin only", statusCode = 403, headers = Seq("Content-Type" -> "text/plain")))
+  /**
+   * Decorator for an endpoint that needs a Permission in the path's Library, any one of `permissions`, applied after
+   * `requireLogin`, which has put the account's Permissions there in the context (every one for an Admin; none for a Guest, who
+   * is refused every such route). An account holding none of them is answered as `requireAdmin` answers a User. A rule that
+   * depends on the asset (Curate own against its owner, recycling a sorted or a triaged one) is the service's (`AssetRules`).
+   * `RouteTableTests` reads `anyOf` off the route.
+   */
+  class requirePermission(permissions: Permission*) extends cask.RawDecorator:
+    require(permissions.nonEmpty, "requirePermission names at least one Permission")
+    val anyOf: Set[Permission] = permissions.toSet
+
+    // "Curate own, Curate all or Recycle": the labels in the order of the Permissions
+    private val named =
+      val labels = Permission.values.toList.filter(anyOf.contains).map(_.label)
+      if labels.size == 1 then labels.head else s"${labels.init.mkString(", ")} or ${labels.last}"
+
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      allowedOnly(req, delegate, "requirePermission", Const.Msg.Err.FORBIDDEN_PERMISSION.format(named)) {
+        _ => anyOf.exists(RequestContext.permissions.value.has)
+      }
+
+  /**
+   * Decorator for an endpoint of a view a Guest does not see and that needs no Permission (the Triage partials), applied after
+   * `requireLogin`: a Guest sees Browse alone, and is answered as `requireAdmin` answers a User. A view or a route that does need
+   * one (the Import page, Curation, the Trash's Purge) is `requirePermission`'s, which refuses a Guest too.
+   */
+  class requireMember extends cask.RawDecorator:
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      allowedOnly(req, delegate, "requireMember", Const.Msg.Err.FORBIDDEN_GUEST)(_.accountType != AccountType.Guest)
+
+  /**
+   * Decorator for creating a Library, applied after `requireLogin`: an Admin, or an account whose token carries the Create
+   * Libraries flag (`User.canCreateLibraries`); anyone else is answered as `requireAdmin` answers a User
+   */
+  class requireLibraryCreator extends cask.RawDecorator:
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      allowedOnly(req, delegate, "requireLibraryCreator", Const.Msg.Err.FORBIDDEN_LIBRARY_CREATOR)(mayCreateLibraries)
+
+  /**
+   * Whether the context's account may see a view of its Library (`Const.Search.View`), for the routes that take the view as a
+   * parameter, which no decorator reads: a Guest sees Browse alone, so neither Triage nor the Trash, nor the triaged assets
+   * Browse adds with `triaged=true`; any other account sees every view
+   */
+  def maySeeView(view: String, triaged: Option[Boolean] = None): Boolean =
+    RequestContext.isMember || (view == Const.Search.View.DEFAULT && !triaged.contains(true))
+
+  /**
+   * A Guest's request for a view it does not see ([[maySeeView]]), as a route taking the view as a parameter answers it: a 403
+   * ([[forbidden]]), in JSON when `json`; None for a view the account sees
+   */
+  def refusedView(view: String, triaged: Option[Boolean], json: Boolean = false): Option[Response[String]] =
+    Option.unless(maySeeView(view, triaged)) {
+      logger.warn(s"Account [${RequestContext.getAccount.persistedId}] refused the view [$view] (triaged: $triaged): a Guest")
+      forbidden(Const.Msg.Err.FORBIDDEN_GUEST, json)
+    }
+
+  /**
+   * Whether the context's account may open the asset by its ID: a Guest sees Browse alone, so neither a triaged asset nor one in
+   * the trash; any other account, and a request with no account (a signed URL, whose signature is the grant), may
+   */
+  def maySeeAsset(asset: Asset): Boolean = !RequestContext.isGuest || (!asset.isTriaged && !asset.isRecycled)
+
+  /** The asset, or a `NotFoundException`, as for an unknown ID, when the context's account may not open it ([[maySeeAsset]]) */
+  def visibleOnly(asset: Asset): Asset =
+    if maySeeAsset(asset) then asset
+    else
+      logger.debug(s"Asset [${asset.persistedId}] not shown to Guest [${RequestContext.getAccount.persistedId}]: Browse alone")
+      throw NotFoundException(s"Asset [${asset.persistedId}] not found")
+
+  /** Whether the account may create a Library: an Admin by type, anyone else by the Create Libraries flag */
+  def mayCreateLibraries(user: User): Boolean = user.accountType == AccountType.Admin || user.canCreateLibraries
 
   /**
    * For a full page of a repository, applied after `requireLogin`, whose access check has refused a foreign repository: once the

@@ -12,19 +12,19 @@ import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.routes.BaseController
-import altitude.core.routes.decorators.requireAdmin
+import altitude.core.routes.decorators.requireLibraryCreator
 import altitude.core.routes.decorators.requireLogin
 
 /**
- * The New library dialog, an Admin's, opened from the nav's Library menu: it creates a Library, which an Admin reaches by type,
- * and sends the browser to its Import page. Both routes are scoped to the Library the dialog was opened from, as every partial
- * is.
+ * The New library dialog, an Admin's or that of an account with the Create Libraries flag (`requireLibraryCreator`), opened from
+ * the nav's Library menu: it creates a Library, which an Admin reaches by type, and sends the browser to its Import page. Both
+ * routes are scoped to the Library the dialog was opened from, as every partial is.
  */
 class LibraryActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/library"
 
   @requireLogin()
-  @requireAdmin()
+  @requireLibraryCreator()
   @cask.get(f"/$prefix/r/:repoId/dialogs/new")
   def showNewLibraryDialog(repoId: String)(using request: Request): Response[String] =
     htmlResponse(htmx.html.new_library_dialog())
@@ -36,7 +36,7 @@ class LibraryActionController(using logger: Logger) extends BaseController:
    * with `HX-Redirect` to its Import page, whose load records it as the last active one.
    */
   @requireLogin()
-  @requireAdmin()
+  @requireLibraryCreator()
   @cask.post(f"/$prefix/r/:repoId/new")
   def htmxNewLibrary(repoId: String)(using request: Request): Response[String] =
     val jsonIn: ujson.Obj = unscrubbedJson.get

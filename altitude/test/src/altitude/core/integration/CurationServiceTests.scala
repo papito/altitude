@@ -594,18 +594,25 @@ import altitude.core.service.FaceDetectionService
      *
      * Assertions:
      *
-     * The engine's plan names `asset_sequence` for all five statements, so the toolbar's count, read after every mutation, costs
-     * the rows that carry a Sequence and not the library. The queue's statement names it twice, once for the grouped rows and
-     * once for the cover its correlated subquery reads per Sequence, so no cover costs a scan of the library either.
+     * The engine's plan names `asset_sequence` for all five statements, the first four also as an account that curates its own
+     * frames alone reads them, so the toolbar's count, read after every mutation, costs the rows that carry a Sequence and not
+     * the library. The queue's statement names it twice, once for the grouped rows and once for the cover its correlated subquery
+     * reads per Sequence, so no cover costs a scan of the library either.
      */
     val frames = burst(0)
     val dao = testApp.DAO.asset.asInstanceOf[AssetDao]
     val plans = atScale(seedCopies(frames.head.persistedId, copies = 5000, folders = 1)) {
+      // Each as an account that curates everyone's frames reads it, then as one that curates its own alone
+      val owner = Some(frames.head.ownerUserId)
       List(
-        dao.sequencesToCurateStatement,
-        dao.countSequencesToCurateStatement,
+        dao.sequencesToCurateStatement(),
+        dao.sequencesToCurateStatement(owner),
+        dao.countSequencesToCurateStatement(),
+        dao.countSequencesToCurateStatement(owner),
         dao.sequenceFramesStatement(sequenceOf(frames), MAX_FRAMES),
+        dao.sequenceFramesStatement(sequenceOf(frames), MAX_FRAMES, owner),
         dao.countSequenceFramesStatement(sequenceOf(frames)),
+        dao.countSequenceFramesStatement(sequenceOf(frames), owner),
         dao.liveSequenceMembersStatement(Set(sequenceOf(frames)))
       ).map((sql, values) => lookupPlanOf(sql, values))
     }

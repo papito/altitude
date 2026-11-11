@@ -30,6 +30,17 @@ final case class Permissions(mask: Int):
 
   def isEmpty: Boolean = mask == 0
 
+  /** Whether these Permissions curate the asset for the account `accountId`: Curate all, or Curate own on an asset it owns */
+  def mayCurate(asset: Asset, accountId: String): Boolean =
+    has(Permission.CurateAll) || (has(Permission.CurateOwn) && asset.ownerUserId == accountId)
+
+  /**
+   * Whether these Permissions recycle the asset for the account `accountId`, and so restore it: a triaged asset, as one recycled
+   * from Triage still is, takes a Curate Permission ([[mayCurate]]), a sorted one Recycle
+   */
+  def mayRecycle(asset: Asset, accountId: String): Boolean =
+    if asset.isTriaged then mayCurate(asset, accountId) else has(Permission.Recycle)
+
   /** The Permissions held, in the order of [[Permission]] */
   def toList: List[Permission] = Permission.values.toList.filter(has)
 

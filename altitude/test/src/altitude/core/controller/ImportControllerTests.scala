@@ -127,6 +127,22 @@ object ImportControllerTests {
     }
   }
 
+  test("The import status WebSocket refuses a Guest's handshake") {
+
+    /**
+     * Setup:
+     *
+     * A Guest logged in to a Library.
+     *
+     * Assertions:
+     *
+     * The Guest's handshake is refused with a 403: a Guest imports nothing, so it has no import feed.
+     */
+    loginAs(AccountType.Guest, Permissions.none)
+
+    withServer(App)(host => importStatusHandshake(host, testContext.cookies) shouldBe Left(403))
+  }
+
   test("The import status WebSocket refuses a handshake from another origin") {
 
     /**

@@ -12,9 +12,12 @@ import altitude.core.DuplicateException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Asset
+import altitude.core.models.Permission
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requirePermission
+import altitude.core.routes.decorators.visibleOnly
 import altitude.core.service.PersonService.FaceTarget
 
 class AssetActionController(using logger: Logger) extends BaseController:
@@ -25,7 +28,10 @@ class AssetActionController(using logger: Logger) extends BaseController:
   private val nameMaxLength = Map(Api.Field.Person.NAME -> Api.Constraints.MAX_NAME_LENGTH)
   private val nameMinLength = Map(Api.Field.Person.NAME -> Api.Constraints.MIN_NAME_LENGTH)
 
-  /** The asset's detail modal, or its JSON when JSON is asked for; an unknown asset, or another repository's, is a 404 of either */
+  /**
+   * The asset's detail modal, or its JSON when JSON is asked for; an unknown asset, or another repository's, is a 404 of either,
+   * as is a triaged asset or one in the trash for a Guest, who sees Browse alone (`visibleOnly`)
+   */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/asset-detail/:assetId")
   def showAssetDetailModal(repoId: String, assetId: String)(using request: Request): Response[String] =
@@ -35,20 +41,23 @@ class AssetActionController(using logger: Logger) extends BaseController:
     val isJsonFormat =
       (contentType != null && contentType.contains("application/json")) ||
         (accept != null && accept.contains("application/json"))
-    if isJsonFormat then answeringJson(jsonResponse(App.altitude.service.asset.getById(assetId).toBrowserJson))
-    else answering(htmlResponse(htmx.html.view_image_detail_modal(App.altitude.service.asset.getById(assetId))))
+    def asset: Asset = visibleOnly(App.altitude.service.asset.getById(assetId))
+    if isJsonFormat then answeringJson(jsonResponse(asset.toBrowserJson))
+    else answering(htmlResponse(htmx.html.view_image_detail_modal(asset)))
 
   /**
    * The Detail panel's two sections, People and Details, for the asset, read in one snapshot (`AssetService.detailOf`): its Faces
    * with their people (bad matches left out, Hidden marked), the folder path (nothing for the root or for triage), its albums and
    * Locations, and the frames of its Sequence. An asset in the trash gets the same panel with its People section read-only; an
-   * unknown asset, or another repository's, is a 404.
+   * unknown asset, or another repository's, is a 404, as is a triaged asset or one in the trash for a Guest (`visibleOnly`).
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/detail-panel/:assetId")
   def showDetailPanel(repoId: String, assetId: String)(using request: Request): Response[String] =
     answering {
-      val payload = "<!doctype html>" + htmx.html.detail_panel(App.altitude.service.asset.detailOf(assetId))
+      val detail = App.altitude.service.asset.detailOf(assetId)
+      visibleOnly(detail.asset): Unit
+      val payload = "<!doctype html>" + htmx.html.detail_panel(detail)
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
     }
 
@@ -60,6 +69,7 @@ class AssetActionController(using logger: Logger) extends BaseController:
    * in the trash a 409.
    */
   @requireLogin()
+  @requirePermission(Permission.EditMetadata)
   @cask.put(f"/$prefix/r/:repoId/face/:faceId/person")
   def changeFacePerson(repoId: String, faceId: String)(using request: Request): Response[String] =
     answering {
@@ -96,6 +106,7 @@ class AssetActionController(using logger: Logger) extends BaseController:
    * client shows is stale.
    */
   @requireLogin()
+  @requirePermission(Permission.EditMetadata)
   @cask.put(f"/$prefix/r/:repoId/face/:faceId/person/name")
   def nameFacePerson(repoId: String, faceId: String)(using request: Request): Response[String] =
     answering {
@@ -128,9 +139,11 @@ class AssetActionController(using logger: Logger) extends BaseController:
    * People section with the result in its data attributes, the merged Person's ID and the destination's among them. A body that
    * is not a JSON object, an ID that is not a UUID, a destination with no name or the Person themselves is a 400; a Face gone or
    * given to someone else meanwhile, or a Person or destination no longer live or of another Library, a 404; a Face of an asset
-   * in the trash, or a Person who has a name by now, a 409, as the section the client shows is stale.
+   * in the trash, or a Person who has a name by now, a 409, as the section the client shows is stale. It merges People, so it is
+   * Organize's, not Edit Metadata's as the other corrections are.
    */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/face/:faceId/person/merge")
   def mergeFacePerson(repoId: String, faceId: String)(using request: Request): Response[String] =
     answering {
@@ -156,6 +169,7 @@ class AssetActionController(using logger: Logger) extends BaseController:
    * gone or moved meanwhile is a 404, a Face of an asset in the trash a 409.
    */
   @requireLogin()
+  @requirePermission(Permission.EditMetadata)
   @cask.delete(f"/$prefix/r/:repoId/face/:faceId")
   def removeFace(repoId: String, faceId: String)(using request: Request): Response[String] =
     answering {

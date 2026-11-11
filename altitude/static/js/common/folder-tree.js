@@ -41,12 +41,14 @@
  * button, which stays flush left at every depth.
  */
 import { Const } from "../constants.js"
+import { context } from "../context.js"
 import { Folder } from "../models/folder.js"
 import { http } from "../http/client.js"
 import { buildAssetCountEl, setAssetCount } from "./asset-count.js"
 import {
     buildContextMenuCtrl,
     buildModalTriggerCtrl,
+    buildNoMenuCell,
 } from "./context-menu-markup.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { applyViewedFolderScope } from "./viewed-folder-scope.js"
@@ -174,6 +176,8 @@ function _patchAssetCounts(folder) {
 function _ensureAddControl(rootFolder, repoId) {
     const hostEl = document.getElementById("folderActions")
     if (!hostEl || hostEl.childElementCount > 0) return
+    // Adding a folder is Organize's: without it the host stays hidden
+    if (!context.holds(Const.permission.organize)) return
 
     hostEl.appendChild(
         buildModalTriggerCtrl({
@@ -477,8 +481,14 @@ function _anchorDialogsTo(el) {
  * The folder's ⋯ menu cell (see `buildContextMenuCtrl`). The IDs are stable across rebuilds:
  * `folderMenuCtrl-<id>` is the trigger the folder dialogs return focus to, `menu-<id>` the panel.
  * Each action requests a popover dialog; the root can only gain children, so it offers Add folder alone.
+ * Every action is Organize's, so an account without it gets the empty cell, and Delete of a folder holding assets also
+ * Recycle's.
  */
 function _buildMenuCtrl(folder, repoId, folderName) {
+    if (!context.holds(Const.permission.organize)) {
+        return buildNoMenuCell()
+    }
+
     const actions = [
         {
             label: "Add folder",
@@ -488,18 +498,23 @@ function _buildMenuCtrl(folder, repoId, folderName) {
     ]
 
     if (!folder.isRoot) {
-        actions.push(
-            {
-                label: "Rename",
-                dialog: "rename-folder",
-                vals: { id: folder.id },
-            },
-            {
+        actions.push({
+            label: "Rename",
+            dialog: "rename-folder",
+            vals: { id: folder.id },
+        })
+        // Deleting a folder recycles the assets in it and in its subfolders (the recursive count),
+        // which takes Recycle; an empty one any holder of Organize deletes
+        if (
+            folder.numOfAssets === 0 ||
+            context.holds(Const.permission.recycle)
+        ) {
+            actions.push({
                 label: "Delete",
                 dialog: "delete-folder",
                 vals: { id: folder.id },
-            },
-        )
+            })
+        }
     }
 
     return buildContextMenuCtrl({

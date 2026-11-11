@@ -7,8 +7,10 @@ import org.slf4j.Logger
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.models.Album
+import altitude.core.models.Permission
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requirePermission
 
 /** Album JSON API: the list the Albums tab renders, and the membership changes made by drag/drop and the batch footer */
 class AlbumController(using logger: Logger) extends BaseController:
@@ -23,6 +25,7 @@ class AlbumController(using logger: Logger) extends BaseController:
 
   /** An unknown album, or another repository's, is a JSON 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/assets")
   def addAssetsToAlbum(repoId: String)(using request: Request): Response[String] =
     val (albumId, assetIds) = membershipRequest(unscrubbedJson.get)
@@ -32,6 +35,7 @@ class AlbumController(using logger: Logger) extends BaseController:
 
   /** An unknown album, or another repository's, is a JSON 404, and none of its memberships goes */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.delete(f"/$prefix/r/:repoId/assets")
   def removeAssetsFromAlbum(repoId: String)(using request: Request): Response[String] =
     val (albumId, assetIds) = membershipRequest(unscrubbedJson.get)

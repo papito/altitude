@@ -3,6 +3,7 @@ import { requestCuration } from "../alpine/components/curation.js"
 import { isModalActive } from "../common/modal.js"
 import { showWarningSnackBar } from "../common/snackbar.js"
 import { Const } from "../constants.js"
+import { context } from "../context.js"
 import { assetIdOf } from "../search-results/cells.js"
 import { removeCurateButtons } from "../search-results/date-groups.js"
 import { runSearch } from "../search-results/search.js"
@@ -12,14 +13,18 @@ const CURATE_PARAM = "curate"
 /**
  * Curation on the Sequence the browser's URL names (`?curate=`, the Detail panel's Curation link), over the page's first
  * results. The first search replaces the URL without the parameter, so a reload shows the grid. An ID that is no Sequence's
- * opens on Curation's own too-few-frames state.
+ * opens on Curation's own too-few-frames state. Opening Curation takes a Curate Permission, so without one the
+ * parameter is left alone, as the server would refuse every request of Curation.
  */
 export function openCurationInLocation(app) {
     const sequenceId = new URLSearchParams(window.location.search).get(
         CURATE_PARAM,
     )
 
-    if (sequenceId) {
+    if (
+        sequenceId &&
+        context.holds(Const.permission.curateOwn, Const.permission.curateAll)
+    ) {
         app.dispatch(Const.events.curateRequested, { sequenceId })
     }
 }

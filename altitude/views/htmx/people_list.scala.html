@@ -2,6 +2,7 @@
 @import altitude.core.models.ListedPeople
 @import altitude.core.models.ListedPerson
 @import altitude.core.Const
+@import altitude.core.models.Permission
 
 @(listed: ListedPeople, pane: String)
 
@@ -25,7 +26,7 @@
    requests the rename dialog
    (htmx/rename_person_dialog) into the popover host, anchored to itself: its ID carries `pane`, the pane the list is for,
    so the pencils of a person listed in both panes are two anchors, and the dialog's return-focus selector finds the copy
-   a reload renders. With no one listed, one line
+   a reload renders; it is Edit Metadata's, rendered only for the account holding it. With no one listed, one line
    of text and no grid: that everyone is only in triaged items when the buckets hold people the triage switch left off
    (`leftOffByTriage`), and otherwise that no one is in the buckets. *@
 
@@ -66,6 +67,7 @@
                    data-app-dialog-anchor="@{linkId}">
                     @{person.name.getOrElse("")}<span class="count"> (@{visibleCount})</span>@if(person.isHidden) {<span class="visually-hidden">, hidden</span>}
                 </a>
+                @if(RequestContext.holds(Permission.EditMetadata)) {
                 @defining(s"personRenameCtrl-$pane-${person.persistedId}") { renameCtrlId =>
                 <button type="button"
                         class="rename"
@@ -78,6 +80,7 @@
                         hx-trigger="click"
                         hx-vals='{"personId": "@{person.persistedId}", "pane": "@{pane}"}'
                         data-app-dialog-anchor="@{renameCtrlId}"><i class="fas fa-edit" aria-hidden="true"></i></button>
+                }
                 }
             </span>
         </div>

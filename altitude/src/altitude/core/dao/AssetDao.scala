@@ -97,20 +97,26 @@ trait AssetDao extends BaseDao[Asset]:
    * The queue of Curation: the context repository's Sequences with at least `Const.Curation.MIN_FRAMES` frames completed and out
    * of the trash, counted over those frames alone, the oldest first capture first, a Sequence with none (an undated one) last on
    * both engines, and then by ID, each with its cover, the first of those frames in capture order. Read through `asset_sequence`.
+   * With an `owner`, every frame counted, and the cover, is one of that account's assets (`owner_user_id`): the queue of an
+   * account that curates its own assets alone.
    */
-  def getSequencesToCurate(): List[QueuedSequence]
+  def getSequencesToCurate(owner: Option[String] = None): List[QueuedSequence]
 
   /** How many Sequences [[getSequencesToCurate]] holds, read from the database */
-  def countSequencesToCurate(): Int
+  def countSequencesToCurate(owner: Option[String] = None): Int
 
   /**
    * The first `limit` of a Sequence's frames in the context repository, completed and out of the trash, in capture order (a frame
-   * with no capture time last, then by import time and ID, as `CurationRule` orders them), through `asset_sequence`
+   * with no capture time last, then by import time and ID, as `CurationRule` orders them), through `asset_sequence`; with an
+   * `owner`, that account's frames alone
    */
-  def getSequenceFrames(sequenceId: String, limit: Int): List[Asset]
+  def getSequenceFrames(sequenceId: String, limit: Int, owner: Option[String] = None): List[Asset]
 
-  /** How many frames of a Sequence are in the context repository, completed and out of the trash, through `asset_sequence` */
-  def countSequenceFrames(sequenceId: String): Int
+  /**
+   * How many frames of a Sequence are in the context repository, completed and out of the trash, through `asset_sequence`; with
+   * an `owner`, that account's frames alone
+   */
+  def countSequenceFrames(sequenceId: String, owner: Option[String] = None): Int
 
   /**
    * Makes the context repository's writers of Sequences (`SequenceService.assign`, `CurationService.resolve` and `reopen`) take

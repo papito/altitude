@@ -1,6 +1,7 @@
 package altitude.core.controller
 
 import altitude.test.TestContext
+import java.net.HttpCookie
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -16,20 +17,53 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.models.AccountType
+import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.Person
 import altitude.core.models.Repository
+import altitude.core.routes.decorators.requireAdmin
+import altitude.core.routes.decorators.requireLibraryCreator
+import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requireLoginOrSignature
+import altitude.core.routes.decorators.requireMember
+import altitude.core.routes.decorators.requirePermission
 
 /**
  * One table over every route of `App.allRoutes`: who may call it, and how it answers another repository's IDs. A route the table
- * does not list fails the first test, so a new route has to be added to it, with its ID parameters probed.
+ * does not list fails the first test, so a new route has to be added to it, with its ID parameters probed and who may call it,
+ * which must be what the route's decorators declare.
  */
 @DoNotDiscover class RouteTableTests extends ControllerTestCore {
 
-  /** Who may call a route: anyone logged in, or anyone, for the reason given */
+  /**
+   * Who may call a route: anyone, for the reason given; any account logged in, and with access to the Library of the path when it
+   * names one, as `requireLogin` checks it, or as the route checks it itself, for the reason given (`LoginInRoute`); a member, an
+   * account that is no Guest (`requireMember`); the holder of any one of `anyOf` in the path's Library (`requirePermission`); an
+   * Admin or an account with the Create Libraries flag (`requireLibraryCreator`); an Admin alone (`requireAdmin`).
+   */
   private enum Access:
-    case Login
     case Public(reason: String)
+    case Login
+    case LoginInRoute(reason: String)
+    case Member
+    case Holder(anyOf: Set[Permission])
+    case LibraryCreator
+    case Admin
+
+    /** Whether an account of `accountType` holding `permissions` in the Library, with the Create Libraries flag or not, may call */
+    def allows(accountType: AccountType, permissions: Permissions, canCreateLibraries: Boolean): Boolean = this match {
+      case Public(_) | Login | LoginInRoute(_) => true
+      case Member => accountType != AccountType.Guest
+      case Holder(anyOf) => accountType == AccountType.Admin || anyOf.exists(permissions.has)
+      case LibraryCreator => accountType == AccountType.Admin || canCreateLibraries
+      case Admin => accountType == AccountType.Admin
+    }
+
+    /** What the route's decorators declare of this: nothing for a route anyone calls or that checks the login itself */
+    def declared: Option[Access] = this match {
+      case Public(_) | LoginInRoute(_) => None
+      case access => Some(access)
+    }
 
   /**
    * What a route takes: no entity ID at all, a parameter that names no row of a repository (with the reason), or entity IDs,
@@ -68,6 +102,15 @@ import altitude.core.models.Repository
     def key: (String, String) = (method, path)
 
     def ignoring(fields: (String, String)*): Row = copy(ignored = ignored ++ fields)
+
+    /** The route needs any one of the Permissions in the Library */
+    def needs(anyOf: Permission*): Row = copy(access = Access.Holder(anyOf.toSet))
+
+    def forMembers: Row = copy(access = Access.Member)
+
+    def forLibraryCreators: Row = copy(access = Access.LibraryCreator)
+
+    def forAdmins: Row = copy(access = Access.Admin)
   }
 
   /**
@@ -120,6 +163,9 @@ import altitude.core.models.Repository
 
   private val MARK = "Quxtheirs"
 
+  // The part of a path that names its Library
+  private val LIBRARY_PATH = "/r/:repoId"
+
   private val GET = "GET"
   private val POST = "POST"
   private val PUT = "PUT"
@@ -149,9 +195,9 @@ import altitude.core.models.Repository
     none(POST, "/htmx/setup", publicRoute("setup runs before any account exists, and refuses once the instance is set up")),
     none(GET, "/static/", publicRoute("the app's own scripts, styles and fonts")),
     none(GET, "/assets/:name", publicRoute("the app's stylesheet bundle")),
-    none(WEBSOCKET, "/import/status"),
+    none(WEBSOCKET, "/import/status", Access.LoginInRoute("a WebSocket handshake, which no decorator wraps, checks it")),
     // Pages
-    none(GET, "/"),
+    none(GET, "/", Access.LoginInRoute("sends a request with no login to the login page, and one with a login to its Library")),
     probed(GET, "/r/:repoId") {
       fx =>
         List(
@@ -161,16 +207,16 @@ import altitude.core.models.Repository
             why = "reads neither ID: the client seeds its search from them"))
     },
     probed(GET, "/r/:repoId/asset/:assetId")(fx => List(Probe(404, path = Map("assetId" -> fx.asset)))),
-    none(GET, "/pipeline/r/:repoId"),
-    none(GET, "/settings/r/:repoId"),
+    none(GET, "/pipeline/r/:repoId").needs(Permission.Import),
+    none(GET, "/settings/r/:repoId").forAdmins,
     Row(
       POST,
       "/r/:repoId/upload/:uploadId/cancel",
-      Ids.NotEntity(Set("uploadId"), "the client's token for one upload, no row of a repository")),
+      Ids.NotEntity(Set("uploadId"), "the client's token for one upload, no row of a repository")).needs(Permission.Import),
     Row(
       POST,
       "/import/r/:repoId/upload/:uploadId",
-      Ids.NotEntity(Set("uploadId"), "the client's token for one upload, no row of a repository")),
+      Ids.NotEntity(Set("uploadId"), "the client's token for one upload, no row of a repository")).needs(Permission.Import),
     probed(GET, "/content/r/:repoId/:dataType/:itemId") {
       fx =>
         List(
@@ -190,7 +236,7 @@ import altitude.core.models.Repository
             why = "assets that are not the repository's are left out, as when they are gone"
           )
         )
-    },
+    }.needs(Permission.Organize),
     probed(DELETE, "/api/asset/r/:repoId/move") {
       fx =>
         List(
@@ -198,8 +244,9 @@ import altitude.core.models.Repository
             200,
             body = json(Api.Field.ASSET_IDS -> ids(fx.asset)),
             why = "recycling leaves out assets that are not the repository's"))
-    },
-    probed(PUT, "/api/asset/r/:repoId/restore")(fx => List(Probe(404, body = json(Api.Field.ASSET_IDS -> ids(fx.recycled))))),
+    }.needs(Permission.Recycle, Permission.CurateOwn, Permission.CurateAll),
+    probed(PUT, "/api/asset/r/:repoId/restore")(fx => List(Probe(404, body = json(Api.Field.ASSET_IDS -> ids(fx.recycled)))))
+      .needs(Permission.Recycle, Permission.CurateOwn, Permission.CurateAll),
     probed(DELETE, "/api/asset/r/:repoId/purge") {
       fx =>
         List(
@@ -207,7 +254,7 @@ import altitude.core.models.Repository
             200,
             body = json(Api.Field.ASSET_IDS -> ids(fx.recycled)),
             why = "purging leaves out assets that are not the repository's"))
-    },
+    }.needs(Permission.Purge),
     probed(GET, "/htmx/asset/r/:repoId/modals/asset-detail/:assetId") {
       fx => List(Probe(404, path = Map("assetId" -> fx.asset)), Probe(404, path = Map("assetId" -> fx.asset), json = true))
     },
@@ -218,7 +265,7 @@ import altitude.core.models.Repository
           Probe(404, path = Map("faceId" -> fx.face), body = json(Api.Field.PERSON_ID -> fx.myPerson)),
           Probe(404, path = Map("faceId" -> fx.myFace), body = json(Api.Field.PERSON_ID -> fx.person))
         )
-    },
+    }.needs(Permission.EditMetadata),
     probed(PUT, "/htmx/asset/r/:repoId/face/:faceId/person/name") {
       fx =>
         List(
@@ -231,7 +278,7 @@ import altitude.core.models.Repository
             path = Map("faceId" -> fx.myFace),
             body = json(Api.Field.PERSON_ID -> fx.person, Api.Field.Person.NAME -> "Renamed"))
         )
-    },
+    }.needs(Permission.EditMetadata),
     probed(PUT, "/htmx/asset/r/:repoId/face/:faceId/person/merge") {
       fx =>
         List(
@@ -244,8 +291,9 @@ import altitude.core.models.Repository
             path = Map("faceId" -> fx.myFace),
             body = json(Api.Field.PERSON_ID -> fx.myPerson, Api.Field.Person.DEST_PERSON_ID -> fx.person))
         )
-    },
-    probed(DELETE, "/htmx/asset/r/:repoId/face/:faceId")(fx => List(Probe(404, path = Map("faceId" -> fx.face)))),
+    }.needs(Permission.Organize),
+    probed(DELETE, "/htmx/asset/r/:repoId/face/:faceId")(fx => List(Probe(404, path = Map("faceId" -> fx.face))))
+      .needs(Permission.EditMetadata),
     // Folders
     none(GET, "/api/folder/r/:repoId/tree"),
     none(GET, "/htmx/folder/r/:repoId/tab"),
@@ -256,7 +304,7 @@ import altitude.core.models.Repository
             200,
             query = Map("parentId" -> fx.folder),
             why = "reads nothing: the empty form carries the parent for the add, which checks it"))
-    },
+    }.needs(Permission.Organize),
     probed(GET, "/htmx/folder/r/:repoId/dialogs/rename-folder") {
       fx =>
         List(
@@ -266,7 +314,7 @@ import altitude.core.models.Repository
             query = Map("id" -> fx.myFolder, "parentId" -> fx.folder),
             why = "`parentId` is not read: the dialog is the folder's")
         )
-    },
+    }.needs(Permission.Organize),
     probed(GET, "/htmx/folder/r/:repoId/dialogs/delete-folder") {
       fx =>
         List(
@@ -276,7 +324,7 @@ import altitude.core.models.Repository
             query = Map("id" -> fx.myFolder, "parentId" -> fx.folder),
             why = "`parentId` is not read: the dialog is the folder's")
         )
-    },
+    }.needs(Permission.Organize),
     probed(POST, "/htmx/folder/r/:repoId/add") {
       fx =>
         List(
@@ -285,10 +333,10 @@ import altitude.core.models.Repository
             body = json(Api.Field.Folder.NAME -> "Added", Api.Field.Folder.PARENT_ID -> fx.folder),
             why = "the dialog's form again, with the parent's field error, as for a name refused"
           ))
-    },
+    }.needs(Permission.Organize),
     probed(PUT, "/htmx/folder/r/:repoId/rename") {
       fx => List(Probe(404, body = json(Api.Field.ID -> fx.folder, Api.Field.Folder.NAME -> "Renamed")))
-    },
+    }.needs(Permission.Organize),
     probed(PUT, "/htmx/folder/r/:repoId/move") {
       fx =>
         List(
@@ -299,8 +347,8 @@ import altitude.core.models.Repository
             why = "a destination that is no folder of the repository is a bad request, as an unknown one is"
           )
         )
-    },
-    probed(DELETE, "/htmx/folder/r/:repoId/")(fx => List(Probe(404, query = Map("id" -> fx.folder)))),
+    }.needs(Permission.Organize),
+    probed(DELETE, "/htmx/folder/r/:repoId/")(fx => List(Probe(404, query = Map("id" -> fx.folder)))).needs(Permission.Organize),
     // Albums
     none(GET, "/api/album/r/:repoId/list"),
     probed(PUT, "/api/album/r/:repoId/assets") {
@@ -313,7 +361,7 @@ import altitude.core.models.Repository
             why = "assets that are not the repository's are left out, and the count says none was added"
           )
         )
-    },
+    }.needs(Permission.Organize),
     probed(DELETE, "/api/album/r/:repoId/assets") {
       fx =>
         List(
@@ -324,16 +372,18 @@ import altitude.core.models.Repository
             why = "assets that are not the repository's are left out, and the count says none was removed"
           )
         )
-    },
+    }.needs(Permission.Organize),
     none(GET, "/htmx/album/r/:repoId/tab"),
-    none(GET, "/htmx/album/r/:repoId/dialogs/add-album"),
-    probed(GET, "/htmx/album/r/:repoId/dialogs/rename-album")(fx => List(Probe(404, query = Map("id" -> fx.album)))),
-    probed(GET, "/htmx/album/r/:repoId/dialogs/delete-album")(fx => List(Probe(404, query = Map("id" -> fx.album)))),
-    none(POST, "/htmx/album/r/:repoId/add"),
+    none(GET, "/htmx/album/r/:repoId/dialogs/add-album").needs(Permission.Organize),
+    probed(GET, "/htmx/album/r/:repoId/dialogs/rename-album")(fx => List(Probe(404, query = Map("id" -> fx.album))))
+      .needs(Permission.Organize),
+    probed(GET, "/htmx/album/r/:repoId/dialogs/delete-album")(fx => List(Probe(404, query = Map("id" -> fx.album))))
+      .needs(Permission.Organize),
+    none(POST, "/htmx/album/r/:repoId/add").needs(Permission.Organize),
     probed(PUT, "/htmx/album/r/:repoId/rename") {
       fx => List(Probe(404, body = json(Api.Field.ID -> fx.album, Api.Field.Album.NAME -> "Renamed")))
-    },
-    none(GET, "/htmx/album/r/:repoId/dialogs/add-to-album"),
+    }.needs(Permission.Organize),
+    none(GET, "/htmx/album/r/:repoId/dialogs/add-to-album").needs(Permission.Organize),
     probed(PUT, "/htmx/album/r/:repoId/assets") {
       fx =>
         List(
@@ -347,8 +397,8 @@ import altitude.core.models.Repository
             why = "assets that are not the repository's are left out, and the success says none was added"
           )
         )
-    },
-    probed(DELETE, "/htmx/album/r/:repoId/")(fx => List(Probe(404, query = Map("id" -> fx.album)))),
+    }.needs(Permission.Organize),
+    probed(DELETE, "/htmx/album/r/:repoId/")(fx => List(Probe(404, query = Map("id" -> fx.album)))).needs(Permission.Organize),
     // Locations
     none(GET, "/api/location/r/:repoId/list"),
     probed(PUT, "/api/location/r/:repoId/assets") {
@@ -361,7 +411,7 @@ import altitude.core.models.Repository
             why = "assets that are not the repository's are left out, and the count says none was added"
           )
         )
-    },
+    }.needs(Permission.Organize),
     probed(DELETE, "/api/location/r/:repoId/assets") {
       fx =>
         List(
@@ -372,15 +422,18 @@ import altitude.core.models.Repository
             why = "assets that are not the repository's are left out, and the count says none was removed"
           )
         )
-    },
+    }.needs(Permission.Organize),
     none(GET, "/htmx/location/r/:repoId/tab"),
-    none(GET, "/htmx/location/r/:repoId/dialogs/add-location"),
-    none(GET, "/htmx/location/r/:repoId/dialogs/add-category"),
-    none(GET, "/htmx/location/r/:repoId/dialogs/add-to-location"),
-    probed(GET, "/htmx/location/r/:repoId/dialogs/rename-location")(fx => List(Probe(404, query = Map("id" -> fx.location)))),
-    probed(GET, "/htmx/location/r/:repoId/dialogs/delete-location")(fx => List(Probe(404, query = Map("id" -> fx.location)))),
+    none(GET, "/htmx/location/r/:repoId/dialogs/add-location").needs(Permission.Organize),
+    none(GET, "/htmx/location/r/:repoId/dialogs/add-category").needs(Permission.Organize),
+    none(GET, "/htmx/location/r/:repoId/dialogs/add-to-location").needs(Permission.Organize),
+    probed(GET, "/htmx/location/r/:repoId/dialogs/rename-location")(fx => List(Probe(404, query = Map("id" -> fx.location))))
+      .needs(Permission.Organize),
+    probed(GET, "/htmx/location/r/:repoId/dialogs/delete-location")(fx => List(Probe(404, query = Map("id" -> fx.location))))
+      .needs(Permission.Organize),
     probed(GET, "/htmx/location/r/:repoId/dialogs/move-location")(fx => List(Probe(404, query = Map("id" -> fx.location))))
-      .ignoring(Api.Field.Location.CATEGORY_ID -> "written into the form as the Location's category, not read"),
+      .ignoring(Api.Field.Location.CATEGORY_ID -> "written into the form as the Location's category, not read")
+      .needs(Permission.Organize),
     probed(POST, "/htmx/location/r/:repoId/add") {
       fx =>
         List(
@@ -393,11 +446,13 @@ import altitude.core.models.Repository
               Api.Field.Location.CATEGORY_ID -> fx.category),
             why = "the dialog's form again, with the category's field error"
           ))
-    },
-    none(POST, "/htmx/location/r/:repoId/add-category").ignoring(Api.Field.Location.CATEGORY_ID -> SCRUBBED_CATEGORY),
+    }.needs(Permission.Organize),
+    none(POST, "/htmx/location/r/:repoId/add-category")
+      .ignoring(Api.Field.Location.CATEGORY_ID -> SCRUBBED_CATEGORY)
+      .needs(Permission.Organize),
     probed(PUT, "/htmx/location/r/:repoId/rename") {
       fx => List(Probe(404, body = json(Api.Field.ID -> fx.location, Api.Field.Location.NAME -> "Renamed")))
-    }.ignoring(Api.Field.Location.CATEGORY_ID -> SCRUBBED_CATEGORY),
+    }.ignoring(Api.Field.Location.CATEGORY_ID -> SCRUBBED_CATEGORY).needs(Permission.Organize),
     probed(PUT, "/htmx/location/r/:repoId/move") {
       fx =>
         List(
@@ -408,7 +463,7 @@ import altitude.core.models.Repository
             why = "the dialog's form again, with the category's field error"
           )
         )
-    },
+    }.needs(Permission.Organize),
     probed(PUT, "/htmx/location/r/:repoId/assets") {
       fx =>
         List(
@@ -423,8 +478,9 @@ import altitude.core.models.Repository
             why = "assets that are not the repository's are left out, and the success says none was added"
           )
         )
-    }.ignoring(Api.Field.Location.CATEGORY_ID -> SCRUBBED_CATEGORY),
-    probed(DELETE, "/htmx/location/r/:repoId/")(fx => List(Probe(404, query = Map("id" -> fx.location)))),
+    }.ignoring(Api.Field.Location.CATEGORY_ID -> SCRUBBED_CATEGORY).needs(Permission.Organize),
+    probed(DELETE, "/htmx/location/r/:repoId/")(fx => List(Probe(404, query = Map("id" -> fx.location))))
+      .needs(Permission.Organize),
     // Map
     probed(GET, "/api/map/r/:repoId/cells") {
       fx =>
@@ -444,28 +500,29 @@ import altitude.core.models.Repository
             Probe(200, query = Map(filter), why = "a scope the repository does not hold matches nothing, so there are no bounds")
         }
     },
-    none(GET, "/api/map/r/:repoId/geocode"),
+    none(GET, "/api/map/r/:repoId/geocode").needs(Permission.Organize),
     // Search, Triage and the nav
     probed(GET, "/htmx/search/r/:repoId") {
       fx =>
         List("folderId" -> fx.folder, "personId" -> fx.person, "albumId" -> fx.album, "locationId" -> fx.location)
           .map(filter => Probe(404, query = Map(filter)))
     },
-    none(GET, "/htmx/triage/r/:repoId/summary"),
+    none(GET, "/htmx/triage/r/:repoId/summary").forMembers,
     probed(GET, "/htmx/triage/r/:repoId/dialogs/scope") {
       fx =>
         List("folderId" -> fx.folder, "personId" -> fx.person, "locationId" -> fx.location)
           .map(filter => Probe(404, query = Map(filter)))
-    },
-    probed(GET, "/htmx/triage/r/:repoId/modals/quick-view")(fx => List(Probe(404, query = Map("folderId" -> fx.folder)))),
+    }.forMembers,
+    probed(GET, "/htmx/triage/r/:repoId/modals/quick-view")(
+      fx => List(Probe(404, query = Map("folderId" -> fx.folder)))).forMembers,
     none(GET, "/htmx/nav/r/:repoId"),
-    none(DELETE, "/htmx/trash/r/:repoId/purge"),
+    none(DELETE, "/htmx/trash/r/:repoId/purge").needs(Permission.Purge),
     none(GET, "/htmx/view-settings/r/:repoId/dialogs/view-settings"),
-    none(POST, "/htmx/settings/r/:repoId"),
-    none(GET, "/htmx/library/r/:repoId/dialogs/new"),
-    none(POST, "/htmx/library/r/:repoId/new"),
+    none(POST, "/htmx/settings/r/:repoId").forAdmins,
+    none(GET, "/htmx/library/r/:repoId/dialogs/new").forLibraryCreators,
+    none(POST, "/htmx/library/r/:repoId/new").forLibraryCreators,
     // Curation
-    none(GET, "/api/curation/r/:repoId/count"),
+    none(GET, "/api/curation/r/:repoId/count").needs(Permission.CurateOwn, Permission.CurateAll),
     probed(POST, "/api/curation/r/:repoId/resolve") {
       fx =>
         List(
@@ -480,7 +537,7 @@ import altitude.core.models.Repository
             why = "recycling leaves out assets that are not the repository's"
           )
         )
-    },
+    }.needs(Permission.CurateOwn, Permission.CurateAll),
     probed(POST, "/api/curation/r/:repoId/reopen") {
       fx =>
         List(
@@ -501,9 +558,9 @@ import altitude.core.models.Repository
             why = "a Pick that is no asset of the repository is put back in no Sequence"
           )
         )
-    },
-    none(GET, "/htmx/curation/r/:repoId"),
-    none(GET, "/htmx/curation/r/:repoId/queue"),
+    }.needs(Permission.CurateOwn, Permission.CurateAll),
+    none(GET, "/htmx/curation/r/:repoId").needs(Permission.CurateOwn, Permission.CurateAll),
+    none(GET, "/htmx/curation/r/:repoId/queue").needs(Permission.CurateOwn, Permission.CurateAll),
     probed(GET, "/htmx/curation/r/:repoId/sequence/:sequenceId") {
       fx =>
         List(
@@ -511,7 +568,7 @@ import altitude.core.models.Repository
             204,
             path = Map("sequenceId" -> fx.sequence),
             why = "a Sequence with too few frames of the repository is passed over, as one gone from the queue is"))
-    },
+    }.needs(Permission.CurateOwn, Permission.CurateAll),
     probed(POST, "/htmx/curation/r/:repoId/selection") {
       fx =>
         List(
@@ -520,30 +577,33 @@ import altitude.core.models.Repository
             body = json(Api.Field.ASSET_IDS -> fx.frames.mkString(",")),
             why = "assets that are not the repository's are left out, and the set says too few frames are left"
           ))
-    },
+    }.needs(Permission.CurateOwn, Permission.CurateAll),
     // People
     none(GET, "/htmx/people/r/:repoId/tab"),
     none(GET, "/htmx/people/r/:repoId/list"),
-    probed(GET, "/htmx/people/r/:repoId/assignable")(fx => List(Probe(404, query = Map("faceId" -> fx.face)))),
+    probed(GET, "/htmx/people/r/:repoId/assignable")(fx => List(Probe(404, query = Map("faceId" -> fx.face))))
+      .needs(Permission.EditMetadata),
     probed(GET, "/htmx/people/r/:repoId/p/:personId/title")(fx => List(Probe(404, path = Map("personId" -> fx.person)))),
     probed(GET, "/htmx/people/r/:repoId/modals/choose-person-cover-face") {
       fx => List(Probe(404, query = Map("personId" -> fx.person)))
-    },
+    }.needs(Permission.Organize),
     probed(PUT, "/htmx/people/r/:repoId/p/:personId/cover-image") {
       fx =>
         List(
           Probe(404, path = Map("personId" -> fx.person), query = Map("faceId" -> fx.myFace)),
           Probe(404, path = Map("personId" -> fx.myPerson), query = Map("faceId" -> fx.face))
         )
-    },
-    probed(GET, "/htmx/people/r/:repoId/p/:personId/name/edit")(fx => List(Probe(404, path = Map("personId" -> fx.person)))),
+    }.needs(Permission.Organize),
+    probed(GET, "/htmx/people/r/:repoId/p/:personId/name/edit")(fx => List(Probe(404, path = Map("personId" -> fx.person))))
+      .needs(Permission.EditMetadata),
     probed(PUT, "/htmx/people/r/:repoId/p/:personId/name/edit") {
       fx => List(Probe(404, path = Map("personId" -> fx.person), body = json(Api.Field.Person.NAME -> "Renamed")))
-    },
-    probed(GET, "/htmx/people/r/:repoId/dialogs/rename-person")(fx => List(Probe(404, query = Map("personId" -> fx.person)))),
+    }.needs(Permission.EditMetadata),
+    probed(GET, "/htmx/people/r/:repoId/dialogs/rename-person")(fx => List(Probe(404, query = Map("personId" -> fx.person))))
+      .needs(Permission.EditMetadata),
     probed(PUT, "/htmx/people/r/:repoId/p/:personId/rename") {
       fx => List(Probe(404, path = Map("personId" -> fx.person), body = json(Api.Field.Person.NAME -> "Renamed")))
-    },
+    }.needs(Permission.EditMetadata),
     probed(GET, "/htmx/people/r/:repoId/p/:personId/name")(fx => List(Probe(404, path = Map("personId" -> fx.person)))),
     probed(GET, "/htmx/people/r/:repoId/modals/merge") {
       fx =>
@@ -551,25 +611,52 @@ import altitude.core.models.Repository
           Probe(404, query = Map("mergeSourceId" -> fx.person, "mergeDestId" -> fx.myPerson)),
           Probe(404, query = Map("mergeSourceId" -> fx.myPerson, "mergeDestId" -> fx.person))
         )
-    },
+    }.needs(Permission.Organize),
     probed(PUT, "/htmx/people/r/:repoId/src/:srcPersonId/dest/:destPersonId") {
       fx =>
         List(
           Probe(404, path = Map("srcPersonId" -> fx.person, "destPersonId" -> fx.myPerson)),
           Probe(404, path = Map("srcPersonId" -> fx.myPerson, "destPersonId" -> fx.person))
         )
-    },
-    probed(PUT, "/htmx/people/r/:repoId/p/:personId/hide")(fx => List(Probe(404, path = Map("personId" -> fx.person)))),
-    probed(PUT, "/htmx/people/r/:repoId/p/:personId/show")(fx => List(Probe(404, path = Map("personId" -> fx.person)))),
+    }.needs(Permission.Organize),
+    probed(PUT, "/htmx/people/r/:repoId/p/:personId/hide")(fx => List(Probe(404, path = Map("personId" -> fx.person))))
+      .needs(Permission.Organize),
+    probed(PUT, "/htmx/people/r/:repoId/p/:personId/show")(fx => List(Probe(404, path = Map("personId" -> fx.person))))
+      .needs(Permission.Organize),
     probed(DELETE, "/htmx/people/r/:repoId/p/:personId")(fx => List(Probe(404, path = Map("personId" -> fx.person))))
+      .needs(Permission.Organize)
   )
 
   /**
    * A route of the app as cask registers it: the method, the path, the names of the endpoint's parameters, and the controller
    * class and method that answer it
    */
-  private case class Endpoint(method: String, path: String, params: List[String], controller: String, handler: String) {
+  private case class Endpoint(
+      method: String,
+      path: String,
+      params: List[String],
+      controller: String,
+      handler: String,
+      decorators: Seq[cask.router.Decorator[?, ?, ?, ?]]) {
     def key: (String, String) = (method, path)
+
+    /**
+     * Who the route's decorators let call it, read off the instances cask builds from its annotations (so the table and the route
+     * cannot disagree unseen): the gate applied after `requireLogin`, or `requireLogin` itself (as `requireLoginOrSignature`
+     * applies it); nothing for a route with neither
+     */
+    def declared: Option[Access] =
+      decorators
+        .collectFirst {
+          case _: requireAdmin => Access.Admin
+          case _: requireLibraryCreator => Access.LibraryCreator
+          case gate: requirePermission => Access.Holder(gate.anyOf)
+          case _: requireMember => Access.Member
+        }
+        .orElse(decorators.collectFirst { case _: requireLogin | _: requireLoginOrSignature => Access.Login })
+
+    /** A route that changes something in a Library: any method but GET under `/r/:repoId` */
+    def changesLibrary: Boolean = method != GET && path.contains(LIBRARY_PATH)
 
     /** The parameters that name a row: `id`, or any `...Id` but the repository's, which the path's own check covers */
     def idParams: Set[String] = params.filter(RouteTableTests.isIdName).toSet - "repoId"
@@ -594,7 +681,8 @@ import altitude.core.models.Repository
                   metadata.endpoint.path,
                   params,
                   routes.getClass.getSimpleName,
-                  metadata.entryPoint.name)
+                  metadata.entryPoint.name,
+                  metadata.decorators)
             }
         }
     }
@@ -730,7 +818,7 @@ import altitude.core.models.Repository
 
     withServer(App) {
       host =>
-        for (row <- table if row.access == Access.Login) withClue(s"[${row.method} ${row.path}]: ") {
+        for (row <- table if !row.access.isInstanceOf[Access.Public]) withClue(s"[${row.method} ${row.path}]: ") {
           val values = pathParam.findAllMatchIn(row.path).map(_.group(1) -> UUID.randomUUID.toString).toMap
           val status =
             if (row.method == WEBSOCKET)
@@ -740,6 +828,128 @@ import altitude.core.models.Repository
                 .getOrElse(101)
             else send(host, row, Probe(0, path = values), repoId, cookies = Map.empty).statusCode
           List(302, 401) should contain(status)
+        }
+    }
+  }
+
+  test(
+    "Every row says who may call its route as the route's decorators declare, and every route that changes a Library is gated") {
+
+    /**
+     * Setup:
+     *
+     * The routes of `App.allRoutes`, with the decorators cask builds from their annotations, and the table.
+     *
+     * Assertions:
+     *
+     * The access of every row is what its route's decorators declare: `requireAdmin` an Admin, `requireLibraryCreator` the Create
+     * Libraries flag, `requirePermission` the holder of any one of its Permissions, `requireMember` a member, and `requireLogin`
+     * alone (or `requireLoginOrSignature`) any account with access to the Library. A route that changes something in a Library
+     * (any method but GET under `/r/:repoId`) declares a member, a Permission, the Create Libraries flag or an Admin.
+     *
+     * Edge cases:
+     *
+     * A public row, and a route that checks the login itself (`/` and the import status WebSocket), have none of these
+     * decorators.
+     */
+    val rows = table.map(row => row.key -> row).toMap
+
+    for (route <- endpoints; row <- rows.get(route.key)) withClue(s"[${route.method} ${route.path}]: ") {
+      route.declared shouldBe row.access.declared
+      // A gate past the login: neither nothing nor `requireLogin` alone
+      if (route.changesLibrary) withClue("a route changing a Library declares a gate: ") {
+        route.declared.exists(_ != Access.Login) shouldBe true
+      }
+    }
+  }
+
+  test("Every route answers 403 exactly the accounts its row refuses") {
+
+    /**
+     * Setup:
+     *
+     * A Library and, logged in to it, an Admin, a Guest, a User holding no Permission, a User holding every Permission, a User
+     * holding every Permission with the Create Libraries flag, and, for each row that needs a Permission, a User holding every
+     * Permission but the row's and a User holding each of the row's alone.
+     *
+     * Assertions:
+     *
+     * Each account's request to each route is answered 403 exactly when the row refuses the account: a route for members refuses
+     * the Guest, a route that needs any of several Permissions refuses the Guest and the User holding none of them and lets each
+     * of them through alone, a route for an Admin refuses every User and the Guest, and creating a Library refuses every account
+     * but an Admin and the User with the flag. A route any account with access calls refuses no one.
+     *
+     * Edge cases:
+     *
+     * The requests carry no body and random IDs, so an account let through is answered whatever the route answers such a request,
+     * a 400 or a 404 among them, but never 403. The import status WebSocket names no Library and is left out.
+     */
+    val library = testContext.persistRepository()
+    val repoId = library.persistedId
+
+    withServer(App) {
+      host =>
+        // One account, logged in, per account type, Permissions and flag
+        val sessions = scala.collection.mutable.Map.empty[(AccountType, Permissions, Boolean), Map[String, HttpCookie]]
+        def session(accountType: AccountType, permissions: Permissions, canCreateLibraries: Boolean = false) =
+          sessions.getOrElseUpdate(
+            (accountType, permissions, canCreateLibraries), {
+              val account = testContext.persistUser(
+                Some(testContext.makeUser().copy(accountType = accountType, canCreateLibraries = canCreateLibraries)))
+              if (accountType != AccountType.Admin) testContext.grant(account, library, permissions)
+              cookiesOf(host, account)
+            }
+          )
+
+        for (row <- table if row.method != WEBSOCKET) withClue(s"[${row.method} ${row.path}] ") {
+          val holders: List[(AccountType, Permissions, Boolean)] = row.access match {
+            case Access.Holder(anyOf) =>
+              (AccountType.User, Permissions(Permissions.all.mask & ~Permissions.of(anyOf.toSeq*).mask), false) ::
+                anyOf.toList.map(permission => (AccountType.User, Permissions.of(permission), false))
+            case _ => Nil
+          }
+          val callers = List(
+            (AccountType.Admin, Permissions.all, false),
+            (AccountType.Guest, Permissions.none, false),
+            (AccountType.User, Permissions.none, false),
+            (AccountType.User, Permissions.all, false),
+            (AccountType.User, Permissions.all, true)
+          ) ++ holders
+
+          for ((accountType, permissions, canCreateLibraries) <- callers)
+            withClue(s"as a $accountType holding $permissions${if (canCreateLibraries) " with the flag" else ""}: ") {
+              val values = pathParam.findAllMatchIn(row.path).map(_.group(1) -> UUID.randomUUID.toString).toMap
+              val cookies = session(accountType, permissions, canCreateLibraries)
+              val status = send(host, row, Probe(0, path = values), repoId, cookies).statusCode
+              (status == 403) shouldBe !row.access.allows(accountType, permissions, canCreateLibraries)
+            }
+        }
+    }
+  }
+
+  test("An account with no grant in a Library is answered 404 on every route of the Library") {
+
+    /**
+     * Setup:
+     *
+     * A Library, and a User logged in who holds every Permission in another Library and no grant in this one.
+     *
+     * Assertions:
+     *
+     * Every route whose path names a Library answers the User's request to it in this Library with a 404, as it would a Library
+     * that does not exist, whatever Permission the route needs.
+     */
+    val library = testContext.persistRepository()
+    val elsewhere = testContext.persistRepository()
+    val stranger = testContext.persistUser()
+    testContext.grant(stranger, elsewhere)
+
+    withServer(App) {
+      host =>
+        val cookies = cookiesOf(host, stranger)
+        for (row <- table if row.path.contains(LIBRARY_PATH)) withClue(s"[${row.method} ${row.path}]: ") {
+          val values = pathParam.findAllMatchIn(row.path).map(_.group(1) -> UUID.randomUUID.toString).toMap
+          send(host, row, Probe(0, path = values), library.persistedId, cookies).statusCode shouldBe 404
         }
     }
   }

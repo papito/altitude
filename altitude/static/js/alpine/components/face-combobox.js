@@ -29,7 +29,10 @@
  * option reads "· merge Unknown 7 (5 assets)" and merges the Person into the picked one, the Create
  * row reads "Name Unknown 7 'X' (5 assets)" and names the Person, and a nameless option reads
  * "· this face" and still moves this Face only, since two nameless people are never merged from here.
- * With the switch on, every pick moves this Face only, as for a named Person's Face. The switch is a
+ * With the switch on, every pick moves this Face only, as for a named Person's Face. Merging People is
+ * Organize's (`Const.permission.organize`): without it a named option never merges, and moves this Face
+ * only, "· this face", as a nameless one does, while the Create row still names the Person (Edit
+ * Metadata's, as every correction here is). The switch is a
  * `.switch` (`button[role="switch"]`) with its label, both inside the component root, so Tab to it
  * keeps the listbox open (`onFocusOut`); a pointer press on either keeps focus in the input
  * (`mousedown` prevented, the label's own click replaced by the component's), so Enter still picks
@@ -226,6 +229,15 @@ export function faceCombobox() {
             return !this.rowPerson.named && !this.faceOnly
         },
 
+        /** The option's pick merges the row's Person into it: a named option, picked for the whole Person, by a holder of Organize */
+        mergesInto(option) {
+            return (
+                this.wholePerson &&
+                option.named &&
+                context.holds(Const.permission.organize)
+            )
+        },
+
         get listboxId() {
             return `faceListbox-${this.faceId}`
         },
@@ -298,7 +310,7 @@ export function faceCombobox() {
             }
 
             const { name, assetCount } = this.rowPerson
-            return option.named
+            return this.mergesInto(option)
                 ? `· merge ${name} (${assetCountText(assetCount)})`
                 : "· this face"
         },
@@ -588,7 +600,7 @@ export function faceCombobox() {
                 return
             }
 
-            if (!this.wholePerson || !option.named) {
+            if (!this.mergesInto(option)) {
                 this.announcePick({ faceId, action: "move", personId: key })
             } else if (this.armedKey !== key) {
                 this.setActive(key)

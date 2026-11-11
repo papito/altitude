@@ -38,6 +38,7 @@ abstract class AllIntegrationTestSuites(val testApp: Altitude)
     new LibraryServicePruneTests(testApp),
     new LibraryServiceRecycleTests(testApp),
     new LibraryServiceRestoreTests(testApp),
+    new AssetPermissionTests(testApp),
     new UserMetadataServiceTests(testApp),
     new FaceDetectionTests(testApp),
     new FaceRecognitionServiceTests(testApp),

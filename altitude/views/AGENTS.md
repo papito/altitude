@@ -1167,7 +1167,7 @@ and Tab out of the popover dismiss the dialog; Escape and the × return focus as
 Tab leave it where they put it.
 
 **New library dialog** — `htmx/new_library_dialog.scala.html` (`#newLibrary`, `static/css/htmx/new_library_dialog.css`) is
-an Admin's dialog, opened by the Library menu's "New library…" action (`Const.UI.NEW_LIBRARY_OPTION`) into the popover
+the dialog of an Admin or an account with the Create Libraries flag, opened by the Library menu's "New library…" action (`Const.UI.NEW_LIBRARY_OPTION`) into the popover
 host, below the nav's Browse trigger and centered on it, and titled "New library" (`Const.UI.NEW_LIBRARY_DIALOG_TITLE`).
 Like the explorer's Add dialogs it declares `data-app-fragment="modal"`, holds one field with no label (the placeholder
 and `aria-label` "Library name"), which it focuses (`data-app-dialog-autofocus-selector`), and posts JSON with
@@ -1544,7 +1544,7 @@ removed from the grid drops out of navigation with it, and the search route is H
 
 Asset detail's URL (`js/search-results/detail-url.js`, `app.detailUrl`) is `/r/:repoId/asset/:assetId`, with `?panel=open`
 while the Detail panel is open and no parameter while it is closed. It carries no search. `IndexController.assetView` answers
-it with the main page (a 404 for an asset the repository does not hold, through the scoped `AssetService.isInRepository`), and
+it with the main page (a 404 for an asset the repository does not hold, read through the scoped `AssetService.getById`, and for a Guest's triaged asset or one in the trash, `decorators.visibleOnly`), and
 `index.scala.html` opens the asset through `openAssetInLocation` after the page's first search, so it shows over the default
 results and, having no cell, with no previous or next. The panel goes by that URL for an open that starts on one, and by what
 this browser remembers otherwise (`attach`); only a toggle writes the remembered state. The URL follows from the panel, which
@@ -2325,8 +2325,9 @@ name alone opens. `includes/nav` renders both through `includes/library_menu`: t
 `data-choice-menu-trigger-class="nav-menu-trigger"` and `hx-preserve`. Its options are the Libraries
 `RepositoryService.getAccessibleTo` lists (every one for an Admin, those it holds a grant in for anyone else; by name,
 case-insensitively and naturally), each a link to its main page, `/r/<id>`, Browse with its defaults, holding the name in a `span` and titled
-with it in full, the current Library `aria-checked`. For an Admin a separator and the "New library…" action follow,
-requesting the **New library dialog** of the current Library. The trigger (`.nav-menu-trigger`, a nav entry's look)
+with it in full, the current Library `aria-checked`. For an Admin, or an account with the Create Libraries flag
+(`decorators.mayCreateLibraries`), a separator and the "New library…" action follow, requesting the **New library dialog**
+of the current Library. The trigger (`.nav-menu-trigger`, a nav entry's look)
 reads the current Library's name after a dot (`·`, drawn by `::before` at 0.6 alpha) in the name's own case, cut with
 an ellipsis at `--library-name-max-width`, and the caret; its accessible name and title are "Library: <the full name>".
 A name in the panel is cut at the same width. Browse and the trigger each glow on their own hover, and each reaches the
@@ -2339,6 +2340,46 @@ is listed at the next full page load. A name is a flex item in the trigger and a
 paragraph of its own, so a right-to-left name never reorders the dot or the caret; the browser tab title, which holds no
 markup, isolates it with U+2068 … U+2069
 (`includes/page_title`). The style guide's navigation section holds the specimen.
+
+**Controls follow Permissions** — An action control is rendered, or bound, only where the account holds what its request
+needs, so no control answers 403 (`altitude/AGENTS.md`, **Permissions on routes**). A template reads the token's bitmask in
+the request's Library through `RequestContext.holds(p, ...)` (any one of them), `RequestContext.isMember` (no Guest),
+`RequestContext.recyclesIn(view)` (Recycle in Browse, a Curate Permission in Triage, nothing in the Trash) and
+`RequestContext.restores` (Recycle or a Curate Permission), the same values the route decorators and the services read; the
+main page (`index`) lists the Permissions held on its body, `data-app-permissions="Import CurateOwn ..."` (the `Permission`
+names), and marks `data-app-recycles` when the account may recycle what its view shows, and a script asks
+`context.holds(...)` or `context.recyclesHere()` (`js/context.js`, with `Const.permission` naming the Permissions) before it
+builds or binds a control. Where each control follows:
+
+- The nav (`includes/nav`): Triage and Trash for a member, Import for Import, New library for an Admin or the Create
+  Libraries flag, Settings for an Admin. A Guest's nav is Browse, the search, the Library menu and the theme switch.
+- The batch operations (`includes/batch_ops`, given the page's `view`): Move, Add to album, Remove from album, Add to
+  location and Remove from location for Organize; Recycle by `recyclesIn(view)`; the Trash's Restore by `restores`, since the
+  Trash holds assets recycled from a folder and from Triage alike, the server checking each (Curate own reaching only the
+  account's own); Curate Selected for a Curate Permission; the Trash's Purge, and the toolbar's Purge recycle bin
+  (`htmx/trashbin_header`), for Purge.
+- The explorer: the ⋯ menus and add buttons of the folder tree, the album list and the Location list
+  (`js/common/folder-tree.js`, `album-list.js`, `location-list.js`) for Organize; without it a row's menu cell is the
+  empty `buildNoMenuCell` (`js/common/context-menu-markup.js`), so the row's other cells keep their grid columns, and the
+  add hosts stay empty. A folder's Delete is offered with Recycle too, unless the folder holds no asset (its recursive
+  `numOfAssets` as the tree read it), since deleting recycles what it holds; the server refuses a delete the count went stale
+  for. A Person's rename pencil (`htmx/people_list`) and the results title's name, the inline editor's trigger
+  (`htmx/view_person_name`, plain text without it), for Edit Metadata; the results title's cover choice and Hide / Show /
+  Discard (`includes/results_title_inner`), and a taken name's "Merge into …" offer (`includes/person_name_taken`), for
+  Organize. The View settings dialog's "Show triaged items" for a member.
+- Drag and drop (`js/dragdrop/index.js`): every move, membership, folder and People drag for Organize; the thumbnails drag,
+  and `#trash` is a drop zone, where the account may recycle what the view shows (`context.recyclesHere`) too.
+- The Detail panel: its People section (`htmx/detail_panel_people`) is read-only, Search alone, without Edit Metadata, as
+  for an asset in the trash; the Change combobox (`js/alpine/components/face-combobox.js`) merges a nameless Person into a
+  named one only for a holder of Organize, and otherwise moves this Face alone ("· this face"); its Curation row
+  (`htmx/detail_panel`) for a Curate Permission.
+- Curation is a Curate Permission's, as its routes are: every way in (Triage's Curate button in `includes/search_results`,
+  a Sequence header's in `htmx/results_grid_grouped`, Curate Selected, the Detail panel's row, the `?curate=` address,
+  which `js/listeners/curation.js` leaves alone without one) and the queue's count (`js/stores/sequences-to-curate.js`,
+  which asks nothing without one). Inside, every control is offered: a set holds only the frames the account may curate,
+  its own alone with Curate own (`AssetRules.curatedOwner`).
+
+The Users entry and page come with account management.
 
 **Nav refresh** — After any successful asset mutation, reload the nav to update counts.
 Folder deletion also recycles assets throughout its subtree, so the `folderDeleted` listener
@@ -2737,7 +2778,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
 | `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder, album or Location row, the dialog-trigger buttons and a choice menu from its host (`buildChoiceMenuCtrl`, with the compact, glyph-only variant of the Dock side menu, and the link options and the actions after a separator of the nav's Library menu) |
-| `views/includes/library_menu.scala.html` | The nav's Browse cell: the Browse link to the current Library's main page, then the Library menu host: the account's Libraries as link options, the current one checked, and for an Admin a separator and New library…; `hx-preserve` (**Nav**) |
+| `views/includes/library_menu.scala.html` | The nav's Browse cell: the Browse link to the current Library's main page, then the Library menu host: the account's Libraries as link options, the current one checked, and for an Admin or the Create Libraries flag a separator and New library…; `hx-preserve` (**Nav**) |
 | `views/htmx/new_library_dialog.scala.html` | The New library dialog: one name field, Create and Cancel, the Library name rule's errors under the field (**New library dialog**) |
 | `views/includes/page_title.scala.html` | The browser tab title of a page of a Library: "<page> · <Library> · Altitude", or "<Library> · Altitude" on the main page |
 | `views/includes/dock_glyphs.scala.html` | The hidden SVG symbol sheet of the four Dock side glyphs, drawn by the Dock side menu's options and trigger through `<use>`; included by `index.scala.html` and the style guide |

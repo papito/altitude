@@ -189,6 +189,16 @@ object Const:
       val NO_LIBRARY = "There is no library to open"
       // A page of a Library that does not exist or that the account cannot see (decorators.requireLogin): one text for both
       val LIBRARY_NOT_FOUND = "Library not found"
+      // Why a route refused an account with 403 (decorators.forbidden: "Forbidden: " and this in plain text, this alone in
+      // JSON): a Permission it does not hold in the Library (requirePermission), naming the Permissions any one of which would do;
+      // a Guest, who sees Browse alone (requireMember, decorators.refusedView); an account without the Create Libraries flag
+      // (requireLibraryCreator); an account that is no Admin (requireAdmin)
+      val FORBIDDEN_PERMISSION = "needs the %s Permission"
+      val FORBIDDEN_ADMIN = "Admin only"
+      val FORBIDDEN_GUEST = "not for a Guest"
+      val FORBIDDEN_LIBRARY_CREATOR = "creating a library needs the Create Libraries flag"
+      // An operation refused for assets the account's Permissions do not reach (AssetRules): the action and how many
+      val FORBIDDEN_ASSETS = "You do not hold the Permission to %s %d of these assets"
       // A Face correction onto the Face's own Person: a move (PersonService.moveFace), or a merge of the Face's Person into
       // themselves (mergeFacePerson)
       val FACE_ALREADY_THEIRS = "The face is already this person's"

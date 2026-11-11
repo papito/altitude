@@ -12,7 +12,8 @@ import {
 /**
  * Thumbnails in the results grid drag into folders, albums, and the trash; a thumbnail that is
  * among the selected ones drags the whole selection with it (its listeners escalate to a batch).
- * The `#trash` nav item is a drop zone for a thumbnail or the batch mover.
+ * The `#trash` nav item is a drop zone for a thumbnail or the batch mover when `toTrash`, the
+ * account may recycle what the view shows (`context.recyclesHere`).
  */
 
 // The dragged thumbnail's image, shrunk under the pointer, is this wide
@@ -21,7 +22,7 @@ const GHOST_IMAGE_WIDTH_PX = 45
 // The inline size each dragged image had before its drag, restored when the drag ends
 const ghostImageInlineSizes = new WeakMap()
 
-export function bindAssetDragDrop({ dispatch }) {
+export function bindAssetDragDrop({ dispatch, toTrash }) {
     const assetDraggable = interact("#assets .drag-drop")
 
     // A Shift-drag over a thumbnail is an additive box selection (see box-selection.js), so no asset
@@ -40,6 +41,10 @@ export function bindAssetDragDrop({ dispatch }) {
             end: onDragEnd,
         },
     })
+
+    if (!toTrash) {
+        return
+    }
 
     interact("#trash").dropzone({
         accept: "#assets .drag-drop, .batch-ops .drag-drop",

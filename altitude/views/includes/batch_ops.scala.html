@@ -1,17 +1,31 @@
 @import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.models.Permission
 
 @* The batch ops: what the selection can do, shown while assets are selected. Rendered twice: in the search toolbar
    (includes/search_results), between the total and the layout and View controls, and in the footer (index), where CSS
    anchor positioning keeps each button directly below its twin in the toolbar (static/css/includes/batch_ops.css).
    The count shows once; the buttons carry no count of their own.
-   Move is a drag handle (js/dragdrop/batch-ops.js); a click on it explains that in a tooltip. *@
+   Move is a drag handle (js/dragdrop/batch-ops.js); a click on it explains that in a tooltip. A button shows only where the
+   account holds the Permission its action needs in the page's `view` (`RequestContext.holds`): Organize for Move and the album
+   and Location buttons, a Curate Permission for Curate Selected, Purge for Purge, Recycle by the view
+   (`RequestContext.recyclesIn`: Recycle in Browse, a Curate Permission in Triage), and Restore for Recycle or a Curate
+   Permission (`RequestContext.restores`), the server checking each asset. *@
+@(view: String)
+
+@organizes = @{ RequestContext.holds(Permission.Organize) }
 <div class="batch-ops" x-show="!$store.selectedAssets.isEmpty">
     @* Default view: Move, Recycle, Add to album, Remove from album (in an album), Add to location, Remove from location
        (in a Location), Curate Selected (two images or more) *@
     <template x-if="!$store.currentView.isTrashBinView()">
         <div class="actions">
+            @if(organizes) {
             <button type="button" class="action-button success drag-drop batch-mover" @@click="$tooltip('Drag to folder, location, or album')"><i class="fas fa-truck-moving"></i>Move</button>
+            }
+            @if(RequestContext.recyclesIn(view)) {
             <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRecycled)"><i class="fas fa-trash"></i>Recycle</button>
+            }
+            @if(organizes) {
             @* Opens the Add to album dialog for the selection (js/listeners/albums.js), which can also create the album *@
             <button type="button" class="action-button" @@click="$dispatch(window.Const.events.batchAddToAlbumRequested)"><i class="fas fa-images"></i>Add to album</button>
             @* While an album's results are displayed: drop the selected assets from that album (the assets themselves are untouched) *@
@@ -24,15 +38,22 @@
             <template x-if="$store.searchParams.locationId">
                 <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromLocation)"><i class="fas fa-minus-circle"></i>Remove from location</button>
             </template>
+            }
+            @if(RequestContext.holds(Permission.CurateOwn, Permission.CurateAll)) {
             @* Opens Curation on the selection, up to the cap it carries (js/listeners/curation.js) *@
             <button type="button" class="action-button curate" x-show="$store.selectedAssets.size > 1" data-max-selection="@{Const.Curation.MAX_SELECTION}" @@click="$dispatch(window.Const.events.batchCurateRequested)"><i class="fas fa-check-double"></i>Curate Selected</button>
+            }
         </div>
     </template>
     @* Trash bin view: Purge, Restore *@
     <template x-if="$store.currentView.isTrashBinView()">
         <div class="actions">
+            @if(RequestContext.holds(Permission.Purge)) {
             <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsPurged)"><i class="fas fa-fire"></i>Purge</button>
+            }
+            @if(RequestContext.restores) {
             <button type="button" class="action-button success" @@click="$dispatch(window.Const.events.batchAssetsRestored)"><i class="fas fa-undo"></i>Restore</button>
+            }
         </div>
     </template>
     @* Every view ends with the count and Deselect all *@

@@ -1,5 +1,6 @@
 @import altitude.core.Const
 @import altitude.core.RequestContext
+@import altitude.core.models.Permission
 @import altitude.core.util.GroupBy
 @import altitude.core.util.SearchGrouping
 @import altitude.core.util.SearchSort
@@ -86,7 +87,7 @@
         <button id="bboxScope" type="button" class="filter-chip" title="Showing the map area only" data-app-search="click" data-app-search-bbox="">Map area &times;</button>
       }
     </div>
-    @includes.html.batch_ops()
+    @includes.html.batch_ops(view = view)
   </div>
 
   <div class="controls">
@@ -149,7 +150,7 @@
 
   @* The trash view's Purge button holds the right edge of the toolbar. The trail stays empty elsewhere, so the controls keep the bar's center *@
   <div class="trail">
-    @if(view == Const.Search.View.TRASHBIN) {
+    @if(view == Const.Search.View.TRASHBIN && RequestContext.holds(Permission.Purge)) {
     @htmx.html.trashbin_header()
     }
   </div>
@@ -157,8 +158,8 @@
 
 @* Triage's row under the toolbar, outside it so it scrolls away with the grid: the button that opens Curation on the whole
    queue, whatever the search shows, since only a frame in triage carries a Sequence. The row waits for the count, and goes at
-   zero (js/stores/sequences-to-curate.js) *@
-@if(view == Const.Search.View.TRIAGE) {
+   zero (js/stores/sequences-to-curate.js). It is a Curate Permission's, as is every way into Curation *@
+@if(view == Const.Search.View.TRIAGE && RequestContext.holds(Permission.CurateOwn, Permission.CurateAll)) {
 <div id="curateQueue" style="display: none" x-data x-show="$store.sequencesToCurate.hasAny">
   <button id="curateSequences"
           type="button"

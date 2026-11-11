@@ -13,13 +13,16 @@ import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Folder
+import altitude.core.models.Permission
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requirePermission
 
 class FolderActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/folder"
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-folder")
   def showAddFolderDialog(repoId: String, parentId: String)(using request: Request): Response[String] =
     val payload = "<!doctype html>" + htmx.html.add_folder_dialog(parentId = parentId)
@@ -27,6 +30,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
   /** An unknown folder, or another repository's, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-folder")
   def showRenameFolderDialog(repoId: String, id: String, parentId: Option[String] = None)(using
       request: Request): Response[String] =
@@ -42,6 +46,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
   /** An unknown folder, or another repository's, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete-folder")
   def showDeleteFolderDialog(repoId: String, id: String, parentId: Option[String] = None)(using
       request: Request): Response[String] =
@@ -61,6 +66,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
    * dialog's form again with the error, as a name refused does, and adds nothing.
    */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.post(f"/$prefix/r/:repoId/add")
   def htmxAddFolder(repoId: String)(using request: Request): Response[String] =
     val dataScrubber = DataScrubber(
@@ -111,6 +117,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
   /** An unknown folder, or another repository's, is a 404, and the root folder a 409 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/rename")
   def htmxRenameFolder(repoId: String)(using request: Request): Response[String] =
     val dataScrubber = DataScrubber(
@@ -164,6 +171,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
    * root folder of another repository; a destination that is not the repository's is a 400, as it does not exist.
    */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/move")
   def htmxMoveFolder(repoId: String, movedFolderId: String, newParentId: String)(using request: Request): Response[String] =
     logger.trace(s"Moving folder $movedFolderId to $newParentId")
@@ -182,6 +190,7 @@ class FolderActionController(using logger: Logger) extends BaseController:
 
   /** An unknown folder, or another repository's, is a 404, and the root folder a 409 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.delete(f"/$prefix/r/:repoId/")
   def htmxDeleteFolder(repoId: String, id: String)(using request: Request): Response[String] =
     answering {

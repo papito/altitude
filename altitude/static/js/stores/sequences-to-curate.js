@@ -1,3 +1,4 @@
+import { Const } from "../constants.js"
 import { context } from "../context.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
@@ -42,6 +43,17 @@ export function createSequencesToCurateStore() {
         },
 
         async refresh() {
+            // The count is a Curate Permission's, as all of Curation is: without one there is nothing
+            // to ask, and the Curate row stays hidden
+            if (
+                !context.holds(
+                    Const.permission.curateOwn,
+                    Const.permission.curateAll,
+                )
+            ) {
+                return
+            }
+
             const read = ++latestRead
 
             try {

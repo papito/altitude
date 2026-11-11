@@ -14,6 +14,7 @@ import altitude.core.models.TriageScope
 import altitude.core.routes.BaseController
 import altitude.core.routes.SearchRequestParser
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requireMember
 import altitude.core.util.SearchSort
 import altitude.core.util.SortDirection
 
@@ -30,6 +31,7 @@ class TriageController(using logger: Logger) extends BaseController:
   private val fields = Api.Field.Search
 
   @requireLogin()
+  @requireMember()
   @cask.get(f"/$prefix/r/:repoId/summary")
   def summary(repoId: String)(using request: Request): Response[String] =
     htmlResponse(htmx.html.triage_summary(App.altitude.service.library.triageSummary()))
@@ -45,6 +47,7 @@ class TriageController(using logger: Logger) extends BaseController:
    * repository's, is a 404, and so is a Person merged away or discarded as a bad match.
    */
   @requireLogin()
+  @requireMember()
   @cask.get(f"/$prefix/r/:repoId/dialogs/scope")
   def scopeDialog(
       repoId: String,
@@ -64,6 +67,7 @@ class TriageController(using logger: Logger) extends BaseController:
    * the folder's dialog counts them. The root folder is a 400; an unknown folder, or another repository's, is a 404.
    */
   @requireLogin()
+  @requireMember()
   @cask.get(f"/$prefix/r/:repoId/modals/quick-view")
   def quickView(repoId: String, folderId: String)(using request: Request): Response[String] =
     answering {

@@ -1,6 +1,7 @@
 @import altitude.core.Const
 @import altitude.core.Const.FaceRecognition
 @import altitude.core.RequestContext
+@import altitude.core.models.Permission
 @import altitude.core.models.Person
 
 @* The inside of a results title (see includes/results_title for the block, and views/AGENTS.md **Results title**): the kind's
@@ -8,7 +9,8 @@
    title also holds the cover face (the no-cover placeholder for a person with none) before the text and the Hide / Show /
    Discard link after it; those parts are the person
    scope's alone, so they are rendered here from the person rather than passed in. Rendered on its own by htmx/person_inner,
-   which the Hide / Show / Discard responses swap into the person's block. *@
+   which the Hide / Show / Discard responses swap into the person's block. Choosing the cover and Hide / Show / Discard are
+   Organize's, rendered only for the account holding it (`RequestContext.holds`). *@
 @(icon: String, subtitle: Option[String] = None, person: Option[Person] = None)(title: Html)
 
 @* What a click on the cover, or on the no-cover placeholder in its place, asks for: the Choose cover face modal *@
@@ -17,17 +19,19 @@
          hx-vals='{"personId": "@{p.persistedId}"}'
          hx-trigger="click"}
 
+@organizes = @{ RequestContext.holds(Permission.Organize) }
+
 @for(p <- person) {
 <div class="cover drag-drop" data-person-id="@{p.persistedId}">
     @p.coverFaceId match {
     case Some(cover) => {
     <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{cover}"
          alt=""
-         @chooseCover(p)
+         @if(organizes) {@chooseCover(p)}
          draggable="false">
     }
     case None => {
-    <span class="no-cover" @chooseCover(p)><i class="fas fa-user" aria-hidden="true"></i></span>
+    <span class="no-cover" @if(organizes) {@chooseCover(p)}><i class="fas fa-user" aria-hidden="true"></i></span>
     }
     }
 </div>
@@ -50,7 +54,7 @@
   @for(s <- subtitle) {<div class="subtitle">@s</div>}
 </div>
 
-@for(p <- person) {
+@for(p <- person.filter(_ => organizes)) {
 <div class="actions">
     @* A successful hide or show announces PEOPLE_CHANGED_EVENT (js/listeners/htmx-requests.js), so the People tab moves
        the person between its buckets *@

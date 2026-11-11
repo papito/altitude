@@ -20,7 +20,9 @@ import altitude.core.util.Query
 /**
  * Reads the Curation sets: the queue of Sequences and the frames of one Sequence or of a selection, each with its Faces and its
  * memberships, sorted by `CurationRule` as they are read, so nothing the rule decides is stored. A set's reads share one
- * snapshot. A set's outcome is written by [[resolve]], and undone by [[reopen]].
+ * snapshot. A set's outcome is written by [[resolve]], and undone by [[reopen]]. An account holding Curate own without Curate all
+ * is shown its own frames alone (`AssetRules.curatedOwner`): the queue counts them, and a set, a selection's included, holds them
+ * alone, so a set never holds a frame its outcome would be refused for.
  */
 class CurationService(val app: Altitude):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -33,13 +35,13 @@ class CurationService(val app: Altitude):
    */
   def queue(): List[QueuedSequence] =
     txManager.asReadOnly {
-      dao.getSequencesToCurate()
+      dao.getSequencesToCurate(AssetRules.curatedOwner)
     }
 
   /** How many Sequences [[queue]] holds */
   def countQueue(): Int =
     txManager.asReadOnly {
-      dao.countSequencesToCurate()
+      dao.countSequencesToCurate(AssetRules.curatedOwner)
     }
 
   /**
@@ -54,14 +56,20 @@ class CurationService(val app: Altitude):
    */
   def setSizeOf(asset: Asset): Option[Int] =
     txManager.asReadOnly {
-      asset.sequenceId.filterNot(_ => asset.isRecycled).map(dao.countSequenceFrames).filter(_ >= C.Curation.MIN_FRAMES)
+      val owner = AssetRules.curatedOwner
+      asset.sequenceId
+        .filterNot(_ => asset.isRecycled)
+        .map(dao.countSequenceFrames(_, owner))
+        .filter(_ >= C.Curation.MIN_FRAMES)
     }
 
   def sequenceSet(sequenceId: String): Option[CurationSet] =
     txManager.asReadOnly {
-      val window = dao.getSequenceFrames(sequenceId, C.Curation.MAX_SEQUENCE_FRAMES)
+      val owner = AssetRules.curatedOwner
+      val window = dao.getSequenceFrames(sequenceId, C.Curation.MAX_SEQUENCE_FRAMES, owner)
       // Only a full window can hold a frame back
-      val heldBack = if window.size < C.Curation.MAX_SEQUENCE_FRAMES then 0 else dao.countSequenceFrames(sequenceId) - window.size
+      val heldBack =
+        if window.size < C.Curation.MAX_SEQUENCE_FRAMES then 0 else dao.countSequenceFrames(sequenceId, owner) - window.size
       assess(window).map(_.copy(heldBack = heldBack))
     }
 
@@ -74,7 +82,8 @@ class CurationService(val app: Altitude):
     if assetIds.size < C.Curation.MIN_FRAMES then return None
 
     txManager.asReadOnly {
-      assess(liveAmong(assetIds).filter(_.isStillImage))
+      val owner = AssetRules.curatedOwner
+      assess(liveAmong(assetIds).filter(asset => asset.isStillImage && owner.forall(_ == asset.ownerUserId)))
     }
 
   /**
@@ -82,8 +91,10 @@ class CurationService(val app: Altitude):
    * holds all its frames still out of the trash, its Picks leave it, so the set does not return to the queue however many Picks
    * it has; when it does not, they stay, to be compared with the other frames from the queue. The recycled frames keep their
    * Sequence, as any recycled frame does. Keep all is this with nothing to recycle. A Pick that is no live asset of the
-   * repository is refused, as the set would otherwise be recycled with nothing kept. Answers with each Pick that left its
-   * Sequence and that Sequence, for [[reopen]].
+   * repository is refused, as the set would otherwise be recycled with nothing kept. A triaged Pick takes a Curate Permission
+   * (`AssetRules.requireCurate`: Curate own only over the account's own assets) and a recycled frame what recycling it takes
+   * (`LibraryService.recycleAssets`); one refused frame changes nothing. Answers with each Pick that left its Sequence and that
+   * Sequence, for [[reopen]].
    */
   def resolve(keepIds: Set[String], recycleIds: Set[String]): Map[String, String] =
     requireOutcome(keepIds, recycleIds)
@@ -94,6 +105,7 @@ class CurationService(val app: Altitude):
       val live = liveAmong(setIds)
       val picks = live.filter(asset => keepIds.contains(asset.persistedId))
       if picks.size < keepIds.size then throw IllegalOperationException("A Pick is no live asset of the repository")
+      AssetRules.requireCurate(picks.filter(_.isTriaged))
 
       // The members are locked, so a move or a recycle meanwhile is settled in what they say; a Pick moved after the read above is
       // no longer among them
@@ -122,7 +134,9 @@ class CurationService(val app: Altitude):
    * Undoes a [[resolve]], in one transaction: restores the recycled frames and puts the Picks back in the Sequences it answered
    * with. It reports as a restore does, and fails as one does: a frame whose content was imported again stays in the trash, and
    * an ID that is no asset of the repository changes nothing. A Pick moved into a folder since stays sorted, as `setSequence`
-   * writes only the rows still in triage, and a sorted asset never carries a Sequence.
+   * writes only the rows still in triage, and a sorted asset never carries a Sequence. Every triaged Pick of the repository, in
+   * the trash or not, as `setSequence` writes each, takes a Curate Permission, and a recycled frame what restoring it takes, as
+   * in [[resolve]].
    */
   def reopen(keepIds: Set[String], recycleIds: Set[String], sequenceOf: Map[String, String]): RestoreResult =
     requireOutcome(keepIds, recycleIds)
@@ -130,6 +144,8 @@ class CurationService(val app: Altitude):
 
     val (result, stamped) = txManager.withTransaction {
       dao.lockSequences()
+      val picks = dao.queryAll(new Query().add(FieldConst.ID -> Query.IN(keepIds.toSet[Any]))).records
+      AssetRules.requireCurate(picks.filter(_.isTriaged))
       val result = app.service.library.restoreRecycledAssets(recycleIds)
       val stamped =
         sequenceOf.groupMap(_._2)(_._1).toList.map((sequenceId, assetIds) => dao.setSequence(assetIds.toSet, sequenceId)).sum

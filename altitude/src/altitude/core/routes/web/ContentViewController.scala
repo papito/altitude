@@ -7,17 +7,21 @@ import org.slf4j.Logger
 import altitude.core.{ Const => C }
 import altitude.core.App
 import altitude.core.NotFoundException
+import altitude.core.RequestContext
 import altitude.core.Validators
 import altitude.core.models.MimedPreviewData
 import altitude.core.routes.RangeStreaming
 import altitude.core.routes.decorators.requireLoginOrSignature
+import altitude.core.routes.decorators.visibleOnly
 
 class ContentViewController(using logger: Logger) extends cask.Routes:
 
   /**
    * A preview, a face or a stored original, served to an account that can see the repository (an Admin by type, anyone else by a
    * grant), or to the holder of a signed URL for that one item. The file store builds paths from the item ID, so an ID that is
-   * not a UUID is a 400, and anything the ID does not name, in the database or on disk, is a 404.
+   * not a UUID is a 400, and anything the ID does not name, in the database or on disk, is a 404. A Guest, who sees Browse alone,
+   * is answered a triaged asset's Preview or original, or one in the trash, as an unknown one (`visibleOnly`); a Face's crop is
+   * served, since it may be the cover of a Person the Guest sees.
    *
    * `exp` and `sig` are a signed URL's, which the decorator verifies; they are declared only because cask answers a query
    * parameter that an endpoint does not declare with a 400.
@@ -39,13 +43,15 @@ class ContentViewController(using logger: Logger) extends cask.Routes:
   private def content(dataType: String, itemId: String)(using request: Request): Response.Raw =
     dataType match {
       case C.DataStore.PREVIEW =>
+        // Only a Guest's request reads the asset, to refuse it one Browse does not show
+        if RequestContext.isGuest then visibleOnly(App.altitude.service.asset.getById(itemId)): Unit
         val preview: MimedPreviewData = App.altitude.service.fileStore.getPreviewById(itemId)
         image(preview.data, preview.mimeType)
 
       case C.DataStore.FILE =>
         // The stored original, streamed with byte ranges so a Video plays and seeks, typed as the asset was detected and named
         // after its file
-        val asset = App.altitude.service.asset.getById(itemId)
+        val asset = visibleOnly(App.altitude.service.asset.getById(itemId))
         val file = App.altitude.service.fileStore.assetFile(itemId)
         val range = Option(request.exchange.getRequestHeaders.getFirst("Range"))
         withContentHeaders(RangeStreaming.respond(file, asset.assetType.mime, asset.fileName, range))

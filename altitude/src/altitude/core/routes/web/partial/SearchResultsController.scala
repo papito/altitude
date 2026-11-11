@@ -17,6 +17,7 @@ import altitude.core.models.Location
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
 import altitude.core.routes.SearchRequestParser
+import altitude.core.routes.decorators.refusedView
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.util.GroupBy
 import altitude.core.util.GroupedSearchResult
@@ -40,7 +41,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * fragment, so replacing the URL does not switch the explorer tab.
    *
    * `triaged` changes the view's scope (`SearchRequestParser`): `true` adds the triaged assets to the repository view, which
-   * leaves them out by default. The View settings dialog offers that switch there alone.
+   * leaves them out by default. The View settings dialog offers that switch there alone. A Guest sees Browse alone: the Triage
+   * and Trash views, and `triaged=true`, are a 403 for it (`refusedView`).
    *
    * `subset` narrows the view to a Triage subset, `unknownPeople` or `noLocation` (`SearchRequestParser`), in every layout and
    * view; any other value is a 400. The results title names it, and the browser URL keeps it.
@@ -94,6 +96,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         ujson.write(ujson.Obj("error" -> "Search results are available as HTML only")),
         400,
         Seq(("Content-Type", "application/json")))
+
+    refusedView(view, triaged) match
+      case Some(refusal) => return refusal
+      case None =>
 
     val scope = SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox, triaged, subset) match
       case Left(message) => return textError(message, 400)

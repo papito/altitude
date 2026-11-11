@@ -35,6 +35,12 @@ case class MetadataExtractorException(asset: Asset, ex: Throwable) extends Excep
 
 case class NotFoundException(msg: String) extends Exception(msg)
 
+/**
+ * The account holds no Permission for what it asked of an asset (a rule a route's decorators cannot decide): a 403 through
+ * `BaseController.answering` and `answeringJson`
+ */
+case class ForbiddenException(msg: String) extends Exception(msg)
+
 case class StorageException(msg: String) extends Exception(msg)
 
 /** The external geocoder could not be reached or did not answer with a list of places */

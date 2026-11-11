@@ -71,7 +71,7 @@ import altitude.core.models.Settings
      * Assertions:
      *
      * The page answers 403 as plain text for a browser request and as JSON for a request that accepts JSON; the save route is
-     * refused the same way. A User's own pages carry no Settings link in the nav.
+     * refused the same way. The main page carries no Settings link in the nav for either.
      */
     for (accountType <- List(AccountType.User, AccountType.Guest)) {
       testContext = new TestContext(testApp)
@@ -91,15 +91,15 @@ import altitude.core.models.Settings
             maxRedirects = 0)
           api.statusCode shouldBe 403
           api.headers("content-type").head should include("application/json")
-          ujson.read(api.text())("error").str shouldBe "Forbidden"
+          ujson.read(api.text())("error").str shouldBe "Admin only"
 
           val saved = save(host, repoId, ujson.Obj(Settings.FACE_YUNET_CONFIDENCE_THRESHOLD -> "0.9"))
           saved.statusCode shouldBe 403
           storedValue(Settings.FACE_YUNET_CONFIDENCE_THRESHOLD) shouldBe "0.85"
 
-          val importPage = requests.get(s"$host/pipeline/r/$repoId", cookies = testContext.cookies, check = false)
-          importPage.statusCode shouldBe 200
-          (importPage.text() should not).include(s"""href="/settings/r/$repoId"""")
+          val mainPage = requests.get(s"$host/r/$repoId", cookies = testContext.cookies, check = false)
+          mainPage.statusCode shouldBe 200
+          (mainPage.text() should not).include(s"""href="/settings/r/$repoId"""")
       }
     }
   }

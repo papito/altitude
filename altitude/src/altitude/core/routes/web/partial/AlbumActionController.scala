@@ -13,8 +13,10 @@ import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Album
+import altitude.core.models.Permission
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
+import altitude.core.routes.decorators.requirePermission
 
 /**
  * The Albums tab and its dialogs. The tab shell is a Twirl partial; the list itself is rendered client-side from
@@ -41,6 +43,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-album")
   def showAddAlbumDialog(repoId: String)(using request: Request): Response[String] =
     val payload = "<!doctype html>" + htmx.html.add_album_dialog()
@@ -48,6 +51,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
 
   /** An unknown album, or another repository's, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-album")
   def showRenameAlbumDialog(repoId: String, id: String)(using request: Request): Response[String] =
     answering {
@@ -62,6 +66,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
 
   /** An unknown album, or another repository's, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete-album")
   def showDeleteAlbumDialog(repoId: String, id: String)(using request: Request): Response[String] =
     answering {
@@ -70,6 +75,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
     }
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.post(f"/$prefix/r/:repoId/add")
   def htmxAddAlbum(repoId: String)(using request: Request): Response[String] =
     val jsonIn: ujson.Obj = nameScrubber.scrub(unscrubbedJson.get)
@@ -95,6 +101,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
 
   /** An unknown album, or another repository's, is a 404 */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/rename")
   def htmxRenameAlbum(repoId: String)(using request: Request): Response[String] =
     val jsonIn: ujson.Obj = nameScrubber.scrub(unscrubbedJson.get)
@@ -130,6 +137,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
     }
 
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-to-album")
   def showAddToAlbumDialog(repoId: String)(using request: Request): Response[String] =
     val payload =
@@ -143,6 +151,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
    * show.
    */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.put(f"/$prefix/r/:repoId/assets")
   def htmxAddAssets(repoId: String)(using request: Request): Response[String] =
     val jsonIn: ujson.Obj = nameScrubber.scrub(unscrubbedJson.get)
@@ -185,6 +194,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
 
   /** An unknown album, or another repository's, is a 404, and its memberships stay */
   @requireLogin()
+  @requirePermission(Permission.Organize)
   @cask.delete(f"/$prefix/r/:repoId/")
   def htmxDeleteAlbum(repoId: String, id: String)(using request: Request): Response[String] =
     answering {

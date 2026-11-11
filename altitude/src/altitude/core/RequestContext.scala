@@ -4,6 +4,8 @@ import java.sql.Connection
 
 import scala.util.DynamicVariable
 
+import altitude.core.models.AccountType
+import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.Repository
 import altitude.core.models.User
@@ -35,6 +37,35 @@ object RequestContext:
   def getConn: Connection = conn.value.getOrElse(throw RuntimeException("No connection in context"))
   def getAccount: User = account.value.getOrElse(throw RuntimeException("No account in context"))
   def getRepository: Repository = repository.value.getOrElse(throw RuntimeException("No repository in context"))
+
+  /**
+   * Whether the context's account holds any one of the Permissions in the request's Library (`permissions`): what a template
+   * renders an action control by, from the same bitmask the route's decorators read
+   */
+  def holds(anyOf: Permission*): Boolean = anyOf.exists(permissions.value.has)
+
+  /** Whether the context's account is a member, an account that is no Guest: it sees Triage, the Trash and Curation */
+  def isMember: Boolean = account.value.exists(_.accountType != AccountType.Guest)
+
+  /**
+   * Whether the context's account may recycle what a view shows (`Const.Search.View`), the rule its Recycle controls follow:
+   * Browse's assets are sorted, which takes Recycle; Triage's are triaged, which takes a Curate Permission (Curate own reaching
+   * only the account's own, which the service checks per asset); the Trash's are recycled already
+   */
+  def recyclesIn(view: String): Boolean = view match
+    case Const.Search.View.TRIAGE => holds(Permission.CurateOwn, Permission.CurateAll)
+    case Const.Search.View.TRASHBIN => false
+    case _ => holds(Permission.Recycle)
+
+  /**
+   * Whether the context's account may restore from the Trash, which takes what recycling took: Recycle for an asset recycled from
+   * a folder, a Curate Permission for one recycled from Triage. The Trash shows both, so its Restore follows either, and the
+   * service refuses per asset.
+   */
+  def restores: Boolean = holds(Permission.Recycle, Permission.CurateOwn, Permission.CurateAll)
+
+  /** Whether the context's account is a Guest, who sees Browse alone; a request with no account (a signed URL) is none */
+  def isGuest: Boolean = account.value.exists(_.accountType == AccountType.Guest)
 
   // This clears everything EXCEPT for the database-related properties
   def clear(): Unit =

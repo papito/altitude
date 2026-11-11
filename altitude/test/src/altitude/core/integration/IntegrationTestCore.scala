@@ -109,6 +109,9 @@ abstract class IntegrationTestCore
     // needs access), since every asset has an owner. Tests then create more repositories and accounts to test the boundaries
     // between them.
     testContext.persistRepository()
+    // The context account acts with every Permission, as an Admin's request does; a test of the rules that read them narrows
+    // them around its calls (`RequestContext.permissions.withValue`)
+    RequestContext.permissions.value = Permissions.all
 
     // nuke the data dir tree
     IntegrationTestUtil.createFileStoreDir(testApp)

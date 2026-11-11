@@ -251,7 +251,8 @@ class LibraryService(val app: Altitude):
 
   /**
    * Delete a folder by ID, including its children. Does not allow deleting the root folder, or any system folders. A folder of
-   * another repository, or none, is not found.
+   * another repository, or none, is not found. The folders' assets are recycled ([[recycleAssets]]), so deleting a folder that
+   * holds any takes Recycle.
    */
   def deleteFolderById(id: String): Unit =
     if app.service.folder.isRootFolder(id) then throw IllegalOperationException("Cannot delete the root folder")
@@ -276,7 +277,9 @@ class LibraryService(val app: Altitude):
   /**
    * Restores recycled assets, all in one transaction: an asset whose content is live again (imported anew after it was recycled)
    * stays in the trash and is reported, and any other failure restores nothing. An ID that is no asset of the repository fails
-   * the restore; a live asset, or one marked for purging, is ignored.
+   * the restore; a live asset, or one marked for purging, is ignored. Restoring takes what recycling the asset would
+   * (`AssetRules.requireRecycle`), checked once the assets are read, so an asset of another repository is not found rather than
+   * refused.
    */
   def restoreRecycledAssets(assetIds: Set[String]): RestoreResult =
     logger.debug(s"Restoring recycled assets [${assetIds.mkString(",")}]")
@@ -284,6 +287,7 @@ class LibraryService(val app: Altitude):
     val result = txManager.withTransaction {
       val recycled = app.service.asset.getAssetsToRestore(assetIds)
       requireAssets(assetIds -- recycled.map(_.persistedId))
+      AssetRules.requireRecycle(recycled, action = "restore")
 
       // One at a time: a restored asset makes a recycled copy of its content a duplicate
       val (restored, duplicates) = recycled.foldLeft((List.empty[Asset], List.empty[Asset])) {
@@ -337,7 +341,8 @@ class LibraryService(val app: Altitude):
    * asset leaving triage leaves its Sequence in the same update: a sorted asset never carries one, so a Sequence whose last
    * member moves is gone with it. The column is written NULL for every moved asset in the one update: a sorted asset has none
    * already, and an asset recycled from triage keeps its Sequence until it is moved into a folder. A destination that is no
-   * folder of the context repository, unknown or another repository's, is a `NotFoundException` that moves nothing.
+   * folder of the context repository, unknown or another repository's, is a `NotFoundException` that moves nothing. An asset
+   * moved out of the trash is restored, which takes what recycling it would (`AssetRules.requireRecycle`).
    */
   def moveAssetsToFolder(assetIds: Set[String], destFolderId: String): Unit =
     if destFolderId == null then throw IllegalOperationException("Destination folder ID cannot be null")
@@ -345,6 +350,7 @@ class LibraryService(val app: Altitude):
     txManager.withTransaction {
       app.service.folder.getById(destFolderId): Unit
       val assetsToMove = app.service.asset.getAssetsToMove(assetIds)
+      AssetRules.requireRecycle(assetsToMove.filter(_.isRecycled), action = "restore")
 
       logger.debug(s"Moving assets [${assetIds.mkString(",")}] to folder [$destFolderId] " + assetsToMove.length)
       if assetsToMove.nonEmpty then
@@ -369,9 +375,15 @@ class LibraryService(val app: Altitude):
         if restoredIds.nonEmpty then app.service.person.restoreFacesForAssets(restoredIds)
     }
 
+  /**
+   * Recycles the live assets among the IDs, in one transaction; an ID that is no live asset of the context repository is left
+   * out. A sorted asset takes Recycle and a triaged one a Curate Permission (`AssetRules.requireRecycle`): one refused asset
+   * recycles nothing.
+   */
   def recycleAssets(assetIds: Set[String]): Unit =
     txManager.withTransaction {
       val assetsToRecycle = app.service.asset.getAssetsToRecycle(assetIds)
+      AssetRules.requireRecycle(assetsToRecycle)
       logger.debug(s"Recycling assets [${assetIds.mkString(",")}]: ${assetsToRecycle.size} recyclable")
 
       if assetsToRecycle.nonEmpty then
