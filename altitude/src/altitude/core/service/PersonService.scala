@@ -147,7 +147,9 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
             e,
             Some(s"Face already exists for person ${person.persistedId} in asset ${asset.persistedId}"))
 
-      if person.numOfFaces == 0 then setFaceAsCover(person, persistedFace.get)
+      // The Face is the person's own, on the asset being imported: the checks of `setFaceAsCover` hold by construction
+      if person.numOfFaces == 0 then
+        updateById(person.persistedId, Map(FieldConst.Person.COVER_FACE_ID -> persistedFace.get.persistedId))
 
       if firstOnAsset then increment(person.persistedId, FieldConst.Person.NUM_OF_FACES)
       logger.trace(
@@ -188,10 +190,10 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     merged
 
   /**
-   * [[merge]] in the caller's transaction: the destination as they are after it, and the Faces the merge deleted, each with the
-   * destination, for `purgeFaceFiles` once the caller's transaction commits
+   * [[merge]] in the caller's transaction: the destination as they are after it, and the Faces the merge deleted, for
+   * `purgeFaceFiles` once the caller's transaction commits
    */
-  private def mergeLocked(dest: Person, source: Person): (Person, List[(Face, Person)]) =
+  private def mergeLocked(dest: Person, source: Person): (Person, List[Face]) =
     val liveIds: Set[String] = dao.lockAndGetLive(Set(dest.persistedId, source.persistedId))
     val persistedDest: Person = dao.getById(dest.persistedId)
     val persistedSource: Person = dao.getById(source.persistedId)
@@ -245,9 +247,8 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
 
     updateById(persistedDest.persistedId, Map(FieldConst.Person.NUM_OF_FACES -> mergedFaceCount) ++ nameFields)
 
-    // Read again, as the cover may have moved: a cover Face keeps its files, and the lost Faces' must go
-    val merged = dao.getById(persistedDest.persistedId)
-    (merged, lostFaces.map(_ -> merged))
+    // Read again, as the name, the count and the cover may have changed
+    (dao.getById(persistedDest.persistedId), lostFaces)
 
   /**
    * For a merge, given the two people's Faces on the Videos where both had one (read before the source's Faces moved): on each
@@ -281,7 +282,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
   /**
    * When an asset gets recycled, each person with a Face on it loses that asset from `numOfFaces`, however many Faces of theirs
    * it holds: the number counts the assets a person is found on outside the trash. The people are locked first
-   * ([[lockAssetPeople]]), after the caller's lock on the assets, so a correction holding one of them ([[removeFace]],
+   * (`PersonDao.lockAssetPeople`), after the caller's lock on the assets, so a correction holding one of them ([[removeFace]],
    * [[moveFace]]) ends before the count is read: read while it held, from a snapshot in which its Face still existed, the count
    * would take the asset from the Person twice.
    *
@@ -332,16 +333,6 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     }
 
   /**
-   * Locks the people with a Face on any of the assets for the caller's transaction, in ID order, so that a face another import
-   * gives one of them meanwhile, or a correction of one of their Faces, waits for it to end. Taken after the assets are locked,
-   * where they are (`AssetDao.lockAssets`): assets, then people, in every transaction that locks both.
-   */
-  def lockAssetPeople(assetIds: Set[String]): Unit =
-    txManager.withTransaction {
-      dao.lockAssetPeople(assetIds)
-    }
-
-  /**
    * Deletes those of the people who have no face left, and gives back their IDs. Recognition matches face rows, so a person is
    * left without any only by an import that started them being discarded, or by a correction ([[removeFace]], [[moveFace]])
    * taking their last Face.
@@ -354,15 +345,55 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     }
 
   /**
-   * Deletes the files of faces whose rows are gone. The cover face of a person who stays keeps its files, which the People tab
-   * still shows; the faces of a deleted person keep none.
+   * Deletes the files of Faces whose rows are gone, or are going with their asset. No cover is left on one of them: every path
+   * that deletes a Face moves the cover off it first (the corrections through [[settleAfterFaceLeft]], purge and the discard of
+   * an import through [[moveCoversOff]]).
    */
-  def purgeFaceFiles(facesWithPeople: List[(Face, Person)], deletedPeople: Set[String] = Set.empty): Unit =
-    facesWithPeople.foreach {
-      case (face, person) =>
-        if deletedPeople.contains(person.persistedId) || !person.coverFaceId.contains(face.persistedId) then
-          logger.trace(s"Removing the files of face [${face.persistedId}]")
-          app.service.fileStore.purgeFaceById(face.persistedId)
+  def purgeFaceFiles(faces: List[Face]): Unit =
+    faces.foreach {
+      face =>
+        logger.trace(s"Removing the files of face [${face.persistedId}]")
+        app.service.fileStore.purgeFaceById(face.persistedId)
+    }
+
+  /**
+   * Moves every cover off the Faces of the assets, whose Faces are about to go (a purge, the discard of an import), in one
+   * transaction. The people with a Face on them are locked first (`PersonDao.lockAssetPeople`, in ID order), so that a face
+   * another import gives one of them meanwhile, a correction of one of their Faces, or a cover being set waits for it to end;
+   * where the caller holds the assets' locks, they come first: assets, then people, in every transaction that locks both. Each
+   * Person whose cover is one of those Faces, live or not, then takes their best Face on another asset not marked for purging
+   * (`FaceDao.getBestCoverCandidate`), or no cover when none is left. Run before the Faces' rows go, so no cover is ever left on
+   * a deleted Face.
+   */
+  def moveCoversOff(assetIds: Set[String]): Unit =
+    if assetIds.isEmpty then return
+
+    txManager.withTransaction {
+      dao.lockAssetPeople(assetIds)
+
+      val faceIds = faceDao
+        .query(new Query().add(FieldConst.Face.ASSET_ID -> Query.IN(assetIds.toSet[Any])))
+        .records
+        .map(_.persistedId)
+        .toSet[Any]
+
+      if faceIds.nonEmpty then
+        val coverHolders = dao.query(new Query().add(FieldConst.Person.COVER_FACE_ID -> Query.IN(faceIds))).records
+
+        coverHolders.foreach {
+          person =>
+            val cover = faceDao.getBestCoverCandidate(person.persistedId, assetIds)
+            logger.debug(
+              s"Cover of person [${person.persistedId}] moves off face [${person.coverFaceId.get}] to " +
+                s"[${cover.map(_.persistedId).getOrElse("none")}]")
+            updateById(person.persistedId, Map(FieldConst.Person.COVER_FACE_ID -> cover.map(_.persistedId)))
+        }
+    }
+
+  /** Every Face of an asset, whoever its person is; see `FaceDao.getAllAssetFaces` */
+  def getAllAssetFaces(assetId: String): List[Face] =
+    txManager.asReadOnly {
+      faceDao.getAllAssetFaces(assetId)
     }
 
   /**
@@ -426,8 +457,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    * other Face on it, has their cover repicked (their remaining Face with the highest detection score) if it was this Face, and
    * is deleted if no Face is left. One transaction, under the Person's row lock, so a concurrent correction of the same Face
    * waits and then finds it gone (`NotFoundException`); a Face of a recycled asset is an `IllegalOperationException`. Once
-   * committed, the Face's files go: `purgeFaceFiles` is given the Person as they are after the repick, since a cover Face keeps
-   * its files, and this one is no longer the cover.
+   * committed, the Face's files go.
    */
   def removeFace(faceId: String): FaceRemoval =
     val removal = txManager.withTransaction {
@@ -441,7 +471,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       FaceRemoval(face, person, deleted)
     }
 
-    purgeFaceFiles(List(removal.face -> removal.person), deletedPeopleOf(removal.person, removal.personDeleted))
+    purgeFaceFiles(List(removal.face))
     removal
 
   /**
@@ -482,7 +512,7 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
           logger.debug(s"Face [$faceId] loses to face [${kept.persistedId}] of person [$targetId] in video [$assetId]; deleted")
           faceDao.deleteById(face.persistedId)
           val (sourceAfter, sourceDeleted) = settleAfterFaceLeft(face, source)
-          (FaceMove(face, sourceAfter, dao.getById(targetId), sourceDeleted), Some(face -> sourceAfter))
+          (FaceMove(face, sourceAfter, dao.getById(targetId), sourceDeleted), Some(face))
         case _ =>
           val targetHadAsset = rival.isDefined || faceDao.hasFaceOfPerson(assetId, targetId)
           faceDao.updateById(face.persistedId, Map(FieldConst.Face.PERSON_ID -> targetId))
@@ -497,7 +527,8 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
               logger.debug(
                 s"Face [${worse.persistedId}] of person [$targetId] loses to face [$faceId] in video [$assetId]; deleted")
               faceDao.deleteById(worse.persistedId)
-              worse -> settleAfterFaceLeft(worse, targetBefore, successor = Some(face))._1
+              settleAfterFaceLeft(worse, targetBefore, successor = Some(face))
+              worse
           }
 
           if !targetHadAsset then increment(targetId, FieldConst.Person.NUM_OF_FACES)
@@ -506,11 +537,8 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
           (FaceMove(face, sourceAfter, dao.getById(targetId), sourceDeleted), lost)
     }
 
-    // The deleted Face's files, once committed: the target's lost Face (its cover now the moved Face) or the moved Face itself,
-    // with the source as settled, deleted or not
-    loser.foreach {
-      case (face, person) => purgeFaceFiles(List(face -> person), deletedPeopleOf(move.source, move.sourceDeleted))
-    }
+    // The deleted Face's files, once committed: the target's lost Face (its cover now the moved Face) or the moved Face itself
+    purgeFaceFiles(loser.toList)
     move
 
   /**
@@ -613,24 +641,19 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
   /**
    * What becomes of a Person once `face`, a Face of theirs on an asset outside the trash, has left (deleted, or given away): the
    * asset leaves their count if no other Face of theirs is on it, the cover goes to `successor`, or to their remaining Face with
-   * the highest detection score, if it was this Face, and they are deleted if no Face is left. The Person as they are after, or
-   * as they were when deleted, with whether they were.
+   * the highest detection score on an asset not marked for purging (none when there is no such Face), if it was this Face, and
+   * they are deleted if no Face is left. The Person as they are after, or as they were when deleted, with whether they were.
    */
   private def settleAfterFaceLeft(face: Face, person: Person, successor: Option[Face] = None): (Person, Boolean) =
     val personId = person.persistedId
     if !faceDao.hasFaceOfPerson(face.assetId.get, personId) then increment(personId, FieldConst.Person.NUM_OF_FACES, -1)
 
     if person.coverFaceId.contains(face.persistedId) then
-      successor.orElse(faceDao.getTopFaces(personId, 1).headOption).foreach {
-        cover => updateById(personId, Map(FieldConst.Person.COVER_FACE_ID -> cover.persistedId))
-      }
+      val cover = successor.orElse(faceDao.getBestCoverCandidate(personId, Set.empty))
+      updateById(personId, Map(FieldConst.Person.COVER_FACE_ID -> cover.map(_.persistedId)))
 
     val deleted = deletePeopleWithoutFaces(Set(personId)).nonEmpty
     (if deleted then person else dao.getById(personId), deleted)
-
-  /** The deleted people for `purgeFaceFiles`: the one person when deleted, so that even their cover's files go */
-  private def deletedPeopleOf(person: Person, deleted: Boolean): Set[String] =
-    if deleted then Set(person.persistedId) else Set.empty
 
   /** The people the faces belong to; to be called in the transaction the faces were read in */
   private def peopleOf(faces: List[Face]): List[Person] = peopleByIds(faces.map(_.personId.get).toSet)
@@ -643,14 +666,31 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
       val qRes: QueryResult[Person] = dao.query(q)
       qRes.records
 
+  /**
+   * Makes the Face the Person's cover. Under the Person's lock, so a purge moving covers off the Face's asset waits or is waited
+   * for ([[moveCoversOff]]): the Person must be of the context repository, and the Face too (`NotFoundException`), the Face the
+   * Person's own and on an asset not marked for purging (`ValidationException`), since a cover never rests on a Face about to go.
+   */
   def setFaceAsCover(person: Person, face: Face): Person =
     txManager.withTransaction {
-      logger.debug(s"Setting the cover of person [${person.persistedId}] to face [${face.persistedId}]")
-      val personForUpdate = person.copy(coverFaceId = Some(face.persistedId))
+      val personId = person.persistedId
+      val faceId = face.persistedId
+      dao.lockAndGetLive(Set(personId)): Unit
+      dao.getById(personId)
 
-      updateById(person.persistedId, Map(FieldConst.Person.COVER_FACE_ID -> face.persistedId))
+      val stored = faceDao.getInRepository(faceId).getOrElse(throw NotFoundException(s"Face [$faceId] not found"))
+      if !stored.personId.contains(personId) then
+        logger.debug(s"Refusing face [$faceId] of person [${stored.personId.get}] as the cover of person [$personId]")
+        throw ValidationException(C.Msg.Err.COVER_FACE_NOT_THEIRS)
 
-      personForUpdate
+      val purging = new Query().add(FieldConst.ID -> stored.assetId.get).add(FieldConst.Asset.IS_PURGED -> true)
+      if app.service.asset.queryAll(purging).nonEmpty then
+        logger.debug(s"Refusing face [$faceId] as a cover: its asset [${stored.assetId.get}] is marked for purging")
+        throw ValidationException(C.Msg.Err.COVER_FACE_PURGING)
+
+      logger.debug(s"Setting the cover of person [$personId] to face [$faceId]")
+      updateById(personId, Map(FieldConst.Person.COVER_FACE_ID -> faceId))
+      person.copy(coverFaceId = Some(faceId))
     }
 
   /**

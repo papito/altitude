@@ -28,3 +28,9 @@
     font-size: var(--font-size-small);
     color: var(--theme-neutral-3);
 }
+
+/* A person with no cover: the placeholder takes the face's box, --face-box, which the modal sets on .people-to-merge */
+#mergePeople .no-cover {
+    width: var(--face-box);
+    height: var(--face-box);
+}

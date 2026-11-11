@@ -14,7 +14,8 @@
    so to assistive tech in a `.visually-hidden` ", hidden" after the number: the link is named by its content, the name,
    the number, which is not displayed in Triage and so is no part of the name there, and then "hidden". An Unmatched
    person is told apart by its
-   orange "Unknown N" name. The face's link and the name link are search triggers for the person; in Triage a person with no
+   orange "Unknown N" name. A person with no cover (no Face left to be one) shows the no-cover placeholder (`.no-cover`,
+   core.css) in place of the face. The face's link and the name link are search triggers for the person; in Triage a person with no
    triaged assets gets the scope dialog instead (js/search-results/search-triggers.js), a popover dialog anchored to the
    name link whichever of the two was clicked: the name link is `personLink-<pane>-<id>` with that `anchor-name`, the pane
    in the ID for the reason the pencil's has it, and both links name it in `data-app-dialog-anchor`, so the dialog sits
@@ -43,7 +44,10 @@
                data-app-search="click"
                data-app-search-person-id="@{person.persistedId}"
                data-app-dialog-anchor="@{linkId}">
-            <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{person.coverFaceId}">
+            @person.coverFaceId match {
+            case Some(cover) => {<img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{cover}">}
+            case None => {<span class="no-cover"><i class="fas fa-user" aria-hidden="true"></i></span>}
+            }
             </a>
             @if(person.isHidden) {
             <i class="fas fa-eye-slash hidden-badge" aria-hidden="true"></i>

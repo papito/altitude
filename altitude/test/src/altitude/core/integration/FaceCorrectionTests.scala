@@ -10,6 +10,7 @@ import scala.util.Try
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.DuplicateException
+import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
 import altitude.core.ValidationException
@@ -128,6 +129,31 @@ import altitude.core.service.PersonService.FaceTarget
     hasFiles(cover.persistedId) shouldBe false
     hasFiles(lower.persistedId) shouldBe true
     hasFiles(higher.persistedId) shouldBe true
+  }
+
+  test("Removing the cover Face repicks no Face on an asset marked for purging") {
+
+    /**
+     * Setup:
+     *
+     * A Person with Faces on three assets: the first, their cover, at a detection score of 0.5, the second at 0.9, its asset
+     * recycled and marked for purging, and the third at 0.3.
+     *
+     * Assertions:
+     *
+     * Removing the cover makes the Face on the third asset the cover, not the better one on the asset marked for purging.
+     */
+    val p = person()
+    val purging = testContext.insertAsset()
+    val cover = face(p, testContext.insertAsset(), detectionScore = 0.5)
+    face(p, purging, detectionScore = 0.9)
+    val left = face(p, testContext.insertAsset(), detectionScore = 0.3)
+    testApp.service.library.recycleAssets(Set(purging.persistedId))
+    testApp.service.asset.updateById(purging.persistedId, Map(FieldConst.Asset.IS_PURGED -> true))
+
+    testApp.service.person.removeFace(cover.persistedId)
+
+    getPerson(p.persistedId).coverFaceId shouldBe Some(left.persistedId)
   }
 
   test("Removing a person's last Face deletes the person, named or not, and their cover's files") {

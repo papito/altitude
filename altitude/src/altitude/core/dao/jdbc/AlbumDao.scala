@@ -83,11 +83,12 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
   override def removeAssets(albumId: String, assetIds: Set[String]): Int =
     val sql = s"""
       DELETE FROM $membershipTable
-       WHERE ${FieldConst.Album.ALBUM_ID} = ?
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Album.ALBUM_ID} = ?
          AND ${FieldConst.Album.ASSET_ID} $inIdSet
     """
 
-    updateByBySql(sql, List(albumId, idSet(assetIds)))
+    updateByBySql(sql, List(RequestContext.getRepository.persistedId, albumId, idSet(assetIds)))
 
   override def removeAssetsFromAllAlbums(assetIds: Set[String]): Int =
     val sql = s"""
@@ -102,10 +103,13 @@ abstract class AlbumDao(override val config: Config) extends BaseDao[Album] with
     val sql = s"""
       SELECT ${FieldConst.Album.ASSET_ID}
         FROM $membershipTable
-       WHERE ${FieldConst.Album.ALBUM_ID} = ?
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Album.ALBUM_ID} = ?
     """
 
-    manyBySqlQuery(sql, List(albumId)).map(_(FieldConst.Album.ASSET_ID).asInstanceOf[String]).toSet
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, albumId))
+      .map(_(FieldConst.Album.ASSET_ID).asInstanceOf[String])
+      .toSet
 
   override def getAlbumsOfAsset(assetId: String): List[Album] =
     val sql = s"""

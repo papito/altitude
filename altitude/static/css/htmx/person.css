@@ -1,5 +1,5 @@
 /* The person scope's results title (htmx/person.scala.html): a .results-title of includes/results_title.css with the cover
-   face before the text and the Hide / Show / Discard link after it */
+   face (or the no-cover placeholder of core.css) before the text and the Hide / Show / Discard link after it */
 #person .cover {
     flex: none;
     cursor: pointer;
@@ -11,6 +11,13 @@
     height: var(--person-avatar-size);
     border-radius: 50%;
     object-fit: cover;
+}
+
+/* A person with no cover: the placeholder takes the cover's circle */
+#person .cover .no-cover {
+    width: var(--person-avatar-size);
+    height: var(--person-avatar-size);
+    border-radius: 50%;
 }
 
 /* The name opens the inline editor (htmx/view_person_name); its pencil shows while the title is hovered or the name has

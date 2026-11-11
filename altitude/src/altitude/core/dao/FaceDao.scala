@@ -27,8 +27,18 @@ trait FaceDao extends BaseDao[Face]:
   /** The Face by ID if it is in the context repository; none for a Face gone or of another repository */
   def getInRepository(faceId: String): Option[Face]
 
-  /** A person's faces by detection score, best first and then by ID, no more than `limit` of them */
+  /**
+   * A person's faces by detection score, best first and then by ID, no more than `limit` of them, in the context repository: none
+   * for another repository's person
+   */
   def getTopFaces(personId: String, limit: Int): List[Face]
+
+  /**
+   * The cover a person takes when Faces of theirs go: their Face with the highest detection score, then by ID as in
+   * [[getTopFaces]], on none of `excludedAssetIds` and on no asset marked for purging, in the context repository; none when no
+   * such Face is left
+   */
+  def getBestCoverCandidate(personId: String, excludedAssetIds: Set[String]): Option[Face]
 
   /**
    * The enrolled Faces of the repository nearest to `features`, closest first: no more than `matchCount`, none at a cosine

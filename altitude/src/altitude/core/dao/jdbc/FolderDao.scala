@@ -93,6 +93,9 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
      * the query itself.
      *
      * This kind of shenanigan is normally not recommended.
+     *
+     * Both arms of the recursion carry the repository, as every hand-written folder read does: another repository's folder has no
+     * children here.
      */
     val recursiveOrderByClause = getDataSourceType match
       case C.DbEngineName.POSTGRES => ""
@@ -104,6 +107,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
         SELECT *, 0 AS level
           FROM folder
          WHERE id = ?
+           AND repository_id = ?
 
         UNION ALL
 
@@ -111,6 +115,7 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
         SELECT f.*, c.level + 1
           FROM folder f, children c
          WHERE f.parent_id = c.id
+           AND f.repository_id = ?
            AND f.is_recycled = false
            AND c.level < 1
           $recursiveOrderByClause
@@ -127,16 +132,21 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
       ORDER BY f.name_lc
     """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId))
+    val repositoryId = RequestContext.getRepository.persistedId
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId, repositoryId, repositoryId))
     recs.map(makeModel)
 
-  /** Every folder above `folderId` short of the repository root (its own parent), the top-level folder first */
+  /**
+   * Every folder above `folderId` short of the repository root (its own parent), the top-level folder first. Both arms of the
+   * recursion carry the repository: another repository's folder has no ancestors here.
+   */
   def getAncestors(folderId: String): List[Folder] =
     val sql = """
       WITH RECURSIVE ancestors AS (
         SELECT *, 0 AS level
           FROM folder
          WHERE id = ?
+           AND repository_id = ?
 
         UNION ALL
 
@@ -144,7 +154,8 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
           FROM folder f
           JOIN ancestors a
             ON f.id = a.parent_id
-         WHERE f.id <> f.parent_id
+         WHERE f.repository_id = ?
+           AND f.id <> f.parent_id
       )
       SELECT *
         FROM ancestors
@@ -152,16 +163,19 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
        ORDER BY level DESC
     """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(folderId))
+    val repositoryId = RequestContext.getRepository.persistedId
+    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(folderId, repositoryId, repositoryId))
     recs.map(makeModel)
 
-  // this does NOT return the child counts
+  // This does NOT return the child counts. Both arms of the recursion carry the repository: another repository's folder has no
+  // children here
   def getChildrenRecursive(parentId: String): List[Folder] =
     val sql = """
       WITH RECURSIVE children AS (
         SELECT *
           FROM folder
          WHERE parent_id = ?
+           AND repository_id = ?
            AND is_recycled = ?
 
         UNION ALL
@@ -170,13 +184,16 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
           FROM folder f
           JOIN children c
             ON f.parent_id = c.id
-         WHERE f.is_recycled = ?
+         WHERE f.repository_id = ?
+           AND f.is_recycled = ?
            AND f.id <> f.parent_id
       )
       SELECT *
         FROM children
   """
 
-    val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(parentId, nativeBool(false), nativeBool(false)))
+    val repositoryId = RequestContext.getRepository.persistedId
+    val recs: List[Map[String, AnyRef]] =
+      manyBySqlQuery(sql, List(parentId, repositoryId, nativeBool(false), repositoryId, nativeBool(false)))
 
     recs.map(makeModel)

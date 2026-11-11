@@ -195,6 +195,10 @@ object Const:
       val FACE_PERSON_NAMED_SINCE = "This person has a name now"
       // A merge of a Face's Person into a Person with no name, which the panel never offers
       val MERGE_INTO_NAMELESS = "Merge into a person with a name"
+      // A cover (PersonService.setFaceAsCover) that is another Person's Face, or a Face on an asset marked for purging, whose
+      // Faces are about to go
+      val COVER_FACE_NOT_THEIRS = "The face is not this person's"
+      val COVER_FACE_PURGING = "The face is on an asset being purged"
 
     // What a Face correction did, named for the snackbar in the People section's data attributes (htmx/detail_panel_people)
     object FaceCorrection:

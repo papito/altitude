@@ -5,6 +5,14 @@
 
 @(title: String, mergeSourcePerson: Person, mergeDestPerson: Person, returnFocusPencil: Option[(String, String)] = None)
 
+@* A person's cover face, or the no-cover placeholder for a person with none, named by the person's side of the merge *@
+@cover(person: Person, side: String) = {
+    @person.coverFaceId match {
+    case Some(faceId) => {<img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{faceId}" alt="@side person face for @{person.name}">}
+    case None => {<span class="no-cover" role="img" aria-label="@side person face for @{person.name}"><i class="fas fa-user" aria-hidden="true"></i></span>}
+    }
+}
+
 @* The Merge people modal. `returnFocusPencil` is the pane and the Person ID of the People tab's rename pencil
    (htmx/people_list) whose rename dialog offered this merge: that dialog is gone once this modal shows, and the control
    that asked for the modal with it, so the modal names the pencil as the control focus goes back to when it closes. A merge
@@ -22,11 +30,10 @@
       hx-put="/htmx/people/r/@{RequestContext.getRepository.persistedId}/src/@{mergeSourcePerson.persistedId}/dest/@{mergeDestPerson.persistedId}"
       hx-trigger="submit"
       hx-swap="none">
-    <div class="people-to-merge">
+    <div class="people-to-merge" style="--face-box: @{altitude.core.service.FaceDetectionService.faceDetectionBoxPx}px">
         <div class="person-to-merge">
             <div>
-                <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{mergeSourcePerson.coverFaceId}"
-                     alt="Source person face for @{mergeSourcePerson.name}">
+                @cover(mergeSourcePerson, "Source")
             </div>
             <div class="person-info">
                 <div>
@@ -42,8 +49,7 @@
         </div>
         <div class="person-to-merge">
             <div>
-                <img src="/content/r/@{RequestContext.getRepository.persistedId}/@{Const.DataStore.FACE}/@{mergeDestPerson.coverFaceId}"
-                     alt="Destination person face for @{mergeDestPerson.name}">
+                @cover(mergeDestPerson, "Destination")
             </div>
             <div class="person-info">
                 <div>

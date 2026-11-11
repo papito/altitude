@@ -258,7 +258,10 @@
              <code>--theme-neutral-3</code> and <code>--theme-neutral-4</code> on hover; it shows only while the cell is
              hovered or holds keyboard focus (<code>:focus-visible</code>), and always where nothing hovers, on a touch
              screen, and opens the rename dialog as a popover anchored to it. A name that wraps is centered line by
-             line. Hover a specimen, or Tab into it, to see the pencil.</p>
+             line. Hover a specimen, or Tab into it, to see the pencil. A Person with no cover shows the no-cover
+             placeholder (<code>.no-cover</code>, core.css) in the face's box: <code>fa-user</code> in
+             <code>--theme-neutral-3</code> at <code>--font-size-xl</code> on <code>--theme-secondary</code>, as it does,
+             at the size and shape of the face there, in the results title and the merge modal.</p>
           @* The People tab's cells, hand-written to htmx/people_list's markup inside the tab's ID, which the rules of
              static/css/htmx/people.css are scoped by, with --face-box set as htmx/people sets it. No drag-drop or dropzone
              class and no search trigger, so nothing binds to them, and the pencils request nothing *@
@@ -282,6 +285,15 @@
                   <span>
                     <a href="#" class="unknown">Unknown 4<span class="count"> (2)</span><span class="visually-hidden">, hidden</span></a>
                     <button type="button" class="rename" aria-label="Rename Unknown 4"><i class="fas fa-edit" aria-hidden="true"></i></button>
+                  </span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="image"><span class="no-cover"><i class="fas fa-user" aria-hidden="true"></i></span></div>
+                <div class="name">
+                  <span>
+                    <a href="#">Bob<span class="count"> (1)</span></a>
+                    <button type="button" class="rename" aria-label="Rename Bob"><i class="fas fa-edit" aria-hidden="true"></i></button>
                   </span>
                 </div>
               </div>

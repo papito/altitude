@@ -8,6 +8,7 @@ import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
+import altitude.core.ValidationException
 import altitude.core.dao.AssetDao
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.*
@@ -128,6 +129,10 @@ import altitude.core.util.QueryResult
         case (column, value) => s"$column=$value"
       }
       .mkString(", ")
+
+  /** The ID of the second repository's row of the table */
+  private def idOf(repos: TwoRepositories, table: String): String =
+    repos.rows.find(_.table == table).flatMap(_.id).get
 
   /** The DAO's generic `query`; an asset is only ever queried through a view, of which `queryAll` reads every asset */
   private def queryOf(row: ScopedRow, q: Query): QueryResult[?] = row.dao match {
@@ -353,6 +358,170 @@ import altitude.core.util.QueryResult
             }
         }
     }
+
+    rowsOf(repos.second) shouldEqual before
+  }
+
+  test("Another repository's album can be neither deleted nor emptied, and its memberships are not read") {
+
+    /**
+     * Setup:
+     *
+     * Two repositories, the second holding an album with an asset in it.
+     *
+     * Assertions:
+     *
+     * From the first repository, the album DAO's membership removal, given the second repository's album and asset, removes
+     * nothing; through the album service, deleting the album and removing the asset from it are `NotFoundException`, and its
+     * asset IDs read as none. Every row of the second repository is as it was: the album and its membership stay.
+     */
+    val repos = twoRepositories()
+    val before = rowsOf(repos.second)
+    val albumId = idOf(repos, "album")
+    val assetId = idOf(repos, "asset")
+
+    testApp.txManager.withTransaction(testApp.DAO.album.removeAssets(albumId, Set(assetId))) shouldBe 0
+    intercept[NotFoundException](testApp.service.album.removeAssets(albumId, Set(assetId)))
+    intercept[NotFoundException](testApp.service.album.deleteById(albumId))
+    testApp.service.album.getAssetIds(albumId) shouldBe empty
+
+    rowsOf(repos.second) shouldEqual before
+  }
+
+  test("Another repository's Location is not emptied, and its memberships are not read") {
+
+    /**
+     * Setup:
+     *
+     * Two repositories, the second holding a Location with an asset in it.
+     *
+     * Assertions:
+     *
+     * From the first repository, the Location DAO's membership removal, given the second repository's Location and asset, removes
+     * nothing; through the Location service, removing the asset from it is `NotFoundException`, and its asset IDs read as none.
+     * Every row of the second repository is as it was: the Location and its membership stay.
+     */
+    val repos = twoRepositories()
+    val before = rowsOf(repos.second)
+    val locationId = idOf(repos, "location")
+    val assetId = idOf(repos, "asset")
+
+    testApp.txManager.withTransaction(testApp.DAO.location.removeAssets(locationId, Set(assetId))) shouldBe 0
+    intercept[NotFoundException](testApp.service.location.removeAssets(locationId, Set(assetId)))
+    testApp.service.location.getAssetIds(locationId) shouldBe empty
+
+    rowsOf(repos.second) shouldEqual before
+  }
+
+  test("Another repository's folder is neither renamed, moved, moved into nor deleted, and its tree is not read") {
+
+    /**
+     * Setup:
+     *
+     * Two repositories, the second holding a folder with a child folder under it, and the first a folder of its own.
+     *
+     * Assertions:
+     *
+     * From the first repository, the children, the children all the way down and the ancestors of the second repository's
+     * folders, its root included, read as none. Renaming its folder, moving it, and moving its root folder are
+     * `NotFoundException`; moving the first repository's folder into either of them is refused as a move into a folder that does
+     * not exist (`ValidationException`); deleting its folder is `NotFoundException`. Every row of both repositories is as it was.
+     */
+    val repos = twoRepositories()
+    val theirs = idOf(repos, "folder")
+    val theirRoot = repos.second.rootFolderId
+    switchContextRepo(repos.second)
+    val theirChild = testApp.service.folder.add("their child", Some(theirs))
+    switchContextRepo(repos.first)
+    val mine = testApp.service.folder.add("mine")
+    val firstBefore = rowsOf(repos.first)
+    val secondBefore = rowsOf(repos.second)
+
+    List(theirs, theirRoot).foreach {
+      folderId =>
+        withClue(s"[$folderId]: ") {
+          testApp.service.folder.getChildren(folderId) shouldBe empty
+          testApp.service.folder.getChildrenRecursive(folderId) shouldBe empty
+        }
+    }
+    testApp.service.folder.getAncestors(theirChild.persistedId) shouldBe empty
+
+    intercept[NotFoundException](testApp.service.folder.rename(theirs, "changed"))
+    intercept[NotFoundException](testApp.service.folder.move(theirs, mine.persistedId))
+    intercept[NotFoundException](testApp.service.folder.move(theirRoot, mine.persistedId))
+    intercept[ValidationException](testApp.service.folder.move(mine.persistedId, theirs))
+    intercept[ValidationException](testApp.service.folder.move(mine.persistedId, theirRoot))
+    intercept[NotFoundException](testApp.service.library.deleteFolderById(theirs))
+
+    rowsOf(repos.first) shouldEqual firstBefore
+    rowsOf(repos.second) shouldEqual secondBefore
+  }
+
+  test("Another repository's Person is neither read nor changed, and a merge with them is not found") {
+
+    /**
+     * Setup:
+     *
+     * Two repositories, the second holding a Person with a Face, and the first a Person with a Face of their own.
+     *
+     * Assertions:
+     *
+     * From the first repository, the second repository's Person is not found by ID and their Faces read as none. Hiding, showing,
+     * marking as a bad match, renaming them and setting their cover, given them, are `NotFoundException`, and so is a merge with
+     * them, as the source or as the destination. Every row of both repositories is as it was: both people, their Faces and their
+     * counts.
+     */
+    val repos = twoRepositories()
+    val theirId = idOf(repos, "person")
+    val theirs = Person(id = Some(theirId))
+    val myAsset = testContext.insertAsset(testContext.makeAsset(repository = Some(repos.first)))
+    val added = testApp.service.person.addPerson(Person())
+    val myFace = testContext.addTestFace(added, myAsset, TestContext.unitVector(2))
+    val mine: Person = testApp.service.person.getById(added.persistedId)
+    val firstBefore = rowsOf(repos.first)
+    val secondBefore = rowsOf(repos.second)
+
+    intercept[NotFoundException](testApp.service.person.getById(theirId))
+    testApp.service.person.getPersonFaces(theirId) shouldBe empty
+
+    intercept[NotFoundException](testApp.service.person.setVisibility(theirs, isHidden = true))
+    intercept[NotFoundException](testApp.service.person.setVisibility(theirs, isHidden = false))
+    intercept[NotFoundException](testApp.service.person.markAsBadMatch(theirs))
+    intercept[NotFoundException](testApp.service.person.updateName(theirs, "Changed"))
+    intercept[NotFoundException](testApp.service.person.setFaceAsCover(theirs, myFace))
+    intercept[NotFoundException](testApp.service.person.merge(dest = mine, source = theirs))
+    intercept[NotFoundException](testApp.service.person.merge(dest = theirs, source = mine))
+
+    rowsOf(repos.first) shouldEqual firstBefore
+    rowsOf(repos.second) shouldEqual secondBefore
+  }
+
+  test("Another repository's asset metadata and metadata field are neither read nor changed") {
+
+    /**
+     * Setup:
+     *
+     * Two repositories, the second holding an asset with a value of its own metadata field, and the first a metadata field of its
+     * own.
+     *
+     * Assertions:
+     *
+     * From the first repository, the second repository's asset's metadata is not found, read or updated (with a value of the
+     * first repository's field), and its field is not found by ID; deleting the field deletes nothing. Every row of the second
+     * repository is as it was: the asset's metadata and the field.
+     */
+    val repos = twoRepositories()
+    val assetId = idOf(repos, "asset")
+    val fieldId = idOf(repos, "metadata_field")
+    val myField = testApp.service.metadata.addField(UserMetadataField(name = "mine", fieldType = FieldType.KEYWORD))
+    val before = rowsOf(repos.second)
+
+    intercept[NotFoundException](testApp.service.metadata.getMetadata(assetId))
+    intercept[NotFoundException] {
+      testApp.service.metadata.updateMetadata(assetId, UserMetadata(Map(myField.persistedId -> Set("changed"))))
+    }
+    intercept[NotFoundException](testApp.service.metadata.getFieldById(fieldId))
+    testApp.service.metadata.deleteFieldById(fieldId) shouldBe 0
 
     rowsOf(repos.second) shouldEqual before
   }

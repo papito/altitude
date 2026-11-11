@@ -878,6 +878,21 @@ a.crumb:hover {
     opacity: 0.4;
 }
 
+/*          */
+/* NO COVER */
+/*          */
+
+/* What stands in a person's cover face when they have none (no Face left to be one): the People tab's cell
+   (htmx/people_list), the person's results title (includes/results_title_inner) and the merge modal
+   (htmx/merge_people_modal), each of which sizes and rounds it as it does the face */
+.no-cover {
+    display: grid;
+    place-items: center;
+    background-color: var(--theme-secondary);
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-xl);
+}
+
 /*         */
 /* DIVIDER */
 /*         */

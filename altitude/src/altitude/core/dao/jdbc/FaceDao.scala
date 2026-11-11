@@ -58,8 +58,32 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
   override def getTopFaces(personId: String, limit: Int): List[Face] =
     import dialect.*
 
-    val top = FaceRow.select.filter(_.personId `=` personId).sortBy(_.id).asc.sortBy(_.detectionScore).desc.take(limit)
+    val repositoryId = RequestContext.getRepository.persistedId
+    val top = FaceRow.select
+      .filter(face => face.personId `=` personId && face.repositoryId `=` repositoryId)
+      .sortBy(_.id)
+      .asc
+      .sortBy(_.detectionScore)
+      .desc
+      .take(limit)
     Db.read(dialect)(_.run(top)).map(toModel).toList
+
+  // The person's Faces come from `face_02`, which leads with the person and orders them by detection score
+  override def getBestCoverCandidate(personId: String, excludedAssetIds: Set[String]): Option[Face] =
+    val sql = s"""
+        SELECT face.*
+          FROM face, asset
+         WHERE face.repository_id = ?
+           AND face.person_id = ?
+           AND NOT (face.asset_id $inIdSet)
+           AND asset.id = face.asset_id
+           AND asset.${FieldConst.Asset.IS_PURGED} = FALSE
+         ORDER BY face.detection_score DESC, face.id
+         LIMIT 1
+      """
+
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, personId, idSet(excludedAssetIds))).headOption
+      .map(makeModel)
 
   // Reads `face_01`, which leads with the asset
   override def getAllAssetFaces(assetId: String): List[Face] =

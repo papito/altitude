@@ -112,11 +112,12 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
   override def removeAssets(locationId: String, assetIds: Set[String]): Int =
     val sql = s"""
       DELETE FROM $membershipTable
-       WHERE ${FieldConst.Location.LOCATION_ID} = ?
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Location.LOCATION_ID} = ?
          AND ${FieldConst.Location.ASSET_ID} $inIdSet
     """
 
-    updateByBySql(sql, List(locationId, idSet(assetIds)))
+    updateByBySql(sql, List(RequestContext.getRepository.persistedId, locationId, idSet(assetIds)))
 
   override def removeAssetsFromAllLocations(assetIds: Set[String]): Int =
     val sql = s"""

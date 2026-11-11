@@ -10,6 +10,7 @@ import altitude.core.util.Query
 import altitude.core.util.QueryResult
 
 trait AssetDao extends BaseDao[Asset]:
+  /** The asset's user metadata; an asset of another repository, or none, is a `NotFoundException` */
   def getUserMetadata(assetId: String): Option[UserMetadata]
 
   def setUserMetadata(assetId: String, metadata: UserMetadata): Unit

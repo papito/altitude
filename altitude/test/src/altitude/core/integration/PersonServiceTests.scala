@@ -336,6 +336,54 @@ import altitude.core.util.Util
     top.map(_.persistedId) should be(all.take(3).map(_.persistedId))
   }
 
+  test("A cover is refused for another Person's Face, another repository's Face and a Face on an asset marked for purging") {
+
+    /**
+     * Setup:
+     *
+     * A Person with Faces on three assets, the first Face their cover, the second's asset recycled and marked for purging; a
+     * second Person with a Face of their own; and a second repository with a Person and a Face.
+     *
+     * Assertions:
+     *
+     * Setting the first Person's cover to the second Person's Face, or to their own Face on the asset marked for purging, is a
+     * `ValidationException`, and to the other repository's Face a `NotFoundException`. The cover is still the first Face after
+     * each. Their Face on the third asset, which is live, becomes their cover.
+     */
+    val repo = testContext.repository
+    val added: Person = testApp.service.person.addPerson(Person())
+    val faces = (1 to 3).toList.map {
+      n =>
+        val asset = testContext.insertAsset()
+        testContext.addTestFace(testApp.service.person.getById(added.persistedId), asset, TestContext.unitVector(n))
+    }
+    val person: Person = testApp.service.person.getById(added.persistedId)
+    person.coverFaceId shouldBe Some(faces.head.persistedId)
+
+    val purging = faces(1).assetId.get
+    testApp.service.library.recycleAssets(Set(purging))
+    testApp.service.asset.updateById(purging, Map(FieldConst.Asset.IS_PURGED -> true))
+
+    val other: Person = testApp.service.person.addPerson(Person())
+    val othersFace = testContext.addTestFace(other, testContext.insertAsset(), TestContext.unitVector(4))
+
+    val otherRepo = testContext.persistRepository()
+    switchContextRepo(otherRepo)
+    val foreignFace = testContext.addTestFace(
+      testApp.service.person.addPerson(Person()),
+      testContext.insertAsset(testContext.makeAsset(repository = Some(otherRepo))),
+      TestContext.unitVector(5))
+    switchContextRepo(repo)
+
+    intercept[ValidationException](testApp.service.person.setFaceAsCover(person, othersFace))
+    intercept[ValidationException](testApp.service.person.setFaceAsCover(person, faces(1)))
+    intercept[NotFoundException](testApp.service.person.setFaceAsCover(person, foreignFace))
+    testApp.service.person.getById(person.persistedId).coverFaceId shouldBe Some(faces.head.persistedId)
+
+    testApp.service.person.setFaceAsCover(person, faces(2))
+    testApp.service.person.getById(person.persistedId).coverFaceId shouldBe Some(faces(2).persistedId)
+  }
+
   test("Person merge B -> A") {
 
     /**

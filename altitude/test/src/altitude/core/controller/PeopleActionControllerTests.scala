@@ -7,6 +7,7 @@ import org.scalatest.matchers.should.Matchers.{ contain, include, not, should, s
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.FieldConst
 import altitude.core.models.Person
 
 @DoNotDiscover class PeopleActionControllerTests extends ControllerTestCore {
@@ -499,6 +500,58 @@ import altitude.core.models.Person
 
         response.statusCode shouldBe 200
         response.text() should include("""id="faceSelector"""")
+    }
+  }
+
+  test("A Person with no cover shows a placeholder on the People list, in the results title and in the merge modal") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a Person named "Alice", with Faces on three assets and no cover, as a cover's Face
+     * deleted under it would leave her, and a Person named "Bob" with a Face and his cover.
+     *
+     * Assertions:
+     *
+     * The People list, Alice's results title and the merge modal of the two each render the no-cover placeholder in place of
+     * Alice's face, and no face URL with no Face ID at its end; Bob's cover is still his face's URL.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val alice: Person = testApp.service.person.addPerson(Person(name = Some("Alice")))
+        testContext.addTestFacesAndAssets(alice, assetCount = 3)
+        testApp.service.person.updateById(alice.persistedId, Map(FieldConst.Person.COVER_FACE_ID -> None))
+        val bob: Person = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        testContext.addTestFacesAndAssets(bob)
+        val bobsCover = testApp.service.person.getById(bob.persistedId).coverFaceId.get
+
+        // The end of a face URL rendered with no Face ID
+        val emptyFaceUrl = s"/${Const.DataStore.FACE}/" + '"'
+        def get(path: String, params: Map[String, String] = Map.empty): String = {
+          val response = requests.get(s"$host$path", params = params, cookies = testContext.cookies, check = false)
+          response.statusCode shouldBe 200
+          response.text()
+        }
+
+        val list = get(s"/htmx/people/r/$repoId/list")
+        val title = get(s"/htmx/people/r/$repoId/p/${alice.persistedId}/title")
+        val modal = get(
+          s"/htmx/people/r/$repoId/modals/merge",
+          Map("mergeSourceId" -> alice.persistedId, "mergeDestId" -> bob.persistedId, "keepDirection" -> "true"))
+
+        List("list" -> list, "title" -> title, "modal" -> modal).foreach {
+          case (view, html) =>
+            withClue(s"$view: ") {
+              html should include("""class="no-cover"""")
+              (html should not).include(emptyFaceUrl)
+            }
+        }
+        list should include(s"/${Const.DataStore.FACE}/$bobsCover")
+        modal should include(s"/${Const.DataStore.FACE}/$bobsCover")
     }
   }
 

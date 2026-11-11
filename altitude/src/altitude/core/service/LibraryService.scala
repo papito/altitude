@@ -112,11 +112,11 @@ class LibraryService(val app: Altitude):
   /**
    * Undoes what the import of an asset wrote, for an asset the pipeline dropped or an import a crash cut off. Nothing to undo for
    * an asset that was never persisted (dropped before the index stage, or a duplicate it refused) or that completed. In one
-   * transaction: the people of its faces are locked, so a face another import gives one of them meanwhile keeps that person; the
-   * face counts it added are given back; its row goes, with its faces, its Search document and its metadata; and a person left
-   * with no face, which only this import can have started, goes too. Once that commits, its files go: its faces' (a cover face of
-   * a person who stays keeps them, as on purge), its stored file and its preview. Its stats need nothing: an asset counts once
-   * its import completes.
+   * transaction: the people of its faces are locked, so a face another import gives one of them meanwhile keeps that person; a
+   * cover on one of its faces moves to the person's best face elsewhere, as on purge (`PersonService.moveCoversOff`); the face
+   * counts it added are given back; its row goes, with its faces, its Search document and its metadata; and a person left with no
+   * face, which only this import can have started, goes too. Once that commits, its files go: its faces', its stored file and its
+   * preview. Its stats need nothing: an asset counts once its import completes.
    */
   def discardImport(asset: Asset): Unit =
     asset.id.foreach {
@@ -125,7 +125,8 @@ class LibraryService(val app: Altitude):
 
         val discarded = txManager.withTransaction {
           Option.when(app.service.asset.queryAll(unfinished).nonEmpty) {
-            app.service.person.lockAssetPeople(Set(assetId))
+            // Locks the people of its faces first
+            app.service.person.moveCoversOff(Set(assetId))
             val facesWithPeople = app.service.person.getAssetFacesWithPeople(assetId)
             app.service.person.recycleFacesForAssets(Set(assetId))
             app.service.asset.deleteByQuery(unfinished)
@@ -136,7 +137,7 @@ class LibraryService(val app: Altitude):
 
         discarded.foreach {
           case (facesWithPeople, deletedPeople) =>
-            app.service.person.purgeFaceFiles(facesWithPeople, deletedPeople)
+            app.service.person.purgeFaceFiles(facesWithPeople.map(_._1))
             app.service.fileStore.purgeAssetById(assetId)
             logger.debug(
               s"Discarded the import of asset [$assetId]: ${facesWithPeople.size} faces, ${deletedPeople.size} people it started")
@@ -245,12 +246,15 @@ class LibraryService(val app: Altitude):
       val allFolderIds = (folderId :: allFolders.map(_.persistedId)).toSet
       query.withFolderIds(allFolderIds)
 
-  /** Delete a folder by ID, including its children. Does not allow deleting the root folder, or any system folders. */
+  /**
+   * Delete a folder by ID, including its children. Does not allow deleting the root folder, or any system folders. A folder of
+   * another repository, or none, is not found.
+   */
   def deleteFolderById(id: String): Unit =
     if app.service.folder.isRootFolder(id) then throw IllegalOperationException("Cannot delete the root folder")
 
     txManager.withTransaction {
-      val folder: Folder = app.service.folder.getById(id)
+      val folder: Folder = app.service.folder.getInRepository(id)
       logger.debug(s"Deleting folder $folder")
 
       val children = app.service.folder.getChildrenRecursive(id)

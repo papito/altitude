@@ -45,7 +45,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
     if assetIds.isEmpty then return 0
 
     txManager.withTransaction {
-      // Fails with NotFoundException for an unknown album
+      // Fails with NotFoundException for an unknown album, or another repository's
       getById(albumId)
 
       val added = dao.addAssets(albumId, assetIds)
@@ -69,6 +69,9 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
     if assetIds.isEmpty then return 0
 
     txManager.withTransaction {
+      // Fails with NotFoundException for an unknown album, or another repository's
+      getById(albumId)
+
       val removed = dao.removeAssets(albumId, assetIds)
       logger.debug(s"Removed $removed asset(s) from album [$albumId]")
       removed

@@ -129,9 +129,10 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       SELECT ${FieldConst.Asset.USER_METADATA}
          FROM asset
        WHERE ${FieldConst.ID} = ?
+         AND ${FieldConst.REPO_ID} = ?
       """
 
-    val rec = executeAndGetOne(sql, List(assetId))
+    val rec = executeAndGetOne(sql, List(assetId, RequestContext.getRepository.persistedId))
     val userMetadataJson = getJsonFromColumn(rec(FieldConst.Asset.USER_METADATA))
     val userMetadata = UserMetadata.fromJson(userMetadataJson)
     Some(userMetadata)

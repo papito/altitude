@@ -1,6 +1,7 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.TestContext
 import java.nio.file.Files
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
@@ -132,6 +133,43 @@ import altitude.core.util.SearchQuery
     testApp.service.fileStore.getDisplayFaceById(coverFace.persistedId).data should not be empty
     intercept[NotFoundException](testApp.service.person.getPersonById(startedPerson.persistedId))
     storedStats shouldBe statsBefore
+  }
+
+  test("Discarding a cut-off import whose Face is an existing Person's cover gives them their best Face left") {
+
+    /**
+     * Setup:
+     *
+     * A Person with a Face at a detection score of 0.5 on a completed asset and one at 0.7 on an asset marked for purging. An
+     * import cut off before it completed adds a Face of theirs at 0.9, which becomes their cover; then that import is discarded.
+     *
+     * Assertions:
+     *
+     * The Person stays, and their cover is their Face on the completed asset. The cut-off import's Face is gone, row and images.
+     *
+     * Edge cases:
+     *
+     * The Face on the asset marked for purging scores higher than the new cover, but is never picked.
+     */
+    val added = testApp.service.person.addPerson(Person())
+    def person: Person = testApp.service.person.getPersonById(added.persistedId)
+
+    val kept = testContext.addTestFace(person, testContext.insertAsset(), TestContext.unitVector(1), detectionScore = 0.5)
+    val purging = testContext.insertAsset()
+    testContext.addTestFace(person, purging, TestContext.unitVector(2), detectionScore = 0.7)
+    testApp.service.library.recycleAssets(Set(purging.persistedId))
+    testApp.service.asset.updateById(purging.persistedId, Map(FieldConst.Asset.IS_PURGED -> true))
+
+    val cutOff = testApp.service.library.persistAndIndex(testContext.makeAsset())
+    val cover =
+      testContext.addTestFace(person, cutOff, TestContext.unitVector(3), detectionScore = 0.9, withFiles = true)
+    testApp.service.person.setFaceAsCover(person, cover)
+
+    testApp.service.library.discardImport(cutOff)
+
+    person.coverFaceId shouldBe Some(kept.persistedId)
+    intercept[NotFoundException](testApp.service.person.getFaceById(cover.persistedId))
+    intercept[NotFoundException](testApp.service.fileStore.getDisplayFaceById(cover.persistedId))
   }
 
   /** An import cut off before it completed: persisted and indexed, its file stored, its preview made, its faces recognized */

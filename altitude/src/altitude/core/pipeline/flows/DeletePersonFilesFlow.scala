@@ -19,8 +19,10 @@ object DeletePersonFilesFlow:
         withContext(ctx) {
           debugInfo(s"\tRemoving PERSON files for asset ${asset.persistedId}")
 
+          // Every cover is moved off the asset's Faces first, so all of their files can go; a failure to move one keeps them
           try {
-            app.service.person.purgeFaceFiles(app.service.person.getAssetFacesWithPeople(asset.persistedId))
+            app.service.person.moveCoversOff(Set(asset.persistedId))
+            app.service.person.purgeFaceFiles(app.service.person.getAllAssetFaces(asset.persistedId))
           } catch {
             case ex: Exception =>
               logger.error(s"Error purging PERSON file data for asset ${asset.persistedId}", ex)
