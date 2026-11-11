@@ -344,7 +344,8 @@ import altitude.core.models.Person
      *
      * Edge cases:
      *
-     * Once the Person is named elsewhere, naming them through the Face answers 400 with "This person has a name now".
+     * Once the Person is named elsewhere, naming them through the Face answers 409 with "This person has a name now", as a stale
+     * section is answered.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -377,7 +378,7 @@ import altitude.core.models.Person
 
         testApp.service.person.updateName(unknown, "Bob")
         val namedSince = name(f.persistedId, unknown.persistedId, "Carol")
-        namedSince.statusCode shouldBe 400
+        namedSince.statusCode shouldBe 409
         namedSince.text() shouldBe Const.Msg.Err.FACE_PERSON_NAMED_SINCE
         testApp.service.person.getById(unknown.persistedId).name shouldBe Some("Bob")
     }
@@ -396,6 +397,11 @@ import altitude.core.models.Person
      * A body with no destination, or a destination that is not a UUID, answers 400, as do a destination with no name and the
      * Face's own Person. A destination no Person has, or Eve, answers 404, as does a Person who is not the Face's; the Face on
      * the recycled asset answers 409. The Person stays live and keeps their Face throughout.
+     *
+     * Edge cases:
+     *
+     * Once the Person is named elsewhere, merging them through the Face answers 409 with "This person has a name now", as a stale
+     * section is answered, and they stay live under that name.
      */
     val repo = testContext.persistRepository()
     val repoId = repo.persistedId
@@ -433,6 +439,12 @@ import altitude.core.models.Person
 
         testApp.service.person.getLiveInRepository(unknown.persistedId).persistedId shouldBe unknown.persistedId
         testApp.service.person.getFaceById(f.persistedId).personId shouldBe Some(unknown.persistedId)
+
+        testApp.service.person.updateName(unknown, "Bob")
+        val namedSince = merge(f.persistedId, unknown.persistedId, andrei.persistedId)
+        namedSince.statusCode shouldBe 409
+        namedSince.text() shouldBe Const.Msg.Err.FACE_PERSON_NAMED_SINCE
+        testApp.service.person.getLiveInRepository(unknown.persistedId).name shouldBe Some("Bob")
     }
   }
 
@@ -446,16 +458,18 @@ import altitude.core.models.Person
      *
      * A logged-in user's repository with the folders Trips and 2026 under it, an image in 2026 imported with EXIF metadata naming
      * its camera, aperture and capture time, in the album Iceland and in the Location Reykjavik under the category Europe; on it
-     * a Face of Alice, a Face of the hidden Mia and a Face of a bad-match Person.
+     * a Face of Alice, a Face of the hidden Mia, a Face of a Person with no name who has a Face on a second image too, and a Face
+     * of a bad-match Person.
      *
      * Assertions:
      *
-     * The panel answers 200 with the People section holding Alice's and Mia's rows, Mia's marked Hidden, and not the bad match's;
-     * the Details with the file name, the stored dimensions, the Date Taken with its source, the folder crumbs, the album and the
-     * Location each a link to its search opening in a new tab, the MIME type, the extractor's File Type and the camera rows, with
-     * no Curation row for a sorted asset, no Image quality row for a measured one and no Metadata section. Nothing marks the
-     * section read-only, and each row renders its corrections: Change, Remove with its two labels, and the Change combobox's
-     * input and listbox.
+     * The panel answers 200 with the People section holding Alice's, Mia's and the nameless Person's rows, Mia's marked Hidden,
+     * and not the bad match's; Alice's and Mia's rows marked named and the nameless Person's not, each carrying its Person's
+     * number of assets, their `numOfFaces` (1 for Alice, 2 for the nameless Person); the Details with the file name, the stored
+     * dimensions, the Date Taken with its source, the folder crumbs, the album and the Location each a link to its search opening
+     * in a new tab, the MIME type, the extractor's File Type and the camera rows, with no Curation row for a sorted asset, no
+     * Image quality row for a measured one and no Metadata section. Nothing marks the section read-only, and each row renders its
+     * corrections: Change, Remove with its two labels, and the Change combobox's input and listbox.
      *
      * Edge cases:
      *
@@ -489,6 +503,9 @@ import altitude.core.models.Person
         val alices = face(alice, image)
         val mias = face(mia, image)
         val bads = face(badMatch, image)
+        val nameless = testApp.service.person.addPerson(Person())
+        val namelessFace = face(nameless, image)
+        face(testApp.service.person.getById(nameless.persistedId), testContext.persistAsset())
         testApp.service.person.setVisibility(mia, isHidden = true)
         testApp.service.person.markAsBadMatch(badMatch)
 
@@ -502,6 +519,15 @@ import altitude.core.models.Person
         (html should not).include(rowOf(bads.persistedId))
         html should include("""data-person-hidden="true"""")
         html should include("Hidden")
+
+        // A row's opening tag, which carries what the Face highlights and the combobox read of its Person
+        def rowTag(faceId: String): String = s"""<div ${rowOf(faceId)}[^>]*>""".r.findFirstIn(html).get
+        List(alices, mias).foreach(named => rowTag(named.persistedId) should include("""data-person-named="true""""))
+        (rowTag(namelessFace.persistedId) should not).include("data-person-named")
+        testApp.service.person.getById(alice.persistedId).numOfFaces shouldBe 1
+        testApp.service.person.getById(nameless.persistedId).numOfFaces shouldBe 2
+        rowTag(alices.persistedId) should include("""data-person-asset-count="1"""")
+        rowTag(namelessFace.persistedId) should include("""data-person-asset-count="2"""")
         (html should not).include("data-app-read-only")
         html should include("data-app-face-change")
         html should include("""data-app-face-remove-label-last="Remove (last click)">Remove (click twice)</button>""")

@@ -94,8 +94,9 @@ class AssetActionController(using logger: Logger) extends BaseController:
    * Name: names the Face's Person as a whole (`PersonService.nameFacePerson`), the body's `personId` being the Person the panel
    * showed with the Face and its `name` the new name, and answers the asset's People section with the result in its data
    * attributes. A body that is not a JSON object, a `personId` that is not a UUID, a name outside the length rules of the name
-   * editor, a reserved name, a name another live Person holds or a Person who has a name by now is a 400; a Face gone or given to
-   * someone else meanwhile, or a Person no longer live, a 404; a Face of an asset in the trash a 409.
+   * editor, a reserved name or a name another live Person holds is a 400; a Face gone or given to someone else meanwhile, or a
+   * Person no longer live, a 404; a Face of an asset in the trash, or a Person who has a name by now, a 409, as the section the
+   * client shows is stale.
    */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/face/:faceId/person/name")
@@ -128,9 +129,9 @@ class AssetActionController(using logger: Logger) extends BaseController:
    * Merge: merges the Face's Person as a whole into a named Person (`PersonService.mergeFacePerson`), the body's `personId` being
    * the Person the panel showed with the Face and its `destPersonId` the Person they are merged into, and answers the asset's
    * People section with the result in its data attributes, the merged Person's ID and the destination's among them. A body that
-   * is not a JSON object, an ID that is not a UUID, a Person who has a name by now, a destination with no name or the Person
-   * themselves is a 400; a Face gone or given to someone else meanwhile, or a Person or destination no longer live or of another
-   * Library, a 404; a Face of an asset in the trash a 409.
+   * is not a JSON object, an ID that is not a UUID, a destination with no name or the Person themselves is a 400; a Face gone or
+   * given to someone else meanwhile, or a Person or destination no longer live or of another Library, a 404; a Face of an asset
+   * in the trash, or a Person who has a name by now, a 409, as the section the client shows is stale.
    */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/face/:faceId/person/merge")

@@ -20,10 +20,11 @@
  * Each answers the asset's People section (200), which replaces the one shown, with the result
  * message, any deleted Person and, after a merge, the merged Person and the Person they were merged
  * into read from its root's data attributes; a name also tells the panel who was named. A 400 (the
- * body, a reserved name, a name held by someone, a Person named meanwhile) is a message to show and
- * nothing changes; a 404 (the Face gone or moved meanwhile, a merge target no longer live) or a 409
- * (the asset recycled meanwhile) means the section is stale: the panel reloads and the server's
- * message is shown. One request at a time per Face, so a second pick during one is dropped.
+ * body, a reserved name, a name held by someone) is a message to show and nothing changes; a 404
+ * (the Face gone or moved meanwhile, a merge target no longer live) or a 409 (the asset recycled
+ * meanwhile, or the Person named meanwhile, whose row would otherwise offer a name and a merge
+ * forever) means the section is stale: the panel reloads and the server's message is shown. One
+ * request at a time per Face, so a second pick during one is dropped.
  */
 import { Const } from "../constants.js"
 import { showErrorSnackBar } from "../common/snackbar.js"

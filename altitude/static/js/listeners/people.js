@@ -6,6 +6,7 @@ import {
     isRequestSuccessful,
 } from "../common/htmx-events.js"
 import { showSuccessSnackBar } from "../common/snackbar.js"
+import { reloadPersonTitle } from "../search-results/person-title.js"
 import { runSearch } from "../search-results/search.js"
 
 const NAME_EDITOR_SELECTOR = '[data-app-fragment="person-name-editor"]'
@@ -102,25 +103,18 @@ export function registerPeopleListeners(app) {
      * pencil. The People tab reloads rather than patching the cell's text: a rename can move the
      * person from Unmatched to Matched, and the list the server renders has them in the right
      * bucket, with the cell's number and a hidden person's ", hidden" text intact. A results title
-     * showing that person reads the name again from the name route, unless the rename came from
-     * its own editor, whose response is the new name (`detail.titleShowsName`).
+     * showing that person is read again (`reloadPersonTitle`), the name with the links a name
+     * changes, unless the rename came from its own editor, whose response is the new name
+     * (`detail.titleShowsName`).
      */
     document.body.addEventListener(Const.events.personNameEdited, (event) => {
         const { personId, titleShowsName } = event.detail
 
         app.dispatch(Const.events.peopleChanged, { personId })
 
-        const showsPerson =
-            document.getElementById("person")?.dataset.personId === personId
-        if (!showsPerson || titleShowsName) {
-            return
+        if (!titleShowsName) {
+            reloadPersonTitle(app.context.getRepoId(), personId)
         }
-
-        htmx.ajax(
-            "GET",
-            `/htmx/people/r/${app.context.getRepoId()}/p/${personId}/name`,
-            { swap: "innerHTML", target: "#personName" },
-        )
     })
 
     document.body.addEventListener(Const.events.personCoverFaceSet, (event) => {

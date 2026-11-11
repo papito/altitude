@@ -49,8 +49,10 @@
  * viewed Person is the one named, the results title is read again at once and shows the name. When
  * the viewed Person is the one merged, every cell of the grid is the destination's now, so the cells
  * stay, the destination stands in for the viewed Person in later corrections, and on closing (not on
- * a step) the results become the destination's (`runSearch` with their `personId`). Naming or merging
- * another Person changes nothing in the grid.
+ * a step) the results become the destination's (`runSearch` with their `personId`). When the viewed
+ * Person is the destination, the same search on closing reads their results again, so the grid gains
+ * the merged Person's assets, and the total and the title's count-dependent links follow. Naming or
+ * merging another Person changes nothing in the grid.
  *
  * The side and share are written on the fragment (`data-detail-dock-side`, `--detail-panel-share`)
  * and whether the panel is open as `data-app-detail-panel-open`; `view_image_detail_modal.css`
@@ -71,6 +73,7 @@ import {
     FRAME_TIME_TOLERANCE_MS,
     LAYER_ID,
 } from "./face-highlights.js"
+import { reloadPersonTitle } from "./person-title.js"
 import { runSearch } from "./search.js"
 
 export const DEFAULT_WIDTH_SHARE = 30
@@ -97,7 +100,8 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
     // An asset the viewed Person has no Face left on after a correction: its cells leave the grid
     // on stepping away or closing, with whether the Person was deleted
     let leaving = null
-    // The Person the viewed Person was merged into from the panel: the results become theirs on closing
+    // The Person the viewed Person was merged into from the panel, or the viewed Person when another
+    // was merged into them: the results are searched for them on closing
     let mergedInto = null
 
     const highlights = createFaceHighlights()
@@ -374,10 +378,11 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
      * clears and the Face highlights follow the new rows, the result is reported, the People tab
      * reloads, and the asset is noted as leaving the grid when the viewed Person has no Face left
      * on it. A viewed Person named (`namedPersonId`, from the request) has the results title read
-     * again at once; a viewed Person merged away (`mergedPersonId`) is noted with the destination
-     * (`mergedIntoId`), whose results the grid becomes on closing, at once if Asset detail closed
-     * while the request was out. An answer for an asset no longer shown changes nothing in the
-     * panel but is still reported, and still names or merges the viewed Person.
+     * again at once; a merge of the viewed Person (`mergedPersonId`), or into them (`mergedIntoId`),
+     * notes the destination, whose results are searched on closing, at once if Asset detail closed
+     * while the request was out: the grid becomes the destination's, or gains what the merged
+     * Person had. An answer for an asset no longer shown changes nothing in the panel but is still
+     * reported, and still names or merges the viewed Person.
      */
     function afterEdit({
         sectionEl: newSectionEl,
@@ -401,9 +406,12 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
 
         const searchedPersonId = Alpine.store(Const.state.searchParams).personId
         if (namedPersonId && namedPersonId === searchedPersonId) {
-            reloadResultsTitle(namedPersonId)
+            reloadPersonTitle(context.getRepoId(), namedPersonId)
         }
-        if (mergedPersonId && mergedPersonId === searchedPersonId) {
+        if (
+            mergedPersonId &&
+            [mergedPersonId, mergedIntoId].includes(searchedPersonId)
+        ) {
             mergedInto = mergedIntoId
             if (getActiveModalHost() !== ModalHost.assetDetail) {
                 flushLeaving({ closing: true })
@@ -479,8 +487,9 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
      * it; the results title is read again, as its Hide and Discard links depend on the count, or
      * the results go back to the whole repository when the Person was deleted. A detail opened from
      * a map pin has no cell, so only the title. On `closing`, the results of a viewed Person merged
-     * away become the destination's; until then the title, still the merged Person's, is left for
-     * that search to replace.
+     * away become the destination's, and those of a viewed destination are read again; until then
+     * the title, the merged Person's or the destination's before the merge, is left for that search
+     * to replace.
      */
     function flushLeaving({ closing = false } = {}) {
         const left = leaving
@@ -500,21 +509,8 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         } else if (destinationId) {
             runSearch({ params: { personId: destinationId } })
         } else if (left && !mergedInto) {
-            reloadResultsTitle(left.personId)
+            reloadPersonTitle(context.getRepoId(), left.personId)
         }
-    }
-
-    /** The results title (`#person`), when it is shown, read again for `personId` */
-    function reloadResultsTitle(personId) {
-        if (!document.getElementById("person")) {
-            return
-        }
-
-        htmx.ajax(
-            "GET",
-            `/htmx/people/r/${context.getRepoId()}/p/${personId}/title`,
-            { target: "#person", swap: "innerHTML" },
-        )
     }
 
     /** The fragment's open state, which the stylesheet lays the grid out from, and the toggles' pressed state */

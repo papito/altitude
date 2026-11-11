@@ -141,8 +141,8 @@ holds all detections of the video in memory. Then, with the pure functions of th
    sample interval has one frame, so nobody enrolls from it.
 5. One Face per Person per Video: when two clusters resolve to the same Person (`recognizeAndStore`), the later,
    lower-quality one is dropped, so a pose change that splits a person in two does not fail the import. The rule holds
-   after import too: a Face correction that would give a Person a second Face on a Video keeps the better one (see
-   **Corrections** below).
+   after import too: a Face correction or a merge that would give a Person a second Face on a Video keeps the better one
+   (see **Merge** under **People** and **Corrections** below).
 
 ## Storage
 
@@ -209,8 +209,9 @@ A merge reloads the tab and confirms in the snackbar, and runs no search of its 
 that are neither person's stay as they are, results scoped to the source, who is gone, become the destination's in the
 same view, and results scoped to the destination are read again with the Faces the merge gave it (**Event Flow** in
 `views/AGENTS.md`). A merge from the Detail panel reloads the tab and confirms in the snackbar too, and searches only on
-closing Asset detail, and only when the results are scoped to the merged person: they become the destination's then,
-while every other result, the destination's included, stays as it is (**Detail panel** in `views/AGENTS.md`).
+closing Asset detail, and only when the results are scoped to one of the two people: results scoped to the merged person
+become the destination's then, and results scoped to the destination are read again, while every other result stays as it
+is (**Detail panel** in `views/AGENTS.md`).
 
 The Triage summary above the Triage explorer's tabs counts, among other things, the assets in triage that have an
 **Unknown person** (the glossary's term): a triaged asset outside the trash with a Face of a Person who has no name and is
@@ -256,8 +257,14 @@ The tab's actions:
   The merged name is decided from the two stored rows, not the models passed in: an unnamed destination with a named,
   live source takes the source's `name`, its name key as `name_for_sort`, and `is_named`; otherwise the destination, named
   or not, keeps all three. A source no longer live (merged away or a bad match) gives no name; a merge of one is not
-  refused. The source is soft-deleted first, so `person_01` never sees the name on two live people. The Detail panel's
-  Change merges through it as well, a person with no name into a named one (**Corrections**).
+  refused. The source is soft-deleted first, so `person_01` never sees the name on two live people. One Face per Person
+  per Video holds as at import (**Videos**): on each Video where both had a Face (`FaceDao.getFacesOnSharedVideos`, read
+  before the Faces move), the higher-quality Face stays, the destination's own on a tie as for a move, and the other is
+  deleted as Remove deletes it (`keepOneFacePerVideo`), after the source is soft-deleted, so a cover of either person that
+  pointed at it can move to the survivor, which `person_02` allows. The deleted Faces' files go once the merge commits,
+  given the destination as re-read after it, whose cover keeps its files. An image may hold two Faces of one person, so
+  a merge keeps both there, and the recount counts the asset once. The Detail panel's Change merges through it as well,
+  a person with no name into a named one (**Corrections**).
 
 ### Corrections
 
@@ -268,10 +275,12 @@ Person, so every asset of theirs follows, not just the one shown (**Name** and *
 still gets this Face alone, so two nameless people are never merged from the panel (the People tab's drag and drop does
 it), and a named Person's Face always moves alone, so the panel never renames a named Person or merges them away (the
 results title and the People tab's pencil rename them).
-Each correction is one `PersonService` transaction. Remove and a move are followed by a file purge, and each follows the
-count rule above: a Face leaving an asset lowers its Person's `num_of_faces` only if they have no other Face on it, and a
-Face arriving raises the target's only if they had none (`FaceDao.hasFaceOfPerson`). A name changes no count, and a merge
-recounts the destination as every merge does.
+Each correction is one `PersonService` transaction. Once it commits, the files of the Faces it deleted go: Remove's Face
+always, a move's only on a Video where the target already had a Face (the one of the two that lost), and a merge's only
+on the Videos where the two people both had one; a name deletes no Face. Each follows the count rule above: a Face leaving an asset
+lowers its Person's `num_of_faces` only if they have no other Face on it, and a Face arriving raises the target's only if
+they had none (`FaceDao.hasFaceOfPerson`). A name changes no count, and a merge recounts the destination as every merge
+does.
 
 - **Remove** (`removeFace(faceId)`): the Person is locked (`lockAndGetLive`), the Face re-read and its row deleted; the
   cover, if it was this Face, becomes the Person's remaining Face with the highest detection score (`getTopFaces`); a
@@ -290,24 +299,29 @@ recounts the destination as every merge does.
   new Person's cover is the moved Face). On a Video where the target already has a Face, the lower-quality of the two
   (the target's own on a tie) is deleted as Remove deletes it, and a cover that pointed at it moves to the survivor.
 - **Name** (`nameFacePerson(faceId, personId, name)`): names the Face's Person through `updateName`, as the tab's **Name**
-  does, so the same Person, with their ID, cover and count, carries the name on every asset of theirs.
+  does, so the same Person, with their ID, cover and count, carries the name on every asset of theirs. It takes the name's
+  lock first (`lockName`), as a move to a name does, so a move creating a Person of that name meanwhile waits for it and
+  then finds the named Person holding the name, instead of failing on `person_01`.
 - **Merge** (`mergeFacePerson(faceId, personId, destId)`): merges the Face's Person into the named Person `destId` through
   `merge(dest, source)`, as the tab's **Merge** does: every Face of theirs becomes the destination's, whose ID, name and
-  Hidden state stay, and the source is soft-deleted.
+  Hidden state stay, the source is soft-deleted and one Face per Person per Video holds; the lost Faces' files go once the
+  correction's transaction commits.
 
   Both answer a `FacePersonChange(face, before, after)`: the Face, its Person as they were, with the name they had, and the
   Person who has the Face now, the same Person named or the destination. `personId` is the Person the client showed with
   the Face, checked rather than read from the Face: the Face may have been given to someone else since the panel was
   rendered, and the name must not land on, nor the merge take, whoever has it now. In one transaction (`withTransaction`
-  joins the outer one, so `updateName` and `merge` run inside it) the Person is locked, with the destination in ID order
-  for a merge (`lockAndGetLive`, each of them live in this repository), the Face is re-read under the lock (`lockedFace`,
-  as Remove and Change re-read it, so it must still be that Person's and on a live asset), and the Person, read again,
-  must still have no name. Beyond that and a merge's named destination they add no rule of their own: a held name is
-  `updateName`'s refusal, and `merge` keeps the destination's name. Each logs on DEBUG.
+  joins the outer one, so `updateName` runs inside it, and the merge runs `merge`'s body, `mergeLocked`, in it) the Person
+  is locked, with the destination in ID order for a merge (`lockAndGetLive`, each of them live in this repository), the
+  Face is re-read under the lock (`lockedFace`, as Remove and Change re-read it, so it must still be that Person's and on
+  a live asset), and the Person, read again, must still have no name. Beyond that and a merge's named destination they
+  add no rule of their own: a held name is `updateName`'s refusal, and `merge` keeps the destination's name. Each logs on
+  DEBUG.
 - **Last Face**: a Person is deleted only when no Face row of theirs remains. Faces on assets in the trash are rows, so a
   Person whose every live Face was removed stays, counting zero, until the trash is purged.
 - **Locks**: a correction locks the people it touches (`lockAndGetLive`, ID order: the Face's Person and the target or the
-  destination) and reads its asset without a lock, while a
+  destination), after the name's lock when it gives a name (a move to a name, a Name: the name, then the people), and
+  reads its asset without a lock, while a
   recycle or restore locks its assets first (`AssetDao.lockAssets`) and their people after (`lockAssetPeople`): assets, then
   people, in every transaction that locks both, so none waits on another in a cycle, and a recycle counts an asset's people
   only once a correction holding one of them has ended.
@@ -315,9 +329,10 @@ recounts the destination as every merge does.
   Face gone, or moved by a request that held the lock first, is a `NotFoundException`; the Face's own Person a
   `ValidationException`, as is a reserved name. A Name or a Merge refuses as well, changing nothing: a Face no longer
   `personId`'s, or a Person or destination no longer live or of another repository, is a `NotFoundException`; a Person
-  who has a name by now (`Const.Msg.Err.FACE_PERSON_NAMED_SINCE`, "This person has a name now"), a destination with no
-  name (`MERGE_INTO_NAMELESS`, "Merge into a person with a name", which the panel never offers) and the Person themselves
-  as the destination (`FACE_ALREADY_THEIRS`, checked before the transaction) are a `ValidationException`; a name another
+  who has a name by now (`Const.Msg.Err.FACE_PERSON_NAMED_SINCE`, "This person has a name now") is an
+  `IllegalOperationException`, as the section showing them nameless is stale; a destination with no name
+  (`MERGE_INTO_NAMELESS`, "Merge into a person with a name", which the panel never offers) and the Person themselves as
+  the destination (`FACE_ALREADY_THEIRS`, checked before the transaction) are a `ValidationException`; a name another
   live Person holds is `person_01`'s `DuplicateException`.
 
 The routes (`AssetActionController`, under `requireLogin`, each logging the correction on INFO):
@@ -331,11 +346,12 @@ marked, by `x1` for an image and by Frame time for a Video, `PersonService.getAs
 the result message (`Const.Msg.FaceCorrection`: `MOVED`, `REMOVED`, and for a name `NAMED`, "%s is now %s", and for a
 merge `MERGED`, "%s merged into %s", both by the name the Person had), when a Person was deleted their ID and the line
 that says so, and after a merge the merged Person's ID (`data-app-merged-person-id`) and the destination's
-(`data-app-merged-into-id`). A refused correction is a plain-text 400 (the body, the target, a reserved name, a Person
-named meanwhile, a nameless destination, or a name another live Person holds, whose `DuplicateException` the name route
-catches and answers with `PERSON_NAME_ALREADY_EXISTS`, "Person by that name already exists", offering no merge), a 404
-(the Face gone or moved, a Person or destination no longer live or of another repository) or a 409 (in the trash). The
-client shows a 400's message and changes nothing, and reloads the section on a 404 or 409. The controls, the Change
+(`data-app-merged-into-id`). A refused correction is a plain-text 400 (the body, the target, a reserved name, a
+nameless destination, or a name another live Person holds, whose `DuplicateException` the name route catches and
+answers with `PERSON_NAME_ALREADY_EXISTS`, "Person by that name already exists", offering no merge), a 404 (the Face gone
+or moved, a Person or destination no longer live or of another repository) or a 409 (in the trash, or a Person named
+meanwhile). The client shows a 400's message and changes nothing, and reloads the section on a 404 or 409, so a row
+whose Person was named meanwhile comes back as a named Person's, offering no name or merge. The controls, the Change
 combobox and what the client does with an answer are
 under **Detail panel** in `altitude/views/AGENTS.md`. `PeopleActionController` serves the Change combobox's options,
 `GET /htmx/people/r/:repoId/assignable` (`getAssignable`: the live people who are not a bad match, named first, then by
@@ -396,7 +412,9 @@ and the Video rules on clips synthesized by [TestVideos](../altitude/test/src/al
 [FaceCorrectionTests](../altitude/test/src/altitude/core/integration/FaceCorrectionTests.scala) covers Remove and
 Change on both engines, their four races included (`contend`: two moves of one Person's Faces on an asset, a move of a Face
 a concurrent request removed, two moves to one new name, and a recycle of an asset during a removal of a Face on it), the
-Name and Merge of a Face's Person with their refusals, and the suggested people of a Face, and
+Name and Merge of a Face's Person with their refusals and their races (a name or a merge during a move of the Face, a
+move during a merge, two merges of one Person, a move to a name during a Name to it), a merge's one Face per Person per
+Video, and the suggested people of a Face, and
 [AssetActionControllerTests](../altitude/test/src/altitude/core/controller/AssetActionControllerTests.scala) their
 routes, [PeopleActionControllerTests](../altitude/test/src/altitude/core/controller/PeopleActionControllerTests.scala) the
 assignable list with its Suggested group.
