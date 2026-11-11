@@ -2153,7 +2153,9 @@ component's element itself. A confirmation that differs from the password comes 
 error, both passwords kept. The account type is a row of cards (`.type-card`, a radio and a one-line description, the
 chosen one in the accent), only the types the creator may create. For an Admin creator, the Create Libraries switch (a User's)
 and the new-Library grant's switch, then its Permission chips (a User's; a Guest's grant is access alone), each switch a
-`.switch` button with a hidden input bound to it, which is disabled where the type may not have it. Then the **Permission
+`.switch` button with a hidden input bound to it, which is disabled where the type may not have it; the section
+(`.admin-only`) is boxed as a type card is (`--border-hairline` in `--panel-border-color`, `--radius`, `--space-5` inside).
+Then the **Permission
 matrix**: a table under a sticky header, one row per Library the creator may give access to, the access checkbox before its
 name (`libraryIds`), an All button, and one column per Permission in the order of the Goals, `--permission-column-width` wide,
 its header a button spelling the Permission out, wrapped; a cell is a checkbox (`permissions`, "<Library ID>:<Permission>")

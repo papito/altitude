@@ -201,9 +201,13 @@
   color: var(--theme-neutral-3);
 }
 
+/* An Admin's section, the Library switches, boxed as a type card is */
 #accountForm .admin-only {
   display: grid;
   row-gap: var(--space-5);
+  padding: var(--space-5);
+  border: var(--border-hairline) var(--panel-border-color);
+  border-radius: var(--radius);
 }
 
 /* A switch, its label, and after the new-Library grant's switch its Permission chips */
