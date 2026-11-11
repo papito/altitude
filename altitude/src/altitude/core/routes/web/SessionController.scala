@@ -40,7 +40,7 @@ class SessionController(using logger: Logger) extends cask.Routes:
 
         // Determine where to redirect after successful login
         // Validate redirect URL to prevent open redirect vulnerabilities
-        // Without one, the Library the user lands in; `/` tells a user who owns none so
+        // Without one, the Library the user lands in; `/` tells a user who can see none so
         val decodedRedirect = redirect.map(java.net.URLDecoder.decode(_, "UTF-8"))
         val redirectUrl = decodedRedirect
           .filter(SessionController.isValidRedirectUrl)

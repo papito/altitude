@@ -3,7 +3,6 @@ package altitude.core
 object FieldConst:
   val ID = "id"
   val REPO_ID = "repository_id"
-  val USER_ID = "user_id"
   val VALUE = "value"
   val VALUES = "values"
   val DATA = "data"
@@ -22,7 +21,6 @@ object FieldConst:
   object Repository:
     val NAME = "name"
     val NAME_KEY = "name_key"
-    val OWNER_ACCOUNT_ID = "owner_account_id"
     val ROOT_FOLDER_ID = "root_folder_id"
     val FILE_STORE_TYPE = "file_store_type"
     val FILES_STORE_CONFIG = "file_store_config"
@@ -33,6 +31,26 @@ object FieldConst:
     val PASSWORD_HASH = "password_hash"
     val ACCOUNT_TYPE = "account_type"
     val LAST_ACTIVE_REPO_ID = "last_active_repo_id"
+    val EMAIL_KEY = "email_key"
+    val USERNAME = "username"
+    val USERNAME_KEY = "username_key"
+    val IS_ACTIVE = "is_active"
+    val CAN_CREATE_LIBRARIES = "can_create_libraries"
+    val GRANTS_NEW_LIBRARIES = "grants_new_libraries"
+    val NEW_LIBRARY_PERMISSIONS = "new_library_permissions"
+    val CREATED_BY_ACCOUNT_ID = "created_by_account_id"
+    val LAST_LOGIN_AT = "last_login_at"
+
+  object RepositoryGrant:
+    val ACCOUNT_ID = "account_id"
+    val PERMISSIONS = "permissions"
+
+  object AuditEvent:
+    val EVENT = "event"
+    val ACTOR = "actor"
+    val TARGET = "target"
+    val DETAIL = "detail"
+    val CLIENT_IP = "client_ip"
 
   object Face:
     val X1 = "x1"
@@ -61,6 +79,8 @@ object FieldConst:
     val FACES = "faces"
 
   object Asset:
+    val OWNER_USER_ID = "owner_user_id"
+    val ORIGINAL_OWNER = "original_owner"
     val CHECKSUM = "checksum"
     val ASSET_TYPE = "asset_type"
     val FOLDER_ID = "folder_id"

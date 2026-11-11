@@ -15,9 +15,9 @@ import altitude.core.routes.decorators.requireLoginOrSignature
 class ContentViewController(using logger: Logger) extends cask.Routes:
 
   /**
-   * A preview, a face or a stored original, served to the owner of the repository, or to the holder of a signed URL for that one
-   * item. The file store builds paths from the item ID, so an ID that is not a UUID is a 400, and anything the ID does not name,
-   * in the database or on disk, is a 404.
+   * A preview, a face or a stored original, served to an account that can see the repository (an Admin by type, anyone else by a
+   * grant), or to the holder of a signed URL for that one item. The file store builds paths from the item ID, so an ID that is
+   * not a UUID is a 400, and anything the ID does not name, in the database or on disk, is a 404.
    *
    * `exp` and `sig` are a signed URL's, which the decorator verifies; they are declared only because cask answers a query
    * parameter that an endpoint does not declare with a 400.

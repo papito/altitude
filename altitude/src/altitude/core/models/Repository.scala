@@ -69,7 +69,6 @@ object Repository:
 case class Repository(
     id: Option[String] = None,
     name: String,
-    ownerAccountId: String,
     rootFolderId: String,
     fileStoreType: String,
     fileStoreConfig: Map[String, String] = Map(),

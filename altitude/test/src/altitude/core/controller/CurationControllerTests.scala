@@ -384,7 +384,7 @@ import altitude.core.models.Asset
     }
   }
 
-  test("Every route answers a repository the user does not own with a JSON 404") {
+  test("Every route answers a repository the user cannot see with a JSON 404") {
 
     /**
      * Setup:
@@ -399,7 +399,8 @@ import altitude.core.models.Asset
     login()
 
     val stranger = testContext.persistUser()
-    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    val strangersRepo = testContext.persistRepository()
+    testContext.grant(stranger, strangersRepo)
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign =

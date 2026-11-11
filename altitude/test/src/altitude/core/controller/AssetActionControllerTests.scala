@@ -669,6 +669,47 @@ import altitude.core.models.Person
     }
   }
 
+  test("The asset-detail JSON carries neither the importer record nor the owner of the asset") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in User's repository holding an image imported by another User who holds a grant in it.
+     *
+     * Assertions:
+     *
+     * Asked for as JSON, the asset-detail modal answers 200 with the image's file name, and with no `original_owner` or
+     * `owner_user_id` key: the importer's email, username and ID appear nowhere in it.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    val importer = testContext.persistUser()
+    testContext.grant(importer, repo)
+    testApp.service.user.switchContextToUser(importer)
+    val asset = testContext.persistAsset(repository = Some(repo), user = Some(importer))
+
+    withServer(App) {
+      host =>
+        val response = requests.get(
+          s"$host/htmx/asset/r/$repoId/modals/asset-detail/${asset.persistedId}",
+          headers = Map("Accept" -> "application/json"),
+          cookies = testContext.cookies,
+          check = false
+        )
+
+        response.statusCode shouldBe 200
+        val json = ujson.read(response.text()).obj
+        json("file_name").str shouldBe asset.fileName
+        json.contains("original_owner") shouldBe false
+        json.contains("owner_user_id") shouldBe false
+        for (detail <- List(importer.email, importer.username, importer.persistedId)) {
+          (response.text() should not).include(detail)
+        }
+    }
+  }
+
   test("A change request whose body is not JSON, not a JSON object or not sent as JSON is a bad request") {
 
     /**

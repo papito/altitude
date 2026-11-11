@@ -39,14 +39,14 @@ class IndexController(using logger: Logger, caskLogger: cask.Logger, context: ca
         Response("", 302, Seq("Location" -> "/login"), Nil)
 
   /**
-   * To the Library `user` lands in (`RepositoryService.landingRepositoryOf`). A user who owns none is told so in plain text, the
-   * way a foreign Library is not found, rather than sent anywhere.
+   * To the Library `user` lands in (`RepositoryService.landingRepositoryOf`). A user who can see none is told so in plain text,
+   * the way a foreign Library is not found, rather than sent anywhere.
    */
   private def landing(user: User): cask.Response[String] =
     App.altitude.service.repository.landingRepositoryOf(user) match
       case Some(repo) => Response("", 302, Seq("Location" -> s"/r/${repo.persistedId}"), Nil)
       case None =>
-        logger.info(s"User [${user.persistedId}] owns no library to land in")
+        logger.info(s"User [${user.persistedId}] can see no library to land in")
         cask.Response(Const.Msg.Err.NO_LIBRARY, 404, Seq(("Content-Type", "text/plain")))
 
   @requireLogin()

@@ -8,6 +8,7 @@ import org.scalatest.matchers.should.Matchers.{ convertToStringShouldWrapperForV
 
 import scala.language.implicitConversions
 
+import altitude.core.models.AccountSnapshot
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.ExtractedMetadata
@@ -77,7 +78,8 @@ import altitude.core.models.UserMetadataValue
     val quality = ImageQuality(sharpness = 123.5, luminance = 0.45, clippedHighlights = 0.01, crushedShadows = 0.002, score = 87)
     val highBit = PerceptualHash(Long.MinValue + 42)
     val measured = Asset(
-      userId = "u",
+      ownerUserId = "u",
+      originalOwner = AccountSnapshot("u", "U", "u", "u@example.com"),
       assetType = AssetType("image", "jpeg", "image/jpeg"),
       fileName = "burst-1.jpg",
       checksum = "a" * 64,
@@ -123,7 +125,8 @@ import altitude.core.models.UserMetadataValue
      */
     val embedding = SceneEmbedding(IArray(0.6f, 0.8f))
     val embedded = Asset(
-      userId = "u",
+      ownerUserId = "u",
+      originalOwner = AccountSnapshot("u", "U", "u", "u@example.com"),
       assetType = AssetType("image", "jpeg", "image/jpeg"),
       fileName = "scene.jpg",
       checksum = "a" * 64,
@@ -167,7 +170,8 @@ import altitude.core.models.UserMetadataValue
     Histogram.fromBytes(bytes).hashCode should be(histogram.hashCode)
 
     val measured = Asset(
-      userId = "u",
+      ownerUserId = "u",
+      originalOwner = AccountSnapshot("u", "U", "u", "u@example.com"),
       assetType = AssetType("image", "jpeg", "image/jpeg"),
       fileName = "histogram.jpg",
       checksum = "a" * 64,
@@ -221,13 +225,15 @@ import altitude.core.models.UserMetadataValue
      * duration key at all. The Face's quality and enrollment flag also travel through JSON.
      */
     val video = Asset(
-      userId = "u",
+      ownerUserId = "u",
+      originalOwner = AccountSnapshot("u", "U", "u", "u@example.com"),
       assetType = AssetType("video", "mp4", "video/mp4"),
       fileName = "clip.mp4",
       checksum = "a" * 64,
       sizeBytes = 10,
       folderId = "",
-      durationMs = Some(90_500L))
+      durationMs = Some(90_500L)
+    )
     video.toJson("duration_ms").num should be(90500)
     Asset.fromJson(video.toJson).durationMs should be(Some(90_500L))
     val image = video.copy(assetType = AssetType("image", "png", "image/png"), durationMs = None)

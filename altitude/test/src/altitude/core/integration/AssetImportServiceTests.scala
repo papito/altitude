@@ -5,6 +5,7 @@ import altitude.test.TestVideos
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
+import java.sql.SQLException
 import java.time.LocalDateTime
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
@@ -15,6 +16,7 @@ import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.UnsupportedMediaTypeException
+import altitude.core.models.AccountSnapshot
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.AssetWithData
@@ -26,6 +28,7 @@ import altitude.core.models.SceneEmbeddings
 import altitude.core.models.SceneModel
 import altitude.core.util.ImageMeasurement
 import altitude.core.util.ImageUtil
+import altitude.core.util.SearchQuery
 
 @DoNotDiscover class AssetImportServiceTests(override val testApp: Altitude) extends IntegrationTestCore with BurstFrames {
   import BurstFrames.*
@@ -285,6 +288,51 @@ import altitude.core.util.ImageUtil
     val importedAsset: Asset = testApp.service.library.addImportAsset(importAsset)
     val asset = testApp.service.asset.getById(importedAsset.persistedId): Asset
     asset.isTriaged should be(true)
+  }
+
+  test("An imported asset is owned by the importing account and keeps its importer record") {
+
+    /**
+     * Setup:
+     *
+     * A User, the context account, who imports one JPEG (images/1.jpg) into the common setup's Library.
+     *
+     * Assertions:
+     *
+     * The asset, as imported and as read back by a general read and by a search, is owned by the User and carries the User's
+     * importer record: the account's ID, name, username and email.
+     *
+     * Edge cases:
+     *
+     * A hand-written update of the asset's owner to an ID that names no account is refused by the database, and the asset stays
+     * the User's.
+     */
+    val importer = testContext.persistUser()
+    switchContextUser(importer)
+    val expected = AccountSnapshot(importer.persistedId, importer.name, importer.username, importer.email)
+
+    val imported = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/1.jpg"))
+    val read = testApp.service.asset.getById(imported.persistedId): Asset
+    val searched = testApp.service.library
+      .search(new SearchQuery(params = SearchQuery.TRIAGE_VIEW, rpp = 100))
+      .records
+      .find(_.id == imported.id)
+      .get
+
+    for (asset <- List(imported, read, searched)) {
+      asset.ownerUserId shouldBe importer.persistedId
+      asset.originalOwner shouldBe expected
+    }
+
+    an[SQLException] should be thrownBy testApp.txManager.withTransaction {
+      update(
+        "UPDATE asset SET owner_user_id = ? WHERE id = ? AND repository_id = ?",
+        java.util.UUID.randomUUID.toString,
+        imported.persistedId,
+        testContext.repository.persistedId
+      )
+    }
+    (testApp.service.asset.getById(imported.persistedId): Asset).ownerUserId shouldBe importer.persistedId
   }
 
   test("Imported asset with metadata has media creation date set") {

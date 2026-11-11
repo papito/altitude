@@ -8,7 +8,11 @@ import altitude.core.models.Repository
 import altitude.core.models.User
 
 object PipelineTypes:
-  case class PipelineContext(repository: Repository, account: User)
+  /**
+   * What a pipeline element's work runs in: its repository, and the account that queued it, which an import always has and the
+   * startup's requeue of purge-pending assets does not
+   */
+  case class PipelineContext(repository: Repository, account: Option[User])
 
   /** An asset the pipeline dropped, with its staged file if it still has one, for the pipeline's end to discard */
   case class InvalidAsset(payload: Asset, cause: Option[Throwable], stagedFile: Option[Path] = None)

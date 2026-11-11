@@ -53,7 +53,7 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
       logger.error("Not a multipart upload")
       return cask.Response(uploadFormPayload, 200, Seq(("Content-Type", "text/html")))
 
-    val pipelineContext = PipelineContext(repository = RequestContext.getRepository, account = RequestContext.getAccount)
+    val pipelineContext = PipelineContext(repository = RequestContext.getRepository, account = Some(RequestContext.getAccount))
 
     // Get all form field names and process file uploads
     val fieldNames = formData.iterator().asScala.toList

@@ -181,9 +181,9 @@ object Const:
       val LIBRARY_NAME_CONTROL_CHARACTERS = "Remove the control characters"
       // A Library name whose name key another Library holds (repository_01), named as it was submitted, once normalized
       val LIBRARY_NAME_TAKEN = "A library named “%s” already exists"
-      // `/` for an account that owns no Library to land in
+      // `/` for an account that can see no Library to land in
       val NO_LIBRARY = "There is no library to open"
-      // A page of a Library that does not exist or that the account does not own (decorators.requireLogin): one text for both
+      // A page of a Library that does not exist or that the account cannot see (decorators.requireLogin): one text for both
       val LIBRARY_NOT_FOUND = "Library not found"
       // A Face correction onto the Face's own Person: a move (PersonService.moveFace), or a merge of the Face's Person into
       // themselves (mergeFacePerson)

@@ -378,7 +378,7 @@ import altitude.core.util.SearchQuery
 
     // Another repository's geotagged asset is invisible here
     val otherUser = testContext.persistUser()
-    val otherRepo = testContext.persistRepository(user = Some(otherUser))
+    val otherRepo = testContext.persistRepository()
     val foreign = testContext.persistAsset(repository = Some(otherRepo), user = Some(otherUser))
     testContext.setAssetCoordinates(foreign.persistedId, paris._1, paris._2)
     switchContextRepo(testContext.repositories.head)

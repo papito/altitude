@@ -57,8 +57,8 @@ class SystemService(val app: Altitude):
 
       val repo: Repository = app.service.repository.addRepository(
         name = repositoryName,
-        fileStoreType = Const.StorageEngineName.FS, // hard default for now
-        owner = admin)
+        fileStoreType = Const.StorageEngineName.FS // hard default for now
+      )
 
       RequestContext.repository.value = Some(repo)
 

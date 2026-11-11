@@ -83,7 +83,7 @@ import altitude.core.util.Query
         asset
     }
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source = Source.fromIterator(() => recycledAssets.iterator).map((_, pipelineContext))
 
     val pipelineResFuture: Future[Seq[TAssetWithContext]] = testApp.service.purgePipeline.run(source, VoidAssetSink())
@@ -133,7 +133,7 @@ import altitude.core.util.Query
     val personIdToFaceMap: Map[String, List[Face]] =
       people.map(person => person.persistedId -> testApp.service.person.getPersonFaces(person.persistedId)).toMap
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
 
     val pipelineResFuture: Future[Seq[TAssetWithContext]] = testApp.service.purgePipeline.run(source, VoidAssetSink())
@@ -195,7 +195,7 @@ import altitude.core.util.Query
 
     val survivor = testContext.persistAsset()
 
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source = Source.fromIterator(() => assets.iterator).map((_, pipelineContext))
 
     Await.result(testApp.service.purgePipeline.run(source, VoidAssetSink()), Duration.Inf)
@@ -221,7 +221,7 @@ import altitude.core.util.Query
 
   /** Runs the assets through the purge pipeline, and waits for it */
   private def purge(assets: Asset*): Unit = {
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val source = Source(assets.toList).map((_, pipelineContext))
     Await.result(testApp.service.purgePipeline.run(source, VoidAssetSink()), Duration.Inf)
   }
@@ -337,7 +337,7 @@ import altitude.core.util.Query
     testApp.service.library.recycleAssets(Set(recycledAsset.persistedId))
 
     // purgeRecycleBin() only queues the purge, so the asset runs straight through the pipeline, which can be awaited
-    val pipelineContext = PipelineContext(testContext.repository, testContext.user)
+    val pipelineContext = PipelineContext(testContext.repository, Some(testContext.user))
     val purgeSource = Source.single((recycledAsset, pipelineContext))
     Await.result(testApp.service.purgePipeline.run(purgeSource, VoidAssetSink()), Duration.Inf)
 
@@ -524,6 +524,10 @@ import altitude.core.util.Query
      * Assertions:
      *
      * The asset's row, file and preview are deleted.
+     *
+     * Edge cases:
+     *
+     * The job queues the asset with no account, since no request did and a Library has no owner, and the purge needs none.
      */
     val asset = testContext.persistAsset()
     testApp.service.library.recycleAssets(Set(asset.persistedId))

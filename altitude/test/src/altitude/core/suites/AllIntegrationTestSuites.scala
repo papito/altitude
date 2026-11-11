@@ -32,6 +32,7 @@ abstract class AllIntegrationTestSuites(val testApp: Altitude)
     new FileStoreServiceTests(testApp),
     new StatsServiceTests(testApp),
     new UserServiceTests(testApp),
+    new AuditServiceTests(testApp),
     new LibraryServiceTests(testApp),
     new LibraryServicePruneTests(testApp),
     new LibraryServiceRecycleTests(testApp),

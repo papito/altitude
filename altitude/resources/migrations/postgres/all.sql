@@ -68,33 +68,78 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('pipeline.shutdown_timeout', '30', '30'),
   ('import.parallelism', '0', '0');
 
+-- email_key and username_key are the name keys of the email address and the username (User.emailKey and User.usernameKey:
+-- NameKey.of, folded in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
 CREATE TABLE account (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   email TEXT NOT NULL,
+  email_key TEXT NOT NULL,
+  username TEXT NOT NULL,
+  username_key TEXT NOT NULL,
   name TEXT NOT NULL,
   account_type TEXT NOT NULL
     CHECK (account_type IN ('Admin', 'User', 'Guest')),
   password_hash TEXT NOT NULL,
+  -- A deactivated account can do nothing until it is reactivated
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  -- The Create Libraries flag, which only an Admin sets
+  can_create_libraries BOOLEAN NOT NULL DEFAULT FALSE,
+  -- The new-Library grant: with the switch on, every Library created later grants the account these Permissions (a bitmask of
+  -- Permission bits)
+  grants_new_libraries BOOLEAN NOT NULL DEFAULT FALSE,
+  new_library_permissions INT NOT NULL DEFAULT 0 CHECK (new_library_permissions >= 0),
+  -- The account that created this one; NULL for the setup Admin, and once the creator is deleted
+  created_by_account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE SET NULL,
+  last_login_at TIMESTAMP WITH TIME ZONE,
   last_active_repo_id CHAR(36) COLLATE "C"
 ) INHERITS (_core);
 
--- One account per email address, whatever its case, and the login lookup, which compares lower(email) too
-CREATE UNIQUE INDEX account_01 ON account (lower(email));
+-- One account per email address and one per username, whatever the case or Unicode form either is typed in; a login compares
+-- the key column of what it names
+CREATE UNIQUE INDEX account_01 ON account (email_key);
+CREATE UNIQUE INDEX account_02 ON account (username_key);
 
 CREATE TABLE repository (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   name TEXT NOT NULL,
   name_key TEXT NOT NULL,
   description TEXT,
-  owner_account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE CASCADE,
   root_folder_id CHAR(36) COLLATE "C" NOT NULL,
   file_store_type VARCHAR NOT NULL,
   file_store_config jsonb
 ) INHERITS (_core);
 
--- repository_01: a Library's name is unique instance-wide, across owners, under its name key (Repository.nameKey: NameKey.of
--- of the normalized name, folded in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
+-- repository_01: a Library's name is unique instance-wide under its name key (Repository.nameKey: NameKey.of of the normalized
+-- name, folded in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
 CREATE UNIQUE INDEX repository_01 ON repository (name_key);
+
+-- Who may see a Library, and do what in it: one row per account and Library, its Permissions a bitmask of Permission bits (0
+-- for a Guest, who only looks). An Admin reaches every Library with no row. A row goes with its Library or its account.
+CREATE TABLE repository_grant (
+  account_id CHAR(36) COLLATE "C" NOT NULL REFERENCES account (id) ON DELETE CASCADE,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  permissions INT NOT NULL DEFAULT 0 CHECK (permissions >= 0),
+  -- An account's grants, the lookup of a login and of the gate, and one row per pair
+  PRIMARY KEY (account_id, repository_id)
+);
+
+-- A Library's grants, and the cascade from a deleted Library
+CREATE INDEX repository_grant_01 ON repository_grant (repository_id);
+
+-- An append-only record of account events (AuditEventType), written from the service layer. The actor and the target are
+-- snapshots of the accounts as they were (id, name, username, email), since accounts are deleted; the actor is NULL for a failed
+-- login, which names no account.
+CREATE TABLE audit_event (
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  event TEXT NOT NULL,
+  actor jsonb,
+  target jsonb,
+  detail jsonb,
+  client_ip TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
+);
+
+CREATE INDEX audit_event_01 ON audit_event (created_at);
 
 CREATE TABLE stats (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
@@ -127,7 +172,13 @@ CREATE INDEX folder_03 ON folder (parent_id, is_recycled);
 CREATE TABLE asset (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
-  user_id CHAR(36) COLLATE "C",
+  -- The account that owns the asset: its importer, until the importer is deleted and the asset moves to the deleting Admin. No
+  -- delete action, so an account with assets cannot be deleted without that move.
+  owner_user_id CHAR(36) COLLATE "C" NOT NULL REFERENCES account (id),
+  -- The importer record (AccountSnapshot): id, name, username and email of the account that imported the asset, written at
+  -- import, which outlives the account. Every general read selects it, so it is kept in the heap row (STORAGE MAIN) rather
+  -- than moved out of line with the metadata (toast_tuple_target, below), which would cost each row read a TOAST lookup.
+  original_owner jsonb STORAGE MAIN NOT NULL,
   -- SHA-256 of the file, 64 lowercase hex characters (Sha256.hex), compared byte-wise as the IDs are
   checksum CHAR(64) COLLATE "C" NOT NULL,
   media_type VARCHAR(64) NOT NULL,
@@ -215,6 +266,8 @@ CREATE INDEX asset_geo ON asset (repository_id, is_recycled, is_pipeline_process
   INCLUDE (id, original_created_at, is_triaged) WHERE latitude IS NOT NULL;
 -- The members of a Sequence: their count, their repointing when Sequences merge, and a Curate view's listing
 CREATE INDEX asset_sequence ON asset (sequence_id) WHERE sequence_id IS NOT NULL;
+-- An account's assets, in every Library: the key from the account, which a delete of an account checks
+CREATE INDEX asset_owner ON asset (owner_user_id);
 
 CREATE SEQUENCE person_label;
 

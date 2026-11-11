@@ -44,8 +44,8 @@ class PasetoService(val app: Altitude):
   private val tokenExpirationDays: Int = Const.Security.MEMBER_ME_COOKIE_EXPIRATION_DAYS
 
   /**
-   * Creates a PASETO token for the given user: the user ID, email, name and account type, and the expiration time. It does not
-   * carry the last active Library, which changes with every switch the token outlives: that is read from the database.
+   * Creates a PASETO token for the given user: the user ID, email, username, name and account type, and the expiration time. It
+   * does not carry the last active Library, which changes with every switch the token outlives: that is read from the database.
    */
   def createToken(user: User): String =
     val now = Instant.now()
@@ -58,6 +58,7 @@ class PasetoService(val app: Altitude):
       .setExpiration(expiration)
       .setSubject(user.persistedId)
       .claim("email", user.email)
+      .claim("username", user.username)
       .claim("name", user.name)
       .claim("accountType", user.accountType.toString)
       .compact()
@@ -116,10 +117,11 @@ class PasetoService(val app: Altitude):
 
       // Extract user data from token claims
       val email = claims.get("email", classOf[String])
+      val username = claims.get("username", classOf[String])
       val name = claims.get("name", classOf[String])
       val accountTypeStr = claims.get("accountType", classOf[String])
 
-      if email.isEmpty || name.isEmpty || accountTypeStr.isEmpty then
+      if email.isEmpty || username.isEmpty || name.isEmpty || accountTypeStr.isEmpty then
         logger.debug("Token missing required user claims")
         return None
 
@@ -128,6 +130,7 @@ class PasetoService(val app: Altitude):
       val user = User(
         id = Some(userId),
         email = email,
+        username = username,
         name = name,
         accountType = AccountType.valueOf(accountTypeStr)
       )

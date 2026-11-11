@@ -12,6 +12,9 @@ import scalasql.Table
  *
  * `folderId` is NULL for an asset in no folder (a triaged one), whose model has an empty folder ID, as the raw path reads it.
  *
+ * `originalOwner` is the importer record's JSON: `jsonb` on PostgreSQL, which pgJDBC hands out as its JSON text, and `TEXT` on
+ * SQLite.
+ *
  * The Scene embeddings (`dinov2_embedding`, `clip_embedding`) are never carried back out of the database by a typed read, so the
  * row class does not even select them: they are bulky, and the one reader is the hand-written Sequence candidates' statement. The
  * search statements build their asset column list from these labels, so they leave them out too.
@@ -19,7 +22,8 @@ import scalasql.Table
 case class AssetRow[T[_]](
     id: T[String],
     repositoryId: T[String],
-    userId: T[String],
+    ownerUserId: T[String],
+    originalOwner: T[String],
     checksum: T[String],
     mediaType: T[String],
     mediaSubtype: T[String],

@@ -105,8 +105,8 @@ object decorators:
 
   /**
    * Decorator that requires a valid PASETO token for the endpoint. If the token is invalid or missing, returns a 401 Unauthorized
-   * response. For web requests, redirects to the login page. A repository in the path that the user does not own is answered as
-   * not found, as any foreign entity is.
+   * response. For web requests, redirects to the login page. A repository in the path that the account cannot see (an Admin sees
+   * every one, anyone else one it holds a grant in) is answered as not found, as any foreign entity is.
    */
   class requireLogin extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
@@ -116,14 +116,14 @@ object decorators:
       val devUser = App.altitude.service.user.getDevUser
 
       if devUser.isDefined then
-        return ownedRepositoryOnly(req, devUser.get)(delegate(req, Map("request" -> req, "user" -> devUser)))
+        return accessibleRepositoryOnly(req, devUser.get)(delegate(req, Map("request" -> req, "user" -> devUser)))
 
       extractToken(req) match {
         case Some(token) =>
           App.altitude.service.user.getUserFromToken(token) match {
             case Some(user) =>
               logger.trace(s"User authenticated: ${user.email}")
-              ownedRepositoryOnly(req, user)(delegate(req, Map("request" -> req, "user" -> user)))
+              accessibleRepositoryOnly(req, user)(delegate(req, Map("request" -> req, "user" -> user)))
             case None =>
               logger.warn("Invalid or expired token")
               handleUnauthenticated(req)
@@ -134,13 +134,14 @@ object decorators:
       }
 
     /**
-     * Runs `endpoint` unless the path names a repository that `user` does not own or that does not exist: both are answered as
-     * not found, so the two cannot be told apart
+     * Runs `endpoint` unless the path names a repository that `user` cannot see or that does not exist: both are answered as not
+     * found, so the two cannot be told apart
      */
-    private def ownedRepositoryOnly(req: cask.Request, user: User)(endpoint: => Result[Raw]): Result[Raw] =
+    private def accessibleRepositoryOnly(req: cask.Request, user: User)(endpoint: => Result[Raw]): Result[Raw] =
       RequestContext.repository.value match
-        case Some(repo) if repo.ownerAccountId != user.persistedId =>
-          logger.warn(s"User [${user.persistedId}] denied repository [${repo.persistedId}] they do not own")
+        // Reads the grant from the database for now; Task B reads it from the token's claims
+        case Some(repo) if !App.altitude.service.repository.isAccessibleTo(user, repo.persistedId) =>
+          logger.warn(s"User [${user.persistedId}] denied repository [${repo.persistedId}]: no access")
           handleNotFound(req)
         case _ => existingRepositoryOnly(req)(endpoint)
 
@@ -168,7 +169,7 @@ object decorators:
   /**
    * Decorator for an endpoint that a signed URL may open without a login. A request with both `exp` and `sig` query parameters is
    * answered by the signature alone: one that [[altitude.core.service.ContentSigner.verify]] accepts for the request path is
-   * served whoever owns the repository, since the signature is the grant, unless the repository does not exist (a 404, as for
+   * served with no account, since the signature is the grant, unless the repository does not exist (a 404, as for
    * `requireLogin`), and any other is a plain-text 403 (a share-link holder has no account to log in to). Any other request,
    * including one with only one of the two parameters, is `requireLogin`'s, so the logged-in UI builds plain URLs to the same
    * route.
@@ -228,8 +229,8 @@ object decorators:
         else Result.Success(Response("Forbidden: Admin only", statusCode = 403, headers = Seq("Content-Type" -> "text/plain")))
 
   /**
-   * For a full page of a repository, applied after `requireLogin`, whose ownership check has refused a foreign repository: once
-   * the page answers 200, the request's repository is recorded as the account's last active one
+   * For a full page of a repository, applied after `requireLogin`, whose access check has refused a foreign repository: once the
+   * page answers 200, the request's repository is recorded as the account's last active one
    * (`UserService.rememberLastActiveRepository`), which login and `/` open next. Partials and API routes do not carry it, so a
    * nav reload or a search never moves where the user lands, and neither does a page that is not found. The page is rendered
    * already, so a failure to record is logged at WARN and the page is served: the next login lands where the last recorded load

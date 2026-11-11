@@ -21,13 +21,13 @@
     <a href="/"><i class="fas fa-chevron-up"></i><span>Altitude</span></a>
 </div>
 @* Browse goes to the current Library's main page with no search; the Library's name after it is the Library menu's trigger:
-   the account's Libraries, and New library for an Admin. A nav reload renders the menu's host empty, by its ID and
+   the Libraries the account can see, and New library for an Admin. A nav reload renders the menu's host empty, by its ID and
    `hx-preserve`: htmx swaps the page's built host back in for it, so a list would be read for nothing. *@
 <div class="menu repository"@currentAttr(Const.NavEntry.BROWSE)>
     @includes.html.library_menu(
         hostId = libraryMenuHostId,
         browseHref = s"/r/$repoId",
-        libraries = if (reload) Seq.empty else App.altitude.service.repository.getOwnedBy(RequestContext.getAccount),
+        libraries = if (reload) Seq.empty else App.altitude.service.repository.getAccessibleTo(RequestContext.getAccount),
         currentId = repoId,
         newLibraryDialogUrl = Option.when(isAdmin)(s"/htmx/library/r/$repoId/dialogs/new"),
         emptyHost = reload)

@@ -9,6 +9,7 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.models.AccountType
+import altitude.core.models.Permissions
 
 @DoNotDiscover class IndexControllerTests extends ControllerTestCore {
 
@@ -207,7 +208,7 @@ import altitude.core.models.AccountType
      * The main page marks Browse, or the view its URL asks for; the import and settings pages mark their own entries; a nav
      * reload marks the entry passed as `current`, and no entry without one.
      */
-    val repoId = loginAs(AccountType.Admin)
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
 
     withServer(App) {
       host =>
@@ -276,7 +277,7 @@ import altitude.core.models.AccountType
     /**
      * Setup:
      *
-     * A logged-in user's Library, and another user's Library.
+     * A logged-in User's Library, and a Library another User holds a grant in and the first does not.
      *
      * Assertions:
      *
@@ -303,6 +304,47 @@ import altitude.core.models.AccountType
     }
   }
 
+  test("An Admin opens every Library; a User and a Guest only one they hold a grant in") {
+
+    /**
+     * Setup:
+     *
+     * A Library a User and a Guest each hold a grant in, and a Library that grants nobody; an Admin, the User and the Guest, each
+     * logged in on its own.
+     *
+     * Assertions:
+     *
+     * The Admin opens the main page of both Libraries. The User and the Guest open the first one's, and the second one's answers
+     * the plain-text 404 of a Library that does not exist.
+     */
+    val shared = addLibrary("Shared", testApp.service.user.add(testContext.makeUser(), TestContext.USER_PASSWORD))
+    val nobodys = addLibrary("Nobody's", testApp.service.user.add(testContext.makeAdminUser(), TestContext.USER_PASSWORD))
+
+    val opens = List(AccountType.Admin -> Set(shared, nobodys), AccountType.User -> Set(shared), AccountType.Guest -> Set(shared))
+
+    for ((accountType, opened) <- opens) withClue(s"[$accountType]: ") {
+      testContext = new TestContext(testApp)
+      val account = testContext.persistUser(Some(testContext.makeUser().copy(accountType = accountType)))
+      if (accountType != AccountType.Admin) {
+        val permissions = if (accountType == AccountType.User) Permissions.all else Permissions.none
+        testContext.grant(account, shared, permissions)
+      }
+      login()
+
+      withServer(App) {
+        host =>
+          for (library <- List(shared, nobodys)) withClue(s"[${library.name}]: ") {
+            val page = requests.get(s"$host/r/${library.persistedId}", cookies = testContext.cookies, check = false)
+            if (opened.contains(library)) page.statusCode shouldBe 200
+            else {
+              page.statusCode shouldBe 404
+              page.text() shouldBe Const.Msg.Err.LIBRARY_NOT_FOUND
+            }
+          }
+      }
+    }
+  }
+
   /** The Library menu's host in `page`: from its opening tag to the end of the host, which holds no other `div` */
   private def browseMenu(page: String): String = {
     val start = page.indexOf("""data-choice-menu="Library"""")
@@ -323,27 +365,27 @@ import altitude.core.models.AccountType
     /**
      * Setup:
      *
-     * A logged-in Admin with Libraries "Client 10", "client 2" and "Alpha", and another user's Library "Beta".
+     * A logged-in Admin, the Libraries "Client 10", "client 2" and "Alpha", and a Library "Beta" a User holds a grant in.
      *
      * Assertions:
      *
      * On the main page of "client 2", its Import and Settings pages, the Browse cell holds Browse, a link (the database icon) to
      * the main page of "client 2" with no search, then the Library menu, a choice menu whose trigger shows the choice alone (the
-     * Library's name). It lists the Admin's Libraries by name, case-insensitively and naturally (Alpha, client 2, Client 10),
-     * each a link to its Library's main page titled with its name, with "client 2" alone checked; then a separator and "New
-     * library…", which requests the New library dialog of "client 2" into the popover dialog host. The main page's Browse cell
-     * keeps `aria-current="page"`.
+     * Library's name). It lists the Libraries by name, case-insensitively and naturally (Alpha, Beta, client 2, Client 10), each
+     * a link to its Library's main page titled with its name, with "client 2" alone checked; then a separator and "New library…",
+     * which requests the New library dialog of "client 2" into the popover dialog host. The main page's Browse cell keeps
+     * `aria-current="page"`.
      *
      * Edge cases:
      *
-     * The other user's Library is not listed.
+     * The User's Library is listed too: an Admin sees every Library.
      */
     val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
     val client10 = addLibrary("Client 10", admin)
     val client2 = addLibrary("client 2", admin)
     val alpha = addLibrary("Alpha", admin)
     // Not one of the test context's users, whose one user logs in
-    addLibrary("Beta", testApp.service.user.add(testContext.makeUser(), TestContext.USER_PASSWORD))
+    val beta = addLibrary("Beta", testApp.service.user.add(testContext.makeUser(), TestContext.USER_PASSWORD))
     login()
     val repoId = client2.persistedId
 
@@ -367,30 +409,32 @@ import altitude.core.models.AccountType
           menu.contains("data-choice-menu-icon") shouldBe false
           browseMenuOptions(page) shouldBe List(
             (s"/r/${alpha.persistedId}", "Alpha", false),
+            (s"/r/${beta.persistedId}", "Beta", false),
             (s"/r/$repoId", "client 2", true),
-            (s"/r/${client10.persistedId}", "Client 10", false))
+            (s"/r/${client10.persistedId}", "Client 10", false)
+          )
           menu should include("<hr>")
           menu should include(s"""hx-get="/htmx/library/r/$repoId/dialogs/new"""")
           menu should include("""hx-target="#popoverContent"""")
           menu should include(s">${Const.UI.NEW_LIBRARY_OPTION}</button>")
-          menu.contains("Beta") shouldBe false
         }
     }
   }
 
-  test("A User's Library menu lists their Library and offers no New library") {
+  test("A User's Library menu lists the Libraries they hold a grant in and offers no New library") {
 
     /**
      * Setup:
      *
-     * A logged-in User's Library.
+     * A logged-in User's Library, and a Library that grants nobody.
      *
      * Assertions:
      *
-     * The main page lists the Library, checked, in the Library menu, with no separator and no New library entry.
+     * The main page lists the User's Library alone, checked, in the Library menu, with no separator and no New library entry.
      */
-    val repoId = loginAs(AccountType.User)
+    val repoId = loginAs(AccountType.User, Permissions.none)
     val name = testContext.repository.name
+    testApp.service.repository.addRepository("Nobody's", Const.StorageEngineName.FS)
 
     withServer(App) {
       host =>
@@ -443,7 +487,7 @@ import altitude.core.models.AccountType
     /**
      * Setup:
      *
-     * A logged-in user with Libraries A, B and C, B recorded as the last active one before the login.
+     * A logged-in User with grants in Libraries A, B and C, B recorded as the last active one before the login.
      *
      * Assertions:
      *
@@ -465,12 +509,12 @@ import altitude.core.models.AccountType
     }
   }
 
-  test("`/` falls back to the first owned Library by name when the last active one is another user's or gone, and records it") {
+  test("`/` falls back to the first Library by name when the last active one is another user's or gone, and records it") {
 
     /**
      * Setup:
      *
-     * A logged-in user's Libraries "Client 10" and "Client 2", the second added last, and another user's Library.
+     * A logged-in User's grants in the Libraries "Client 10" and "Client 2", the second added last, and another User's Library.
      *
      * Assertions:
      *
@@ -496,12 +540,12 @@ import altitude.core.models.AccountType
     }
   }
 
-  test("A login and `/` of a user who owns no Library end in a plain not found, not a server error") {
+  test("A login and `/` of a user who can see no Library end in a plain not found, not a server error") {
 
     /**
      * Setup:
      *
-     * A User who owns no Library.
+     * A User who holds no grant.
      *
      * Assertions:
      *

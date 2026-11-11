@@ -2,7 +2,9 @@ package altitude.core.models
 
 import java.time.LocalDateTime
 
+import altitude.core.FieldConst
 import altitude.core.util.JsonCodec
+import altitude.core.util.JsonCodec.--
 import altitude.core.util.JsonCodec.given
 
 /**
@@ -33,7 +35,10 @@ object Asset:
 
 case class Asset(
     id: Option[String] = None,
-    userId: String,
+    // The account that owns the asset: its importer, until that account is deleted and the asset moves to the deleting Admin
+    ownerUserId: String,
+    // The importer record: the account that imported the asset, as it was then or as its last edit left it
+    originalOwner: AccountSnapshot,
     assetType: AssetType,
     fileName: String,
     checksum: String,
@@ -71,6 +76,12 @@ case class Asset(
   extends BaseModel:
 
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
+
+  /**
+   * The asset as the browser is sent it: [[toJson]] without its owner and its importer record, which name an account (its ID, and
+   * its name, username and email) to anyone who can see the Library, and which no page reads
+   */
+  lazy val toBrowserJson: ujson.Obj = toJson -- (FieldConst.Asset.ORIGINAL_OWNER, FieldConst.Asset.OWNER_USER_ID)
 
   /** An image that is one picture: a Video is no image, and an animated image has a duration */
   def isStillImage: Boolean = assetType.mediaType == "image" && durationMs.isEmpty

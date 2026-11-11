@@ -13,7 +13,6 @@ case class RepositoryRow[T[_]](
     name: T[String],
     nameKey: T[String],
     description: T[Option[String]],
-    ownerAccountId: T[String],
     rootFolderId: T[String],
     fileStoreType: T[String],
     fileStoreConfig: T[Option[String]],

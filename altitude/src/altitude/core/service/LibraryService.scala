@@ -53,12 +53,14 @@ class LibraryService(val app: Altitude):
     stagedFileToAsset(importAsset.fileName, app.service.staging.stageCopy(importAsset.path))
 
   /**
-   * The asset of a staged file: its media type by content, its checksum (the file's SHA-256, streamed), its size; the pipeline
-   * owns the file from here
+   * The asset of a staged file: its media type by content, its checksum (the file's SHA-256, streamed), its size, and the context
+   * account as its owner and in its importer record; the pipeline owns the file from here
    */
   def stagedFileToAsset(fileName: String, staged: Path): AssetWithData =
+    val importer = RequestContext.getAccount
     val asset = Asset(
-      userId = RequestContext.account.value.get.persistedId,
+      ownerUserId = importer.persistedId,
+      originalOwner = AccountSnapshot.of(importer),
       fileName = fileName,
       checksum = Sha256.hex(staged),
       assetType = app.service.metadataExtractor.detectAssetType(staged),
@@ -74,7 +76,7 @@ class LibraryService(val app: Altitude):
     addAsset(dataAssetIn)
 
   def addAsset(dataAsset: AssetWithData): Asset =
-    val pipelineContext = PipelineContext(RequestContext.getRepository, RequestContext.getAccount)
+    val pipelineContext = PipelineContext(RequestContext.getRepository, Some(RequestContext.getAccount))
     val source: Source[(AssetWithData, PipelineContext), NotUsed] = Source.single((dataAsset, pipelineContext))
     val pipelineResFuture: Future[Seq[TAssetOrInvalidWithContext]] = app.service.importPipeline.run(source, AssetSeqOutputSink())
 
@@ -414,8 +416,11 @@ class LibraryService(val app: Altitude):
       logger.info(s"Marked ${assets.size} assets for purging")
     assets
 
-  /** Hands assets marked for purging in the context repository to the purge queue, once their mark has committed */
-  private def queueForPurging(assets: List[Asset], account: User = RequestContext.getAccount): Unit =
+  /**
+   * Hands assets marked for purging in the context repository to the purge queue, once their mark has committed, with the context
+   * account, if there is one, as the pipeline's
+   */
+  private def queueForPurging(assets: List[Asset], account: Option[User] = RequestContext.account.value): Unit =
     val pipelineContext = PipelineContext(repository = RequestContext.getRepository, account = account)
     app.service.purgePipeline.enqueue(assets.map((_, pipelineContext)))
 
@@ -430,7 +435,8 @@ class LibraryService(val app: Altitude):
 
         if pending.nonEmpty then
           logger.info(s"Queueing ${pending.size} assets marked for purging again. Repo: ${repository.name}")
-          queueForPurging(pending, account = app.service.user.getById(repository.ownerAccountId))
+          // No request queued them, so no account does: a Library has no owner to stand in for one
+          queueForPurging(pending, account = None)
     }
 
   /** Repairs every repository's stats from its assets, which the library operations only ever adjust */

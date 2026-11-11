@@ -46,7 +46,7 @@ import altitude.core.routes.decorators
     }
   }
 
-  test("Content requires a login and a repository the user owns") {
+  test("Content requires a login and a repository the user can see") {
 
     /**
      * Setup:
@@ -64,7 +64,8 @@ import altitude.core.routes.decorators
     login()
 
     val stranger = testContext.persistUser()
-    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    val strangersRepo = testContext.persistRepository()
+    testContext.grant(stranger, strangersRepo)
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/2.jpg"))
@@ -90,8 +91,8 @@ import altitude.core.routes.decorators
     /**
      * Setup:
      *
-     * A logged-in user's repository, and a second repository of theirs holding an imported image with a Person's Face on it, its
-     * files and the Face's images stored.
+     * A logged-in user's repository, and a second repository of theirs (they hold a grant in both) holding an imported image with
+     * a Person's Face on it, its files and the Face's images stored.
      *
      * Assertions:
      *
@@ -104,6 +105,7 @@ import altitude.core.routes.decorators
     login()
 
     val otherRepo = testContext.persistRepository()
+    testContext.grant(testContext.user, otherRepo)
     testApp.service.repository.switchContextToRepository(otherRepo)
     val foreign = testContext.persistAsset(repository = Some(otherRepo))
     val person = testApp.service.person.addPerson(altitude.core.models.Person())
@@ -488,7 +490,8 @@ import altitude.core.routes.decorators
     login()
 
     val stranger = testContext.persistUser()
-    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    val strangersRepo = testContext.persistRepository()
+    testContext.grant(stranger, strangersRepo)
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign: Asset = testApp.service.library.addImportAsset(IntegrationTestUtil.getImportAsset("images/2.jpg"))

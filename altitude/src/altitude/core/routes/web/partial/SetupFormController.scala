@@ -114,6 +114,8 @@ class SetupFormController(using logger: Logger) extends BaseController:
         // Initialize system
         val userModel = User(
           email = email,
+          // The setup form has no Username field until Task B adds one; the address's local part stands in for it
+          username = email.takeWhile(_ != '@'),
           name = name,
           accountType = AccountType.Admin
         )

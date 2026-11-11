@@ -201,7 +201,7 @@ import altitude.core.models.Asset
     }
   }
 
-  test("Assets in a repository the user does not own cannot be recycled") {
+  test("Assets in a repository the user cannot see cannot be recycled") {
 
     /**
      * Setup:
@@ -217,7 +217,8 @@ import altitude.core.models.Asset
     login()
 
     val stranger = testContext.persistUser()
-    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    val strangersRepo = testContext.persistRepository()
+    testContext.grant(stranger, strangersRepo)
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign = testContext.persistAsset(repository = Some(strangersRepo), user = Some(stranger))

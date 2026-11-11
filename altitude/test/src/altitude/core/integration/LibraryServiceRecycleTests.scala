@@ -82,8 +82,8 @@ import altitude.core.util.Query
     /**
      * Setup:
      *
-     * Two users each add an asset to the same repository, and the first user recycles one of them; then a second repository,
-     * owned by the second user, is switched to.
+     * Two users each add an asset to the same repository, and the first user recycles one of them; then a second repository is
+     * switched to.
      *
      * Assertions:
      *
@@ -109,7 +109,7 @@ import altitude.core.util.Query
     testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 1
 
     // SECOND REPO
-    val repo2 = testContext.persistRepository(user = Some(user2))
+    val repo2 = testContext.persistRepository()
     switchContextRepo(repo2)
 
     testApp.service.asset.queryRecycled(new Query()).records.length shouldBe 0

@@ -35,7 +35,7 @@ class AssetActionController(using logger: Logger) extends BaseController:
     val isJsonFormat =
       (contentType != null && contentType.contains("application/json")) ||
         (accept != null && accept.contains("application/json"))
-    if isJsonFormat then answeringJson(jsonResponse(App.altitude.service.asset.getById(assetId).toJson))
+    if isJsonFormat then answeringJson(jsonResponse(App.altitude.service.asset.getById(assetId).toBrowserJson))
     else answering(htmlResponse(htmx.html.view_image_detail_modal(App.altitude.service.asset.getById(assetId))))
 
   /**

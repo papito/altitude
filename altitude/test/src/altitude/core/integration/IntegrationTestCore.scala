@@ -105,8 +105,9 @@ abstract class IntegrationTestCore
     testApp.isInitialized = false
     testContext = new TestContext(testApp)
 
-    // Every integration test has at least one repository and its admin to start with - you can't test anything otherwise.
-    // Tests then can create additional repos and users to test the boundaries of repository and user separation.
+    // Every integration test starts with one repository and one account (a User holding no grant, which a test grants if it
+    // needs access), since every asset has an owner. Tests then create more repositories and accounts to test the boundaries
+    // between them.
     testContext.persistRepository()
 
     // nuke the data dir tree

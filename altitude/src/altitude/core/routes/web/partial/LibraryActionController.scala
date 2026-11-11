@@ -16,8 +16,9 @@ import altitude.core.routes.decorators.requireAdmin
 import altitude.core.routes.decorators.requireLogin
 
 /**
- * The New library dialog, an Admin's, opened from the nav's Library menu: it creates a Library the Admin owns and sends the
- * browser to its Import page. Both routes are scoped to the Library the dialog was opened from, as every partial is.
+ * The New library dialog, an Admin's, opened from the nav's Library menu: it creates a Library, which an Admin reaches by type,
+ * and sends the browser to its Import page. Both routes are scoped to the Library the dialog was opened from, as every partial
+ * is.
  */
 class LibraryActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/library"
@@ -40,16 +41,16 @@ class LibraryActionController(using logger: Logger) extends BaseController:
   def htmxNewLibrary(repoId: String)(using request: Request): Response[String] =
     val jsonIn: ujson.Obj = unscrubbedJson.get
     val name = jsonIn.obj.get(Api.Field.Library.NAME).flatMap(_.strOpt).getOrElse("")
-    val owner = RequestContext.getAccount
+    val account = RequestContext.getAccount
 
     def responseWithValidationError(error: String): Response[String] =
-      logger.debug(s"New library refused for account [${owner.persistedId}]: $error")
+      logger.debug(s"New library refused for account [${account.persistedId}]: $error")
       dialogFormValidationResponse(
         "<!doctype html>" + htmx.html.new_library_dialog(fieldErrors = Map(Api.Field.Library.NAME -> error), formJson = jsonIn))
 
     try
-      val repo = App.altitude.service.repository.addRepository(name = name, fileStoreType = C.StorageEngineName.FS, owner = owner)
-      logger.info(s"Account [${owner.persistedId}] created library [${repo.persistedId}] [${repo.name}]")
+      val repo = App.altitude.service.repository.addRepository(name = name, fileStoreType = C.StorageEngineName.FS)
+      logger.info(s"Account [${account.persistedId}] created library [${repo.persistedId}] [${repo.name}]")
       cask.Response("", 200, Seq("Content-Type" -> "text/html", "HX-Redirect" -> s"/pipeline/r/${repo.persistedId}"))
     catch
       case ex: ValidationException => responseWithValidationError(ex.errors.getOrElse(FieldConst.Repository.NAME, ex.message))

@@ -83,7 +83,10 @@ abstract class BaseDao[Model <: BaseModel]:
   private def requireParams(q: Query, operation: String): Unit =
     if q.params.isEmpty then throw IllegalArgumentException(s"Cannot $operation all of '$tableName' with an empty query")
 
-  /** The one remaining hand-written `SELECT` that names its columns is `RepositoryDao.getAll`; everywhere else [[table]] does */
+  /**
+   * The hand-written `SELECT`s that name their columns through this are `RepositoryDao.getAll` and `getGrantedTo`; everywhere
+   * else [[table]] does
+   */
   protected def columnsForSelect: List[String] = List("*")
 
   /** The ScalaSql row class behind this DAO's table */

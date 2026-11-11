@@ -21,6 +21,7 @@ import altitude.core.unit.ImportParallelismTests
 import altitude.core.unit.NameKeyTests
 import altitude.core.unit.NaturalOrderTests
 import altitude.core.unit.NetPoolTests
+import altitude.core.unit.PermissionsTests
 import altitude.core.unit.PersonModelTests
 import altitude.core.unit.RangeStreamingTests
 import altitude.core.unit.RowColumnTests
@@ -65,6 +66,7 @@ abstract class AllUnitTestSuites
     new UtilTests,
     new NaturalOrderTests,
     new NameKeyTests,
+    new PermissionsTests,
     new EnvironmentTests,
     new Sha256Tests,
     new NetPoolTests,

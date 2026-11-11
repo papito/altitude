@@ -72,7 +72,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
     txManager.withTransaction {
       logger.debug(s"Adding user [${objIn.email}]")
       val passwordHash = Util.hashPassword(password)
-      // An email address names one account, whatever its case
+      // An email address and a username each name one account under their name keys (`account_01`, `account_02`)
       try dao.addUser(objIn, passwordHash)
       catch case e: SQLException => throw newDuplicateExceptionOrRethrow(e)
     }

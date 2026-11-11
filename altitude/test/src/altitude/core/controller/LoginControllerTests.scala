@@ -14,7 +14,7 @@ import altitude.core.App
     /**
      * Setup:
      *
-     * An initialized instance with a user and their repository.
+     * An initialized instance with a User and a repository the User holds a grant in.
      *
      * Assertions:
      *
@@ -22,6 +22,7 @@ import altitude.core.App
      * titled with its name.
      */
     testContext.persistRepository()
+    testContext.grant(testContext.user, testContext.repository)
     testApp.app.isInitialized = true
 
     withServer(App) {
@@ -52,7 +53,7 @@ import altitude.core.App
     /**
      * Setup:
      *
-     * An initialized instance with a user and their repository.
+     * An initialized instance with a User and a repository.
      *
      * Assertions:
      *
@@ -89,7 +90,7 @@ import altitude.core.App
     /**
      * Setup:
      *
-     * A user with Libraries A, B and C, B recorded as the last active one.
+     * A User with grants in Libraries A, B and C, B recorded as the last active one.
      *
      * Assertions:
      *
@@ -104,12 +105,12 @@ import altitude.core.App
     withServer(App)(host => loginLocation(host) shouldBe Seq(s"/r/${b.persistedId}"))
   }
 
-  test("A login without a last active Library lands in the first owned by name and records it") {
+  test("A login without a last active Library lands in the first it can see by name and records it") {
 
     /**
      * Setup:
      *
-     * A user with Libraries "Client 10" and "Client 2", the second added last, and no last active Library.
+     * A User with grants in Libraries "Client 10" and "Client 2", the second added last, and no last active Library.
      *
      * Assertions:
      *

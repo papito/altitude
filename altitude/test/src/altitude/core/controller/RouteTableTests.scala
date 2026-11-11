@@ -15,6 +15,8 @@ import scala.util.matching.Regex
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.models.AccountType
+import altitude.core.models.Permissions
 import altitude.core.models.Person
 import altitude.core.models.Repository
 
@@ -638,7 +640,7 @@ import altitude.core.models.Repository
   /** IDs that stand for the fixtures where only the shape of the probes matters */
   private lazy val placeholders: Fixtures = {
     def id = UUID.randomUUID.toString
-    val repository = Repository(id = Some(id), name = "placeholder", ownerAccountId = id, rootFolderId = id, fileStoreType = "")
+    val repository = Repository(id = Some(id), name = "placeholder", rootFolderId = id, fileStoreType = "")
     Fixtures(
       mine = repository,
       theirs = repository,
@@ -753,7 +755,9 @@ import altitude.core.models.Repository
     val myPerson = testApp.service.person.addPerson(Person())
     val myFace = testContext.addTestFace(myPerson, myAsset, TestContext.unitVector(1))
 
+    // The user's too: the foreign IDs are refused by the scoping of the Library in the path, not by the login's gate
     val theirs = testContext.persistRepository()
+    testContext.grant(testContext.user, theirs)
     testApp.service.repository.switchContextToRepository(theirs)
     val asset = testContext.persistAsset(repository = Some(theirs))
     testContext.setAssetCoordinates(asset.persistedId, 48.8566, 2.3522)
@@ -801,10 +805,10 @@ import altitude.core.models.Repository
     /**
      * Setup:
      *
-     * A logged-in user's repository with an asset, a folder, an album, a Location and a Person with a Face, and a second
-     * repository of theirs holding a row of every kind a route takes an ID of, each named with a mark: an asset with a Preview, a
-     * point, a Face with its files, a folder, an album and a Location in a category, a Person with that Face, two triaged assets
-     * in a Sequence and a recycled asset.
+     * A logged-in User's repository with an asset, a folder, an album, a Location and a Person with a Face, and a second
+     * repository of theirs (the User holds every Permission in both) holding a row of every kind a route takes an ID of, each
+     * named with a mark: an asset with a Preview, a point, a Face with its files, a folder, an album and a Location in a
+     * category, a Person with that Face, two triaged assets in a Sequence and a recycled asset.
      *
      * Assertions:
      *
@@ -820,8 +824,7 @@ import altitude.core.models.Repository
      * that are not the repository's (and refuse a Pick that is none), the map, which is empty for a scope the repository does not
      * hold, and the library page, which reads neither ID it is given.
      */
-    val mine = testContext.persistRepository()
-    login()
+    val mine = testApp.service.repository.getById(loginAs(AccountType.User, Permissions.all))
 
     withServer(App) {
       host =>

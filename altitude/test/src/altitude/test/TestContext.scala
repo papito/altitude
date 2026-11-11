@@ -20,6 +20,7 @@ import altitude.core.Altitude
 import altitude.core.Const as C
 import altitude.core.RequestContext
 import altitude.core.dao.sqlite.SqliteOverrides
+import altitude.core.models.AccountSnapshot
 import altitude.core.models.AccountType
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
@@ -30,6 +31,7 @@ import altitude.core.models.FaceImages
 import altitude.core.models.Folder
 import altitude.core.models.Histogram
 import altitude.core.models.ImageQuality
+import altitude.core.models.Permissions
 import altitude.core.models.Person
 import altitude.core.models.Repository
 import altitude.core.models.User
@@ -93,18 +95,20 @@ class TestContext(val testApp: Altitude) {
 
   def makeUser(): User = User(
     email = Util.randomStr(),
+    username = Util.randomStr(),
     name = Util.randomStr(),
     accountType = AccountType.User
   )
 
-  def makeAdminUser(): User = User(
-    email = Util.randomStr(),
-    name = Util.randomStr(),
-    accountType = AccountType.Admin
-  )
+  def makeAdminUser(): User = makeUser().copy(accountType = AccountType.Admin)
 
-  def persistUser(user: Option[User] = None, password: String = TestContext.USER_PASSWORD): User = {
-    val userModel = user.getOrElse(makeUser())
+  /** The account `user` describes (a User of random names when None), under `username` when one is given */
+  def persistUser(
+      user: Option[User] = None,
+      password: String = TestContext.USER_PASSWORD,
+      username: Option[String] = None): User = {
+    val model = user.getOrElse(makeUser())
+    val userModel = username.fold(model)(name => model.copy(username = name))
 
     val persistedUser: User = testApp.service.user.add(userModel, password = password)
     users = users ::: persistedUser :: Nil
@@ -117,33 +121,30 @@ class TestContext(val testApp: Altitude) {
     persistedUser
   }
 
-  def persistRepository(user: Option[User] = None): Repository = {
-    if (user.isEmpty && users.length > 1) {
-      throw new RuntimeException(
-        "Cannot use existing user when there are multiple test context users - must supply a user explicitly")
-    }
-
-    if (user.isEmpty && users.isEmpty) {
+  /**
+   * A Library, which has no owner and grants nobody access (see [[grant]]). The context gets an account first when it has none,
+   * since every asset has an owner; the first Library becomes the context repository.
+   */
+  def persistRepository(): Repository = {
+    if (users.isEmpty) {
       persistUser(None)
     }
 
-    // use supplied user, then existing single user, then new user
-    val persistedUser = user.getOrElse(users.headOption.getOrElse(makeUser()))
-
-    val persistedRepo: Repository = testApp.service.repository.addRepository(
-      name = TestContext.nextRepositoryName(),
-      fileStoreType = C.StorageEngineName.FS,
-      owner = persistedUser)
+    val persistedRepo: Repository =
+      testApp.service.repository.addRepository(name = TestContext.nextRepositoryName(), fileStoreType = C.StorageEngineName.FS)
     repositories = repositories ::: persistedRepo :: Nil
 
     // if this is the only (or the first repo), set current request context
     if (repositories.length == 1) {
       testApp.service.repository.switchContextToRepository(persistedRepo)
-      testApp.service.user.switchContextToUser(persistedUser)
     }
 
     persistedRepo
   }
+
+  /** Gives a User or a Guest access to the Library with `permissions` (none for a Guest, who holds none) */
+  def grant(account: User, repository: Repository, permissions: Permissions = Permissions.all): Unit =
+    testApp.service.repository.setGrant(account.persistedId, repository.persistedId, permissions)
 
   def makeAsset(
       repository: Option[Repository] = None,
@@ -172,7 +173,8 @@ class TestContext(val testApp: Altitude) {
     val currentUser = user.getOrElse(this.user)
 
     Asset(
-      userId = currentUser.persistedId,
+      ownerUserId = currentUser.persistedId,
+      originalOwner = AccountSnapshot.of(currentUser),
       folderId = folderId,
       assetType = new AssetType(mediaType = "image", mediaSubtype = "png", mime = "image/png"),
       fileName = filename,
@@ -205,7 +207,7 @@ class TestContext(val testApp: Altitude) {
         "Cannot use existing repository when there are  multiple test context repositories - must supply a repository explicitly")
     }
 
-    val persistedRepository = repository.getOrElse(repositories.headOption.getOrElse(persistRepository(user = user)))
+    val persistedRepository = repository.getOrElse(repositories.headOption.getOrElse(persistRepository()))
 
     val asset = makeAsset(
       repository = Some(persistedRepository),

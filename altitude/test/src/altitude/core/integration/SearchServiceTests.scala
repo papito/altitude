@@ -1074,7 +1074,7 @@ import altitude.core.util.*
     val kept = importAsset("lake.jpg")
     val purged = importAsset("beach.jpg")
 
-    val source = Source.single((purged, PipelineContext(testContext.repository, testContext.user)))
+    val source = Source.single((purged, PipelineContext(testContext.repository, Some(testContext.user))))
     Await.result(testApp.service.purgePipeline.run(source, VoidAssetSink()), Duration.Inf)
 
     documentBody(purged) shouldBe None

@@ -1040,7 +1040,8 @@ import altitude.core.util.Util
     login()
 
     val stranger = testContext.persistUser()
-    val strangersRepo = testContext.persistRepository(user = Some(stranger))
+    val strangersRepo = testContext.persistRepository()
+    testContext.grant(stranger, strangersRepo)
     testApp.service.repository.switchContextToRepository(strangersRepo)
     testApp.service.user.switchContextToUser(stranger)
     val foreign = testContext.persistAsset(repository = Some(strangersRepo), user = Some(stranger))

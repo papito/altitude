@@ -467,7 +467,7 @@ import altitude.core.util.*
 
     // Another repository's asset on the same day is invisible to this repository's counts
     val otherUser = testContext.persistUser(Some(testContext.makeUser()))
-    val otherRepo = testContext.persistRepository(Some(otherUser))
+    val otherRepo = testContext.persistRepository()
     switchContextRepo(otherRepo)
     switchContextUser(otherUser)
     val foreign = testContext.persistAsset(repository = Some(otherRepo), user = Some(otherUser))

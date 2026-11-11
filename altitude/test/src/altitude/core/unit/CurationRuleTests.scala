@@ -6,6 +6,7 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers.*
 
+import altitude.core.models.AccountSnapshot
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.BundledFrame
@@ -43,7 +44,8 @@ import altitude.core.util.CurationRule
     CurationFrame(
       asset = Asset(
         id = Some(id),
-        userId = "u",
+        ownerUserId = "u",
+        originalOwner = AccountSnapshot("u", "U", "u", "u@example.com"),
         assetType = AssetType("image", "jpeg", "image/jpeg"),
         fileName = s"$id.jpg",
         checksum = id,

@@ -28,10 +28,13 @@ import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
 object PipelineUtils:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  /** Runs the work with the pipeline context's repository and account as the request context, for the work alone */
+  /**
+   * Runs the work with the pipeline context's repository and account (or none, when the context has none) as the request context,
+   * for the work alone
+   */
   def withContext[A](ctx: PipelineContext)(work: => A): A =
     RequestContext.repository.withValue(Some(ctx.repository)) {
-      RequestContext.account.withValue(Some(ctx.account))(work)
+      RequestContext.account.withValue(ctx.account)(work)
     }
 
   /** A cause a file can have for being dropped, which the user is told and the log records in one line, without a stack trace */

@@ -2313,11 +2313,12 @@ works on every page, those without Alpine included. See **Themes**.
 
 The Browse cell (`.menu.repository`, marked while Browse is shown) holds two targets side by side: **Browse**, a link
 like every entry's (the database icon and "Browse") to the current Library's main page with no search, `/r/<id>`, and
-the trigger of the **Library menu**, the choice menu of the account's Libraries, which the current Library's name alone
-opens. `includes/nav` renders both through `includes/library_menu`: the link, then a host `data-choice-menu="Library"`
-(`#libraryMenuHost`) with `data-choice-menu-choice-only`, `data-choice-menu-trigger-class="nav-menu-trigger"` and
-`hx-preserve`. Its options are the Libraries `RepositoryService.getOwnedBy` lists (by name, case-insensitively and
-naturally), each a link to its main page, `/r/<id>`, Browse with its defaults, holding the name in a `span` and titled
+the trigger of the **Library menu**, the choice menu of the Libraries the account can see, which the current Library's
+name alone opens. `includes/nav` renders both through `includes/library_menu`: the link, then a host
+`data-choice-menu="Library"` (`#libraryMenuHost`) with `data-choice-menu-choice-only`,
+`data-choice-menu-trigger-class="nav-menu-trigger"` and `hx-preserve`. Its options are the Libraries
+`RepositoryService.getAccessibleTo` lists (every one for an Admin, those it holds a grant in for anyone else; by name,
+case-insensitively and naturally), each a link to its main page, `/r/<id>`, Browse with its defaults, holding the name in a `span` and titled
 with it in full, the current Library `aria-checked`. For an Admin a separator and the "New library…" action follow,
 requesting the **New library dialog** of the current Library. The trigger (`.nav-menu-trigger`, a nav entry's look)
 reads the current Library's name after a dot (`·`, drawn by `::before` at 0.6 alpha) in the name's own case, cut with

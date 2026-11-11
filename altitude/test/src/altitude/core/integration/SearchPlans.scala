@@ -86,10 +86,12 @@ trait SearchPlans { self: IntegrationTestCore =>
 
     update(
       s"""WITH RECURSIVE g (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM g WHERE n < $copies)
-         |INSERT INTO asset (id, repository_id, user_id, checksum, media_type, media_subtype, mime_type, width, height, area_size,
+         |INSERT INTO asset (id, repository_id, owner_user_id, original_owner, checksum, media_type, media_subtype, mime_type,
+         |                   width, height, area_size,
          |                   folder_id, filename, size_bytes, is_triaged, is_recycled, is_purged, is_pipeline_processed,
          |                   original_created_at, created_at)
-         |SELECT $copyId, repository_id, user_id, $checksum, media_type, media_subtype, mime_type, width, height, area_size,
+         |SELECT $copyId, repository_id, owner_user_id, original_owner, $checksum, media_type, media_subtype, mime_type,
+         |       width, height, area_size,
          |       ${folderId(s"g.n % $folders")}, filename, size_bytes, is_triaged, is_recycled, is_purged, is_pipeline_processed,
          |       original_created_at, $createdAt
          |  FROM asset CROSS JOIN g

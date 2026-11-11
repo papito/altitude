@@ -7,7 +7,7 @@ import org.scalatest.matchers.should.Matchers.shouldBe
 
 import altitude.core.{ Altitude, App }
 import altitude.core.Const as C
-import altitude.core.models.{ AccountType, Repository, User }
+import altitude.core.models.{ AccountType, Permissions, Repository, User }
 import altitude.core.suites.SqliteSuiteBundle
 
 class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll with BeforeAndAfterEach with TestFocus {
@@ -34,7 +34,20 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
     }
   }
 
+  /**
+   * Logs the test context's account in. A User or a Guest that holds no grant in the context's first Library is given access to
+   * it first, with every Permission for a User, as an Admin has by type; a test that wants fewer grants them before it logs in,
+   * or uses [[loginAs]].
+   */
   def login(): Unit = {
+    val account = testContext.user
+    for (repository <- testContext.repositories.headOption if account.accountType != AccountType.Admin) {
+      if (testApp.service.repository.getGrant(account, repository.persistedId).isEmpty) {
+        val permissions = if (account.accountType == AccountType.Guest) Permissions.none else Permissions.all
+        testContext.grant(account, repository, permissions)
+      }
+    }
+
     withServer(App) {
       host =>
         val loginResponse = requests.post(
@@ -52,18 +65,34 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
     }
   }
 
-  /** A repository owned by an account of `accountType`, logged in; its ID */
-  def loginAs(accountType: AccountType): String = {
-    val model = if (accountType == AccountType.Admin) testContext.makeAdminUser() else testContext.makeUser()
-    val account: User = testContext.persistUser(Some(model.copy(accountType = accountType)))
-    testContext.persistRepository(Some(account))
+  /**
+   * An account of `accountType`, logged in, and a Library it can see: an Admin by type, holding every Permission with no grant,
+   * so `permissions` must be all of them; a User by a grant of `permissions`; a Guest by a grant of none, so `permissions` must
+   * be none. The Library's ID.
+   */
+  def loginAs(accountType: AccountType, permissions: Permissions): String = {
+    require(accountType != AccountType.Admin || permissions == Permissions.all, "An Admin holds every Permission")
+    require(accountType != AccountType.Guest || permissions.isEmpty, "A Guest holds no Permission")
+    val account: User = testContext.persistUser(Some(testContext.makeUser().copy(accountType = accountType)))
+    val repository = testContext.persistRepository()
+    if (accountType != AccountType.Admin) testContext.grant(account, repository, permissions)
     login()
-    testContext.repository.persistedId
+    repository.persistedId
   }
 
-  /** A Library owned by `owner`, under `name` */
-  def addLibrary(name: String, owner: User): Repository =
-    testApp.service.repository.addRepository(name = name, fileStoreType = C.StorageEngineName.FS, owner = owner)
+  /**
+   * A Library under `name` that `account` can see: an Admin by type, a User by a grant of every Permission, a Guest by a grant of
+   * none
+   */
+  def addLibrary(name: String, account: User): Repository = {
+    val library = testApp.service.repository.addRepository(name = name, fileStoreType = C.StorageEngineName.FS)
+    account.accountType match {
+      case AccountType.Admin =>
+      case AccountType.User => testContext.grant(account, library)
+      case AccountType.Guest => testContext.grant(account, library, Permissions.none)
+    }
+    library
+  }
 
   /** The account's last active Library, as stored */
   def lastActiveRepoIdOf(user: User): Option[String] =

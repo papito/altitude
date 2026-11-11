@@ -13,6 +13,7 @@ import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.tables.AssetRow
+import altitude.core.models.AccountSnapshot
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.CaptureDateSource
@@ -26,6 +27,7 @@ import altitude.core.models.SceneEmbeddings
 import altitude.core.models.SceneModel
 import altitude.core.models.SequenceMembers
 import altitude.core.models.UserMetadata
+import altitude.core.util.JsonCodec
 import altitude.core.util.Query
 import altitude.core.util.QueryResult
 import altitude.core.util.SequenceRule
@@ -41,7 +43,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
     Asset(
       id = Option(row.id),
-      userId = row.userId,
+      ownerUserId = row.ownerUserId,
+      originalOwner = JsonCodec.read[AccountSnapshot](row.originalOwner),
       fileName = row.filename,
       checksum = row.checksum,
       assetType = assetType,
@@ -77,7 +80,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
     Asset(
       id = Option(rec(FieldConst.ID).asInstanceOf[String]),
-      userId = rec(FieldConst.USER_ID).asInstanceOf[String],
+      ownerUserId = rec(FieldConst.Asset.OWNER_USER_ID).asInstanceOf[String],
+      originalOwner = JsonCodec.read[AccountSnapshot](rec(FieldConst.Asset.ORIGINAL_OWNER).toString),
       fileName = rec(FieldConst.Asset.FILENAME).asInstanceOf[String],
       checksum = rec(FieldConst.Asset.CHECKSUM).asInstanceOf[String],
       assetType = assetType,
@@ -139,7 +143,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   override def add(asset: Asset): Asset =
     val sql = s"""
         INSERT INTO asset (
-             ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.USER_ID}, ${FieldConst.Asset.CHECKSUM},
+             ${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Asset.OWNER_USER_ID}, ${FieldConst.Asset.ORIGINAL_OWNER},
+             ${FieldConst.Asset.CHECKSUM},
              ${FieldConst.Asset.FILENAME}, ${FieldConst.Asset.SIZE_BYTES},
              ${FieldConst.AssetType.MEDIA_TYPE}, ${FieldConst.AssetType.MEDIA_SUBTYPE}, ${FieldConst.AssetType.MIME_TYPE},
              ${FieldConst.Asset.FOLDER_ID}, ${FieldConst.Asset.IS_TRIAGED}, ${FieldConst.Asset.ORIGINAL_CREATED_AT}, ${FieldConst.Asset.ORIGINAL_CREATED_AT_SOURCE},
@@ -147,7 +152,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
              ${FieldConst.CREATED_AT},
              ${FieldConst.Asset.WIDTH}, ${FieldConst.Asset.HEIGHT}, ${FieldConst.Asset.AREA_SIZE}, ${FieldConst.Asset.DURATION_MS},
              ${FieldConst.Asset.USER_METADATA}, ${FieldConst.Asset.EXTRACTED_METADATA}, ${FieldConst.Asset.PUBLIC_METADATA})
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
+            VALUES(?, ?, ?, $jsonFunc, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, $jsonFunc, $jsonFunc, $jsonFunc)
     """
 
     val id = asset.id match
@@ -164,7 +169,8 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     val sqlVals: List[Any] = List(
       id,
       RequestContext.getRepository.persistedId,
-      asset.userId,
+      asset.ownerUserId,
+      asset.originalOwner.toJson.toString,
       asset.checksum,
       asset.fileName,
       asset.sizeBytes.asInstanceOf[Object],

@@ -1,27 +1,42 @@
 package altitude.core.integration
 
 import altitude.core
+import java.sql.SQLException
 import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.not
-import org.scalatest.matchers.should.Matchers.{ should, shouldBe, shouldEqual }
+import org.scalatest.matchers.should.Matchers.{ an, contain, should, shouldBe, shouldEqual, thrownBy }
 
 import altitude.core.Altitude
 import altitude.core.Const as C
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
+import altitude.core.IllegalOperationException
+import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.dao.jdbc.BaseDao
+import altitude.core.models.AccountType
+import altitude.core.models.Asset
+import altitude.core.models.Permission
+import altitude.core.models.Permissions
 import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.util.NameKey
+import altitude.core.util.NaturalOrder
 import altitude.core.util.Util
 
 @DoNotDiscover class RepositoryServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
 
-  private def addLibrary(name: String, owner: User = testContext.user): Repository =
-    testApp.service.repository.addRepository(name = name, fileStoreType = C.StorageEngineName.FS, owner = owner)
+  private def addLibrary(name: String): Repository =
+    testApp.service.repository.addRepository(name = name, fileStoreType = C.StorageEngineName.FS)
+
+  /** A Library under `name` that `user` holds a grant of every Permission in */
+  private def addLibraryFor(name: String, user: User): Repository = {
+    val library = addLibrary(name)
+    testContext.grant(user, library)
+    library
+  }
 
   /** The Libraries of the whole instance holding a name key: every bundle's tests add Libraries to one database */
   private def librariesKeyed(nameKey: String): List[Repository] =
@@ -34,7 +49,7 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A second repository with a random name on the file-system store, owned by the common setup's user.
+     * A second repository with a random name on the file-system store.
      *
      * Assertions:
      *
@@ -147,32 +162,30 @@ import altitude.core.util.Util
     }
   }
 
-  test("A second Library whose name differs only in case, spacing or Unicode composition is a duplicate, for any owner") {
+  test("A second Library whose name differs only in case, spacing or Unicode composition is a duplicate") {
 
     /**
      * Setup:
      *
-     * An Admin's Library named with a precomposed "é", and a second Admin.
+     * A Library named with a precomposed "é".
      *
      * Assertions:
      *
-     * Adding a Library under the same name in other capitals for the same Admin, and under it with doubled spaces and a
-     * decomposed "é" for the other Admin, each fails with a `DuplicateException` saying a library of that name, as normalized,
-     * already exists. The instance keeps one Library of that name.
+     * Adding a Library under the same name in other capitals, and under it with doubled spaces and a decomposed "é", each fails
+     * with a `DuplicateException` saying a library of that name, as normalized, already exists. The instance keeps one Library of
+     * that name.
      */
-    val owner = persistAdmin()
-    val otherAdmin = persistAdmin()
     val suffix = Util.randomStr()
-    val original = addLibrary(s"Caf\u00E9 Smith $suffix", owner)
+    val original = addLibrary(s"Caf\u00E9 Smith $suffix")
 
     val attempts = List(
-      (s"CAF\u00C9 SMITH ${suffix.toUpperCase}", owner, s"CAF\u00C9 SMITH ${suffix.toUpperCase}"),
-      (s"  Cafe\u0301   Smith $suffix", otherAdmin, s"Caf\u00E9 Smith $suffix")
+      (s"CAF\u00C9 SMITH ${suffix.toUpperCase}", s"CAF\u00C9 SMITH ${suffix.toUpperCase}"),
+      (s"  Cafe\u0301   Smith $suffix", s"Caf\u00E9 Smith $suffix")
     )
 
-    for ((name, attemptOwner, normalized) <- attempts) {
+    for ((name, normalized) <- attempts) {
       withClue(s"[$name]: ") {
-        val ex = intercept[DuplicateException](addLibrary(name, attemptOwner))
+        val ex = intercept[DuplicateException](addLibrary(name))
         ex.message shouldBe Some(s"A library named \u201C$normalized\u201D already exists")
       }
     }
@@ -185,7 +198,7 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin's Library named "Weiß", under a random suffix.
+     * A Library named "Weiß", under a random suffix.
      *
      * Assertions:
      *
@@ -193,13 +206,12 @@ import altitude.core.util.Util
      * same suffix, fails with a `DuplicateException` saying a library of that name, as typed, already exists. The instance keeps
      * one Library of that name.
      */
-    val owner = persistAdmin()
     val suffix = Util.randomStr()
-    val original = addLibrary(s"Wei\u00DF $suffix", owner)
+    val original = addLibrary(s"Wei\u00DF $suffix")
 
     for (name <- List(s"WEISS $suffix", s"\uFF37ei\u00DF $suffix")) {
       withClue(s"[$name]: ") {
-        val ex = intercept[DuplicateException](addLibrary(name, owner))
+        val ex = intercept[DuplicateException](addLibrary(name))
         ex.message shouldBe Some(s"A library named \u201C$name\u201D already exists")
       }
     }
@@ -212,49 +224,198 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Two Admins adding a Library under one name, in other capitals, from two transactions: the first holds its transaction open
-     * until the second waits for it.
+     * Two adds of a Library under one name, in other capitals, from two transactions: the first holds its transaction open until
+     * the second waits for it.
      *
      * Assertions:
      *
      * The second add fails with a `DuplicateException` once the first commits, and the instance holds one Library of that name,
-     * the first's. The database decides it: on PostgreSQL both transactions insert before either commits.
+     * the first's, as it spelled it. The database decides it: on PostgreSQL both transactions insert before either commits.
      */
-    val owner = persistAdmin()
-    val otherAdmin = persistAdmin()
     val name = s"Race ${Util.randomStr()}"
 
     intercept[DuplicateException] {
       contend(
-        first = addLibrary(name, owner),
-        second = addLibrary(name.toUpperCase, otherAdmin)
+        first = addLibrary(name),
+        second = addLibrary(name.toUpperCase)
       )
     }
 
-    val libraries = librariesKeyed(NameKey.of(name))
-    libraries.map(_.ownerAccountId) shouldBe List(owner.persistedId)
+    librariesKeyed(NameKey.of(name)).map(_.name) shouldBe List(name)
   }
 
-  test("An account's Libraries are listed alone, by name: case-insensitively and naturally") {
+  test("A User sees the Libraries it holds a grant in, alone, by name: case-insensitively and naturally") {
 
     /**
      * Setup:
      *
-     * An Admin's four Libraries, added out of order and named under one random prefix "client 10", "Client 2", "alpha" and
-     * "Client 100", and another Admin's Library under the same prefix.
+     * A User's grants in four Libraries, added out of order and named under one random prefix "client 10", "Client 2", "alpha"
+     * and "Client 100", a Guest's grant in a fifth under the same prefix, and a sixth that grants nobody.
      *
      * Assertions:
      *
-     * The Admin's Libraries are listed, and only those, as "alpha", "Client 2", "client 10", "Client 100".
+     * The User's Libraries are listed, and only those, as "alpha", "Client 2", "client 10", "Client 100". The User can see each
+     * of them and neither of the other two.
      */
-    val owner = persistAdmin()
-    val otherAdmin = persistAdmin()
+    val user = testContext.persistUser()
+    val guest = testContext.persistUser(Some(testContext.makeUser().copy(accountType = AccountType.Guest)))
     val prefix = Util.randomStr()
-    for (name <- List("client 10", "Client 2", "alpha", "Client 100")) addLibrary(s"$prefix $name", owner)
-    addLibrary(s"$prefix Client 3", otherAdmin)
+    val granted = for (name <- List("client 10", "Client 2", "alpha", "Client 100")) yield addLibraryFor(s"$prefix $name", user)
+    val guests = addLibrary(s"$prefix Client 3")
+    testContext.grant(guest, guests, Permissions.none)
+    val nobodys = addLibrary(s"$prefix Client 4")
 
-    testApp.service.repository.getOwnedBy(owner).map(_.name) shouldBe
+    testApp.service.repository.getAccessibleTo(user).map(_.name) shouldBe
       List("alpha", "Client 2", "client 10", "Client 100").map(name => s"$prefix $name")
+
+    for (library <- granted) testApp.service.repository.isAccessibleTo(user, library.persistedId) shouldBe true
+    for (library <- List(guests, nobodys)) testApp.service.repository.isAccessibleTo(user, library.persistedId) shouldBe false
+  }
+
+  test("An Admin sees every Library, with no grant") {
+
+    /**
+     * Setup:
+     *
+     * An Admin, a Library a User holds a grant in, and a Library that grants nobody.
+     *
+     * Assertions:
+     *
+     * The Admin's Libraries are every Library of the instance, by name, and the Admin can see both new ones. The Admin holds no
+     * grant in either.
+     */
+    val admin = persistAdmin()
+    val usersLibrary = addLibraryFor(s"Users ${Util.randomStr()}", testContext.users.head)
+    val nobodys = addLibrary(s"Nobody's ${Util.randomStr()}")
+
+    testApp.service.repository.getAccessibleTo(admin).map(_.persistedId) shouldBe
+      testApp.service.repository.getAll.sortBy(_.name)(using NaturalOrder).map(_.persistedId)
+
+    for (library <- List(usersLibrary, nobodys)) {
+      testApp.service.repository.isAccessibleTo(admin, library.persistedId) shouldBe true
+      testApp.service.repository.getGrant(admin, library.persistedId) shouldBe None
+    }
+  }
+
+  test("A grant set again replaces its Permissions; an Admin takes no grant, and a Guest no Permission") {
+
+    /**
+     * Setup:
+     *
+     * A User granted Import in a Library, then granted Recycle and Purge in it; an Admin and a Guest.
+     *
+     * Assertions:
+     *
+     * The User holds Recycle and Purge in the Library, in one grant. A grant to the Admin, and a grant of a Permission to the
+     * Guest, fail with `IllegalOperationException` and write nothing.
+     *
+     * Edge cases:
+     *
+     * The Guest's grant of no Permission is written, and gives it access.
+     */
+    val user = testContext.persistUser()
+    val library = addLibrary(s"Grants ${Util.randomStr()}")
+
+    testContext.grant(user, library, Permissions.of(Permission.Import))
+    testContext.grant(user, library, Permissions.of(Permission.Recycle, Permission.Purge))
+
+    testApp.service.repository.getGrant(user, library.persistedId) shouldBe Some(
+      Permissions.of(Permission.Recycle, Permission.Purge))
+    testApp.txManager.asReadOnly {
+      query("SELECT account_id FROM repository_grant WHERE repository_id = ?", library.persistedId).size
+    } shouldBe 1
+
+    val admin = persistAdmin()
+    val guest = testContext.persistUser(Some(testContext.makeUser().copy(accountType = AccountType.Guest)))
+    intercept[IllegalOperationException](testContext.grant(admin, library))
+    intercept[IllegalOperationException](testContext.grant(guest, library, Permissions.of(Permission.Import)))
+    testApp.service.repository.getGrant(admin, library.persistedId) shouldBe None
+    testApp.service.repository.getGrant(guest, library.persistedId) shouldBe None
+
+    testContext.grant(guest, library, Permissions.none)
+    testApp.service.repository.getGrant(guest, library.persistedId) shouldBe Some(Permissions.none)
+    testApp.service.repository.isAccessibleTo(guest, library.persistedId) shouldBe true
+  }
+
+  test("Deleting an account deletes its grants and never a Library") {
+
+    /**
+     * Setup:
+     *
+     * A User with no assets, granted every Permission in a Library of its own and in the common setup's Library.
+     *
+     * Assertions:
+     *
+     * Once the account row is deleted, both Libraries are still there, with their rows, and no grant of the account is left.
+     */
+    val user = testContext.persistUser()
+    val library = addLibraryFor(s"Survivor ${Util.randomStr()}", user)
+    testContext.grant(user, testContext.repository)
+    val rowsBefore = testContext.rowsOf(library)
+
+    testApp.txManager.withTransaction(update("DELETE FROM account WHERE id = ?", user.persistedId))
+
+    for (survivor <- List(library, testContext.repository)) {
+      testApp.service.repository.getAll.map(_.persistedId) should contain(survivor.persistedId)
+    }
+    testContext.rowsOf(library) shouldBe rowsBefore
+    testApp.txManager.asReadOnly {
+      query("SELECT repository_id FROM repository_grant WHERE account_id = ?", user.persistedId)
+    } shouldBe Nil
+  }
+
+  test("Deleting an account that owns an asset is refused, and both stay") {
+
+    /**
+     * Setup:
+     *
+     * A User who imported an asset into the common setup's Library, then a hand-written delete of the User's account row.
+     *
+     * Assertions:
+     *
+     * The database refuses the delete (`asset.owner_user_id` references the account, with no delete action), and the account and
+     * the asset are still there, the asset still the User's.
+     */
+    val user = testContext.persistUser()
+    val asset = testContext.insertAsset(testContext.makeAsset(user = Some(user)))
+
+    an[SQLException] should be thrownBy testApp.txManager.withTransaction(
+      update("DELETE FROM account WHERE id = ?", user.persistedId))
+
+    testApp.service.user.getById(user.persistedId).persistedId shouldBe user.persistedId
+    (testApp.service.asset.getById(asset.persistedId): Asset).ownerUserId shouldBe user.persistedId
+  }
+
+  test("A grant names a stored account and Library, and its account type is read from the store") {
+
+    /**
+     * Setup:
+     *
+     * A User whose stored account type is then changed to Admin by hand, an account ID that names no account, and a Library ID
+     * that names no Library.
+     *
+     * Assertions:
+     *
+     * A grant to the User is refused as one to an Admin (`IllegalOperationException`), the type being read from the stored
+     * account, not from the model the caller holds. A grant to the unknown account, and one in the unknown Library, are
+     * `NotFoundException`. None writes a grant.
+     */
+    val user = testContext.persistUser()
+    val library = addLibrary(s"Grants ${Util.randomStr()}")
+    testApp.txManager.withTransaction(update("UPDATE account SET account_type = 'Admin' WHERE id = ?", user.persistedId))
+
+    intercept[IllegalOperationException](testContext.grant(user, library))
+    intercept[NotFoundException](testApp.service.repository.setGrant(BaseDao.genId, library.persistedId, Permissions.all))
+    intercept[NotFoundException] {
+      testApp.service.repository.setGrant(testContext.users.head.persistedId, BaseDao.genId, Permissions.all)
+    }
+
+    testApp.txManager.asReadOnly {
+      query(
+        "SELECT account_id FROM repository_grant WHERE repository_id = ? OR account_id = ?",
+        library.persistedId,
+        user.persistedId)
+    } shouldBe Nil
   }
 
   test("A user lands in their last active Library") {
@@ -262,65 +423,65 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * An Admin's three Libraries, the last active one being neither the first by name nor the newest.
+     * A User's grants in three Libraries, the last active one being neither the first by name nor the newest.
      *
      * Assertions:
      *
      * The landing Library is the last active one, which stays recorded.
      */
-    val owner = persistAdmin()
+    val user = testContext.persistUser()
     val prefix = Util.randomStr()
-    addLibrary(s"$prefix A", owner)
-    val lastActive = addLibrary(s"$prefix B", owner)
-    addLibrary(s"$prefix C", owner)
-    testApp.service.user.rememberLastActiveRepository(owner, lastActive.persistedId)
+    addLibraryFor(s"$prefix A", user)
+    val lastActive = addLibraryFor(s"$prefix B", user)
+    addLibraryFor(s"$prefix C", user)
+    testApp.service.user.rememberLastActiveRepository(user, lastActive.persistedId)
 
-    testApp.service.repository.landingRepositoryOf(owner).map(_.persistedId) shouldBe Some(lastActive.persistedId)
-    testApp.service.user.getById(owner.persistedId).lastActiveRepoId shouldBe Some(lastActive.persistedId)
+    testApp.service.repository.landingRepositoryOf(user).map(_.persistedId) shouldBe Some(lastActive.persistedId)
+    testApp.service.user.getById(user.persistedId).lastActiveRepoId shouldBe Some(lastActive.persistedId)
   }
 
-  test("A last active Library that is unset, missing or another account's falls back to the first owned by name, recorded") {
+  test("A last active Library that is unset, missing or one the user cannot see falls back to the first it can see by name") {
 
     /**
      * Setup:
      *
-     * An Admin's Libraries "Client 10" and "Client 2" (under one random prefix), the second added last, and another Admin's
-     * Library.
+     * A User's grants in the Libraries "Client 10" and "Client 2" (under one random prefix), the second added last, and a Library
+     * "Client 1" another User holds a grant in.
      *
      * Assertions:
      *
-     * With no last active Library, with one that names no Library, and with the other Admin's, the landing Library is "Client 2",
+     * With no last active Library, with one that names no Library, and with the other User's, the landing Library is "Client 2",
      * and it is recorded as the last active one.
      */
-    val owner = persistAdmin()
-    val otherAdmin = persistAdmin()
+    val user = testContext.persistUser()
+    val other = testContext.persistUser()
     val prefix = Util.randomStr()
-    addLibrary(s"$prefix Client 10", owner)
-    val firstByName = addLibrary(s"$prefix Client 2", owner)
-    val foreign = addLibrary(s"$prefix Client 1", otherAdmin)
+    addLibraryFor(s"$prefix Client 10", user)
+    val firstByName = addLibraryFor(s"$prefix Client 2", user)
+    val foreign = addLibraryFor(s"$prefix Client 1", other)
 
     def landsInFirstByName(): Unit = {
-      testApp.service.repository.landingRepositoryOf(owner).map(_.persistedId) shouldBe Some(firstByName.persistedId)
-      testApp.service.user.getById(owner.persistedId).lastActiveRepoId shouldBe Some(firstByName.persistedId)
+      testApp.service.repository.landingRepositoryOf(user).map(_.persistedId) shouldBe Some(firstByName.persistedId)
+      testApp.service.user.getById(user.persistedId).lastActiveRepoId shouldBe Some(firstByName.persistedId)
     }
 
-    testApp.service.user.getById(owner.persistedId).lastActiveRepoId shouldBe None
+    testApp.service.user.getById(user.persistedId).lastActiveRepoId shouldBe None
     landsInFirstByName()
 
     for (lastActiveId <- List(BaseDao.genId, foreign.persistedId)) {
       withClue(s"[$lastActiveId]: ") {
-        testApp.service.user.rememberLastActiveRepository(owner, lastActiveId)
+        testApp.service.user.rememberLastActiveRepository(user, lastActiveId)
         landsInFirstByName()
       }
     }
   }
 
-  test("A user who owns no Library has none to land in") {
+  test("A user who can see no Library has none to land in") {
 
     /**
      * Setup:
      *
-     * A User who owns no Library, with no last active one.
+     * A User who holds no grant, with no last active Library, beside the common setup's Library.
      *
      * Assertions:
      *

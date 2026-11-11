@@ -7,6 +7,7 @@ import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe }
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.models.AccountType
+import altitude.core.models.Permissions
 
 /**
  * The New library dialog: an Admin's dialog and create, the redirect to the new Library's Import page, the Library name rule's
@@ -38,7 +39,7 @@ import altitude.core.models.AccountType
       response.text() should include(s"""value="$typed"""")
     }
 
-  /** The names of every Library, any owner's */
+  /** The names of every Library of the instance */
   private def allLibraryNames: List[String] = testApp.service.repository.getAll.map(_.name).sorted
 
   test("An Admin opens the New library dialog") {
@@ -46,14 +47,14 @@ import altitude.core.models.AccountType
     /**
      * Setup:
      *
-     * A Library owned by an Admin, logged in.
+     * An Admin, logged in to a Library.
      *
      * Assertions:
      *
      * The dialog answers 200 with an empty name field in a popover dialog form titled "New library", which posts to the create
      * route of the Library it was opened from, and holds Create and Cancel.
      */
-    val repoId = loginAs(AccountType.Admin)
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
 
     withServer(App) {
       host =>
@@ -76,7 +77,7 @@ import altitude.core.models.AccountType
     /**
      * Setup:
      *
-     * A Library owned by a User, then one owned by a Guest, each logged in.
+     * A User, then a Guest, each logged in to a Library it holds a grant in.
      *
      * Assertions:
      *
@@ -84,7 +85,7 @@ import altitude.core.models.AccountType
      */
     for (accountType <- List(AccountType.User, AccountType.Guest)) {
       testContext = new TestContext(testApp)
-      val repoId = loginAs(accountType)
+      val repoId = loginAs(accountType, Permissions.none)
       val before = allLibraryNames
 
       withServer(App) {
@@ -120,21 +121,21 @@ import altitude.core.models.AccountType
     }
   }
 
-  test("Create adds a Library the Admin owns and sends the browser to its Import page, which records it") {
+  test("Create adds a Library the Admin can see and sends the browser to its Import page, which records it") {
 
     /**
      * Setup:
      *
-     * A Library owned by an Admin, logged in, which the login recorded as the last active one; the Admin creates a Library named
-     * with spaces around it and a tab between its words.
+     * An Admin, logged in, and a Library the login recorded as the last active one; the Admin creates a Library named with spaces
+     * around it and a tab between its words.
      *
      * Assertions:
      *
-     * The create answers with an `HX-Redirect` to the new Library's Import page. The new Library is the Admin's, stored with the
-     * name normalized. The last active Library is still the one the dialog was opened from, until the Import page of the new one
-     * loads and records it.
+     * The create answers with an `HX-Redirect` to the new Library's Import page. The new Library is among the Admin's, stored
+     * with the name normalized. The last active Library is still the one the dialog was opened from, until the Import page of the
+     * new one loads and records it.
      */
-    val repoId = loginAs(AccountType.Admin)
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
     val admin = testContext.user
     lastActiveRepoIdOf(admin) shouldBe Some(repoId)
 
@@ -143,9 +144,8 @@ import altitude.core.models.AccountType
         val response = create(host, repoId, "  Client \t Smith ")
         response.statusCode shouldBe 200
 
-        val created = testApp.service.repository.getOwnedBy(admin).find(_.persistedId != repoId).get
+        val created = testApp.service.repository.getAccessibleTo(admin).find(_.persistedId != repoId).get
         created.name shouldBe "Client Smith"
-        created.ownerAccountId shouldBe admin.persistedId
         response.headers.get("hx-redirect").map(_.head) shouldBe Some(s"/pipeline/r/${created.persistedId}")
 
         lastActiveRepoIdOf(admin) shouldBe Some(repoId)
@@ -161,8 +161,8 @@ import altitude.core.models.AccountType
     /**
      * Setup:
      *
-     * A Library owned by an Admin, logged in, who submits an empty name, a one-character name, an 81-character name, a name with
-     * a control character between its words and one with a control character at its end.
+     * An Admin, logged in to a Library, who submits an empty name, a one-character name, an 81-character name, a name with a
+     * control character between its words and one with a control character at its end.
      *
      * Assertions:
      *
@@ -173,7 +173,7 @@ import altitude.core.models.AccountType
      *
      * The control character at the end is refused, not trimmed away.
      */
-    val repoId = loginAs(AccountType.Admin)
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
     val before = allLibraryNames
     val tooLong = "x" * 81
 
@@ -188,12 +188,12 @@ import altitude.core.models.AccountType
     }
   }
 
-  test("A name another Library holds, any owner's, re-renders the form with the duplicate error and the typed name") {
+  test("A name another Library holds re-renders the form with the duplicate error and the typed name") {
 
     /**
      * Setup:
      *
-     * An Admin, logged in, who owns "Client Smith", and another Admin who owns "Studio Jones".
+     * An Admin, logged in, beside the Libraries "Client Smith" and "Studio Jones".
      *
      * Assertions:
      *
@@ -202,11 +202,11 @@ import altitude.core.models.AccountType
      *
      * Edge cases:
      *
-     * The name differs from the held one only in case, only in spacing, or is held by the other Admin.
+     * The name differs from the held one only in case or only in spacing, and either held name is taken.
      */
-    val repoId = loginAs(AccountType.Admin)
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
     addLibrary("Client Smith", testContext.user)
-    addLibrary("Studio Jones", testApp.service.user.add(testContext.makeAdminUser(), TestContext.USER_PASSWORD))
+    addLibrary("Studio Jones", testContext.user)
     val before = allLibraryNames
 
     withServer(App) {
