@@ -630,6 +630,45 @@ import altitude.core.models.Person
     }
   }
 
+  test("The asset-detail modal is a 404 for an unknown asset and for another repository's, as HTML and as JSON") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, and a second repository of theirs holding an imported image.
+     *
+     * Assertions:
+     *
+     * Asked through the first repository, the asset-detail modal answers 404 for an asset ID that does not exist and for the
+     * other repository's image, as HTML and when asked for as JSON, and no answer carries the image's file name.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val foreign = testContext.persistAsset(repository = Some(otherRepo))
+        testApp.service.repository.switchContextToRepository(repo)
+
+        for (
+          assetId <- List(java.util.UUID.randomUUID.toString, foreign.persistedId);
+          headers <- List(Map.empty[String, String], Map("Accept" -> "application/json"))
+        ) withClue(s"[$assetId] $headers: ") {
+          val response = requests.get(
+            s"$host/htmx/asset/r/$repoId/modals/asset-detail/$assetId",
+            headers = headers,
+            cookies = testContext.cookies,
+            check = false)
+
+          response.statusCode shouldBe 404
+          (response.text() should not).include(foreign.fileName)
+        }
+    }
+  }
+
   test("A change request whose body is not JSON, not a JSON object or not sent as JSON is a bad request") {
 
     /**

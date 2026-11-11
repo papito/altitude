@@ -9,6 +9,7 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.DataScrubber
 import altitude.core.DuplicateException
+import altitude.core.NotFoundException
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Folder
@@ -24,28 +25,30 @@ class FolderActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.add_folder_dialog(parentId = parentId)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
+  /** An unknown folder, or another repository's, is a 404 */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-folder")
   def showRenameFolderDialog(repoId: String, id: String, parentId: Option[String] = None)(using
       request: Request): Response[String] =
-    val folder: Folder = App.altitude.service.folder.getById(id)
-    val payload = "<!doctype html>" + htmx.html.rename_folder_dialog(
-      title = C.UI.RENAME_FOLDER_DIALOG_TITLE,
-      existingName = Some(folder.name),
-      id = id
-    )
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    answering {
+      val folder: Folder = App.altitude.service.folder.getById(id)
+      htmlResponse(
+        htmx.html.rename_folder_dialog(
+          title = C.UI.RENAME_FOLDER_DIALOG_TITLE,
+          existingName = Some(folder.name),
+          id = id
+        ))
+    }
 
+  /** An unknown folder, or another repository's, is a 404 */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete-folder")
   def showDeleteFolderDialog(repoId: String, id: String, parentId: Option[String] = None)(using
       request: Request): Response[String] =
-    val folder: Folder = App.altitude.service.folder.getById(id)
-    val payload = "<!doctype html>" + htmx.html.delete_folder_dialog(
-      title = C.UI.DELETE_FOLDER_DIALOG_TITLE,
-      folder = folder
-    )
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    answering {
+      val folder: Folder = App.altitude.service.folder.getById(id)
+      htmlResponse(htmx.html.delete_folder_dialog(title = C.UI.DELETE_FOLDER_DIALOG_TITLE, folder = folder))
+    }
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/tab")
@@ -53,6 +56,10 @@ class FolderActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.folders()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
+  /**
+   * Adds a folder under `parentId`. A parent that is no folder of the repository, unknown or another repository's, answers the
+   * dialog's form again with the error, as a name refused does, and adds nothing.
+   */
   @requireLogin()
   @cask.post(f"/$prefix/r/:repoId/add")
   def htmxAddFolder(repoId: String)(using request: Request): Response[String] =
@@ -93,10 +100,14 @@ class FolderActionController(using logger: Logger) extends BaseController:
       case ex: DuplicateException =>
         val message = ex.message.getOrElse("Folder name already exists at this level")
         return responseWithValidationErrors(Map(Api.Field.Folder.NAME -> message), parentId = parentId)
+      case _: NotFoundException =>
+        logger.debug(s"Not adding folder [$folderName]: parent [$parentId] is no folder of the repository")
+        return responseWithValidationErrors(Map(Api.Field.Folder.PARENT_ID -> C.Msg.Err.PARENT_FOLDER_NOT_FOUND), parentId)
 
     // The client reloads the folder tree off the "folderAdded" event - no markup needed here
     cask.Response("", 200, Seq(("Content-Type", "text/html")))
 
+  /** An unknown folder, or another repository's, is a 404, and the root folder a 409 */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/rename")
   def htmxRenameFolder(repoId: String)(using request: Request): Response[String] =
@@ -134,14 +145,20 @@ class FolderActionController(using logger: Logger) extends BaseController:
     val newName = jsonIn(Api.Field.Folder.NAME).str
     val folderId = jsonIn(Api.Field.ID).str
 
-    try App.altitude.service.folder.rename(folderId = folderId, newName = newName)
-    catch
-      case ex: DuplicateException =>
-        val message = ex.message.getOrElse("Folder name already exists at this level")
-        return responseWithValidationErrors(Map(Api.Field.Folder.NAME -> message), folderId = folderId)
+    answering {
+      try
+        App.altitude.service.folder.rename(folderId = folderId, newName = newName)
+        cask.Response(newName, 200, Seq(("Content-Type", "text/html")))
+      catch
+        case ex: DuplicateException =>
+          val message = ex.message.getOrElse("Folder name already exists at this level")
+          responseWithValidationErrors(Map(Api.Field.Folder.NAME -> message), folderId = folderId)
+    }
 
-    cask.Response(newName, 200, Seq(("Content-Type", "text/html")))
-
+  /**
+   * Moves a folder under another. A folder that is not the repository's, unknown or another repository's, is a 404, and so is the
+   * root folder of another repository; a destination that is not the repository's is a 400, as it does not exist.
+   */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/move")
   def htmxMoveFolder(repoId: String, movedFolderId: String, newParentId: String)(using request: Request): Response[String] =
@@ -150,21 +167,22 @@ class FolderActionController(using logger: Logger) extends BaseController:
     // short-circuit if this is a noop
     if movedFolderId == newParentId then return cask.Response("", 400, Seq(("Content-Type", "text/html")))
 
-    // Call the movers
-    try App.altitude.service.folder.move(movedFolderId, newParentId)
-    catch
-      case ex: DuplicateException =>
-        return cask.Response(
-          ex.message.getOrElse("Folder name already exists at this level"),
-          409,
-          Seq(("Content-Type", "text/html")))
+    answering {
+      try
+        App.altitude.service.folder.move(movedFolderId, newParentId)
+        cask.Response("", 200, Seq(("Content-Type", "text/html")))
+      catch
+        case ex: DuplicateException =>
+          cask.Response(ex.message.getOrElse("Folder name already exists at this level"), 409, Seq(("Content-Type", "text/html")))
+    }
 
-    cask.Response("", 200, Seq(("Content-Type", "text/html")))
-
+  /** An unknown folder, or another repository's, is a 404, and the root folder a 409 */
   @requireLogin()
   @cask.delete(f"/$prefix/r/:repoId/")
   def htmxDeleteFolder(repoId: String, id: String)(using request: Request): Response[String] =
-    App.altitude.service.library.deleteFolderById(id)
-    cask.Response("", 200, Seq(("Content-Type", "text/html")))
+    answering {
+      App.altitude.service.library.deleteFolderById(id)
+      cask.Response("", 200, Seq(("Content-Type", "text/html")))
+    }
 
   initialize()

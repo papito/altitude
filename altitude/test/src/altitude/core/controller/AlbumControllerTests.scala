@@ -138,4 +138,60 @@ import altitude.core.models.Asset
         response.headers("hx-replace-url").head should include(s"${Api.Field.Search.ALBUM_ID}=${album.persistedId}")
     }
   }
+
+  test("Adding assets to or removing them from an unknown album, or another repository's, is a JSON 404") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with an asset, and a second repository of theirs with the album "Eve's album" holding an
+     * asset of that repository.
+     *
+     * Assertions:
+     *
+     * Through the first repository, adding the user's asset to "Eve's album" and removing her asset from it answer a JSON 404, as
+     * both do for an album ID that does not exist, and no answer carries the album's name. No row of either repository changes.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val mine = testContext.insertAsset(testContext.makeAsset(repository = Some(repo)))
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val eves: Album = testApp.service.album.add("Eve's album")
+        val theirs = testContext.insertAsset(testContext.makeAsset(repository = Some(otherRepo)))
+        testApp.service.album.addAssets(eves.persistedId, Set(theirs.persistedId))
+        testApp.service.repository.switchContextToRepository(repo)
+        val ownBefore = testContext.rowsOf(repo)
+        val othersBefore = testContext.rowsOf(otherRepo)
+
+        def membership(method: requests.Requester, albumId: String, assetId: String): requests.Response =
+          method(
+            s"$host/api/album/r/$repoId/assets",
+            headers = Map("Content-Type" -> "application/json"),
+            data = ujson.write(ujson.Obj(Api.Field.Album.ALBUM_ID -> albumId, Api.Field.ASSET_IDS -> ujson.Arr(assetId))),
+            cookies = testContext.cookies,
+            check = false
+          )
+
+        for (albumId <- List(java.util.UUID.randomUUID.toString, eves.persistedId)) withClue(s"[$albumId]: ") {
+          for (
+            answer <- List(
+              membership(requests.put, albumId, mine.persistedId),
+              membership(requests.delete, albumId, theirs.persistedId))
+          ) {
+            answer.statusCode shouldBe 404
+            answer.headers("content-type") shouldBe Seq("application/json")
+            ujson.read(answer.text()).obj.keySet shouldBe Set("error")
+            (answer.text() should not).include("Eve")
+          }
+        }
+
+        testContext.rowsOf(repo) shouldBe ownBefore
+        testContext.rowsOf(otherRepo) shouldBe othersBefore
+    }
+  }
 }

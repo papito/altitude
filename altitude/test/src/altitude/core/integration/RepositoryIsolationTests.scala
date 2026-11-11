@@ -19,21 +19,6 @@ import altitude.core.util.QueryResult
 /** Every read and write of a repository-scoped table stays in the context repository, on both engines */
 @DoNotDiscover class RepositoryIsolationTests(override val testApp: Altitude) extends IntegrationTestCore {
 
-  /** The tables that carry `repository_id`, whose rows only their own repository's context reaches */
-  private val scopedTables = List(
-    "asset",
-    "folder",
-    "album",
-    "album_asset",
-    "location",
-    "location_asset",
-    "person",
-    "face",
-    "metadata_field",
-    "metadata_parameter",
-    "stats",
-    "search_document")
-
   /**
    * A row of another repository as a scoped DAO reaches it: `key` selects it alone (by ID, or by a dimension only that repository
    * has, for the stats, which have no ID), `update` is a harmless change of one column, and `counter` a numeric column for
@@ -111,25 +96,6 @@ import altitude.core.util.QueryResult
     TwoRepositories(first, second, rows)
   }
 
-  /** Every row of every scoped table in the repository, each as text, read by hand-written SQL that no scoping touches */
-  private def rowsOf(repository: Repository): Map[String, List[String]] =
-    testApp.txManager.asReadOnly {
-      scopedTables.map {
-        table =>
-          val rows = query(s"SELECT * FROM $table WHERE repository_id = ?", repository.persistedId)
-          table -> rows.map(asText).sorted
-      }.toMap
-    }
-
-  private def asText(row: Map[String, AnyRef]): String =
-    row.toList
-      .sortBy(_._1)
-      .map {
-        case (column, bytes: Array[Byte]) => s"$column=${bytes.toSeq}"
-        case (column, value) => s"$column=$value"
-      }
-      .mkString(", ")
-
   /** The ID of the second repository's row of the table */
   private def idOf(repos: TwoRepositories, table: String): String =
     repos.rows.find(_.table == table).flatMap(_.id).get
@@ -204,7 +170,7 @@ import altitude.core.util.QueryResult
      * memberships.
      */
     val repos = twoRepositories()
-    val before = rowsOf(repos.second)
+    val before = testContext.rowsOf(repos.second)
 
     testApp.txManager.withTransaction {
       repos.rows.foreach {
@@ -225,7 +191,7 @@ import altitude.core.util.QueryResult
       }
     }
 
-    rowsOf(repos.second) shouldEqual before
+    testContext.rowsOf(repos.second) shouldEqual before
   }
 
   test("An update or a delete by an empty query is refused") {
@@ -245,8 +211,8 @@ import altitude.core.util.QueryResult
      * The account DAO, whose table has no repository, refuses an empty update too: the refusal is not the scoping's.
      */
     val repos = twoRepositories()
-    val firstBefore = rowsOf(repos.first)
-    val secondBefore = rowsOf(repos.second)
+    val firstBefore = testContext.rowsOf(repos.first)
+    val secondBefore = testContext.rowsOf(repos.second)
 
     testApp.txManager.withTransaction {
       intercept[IllegalArgumentException] {
@@ -267,8 +233,8 @@ import altitude.core.util.QueryResult
     }
     intercept[IllegalArgumentException](testApp.service.album.deleteByQuery(new Query()))
 
-    rowsOf(repos.first) shouldEqual firstBefore
-    rowsOf(repos.second) shouldEqual secondBefore
+    testContext.rowsOf(repos.first) shouldEqual firstBefore
+    testContext.rowsOf(repos.second) shouldEqual secondBefore
   }
 
   test("A scoped DAO with no repository in the context refuses every generic read and write") {
@@ -288,7 +254,7 @@ import altitude.core.util.QueryResult
      * The DAOs of the tables with no repository (accounts, repositories) still read by ID with none in the context.
      */
     val repos = twoRepositories()
-    val before = rowsOf(repos.second)
+    val before = testContext.rowsOf(repos.second)
 
     def refused(f: => Any): Unit =
       intercept[RuntimeException](f).getMessage shouldBe "No repository in context"
@@ -318,7 +284,7 @@ import altitude.core.util.QueryResult
       }
     }
 
-    rowsOf(repos.second) shouldEqual before
+    testContext.rowsOf(repos.second) shouldEqual before
   }
 
   test("A service's write by ID of another repository's row, or of an unknown one, is not found") {
@@ -335,7 +301,7 @@ import altitude.core.util.QueryResult
      * an ID that no row has. Every row of the second repository is as it was.
      */
     val repos = twoRepositories()
-    val before = rowsOf(repos.second)
+    val before = testContext.rowsOf(repos.second)
     val idOf: Map[String, String] = repos.rows.flatMap(row => row.id.map(row.table -> _)).toMap
 
     val services: List[(String, BaseService[?], (String, Any), Option[String])] = List(
@@ -359,7 +325,7 @@ import altitude.core.util.QueryResult
         }
     }
 
-    rowsOf(repos.second) shouldEqual before
+    testContext.rowsOf(repos.second) shouldEqual before
   }
 
   test("Another repository's album can be neither deleted nor emptied, and its memberships are not read") {
@@ -376,7 +342,7 @@ import altitude.core.util.QueryResult
      * asset IDs read as none. Every row of the second repository is as it was: the album and its membership stay.
      */
     val repos = twoRepositories()
-    val before = rowsOf(repos.second)
+    val before = testContext.rowsOf(repos.second)
     val albumId = idOf(repos, "album")
     val assetId = idOf(repos, "asset")
 
@@ -385,7 +351,7 @@ import altitude.core.util.QueryResult
     intercept[NotFoundException](testApp.service.album.deleteById(albumId))
     testApp.service.album.getAssetIds(albumId) shouldBe empty
 
-    rowsOf(repos.second) shouldEqual before
+    testContext.rowsOf(repos.second) shouldEqual before
   }
 
   test("Another repository's Location is not emptied, and its memberships are not read") {
@@ -402,7 +368,7 @@ import altitude.core.util.QueryResult
      * Every row of the second repository is as it was: the Location and its membership stay.
      */
     val repos = twoRepositories()
-    val before = rowsOf(repos.second)
+    val before = testContext.rowsOf(repos.second)
     val locationId = idOf(repos, "location")
     val assetId = idOf(repos, "asset")
 
@@ -410,7 +376,7 @@ import altitude.core.util.QueryResult
     intercept[NotFoundException](testApp.service.location.removeAssets(locationId, Set(assetId)))
     testApp.service.location.getAssetIds(locationId) shouldBe empty
 
-    rowsOf(repos.second) shouldEqual before
+    testContext.rowsOf(repos.second) shouldEqual before
   }
 
   test("Another repository's folder is neither renamed, moved, moved into nor deleted, and its tree is not read") {
@@ -434,8 +400,8 @@ import altitude.core.util.QueryResult
     val theirChild = testApp.service.folder.add("their child", Some(theirs))
     switchContextRepo(repos.first)
     val mine = testApp.service.folder.add("mine")
-    val firstBefore = rowsOf(repos.first)
-    val secondBefore = rowsOf(repos.second)
+    val firstBefore = testContext.rowsOf(repos.first)
+    val secondBefore = testContext.rowsOf(repos.second)
 
     List(theirs, theirRoot).foreach {
       folderId =>
@@ -453,8 +419,8 @@ import altitude.core.util.QueryResult
     intercept[ValidationException](testApp.service.folder.move(mine.persistedId, theirRoot))
     intercept[NotFoundException](testApp.service.library.deleteFolderById(theirs))
 
-    rowsOf(repos.first) shouldEqual firstBefore
-    rowsOf(repos.second) shouldEqual secondBefore
+    testContext.rowsOf(repos.first) shouldEqual firstBefore
+    testContext.rowsOf(repos.second) shouldEqual secondBefore
   }
 
   test("Another repository's Person is neither read nor changed, and a merge with them is not found") {
@@ -478,8 +444,8 @@ import altitude.core.util.QueryResult
     val added = testApp.service.person.addPerson(Person())
     val myFace = testContext.addTestFace(added, myAsset, TestContext.unitVector(2))
     val mine: Person = testApp.service.person.getById(added.persistedId)
-    val firstBefore = rowsOf(repos.first)
-    val secondBefore = rowsOf(repos.second)
+    val firstBefore = testContext.rowsOf(repos.first)
+    val secondBefore = testContext.rowsOf(repos.second)
 
     intercept[NotFoundException](testApp.service.person.getById(theirId))
     testApp.service.person.getPersonFaces(theirId) shouldBe empty
@@ -492,8 +458,8 @@ import altitude.core.util.QueryResult
     intercept[NotFoundException](testApp.service.person.merge(dest = mine, source = theirs))
     intercept[NotFoundException](testApp.service.person.merge(dest = theirs, source = mine))
 
-    rowsOf(repos.first) shouldEqual firstBefore
-    rowsOf(repos.second) shouldEqual secondBefore
+    testContext.rowsOf(repos.first) shouldEqual firstBefore
+    testContext.rowsOf(repos.second) shouldEqual secondBefore
   }
 
   test("Another repository's asset metadata and metadata field are neither read nor changed") {
@@ -514,7 +480,7 @@ import altitude.core.util.QueryResult
     val assetId = idOf(repos, "asset")
     val fieldId = idOf(repos, "metadata_field")
     val myField = testApp.service.metadata.addField(UserMetadataField(name = "mine", fieldType = FieldType.KEYWORD))
-    val before = rowsOf(repos.second)
+    val before = testContext.rowsOf(repos.second)
 
     intercept[NotFoundException](testApp.service.metadata.getMetadata(assetId))
     intercept[NotFoundException] {
@@ -523,6 +489,6 @@ import altitude.core.util.QueryResult
     intercept[NotFoundException](testApp.service.metadata.getFieldById(fieldId))
     testApp.service.metadata.deleteFieldById(fieldId) shouldBe 0
 
-    rowsOf(repos.second) shouldEqual before
+    testContext.rowsOf(repos.second) shouldEqual before
   }
 }

@@ -15,9 +15,13 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
 
   override protected val dao: FolderDao = app.DAO.folder
 
+  /**
+   * Adds the folder under `parentId`, or under the repository root when none is given. A parent that is no folder of the context
+   * repository, unknown or another repository's, is a `NotFoundException` that adds nothing.
+   */
   def add(name: String, parentId: Option[String] = None): Folder =
     txManager.withTransaction {
-      val _parentId = if parentId.isDefined then parentId.get else RequestContext.getRepository.rootFolderId
+      val _parentId = parentId.map(getInRepository(_).persistedId).getOrElse(RequestContext.getRepository.rootFolderId)
       val folder = Folder(name = name.trim, parentId = _parentId)
       app.service.folder.add(folder)
     }

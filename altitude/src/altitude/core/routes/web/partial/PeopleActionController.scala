@@ -81,36 +81,49 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
     }
 
+  /**
+   * The Faces a Person's cover can be chosen from, best first: none on an asset marked for purging, which `setFaceAsCover`
+   * refuses. An unknown person, or another repository's, is a 404
+   */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/choose-person-cover-face")
   def showChoosePersonCoverFaceModal(repoId: String, personId: String)(using request: Request): Response[String] =
-    val person: Person = App.altitude.service.person.getById(personId)
-    val topFaces = App.altitude.service.person.getPersonFaces(person.persistedId, limit = 24)
-    val payload = "<!doctype html>" + htmx.html.choose_person_cover_face_modal(
-      title = C.UI.CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE,
-      person = person,
-      faces = topFaces
-    )
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    answering {
+      val person: Person = App.altitude.service.person.getById(personId)
+      val topFaces = App.altitude.service.person.getPersonFaces(person.persistedId, limit = 24)
+      htmlResponse(
+        htmx.html.choose_person_cover_face_modal(
+          title = C.UI.CHANGE_PERSON_COVER_IMAGE_DIALOG_TITLE,
+          person = person,
+          faces = topFaces
+        ))
+    }
 
+  /**
+   * Sets the Person's cover to the Face. An unknown person or Face, or another repository's, is a 404; a Face of another Person,
+   * or one on an asset marked for purging, is a plain-text 400 saying why
+   */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/p/:personId/cover-image")
   def setCoverImage(repoId: String, personId: String, faceId: String)(using request: Request): Response[String] =
-    val person: Person = App.altitude.service.person.getById(personId)
-    val face: Face = App.altitude.service.person.getFaceById(faceId)
+    answering {
+      val person: Person = App.altitude.service.person.getById(personId)
+      val face: Face = App.altitude.service.person.getFaceById(faceId)
 
-    logger.trace(s"Setting cover image for person $personId to face $faceId")
-    val updatedPerson = App.altitude.service.person.setFaceAsCover(person, face)
+      logger.trace(s"Setting cover image for person $personId to face $faceId")
+      val updatedPerson = App.altitude.service.person.setFaceAsCover(person, face)
 
-    val payload = "<!doctype html>" + htmx.html.person_inner(person = updatedPerson)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+      htmlResponse(htmx.html.person_inner(person = updatedPerson))
+    }
 
+  /** The inline name editor; an unknown person, or another repository's, is a 404 */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/p/:personId/name/edit")
   def showEditPersonName(repoId: String, personId: String)(using request: Request): Response[String] =
-    val person: Person = App.altitude.service.person.getById(personId)
-    val payload = "<!doctype html>" + htmx.html.edit_person_name(person = person)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    answering {
+      val person: Person = App.altitude.service.person.getById(personId)
+      htmlResponse(htmx.html.edit_person_name(person = person))
+    }
 
   /**
    * The name editor's save, for the Person the path names; an ID in the body is ignored. A saved name answers the name view, and
@@ -232,19 +245,21 @@ class PeopleActionController(using logger: Logger) extends BaseController:
 
     RenameOutcome.Saved(App.altitude.service.person.getById(person.persistedId))
 
+  /** The name view; an unknown person, or another repository's, is a 404 */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/p/:personId/name")
   def viewPersonName(repoId: String, personId: String)(using request: Request): Response[String] =
-    val person: Person = App.altitude.service.person.getById(personId)
-    val payload = "<!doctype html>" + htmx.html.view_person_name(person = person)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    answering {
+      val person: Person = App.altitude.service.person.getById(personId)
+      htmlResponse(htmx.html.view_person_name(person = person))
+    }
 
   /**
    * The Merge people modal for the two people asked for. `pane` is sent by the rename dialog's offer to merge alone
    * (`includes/person_name_taken`): the pane of the People tab (`Const.PeoplePane`) whose pencil opened that dialog. The merge
    * modal takes the rename dialog's place, so the modal names that pencil, the requested source's in that pane, as the control
    * focus goes back to when it closes; a name that is no pane is a 400. Without `pane` focus goes back to the control that asked
-   * for the modal.
+   * for the modal. An unknown person, or another repository's, either of the two, is a 404.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/merge")
@@ -256,66 +271,77 @@ class PeopleActionController(using logger: Logger) extends BaseController:
       pane: Option[String] = None)(using request: Request): Response[String] =
     if pane.exists(!Const.PeoplePane.ALL.contains(_)) then return unknownPane(pane.get)
 
-    val requestedSourcePerson: Person = App.altitude.service.person.getById(mergeSourceId)
-    val requestedDestPerson: Person = App.altitude.service.person.getById(mergeDestId)
+    answering {
+      val requestedSourcePerson: Person = App.altitude.service.person.getById(mergeSourceId)
+      val requestedDestPerson: Person = App.altitude.service.person.getById(mergeDestId)
 
-    // A drop merges the person with fewer faces into the other, whichever was dropped on which; the name editor's offer keeps
-    // its direction (`keepDirection`), so the person already holding the name stays, and keeps its ID
-    val (sourcePerson, destPerson) =
-      if keepDirection || requestedSourcePerson.numOfFaces < requestedDestPerson.numOfFaces then
-        (requestedSourcePerson, requestedDestPerson)
-      else (requestedDestPerson, requestedSourcePerson)
+      // A drop merges the person with fewer faces into the other, whichever was dropped on which; the name editor's offer keeps
+      // its direction (`keepDirection`), so the person already holding the name stays, and keeps its ID
+      val (sourcePerson, destPerson) =
+        if keepDirection || requestedSourcePerson.numOfFaces < requestedDestPerson.numOfFaces then
+          (requestedSourcePerson, requestedDestPerson)
+        else (requestedDestPerson, requestedSourcePerson)
 
-    val payload = "<!doctype html>" + htmx.html.merge_people_modal(
-      title = C.UI.MERGE_PEOPLE_DIALOG_TITLE,
-      mergeSourcePerson = sourcePerson,
-      mergeDestPerson = destPerson,
-      returnFocusPencil = pane.map(_ -> requestedSourcePerson.persistedId)
-    )
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+      htmlResponse(
+        htmx.html.merge_people_modal(
+          title = C.UI.MERGE_PEOPLE_DIALOG_TITLE,
+          mergeSourcePerson = sourcePerson,
+          mergeDestPerson = destPerson,
+          returnFocusPencil = pane.map(_ -> requestedSourcePerson.persistedId)
+        ))
+    }
 
+  /** Merges the source into the destination; an unknown person, or another repository's, either of the two, is a 404 */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/src/:srcPersonId/dest/:destPersonId")
   def mergePeople(repoId: String, srcPersonId: String, destPersonId: String)(using request: Request): Response[String] =
-    val srcPerson: Person = App.altitude.service.person.getById(srcPersonId)
-    val destPerson: Person = App.altitude.service.person.getById(destPersonId)
-    logger.debug(s"MERGING: {${srcPerson.name} into ${destPerson.name}")
+    answering {
+      val srcPerson: Person = App.altitude.service.person.getById(srcPersonId)
+      val destPerson: Person = App.altitude.service.person.getById(destPersonId)
+      logger.debug(s"MERGING: {${srcPerson.name} into ${destPerson.name}")
 
-    App.altitude.service.person.merge(dest = destPerson, source = srcPerson)
+      App.altitude.service.person.merge(dest = destPerson, source = srcPerson)
 
-    noContentResponse
+      noContentResponse
+    }
 
+  /** An unknown person, or another repository's, is a 404 */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/p/:personId/hide")
   def hidePerson(repoId: String, personId: String)(using request: Request): Response[String] =
-    val person: Person = App.altitude.service.person.getById(personId)
-    logger.trace(s"Hiding person: $personId")
+    answering {
+      val person: Person = App.altitude.service.person.getById(personId)
+      logger.trace(s"Hiding person: $personId")
 
-    val updatedPerson = App.altitude.service.person.setVisibility(person, isHidden = true)
+      val updatedPerson = App.altitude.service.person.setVisibility(person, isHidden = true)
 
-    val payload = "<!doctype html>" + htmx.html.person_inner(person = updatedPerson)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+      htmlResponse(htmx.html.person_inner(person = updatedPerson))
+    }
 
+  /** An unknown person, or another repository's, is a 404 */
   @requireLogin()
   @cask.delete(f"/$prefix/r/:repoId/p/:personId")
   def discardPersonAsBadMatch(repoId: String, personId: String)(using request: Request): Response[String] =
-    val person: Person = App.altitude.service.person.getById(personId)
-    logger.trace(s"Discarding person: $personId")
+    answering {
+      val person: Person = App.altitude.service.person.getById(personId)
+      logger.trace(s"Discarding person: $personId")
 
-    val updatedPerson = App.altitude.service.person.markAsBadMatch(person)
+      val updatedPerson = App.altitude.service.person.markAsBadMatch(person)
 
-    val payload = "<!doctype html>" + htmx.html.person_inner(person = updatedPerson)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+      htmlResponse(htmx.html.person_inner(person = updatedPerson))
+    }
 
+  /** An unknown person, or another repository's, is a 404 */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/p/:personId/show")
   def showPerson(repoId: String, personId: String)(using request: Request): Response[String] =
     logger.trace(s"Showing person: $personId")
-    val person: Person = App.altitude.service.person.getById(personId)
+    answering {
+      val person: Person = App.altitude.service.person.getById(personId)
 
-    val updatedPerson = App.altitude.service.person.setVisibility(person, isHidden = false)
+      val updatedPerson = App.altitude.service.person.setVisibility(person, isHidden = false)
 
-    val payload = "<!doctype html>" + htmx.html.person_inner(person = updatedPerson)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+      htmlResponse(htmx.html.person_inner(person = updatedPerson))
+    }
 
   initialize()

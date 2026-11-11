@@ -9,9 +9,9 @@ import scala.util.Try
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.NotFoundException
 import altitude.core.QueryTimeoutException
 import altitude.core.SearchCursorException
-import altitude.core.models.Album
 import altitude.core.models.Folder
 import altitude.core.models.Location
 import altitude.core.models.Person
@@ -115,11 +115,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         400)
 
     // What the results title names: the person, the folder's path, the album, the Location or the subset the results are
-    // scoped to
-    val person = personOf(personId)
-    val folderPath = folderPathOf(folderId)
-    val album: Option[Album] = albumId.map(App.altitude.service.album.getById)
-    val location = locationOf(locationId)
+    // scoped to. One that is not the repository's, unknown or another repository's, is a 404 that names nothing of it
+    val (person, folderPath, album, location) =
+      try (personOf(personId), folderPathOf(folderId), albumId.map(App.altitude.service.album.getById), locationOf(locationId))
+      catch case ex: NotFoundException => return textError(ex.getMessage, 404)
 
     val browserUrl = browserViewUrl(
       view,
@@ -328,7 +327,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     textError(Const.Msg.Err.SEARCH_TIMED_OUT, 503)
 
   private def personOf(personId: Option[String]): Person =
-    personId.map(id => App.altitude.service.person.getById(id): Person).orNull
+    personId.map(App.altitude.service.person.getInRepository).orNull
 
   /**
    * The folder scope as a breadcrumb reads it: the top-level folder first, the folder itself last. The repository root is the
@@ -336,7 +335,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    */
   private def folderPathOf(folderId: Option[String]): List[Folder] =
     val folders = App.altitude.service.folder
-    folderId.filterNot(folders.isRootFolder).map(id => folders.getAncestors(id) :+ folders.getById(id)).getOrElse(Nil)
+    folderId.filterNot(folders.isRootFolder).map(id => folders.getAncestors(id) :+ folders.getInRepository(id)).getOrElse(Nil)
 
   /** The Location scope with its category's name, which the typed read leaves out */
   private def locationOf(locationId: Option[String]): Option[Location] =

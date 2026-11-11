@@ -8,8 +8,6 @@ import scala.util.Try
 
 import altitude.core.Api
 import altitude.core.App
-import altitude.core.IllegalOperationException
-import altitude.core.NotFoundException
 import altitude.core.models.Location
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
@@ -40,10 +38,7 @@ class LocationController(using logger: Logger) extends BaseController:
     val (locationId, assetIds) = Try(membershipRequest(jsonIn)).toOption match
       case None => return jsonError("Expected locationId and an assetIds array of strings", 400)
       case Some(membership) => membership
-    try jsonResponse(ujson.Obj(countKey -> change(locationId, assetIds)))
-    catch
-      case ex: NotFoundException => jsonError(ex.getMessage, 404)
-      case ex: IllegalOperationException => jsonError(ex.getMessage, 400)
+    answeringJson(jsonResponse(ujson.Obj(countKey -> change(locationId, assetIds))))
 
   private def membershipRequest(jsonIn: ujson.Obj): (String, Set[String]) =
     (jsonIn(Api.Field.Location.LOCATION_ID).str, jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet)

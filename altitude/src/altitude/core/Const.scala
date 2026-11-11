@@ -199,6 +199,8 @@ object Const:
       // Faces are about to go
       val COVER_FACE_NOT_THEIRS = "The face is not this person's"
       val COVER_FACE_PURGING = "The face is on an asset being purged"
+      // A folder added under a parent folder that is no folder of the repository (FolderActionController.htmxAddFolder)
+      val PARENT_FOLDER_NOT_FOUND = "The parent folder does not exist"
 
     // What a Face correction did, named for the snackbar in the People section's data attributes (htmx/detail_panel_people)
     object FaceCorrection:

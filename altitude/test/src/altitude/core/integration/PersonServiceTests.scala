@@ -336,6 +336,34 @@ import altitude.core.util.Util
     top.map(_.persistedId) should be(all.take(3).map(_.persistedId))
   }
 
+  test("A person's top faces leave out the Faces on an asset marked for purging") {
+
+    /**
+     * Setup:
+     *
+     * A person with Faces on three assets, of detection scores 0.9, 0.8 and 0.7, the best one's asset recycled and marked for
+     * purging, and the next one's asset recycled only.
+     *
+     * Assertions:
+     *
+     * The person's top faces are the Faces of 0.8 and 0.7, in that order: the one on the asset marked for purging, which could
+     * not be set as the cover, is not among them, and the one in the trash is.
+     */
+    val person: Person = testApp.service.person.addPerson(Person())
+    val faces = List(0.9, 0.8, 0.7).zipWithIndex.map {
+      case (score, n) =>
+        testContext.addTestFace(
+          testApp.service.person.getById(person.persistedId),
+          testContext.insertAsset(),
+          TestContext.unitVector(n + 1),
+          detectionScore = score)
+    }
+    testApp.service.library.recycleAssets(Set(faces.head.assetId.get, faces(1).assetId.get))
+    testApp.service.asset.updateById(faces.head.assetId.get, Map(FieldConst.Asset.IS_PURGED -> true))
+
+    testApp.service.person.getPersonFaces(person.persistedId).map(_.persistedId) shouldBe faces.drop(1).map(_.persistedId)
+  }
+
   test("A cover is refused for another Person's Face, another repository's Face and a Face on an asset marked for purging") {
 
     /**

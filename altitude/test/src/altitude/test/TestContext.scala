@@ -10,8 +10,10 @@ import java.time.ZoneOffset
 import java.util.HexFormat
 import java.util.concurrent.atomic.AtomicInteger
 import org.apache.commons.dbutils.QueryRunner
+import org.apache.commons.dbutils.handlers.MapListHandler
 
 import scala.collection.mutable
+import scala.jdk.CollectionConverters.*
 import scala.util.Random
 
 import altitude.core.Altitude
@@ -65,6 +67,21 @@ object TestContext {
    */
   def between(vector: Array[Float], other: Array[Float], parts: Int): Array[Float] =
     FaceRecognitionService.meanNormalized(Seq.fill(parts)(vector) :+ other)
+
+  /** The tables that carry `repository_id`, whose rows only their own repository's context reaches */
+  val SCOPED_TABLES: List[String] = List(
+    "asset",
+    "folder",
+    "album",
+    "album_asset",
+    "location",
+    "location_asset",
+    "person",
+    "face",
+    "metadata_field",
+    "metadata_parameter",
+    "stats",
+    "search_document")
 }
 
 class TestContext(val testApp: Altitude) {
@@ -415,6 +432,35 @@ class TestContext(val testApp: Altitude) {
   def addTestFacesAndAssets(person: Person, assetCount: Int = 1, isTriaged: Boolean = false): Unit = {
     addFacesOnNewAssets(List(person), assetCount, isTriaged)
   }
+
+  /**
+   * Every row of every scoped table in the repository, each as text, read by hand-written SQL that no scoping touches: two reads
+   * that are equal saw no row of the repository change in between
+   */
+  def rowsOf(repository: Repository): Map[String, List[String]] =
+    testApp.txManager.asReadOnly {
+      TestContext.SCOPED_TABLES.map {
+        table =>
+          val read = new QueryRunner()
+            .query(
+              RequestContext.getConn,
+              s"SELECT * FROM $table WHERE repository_id = ?",
+              new MapListHandler(),
+              repository.persistedId)
+            .asScala
+            .toList
+          table -> read.map(row => asText(row.asScala.toMap)).sorted
+      }.toMap
+    }
+
+  private def asText(row: Map[String, AnyRef]): String =
+    row.toList
+      .sortBy(_._1)
+      .map {
+        case (column, bytes: Array[Byte]) => s"$column=${bytes.toSeq}"
+        case (column, value) => s"$column=$value"
+      }
+      .mkString(", ")
 
   def user: User = {
     if (users.length > 1) {

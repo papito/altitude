@@ -1375,4 +1375,47 @@ import altitude.core.util.Util
         }
     }
   }
+
+  test("A search scoped to an unknown or another repository's Person, folder, album or Location is a 404") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with an asset, and a second repository of theirs with the Person "Eve", the folder "Eve's
+     * folder", the album "Eve's album" and the Location "Eve's place".
+     *
+     * Assertions:
+     *
+     * Through the first repository, a search scoped to each of the four, or to an ID of each kind that does not exist, answers a
+     * plain-text 404 that names none of them, in the grid layout and in the map layout.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        testContext.insertAsset(testContext.makeAsset(repository = Some(repo)))
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val scopes = List(
+          Api.Field.Search.PERSON_ID -> testApp.service.person.addPerson(Person(name = Some("Eve"))).persistedId,
+          Api.Field.Search.FOLDER_ID -> testApp.service.folder.add("Eve's folder").persistedId,
+          Api.Field.Search.ALBUM_ID -> testApp.service.album.add("Eve's album").persistedId,
+          Api.Field.Search.LOCATION_ID -> testApp.service.location.addLocation("Eve's place", 1, 2).persistedId
+        )
+        testApp.service.repository.switchContextToRepository(repo)
+
+        for (
+          (param, foreignId) <- scopes;
+          id <- List(java.util.UUID.randomUUID.toString, foreignId);
+          layout <- List(Const.Search.Layout.GRID, Const.Search.Layout.MAP)
+        ) withClue(s"$param=$id $layout: ") {
+          val response = htmlSearch(host, repoId, Map(param -> id, Api.Field.Search.LAYOUT -> layout))
+          response.statusCode shouldBe 404
+          response.headers("content-type") shouldBe Seq("text/plain")
+          (response.text() should not).include("Eve")
+        }
+    }
+  }
 }

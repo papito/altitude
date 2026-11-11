@@ -29,7 +29,7 @@ trait FaceDao extends BaseDao[Face]:
 
   /**
    * A person's faces by detection score, best first and then by ID, no more than `limit` of them, in the context repository: none
-   * for another repository's person
+   * for another repository's person. A Face on an asset marked for purging is left out, since it can no longer be a cover
    */
   def getTopFaces(personId: String, limit: Int): List[Face]
 

@@ -54,22 +54,17 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
       sharpness = getDoubleField(rec(FieldConst.Face.SHARPNESS))
     )
 
-  // Reads `face_02` backwards and stops at the limit: no count of the person's faces and no sort of them
-  override def getTopFaces(personId: String, limit: Int): List[Face] =
-    import dialect.*
+  override def getTopFaces(personId: String, limit: Int): List[Face] = coverCandidates(personId, Set.empty, limit)
 
-    val repositoryId = RequestContext.getRepository.persistedId
-    val top = FaceRow.select
-      .filter(face => face.personId `=` personId && face.repositoryId `=` repositoryId)
-      .sortBy(_.id)
-      .asc
-      .sortBy(_.detectionScore)
-      .desc
-      .take(limit)
-    Db.read(dialect)(_.run(top)).map(toModel).toList
-
-  // The person's Faces come from `face_02`, which leads with the person and orders them by detection score
   override def getBestCoverCandidate(personId: String, excludedAssetIds: Set[String]): Option[Face] =
+    coverCandidates(personId, excludedAssetIds, limit = 1).headOption
+
+  /**
+   * The person's Faces a cover can be: on none of `excludedAssetIds` and on no asset marked for purging, by detection score, best
+   * first, then by ID, no more than `limit`. They come from `face_02`, which leads with the person and orders them by detection
+   * score, so the read stops at the limit, each Face's asset probed by its key.
+   */
+  private def coverCandidates(personId: String, excludedAssetIds: Set[String], limit: Int): List[Face] =
     val sql = s"""
         SELECT face.*
           FROM face, asset
@@ -79,10 +74,10 @@ abstract class FaceDao(override val config: Config) extends BaseDao[Face] with a
            AND asset.id = face.asset_id
            AND asset.${FieldConst.Asset.IS_PURGED} = FALSE
          ORDER BY face.detection_score DESC, face.id
-         LIMIT 1
+         LIMIT ?
       """
 
-    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, personId, idSet(excludedAssetIds))).headOption
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, personId, idSet(excludedAssetIds), limit))
       .map(makeModel)
 
   // Reads `face_01`, which leads with the asset

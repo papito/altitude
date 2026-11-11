@@ -12,6 +12,7 @@ import altitude.core.routes.decorators.requireLogin
 class AssetController(using logger: Logger) extends BaseController:
   private val prefix = "api/asset"
 
+  /** A destination that is no folder of the repository, unknown or another repository's, is a JSON 404 that moves nothing */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/move")
   def moveAssets(repoId: String)(using request: Request): Response[String] =
@@ -19,9 +20,11 @@ class AssetController(using logger: Logger) extends BaseController:
     val folderId = jsonIn(Api.Field.FOLDER_ID).str
     val assetIdSet = jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet
     logger.trace(s"Moving assets ${assetIdSet.mkString(", ")} to $folderId")
-    App.altitude.service.library.moveAssetsToFolder(assetIdSet, folderId)
 
-    cask.Response("{}", 200, Seq(("Content-Type", "application/json")))
+    answeringJson {
+      App.altitude.service.library.moveAssetsToFolder(assetIdSet, folderId)
+      jsonResponse(ujson.Obj())
+    }
 
   @requireLogin()
   @cask.delete(f"/$prefix/r/:repoId/move")
@@ -34,6 +37,7 @@ class AssetController(using logger: Logger) extends BaseController:
 
     cask.Response("{}", 200, Seq(("Content-Type", "application/json")))
 
+  /** An ID that is no asset of the repository, unknown or another repository's, is a JSON 404 that restores nothing */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/restore")
   def restoreAssets(repoId: String)(using request: Request): Response[String] =
@@ -41,7 +45,7 @@ class AssetController(using logger: Logger) extends BaseController:
     val assetIdSet = jsonIn(Api.Field.ASSET_IDS).arr.map(_.str).toSet
     logger.trace(s"Restoring assets ${assetIdSet.mkString(", ")}")
 
-    restoreResponse(App.altitude.service.library.restoreRecycledAssets(assetIdSet))
+    answeringJson(restoreResponse(App.altitude.service.library.restoreRecycledAssets(assetIdSet)))
 
   @requireLogin()
   @cask.delete(f"/$prefix/r/:repoId/purge")

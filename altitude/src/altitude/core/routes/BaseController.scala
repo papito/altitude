@@ -95,6 +95,16 @@ abstract class BaseController(using logger: Logger) extends cask.Routes:
       case ex: IllegalOperationException => textError(ex.getMessage, 409)
 
   /**
+   * [[answering]] for a JSON route, in the `{"error": ...}` shape (`jsonError`): something not found, an unknown ID or another
+   * repository's, is a 404 and a refused operation (`IllegalOperationException`) a 400; any other failure is the route's own.
+   */
+  def answeringJson(f: => Response[String]): Response[String] =
+    try f
+    catch
+      case ex: NotFoundException => jsonError(ex.getMessage, 404)
+      case ex: IllegalOperationException => jsonError(ex.getMessage, 400)
+
+  /**
    * Response for a dialog form that failed validation: the rendered form (with errors and the submitted values) replaces the
    * submitting form itself, instead of going to the form's normal target. The client treats a retargeted response as a validation
    * replacement rather than a completed operation.

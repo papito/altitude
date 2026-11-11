@@ -46,23 +46,28 @@ class AlbumActionController(using logger: Logger) extends BaseController:
     val payload = "<!doctype html>" + htmx.html.add_album_dialog()
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
+  /** An unknown album, or another repository's, is a 404 */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/rename-album")
   def showRenameAlbumDialog(repoId: String, id: String)(using request: Request): Response[String] =
-    val album: Album = App.altitude.service.album.getById(id)
-    val payload = "<!doctype html>" + htmx.html.rename_album_dialog(
-      title = C.UI.RENAME_ALBUM_DIALOG_TITLE,
-      existingName = Some(album.name),
-      id = id
-    )
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    answering {
+      val album: Album = App.altitude.service.album.getById(id)
+      htmlResponse(
+        htmx.html.rename_album_dialog(
+          title = C.UI.RENAME_ALBUM_DIALOG_TITLE,
+          existingName = Some(album.name),
+          id = id
+        ))
+    }
 
+  /** An unknown album, or another repository's, is a 404 */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete-album")
   def showDeleteAlbumDialog(repoId: String, id: String)(using request: Request): Response[String] =
-    val album: Album = App.altitude.service.album.getById(id)
-    val payload = "<!doctype html>" + htmx.html.delete_album_dialog(title = C.UI.DELETE_ALBUM_DIALOG_TITLE, album = album)
-    cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
+    answering {
+      val album: Album = App.altitude.service.album.getById(id)
+      htmlResponse(htmx.html.delete_album_dialog(title = C.UI.DELETE_ALBUM_DIALOG_TITLE, album = album))
+    }
 
   @requireLogin()
   @cask.post(f"/$prefix/r/:repoId/add")
@@ -86,6 +91,7 @@ class AlbumActionController(using logger: Logger) extends BaseController:
     // The client reloads the album list off the "albumAdded" event - no markup needed here
     cask.Response("", 200, Seq(("Content-Type", "text/html")))
 
+  /** An unknown album, or another repository's, is a 404 */
   @requireLogin()
   @cask.put(f"/$prefix/r/:repoId/rename")
   def htmxRenameAlbum(repoId: String)(using request: Request): Response[String] =
@@ -108,14 +114,16 @@ class AlbumActionController(using logger: Logger) extends BaseController:
     val newName = jsonIn(Api.Field.Album.NAME).str
     val albumId = jsonIn(Api.Field.ID).str
 
-    try App.altitude.service.album.rename(albumId = albumId, newName = newName)
-    catch
-      case ex: DuplicateException =>
-        return responseWithValidationErrors(
-          Map(Api.Field.Album.NAME -> ex.message.getOrElse("Album name already exists")),
-          albumId = albumId)
-
-    cask.Response(newName, 200, Seq(("Content-Type", "text/html")))
+    answering {
+      try
+        App.altitude.service.album.rename(albumId = albumId, newName = newName)
+        cask.Response(newName, 200, Seq(("Content-Type", "text/html")))
+      catch
+        case ex: DuplicateException =>
+          responseWithValidationErrors(
+            Map(Api.Field.Album.NAME -> ex.message.getOrElse("Album name already exists")),
+            albumId = albumId)
+    }
 
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/dialogs/add-to-album")
@@ -171,10 +179,13 @@ class AlbumActionController(using logger: Logger) extends BaseController:
         responseWithValidationErrors(Map(Api.Field.Album.NAME -> ex.message.getOrElse("Album name already exists")))
       case ex: NotFoundException => responseWithValidationErrors(Map(Api.Field.Album.ALBUM_ID -> ex.getMessage))
 
+  /** An unknown album, or another repository's, is a 404, and its memberships stay */
   @requireLogin()
   @cask.delete(f"/$prefix/r/:repoId/")
   def htmxDeleteAlbum(repoId: String, id: String)(using request: Request): Response[String] =
-    App.altitude.service.album.deleteById(id)
-    cask.Response("", 200, Seq(("Content-Type", "text/html")))
+    answering {
+      App.altitude.service.album.deleteById(id)
+      cask.Response("", 200, Seq(("Content-Type", "text/html")))
+    }
 
   initialize()

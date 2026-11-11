@@ -8,8 +8,6 @@ import scala.util.Try
 
 import altitude.core.Api
 import altitude.core.App
-import altitude.core.IllegalOperationException
-import altitude.core.NotFoundException
 import altitude.core.Validators
 import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.requireLogin
@@ -35,7 +33,7 @@ class CurationController(using logger: Logger) extends BaseController:
     }.toOption match
       case None => jsonError(s"Expected ${fields.KEEP_IDS} and ${fields.RECYCLE_IDS} arrays of UUIDs", 400)
       case Some((keepIds, recycleIds)) =>
-        refusalsAnswered {
+        answeringJson {
           val sequenceOf = App.altitude.service.curation.resolve(keepIds, recycleIds)
           jsonResponse(ujson.Obj(fields.SEQUENCE_OF -> ujson.Obj.from(sequenceOf.view.mapValues(ujson.Str(_)))))
         }
@@ -53,7 +51,7 @@ class CurationController(using logger: Logger) extends BaseController:
           s"Expected ${fields.KEEP_IDS} and ${fields.RECYCLE_IDS} arrays of UUIDs, and ${fields.SEQUENCE_OF} of UUIDs",
           400)
       case Some((keepIds, recycleIds, sequenceOf)) =>
-        refusalsAnswered(restoreResponse(App.altitude.service.curation.reopen(keepIds, recycleIds, sequenceOf)))
+        answeringJson(restoreResponse(App.altitude.service.curation.reopen(keepIds, recycleIds, sequenceOf)))
 
   private def idsOf(jsonIn: ujson.Obj, field: String): Set[String] = jsonIn(field).arr.map(id => uuid(id.str)).toSet
 
@@ -64,12 +62,5 @@ class CurationController(using logger: Logger) extends BaseController:
   private def uuid(id: String): String =
     require(Validators.isUuid(id))
     id
-
-  /** A refused outcome is the client's error; an asset outside this repository is not found. */
-  private def refusalsAnswered(outcome: => Response[String]): Response[String] =
-    try outcome
-    catch
-      case ex: NotFoundException => jsonError(ex.getMessage, 404)
-      case ex: IllegalOperationException => jsonError(ex.getMessage, 400)
 
   initialize()
