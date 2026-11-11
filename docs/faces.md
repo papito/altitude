@@ -244,13 +244,16 @@ negative number is shown: such a person is left off the list until the next reco
 
 The tab's actions:
 
-- **Name**: `updateName` stores the name in NFC and sets `is_named`; a named person is Matched whatever their count. A
-  named person's `name_for_sort` is its name key (`PersonService.nameKey`: the NFC name lowercased under `Locale.ROOT`),
-  and `person_01` keeps that unique over the live people, hidden ones included, so a name is unique regardless of case and
-  Unicode form. This is lowercasing, not a full Unicode case fold: "Weiß" and "WEISS", or a Greek name with a final sigma
-  and with a plain one ("σοφος" and "σοφοσ"), keep different keys. A merged-away or bad-match person holds no name. An unnamed person's `name_for_sort` is `unknown 0042`, so
-  a name of the form `Unknown N`, in any case and spacing, is reserved and refused with a validation error. A change of
-  case alone is a rename. A name another live person holds is refused, and the form offers to merge into that person
+- **Name**: `updateName` stores the name in NFC (`PersonService.normalizedName`, `NameKey.normalized`) and sets
+  `is_named`; a named person is Matched whatever their count. A named person's `name_for_sort` is its name key
+  (`PersonService.nameKey`, which is `NameKey.of`; **Names** in `altitude/AGENTS.md`), and `person_01` keeps that unique
+  over the live people, hidden ones included, so a name is unique regardless of case, in any script, and of Unicode form:
+  "Weiß" and "WEISS", a Greek name with a final sigma and with a plain one ("σοφος" and "σοφοσ"), or a name with a
+  full-width letter and the same name without, are one name. A merged-away or bad-match person holds no name. An unnamed
+  person's `name_for_sort` is `unknown 0042`, so a name of the form `Unknown N`, in any case and spacing, is reserved and
+  refused with a validation error. `isReservedName` tests the name's NFKC form, as the key folds it, so the form's
+  compatibility forms are reserved too: a full-width "Ｕnknown 42", or one with circled digits. A change that keeps the
+  name key, such as one of case alone, is a rename. A name another live person holds is refused, and the form offers to merge into that person
   (**Event Flow** in `views/AGENTS.md`). There are two forms over one rename (`PeopleActionController.renamePerson`, whose
   `RenameOutcome` is `Saved` or `Refused`, each route rendering it its own way): the results title's inline name editor
   (`PUT /htmx/people/r/:repoId/p/:personId/name/edit`, answering the name or the editor again) and the rename dialog a

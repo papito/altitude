@@ -32,6 +32,18 @@ A named container for Locations, one level deep, with no pin and no assets of
 its own. Locations and Categories share one name pool per Library.
 _Avoid_: Parent, Folder, Group.
 
+**Name key**:
+The folded form of a name under which two names are the same name: names that
+differ only in letter case, in any script ("Weiß" and "WEISS"), or in how their
+characters are encoded (a combining accent, a full-width letter, a ligature)
+share one, while names that differ in an accent ("Émile" and "Emile") do not.
+Libraries, folders among their siblings, albums, Locations and Categories,
+metadata fields and People are unique under their names' keys, an asset's
+metadata values are one value under one key, and a keyword filter matches under
+it. The key is never shown: a name is shown with its own case and letters.
+_Avoid_: Lowercase name, Case-insensitive name, Normalized name (the name as
+stored).
+
 **Choice menu**:
 A control that picks one of several values from a popover list, such as the
 results grid's Group and Sort, or the nav's Library menu, opened by the current

@@ -88,13 +88,14 @@ Sources: [ContentSigner](../altitude/src/altitude/core/service/ContentSigner.sca
 
 ## Repository creation, lookup, and context
 
-Sources: [RepositoryService](../altitude/src/altitude/core/service/RepositoryService.scala), [Repository](../altitude/src/altitude/core/models/Repository.scala) (the Library name rule), [NaturalOrder](../altitude/src/altitude/core/util/NaturalOrder.scala). Evidence: [RepositoryServiceTests](../altitude/test/src/altitude/core/integration/RepositoryServiceTests.scala), [SystemServiceTests](../altitude/test/src/altitude/core/integration/SystemServiceTests.scala), [NaturalOrderTests](../altitude/test/src/altitude/core/unit/NaturalOrderTests.scala).
+Sources: [RepositoryService](../altitude/src/altitude/core/service/RepositoryService.scala), [Repository](../altitude/src/altitude/core/models/Repository.scala) (the Library name rule), [NaturalOrder](../altitude/src/altitude/core/util/NaturalOrder.scala). Evidence: [RepositoryServiceTests](../altitude/test/src/altitude/core/integration/RepositoryServiceTests.scala), [SystemServiceTests](../altitude/test/src/altitude/core/integration/SystemServiceTests.scala), [NaturalOrderTests](../altitude/test/src/altitude/core/unit/NaturalOrderTests.scala), [NameKeyTests](../altitude/test/src/altitude/core/unit/NameKeyTests.scala).
 
 - ✅ Create and retrieve a repository with the supplied name, a creation timestamp, and no update timestamp.
 - ✅ System initialization creates an additional repository and user.
-- ✅ A Library's name is stored trimmed, each run of whitespace (a tab, a newline and a no-break space included) one space, and in NFC, and its name key is that name lowercased, non-ASCII capitals included, which SQLite's `lower()` would leave.
+- ✅ `NameKey.of` (unit): "Straße", "STRASSE" and "STRAẞE" share `strasse`, the Greek sigmas share one key, a full-width letter, a ligature, a combining accent, a circled digit, the ohm and kelvin signs and a title-case digraph fold to their plain forms, and "Émile" and "Emile" keep different keys; the key of "I" is "i" under a Turkish default locale; folding a key again gives the same key for every code point; `NameKey.normalized` returns NFC and keeps a full-width letter.
+- ✅ A Library's name is stored trimmed, each run of whitespace (a tab, a newline and a no-break space included) one space, and in NFC, and its name key is that name in lower case, non-ASCII capitals included, which SQLite's `lower()` would leave.
 - ✅ An empty, whitespace-only, one-character (one once composed), 81-character name, one with a control character between its words or at its end, one with an invisible format character (a zero-width space, a right-to-left override, an isolate pair, a byte order mark, a soft hyphen) and one with an unpaired surrogate, high or low, fails with a `ValidationException` naming the field and adds nothing; a name typed longer than 80 characters that is 80 once its whitespace is collapsed is accepted, and so are an emoji sequence joined by ZERO WIDTH JOINER and a Persian word holding ZERO WIDTH NON-JOINER.
-- ✅ A name that differs from a held one only in case, spacing or Unicode composition is a `DuplicateException` naming the normalized name, for the same owner and for another; the instance keeps one Library of that name.
+- ✅ A name that differs from a held one only in case, spacing or Unicode composition is a `DuplicateException` naming the normalized name, for the same owner and for another; the instance keeps one Library of that name. So is one that differs only by case fold ("WEISS" for "Weiß") or compatibility form (a full-width letter).
 - ✅ Two transactions adding one name at once, in other capitals, leave one Library: the second fails with a `DuplicateException` once the first commits (on PostgreSQL both insert before either commits, so `repository_01` decides it).
 - ✅ `getOwnedBy` lists the account's Libraries alone, case-insensitively and naturally ("alpha", "Client 2", "client 10", "Client 100"); `NaturalOrder` compares digit runs of any length by value, puts fewer leading zeros first, keeps names equal but for case in a fixed order, and sorts an accented letter beside its base letter, the unaccented name first ("Eclair", "éclair", "emile", "Émile", "Öland", "Oz", "Zoo"); over names mixing numbers, punctuation, accents, other scripts, superscript and Arabic-Indic digits, it is antisymmetric, zero only for equal names, and transitive.
 - ✅ `landingRepositoryOf` is the last active Library while the user owns it; with none, one that names no Library, or another account's, it is the first owned by name, which is recorded; a user who owns none has no landing Library and nothing is recorded.
@@ -197,13 +198,14 @@ Sources: [FolderService](../altitude/src/altitude/core/service/FolderService.sca
 - ✅ Traverse immediate children, descendants, and ancestors; exclude the root from its own children and return expected child counts/order.
 - ✅ Move folders between parents or to root; reject self/descendant moves, sibling-name conflicts including casing, and nonexistent destinations.
 - ✅ Rename folders, change casing, and reject duplicate names or root renaming.
+- ✅ Adding a sibling, or renaming a folder, to a name that differs from a sibling's only by case fold ("STRASSE" for "Straße"), canonical form (a combining accent) or compatibility form (a full-width letter) is a `DuplicateException`, while each of those names is free under another parent and a folder can take another form of its own name; added and renamed names are stored in NFC, a full-width letter kept; a name added under a Turkish default locale collides with the same name added under the root locale.
 - ✅ Recycle a subtree; reject deleting root or an unknown folder.
 - ✅ Assemble a tree with sorted children, recursive asset counts, and empty-folder zeroes; omit recycled folders, triaged assets, and unfinished imports from counts.
 - ✅ Counts follow asset/folder moves, recycling/restoration, subtree deletion, and repository context; marking an already recycled asset for purge leaves folder counts unchanged.
 - ✅ HTTP tree serialization carries recursive counts, and blank add/rename submissions render validation errors (indirect service coverage).
 - [ ] Reject moving the root folder, with its parent/tree unchanged. Root rename/delete coverage does not cover the separate move guard. [MEDIUM]
 - [ ] Exercise creation/moves into recycled parents and define the behavior; ensure an accepted operation cannot make live assets disappear from the visible tree. [MEDIUM]
-- [ ] Verify adding duplicate sibling names fails while the same name under another parent is allowed; test invalid parent IDs at creation. [MEDIUM]
+- [ ] Test invalid parent IDs at creation. [MEDIUM]
 - [ ] Assert subtree moves preserve every descendant link and asset assignment after both success and name-conflict failure. Existing move tests emphasize child/count changes. [MEDIUM]
 - [ ] Assert exact ancestor order, since restoration depends on top-down traversal; existing hierarchy assertions primarily check membership. [MEDIUM]
 - [ ] Cover a missing root, orphaned descendants, and a deeply nested tree; define failure behavior rather than returning misleading counts. [EDGE]
@@ -213,7 +215,8 @@ Sources: [FolderService](../altitude/src/altitude/core/service/FolderService.sca
 
 Sources: [AlbumService](../altitude/src/altitude/core/service/AlbumService.scala). Evidence: [AlbumServiceTests](../altitude/test/src/altitude/core/integration/AlbumServiceTests.scala), [AlbumControllerTests](../altitude/test/src/altitude/core/controller/AlbumControllerTests.scala), [AlbumActionControllerTests](../altitude/test/src/altitude/core/controller/AlbumActionControllerTests.scala).
 
-- ✅ Trim names, reject blank names, enforce case-insensitive uniqueness per repository, and permit casing-only renames.
+- ✅ Trim names, reject blank names, enforce uniqueness per repository under the name key, and permit casing-only renames: adding or renaming to a name that differs from a held one only by case fold ("STRASSE" for "Straße"), canonical form (a combining accent) or compatibility form (a full-width letter) is a `DuplicateException`, and an album can take another form of its own name.
+- ✅ Added and renamed album names are stored in NFC, a full-width letter kept; a name added under a Turkish default locale collides with the same name added under the root locale.
 - ✅ List albums by name ignoring case with empty/nonempty counts; create identically named albums in different repositories without listing/count leakage.
 - ✅ Add membership idempotently, return insertion counts, and allow an asset in multiple albums.
 - ✅ An asset's albums are read by name ignoring case, and an asset in none has none.
@@ -234,7 +237,8 @@ Sources: [AlbumService](../altitude/src/altitude/core/service/AlbumService.scala
 
 Sources: [LocationService](../altitude/src/altitude/core/service/LocationService.scala), [Location](../altitude/src/altitude/core/models/Location.scala). Evidence: [LocationServiceTests](../altitude/test/src/altitude/core/integration/LocationServiceTests.scala), [LocationControllerTests](../altitude/test/src/altitude/core/controller/LocationControllerTests.scala), [LocationActionControllerTests](../altitude/test/src/altitude/core/controller/LocationActionControllerTests.scala).
 
-- ✅ Trim names, reject blank names for both kinds, enforce one case-insensitive name pool per repository across categories and Locations on add and rename, and permit casing-only renames.
+- ✅ Trim names, reject blank names for both kinds, enforce one name pool per repository under the name key across categories and Locations on add and rename, and permit casing-only renames: a name that differs from a held one only by case fold ("STRASSE" for "Straße"), canonical form (a combining accent) or compatibility form (a full-width letter) is a `DuplicateException` for either kind, and a row can take another form of its own name.
+- ✅ Added and renamed Location and category names are stored in NFC, a full-width letter kept; a name added under a Turkish default locale collides, as a Location or a category, with the same name added under the root locale.
 - ✅ Reject a pin out of range (including NaN); store the edges of the range; the model refuses a pinless Location, a pinned category and a nested category.
 - ✅ Add a Location under a category only: a Location as the category is an `IllegalOperationException`, an unknown category is `NotFoundException`; `getAll` fills `categoryName` for a Location under a category and leaves it empty for a top-level one.
 - ✅ Move a Location between categories and back to the top level; refuse moving a category, moving under a Location or under itself; unknown IDs on either side are `NotFoundException`.
@@ -340,16 +344,17 @@ Sources: [StatsService](../altitude/src/altitude/core/service/StatsService.scala
 
 Sources: [UserMetadataService](../altitude/src/altitude/core/service/UserMetadataService.scala). Evidence: [UserMetadataServiceTests](../altitude/test/src/altitude/core/integration/UserMetadataServiceTests.scala), [SearchServiceTests](../altitude/test/src/altitude/core/integration/SearchServiceTests.scala).
 
-- ✅ Add/retrieve/delete a metadata field; reject an exact duplicate field name.
+- ✅ Add/retrieve/delete a metadata field; reject an exact duplicate field name, and one that differs from a held one only by case fold ("STRASSE" for "Straße"), canonical form (a combining accent) or compatibility form (a full-width letter), whatever its type. A field name is stored in NFC, a full-width letter kept, and a name added under a Turkish default locale collides with the same name added under the root locale.
 - ✅ Setting metadata on an unknown asset, reading it, and deleting a field by an unknown ID are `NotFoundException`, the existing field untouched; the same for another repository's asset and field ([RepositoryIsolationTests](../altitude/test/src/altitude/core/integration/RepositoryIsolationTests.scala)).
 - ✅ Fields are shared by users in the same repository; reject supplied metadata field IDs that are not configured there.
 - ✅ Store keyword/number fields, omit empty value sets, merge partial updates, and delete fields whose supplied value set becomes empty.
 - ✅ Reject nonnumeric input, invalid Boolean strings, and conflicting Boolean values; accept numbers with leading/trailing dots and leading zeros and store them as given, dropping a blank one; accept `TRUE`/`FALSE` in any letter case and `1`/`0`, stored as given, with letter-case variants of one Boolean collapsing into one value.
 - ✅ Reject blank keyword/text additions and blank updates; replace Boolean values, leaving only the last one stored.
-- ✅ Reject adding a keyword value that differs from an existing one only in letter case, with five values already in the field.
+- ✅ Reject adding a keyword value that differs from an existing one only in letter case, with five values already in the field, or only by case fold, canonical form or compatibility form (a validation error, the field keeping its values), including one added under a Turkish default locale.
+- ✅ A keyword and a TEXT value are stored in NFC and keep a full-width letter.
 - ✅ Generate value IDs, preserve existing IDs when adding another field, and update values by ID including casing-only and unchanged updates.
 - ✅ Delete individual values; verify normal keyword/number edits feed search indexing.
-- [ ] Verify case-insensitive field-name collisions and independent same-name fields in two repositories. The current all-fields test switches users, not repositories. [MEDIUM]
+- [ ] Verify independent same-name fields in two repositories. The current all-fields test switches users, not repositories. [MEDIUM]
 - [ ] Verify deleting a field already used by assets cleans or safely handles stored metadata and search entries; call `toJson` afterward. The deletion fixture uses an unused field. [MEDIUM]
 - [ ] Assert keyword whitespace compaction, text newline preservation, trimming, and duplicates that become equal after cleaning; reject edits to another existing value. [MEDIUM]
 - [ ] Define/test missing asset IDs, missing value IDs, and a value ID belonging to a different asset for update/delete; assert unrelated data survives. [MEDIUM]
@@ -364,7 +369,7 @@ Sources: [UserMetadataService](../altitude/src/altitude/core/service/UserMetadat
 
 - ✅ Updating a keyword value makes the new value searchable; deleting a value removes the exercised text match.
 - ✅ Keyword/number additions participate in combined metadata filters.
-- [ ] Verify `toJson` includes configured empty fields, sorts names case-insensitively, preserves value IDs, omits internal timestamps/lowercase names, and honors a supplied field lookup. No direct assertions cover this transformer. [MINOR]
+- [ ] Verify `toJson` includes configured empty fields, sorts names case-insensitively, preserves value IDs, omits internal timestamps/name keys, and honors a supplied field lookup. No direct assertions cover this transformer. [MINOR]
 - [ ] After Boolean replacement, require the new Boolean filter to match and the old one not to match; current tests check the stored value only. [MEDIUM]
 - [ ] After keyword/number update or deletion, verify both the old text term and old faceted value disappear and unrelated terms remain. [MEDIUM]
 - ✅ A TEXT value added through `addMetadataValue` is found by the next search and has no metadata parameter; an imported or reindexed asset's TEXT and DATETIME values have none either and are found by their words, while its keyword, number and Boolean values have one row each, after a reindex too, and match their filters.
@@ -377,6 +382,7 @@ Sources: [UserMetadataService](../altitude/src/altitude/core/service/UserMetadat
 Sources: [SearchService](../altitude/src/altitude/core/service/SearchService.scala), [LibraryService](../altitude/src/altitude/core/service/LibraryService.scala). Evidence: [SearchServiceTests](../altitude/test/src/altitude/core/integration/SearchServiceTests.scala), [LibraryServiceTests](../altitude/test/src/altitude/core/integration/LibraryServiceTests.scala), [AlbumServiceTests](../altitude/test/src/altitude/core/integration/AlbumServiceTests.scala), [SearchGroupingTests](../altitude/test/src/altitude/core/integration/SearchGroupingTests.scala), [SearchSqlTests](../altitude/test/src/altitude/core/unit/SearchSqlTests.scala), [SearchQueryModelTests](../altitude/test/src/altitude/core/unit/SearchQueryModelTests.scala).
 
 - ✅ Search keyword terms case-insensitively; apply keyword, number, and Boolean filters together; return no match for the exercised wrong-type filter.
+- ✅ A keyword filter finds its value typed in another case fold ("STRASSE" for "Straße"), canonical form or compatibility form, and finds no other asset, on both engines.
 - ✅ Filter by Location (`locationIds`) on the flat search, a grouped search and the bare count; recycling drops the asset from the Location's results and counts.
 - ✅ Filter by bounding box: an asset's own point, its Locations' pins when it has none (never the pin when it has a point), a box across the antimeridian versus the same edges the other way round, the world box; `BoundingBox.parse` arity, ranges and NaN.
 - ✅ Unit tests check the Location and bounding-box filters are bound semi-joins, that `count` renders one `COUNT` over the matching relation with no ordering or page, and that `cappedCount` stops one past its cap.
@@ -484,7 +490,8 @@ Sources: [PersonService](../altitude/src/altitude/core/service/PersonService.sca
 - ✅ Merge people and merge chains, transfer face ownership, zero source counts, preserve/inherit the tested names, and allow reuse of a merged source's name.
 - ✅ A named destination with no cover takes the merged source's cover, though the source has a better Face, and, when that cover is on an asset marked for purging, their best Face on an asset not marked for purging; the merge answers the cover stored (both engines).
 - ✅ Two live people cannot share a name on either engine, whatever its case (a non-ASCII letter's too) or Unicode form, and a merged-away or bad-match person does not hold its name; a person merged away after taking the cover face of one merged into them leaves two merged-away people with one cover face; listing the live people reads the partial `person_03`.
-- ✅ On both engines: an `Unknown N` name, in any case and spacing, is refused and leaves the name as it was, while "Unknown Soldier" saves; a person renamed to its own name in another case takes the new name and key; adding a named person stores the NFC name and its name key; the name key folds alike whatever the JVM's default locale.
+- ✅ A name in another case fold of a live person's ("WEISS" for "Weiß", "σοφοσ" for "σοφος") is refused to a rename, the renamed person keeping their name; looking the name up finds the holder, and a Face moved to it joins them rather than creating a second person.
+- ✅ On both engines: an `Unknown N` name, in any case and spacing, or with a full-width letter or circled digits, is refused and leaves the name as it was, while "Unknown Soldier" saves; a person renamed to its own name in another case takes the new name and key; adding a named person stores the NFC name and its name key; the name key folds alike whatever the JVM's default locale.
 - ✅ A merge decides the name from the stored rows, not the models passed in, stale on either side: an unnamed destination taking a named source's name has the `name`, the name key and `is_named` on its row, is Matched below the face threshold and is found by a Search for the name; a named destination keeps its name, key and flag.
 - ✅ A stale merge of a merged-away or bad-match source into an unnamed destination raises no error and leaves the destination unnamed, even when another live person holds the name since. Two concurrent merges of one source (`contend`): the second waits for the first's row lock, and its destination stays unnamed.
 - ✅ `getLiveByNameKey` finds the live holder of a name, hidden or not, across case and Unicode form, and never a merged-away or bad-match person; its statement (`PersonDao.liveByNameKey`) reads `person_01` on both engines (`SearchPlans`).
