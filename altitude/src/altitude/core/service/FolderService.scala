@@ -30,8 +30,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
 
   def getAll: List[Folder] =
     txManager.asReadOnly {
-      val q: Query = new Query().withRepository()
-      dao.query(q).records
+      dao.query(new Query()).records
     }
 
   /**

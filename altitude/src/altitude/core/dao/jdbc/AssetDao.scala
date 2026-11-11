@@ -116,13 +116,13 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
     )
 
   override def queryNotRecycled(q: Query): QueryResult[Asset] =
-    queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> false).withRepository())
+    queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> false))
 
   override def queryRecycled(q: Query): QueryResult[Asset] =
-    queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> true).withRepository())
+    queryRecords(q.add(FieldConst.Asset.IS_RECYCLED -> true))
 
   override def queryAll(q: Query): QueryResult[Asset] =
-    queryRecords(q.withRepository())
+    queryRecords(q)
 
   override def getUserMetadata(assetId: String): Option[UserMetadata] =
     val sql = s"""

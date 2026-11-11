@@ -3,11 +3,9 @@ package altitude.core.service
 import altitude.core.Altitude
 import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
-import altitude.core.NotFoundException
 import altitude.core.dao.LocationDao
 import altitude.core.models.Location
 import altitude.core.models.LocationKind
-import altitude.core.util.Query
 
 /**
  * Categories and Locations, one table and one name pool per repository (see [[Location]]). Like albums, nothing here touches an
@@ -36,10 +34,6 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       logger.debug(s"Adding location category [$name]")
       add(Location(name = name.trim, kind = LocationKind.Category))
     }
-
-  /** Scoped to the context repository: another repository's row is not found */
-  override def getById(id: String): Location =
-    getOneByQuery(new Query().add(FieldConst.ID -> id).withRepository())
 
   def getAll: List[Location] =
     txManager.asReadOnly {
@@ -79,9 +73,7 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
         logger.debug(s"Deleting location category [${location.name}], moving $moved location(s) to the top level")
       else logger.debug(s"Deleting location [${location.name}]")
 
-      val deleted = super.deleteById(id)
-      if deleted == 0 then throw NotFoundException(s"Location $id not found")
-      deleted
+      super.deleteById(id)
     }
 
   def addAssets(locationId: String, assetIds: Set[String]): Int =

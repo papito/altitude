@@ -16,6 +16,9 @@ abstract class SettingDao(override val config: Config) extends BaseDao[Setting] 
 
   override val tableName = "setting"
 
+  // The table has no repository_id
+  final override protected val repositoryScoped = false
+
   final override type Row[T[_]] = SettingRow[T]
   final override protected def table: Table[Row] = SettingRow
 

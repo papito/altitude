@@ -16,6 +16,9 @@ abstract class SystemMetadataDao(override val config: Config)
 
   override val tableName = "system"
 
+  // The table has no repository_id
+  final override protected val repositoryScoped = false
+
   final override type Row[T[_]] = SystemRow[T]
   final override protected def table: Table[Row] = SystemRow
 
@@ -58,7 +61,7 @@ abstract class SystemMetadataDao(override val config: Config)
     logger.trace(s"UPDATE SQL: $sql, signing key")
     runner.update(RequestContext.getConn, sql, key, altitude.core.dao.SystemMetadataDao.SYSTEM_RECORD_ID) == 1
 
-  // overriding the base method since there is no repository relation in this model
+  // The one row's ID is an integer, bound as one
   override def getById(id: String): SystemMetadata =
     val sql: String = """
       SELECT *

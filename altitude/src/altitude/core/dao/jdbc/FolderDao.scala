@@ -38,6 +38,8 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
     /**
      * The wrinkle here is that we need to return the number of children for the folder, but if the folder is a root folder, we
      * need to subtract 1 from the count, because the root folder is its own parent, introducing a one-off error.
+     *
+     * Hand-written, so it carries the repository itself: another repository's folder is not found, as with any scoped read.
      */
     val sql = """
       SELECT f.*, (
@@ -56,9 +58,10 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
       ) AS num_of_children
       FROM folder f
       WHERE f.id = ?
+        AND f.repository_id = ?
    """
 
-    getOneBySql(sql, List(nativeBool(false), nativeBool(false), id))
+    getOneBySql(sql, List(nativeBool(false), nativeBool(false), id, RequestContext.getRepository.persistedId))
 
   override def add(folder: Folder): Folder =
     val id = folder.id match

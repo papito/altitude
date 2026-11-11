@@ -67,6 +67,22 @@ abstract class BaseDao[Model <: BaseModel]:
 
   val tableName: String
 
+  /**
+   * Whether the table holds rows of one repository each (`repository_id`): then every generic read and write here ([[matching]],
+   * [[updateByQuery]], [[deleteByQuery]], [[increment]] and the by-ID methods built on them) is limited to the context repository
+   * and throws when there is none, so another repository's row is out of reach just as a row that does not exist. Only the DAOs
+   * of the tables with no `repository_id` opt out. A hand-written statement on a scoped table carries `repository_id = ?` itself.
+   */
+  protected val repositoryScoped: Boolean = true
+
+  /** The query limited to the context repository, for a scoped DAO; as given otherwise */
+  private def scoped(q: Query): Query =
+    if repositoryScoped then q.add(FieldConst.REPO_ID -> RequestContext.getRepository.persistedId) else q
+
+  /** A write by a query with no parameters would change every row (every row of the repository, for a scoped DAO) */
+  private def requireParams(q: Query, operation: String): Unit =
+    if q.params.isEmpty then throw IllegalArgumentException(s"Cannot $operation all of '$tableName' with an empty query")
+
   /** The one remaining hand-written `SELECT` that names its columns is `RepositoryDao.getAll`; everywhere else [[table]] does */
   protected def columnsForSelect: List[String] = List("*")
 
@@ -219,8 +235,10 @@ abstract class BaseDao[Model <: BaseModel]:
 
   def deleteByQuery(q: Query): Int =
     import dialect.*
+    requireParams(q, "delete")
 
-    val numDeleted = Db.write(dialect)(_.run(table.delete(row => DynamicFilter(table, writeColumns(row), q, dialect))))
+    val filter = scoped(q)
+    val numDeleted = Db.write(dialect)(_.run(table.delete(row => DynamicFilter(table, writeColumns(row), filter, dialect))))
     logger.trace(s"Deleted records: $numDeleted")
     numDeleted
 
@@ -311,12 +329,14 @@ abstract class BaseDao[Model <: BaseModel]:
 
   def updateByQuery(q: Query, data: Map[String, Any]): Int =
     import dialect.*
+    requireParams(q, "update")
 
     val assignments = data.toSeq.map {
       (name, value) => (row: Row[Column]) => DynamicAssignments.one(table, writeColumns(row), name, value, dialect)
     }
 
-    val update = table.update(row => DynamicFilter(table, writeColumns(row), q, dialect)).set(assignments*)
+    val filter = scoped(q)
+    val update = table.update(row => DynamicFilter(table, writeColumns(row), filter, dialect)).set(assignments*)
     val numUpdated = Db.write(dialect)(_.run(update))
     logger.trace("Updated records: " + numUpdated)
     numUpdated
@@ -340,21 +360,22 @@ abstract class BaseDao[Model <: BaseModel]:
     if csv == null || csv.isEmpty then return List()
     csv.split(",").map(_.asInstanceOf[T]).toList
 
-  def increment(id: String, field: String, count: Int = 1): Unit =
-    BaseDao.incrWriteQueryCount()
+  /** Adds `count` to a numeric column of the row, returning how many rows it changed: 0 for none, as a scoped DAO's foreign row */
+  def increment(id: String, field: String, count: Int = 1): Int =
+    val repositoryClause = if repositoryScoped then s" AND ${FieldConst.REPO_ID} = ?" else ""
     val sql = s"""
       UPDATE $tableName
          SET $field = $field + $count
-       WHERE id = ?
+       WHERE id = ?$repositoryClause
       """
-    logger.trace(s"INCR SQL: $sql, $id")
-    val runner = queryRunner
-    runner.update(RequestContext.getConn, sql, id)
+    val values = if repositoryScoped then List(id, RequestContext.getRepository.persistedId) else List(id)
+    updateByBySql(sql, values)
 
-  /** Every row of this table the query selects, as a typed relation */
+  /** Every row of this table the query selects, of the context repository for a scoped DAO, as a typed relation */
   private def matching(q: Query) =
     import dialect.*
-    table.select.filter(row => DynamicFilter(table, selectColumns(row), q, dialect))
+    val filter = scoped(q)
+    table.select.filter(row => DynamicFilter(table, selectColumns(row), filter, dialect))
 
   private def column(row: Row[Expr], name: String): Expr[?] =
     Columns.required(selectColumns(row), table, name)

@@ -12,6 +12,9 @@ abstract class RepositoryDao(override val config: Config) extends BaseDao[Reposi
 
   final override val tableName = "repository"
 
+  // The table has no repository_id
+  final override protected val repositoryScoped = false
+
   final override type Row[T[_]] = RepositoryRow[T]
   final override protected def table: Table[Row] = RepositoryRow
 

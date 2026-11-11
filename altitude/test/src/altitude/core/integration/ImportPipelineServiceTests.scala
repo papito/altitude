@@ -463,6 +463,8 @@ import altitude.core.util.Query
     val repository = testContext.repository
     val brokenRepository = testContext.persistRepository()
     breakFileStore(brokenRepository)
+    // Adding a repository makes it the context one; the photo is read back from the test's own
+    switchContextRepo(repository)
 
     val unstorable = testContext.makeAssetWithData(Some(testContext.makeAsset(repository = Some(brokenRepository))))
     val photo = testContext.makeAssetWithData(Some(testContext.makeAsset(repository = Some(repository))))

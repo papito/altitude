@@ -2,10 +2,8 @@ package altitude.core.service
 
 import altitude.core.Altitude
 import altitude.core.FieldConst
-import altitude.core.NotFoundException
 import altitude.core.dao.AlbumDao
 import altitude.core.models.Album
-import altitude.core.util.Query
 
 /**
  * Albums are flat, repository-scoped lists of pointers to assets. Nothing here touches an asset: adding to, removing from, or
@@ -20,10 +18,6 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
       logger.debug(s"Adding album [$name]")
       add(Album(name = name.trim))
     }
-
-  /** Scoped to the context repository: another repository's album is not found, so it is neither read, renamed nor added to */
-  override def getById(id: String): Album =
-    getOneByQuery(new Query().add(FieldConst.ID -> id).withRepository())
 
   def getAll: List[Album] =
     txManager.asReadOnly {
@@ -44,9 +38,7 @@ class AlbumService(val app: Altitude) extends BaseService[Album]:
   override def deleteById(id: String): Int =
     txManager.withTransaction {
       logger.debug(s"Deleting album [$id]")
-      val deleted = super.deleteById(id)
-      if deleted == 0 then throw NotFoundException(s"Album $id not found")
-      deleted
+      super.deleteById(id)
     }
 
   def addAssets(albumId: String, assetIds: Set[String]): Int =

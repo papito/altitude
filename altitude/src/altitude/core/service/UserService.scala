@@ -7,8 +7,6 @@ import altitude.core._
 import altitude.core.dao.UserDao
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager
-import altitude.core.util.Query
-import altitude.core.util.QueryResult
 import altitude.core.util.Util
 import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
@@ -16,15 +14,6 @@ class UserService(val app: Altitude) extends BaseService[User]:
   protected val dao: UserDao = app.DAO.user
 
   override protected val txManager: TransactionManager = app.txManager
-
-  /**
-   * The User model is a model that does not have repository_id. Other models are scoped by it as no operations are cross-repo
-   * (normally).
-   */
-  override def query(query: Query): QueryResult[User] =
-    txManager.asReadOnly {
-      dao.query(query)
-    }
 
   def switchContextToUser(user: User): Unit =
     RequestContext.account.value = Some(user)

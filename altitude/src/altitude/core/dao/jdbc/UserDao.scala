@@ -18,6 +18,9 @@ import altitude.core.models.User
 abstract class UserDao(override val config: Config) extends BaseDao[User] with altitude.core.dao.UserDao:
   final override val tableName = "account"
 
+  // The table has no repository_id
+  final override protected val repositoryScoped = false
+
   final override type Row[T[_]] = AccountRow[T]
   final override protected def table: Table[Row] = AccountRow
 

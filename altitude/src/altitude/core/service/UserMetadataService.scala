@@ -22,11 +22,7 @@ class UserMetadataService(val app: Altitude):
 
   def addField(metadataField: UserMetadataField): UserMetadataField =
     txManager.withTransaction {
-      val existing = metadataFieldDao.query(
-        new Query(
-          params = Map(
-            FieldConst.MetadataField.NAME_LC -> metadataField.nameLowercase
-          )).withRepository())
+      val existing = metadataFieldDao.query(new Query().add(FieldConst.MetadataField.NAME_LC -> metadataField.nameLowercase))
 
       if existing.nonEmpty then
         logger.debug(s"Duplicate found for field [${metadataField.name}]")
@@ -39,8 +35,7 @@ class UserMetadataService(val app: Altitude):
   /** Returns a lookup map (by ID) of all configured fields in this repository */
   def getAllFields: Map[String, UserMetadataField] =
     txManager.asReadOnly {
-      val q: Query = new Query().withRepository()
-      val allFields = metadataFieldDao.query(q).records
+      val allFields = metadataFieldDao.query(new Query()).records
 
       allFields.map(metadataField => metadataField.persistedId -> metadataField).toMap
     }

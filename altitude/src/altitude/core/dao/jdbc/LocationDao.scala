@@ -169,5 +169,5 @@ abstract class LocationDao(override val config: Config) extends BaseDao[Location
       .toSet
 
   override def moveChildrenToRoot(categoryId: String): Int =
-    val children = new Query().add(FieldConst.Location.CATEGORY_ID -> categoryId).withRepository()
+    val children = new Query().add(FieldConst.Location.CATEGORY_ID -> categoryId)
     updateByQuery(children, Map(FieldConst.Location.CATEGORY_ID -> None))

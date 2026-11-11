@@ -15,23 +15,12 @@ import altitude.core.models.Stats
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.NaturalOrder
-import altitude.core.util.Query
-import altitude.core.util.QueryResult
 import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
 class RepositoryService(val app: Altitude) extends BaseService[Repository]:
   protected val dao: RepositoryDao = app.DAO.repository
 
   override protected val txManager: TransactionManager = app.txManager
-
-  /**
-   * The Repository model is a model that does not have repository_id. Other models are scoped by it as no operations are
-   * cross-repo (normally).
-   */
-  override def query(query: Query): QueryResult[Repository] =
-    txManager.asReadOnly {
-      dao.query(query)
-    }
 
   /**
    * Adds a Library owned by `owner`, with its root folder and stats, under its name as the Library name rule normalizes it
