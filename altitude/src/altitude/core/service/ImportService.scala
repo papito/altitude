@@ -13,6 +13,7 @@ import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
 
 import altitude.core.Altitude
+import altitude.core.Api
 import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.ForbiddenException
@@ -41,6 +42,7 @@ import altitude.core.pipeline.PipelineUtils
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.QueryResult
 import altitude.core.util.RelPath
+import altitude.core.util.Util
 
 /**
  * The Import record: every Import of a Library and every one of its Import files, with what became of each. An Import is opened,
@@ -60,6 +62,15 @@ object ImportService:
   private val INTERRUPTED = "Interrupted by a restart"
   // Why a file the page could not send is failed
   private val UPLOAD_FAILED = "Upload failed"
+  // How much of a file's path a log line holds
+  private val MAX_LOGGED_PATH_LENGTH = 512
+
+  // An Import's name and a file's path are what a client sent: in a log line their control characters are escaped, so a line
+  // break in one cannot start a line of its own, and the path is cut
+  private def logged(name: Option[String]): String =
+    name.fold("")(n => s" \"${Util.printable(n, Api.Constraints.MAX_IMPORT_NAME_LENGTH)}\"")
+
+  private def logged(relPath: String): String = Util.printable(relPath, MAX_LOGGED_PATH_LENGTH)
 
 class ImportService(val app: Altitude):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -103,7 +114,7 @@ class ImportService(val app: Altitude):
           expectedFiles = expectedFiles
         ))
       logger.info(
-        s"Opened Import [${opened.persistedId}]: ${source.dbValue}${name.fold("")(n => s" \"$n\"")}. Repo: ${RequestContext.getRepository.persistedId}")
+        s"Opened Import [${opened.persistedId}]: ${source.dbValue}${ImportService.logged(name)}. Repo: ${RequestContext.getRepository.persistedId}")
       changed(opened.persistedId)
       opened
     }
@@ -203,7 +214,8 @@ class ImportService(val app: Altitude):
   private def addFailed(importId: String, relPath: String, sizeBytes: Long, reason: String): ImportFile =
     val file = addFile(importId, relPath, sizeBytes)
     settle(file.persistedId, ImportOutcome.Failed, reason = Some(reason))
-    logger.info(s"Import file [${file.persistedId}] \"$relPath\" of Import [$importId] is failed on arrival: $reason")
+    logger.info(
+      s"Import file [${file.persistedId}] \"${ImportService.logged(relPath)}\" of Import [$importId] is failed on arrival: $reason")
     file.copy(outcome = ImportOutcome.Failed, reason = Some(reason))
 
   private def complete(importId: String) = IllegalOperationException(s"Import [$importId] is complete and takes no more files")
@@ -260,7 +272,8 @@ class ImportService(val app: Altitude):
     catch
       case NonFatal(failure) =>
         val reason = PipelineUtils.dropReason(Some(failure))
-        val message = s"Import file [${file.persistedId}] \"$relPath\" of Import [$importId] failed before the pipeline: $reason"
+        val message = s"Import file [${file.persistedId}] \"${ImportService.logged(relPath)}\" of Import [$importId] failed " +
+          s"before the pipeline: $reason"
         failure match
           // The queue has logged its refusal
           case _: QueueRefusedException => logger.warn(message)
@@ -293,7 +306,7 @@ class ImportService(val app: Altitude):
         throw complete(importId)
 
       val file = fileDao.add(ImportFile(importId = importId, relPath = relPath, sizeBytes = sizeBytes))
-      logger.debug(s"Added Import file [${file.persistedId}] \"$relPath\" to Import [$importId]")
+      logger.debug(s"Added Import file [${file.persistedId}] \"${ImportService.logged(relPath)}\" to Import [$importId]")
       changed(importId)
       file
     }
@@ -315,9 +328,13 @@ class ImportService(val app: Altitude):
 
       if fileDao.settle(fileId, outcome, reason, assetId) == 1 then
         BaseService.requireFound(importDao.tableName, file.importId, importDao.fileSettled(file.importId, outcome)): Unit
-        logger.debug(s"Import file [$fileId] \"${file.relPath}\" of Import [${file.importId}] is ${outcome.dbValue}")
+        logger.debug(
+          s"Import file [$fileId] \"${ImportService.logged(file.relPath)}\" of Import [${file.importId}] is ${outcome.dbValue}")
         changed(file.importId)
-      else logger.warn(s"Import file [$fileId] \"${file.relPath}\" was settled already: left as it is, not ${outcome.dbValue}")
+      else
+        logger.warn(
+          s"Import file [$fileId] \"${ImportService.logged(file.relPath)}\" was settled already: left as it is, not " +
+            outcome.dbValue)
     }
 
   /**

@@ -1,6 +1,10 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.SQLException
@@ -13,6 +17,7 @@ import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
+import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters.*
 
@@ -40,6 +45,7 @@ import altitude.core.models.Permissions
 import altitude.core.models.Settings
 import altitude.core.models.Stats
 import altitude.core.service.ImportPipelineService
+import altitude.core.service.ImportService
 import altitude.core.util.Query
 
 /** The Import record: an Import and its Import files, their outcomes, the Import's counters and its closing */
@@ -1000,6 +1006,54 @@ import altitude.core.util.Query
 
       imports.requireTakes(toTriage.persistedId, "b.jpg")
       imports.addFailedFile(toTriage.persistedId, "b.jpg", sizeBytes = 10).outcome shouldBe ImportOutcome.Failed
+    }
+  }
+
+  test("An upload's name and paths are logged with their control characters escaped, so none starts a log line") {
+
+    /**
+     * Setup:
+     *
+     * The Import record's log captured at DEBUG. An upload opened under a name that holds a line break followed by what reads as
+     * a log line of its own, and three files of it whose paths hold a line break or a carriage return: one recorded as the page
+     * could not send it, then settled a second time; and one sent to an import queue that is shut down, which refuses it.
+     *
+     * Assertions:
+     *
+     * No line logged holds a control character. The lines that name the Import or a path, at INFO, WARN and DEBUG, hold the break
+     * as its escape: the Import's opening, a file added, failed on arrival, settled, settled already, and failed before the
+     * pipeline.
+     */
+    val logger = LoggerFactory.getLogger(classOf[ImportService]).asInstanceOf[Logger]
+    val capture = ListAppender[ILoggingEvent]()
+    // Test logging is off, so the level is raised for the test
+    val level = logger.getLevel
+    capture.start()
+    logger.addAppender(capture)
+    logger.setLevel(Level.DEBUG)
+    val refusing = ImportPipelineService(testApp)
+    refusing.shutdown()
+
+    try {
+      val opened = imports.openUpload(name = Some("Trip\n2026-11-12 WARN  Failed login attempt for [admin] from [10.0.0.5]"))
+      val unsent = imports.addFailedFile(opened.persistedId, "Day 1\r/a\n.jpg", sizeBytes = 10)
+      imports.settle(unsent.persistedId, ImportOutcome.Imported)
+      imports.upload(opened.persistedId, "b\n.jpg", stagedImage(), refusing).outcome shouldBe ImportOutcome.Failed
+
+      val lines = capture.list.asScala.map(_.getFormattedMessage).toList
+      lines.filter(_.exists(_.isControl)) shouldBe empty
+      List(
+        "Opened Import",
+        "Added Import file",
+        "is failed on arrival",
+        "is failed",
+        "was settled already",
+        "failed before the pipeline").foreach {
+        said => withClue(said)(lines.exists(line => line.contains(said) && line.contains("\\u000a")) shouldBe true)
+      }
+    } finally {
+      logger.detachAppender(capture)
+      logger.setLevel(level)
     }
   }
 
