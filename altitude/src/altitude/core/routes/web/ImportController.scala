@@ -61,7 +61,9 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
    * what was chosen, its name for a file chosen on its own. The file is staged, added to the Import and offered to the import
    * queue (`ImportService.upload`), the request waiting while the queue is full. Answers the Import file with its outcome:
    * pending, or failed with its reason when it was recorded and then could not be handed to the pipeline, which is no failure of
-   * the request, so the page does not send the file again.
+   * the request, so the page does not send the file again. A file of an Import whose destination folder is in the Trash is
+   * answered so too, recorded failed with that reason and neither staged nor offered to the queue
+   * (`ImportService.failForLostDestination`): the upload fails its remaining files, each in the record.
    *
    * A refused file is a 400 and is not recorded: a path with an ignored name, a ".." or an empty name, and an empty file. It is
    * refused before its body is read where the path says so. An Import that is not the Library's is a 404, one that is not an
@@ -73,8 +75,12 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
   def uploadFile(repoId: String, importId: String, relPath: String = "")(using request: cask.Request): cask.Response[String] =
     answeringUpload {
       imports.requireTakes(importId, relPath)
-      val staged = App.altitude.service.staging.stage(request.data)
-      fileResponse(imports.upload(importId, relPath, staged))
+
+      // A request that says its length, as a browser's does, is failed for a lost destination before its body is staged
+      val length = request.exchange.getRequestContentLength
+      val lost = if length > 0 then imports.failForLostDestination(importId, relPath, length) else None
+
+      fileResponse(lost.getOrElse(imports.upload(importId, relPath, App.altitude.service.staging.stage(request.data))))
     }
 
   /**

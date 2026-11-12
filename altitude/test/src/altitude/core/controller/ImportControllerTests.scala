@@ -420,6 +420,52 @@ object ImportControllerTests {
     }
   }
 
+  test("A file sent to an upload whose destination was recycled is answered as failed, and nothing of it is staged or imported") {
+
+    /**
+     * Setup:
+     *
+     * A User logged in with Import and Organize in a Library, and an Import opened over HTTP into the folder Sorted, which is
+     * then deleted, so it is in the Trash. Two images are sent to the Import.
+     *
+     * Assertions:
+     *
+     * Each file is answered 200 as a failed Import file, saying that the destination folder is in the Trash, so the page goes on
+     * with the next and sends neither again. The Import holds both, failed with that reason and pointing at no asset, and nothing
+     * pending: closing it closes it at once, since no file went to the import queue. The server's staging directory holds no file
+     * more than before.
+     */
+    val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import, Permission.Organize))
+    val sorted = testApp.service.folder.add("Sorted")
+    def stagedFiles: Int = Option(App.altitude.service.staging.dir.toFile.listFiles).fold(0)(_.length)
+
+    withServer(App) {
+      host =>
+        val importId = openedImport(host, repoId, ujson.Obj(Api.Field.Import.DEST_FOLDER_ID -> sorted.persistedId))
+        testApp.service.library.deleteFolderById(sorted.persistedId)
+        val stagedBefore = stagedFiles
+
+        val sent = List("Beach/sea.jpg", "sand.jpg").map(path => sendFile(host, repoId, importId, path, imageBytes()))
+
+        sent.map(_.statusCode) shouldBe List(200, 200)
+        sent
+          .map(response => ujson.read(response.text()))
+          .map(answer => (answer(Api.Field.Import.OUTCOME).str, answer(Api.Field.Import.REASON).str)) shouldBe List.fill(2)(
+          ("failed", Const.Msg.Err.DESTINATION_IN_TRASH))
+        stagedFiles shouldBe stagedBefore
+
+        val imports = testApp.service.imports
+        imports.files(importId).map(file => (file.relPath, file.outcome, file.reason, file.assetId)) shouldBe List(
+          ("Beach/sea.jpg", ImportOutcome.Failed, Some(Const.Msg.Err.DESTINATION_IN_TRASH), None),
+          ("sand.jpg", ImportOutcome.Failed, Some(Const.Msg.Err.DESTINATION_IN_TRASH), None)
+        )
+        closeImport(host, repoId, importId).statusCode shouldBe 200
+        val closed = imports.getById(importId)
+        (closed.pending, closed.failed) shouldBe (0, 2)
+        closed.closedAt should not be empty
+    }
+  }
+
   test("The upload routes refuse an ignored name, a path with \"..\" or an empty name, and an empty file") {
 
     /**

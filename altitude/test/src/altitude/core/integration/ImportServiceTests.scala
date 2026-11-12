@@ -36,6 +36,7 @@ import altitude.core.models.ImportSource
 import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.Settings
+import altitude.core.models.Stats
 import altitude.core.service.ImportPipelineService
 import altitude.core.util.Query
 
@@ -967,6 +968,58 @@ import altitude.core.util.Query
     imports.upload(upload.persistedId, "photo.jpg", stagedImage()).outcome shouldBe ImportOutcome.Pending
     imports.closeUpload(upload.persistedId)
     stored(upload).isComplete shouldBe true
+  }
+
+  test(
+    "A file sent to an upload whose destination is in the Trash is recorded failed at once, and is neither staged nor queued") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import into the folder Sorted. While Sorted is live, a file is announced to it by its path and size, before its
+     * content is read. Sorted is then deleted, which recycles it; a second file is announced the same way, and a third is
+     * uploaded, staged, through an import queue of the test's own that is shut down.
+     *
+     * Assertions:
+     *
+     * With the destination live nothing is recorded for the announced file: its content is to be staged and uploaded. Once the
+     * destination is in the Trash, the announced file is recorded failed at once, under its path and size, saying that the
+     * destination folder is in the Trash. The uploaded one is recorded failed with that reason too, not with the queue's refusal,
+     * so it was never offered to the queue, and its staged file is deleted. The Import counts two failed and none pending, and
+     * the repository holds no asset.
+     *
+     * Edge cases:
+     *
+     * An upload to Triage has no destination to lose. A path the uploads refuse is refused here too, and records nothing.
+     */
+    val sorted = testApp.service.folder.add("Sorted")
+    val opened = imports.openUpload(destFolderId = sorted.id)
+    val stopped = ImportPipelineService(testApp)
+    stopped.shutdown()
+
+    imports.failForLostDestination(opened.persistedId, "early.jpg", sizeBytes = 2048) shouldBe None
+    imports.files(opened.persistedId) shouldBe empty
+
+    testApp.service.library.deleteFolderById(sorted.persistedId)
+    val announced = imports.failForLostDestination(opened.persistedId, "Beach/sea.jpg", sizeBytes = 2048)
+    val staged = stagedImage()
+    val uploaded = imports.upload(opened.persistedId, "sand.jpg", staged, stopped)
+
+    val lost = Some(Const.Msg.Err.DESTINATION_IN_TRASH)
+    announced.map(file => (file.relPath, file.sizeBytes, file.outcome, file.reason)) shouldBe Some(
+      ("Beach/sea.jpg", 2048, ImportOutcome.Failed, lost))
+    (uploaded.outcome, uploaded.reason) shouldBe (ImportOutcome.Failed, lost)
+    Files.exists(staged) shouldBe false
+    imports.files(opened.persistedId).map(file => (file.relPath, file.outcome, file.reason, file.assetId)) shouldBe List(
+      ("Beach/sea.jpg", ImportOutcome.Failed, lost, None),
+      ("sand.jpg", ImportOutcome.Failed, lost, None))
+    counters(opened) shouldBe (0, 0, 0, 0, 2)
+    testApp.service.asset.getDanglingAssets shouldBe empty
+    testApp.service.stats.getStats.getStatValue(Stats.SORTED_ASSETS) shouldBe 0
+
+    imports.failForLostDestination(imports.openUpload().persistedId, "photo.jpg", sizeBytes = 10) shouldBe None
+    intercept[ValidationException](imports.failForLostDestination(opened.persistedId, ".hidden.jpg", sizeBytes = 10))
+    imports.files(opened.persistedId).size shouldBe 2
   }
 
   test("A file the page could not send is recorded failed") {

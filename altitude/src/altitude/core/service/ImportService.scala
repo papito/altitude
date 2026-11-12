@@ -110,13 +110,20 @@ class ImportService(val app: Altitude):
    */
   def destinationOf(importFileId: String): Option[Folder] =
     txManager.asReadOnly {
-      importDao.getById(fileDao.getById(importFileId).importId).destFolderId.map {
-        folderId =>
-          val folder = app.service.folder.getById(folderId)
-          if folder.isRecycled then throw ImportDestinationException(Const.Msg.Err.DESTINATION_IN_TRASH)
-          folder
-      }
+      val anImport = importDao.getById(fileDao.getById(importFileId).importId)
+      lostDestination(anImport).foreach(reason => throw ImportDestinationException(reason))
+      anImport.destFolderId.map(app.service.folder.getById)
     }
+
+  /**
+   * Why the files of the Import cannot be sorted any more, when its destination was recycled since it was opened; none for an
+   * Import whose destination is live, and for one to Triage. A folder is never deleted, only recycled, so there is no other way
+   * to lose one.
+   */
+  private def lostDestination(anImport: Import): Option[String] =
+    anImport.destFolderId
+      .filter(app.service.folder.getById(_).isRecycled)
+      .map(_ => Const.Msg.Err.DESTINATION_IN_TRASH)
 
   /**
    * The Import, when it is an upload the context account opened: the only Import the upload routes add a file to or close, so no
@@ -141,6 +148,27 @@ class ImportService(val app: Altitude):
       if ownUpload(importId).isComplete then throw complete(importId)
     }
 
+  /**
+   * Fails a file sent to an upload's Import whose destination is in the Trash, by its path and size alone, before its content is
+   * read: the file is added to the Import and failed with the reason its completion would fail with
+   * (`Const.Msg.Err.DESTINATION_IN_TRASH`), in one transaction, and returned, so every remaining file of such an upload is
+   * recorded and none is staged or run through the pipeline for nothing. None, recording nothing, for an Import whose destination
+   * is live or that has none: the file is then staged and uploaded ([[upload]], which fails it the same way should the
+   * destination be lost by then). The path and the Import are held to what [[upload]] holds them to.
+   */
+  def failForLostDestination(importId: String, relPath: String, sizeBytes: Long): Option[ImportFile] =
+    RelPath.segments(relPath): Unit
+    txManager.withTransaction {
+      lostDestination(ownUpload(importId)).map(addFailed(importId, relPath, sizeBytes, _))
+    }
+
+  /** Adds a file to the Import and fails it with the reason, in the caller's transaction; the file as failed */
+  private def addFailed(importId: String, relPath: String, sizeBytes: Long, reason: String): ImportFile =
+    val file = addFile(importId, relPath, sizeBytes)
+    settle(file.persistedId, ImportOutcome.Failed, reason = Some(reason))
+    logger.info(s"Import file [${file.persistedId}] \"$relPath\" of Import [$importId] is failed on arrival: $reason")
+    file.copy(outcome = ImportOutcome.Failed, reason = Some(reason))
+
   private def complete(importId: String) = IllegalOperationException(s"Import [$importId] is complete and takes no more files")
 
   /**
@@ -151,10 +179,13 @@ class ImportService(val app: Altitude):
    *
    * A file that is not added is not staged any longer either, and fails the call: a path the uploads refuse or an empty file
    * (`ValidationException`), an Import that is not the context account's own upload ([[ownUpload]]), and one that is not the
-   * repository's or that takes no more files, as [[addFile]] refuses them. Once the file is added, nothing else settles it until
-   * the pipeline has it, so a failure from there on is settled here: a file that cannot be described, or that the queue refuses
-   * (`QueueRefusedException`), is failed with that as its reason (`PipelineUtils.dropReason`), its staged file deleted, and
-   * returned as failed rather than thrown, the file having been delivered and recorded.
+   * repository's or that takes no more files, as [[addFile]] refuses them. A file of an Import whose destination is in the Trash
+   * is added and failed at once, saying so, its staged file deleted, and is never offered to the queue ([[lostDestination]]; the
+   * upload route asks [[failForLostDestination]] first, so such a file is usually not even staged). Once the file is added,
+   * nothing else settles it until the pipeline has it, so a failure from there on is settled here: a file that cannot be
+   * described, or that the queue refuses (`QueueRefusedException`), is failed with that as its reason
+   * (`PipelineUtils.dropReason`), its staged file deleted, and returned as failed rather than thrown, the file having been
+   * delivered and recorded.
    */
   def upload(
       importId: String,
@@ -167,14 +198,19 @@ class ImportService(val app: Altitude):
         val size = Files.size(staged)
         if size == 0 then throw ValidationException(Const.Msg.Err.EMPTY_FILE)
         val file = txManager.withTransaction {
-          ownUpload(importId): Unit
-          addFile(importId, relPath, size)
+          lostDestination(ownUpload(importId)) match
+            case Some(reason) => addFailed(importId, relPath, size, reason)
+            case None => addFile(importId, relPath, size)
         }
         (names, file)
       catch
         case NonFatal(refused) =>
           app.service.staging.discard(staged)
           throw refused
+
+    if file.outcome == ImportOutcome.Failed then
+      app.service.staging.discard(staged)
+      return file
 
     try
       val described = app.service.library
@@ -205,11 +241,7 @@ class ImportService(val app: Altitude):
     RelPath.segments(relPath): Unit
     txManager.withTransaction {
       ownUpload(importId): Unit
-      val file = addFile(importId, relPath, sizeBytes)
-      settle(file.persistedId, ImportOutcome.Failed, reason = Some(ImportService.UPLOAD_FAILED))
-      logger.warn(
-        s"Import file [${file.persistedId}] \"$relPath\" of Import [$importId] did not reach the server: recorded failed")
-      file.copy(outcome = ImportOutcome.Failed, reason = Some(ImportService.UPLOAD_FAILED))
+      addFailed(importId, relPath, sizeBytes, ImportService.UPLOAD_FAILED)
     }
 
   /**

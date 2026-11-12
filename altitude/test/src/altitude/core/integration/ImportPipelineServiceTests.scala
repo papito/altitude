@@ -1312,6 +1312,38 @@ import altitude.core.util.Query
     folderNames shouldBe Set("Clients")
   }
 
+  test("A file below a folder that cannot be created because its name is taken fails with that reason, and is no duplicate") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import whose destination is the repository's root folder, of one image under a folder named as the root itself
+     * is. No folder of that name is under the root to reuse (the root is its own parent, and is never its own child), and none
+     * can be added there: the root holds the name among the folders whose parent it is.
+     *
+     * Assertions:
+     *
+     * The file is dropped at its completion with the folder as the cause, and its Import file is failed, saying that a folder of
+     * the path cannot be created because its name is taken. It is not settled as a duplicate, which only a file whose content the
+     * Library already has is: the Import counts one failed and no duplicate. No asset is left.
+     */
+    val opened =
+      testApp.service.imports.open(ImportSource.Upload, destFolderId = Some(testContext.repository.rootFolderId))
+    val (photo, file) = asFileAt(opened, s"${FieldConst.Folder.Name.ROOT}/a.jpg")
+
+    val result = dropped(runPipeline((photo, PipelineContext(testContext.repository, Some(testContext.user)))))
+
+    result.cause.get shouldBe an[ImportDestinationException]
+    val failed = storedFile(file)
+    (failed.outcome, failed.reason, failed.assetId) shouldBe (
+      ImportOutcome.Failed,
+      Some(Const.Msg.Err.DESTINATION_FOLDER_NAME.format(Const.Msg.Err.FOLDER_NAME_TAKEN)),
+      None)
+    val counted = testApp.service.imports.getById(opened.persistedId)
+    (counted.failed, counted.duplicate) shouldBe (1, 0)
+    rowCount("asset") shouldBe 0
+  }
+
   /** `people/affleck.jpg` scaled to 640 by 893 on a white canvas `extraWidth` pixels wider, so frames of one face differ */
   private def portraitFrame(extraWidth: Int = 0): BufferedImage =
     val portrait = ImageIO.read(IntegrationTestUtil.getImportAsset("people/affleck.jpg").path.toFile)

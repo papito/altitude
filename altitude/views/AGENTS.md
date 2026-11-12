@@ -131,7 +131,9 @@ its styles are `static/css/htmx/search_panel.css`.
   `search_options_locations.scala.html` (`GET /htmx/search/r/:repoId/options/folders`, `/people`, `/locations`,
   each with the text typed so far as `q`) are the options of the three comboboxes: `li[role="option"]` elements
   alone, at most 50, an empty fragment when nothing matches. An option carries what its chip needs,
-  `data-option-id` and `data-option-label`, and has the ID `searchOption-<id>`. A folder's and a Location's option is
+  `data-option-id` and `data-option-label`, and no element ID: the combobox gives each option one of its listbox's own as it
+  places it (`<listbox ID>-<option ID>`, which `aria-activedescendant` names), so the comboboxes of one page, the panel's
+  and the Import page's destination fields, never share an ID. A folder's and a Location's option is
   `includes/search_path_option.scala.html`: `.name` (`data-option-name`), holding the names above its own in
   `.ancestors` (`Trips › 2024 › `, a Location's Category) and then its own. A Person's is their cover
   (`includes/search_person_cover`, loaded lazily: `img.cover`, or `.cover.no-cover`, `data-option-cover`), `.name`
@@ -2259,7 +2261,8 @@ is left out before anything is sent, a directory with everything in it, and so i
 One upload runs at a time (`js/import/upload-run.js`): the Import is opened (the root's `data-app-imports-url`), the
 files are sent one request each, three at a time, each with its relative path, and the Import is closed. A request that
 fails with no answer or a 5xx is sent again twice, after 1 s and 3 s; then the page has the server record the file as
-failed and goes on. A file the server answers as failed, or refuses with a 400, is not sent again; any other refusal
+failed and goes on. A file the server answers as failed (one it could not hand to the pipeline, and every file of an
+upload whose destination folder was recycled meanwhile), or refuses with a 400, is not sent again; any other refusal
 ends the upload. Cancel stops the sending and closes the Import, and so does leaving the page, by a beacon. While it
 runs, the section that started it shows a `<progress>` of the bytes sent, the files and bytes done ("3 of 8 files · 1.6
 of 3.3 MB", with the failed ones) and Cancel, and both sections take nothing: their buttons and options are disabled,

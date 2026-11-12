@@ -197,6 +197,8 @@ object Const:
       val DESTINATION_IN_TRASH = "The destination folder is in the Trash"
       // A file of an Import below a folder name the folder rule refuses, with the rule's own words
       val DESTINATION_FOLDER_NAME = "A folder of the path cannot be created: %s"
+      // That reason for a folder whose name another folder there holds by the time it is added
+      val FOLDER_NAME_TAKEN = "its name is taken"
       // An Admin's own account, which it cannot deactivate, delete or take the Admin type from
       val OWN_ACCOUNT = "You cannot deactivate, delete or demote your own account"
       val INVALID_CONTENT_TYPE = "Invalid content type"

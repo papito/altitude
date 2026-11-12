@@ -1066,4 +1066,36 @@ import altitude.core.models.Repository
     ensured.toArray.distinct.length shouldBe 1
     folders.getChildren(clients.persistedId).map(_.name) shouldBe List("Wedding")
   }
+
+  test("A folder renamed or moved into a name while a path through that name is ensured is the folder the path finds") {
+
+    /**
+     * Setup:
+     *
+     * A folder Clients holding the folder Draft, and a folder Portraits elsewhere. A transaction renames Draft to Party and is
+     * held open until a second one, which ensures the path Party under Clients, waits for it: for the name's advisory lock on
+     * PostgreSQL, for the write connection on SQLite. Then the same with a move of Portraits into Clients against the path
+     * Portraits.
+     *
+     * Assertions:
+     *
+     * Each ensured path is the folder that was renamed or moved into the name, and Clients holds those two folders alone. Without
+     * the rename and the move taking their turn with the path's creator, the second transaction, which read before the first
+     * committed, would add a folder of the name itself and fail on the unique index of a folder's name among its siblings.
+     */
+    val folders = testApp.service.folder
+    val clients = folders.add("Clients")
+    val draft = folders.add("Draft", clients.id)
+    val elsewhere = folders.add("Elsewhere")
+    val portraits = folders.add("Portraits", elsewhere.id)
+    val ensured = new java.util.concurrent.ConcurrentLinkedQueue[String]()
+
+    def ensure(name: String): Unit = ensured.add(folders.ensurePath(clients.persistedId, Seq(name)).persistedId): Unit
+
+    contend(first = folders.rename(draft.persistedId, "Party"): Unit, second = ensure("Party"))
+    contend(first = folders.move(portraits.persistedId, clients.persistedId): Unit, second = ensure("Portraits"))
+
+    ensured.toArray.toList shouldBe List(draft.persistedId, portraits.persistedId)
+    folders.getChildren(clients.persistedId).map(_.name) shouldBe List("Party", "Portraits")
+  }
 }

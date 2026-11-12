@@ -112,8 +112,9 @@ class LibraryService(val app: Altitude):
    * Sequence of its burst if it has one (`SequenceService.assign`, for which the earlier uploads of the burst are completed
    * candidates already). A file of an Import with a destination is sorted on arrival ([[sortInto]]): into the folder its path
    * names under the destination, which is where a folder is born, with the first asset that lands in or below it. A destination
-   * in the Trash, and a folder name the folder rule refuses, fail the completion with `ImportDestinationException`, which is a
-   * drop that creates nothing. An asset that never gets here is purged at startup, so it is never counted.
+   * in the Trash, a folder name the folder rule refuses and one that is taken by the time the folder is added fail the completion
+   * with `ImportDestinationException`, which is a drop that creates nothing and never a duplicate. An asset that never gets here
+   * is purged at startup, so it is never counted.
    */
   def completeImport(asset: Asset, origin: Option[ImportOrigin] = None): Asset =
     txManager.withTransaction {
@@ -137,14 +138,20 @@ class LibraryService(val app: Altitude):
     val folder =
       try app.service.folder.ensurePath(destination.persistedId, folderPath)
       catch
-        case refused: ValidationException =>
-          throw ImportDestinationException(altitude.core.Const.Msg.Err.DESTINATION_FOLDER_NAME.format(refused.message))
+        case refused: ValidationException => throw uncreatable(refused.message)
+        // A name another folder took there meanwhile, past the creators' turn-taking, or that the root holds. Never left a
+        // DuplicateException: that cause is a file whose content the Library has, and would settle the file as a duplicate
+        case _: DuplicateException => throw uncreatable(altitude.core.Const.Msg.Err.FOLDER_NAME_TAKEN)
 
     app.service.asset.updateById(
       asset.persistedId,
       Map(FieldConst.Asset.FOLDER_ID -> folder.persistedId, FieldConst.Asset.IS_TRIAGED -> false)): Unit
     logger.debug(s"Sorted asset [${asset.persistedId}] into folder [${folder.persistedId}]")
     asset.copy(folderId = folder.persistedId, isTriaged = false)
+
+  /** The failure of a completion whose folder cannot be created, for the reason given */
+  private def uncreatable(reason: String) =
+    ImportDestinationException(altitude.core.Const.Msg.Err.DESTINATION_FOLDER_NAME.format(reason))
 
   /**
    * Undoes what the import of an asset wrote, for an asset the pipeline dropped or an import a crash cut off. Nothing to undo for

@@ -21,7 +21,9 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
    * Adds the folder under `parentId`, or under the repository root when none is given. A parent that is no folder of the context
    * repository, unknown or another repository's, is a `NotFoundException` that adds nothing. It takes its turn among the creators
    * of a folder of that name there (`FolderDao.lockName`), so it waits for an import that is creating the folder ([[ensurePath]])
-   * and is then refused as a duplicate, rather than failing that import's file.
+   * and is then refused as a duplicate, rather than failing that import's file. [[rename]] and [[move]] take the same turn for
+   * the name they bring a folder under, each one lock, while [[ensurePath]] takes its locks from the parent down, so no two of
+   * them wait on each other.
    */
   def add(name: String, parentId: Option[String] = None): Folder =
     txManager.withTransaction {
@@ -168,6 +170,9 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
 
       val folderBeingMoved: Folder = getById(folderBeingMovedId)
 
+      // Its turn among the creators of a folder of its name in the destination, as for an add
+      dao.lockName(destFolderId, folderBeingMoved.nameKey)
+
       val data = Map(
         FieldConst.Folder.PARENT_ID -> destFolderId,
         FieldConst.Folder.NAME -> folderBeingMoved.name
@@ -185,6 +190,9 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       logger.debug(s"Renaming folder [${folder.name}] to [$newName]")
 
       val folderForUpdate: Folder = folder.copy(name = validName(newName))
+
+      // Its turn among the creators of a folder of the new name beside it, as for an add
+      dao.lockName(folder.parentId, folderForUpdate.nameKey)
 
       val data = Map(FieldConst.Folder.NAME -> folderForUpdate.name, FieldConst.Folder.NAME_KEY -> folderForUpdate.nameKey)
 

@@ -13,7 +13,8 @@ trait FolderDao extends BaseDao[Folder]:
   def getChild(parentId: String, nameKey: String): Option[Folder]
 
   /**
-   * Makes the transactions that create a folder of the name key under `parentId` take turns until they end, so the second finds
-   * the folder the first created instead of failing on `folder_02`; see `BaseDao.advisoryLock`
+   * Makes the transactions that put a folder of the name key under `parentId` (an add, a rename, a move, an import's path) take
+   * turns until they end, so the second finds the folder the first put there instead of failing on `folder_02`; see
+   * `BaseDao.advisoryLock`
    */
   def lockName(parentId: String, nameKey: String): Unit
