@@ -1481,20 +1481,13 @@ import altitude.core.util.*
      * Each count reads one index and not the table (an index-only scan on PostgreSQL, a covering index on SQLite), bounded by the
      * range at both of its ends: `asset_search_date_taken` by the capture day, `asset_search_created` by the import time.
      */
-    val template = testContext.persistAsset()
-    val noon = "2024-06-15T12:00:00"
-    testContext.setAssetDates(template.persistedId, Some(LocalDateTime.parse(noon)), OffsetDateTime.parse(s"${noon}Z"))
+    val template = persistAssetOfNoon()
     val repositoryId = RequestContext.getRepository.persistedId
     val oneDay = days("2024-06-13", "2024-06-13")
     def countPlan(query: SearchQuery): String =
       indexOnlyPlanOf(SearchQueries.cappedCount(searchDialect, query, repositoryId), "asset")
 
-    val (takenPlan, importedPlan) = atScale {
-      seedCopies(template.persistedId, copies = 5000, folders = 500)
-      // Every copy captured when it was imported, by the wall clock of UTC
-      val importTime = if (isPostgres) "created_at AT TIME ZONE 'UTC'" else "created_at"
-      update(s"UPDATE asset SET original_created_at = $importTime WHERE repository_id = ?", repositoryId)
-    } {
+    val (takenPlan, importedPlan) = atScale(seedCopiesOverDays(template)) {
       (
         countPlan(new SearchQuery(params = browsingView, takenRange = oneDay)),
         countPlan(new SearchQuery(params = browsingView, importedRange = oneDay)))
@@ -1518,6 +1511,89 @@ import altitude.core.util.*
       importedPlan should include(covering("asset_search_created"))
       importTimes.r.findFirstIn(importedPlan).isDefined shouldBe true
     }
+  }
+
+  test("A page within a Date Taken range, sorted by Date Imported, reads the import-time index alone") {
+
+    /**
+     * Setup:
+     *
+     * An asset seeded into 5,000 copies for the planner, imported a minute apart over three and a half days and each given its
+     * import time as its capture time; they are rolled back once the plans are read. A page of 50 of the default view sorted by
+     * import time, newest first, within a Date Taken range of every day but the newest, so the page begins past the newest
+     * imports.
+     *
+     * Assertions:
+     *
+     * The engine's plan builds the page slice by reading `asset_search_created` in order, and reads the capture time the range
+     * tests from that index too, never from the table: an index-only scan on PostgreSQL that filters by the capture day, a
+     * covering index on SQLite.
+     *
+     * Edge cases:
+     *
+     * With the triaged assets added to the view the page reads the same index the same way.
+     */
+    val template = persistAssetOfNoon()
+    val olderDays = days("2024-06-12", "2024-06-14")
+    val sorted = new SearchQuery(params = browsingView, rpp = 50, searchSort = byImport, takenRange = olderDays)
+    val withTriaged = new SearchQuery(params = withTriagedView, rpp = 50, searchSort = byImport, takenRange = olderDays)
+
+    val plans = atScale(seedCopiesOverDays(template)) {
+      List(sorted, withTriaged).map(query => indexOnlyPlanOf(flatPage(query), "asset"))
+    }
+
+    // The ordered read of the page slice, newest first, with the range tested on what the index carries
+    val orderedRead =
+      if (isPostgres)
+        "Index Only Scan Backward using asset_search_created on asset [^\\n]*\\n\\s*Index Cond: [^\\n]*\\n\\s*Filter: [^\\n]*" +
+          "\\(original_created_at\\)::date >= "
+      else
+        "MATERIALIZE candidates\\n\\s*SEARCH \\w+ USING COVERING INDEX asset_search_created " +
+          "\\(repository_id=\\? AND is_recycled=\\? AND is_pipeline_processed=\\?\\)"
+
+    plans.foreach(plan => withClue(plan)(orderedRead.r.findFirstIn(plan).isDefined shouldBe true))
+  }
+
+  test("A page within a Date Imported range, sorted by Date Taken, reads the capture-day index alone") {
+
+    /**
+     * Setup:
+     *
+     * An asset seeded into 5,000 copies for the planner, imported a minute apart over three and a half days and each given its
+     * import time as its capture time; they are rolled back once the plans are read. An ungrouped page of 50 of the default view
+     * sorted by capture time, newest first, within a Date Imported range of every day but the newest, so the page begins past the
+     * newest captures.
+     *
+     * Assertions:
+     *
+     * The engine's plan builds the page slice by reading `asset_search_date_taken` in order, and reads the import time the range
+     * tests from that index too, never from the table: an index-only scan on PostgreSQL that filters by the import time, a
+     * covering index on SQLite.
+     *
+     * Edge cases:
+     *
+     * With the triaged assets added to the view the page reads the same index the same way.
+     */
+    val template = persistAssetOfNoon()
+    val olderDays = days("2024-06-12", "2024-06-14")
+    val byCapture = List(SearchSort(FieldConst.Asset.ORIGINAL_CREATED_AT, SortDirection.DESC))
+    val sorted = new SearchQuery(params = browsingView, rpp = 50, searchSort = byCapture, importedRange = olderDays)
+    val withTriaged = new SearchQuery(params = withTriagedView, rpp = 50, searchSort = byCapture, importedRange = olderDays)
+
+    val plans = atScale(seedCopiesOverDays(template)) {
+      List(sorted, withTriaged).map(query => indexOnlyPlanOf(flatPage(query), "asset"))
+    }
+
+    // The ordered read of the page slice, newest first, with the range tested on what the index carries
+    val orderedRead =
+      if (isPostgres)
+        "Index Only Scan Backward using asset_search_date_taken on asset [^\\n]*\\n\\s*Index Cond: [^\\n]*\\n\\s*Filter: [^\\n]*" +
+          "\\(created_at >= "
+      else
+        "MATERIALIZE candidates\\n\\s*SEARCH \\w+ USING COVERING INDEX asset_search_date_taken " +
+          "\\(repository_id=\\? AND is_recycled=\\? AND is_pipeline_processed=\\?\\)"
+
+    plans.foreach(plan => withClue(plan)(orderedRead.r.findFirstIn(plan).isDefined shouldBe true))
   }
 
   test("People matched all are read through the index that leads with the person and carries the asset") {
@@ -2671,6 +2747,30 @@ import altitude.core.util.*
   /** A flat page's statement, for its plan */
   private def flatPage(query: SearchQuery): SqlStr =
     SearchQueries.flat(searchDialect, query, RequestContext.getRepository.persistedId)
+
+  /** The repository view with the triaged assets added to it: no triage flag is tested */
+  private val withTriagedView = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false)
+
+  /** An asset imported at noon on 15 June 2024, UTC, and captured then by that wall clock: what [[seedCopiesOverDays]] copies */
+  private def persistAssetOfNoon(): Asset = {
+    val asset = testContext.persistAsset()
+    val noon = "2024-06-15T12:00:00"
+    testContext.setAssetDates(asset.persistedId, Some(LocalDateTime.parse(noon)), OffsetDateTime.parse(s"${noon}Z"))
+    asset
+  }
+
+  /**
+   * A library whose capture days differ, for the planner, inside `atScale`: 5,000 copies of the asset, imported a minute apart
+   * over the three and a half days before it, every asset of the repository then captured when it was imported, by the wall clock
+   * of UTC
+   */
+  private def seedCopiesOverDays(template: Asset): Unit = {
+    seedCopies(template.persistedId, copies = 5000, folders = 500)
+    val importTime = if (isPostgres) "created_at AT TIME ZONE 'UTC'" else "created_at"
+    update(
+      s"UPDATE asset SET original_created_at = $importTime WHERE repository_id = ?",
+      RequestContext.getRepository.persistedId)
+  }
 
   test("Advanced search options: the names that have the typed text, by path or by name, people with their cover and count") {
 

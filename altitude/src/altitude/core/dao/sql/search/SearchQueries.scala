@@ -1266,8 +1266,9 @@ object SearchQueries:
 
   /**
    * Assets captured on a day of the range, by the camera's wall clock. The day is the engine's capture-day expression, the one
-   * `asset_search_date_taken` is built on, so a range is a seek in that index. An asset with no capture time has no day: NULL
-   * fails either comparison, so it is in no range, not even one open at an end.
+   * `asset_search_date_taken` is built on, so a range is a seek in that index; `asset_search_created` carries the capture time,
+   * so a page read in Date Imported order tests the range on that index and not the table. An asset with no capture time has no
+   * day: NULL fails either comparison, so it is in no range, not even one open at an end.
    */
   private def takenFilter(engine: SearchDialect, asset: AssetRow[Expr], range: DateRange): Expr[Boolean] =
     import engine.dialect.*
@@ -1281,7 +1282,8 @@ object SearchQueries:
   /**
    * Assets imported on a day of the range, the days being those of `zone`: from the instant the first day begins there to just
    * before the instant the day after the last does, so a day the clocks change is as long as the zone makes it. The import time
-   * is compared as the column stores it, with no day expression around it, so a range is a seek in `asset_search_created`; the
+   * is compared as the column stores it, with no day expression around it, so a range is a seek in `asset_search_created`, and
+   * `asset_search_date_taken` carries it, so a page read in Date Taken order tests the range on that index and not the table. The
    * dialect binds each instant the way its engine stores one (a `timestamptz` on PostgreSQL, the UTC wall clock as text on
    * SQLite, which orders as the instants do). A legacy SQLite row with no import time is in no range.
    *
