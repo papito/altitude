@@ -36,6 +36,7 @@ import org.scalatest.time.Span
 
 import scala.concurrent.Await
 import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.DurationLong
@@ -120,7 +121,6 @@ import altitude.core.util.Query
       flow,
       describe = identity,
       bufferSize = 2,
-      maxConcurrentOffers = 2,
       shutdownTimeout = () => 30.seconds,
       restartOnFailure = restartOnFailure)(using testApp.actorSystem)
 
@@ -355,6 +355,60 @@ import altitude.core.util.Query
     val started = System.nanoTime()
     pipeline.shutdown()
     (System.nanoTime() - started).nanos should be < 5.seconds
+  }
+
+  test("More offers at once than a queue holds wait their turn, and every one is processed") {
+
+    /**
+     * Setup:
+     *
+     * A queue of the test's own with a buffer of two, over a flow that holds every element until the test opens a gate. A hundred
+     * elements offered at once, far more than the buffer and the stream's stages hold, every offer made before the gate opens.
+     *
+     * Assertions:
+     *
+     * While the gate is shut no offer has failed, and the offers the queue has no room for are still waiting. Once it opens,
+     * every offer succeeds and every element comes out of the flow, in the order offered.
+     *
+     * Edge cases:
+     *
+     * The queue shut down afterwards refuses the next offer with `QueueRefusedException`: waiting a turn does not hide a queue
+     * that takes nothing more.
+     */
+    val gate = Promise[Unit]()
+    val passed = ConcurrentLinkedQueue[String]()
+    val flow = Flow[String].mapAsync(1) {
+      element =>
+        gate.future.map {
+          _ =>
+            passed.add(element)
+            element
+        }(scala.concurrent.ExecutionContext.global)
+    }
+    val pipeline = QueuedPipeline[String](
+      "test",
+      flow,
+      describe = identity,
+      bufferSize = 2,
+      shutdownTimeout = () => 30.seconds,
+      restartOnFailure = false)(using testApp.actorSystem)
+
+    val elements = (1 to 100).map(n => s"element $n")
+    val offers = elements.map(pipeline.offer)
+
+    // Long enough for the queue to have refused the offers it has no room for, if it refuses any
+    Thread.sleep(500)
+    offers.flatMap(_.value).filter(_.isFailure) shouldBe empty
+    offers.count(!_.isCompleted) should be > 0
+
+    gate.success(())
+    Await.result(Future.sequence(offers)(implicitly, scala.concurrent.ExecutionContext.global), 30.seconds)
+    eventually {
+      passed.asScala.toList shouldBe elements.toList
+    }
+
+    pipeline.shutdown()
+    intercept[QueueRefusedException](Await.result(pipeline.offer("late"), 10.seconds))
   }
 
   test("A stage does its work on the import dispatcher, in the context of the asset's repository") {

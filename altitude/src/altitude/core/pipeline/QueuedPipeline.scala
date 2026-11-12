@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -34,16 +35,16 @@ import altitude.core.QueueRefusedException
 
 /**
  * A pipeline's flow run for the life of the app behind a queue that elements are offered to: the import and the purge queues. The
- * queue buffers `bufferSize` elements and admits `maxConcurrentOffers` offers at once, and backpressures beyond that. The stream
- * runs until [[shutdown]] completes the queue. A stream that fails stays down, unless `restartOnFailure` (development only,
- * `dev.restart_pipeline`) starts it again after a backoff, with a new queue. `describe` names an element in the log.
+ * queue buffers `bufferSize` elements, and an offer made while it is full waits, however many are made at once: the offers take
+ * turns, in the order they were made ([[offer]]). The stream runs until [[shutdown]] completes the queue. A stream that fails
+ * stays down, unless `restartOnFailure` (development only, `dev.restart_pipeline`) starts it again after a backoff, with a new
+ * queue. `describe` names an element in the log.
  */
 class QueuedPipeline[In](
     name: String,
     flow: Flow[In, ?, NotUsed],
     describe: In => String,
     bufferSize: Int,
-    maxConcurrentOffers: Int,
     shutdownTimeout: () => FiniteDuration,
     restartOnFailure: Boolean)(using system: ActorSystem[?]):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -66,14 +67,16 @@ class QueuedPipeline[In](
   // Set by shutdown, after which a restart ends the stream instead of starting it again
   private val stopping = AtomicBoolean(false)
 
+  // Ends when the offer made last has its answer, which is when the next one's turn comes. A `Source.queue` fails an offer made
+  // while as many as it admits are waiting for room, rather than making it wait, so the queue is handed one offer at a time.
+  private val lastOffer = AtomicReference[Future[Unit]](Future.unit)
+
   /** One start of the stream: a new queue, the current one from here on, run through the flow */
   private def start(): Source[Any, NotUsed] =
     logger.info(s"Starting the $name queue")
     val (queue, source) = Source
-      .queue[In](
-        bufferSize = bufferSize,
-        overflowStrategy = OverflowStrategy.backpressure,
-        maxConcurrentOffers = maxConcurrentOffers)
+      // One offer at a time is all `offer` makes
+      .queue[In](bufferSize = bufferSize, overflowStrategy = OverflowStrategy.backpressure, maxConcurrentOffers = 1)
       .preMaterialize()
     currentQueue.set(queue)
     source.via(flow).addAttributes(ActorAttributes.supervisionStrategy(resumeOnFailure))
@@ -98,19 +101,27 @@ class QueuedPipeline[In](
   }
 
   /**
-   * Offers an element to the queue, waiting while the queue is full. The future fails with [[QueueRefusedException]] when the
-   * queue does not take the element: it dropped it, it is closed, or its stream has stopped.
+   * Offers an element to the queue, waiting while the queue is full: for its turn, behind the offers made before it, and then for
+   * room in the queue. No thread waits meanwhile. The future fails with [[QueueRefusedException]] when the queue does not take
+   * the element: it dropped it, it is closed, or its stream has stopped.
    */
   def offer(element: In): Future[Unit] =
-    val offered =
-      try currentQueue.get.offer(element)
-      catch case NonFatal(e) => Future.failed(e)
+    val turnOver = Promise[Unit]()
+    val offered = lastOffer.getAndSet(turnOver.future).flatMap {
+      _ =>
+        try currentQueue.get.offer(element)
+        catch case NonFatal(e) => Future.failed(e)
+    }
 
     offered.transform {
-      case Success(QueueOfferResult.Enqueued) => Success(())
-      case Success(QueueOfferResult.Failure(cause)) => Failure(refused(element, cause.toString, cause))
-      case Success(result) => Failure(refused(element, result.toString, null))
-      case Failure(cause) => Failure(refused(element, cause.toString, cause))
+      answer =>
+        // Whatever the answer, the next offer's turn has come
+        turnOver.success(())
+        answer match
+          case Success(QueueOfferResult.Enqueued) => Success(())
+          case Success(QueueOfferResult.Failure(cause)) => Failure(refused(element, cause.toString, cause))
+          case Success(result) => Failure(refused(element, result.toString, null))
+          case Failure(cause) => Failure(refused(element, cause.toString, cause))
     }
 
   private def refused(element: In, reason: String, cause: Throwable | Null): QueueRefusedException =

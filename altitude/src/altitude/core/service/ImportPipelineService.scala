@@ -91,7 +91,6 @@ class ImportPipelineService(app: Altitude):
     combinedFlow,
     describe = _._1.asset.fileName,
     bufferSize = app.parallelism * 2,
-    maxConcurrentOffers = app.parallelism,
     shutdownTimeout = () => app.settings.current.pipelineShutdownTimeout.seconds,
     restartOnFailure = app.isPipelineRestartEnabled
   )

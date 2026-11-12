@@ -378,13 +378,13 @@ import altitude.core.util.Query
     }
   }
 
-  test("A recycle bin larger than the purge queue admits at once is emptied completely", Slow) {
+  test("A recycle bin larger than the purge queue buffers is emptied completely", Slow) {
 
     /**
      * Setup:
      *
-     * Four times as many recycled assets as the purge queue buffers and accepts offers for (`parallelism` times two, and
-     * `parallelism`), persisted and completed without files, and the recycle bin emptied.
+     * Twice as many recycled assets as the purge queue buffers (`parallelism` times two), persisted and completed without files,
+     * and the recycle bin emptied.
      *
      * Assertions:
      *

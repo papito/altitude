@@ -233,6 +233,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - ✅ Assets offered to the queue at once (`addToQueue`, as concurrent uploads offer them) are all imported, on both engines, through the one pipeline.
 - ✅ Shutting down an import queue of the test's own waits for the assets it has accepted: all are pipeline-processed when `shutdown()` returns.
 - ✅ An offer to a shut-down import queue fails with `QueueRefusedException`, and the upload's staged file is deleted.
+- ✅ A hundred offers made at once to a queue of the test's own that buffers two, over a flow that holds every element, all wait: none is refused (a `Source.queue` fails an offer past the ones it admits), and once the flow lets go every one is taken and comes out in the order offered; the queue shut down afterwards still refuses.
 - ✅ With the restart on, a queue of the test's own whose stream fails (a flow that stops on one element) restarts it, and an element offered after comes out of the flow; with it off, the stream stays down, a later offer fails with `QueueRefusedException` and nothing comes out; shutdown during a restart's backoff returns at once. `EnvironmentTests` (unit) covers `Environment.devSwitch`: on only for a `true` key in dev, off in test and prod and for a `false` key.
 - ✅ A stage built with `PipelineUtils.stage` does its work on a thread of the import dispatcher, with the element's repository as the context repository.
 - ✅ Two more distinct photos of one face than the import has threads, imported in one stream, are one Person with a Face from each: detection runs on several at once and recognition one at a time in upload order (on PostgreSQL the test fails if recognition runs in parallel).
@@ -409,7 +410,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - ✅ Purging one of two recycled assets, then emptying the trash, succeeds and leaves the recycled statistics at zero; two requests purging the same asset at once leave exactly the other asset in the recycled statistics.
 - ✅ Purging an asset that is already marked for purging takes it out of the recycled statistics only once.
 - [ ] Purge a selection holding active, unknown and no IDs, and verify the exact remaining statistics. [MEDIUM]
-- ✅ A recycle bin four times larger than the purge queue's buffer and concurrent offers is emptied completely.
+- ✅ A recycle bin twice the size of the purge queue's buffer is emptied completely.
 - ✅ A row whose database delete fails stays marked for purging and the queue goes on to purge the next asset.
 - ✅ An asset whose covers cannot be moved off its Faces (the database refusing the Person's cover change) stays whole, row marked for purging, file, cover Face and its images, the cover unchanged; once `requeuePurgePending` queues it again it is purged and the Person's cover moves to their Face left (both engines).
 - [ ] Inject file deletion failures at each stage; verify retained state supports a retry instead of reporting success with orphaned files or missing originals. [CRITICAL]

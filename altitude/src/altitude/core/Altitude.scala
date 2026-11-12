@@ -429,8 +429,8 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
     }
   }
 
-  // How many assets the import and purge queues buffer and admit at once, on both engines. It does not decide the concurrent work
-  // of an import, which the import dispatcher's threads (`importParallelism`) bound.
+  // Sizes the buffers of the import and purge queues (twice this many assets each), on both engines. It does not decide the
+  // concurrent work of an import, which the import dispatcher's threads (`importParallelism`) bound.
   val parallelism: Int = Runtime.getRuntime.availableProcessors()
 
   // An account's import status sockets close when its versions change, so a deactivated, deleted or revoked account's feed ends

@@ -41,7 +41,6 @@ class PurgePipelineService(app: Altitude):
     combinedFlow,
     describe = asset => s"asset [${asset._1.persistedId}]",
     bufferSize = app.parallelism * 2,
-    maxConcurrentOffers = app.parallelism,
     shutdownTimeout = () => app.settings.current.pipelineShutdownTimeout.seconds,
     restartOnFailure = app.isPipelineRestartEnabled
   )
