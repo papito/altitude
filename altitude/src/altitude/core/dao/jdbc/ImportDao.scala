@@ -103,17 +103,39 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
     )
     model.copy(id = Some(id), createdAt = Some(toLocalDateTime(createdAt)))
 
-  override def list(rpp: Int, page: Int): QueryResult[Import] =
-    val sql = s"""
-      SELECT *, COUNT(*) OVER () AS $TOTAL
+  /**
+   * The statements [[list]] reads the first `shown` Imports with: the ones in progress, which are few, by the index on them
+   * (`import_03`); the closed ones off the history by age (`import_01`), from its newest end; and the count of them all. Each
+   * list is the newest first, by ID within one moment, so neither statement sorts more than the Imports of a moment, and the
+   * listing costs the Imports it shows: one statement ordered by whether an Import is closed could use neither index, and read
+   * and sorted the whole history.
+   */
+  def listStatements(shown: Int): List[(String, List[Any])] =
+    def newest(closed: String) = s"""
+      SELECT *
         FROM $tableName
        WHERE ${FieldConst.REPO_ID} = ?
-       ORDER BY CASE WHEN ${FieldConst.Import.CLOSED_AT} IS NULL THEN 0 ELSE 1 END, ${FieldConst.CREATED_AT} DESC, ${FieldConst.ID}
-       LIMIT ? OFFSET ?
+         AND ${FieldConst.Import.CLOSED_AT} $closed
+       ORDER BY ${FieldConst.CREATED_AT} DESC, ${FieldConst.ID}
+       LIMIT ?
     """
 
-    val recs = manyBySqlQuery(sql, List(repositoryId, rpp, (page - 1) * rpp))
-    QueryResult(records = recs.map(makeModel), total = recs.headOption.map(rec => getIntField(rec(TOTAL))).getOrElse(0), rpp, Nil)
+    List(
+      (newest("IS NULL"), List(repositoryId, shown)),
+      (newest("IS NOT NULL"), List(repositoryId, shown)),
+      (s"SELECT COUNT(*) AS $TOTAL FROM $tableName WHERE ${FieldConst.REPO_ID} = ?", List(repositoryId))
+    )
+
+  override def list(shown: Int): QueryResult[Import] =
+    val List(inProgress, closed, count) = listStatements(shown).map(manyBySqlQuery(_, _)): @unchecked
+
+    QueryResult(
+      // The closed ones fill what the ones in progress leave of `shown`
+      records = (inProgress ++ closed).take(shown).map(makeModel),
+      total = getIntField(count.head(TOTAL)),
+      rpp = shown,
+      sort = Nil
+    )
 
   override def addPending(importId: String): Int =
     val sql = s"""

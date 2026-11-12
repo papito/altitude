@@ -458,7 +458,7 @@ class ImportService(val app: Altitude):
    */
   def history(shown: Int): ImportHistory =
     txManager.asReadOnly {
-      val listed = importDao.list(shown, page = 1)
+      val listed = importDao.list(shown)
       val names =
         app.DAO.user.getByIds(listed.records.flatMap(_.accountId).toSet).map(account => account.persistedId -> account.name).toMap
       val destinations =

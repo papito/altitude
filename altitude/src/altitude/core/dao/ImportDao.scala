@@ -12,8 +12,8 @@ import altitude.core.util.QueryResult
  * as they change it, so the writes of files settling at once add up.
  */
 trait ImportDao extends BaseDao[Import]:
-  /** A page of the Imports with their total: the ones in progress first, then the newest first */
-  def list(rpp: Int, page: Int): QueryResult[Import]
+  /** The first `shown` Imports with the total of them all: the ones in progress first, then the closed ones, each the newest first */
+  def list(shown: Int): QueryResult[Import]
 
   /** Counts one more pending file of an Import still taking files; 0 for one marked complete, and for one that is not there */
   def addPending(importId: String): Int

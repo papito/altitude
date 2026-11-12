@@ -49,7 +49,7 @@ import altitude.core.service.ImportService
 import altitude.core.util.Query
 
 /** The Import record: an Import and its Import files, their outcomes, the Import's counters and its closing */
-@DoNotDiscover class ImportServiceTests(override val testApp: Altitude) extends IntegrationTestCore {
+@DoNotDiscover class ImportServiceTests(override val testApp: Altitude) extends IntegrationTestCore with SearchPlans {
 
   private def imports = testApp.service.imports
 
@@ -412,6 +412,64 @@ import altitude.core.util.Query
     top(2) shouldBe (List(secondOpen.id, firstOpen.id), 4)
     top(3) shouldBe (List(secondOpen.id, firstOpen.id, secondClosed.id), 4)
     top(10) shouldBe (List(secondOpen.id, firstOpen.id, secondClosed.id, firstClosed.id), 4)
+  }
+
+  test("The Import history's statements read its indexes, with no sort of the whole history") {
+
+    /**
+     * Setup:
+     *
+     * A closed Import seeded into 5,000 closed copies, each opened a minute before the last, and one Import in progress, analyzed
+     * and rolled back once the plans are read: a history the planner has rows to choose by, in which the Imports in progress are
+     * few.
+     *
+     * Assertions:
+     *
+     * The engine's plan for each statement the history's listing runs reads an index and holds no sort of all the rows it reads:
+     * at the most the Imports of one moment are put in order. The statement of the Imports in progress names `import_03`, the
+     * index of those alone, and the statement of the closed ones `import_01`, the history by age; the count is read off an index
+     * alone.
+     */
+    val template = imports.open(ImportSource.Upload)
+    imports.close(template.persistedId)
+    imports.open(ImportSource.Upload)
+    val dao = testApp.DAO.imports.asInstanceOf[altitude.core.dao.jdbc.ImportDao]
+    val (copyId, createdAt) =
+      if (isPostgres) ("lpad(g.n::text, 36, '0')", "created_at - g.n * interval '1 minute'")
+      else ("printf('%036d', g.n)", "datetime(created_at, '-' || g.n || ' minutes')")
+
+    val plans = atScale {
+      update(
+        s"""WITH RECURSIVE g (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM g WHERE n < 5000)
+           |INSERT INTO import (id, repository_id, source, account_id, is_complete, closed_at, created_at)
+           |SELECT $copyId, repository_id, source, account_id, is_complete, closed_at, $createdAt
+           |  FROM import CROSS JOIN g
+           | WHERE import.id = ?""".stripMargin,
+        template.persistedId
+      )
+    } {
+      // The table as vacuuming leaves it, every page all-visible, which seeded rows never are: the count is then read off an
+      // index alone, as it is in a database that has run for a while
+      if (isPostgres) {
+        update("UPDATE pg_class SET relallvisible = relpages WHERE relname = ?", "import")
+        update("SET LOCAL enable_bitmapscan = off")
+      }
+      dao.listStatements(shown = 20).map((sql, values) => lookupPlanOf(sql, values))
+    }
+
+    // PostgreSQL's node for a sort of everything below it, and SQLite's; a sort within one moment's Imports reads otherwise
+    val sortOfAll = if (isPostgres) """(?m)^\s*(->\s+)?Sort\s+\(""".r else "USE TEMP B-TREE FOR ORDER BY".r
+    plans.foreach {
+      plan =>
+        withClue(plan) {
+          plan should include(if (isPostgres) "Index" else "INDEX")
+          sortOfAll.findFirstIn(plan) shouldBe None
+        }
+    }
+    // The Imports in progress, the closed ones, and the count, which any index that holds the repository answers
+    val List(inProgress, closed, _) = plans: @unchecked
+    withClue(inProgress)(inProgress should include("import_03"))
+    withClue(closed)(closed should include("import_01"))
   }
 
   test("The Import history names who delivered each Import, where its files went and whether a restart interrupted it") {

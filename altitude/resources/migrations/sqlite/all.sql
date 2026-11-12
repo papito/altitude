@@ -603,10 +603,14 @@ CREATE TABLE import (
   FOREIGN KEY (repository_id, dest_folder_id) REFERENCES folder (repository_id, id)
 );
 
--- A Library's Import history by age: its listing, and the prune of the Imports past import.history.days
+-- A Library's Import history by age: the closed Imports of its listing, its count, and the prune of the Imports past
+-- import.history.days
 CREATE INDEX import_01 ON import (repository_id, created_at);
 -- A Watch folder's Imports: the counts its card shows, and the key's delete action when it is removed
 CREATE INDEX import_02 ON import (watch_folder_id) WHERE watch_folder_id IS NOT NULL;
+-- A Library's Imports in progress, which are few and head the history's listing, and which a start closes
+-- (ImportDao.closeInterrupted): read without the closed ones, which are the history
+CREATE INDEX import_03 ON import (repository_id, created_at) WHERE closed_at IS NULL;
 
 -- An Import file: one file of an Import with its outcome. rel_path is the file's path as it was delivered, its name for an
 -- upload of files.
