@@ -144,7 +144,7 @@
 </div>
 }
 
-<form id="@{idPrefix}Form" role="search" x-data="searchPanel" x-on:submit.prevent="search()">
+<form id="@{idPrefix}Form" role="search" x-data="searchPanel" x-on:submit.prevent="search()" x-on:input="countFilters()" x-on:change="countFilters()">
     <div class="fields">
         <div class="field">
             <label for="@{idPrefix}Text">Search text</label>

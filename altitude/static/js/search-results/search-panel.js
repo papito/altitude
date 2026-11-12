@@ -4,6 +4,7 @@ import { showErrorSnackBar } from "../common/snackbar.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
 import {
     applySearchFilters,
+    countSearchFilters,
     seedSearchParams,
     serializeSearchParams,
 } from "../stores/search-params.js"
@@ -13,7 +14,10 @@ import { runSearch } from "./search.js"
  * The advanced search panel of the nav (`#searchPanel` in `includes/nav`, views/AGENTS.md
  * **Advanced search panel**): a native `popover="auto"` panel under the quick search form, which the
  * form's filter button opens (`popovertarget`). The browser owns its visibility; this module loads
- * its form, counts the filters on the button, and runs the search its form asks for. The form's own
+ * its form, counts the filters on the button, and runs the search its form asks for. The button
+ * counts the filters of the search in force while the panel is closed and the fields its form fills
+ * while it is open (`showFormFilterCount`), so a field emptied in the panel, or its Clear, shows on
+ * the button before anything is searched. The form's own
  * behaviour is its components' (`alpine/components/search-panel.js`, `filter-combobox.js`,
  * `date-range.js`).
  *
@@ -59,17 +63,43 @@ export function bindSearchPanel() {
         }
     })
 
+    // A closed panel's form is gone, and the button counts the search in force again: what was
+    // changed in the panel and not searched is dropped
     panelEl.addEventListener("toggle", () => {
         if (!panelEl.matches(":popover-open")) {
             emptyPanel(panelEl)
+            showFilterCount(filterCountInForce())
         }
     })
 
-    // A page with no search of its own has no store, and nothing to count
     const searchParams = Alpine.store(Const.state.searchParams)
     if (searchParams) {
         Alpine.effect(() => showFilterCount(searchParams.filterCount()))
     }
+}
+
+/** How many filters the search in force has; none on a page with no search of its own, which has no store */
+function filterCountInForce() {
+    return Alpine.store(Const.state.searchParams)?.filterCount() ?? 0
+}
+
+/**
+ * Counts on the filter button the fields `formEl` fills, as the store counts those of a search
+ * (`countSearchFilters`): the panel's form calls it as it loads and whenever a field's value
+ * changes. A form outside the nav's panel (the style guide's specimen) counts nothing.
+ */
+export function showFormFilterCount(formEl) {
+    if (!formEl.closest(`#${PANEL_ID}`)) {
+        return
+    }
+
+    const filled = Object.fromEntries(
+        [...new FormData(formEl)].map(([name, value]) => [
+            name,
+            value.trim() === "" ? null : value,
+        ]),
+    )
+    showFilterCount(countSearchFilters(filled))
 }
 
 /**
@@ -205,8 +235,8 @@ function withoutEmpty(filters) {
 }
 
 /**
- * The number of filters in force on the filter button: its badge, shown from one up, and its
- * accessible name
+ * The number of filters on the filter button, those in force or those the open panel's form holds:
+ * its badge, shown from one up, and its accessible name
  */
 function showFilterCount(count) {
     const buttonEl = filterButtonEl()
@@ -217,7 +247,7 @@ function showFilterCount(count) {
     buttonEl.setAttribute(
         "aria-label",
         count > 0
-            ? `${name}: ${count} ${count === 1 ? "filter" : "filters"} in force`
+            ? `${name}: ${count} ${count === 1 ? "filter" : "filters"}`
             : name,
     )
 }

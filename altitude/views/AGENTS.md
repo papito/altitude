@@ -315,7 +315,7 @@ Const.attributes.optionCover       // "data-option-cover"  (a Person's cover Fac
 Const.attributes.chipRemove        // "data-chip-remove"  (the remove button of a chosen filter's chip, in the panel and in a filtered search's results title)
 Const.attributes.filter            // "data-app-filter"  (a chip of a filtered search's results title, its parameters in `data-app-filter-<param>` literals)
 Const.attributes.editFilters       // "data-app-edit-filters"  (that title's Edit, which opens the advanced search panel)
-Const.attributes.filterCount       // "data-app-filter-count"  (the badge of the nav's filter button: the number of filters in force)
+Const.attributes.filterCount       // "data-app-filter-count"  (the badge of the nav's filter button: the number of filters in force, or in the open panel's form)
 ```
 
 A Curation set's root carries `data-opening-pinned-id` and `data-opening-focused-id`, and the
@@ -2605,10 +2605,14 @@ panel until Search or a dismissal.
   floating surface, a month `--search-panel-month-width` of days, a day a pill under the pointer, the range a band of
   the accent at 0.2 between two ends in the accent, so the calendar follows the light and the dark theme. The focus
   ring on a day is the app's.
-- **Filter button.** Its badge (`data-app-filter-count`) shows how many of the panel's fields the search in force fills
-  (`searchParams.filterCount()`: the text, the folder, the people, the Locations and each date range count once), from
-  one up, written by an `Alpine.effect` with the button's accessible name ("Advanced search: 3 filters in force"). A
-  page with no search store shows none.
+- **Filter button.** Its badge (`data-app-filter-count`) shows how many of the panel's fields are filled (the text, the
+  folder, the people, the Locations and each date range count once, `countSearchFilters`), from one up, with the
+  button's accessible name ("Advanced search: 3 filters"). While the panel is closed they are the fields the search in
+  force fills (`searchParams.filterCount()`, written by an `Alpine.effect`; a page with no search store shows none).
+  While it is open they are the fields its form fills (`showFormFilterCount`): the form counts as it loads and on
+  every `input` and `change` that reaches it, which the text field fires as it is typed in and `filterCombobox` and
+  `dateRange` fire on a hidden input as they write it, so a chip removed, a range cleared or Clear shows on the button
+  before anything is searched. A panel closed without a search goes back to the count of the search in force.
 - **Look.** `static/css/htmx/search_panel.css`, scoped by `.search-panel`: frosted glass of its own, clearer and more
   blurred than the popover dialog's (`--search-panel-background-color`, `--theme-neutral-2` at 0.81, under
   `--search-panel-backdrop-filter`, `blur(15px) saturate(200%)`), the popover's hairline and `--float-shadow`,
@@ -2637,7 +2641,7 @@ color, `currentColor`, while the entry is hovered, so an empty one does not reac
 `--nav-search-width`: the form is `--font-nav` at `--font-size-base` in
 `--theme-neutral-4`, centred text, with no border or fill, a `fa-search` mark and the placeholder "quick search" at 0.6 alpha, a
 `.clear` (`fa-times`) control shown while there is text, and the filter button (`.filters`, `fa-sliders-h` in a circle
-of the accent at 0.2), which opens the advanced search panel and carries the number of filters in force as a badge on
+of the accent at 0.2), which opens the advanced search panel and carries the number of filters in force, or of those in the open panel, as a badge on
 its corner, a pill of the accent in `--font-size-xs`, shown from one up (**Advanced search panel**). The form's rules
 are the cell's own form's (`nav .search > form`), since the panel beside it holds a form too. While the field has focus the form widens to
 `--nav-search-focus-width` and glows in `--theme-accent` (a 1px ring and a 14px halo at 0.55 alpha); that glow is the

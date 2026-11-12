@@ -166,12 +166,18 @@ export function dateRange() {
             picker = null
         },
 
-        /** Holds the range: the two hidden inputs take its days and the field shows it */
+        /**
+         * Holds the range: the two hidden inputs take its days, a `change` on the first tells the
+         * form that the field's value is another, and the field shows it
+         */
         setRange(from, to) {
             this.from = from
             this.to = to
             this.$refs.from.value = from
             this.$refs.to.value = to
+            this.$refs.from.dispatchEvent(
+                new Event("change", { bubbles: true }),
+            )
             this.showLabel()
         },
 

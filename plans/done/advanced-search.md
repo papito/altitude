@@ -82,8 +82,9 @@ the chips and the form's values. The cover is the People tab's content URL.
 
 **The panel.** A native `popover="auto"` dialog (`#searchPanel`) in `includes/nav`, on every page, placed under
 `#searchForm` by CSS anchor positioning: centered, 6px below, 26rem wide. A sliders button inside the quick search form
-opens it and carries the number of filled filters as a badge; a plain folder, person, Location or text scope counts
-as one. Each open loads the form for the search in force plus the nav input's unsubmitted text
+opens it and carries the number of filled filters as a badge: those of the search in force while the panel is
+closed, where a plain folder, person, Location or text scope counts as one, and those of the panel's form while it is
+open, so a field emptied in the panel, or Clear, shows on the button before anything is searched. Each open loads the form for the search in force plus the nav input's unsubmitted text
 (`js/search-results/search-panel.js`, `openSearchPanel(filters)`); the panel's text and the nav's input are written to
 each other on open and on search.
 

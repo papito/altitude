@@ -228,7 +228,8 @@ export const Const = {
         // stands for as `data-app-filter-<param>` literals; and the title's Edit, which opens the panel
         filter: "data-app-filter",
         editFilters: "data-app-edit-filters",
-        // The badge of the nav's filter button (includes/nav): the number of filters in force
+        // The badge of the nav's filter button (includes/nav): the number of filters in force, or of those in
+        // the open panel's form
         filterCount: "data-app-filter-count",
     },
 

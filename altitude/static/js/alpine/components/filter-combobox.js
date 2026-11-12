@@ -586,10 +586,14 @@ export function filterCombobox() {
             this.hideListbox()
         },
 
-        /** The chips are the state: their IDs, in order, are the hidden input's value */
+        /**
+         * The chips are the state: their IDs, in order, are the hidden input's value, and a `change`
+         * on that input tells the form that the field's value is another
+         */
         syncChosen() {
             this.chosen = this.chipEls().map((chipEl) => carriedBy(chipEl).id)
             this.$refs.ids.value = this.chosen.join(",")
+            this.$refs.ids.dispatchEvent(new Event("change", { bubbles: true }))
         },
     }
 }

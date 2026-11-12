@@ -10,12 +10,20 @@
  * **Clear** empties every field and searches nothing: the text, the match back to all, and each
  * field's component through `search-panel-clear`, dispatched on its root.
  *
+ * The nav's filter button counts the fields the form fills while the panel is open
+ * (`showFormFilterCount`): as the form loads, and on every `input` and `change` that reaches the
+ * form, which the text field fires as it is typed in and each field's component as it writes its
+ * hidden inputs.
+ *
  * The people match is the form's own state: a switch that is on for all of the people (`matchesAll`)
  * and off for any of them, its value in the hidden `peopleMatch` input. The People field shows it
  * once two people are chosen (`filterCombobox`'s `hasSeveral`).
  */
 import { Const } from "../../constants.js"
-import { searchByFilters } from "../../search-results/search-panel.js"
+import {
+    searchByFilters,
+    showFormFilterCount,
+} from "../../search-results/search-panel.js"
 import { idsOf } from "../../stores/search-params.js"
 
 const { all, any } = Const.search.peopleMatch
@@ -32,6 +40,12 @@ export function searchPanel() {
         init() {
             formEl = this.$el
             this.matchesAll = formEl.elements.peopleMatch.value !== any
+            this.countFilters()
+        },
+
+        /** The filter button counts the fields the form fills now */
+        countFilters() {
+            showFormFilterCount(formEl)
         },
 
         toggleMatch() {
@@ -56,6 +70,7 @@ export function searchPanel() {
                         new CustomEvent("search-panel-clear"),
                     ),
                 )
+            this.countFilters()
             textEl.focus()
         },
 
