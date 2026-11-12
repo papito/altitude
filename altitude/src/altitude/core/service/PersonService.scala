@@ -122,6 +122,18 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
     }
 
   /**
+   * The people of the IDs who are live in the context repository, hidden or not, in no order: an ID of a Person merged away or
+   * marked as a bad match, of another repository's or of nobody has no entry
+   */
+  def getLive(personIds: Set[String]): List[Person] =
+    if personIds.isEmpty then return Nil
+
+    val live = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet[Any])))
+      .add(FieldConst.Person.IS_DELETED -> false)
+      .add(FieldConst.Person.IS_BAD_MATCH -> false)
+    query(live).records
+
+  /**
    * Stores the Face as the person's in the asset, sets it as the cover when the person has none, and counts the asset toward
    * `numOfFaces` when it is the person's first Face on it: the number counts the assets a person is found on, so a second Face of
    * theirs on the same asset (the same person twice in one image) adds nothing

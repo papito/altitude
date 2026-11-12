@@ -1,0 +1,12 @@
+@import altitude.core.models.NamedPath
+
+@(folders: List[NamedPath])
+
+@* The options of the advanced search panel's Folder combobox (GET /htmx/search/r/:repoId/options/folders?q=): the
+   folders whose name has the text typed so far (SearchService.folderOptions), every folder with nothing typed, each
+   labelled by its path from its top-level folder down, in the folder tree's order, the first
+   Const.Search.MAX_FILTER_OPTIONS of them. The fragment is the `role="option"` elements alone, for the combobox's
+   listbox; with no folder to offer it is empty. *@
+@for(folder <- folders) {
+@includes.html.search_path_option(folder)
+}

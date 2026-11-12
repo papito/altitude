@@ -93,6 +93,9 @@ object Const:
     // Quick view (htmx/quick_view_modal) shows a folder's first this many assets, by newest import
     val QUICK_VIEW_SIZE = 100
 
+    // A combobox of the advanced search panel is offered at most this many options for the text typed so far
+    val MAX_FILTER_OPTIONS = 50
+
     object Layout:
       val GRID = "grid"
       val MAP = "map"

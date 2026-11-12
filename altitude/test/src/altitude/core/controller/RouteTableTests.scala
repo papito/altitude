@@ -527,6 +527,19 @@ import altitude.core.routes.decorators.requirePermission
         List("folderId" -> fx.folder, "personId" -> fx.person, "albumId" -> fx.album, "locationId" -> fx.location)
           .map(filter => Probe(404, query = Map(filter)))
     },
+    none(GET, "/htmx/search/r/:repoId/options/folders"),
+    none(GET, "/htmx/search/r/:repoId/options/people"),
+    none(GET, "/htmx/search/r/:repoId/options/locations"),
+    probed(GET, "/htmx/search/r/:repoId/panel") {
+      fx =>
+        List("folderId" -> fx.folder, "personId" -> fx.person, "locationId" -> fx.location).map {
+          filter =>
+            Probe(
+              200,
+              query = Map(filter),
+              why = "an ID the repository does not hold is dropped from the form, as one that no longer exists is")
+        }
+    },
     none(GET, "/htmx/triage/r/:repoId/summary").forMembers,
     probed(GET, "/htmx/triage/r/:repoId/dialogs/scope") {
       fx =>
@@ -1070,8 +1083,9 @@ import altitude.core.routes.decorators.requirePermission
      * The routes that do not answer 404 by design: a dialog's form that shows a field error (adding a folder under the parent, an
      * album or Location chosen in the batch dialogs, a category chosen for a Location), the empty add-folder dialog, Curation's
      * set of a Sequence (204), moving a folder under the parent (400), the batch operations and Curation's selection, which leave
-     * out assets that are not the repository's, the map, which is empty for a scope the repository does not hold, and the library
-     * page, which reads neither ID it is given.
+     * out assets that are not the repository's, the map, which is empty for a scope the repository does not hold, the advanced
+     * search panel, which drops an ID the repository does not hold from its form, and the library page, which reads neither ID it
+     * is given.
      */
     val mine = testApp.service.repository.getById(loginAs(AccountType.User, Permissions.all))
 

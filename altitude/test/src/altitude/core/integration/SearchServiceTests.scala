@@ -2636,6 +2636,139 @@ import altitude.core.util.*
   private def flatPage(query: SearchQuery): SqlStr =
     SearchQueries.flat(searchDialect, query, RequestContext.getRepository.persistedId)
 
+  test("Advanced search options: the names that have the typed text, by path or by name, people with their cover and count") {
+
+    /**
+     * Setup:
+     *
+     * The folder Lisbon under 2024 under Trips, and the folder "Lisbon office"; the Category Portugal holding the Locations
+     * Lisbon and Porto, and the Location Sintra in no Category; the named people "Alice Liddell", with a Face on one asset, and
+     * "Alan Lisle", and three people a Search text does not name: one hidden, one marked as a bad match and one with no name.
+     *
+     * Assertions:
+     *
+     * With nothing typed the folder options are every folder by its path, a folder directly before the folders below it, the
+     * Location options every Location by its own name with its Category before it, and the people options the two named, visible,
+     * live people by name, Alice with her cover and her one asset. Typed text offers the names with a word starting with it:
+     * "lis" the two Lisbon folders, the Location Lisbon and Alan Lisle.
+     *
+     * Edge cases:
+     *
+     * The root folder and a Category are no option, and text naming a Category or an ancestor folder offers nothing below it. The
+     * hidden person, the bad match and the person with no name are never offered.
+     */
+    val trips = testApp.service.folder.add("Trips")
+    val year = testApp.service.folder.add("2024", parentId = trips.id)
+    val lisbonFolder = testApp.service.folder.add("Lisbon", parentId = year.id)
+    val office = testApp.service.folder.add("Lisbon office")
+    val portugal = testApp.service.location.addCategory("Portugal")
+    val lisbon = testApp.service.location.addLocation("Lisbon", 38.72, -9.14, Some(portugal.persistedId))
+    val porto = testApp.service.location.addLocation("Porto", 41.15, -8.61, Some(portugal.persistedId))
+    val sintra = testApp.service.location.addLocation("Sintra", 38.8, -9.39)
+    val alice = addPerson("Alice Liddell")
+    val face = addFace(alice, importAsset("one.jpg"))
+    val alan = addPerson("Alan Lisle")
+    testApp.service.person.setVisibility(addPerson("Lisa Hidden"), isHidden = true)
+    testApp.service.person.markAsBadMatch(addPerson("Lise Badmatch"))
+    testApp.service.person.addPerson(Person())
+    val options = testApp.service.search
+
+    options.folderOptions("") shouldBe List(
+      NamedPath(office.persistedId, List("Lisbon office")),
+      NamedPath(trips.persistedId, List("Trips")),
+      NamedPath(year.persistedId, List("Trips", "2024")),
+      NamedPath(lisbonFolder.persistedId, List("Trips", "2024", "Lisbon"))
+    )
+    options.folderOptions("lis").map(_.id) shouldBe List(office.persistedId, lisbonFolder.persistedId)
+    options.folderOptions("trips").map(_.id) shouldBe List(trips.persistedId)
+    options.folderOptions("").map(_.label).last shouldBe "Trips › 2024 › Lisbon"
+
+    options.locationOptions("") shouldBe List(
+      NamedPath(lisbon.persistedId, List("Portugal", "Lisbon")),
+      NamedPath(porto.persistedId, List("Portugal", "Porto")),
+      NamedPath(sintra.persistedId, List("Sintra"))
+    )
+    options.locationOptions("lis").map(_.id) shouldBe List(lisbon.persistedId)
+    options.locationOptions("portugal") shouldBe empty
+
+    val people = options.peopleOptions("")
+    people.map(_.persistedId) shouldBe List(alan.persistedId, alice.persistedId)
+    people.last.coverFaceId shouldBe Some(face.persistedId)
+    people.last.numOfFaces shouldBe 1
+    people.head.coverFaceId shouldBe None
+    options.peopleOptions("lis").map(_.persistedId) shouldBe List(alan.persistedId)
+    options.peopleOptions("al").map(_.persistedId) shouldBe List(alan.persistedId, alice.persistedId)
+    options.peopleOptions("liddell").map(_.persistedId) shouldBe List(alice.persistedId)
+    options.peopleOptions(PersonService.UNKNOWN_NAME_PREFIX) shouldBe empty
+  }
+
+  test("Advanced search filter names: the names behind a search's IDs, in the order given, less those that name nothing") {
+
+    /**
+     * Setup:
+     *
+     * Two repositories. The first has the folder Lisbon under Trips, the Location Lisbon in the Category Portugal, the Location
+     * Sintra, and the people Alice, a hidden Zed, one with no name, "Gone" merged into Alice and "Bad" marked as a bad match; the
+     * second a folder, a Location and a person of its own.
+     *
+     * Assertions:
+     *
+     * From the first repository, the folder is named by its path, the Locations by their Category and name, and the people are
+     * read whole, each list in the order its IDs were given in. A hidden person and one with no name are named: a search can be
+     * scoped to them.
+     *
+     * Edge cases:
+     *
+     * No entry for an ID that does not exist, the second repository's folder, Location and person, the person merged away, the
+     * bad match, a Category given as a Location, or the root folder. `PersonService.getLive` reads the same people, and none for
+     * no ID.
+     */
+    val first = testContext.repository
+    val trips = testApp.service.folder.add("Trips")
+    val folder = testApp.service.folder.add("Lisbon", parentId = trips.id)
+    val portugal = testApp.service.location.addCategory("Portugal")
+    val lisbon = testApp.service.location.addLocation("Lisbon", 38.72, -9.14, Some(portugal.persistedId))
+    val sintra = testApp.service.location.addLocation("Sintra", 38.8, -9.39)
+    val alice = addPerson("Alice")
+    val zed = testApp.service.person.setVisibility(addPerson("Zed"), isHidden = true)
+    val unnamed = testApp.service.person.addPerson(Person())
+    val gone = addPerson("Gone")
+    testApp.service.person.merge(dest = alice, source = gone)
+    val bad = testApp.service.person.markAsBadMatch(addPerson("Bad"))
+
+    val second = testContext.persistRepository()
+    switchContextRepo(second)
+    val theirFolder = testApp.service.folder.add("Theirs")
+    val theirLocation = testApp.service.location.addLocation("Theirs", 1, 2)
+    val theirPerson = addPerson("Theirs")
+    switchContextRepo(first)
+    def unknown = java.util.UUID.randomUUID.toString
+
+    val live = List(zed, unnamed, alice).map(_.persistedId)
+    val names = testApp.service.search.filterNames(
+      folderId = Some(folder.persistedId),
+      personIds = List(unknown, live(0), theirPerson.persistedId, live(1), gone.persistedId, bad.persistedId, live(2)),
+      locationIds = List(sintra.persistedId, theirLocation.persistedId, portugal.persistedId, lisbon.persistedId, unknown)
+    )
+    names.folder shouldBe Some(NamedPath(folder.persistedId, List("Trips", "Lisbon")))
+    names.people.map(_.persistedId) shouldBe live
+    names.people.head.isHidden shouldBe true
+    names.locations shouldBe List(
+      NamedPath(sintra.persistedId, List("Sintra")),
+      NamedPath(lisbon.persistedId, List("Portugal", "Lisbon")))
+
+    for (folderId <- List(unknown, theirFolder.persistedId, first.rootFolderId)) withClue(s"folder $folderId: ") {
+      testApp.service.search.filterNames(Some(folderId), Nil, Nil) shouldBe SearchFilterNames(None, Nil, Nil)
+    }
+    testApp.service.search.filterNames(None, Nil, Nil) shouldBe SearchFilterNames(None, Nil, Nil)
+
+    testApp.service.person
+      .getLive(Set(alice, zed, unnamed, gone, bad, theirPerson).map(_.persistedId) + unknown)
+      .map(_.persistedId)
+      .toSet shouldBe live.toSet
+    testApp.service.person.getLive(Set.empty) shouldBe empty
+  }
+
   test("Indexing writes open their own transaction") {
 
     /**

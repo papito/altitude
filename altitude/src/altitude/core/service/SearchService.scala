@@ -4,6 +4,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import scala.annotation.tailrec
+import scala.collection.mutable
 
 import altitude.core.Altitude
 import altitude.core.Const
@@ -11,19 +12,25 @@ import altitude.core.dao.SearchDao
 import altitude.core.models.Asset
 import altitude.core.models.MapBounds
 import altitude.core.models.MapCells
+import altitude.core.models.NamedPath
+import altitude.core.models.Person
+import altitude.core.models.SearchFilterNames
 import altitude.core.models.UserMetadataField
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.BoundingBox
 import altitude.core.util.GroupedSearchResult
+import altitude.core.util.NameKey
 import altitude.core.util.ResolvedSearchGroup
 import altitude.core.util.ResolvedSearchTerm
 import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchExpression
+import altitude.core.util.SearchName
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 import altitude.core.util.SearchSource
 import altitude.core.util.SearchTerm
+import altitude.core.util.SearchText
 import altitude.core.util.SearchWords
 import altitude.core.util.SortValue
 
@@ -110,6 +117,108 @@ class SearchService(val app: Altitude):
 
       resolved
     }
+
+  /**
+   * The folders the advanced search panel offers for the text typed so far ([[offered]]), each by its path, in path order: a
+   * folder directly before the folders below it, as the folder tree lists them. The root and the recycled folders are no option.
+   */
+  def folderOptions(typed: String): List[NamedPath] =
+    txManager.asReadOnly {
+      val folders = searchDao.searchNames(SearchSource.Folder)
+      val path = folderPaths(folders)
+      offered(folders, typed)(folder => path(folder.id)).map(folder => NamedPath(folder.id, path(folder.id)))
+    }
+
+  /**
+   * The Locations the advanced search panel offers for the text typed so far ([[offered]]), each with its Category's name before
+   * its own, by their own names. A Category is no option, and text naming one offers none of its Locations.
+   */
+  def locationOptions(typed: String): List[NamedPath] =
+    txManager.asReadOnly {
+      val names = searchDao.searchNames
+      val path = locationPaths(names)
+      offered(names(SearchSource.Location), typed)(location => List(location.name)).map(
+        location => NamedPath(location.id, path(location)))
+    }
+
+  /**
+   * The people the advanced search panel offers for the text typed so far ([[offered]]), by name: the people a Search text
+   * resolves names against, named and neither hidden, merged away nor a bad match, each read with their cover and `numOfFaces`
+   */
+  def peopleOptions(typed: String): List[Person] =
+    txManager.asReadOnly {
+      val ids = offered(searchDao.searchNames(SearchSource.Person), typed)(person => List(person.name)).map(_.id)
+      val people = app.service.person.getLive(ids.toSet).map(person => person.persistedId -> person).toMap
+      ids.flatMap(people.get)
+    }
+
+  /**
+   * What the IDs of a search name in the repository as it is now, read in one snapshot, for the chips of the advanced search
+   * panel. The folder is any but the root, which is the whole repository, and a recycled one; a person is any live one, hidden or
+   * with no name included, since a search can be scoped to them; a Location is no Category. An ID that names none of these (one
+   * that no longer exists, another repository's) has no entry.
+   */
+  def filterNames(folderId: Option[String], personIds: List[String], locationIds: List[String]): SearchFilterNames =
+    txManager.asReadOnly {
+      val names = searchDao.searchNames
+      val folderPath = folderPaths(names(SearchSource.Folder))
+      val locations = names(SearchSource.Location).map(location => location.id -> location).toMap
+      val locationPath = locationPaths(names)
+      val people = app.service.person.getLive(personIds.toSet).map(person => person.persistedId -> person).toMap
+
+      val found = SearchFilterNames(
+        // A folder that is none of the names has no path
+        folder = folderId.map(id => NamedPath(id, folderPath(id))).filter(_.path.nonEmpty),
+        people = personIds.flatMap(people.get),
+        locations = locationIds.flatMap(locations.get).map(location => NamedPath(location.id, locationPath(location)))
+      )
+      logger.debug(
+        s"Advanced search panel: ${found.folder.size} of ${folderId.size} folders, ${found.people.size} of " +
+          s"${personIds.size} people and ${found.locations.size} of ${locationIds.size} Locations named")
+      found
+    }
+
+  /**
+   * The names that have the typed text, in the order of their `sortKey`s (names, compared by their name keys, segment by
+   * segment), the first `Const.Search.MAX_FILTER_OPTIONS` of them. The text is read as a Search text is and matched as one
+   * matches a name ([[SearchTerm.isIn]] over the readings of the name's [[SearchWords]]): every group of its terms must be in the
+   * name itself, an excluded term must not, and text with no usable term, nothing typed included, is in every name.
+   */
+  private def offered(names: Seq[SearchName], typed: String)(sortKey: SearchName => List[String]): List[SearchName] =
+    val started = System.currentTimeMillis
+    val matching = SearchText.parse(typed).fold(names) {
+      expression =>
+        names.filter {
+          name =>
+            val readings = SearchWords.variants(name.name)
+            expression.groups.forall(_.alternatives.exists(term => term.isIn(readings) != term.isExcluded))
+        }
+    }
+    // A name's key is computed once, however many paths it is a segment of
+    val keys = mutable.Map.empty[String, String]
+    val options = matching
+      .sortBy(name => sortKey(name).map(segment => keys.getOrElseUpdate(segment, NameKey.of(segment))))(using
+        Ordering.Implicits.seqOrdering)
+      .take(Const.Search.MAX_FILTER_OPTIONS)
+      .toList
+    logger.trace(
+      s"Advanced search options: ${options.size} offered of ${matching.size} matching among ${names.size} names, " +
+        s"in ${System.currentTimeMillis - started}ms")
+    options
+
+  /** Each folder's path by its ID: the names from its top-level ancestor down to its own, the root, which is no name, left out */
+  private def folderPaths(folders: Seq[SearchName]): String => List[String] =
+    val byId = folders.map(folder => folder.id -> folder).toMap
+
+    def path(id: String): List[String] =
+      byId.get(id).fold(Nil)(folder => folder.parentId.fold(Nil)(path) :+ folder.name)
+
+    path
+
+  /** A Location's path: its Category's name, when it has one, then its own */
+  private def locationPaths(names: Map[SearchSource, Seq[SearchName]]): SearchName => List[String] =
+    val categories = names(SearchSource.Category).map(category => category.id -> category.name).toMap
+    location => location.parentId.flatMap(categories.get).toList :+ location.name
 
   /**
    * The resolution with what its probe found: each positive group whose hits number at most the limit is complete, and the

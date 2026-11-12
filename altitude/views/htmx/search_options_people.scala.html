@@ -1,0 +1,27 @@
+@import altitude.core.Const
+@import altitude.core.models.Person
+@import altitude.core.util.Util
+
+@(people: List[Person])
+
+@* The options of the advanced search panel's People combobox (GET /htmx/search/r/:repoId/options/people?q=): the
+   people a Search text finds by name (named, and neither hidden, merged away nor a bad match) whose name has the text
+   typed so far (SearchService.peopleOptions), all of them with nothing typed, by name, the first
+   Const.Search.MAX_FILTER_OPTIONS of them. An option shows the Person's cover Face, or the no-cover placeholder
+   (`.no-cover`, core.css) for a Person with no Face, their name and their number of assets (`numOfFaces`), and carries
+   what its chip needs once it is chosen: the ID, the name as the label and the cover's URL. The fragment is the
+   `role="option"` elements alone, for the combobox's listbox; with nobody to offer it is empty. *@
+@for(person <- people) {
+<li role="option"
+    id="searchOption-@{person.persistedId}"
+    data-option-id="@{person.persistedId}"
+    data-option-label="@{person.name.getOrElse("")}"
+    @for(cover <- person.coverFaceId) { data-option-cover-url="@{Util.contentUrl(Const.DataStore.FACE, cover)}" }>
+    @person.coverFaceId match {
+    case Some(cover) => {<img class="cover" src="@{Util.contentUrl(Const.DataStore.FACE, cover)}" alt="" loading="lazy">}
+    case None => {<span class="cover no-cover"><i class="fas fa-user" aria-hidden="true"></i></span>}
+    }
+    <span class="name">@{person.name.getOrElse("")}</span>
+    <span class="count">@{person.numOfFaces}<span class="visually-hidden"> @if(person.numOfFaces == 1) {asset} else {assets}</span></span>
+</li>
+}

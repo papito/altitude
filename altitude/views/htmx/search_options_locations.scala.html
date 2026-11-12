@@ -1,0 +1,12 @@
+@import altitude.core.models.NamedPath
+
+@(locations: List[NamedPath])
+
+@* The options of the advanced search panel's Locations combobox (GET /htmx/search/r/:repoId/options/locations?q=):
+   the Locations whose own name has the text typed so far (SearchService.locationOptions), every Location with
+   nothing typed, each labelled with its Category before its name, by name, the first Const.Search.MAX_FILTER_OPTIONS
+   of them. A Category is no option. The fragment is the `role="option"` elements alone, for the combobox's listbox;
+   with no Location to offer it is empty. *@
+@for(location <- locations) {
+@includes.html.search_path_option(location)
+}

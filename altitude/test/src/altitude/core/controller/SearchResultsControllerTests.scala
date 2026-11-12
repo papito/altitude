@@ -1481,4 +1481,358 @@ import altitude.core.util.Util
         }
     }
   }
+
+  /** The URL a response replaces the browser's with, decoded */
+  private def replacedUrl(response: requests.Response): String =
+    java.net.URLDecoder.decode(response.headers("hx-replace-url").head, "UTF-8")
+
+  /** The grid ungrouped and grouped by day: an advanced search's filters hold in both */
+  private val gridShapes = List(Map.empty[String, String], Map("groupBy" -> "dateTaken"))
+
+  private val mapLayout = Map(Api.Field.Search.LAYOUT -> Const.Search.Layout.MAP)
+
+  test("Several people match the assets of all of them, or of any of them with peopleMatch=any") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the people Alice and Bob and four assets: one with a Face of each, one with Alice alone,
+     * one with Bob alone and one with nobody.
+     *
+     * Assertions:
+     *
+     * `personId` naming both, comma-separated, renders the asset with both alone, as `peopleMatch=all` does, and
+     * `peopleMatch=any` the three assets with either, in both grid shapes; the map layout counts the same matches. The replaced
+     * URL carries the people as given and the people match. A page of the search is continued by its cursor.
+     *
+     * Edge cases:
+     *
+     * An ID that names nobody, beside Alice's, is no 404: all of the two match nothing, and any of them match Alice's assets. A
+     * cursor of the search matching any does not continue the one matching all.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val alice = testApp.service.person.addPerson(Person(name = Some("Alice")))
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        def withFacesOf(filename: String, people: Person*): Asset = {
+          val asset = persistDated("2026-09-06T10:00:00", filename)
+          people.zipWithIndex.foreach(
+            (person, index) => testContext.addTestFace(person, asset, TestContext.unitVector(index + 1)))
+          asset
+        }
+        val both = withFacesOf("a.jpg", alice, bob)
+        val aliceOnly = withFacesOf("b.jpg", alice)
+        val bobOnly = withFacesOf("c.jpg", bob)
+        val neither = withFacesOf("d.jpg")
+        val people = Map(Api.Field.Search.PERSON_ID -> s"${alice.persistedId},${bob.persistedId}", "sort" -> "filename0")
+        val any = people + (Api.Field.Search.PEOPLE_MATCH -> "any")
+
+        for (shape <- gridShapes; all <- List(people, people + (Api.Field.Search.PEOPLE_MATCH -> "all")))
+          withClue(s"$shape $all: ") {
+            val response = htmlSearch(host, repoId, all ++ shape)
+            response.statusCode shouldBe 200
+            val page = response.text()
+            page should include(cell(both))
+            for (other <- List(aliceOnly, bobOnly, neither)) (page should not).include(cell(other))
+            replacedUrl(response) should include(s"personId=${alice.persistedId},${bob.persistedId}")
+          }
+
+        for (shape <- gridShapes) withClue(s"$shape any: ") {
+          val response = htmlSearch(host, repoId, any ++ shape)
+          val page = response.text()
+          for (matching <- List(both, aliceOnly, bobOnly)) page should include(cell(matching))
+          (page should not).include(cell(neither))
+          replacedUrl(response) should include("peopleMatch=any")
+        }
+
+        htmlSearch(host, repoId, people ++ mapLayout).text() should include("""data-results-total="1"""")
+        htmlSearch(host, repoId, any ++ mapLayout).text() should include("""data-results-total="3"""")
+
+        // The cursor carries the people match: the second page of any follows the first, and is refused for all
+        val firstPage = htmlSearch(host, repoId, any + ("rpp" -> "2")).text()
+        firstPage should include(cell(both))
+        firstPage should include(cell(aliceOnly))
+        (firstPage should not).include(cell(bobOnly))
+        val continuation = Map("after" -> cursorOf(firstPage).head, "isContinuousScroll" -> "true", "rpp" -> "2")
+        htmlSearch(host, repoId, any ++ continuation).text() should include(cell(bobOnly))
+        htmlSearch(host, repoId, people ++ continuation).statusCode shouldBe 400
+
+        val withNobody = Map(Api.Field.Search.PERSON_ID -> s"${alice.persistedId},${java.util.UUID.randomUUID}")
+        val allOfThem = htmlSearch(host, repoId, withNobody)
+        allOfThem.statusCode shouldBe 200
+        allOfThem.text() should include("""data-results-total="0"""")
+        val anyOfThem = htmlSearch(host, repoId, withNobody + (Api.Field.Search.PEOPLE_MATCH -> "any")).text()
+        anyOfThem should include(cell(both))
+        anyOfThem should include(cell(aliceOnly))
+        (anyOfThem should not).include(cell(bobOnly))
+    }
+  }
+
+  test("Several Locations match the assets in any of them") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the Locations Lisbon, Sintra and Porto, an asset in each, and an asset in none.
+     *
+     * Assertions:
+     *
+     * `locationId` naming Lisbon and Sintra, comma-separated, renders the assets of the two, in both grid shapes, and the map
+     * layout counts them; the replaced URL carries the Locations as given.
+     *
+     * Edge cases:
+     *
+     * An ID that names no Location, beside Lisbon's, is no 404 and adds nothing to Lisbon's assets.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        def located(name: String, filename: String) = {
+          val location = testApp.service.location.addLocation(name, 1, 2)
+          val asset = persistDated("2026-09-06T10:00:00", filename)
+          testApp.service.location.addAssets(location.persistedId, Set(asset.persistedId))
+          (location, asset)
+        }
+        val (lisbon, inLisbon) = located("Lisbon", "a.jpg")
+        val (sintra, inSintra) = located("Sintra", "b.jpg")
+        val (_, inPorto) = located("Porto", "c.jpg")
+        val unlocated = persistDated("2026-09-06T10:00:00", "d.jpg")
+        val locations = Map(Api.Field.Search.LOCATION_ID -> s"${lisbon.persistedId},${sintra.persistedId}")
+
+        for (shape <- gridShapes) withClue(s"$shape: ") {
+          val response = htmlSearch(host, repoId, locations ++ shape)
+          response.statusCode shouldBe 200
+          val page = response.text()
+          page should include(cell(inLisbon))
+          page should include(cell(inSintra))
+          for (other <- List(inPorto, unlocated)) (page should not).include(cell(other))
+          replacedUrl(response) should include(s"locationId=${lisbon.persistedId},${sintra.persistedId}")
+        }
+        htmlSearch(host, repoId, locations ++ mapLayout).text() should include("""data-results-total="2"""")
+
+        val withNowhere =
+          htmlSearch(host, repoId, Map(Api.Field.Search.LOCATION_ID -> s"${lisbon.persistedId},${java.util.UUID.randomUUID}"))
+        withNowhere.statusCode shouldBe 200
+        withNowhere.text() should include(cell(inLisbon))
+        withNowhere.text() should include("""data-results-total="1"""")
+    }
+  }
+
+  test("A Date Taken range and a Date Imported range narrow the results to whole days, both ends included") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with assets taken at the first moment of June 1, on June 15, in the last second of June 30
+     * and at the first moment of July 1, 2024, imported on four consecutive days at noon UTC, an asset with no capture time
+     * imported on the fifth, and a triaged asset taken on June 15.
+     *
+     * Assertions:
+     *
+     * `takenFrom` and `takenTo` of June 1 and June 30 render the three assets of June, in both grid shapes, and the map layout
+     * counts them; `takenFrom` alone renders the assets from that day on and `takenTo` alone those up to it. `importedFrom` and
+     * `importedTo` render the assets imported on those days of the server's time zone and between them. Both ranges together
+     * render the assets in both. The replaced URL carries the four dates.
+     *
+     * Edge cases:
+     *
+     * The asset with no capture time is in no Date Taken range, not even one open at an end. `triaged=true` adds the triaged
+     * asset of June 15 to the range's results, which leave it out otherwise.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        def imported(day: Int) = OffsetDateTime.of(2026, 9, day, 12, 0, 0, 0, ZoneOffset.UTC)
+        // The day of the server's time zone an import of noon UTC falls on
+        def importDay(day: Int): String = imported(day).atZoneSameInstant(java.time.ZoneId.systemDefault).toLocalDate.toString
+        def dated(taken: String, filename: String, importedOn: Int): Asset = {
+          val asset = persistDated(taken, filename)
+          testContext.setAssetDates(asset.persistedId, Some(LocalDateTime.parse(taken)), imported(importedOn))
+          asset
+        }
+        val juneFirst = dated("2024-06-01T00:00:00", "a.jpg", 1)
+        val juneMid = dated("2024-06-15T12:00:00", "b.jpg", 2)
+        val juneLast = dated("2024-06-30T23:59:59", "c.jpg", 3)
+        val julyFirst = dated("2024-07-01T00:00:00", "d.jpg", 4)
+        val undated = persistUndated("e.jpg")
+        testContext.setAssetDates(undated.persistedId, None, imported(5))
+        val triaged = persistFrame("2024-06-15T13:00:00", "f.jpg")
+        val everyone = List(juneFirst, juneMid, juneLast, julyFirst, undated, triaged)
+
+        def shows(page: String, expected: Asset*): Unit = {
+          for (asset <- expected) page should include(cell(asset))
+          for (asset <- everyone.diff(expected)) (page should not).include(cell(asset))
+        }
+
+        val june = Map(Api.Field.Search.TAKEN_FROM -> "2024-06-01", Api.Field.Search.TAKEN_TO -> "2024-06-30")
+        for (shape <- gridShapes) withClue(s"$shape: ") {
+          val response = htmlSearch(host, repoId, june ++ shape)
+          response.statusCode shouldBe 200
+          shows(response.text(), juneFirst, juneMid, juneLast)
+          replacedUrl(response) should include("takenFrom=2024-06-01")
+          replacedUrl(response) should include("takenTo=2024-06-30")
+        }
+        htmlSearch(host, repoId, june ++ mapLayout).text() should include("""data-results-total="3"""")
+
+        shows(htmlSearch(host, repoId, Map(Api.Field.Search.TAKEN_FROM -> "2024-06-30")).text(), juneLast, julyFirst)
+        shows(htmlSearch(host, repoId, Map(Api.Field.Search.TAKEN_TO -> "2024-06-01")).text(), juneFirst)
+        shows(htmlSearch(host, repoId, june + (Api.Field.Search.TRIAGED -> "true")).text(), juneFirst, juneMid, juneLast, triaged)
+
+        val importedRange =
+          Map(Api.Field.Search.IMPORTED_FROM -> importDay(2), Api.Field.Search.IMPORTED_TO -> importDay(4))
+        for (shape <- gridShapes) withClue(s"$shape imported: ") {
+          val response = htmlSearch(host, repoId, importedRange ++ shape)
+          shows(response.text(), juneMid, juneLast, julyFirst)
+          replacedUrl(response) should include(s"importedFrom=${importDay(2)}")
+          replacedUrl(response) should include(s"importedTo=${importDay(4)}")
+        }
+        shows(htmlSearch(host, repoId, Map(Api.Field.Search.IMPORTED_FROM -> importDay(5))).text(), undated)
+
+        shows(htmlSearch(host, repoId, june ++ importedRange).text(), juneMid, juneLast)
+    }
+  }
+
+  test("Text, a folder, people, Locations and date ranges narrow one search together") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the folder Trips, the people Alice and Bob, and the Locations Lisbon and Sintra. One
+     * asset, beach.jpg in Trips, taken on June 15, 2024, has a Face of each and is in Lisbon; five more each differ from it in
+     * one way: named forest.jpg, in no folder of Trips, without Bob, in Porto, and taken on July 15.
+     *
+     * Assertions:
+     *
+     * A search for the text "beach" in Trips, with both people, in Lisbon or Sintra, taken in June 2024 and imported on the day
+     * the assets were, renders the one asset that passes every filter, in both grid shapes, and the map layout counts it.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val trips = testApp.service.folder.add("Trips")
+        val elsewhere = testApp.service.folder.add("Elsewhere")
+        val alice = testApp.service.person.addPerson(Person(name = Some("Alice")))
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val lisbon = testApp.service.location.addLocation("Lisbon", 1, 2)
+        val sintra = testApp.service.location.addLocation("Sintra", 1, 2)
+        val porto = testApp.service.location.addLocation("Porto", 1, 2)
+        val importedAt = OffsetDateTime.of(2026, 9, 6, 12, 0, 0, 0, ZoneOffset.UTC)
+        val importDay = importedAt.atZoneSameInstant(java.time.ZoneId.systemDefault).toLocalDate.toString
+
+        def asset(
+            filename: String = "beach.jpg",
+            folderId: String = trips.persistedId,
+            people: List[Person] = List(alice, bob),
+            locationId: String = lisbon.persistedId,
+            taken: String = "2024-06-15T10:00:00"): Asset = {
+          val asset = testContext.persistAsset()
+          testApp.service.asset.rename(asset.persistedId, filename)
+          testApp.service.library.moveAssetsToFolder(Set(asset.persistedId), folderId)
+          people.zipWithIndex.foreach(
+            (person, index) => testContext.addTestFace(person, asset, TestContext.unitVector(index + 1)))
+          testApp.service.location.addAssets(locationId, Set(asset.persistedId))
+          testContext.setAssetDates(asset.persistedId, Some(LocalDateTime.parse(taken)), importedAt)
+          asset
+        }
+        val matching = asset()
+        val others = List(
+          asset(filename = "forest.jpg"),
+          asset(folderId = elsewhere.persistedId),
+          asset(people = List(alice)),
+          asset(locationId = porto.persistedId),
+          asset(taken = "2024-07-15T10:00:00")
+        )
+
+        val filters = Map(
+          Api.Field.Search.QUERY_TEXT -> "beach",
+          Api.Field.Search.FOLDER_ID -> trips.persistedId,
+          Api.Field.Search.PERSON_ID -> s"${alice.persistedId},${bob.persistedId}",
+          Api.Field.Search.LOCATION_ID -> s"${lisbon.persistedId},${sintra.persistedId}",
+          Api.Field.Search.TAKEN_FROM -> "2024-06-01",
+          Api.Field.Search.TAKEN_TO -> "2024-06-30",
+          Api.Field.Search.IMPORTED_FROM -> importDay,
+          Api.Field.Search.IMPORTED_TO -> importDay
+        )
+
+        for (shape <- gridShapes) withClue(s"$shape: ") {
+          val response = htmlSearch(host, repoId, filters ++ shape)
+          response.statusCode shouldBe 200
+          response.text() should include(cell(matching))
+          for (other <- others) (response.text() should not).include(cell(other))
+        }
+        htmlSearch(host, repoId, filters ++ mapLayout).text() should include("""data-results-total="1"""")
+    }
+  }
+
+  test("An advanced search's malformed parameters, and its filters in the trash, are plain-text 400s") {
+
+    /**
+     * Setup:
+     *
+     * An empty repository, searched ungrouped, grouped by day and in map layout.
+     *
+     * Assertions:
+     *
+     * A date that is not an ISO day, a range whose start is after its end, a `peopleMatch` that is neither `all` nor `any`, and
+     * eleven people or eleven Locations in one parameter are each a plain-text 400. So are a date range, two people and two
+     * Locations with the trash view, naming the trash.
+     *
+     * Edge cases:
+     *
+     * Ten people in one parameter, and one person and one Location with the trash view, are served.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        def ids(count: Int): String = List.fill(count)(java.util.UUID.randomUUID.toString).mkString(",")
+        val trash = Api.Field.Search.VIEW -> Const.Search.View.TRASHBIN
+        val shapes = gridShapes :+ mapLayout
+
+        val malformed = List(
+          Map(Api.Field.Search.TAKEN_FROM -> "june"),
+          Map(Api.Field.Search.IMPORTED_TO -> "2024-02-30"),
+          Map(Api.Field.Search.TAKEN_FROM -> "2024-06-02", Api.Field.Search.TAKEN_TO -> "2024-06-01"),
+          Map(Api.Field.Search.IMPORTED_FROM -> "2024-06-02", Api.Field.Search.IMPORTED_TO -> "2024-06-01"),
+          Map(Api.Field.Search.PEOPLE_MATCH -> "some"),
+          Map(Api.Field.Search.PERSON_ID -> ids(11)),
+          Map(Api.Field.Search.LOCATION_ID -> ids(11))
+        )
+        for (params <- malformed; shape <- shapes) withClue(s"$params $shape: ") {
+          val response = htmlSearch(host, repoId, params ++ shape)
+          response.statusCode shouldBe 400
+          response.headers("content-type").head should include("text/plain")
+        }
+
+        val inTrash = List(
+          Map(Api.Field.Search.TAKEN_FROM -> "2024-06-01"),
+          Map(Api.Field.Search.IMPORTED_TO -> "2024-06-01"),
+          Map(Api.Field.Search.PERSON_ID -> ids(2)),
+          Map(Api.Field.Search.LOCATION_ID -> ids(2))
+        )
+        for (params <- inTrash; shape <- shapes) withClue(s"trash $params $shape: ") {
+          val response = htmlSearch(host, repoId, params ++ shape + trash)
+          response.statusCode shouldBe 400
+          response.headers("content-type").head should include("text/plain")
+          response.text() should include("trash")
+        }
+
+        htmlSearch(host, repoId, Map(Api.Field.Search.PERSON_ID -> ids(10))).statusCode shouldBe 200
+    }
+  }
 }

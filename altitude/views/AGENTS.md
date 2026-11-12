@@ -35,7 +35,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 ```
 views/
   *.scala.html          ← full pages (index, login, setup, pipeline, settings, users, style_guide)
-  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title)
+  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title, an advanced search option)
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
@@ -84,6 +84,44 @@ view** below). Partials carry no module scripts: the repository ID is set once b
 explorer tab that issued a load is marked selected from `htmx:after:request`
 (`js/listeners/htmx-requests.js`). The styles the two menus share (`.menu-ctrl`, `.context-menu`,
 `.asset-count`) live in `core.css`.
+
+**Advanced search panel fragments** — `SearchPanelController` renders the panel's form and the options of its
+comboboxes (`../AGENTS.md`, **Advanced search panel**). No template includes the form and no script requests it or
+its options: they are reached by their routes alone, and have no stylesheet.
+
+- `htmx/search_panel.scala.html` (`GET /htmx/search/r/:repoId/panel`) is `form#searchPanelForm` (`role="search"`,
+  a `get` to the Library's main page), filled in from a search's parameters. Every filter is an input under its
+  search parameter's name, holding the value a search takes: the text field `q` (`#searchPanelText`), and hidden
+  inputs for `folderId`, `personId` and `locationId` (IDs separated by commas), `peopleMatch` (`all` or `any`) and
+  `takenFrom`, `takenTo`, `importedFrom` and `importedTo` (ISO dates). `.fields` holds one `.field` per filter, the
+  two date ranges side by side in `.dates`, and `.actions` holds Clear (`data-app-search-panel-clear`, a button
+  that submits nothing) and Search, the form's submit.
+- A combobox field (`.field[data-filter]`, `folder`, `people` or `locations`) follows the ARIA combobox pattern of
+  the Change combobox: a label, then `.box` with the field's icon, the hidden input of its IDs, the chips of what
+  is chosen (`ul.chips`) and the input typed into (`role="combobox"`, `aria-autocomplete="list"`, `aria-expanded`,
+  `aria-controls`; it has no `name`, so it is never submitted), and after the box the empty `role="listbox"`
+  (`popover="manual"`) its options go into. `data-options-url` is the field's options route, and `data-multiple`
+  marks the two fields that take several. A chip (`li.chip`, `.person` for a Person) carries `data-option-id`,
+  `data-option-label` and, for a Person with a cover, `data-option-cover-url`, shows its label (a folder's path,
+  a Location with its Category, a Person's name led by their cover Face, `.cover`, or the `.no-cover` placeholder)
+  and ends with its remove button (`.remove`, named "Remove <label>"). The server names the chips: an ID that names
+  nothing in the Library has no chip and no place in its input.
+- The people match is the `.switch` beside the People label, the two in `.label-row` (`#searchPanelPeopleMatch`,
+  in `.match` between the words Any and All, on for `all`), its value in the hidden `peopleMatch` input beside it;
+  `.match` is `hidden` with fewer than two people chosen.
+- A date range field (`.field[data-date-range]`, `taken` or `imported`) is a label and a `.box` with a calendar
+  icon, a text input showing the range (`2024-06-01 to 2024-06-30`, no `name`), the two hidden inputs of its days
+  and a clear button (`.clear`).
+- `htmx/search_options_folders.scala.html`, `search_options_people.scala.html` and
+  `search_options_locations.scala.html` (`GET /htmx/search/r/:repoId/options/folders`, `/people`, `/locations`,
+  each with the text typed so far as `q`) are the options of the three comboboxes: `li[role="option"]` elements
+  alone, at most 50, an empty fragment when nothing matches. An option carries what its chip needs,
+  `data-option-id`, `data-option-label` and a Person's `data-option-cover-url`, and has the ID
+  `searchOption-<id>`. A folder's and a Location's option is `includes/search_path_option.scala.html`: `.name`,
+  holding the names above its own in `.ancestors` (`Trips › 2024 › `, a Location's Category) and then its own. A
+  Person's is their cover (`img.cover`, or `.cover.no-cover`), `.name` and `.count`, their number of assets, which
+  a `.visually-hidden` "assets" follows. The server matches the text and orders the options, so the fragment is
+  rendered as it comes.
 
 The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">` in a
 `role="tablist"`, styled by `tabs.css` on `aria-selected="true"`); the initial tab is loaded through
@@ -2909,6 +2947,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/listeners/triage.js` | the Triage summary's reload: `registerTriageListeners` (on `peopleChanged`) and `reloadTriageSummary`, one request per change, issued from the host so the reloads take turns |
 | `views/htmx/triage_summary.scala.html`, `triage_scope_dialog.scala.html`, `quick_view_modal.scala.html` | The Triage explorer's fragments (`TriageController`): the Triage summary above its tabs, the scope dialog of a folder, Person or Location, and Quick view of a folder; styled by `static/css/htmx/triage_summary.css`, `triage_scope_dialog.css` and `quick_view_modal.css` |
 | `static/js/search-results/search-input.js` | `bindSearchInput`: the nav's Search input (`#searchForm`), submitting and clearing `q` and following the store |
+| `views/htmx/search_panel.scala.html`, `search_options_folders.scala.html`, `search_options_people.scala.html`, `search_options_locations.scala.html`, `views/includes/search_path_option.scala.html` | The advanced search panel's fragments (`SearchPanelController`): its form filled in from a search's parameters, each filter an input under its parameter's name and the folder, people and Locations as chips, and the `role="option"` elements of its three comboboxes, a folder's and a Location's sharing the include (**Advanced search panel fragments**) |
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal (the box fitted from the shown element's size, the Detail panel told of each asset and size shown), and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
 | `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing, the results title read again when the viewed Person is named, and the destination's results on closing when the viewed Person is merged away or merged into) |
 | `static/js/search-results/detail-url.js` | `createDetailUrl`: Asset detail's URL, its history entry and Back and Forward over it, the opening of the asset a URL names (`openAssetInLocation`), and the search URL held while it is open (see **Detail navigation**) |

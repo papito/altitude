@@ -50,6 +50,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * `subset` narrows the view to a Triage subset, `unknownPeople` or `noLocation` (`SearchRequestParser`), in every layout and
    * view; any other value is a 400. The results title names it, and the browser URL keeps it.
    *
+   * An advanced search (`SearchRequestParser`) names several people or Locations, comma-separated in `personId` and `locationId`,
+   * says with `peopleMatch` whether the people match `all` or `any`, and narrows by the Date Taken range (`takenFrom`, `takenTo`)
+   * and the Date Imported range (`importedFrom`, `importedTo`); a malformed one is a 400, as is any of them with the trash view,
+   * and the browser URL keeps them. The results title names a person or a Location only when the search names one.
+   *
    * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
    * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
    *
@@ -78,6 +83,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       personId: Option[String] = None,
       albumId: Option[String] = None,
       locationId: Option[String] = None,
+      peopleMatch: Option[String] = None,
+      takenFrom: Option[String] = None,
+      takenTo: Option[String] = None,
+      importedFrom: Option[String] = None,
+      importedTo: Option[String] = None,
       bbox: Option[String] = None,
       triaged: Option[Boolean] = None,
       subset: Option[String] = None,
@@ -104,7 +114,22 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       case Some(refusal) => return refusal
       case None =>
 
-    val scope = SearchRequestParser.parse(view, q, folderId, personId, albumId, locationId, bbox, triaged, subset) match
+    val parsed = SearchRequestParser.parse(
+      view,
+      q,
+      folderId,
+      personId,
+      albumId,
+      locationId,
+      bbox,
+      triaged,
+      subset,
+      peopleMatch,
+      takenFrom,
+      takenTo,
+      importedFrom,
+      importedTo)
+    val scope = parsed match
       case Left(message) => return textError(message, 400)
       case Right(scope) => scope
 
@@ -124,9 +149,15 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         400)
 
     // What the results title names: the person, the folder's path, the album, the Location or the subset the results are
-    // scoped to. One that is not the repository's, unknown or another repository's, is a 404 that names nothing of it
+    // scoped to. One that is not the repository's, unknown or another repository's, is a 404 that names nothing of it. Several
+    // people, or several Locations, are named by no title, and one of them that names nothing matches nothing
     val (person, folderPath, album, location) =
-      try (personOf(personId), folderPathOf(folderId), albumId.map(App.altitude.service.album.getById), locationOf(locationId))
+      try
+        (
+          personOf(theOnly(scope.personIds)),
+          folderPathOf(folderId),
+          albumId.map(App.altitude.service.album.getById),
+          locationOf(theOnly(scope.locationIds)))
       catch case ex: NotFoundException => return textError(ex.getMessage, 404)
 
     val browserUrl = browserViewUrl(
@@ -137,6 +168,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       personId,
       albumId,
       locationId,
+      peopleMatch,
+      takenFrom,
+      takenTo,
+      importedFrom,
+      importedTo,
       bbox,
       triaged,
       subset,
@@ -341,6 +377,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   private def timedOut: Response[String] =
     textError(Const.Msg.Err.SEARCH_TIMED_OUT, 503)
 
+  /** The one ID of a set, none for a set of none or of several */
+  private def theOnly(ids: Set[String]): Option[String] =
+    Option.when(ids.size == 1)(ids.head)
+
   private def personOf(personId: Option[String]): Person =
     personId.map(App.altitude.service.person.getById).orNull
 
@@ -374,6 +414,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       personId: Option[String],
       albumId: Option[String],
       locationId: Option[String],
+      peopleMatch: Option[String],
+      takenFrom: Option[String],
+      takenTo: Option[String],
+      importedFrom: Option[String],
+      importedTo: Option[String],
       bbox: Option[String],
       triaged: Option[Boolean],
       subset: Option[String],
@@ -387,6 +432,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       personId.map(Api.Field.Search.PERSON_ID -> _),
       albumId.map(Api.Field.Search.ALBUM_ID -> _),
       locationId.map(Api.Field.Search.LOCATION_ID -> _),
+      peopleMatch.map(Api.Field.Search.PEOPLE_MATCH -> _),
+      takenFrom.map(Api.Field.Search.TAKEN_FROM -> _),
+      takenTo.map(Api.Field.Search.TAKEN_TO -> _),
+      importedFrom.map(Api.Field.Search.IMPORTED_FROM -> _),
+      importedTo.map(Api.Field.Search.IMPORTED_TO -> _),
       subset.map(Api.Field.Search.SUBSET -> _),
       bbox.map(Api.Field.Search.BBOX -> _),
       triaged.map(Api.Field.Search.TRIAGED -> _.toString),
