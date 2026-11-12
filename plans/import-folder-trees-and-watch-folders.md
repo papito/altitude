@@ -100,6 +100,14 @@ reason (`duplicate` with the existing asset, `unsupported`, else `failed`); for 
 and, with deletion on and the outcome `imported` or `duplicate`, deletes the source and its emptied parents. The delete runs
 after the commit, and a delete that fails is logged at WARN and the file stays remembered as handled.
 
+**Live status.** The socket is per Library (`/import/r/:repoId/status`), opened by an account with Import in it, and
+`ImportStatusWsActor` keeps the sockets by Library and account. `ImportService` tells the actor after each commit that
+changes an Import (opened, a file settled, closed), with the Import as committed. The actor keeps the latest state per
+Import, pushes at most one message per Import per second and a last one at its close, and sends the Import's status (its
+progress bar and count chips) rendered by the Twirl partial the history uses, addressed to the Import's element, which the
+page's `hx-ws` element swaps in. A push for an Import the page does not show yet, an Import's close and a reconnect make
+the page fetch the top of the history again.
+
 **Scanning.** `WatchFolderService.scan(watchFolder)` runs on the import dispatcher, one scan per Watch folder at a time,
 scheduled on the actor system. It walks the path, upserts memory rows (`seen` on first sight or change), and for each file
 stable since the previous scan stages a copy (`stageCopy`) and offers it to the import queue under its backpressure, in path

@@ -27,6 +27,7 @@ import altitude.core.routes.web.partial.AlbumActionController
 import altitude.core.routes.web.partial.AssetActionController
 import altitude.core.routes.web.partial.CurationActionController
 import altitude.core.routes.web.partial.FolderActionController
+import altitude.core.routes.web.partial.ImportHistoryController
 import altitude.core.routes.web.partial.LibraryActionController
 import altitude.core.routes.web.partial.LocationActionController
 import altitude.core.routes.web.partial.NavController
@@ -117,5 +118,6 @@ object App extends cask.Main:
     new SearchPanelController,
     new TrashActionController,
     new TriageController,
+    new ImportHistoryController,
     new ViewSettingsActionController
   )

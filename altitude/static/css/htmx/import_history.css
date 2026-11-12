@@ -1,0 +1,117 @@
+/* The Import history (htmx/import_history): the timeline of a Library's Imports, scoped by the ID of its root */
+
+/* A group's heading: "In progress", "Earlier" */
+#importHistoryList h3 {
+  margin: var(--space-7) 0 var(--space-4);
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-medium);
+  text-transform: uppercase;
+}
+
+#importHistoryList h3:first-child {
+  margin-top: 0;
+}
+
+/* The timeline: a line down the left, set in by half a node so the nodes sit on it, and the Imports beside it */
+#importHistoryList .timeline {
+  display: grid;
+  gap: var(--space-7);
+  margin: 0 0 0 calc(var(--import-node-size) / 2);
+  padding: var(--space-2) 0;
+  border-left: var(--border-heavy) hsl(from var(--theme-neutral-3) h s l / 0.3);
+  list-style: none;
+}
+
+/* An Import: its header, its status, its files, with its node on the line beside the header's first line */
+#importHistoryList .import {
+  position: relative;
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding-left: var(--space-7);
+}
+
+/* The node: a dot centered on the line, ringed by the page's color so the line stops short of it */
+#importHistoryList .import::before {
+  content: "";
+  position: absolute;
+  top: var(--space-2);
+  left: calc((var(--import-node-size) + var(--border-heavy-width)) / -2 - var(--border-heavy-width));
+  width: var(--import-node-size);
+  height: var(--import-node-size);
+  border: var(--border-heavy) var(--theme-neutral-2);
+  border-radius: 50%;
+  background-color: var(--theme-neutral-3);
+  box-sizing: content-box;
+}
+
+/* An Import in progress glows: the accent, in a halo of it */
+#importHistoryList .import.in-progress::before {
+  background-color: var(--theme-accent);
+  box-shadow: 0 0 0 var(--space-2) hsl(from var(--theme-accent) h s l / 0.3);
+}
+
+/* The header: the kind's icon, the title, then who delivered it, when and where it went, which wrap under the title */
+#importHistoryList header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-4);
+  row-gap: var(--space-1);
+}
+
+#importHistoryList header > i {
+  color: var(--theme-neutral-3);
+}
+
+#importHistoryList .title {
+  font-size: var(--font-size-medium);
+  overflow-wrap: anywhere;
+}
+
+#importHistoryList .meta {
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-text);
+  overflow-wrap: anywhere;
+}
+
+#importHistoryList .interrupted {
+  color: var(--error-color);
+}
+
+/* The control that shows an Import's files */
+#importHistoryList summary {
+  width: fit-content;
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+}
+
+/* Nothing was imported yet */
+#importHistoryList .empty {
+  margin: 0;
+  padding: var(--space-9);
+  border: var(--border-dashed) hsl(from var(--theme-neutral-3) h s l / 0.45);
+  border-radius: var(--radius-large);
+  color: var(--theme-neutral-3);
+  text-align: center;
+}
+
+/* How many of the Imports are shown, and the control for the earlier ones; the files' count line is the same
+   (htmx/import_files) */
+#importHistory .shown {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+  margin: 0;
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+}
+
+#importHistoryList > .shown {
+  margin-top: var(--space-7);
+}

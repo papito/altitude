@@ -4,6 +4,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
+import java.util.concurrent.CopyOnWriteArrayList
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -26,10 +27,14 @@ import altitude.core.dao.ImportFileDao
 import altitude.core.models.Asset
 import altitude.core.models.Folder
 import altitude.core.models.Import
+import altitude.core.models.ImportEntry
 import altitude.core.models.ImportFile
+import altitude.core.models.ImportFiles
+import altitude.core.models.ImportHistory
 import altitude.core.models.ImportOrigin
 import altitude.core.models.ImportOutcome
 import altitude.core.models.ImportSource
+import altitude.core.models.NamedPath
 import altitude.core.models.Permission
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineUtils
@@ -44,11 +49,15 @@ import altitude.core.util.RelPath
  * pending. Its five counters are its files by outcome, written by the same transaction that sets a file's outcome.
  */
 object ImportService:
+  // An Import file's reason reads as the pipeline's do (`PipelineUtils.dropReason`): a phrase in sentence case with no full
+  // stop, which the Import history shows as it is stored. A duplicate's reason is a place, which the history leads with
+  // "Already in the Library: ".
+
   // Where the asset a duplicate matches is, when it is in no folder below the root
   private val TRIAGE = "Triage"
   private val TOP_LEVEL = "Top level"
   // Why a file still pending when the server starts is failed
-  private val INTERRUPTED = "interrupted by a restart"
+  private val INTERRUPTED = "Interrupted by a restart"
   // Why a file the page could not send is failed
   private val UPLOAD_FAILED = "Upload failed"
 
@@ -57,6 +66,7 @@ class ImportService(val app: Altitude):
   private val importDao: ImportDao = app.DAO.imports
   private val fileDao: ImportFileDao = app.DAO.importFile
   private val txManager: TransactionManager = app.txManager
+  private val listeners = CopyOnWriteArrayList[(String, Import) => Unit]()
 
   /**
    * Opens an Import delivered by the context account, if there is one: in progress, with no file yet. `name` is the uploaded
@@ -84,6 +94,7 @@ class ImportService(val app: Altitude):
           destFolderId = destFolderId))
       logger.info(
         s"Opened Import [${opened.persistedId}]: ${source.dbValue}${name.fold("")(n => s" \"$n\"")}. Repo: ${RequestContext.getRepository.persistedId}")
+      changed(opened.persistedId)
       opened
     }
 
@@ -257,6 +268,7 @@ class ImportService(val app: Altitude):
 
       val file = fileDao.add(ImportFile(importId = importId, relPath = relPath, sizeBytes = sizeBytes))
       logger.debug(s"Added Import file [${file.persistedId}] \"$relPath\" to Import [$importId]")
+      changed(importId)
       file
     }
 
@@ -278,6 +290,7 @@ class ImportService(val app: Altitude):
       if fileDao.settle(fileId, outcome, reason, assetId) == 1 then
         BaseService.requireFound(importDao.tableName, file.importId, importDao.fileSettled(file.importId, outcome)): Unit
         logger.debug(s"Import file [$fileId] \"${file.relPath}\" of Import [${file.importId}] is ${outcome.dbValue}")
+        changed(file.importId)
       else logger.warn(s"Import file [$fileId] \"${file.relPath}\" was settled already: left as it is, not ${outcome.dbValue}")
     }
 
@@ -306,14 +319,17 @@ class ImportService(val app: Altitude):
    */
   private def placeOf(asset: Asset, fileId: String): String =
     if !asset.isPipelineProcessed then
-      importDao.getById(fileDao.getById(fileId).importId).destFolderId.fold(ImportService.TRIAGE)(pathOf)
+      importDao.getById(fileDao.getById(fileId).importId).destFolderId.fold(ImportService.TRIAGE)(pathOf(_))
     else if asset.isTriaged then ImportService.TRIAGE
     else pathOf(asset.folderId)
 
-  /** A folder as an Import file names it: its path, or the top level of the Library for the root */
-  private def pathOf(folderId: String): String =
+  /**
+   * A folder as an Import file names it, and as the Import history names a destination under its own `separator`: its path, or
+   * the top level of the Library for the root
+   */
+  private def pathOf(folderId: String, separator: String = RelPath.SEPARATOR): String =
     if app.service.folder.isRootFolder(folderId) then ImportService.TOP_LEVEL
-    else app.service.folder.getPath(folderId).map(_.name).mkString(RelPath.SEPARATOR)
+    else app.service.folder.getPath(folderId).map(_.name).mkString(separator)
 
   /**
    * Marks the Import complete: no more files will be added. It closes at once when none of its files is pending, and otherwise
@@ -323,6 +339,7 @@ class ImportService(val app: Altitude):
     txManager.withTransaction {
       BaseService.requireFound(importDao.tableName, importId, importDao.markComplete(importId)): Unit
       logger.info(s"Import [$importId] is complete")
+      changed(importId)
     }
 
   /** [[close]] for the upload routes: the Import is closed by the account that opened it, as an upload ([[ownUpload]]) */
@@ -343,7 +360,7 @@ class ImportService(val app: Altitude):
 
   /**
    * Startup's step for the Imports a server that stopped left behind, in every repository. Nothing is in the import pipeline when
-   * a server starts and staged files are not resumed, so every Import file still pending is failed, "interrupted by a restart",
+   * a server starts and staged files are not resumed, so every Import file still pending is failed, "Interrupted by a restart",
    * and every Import still in progress is closed, counting those files as failed.
    */
   def failInterrupted(): Unit =
@@ -393,10 +410,68 @@ class ImportService(val app: Altitude):
       importDao.list(rpp, page)
     }
 
+  /**
+   * The top of the context repository's Import history, its first `shown` Imports as [[list]] orders them, each with what the
+   * history says of it beside its record: the name of the account that delivered it, the path of its destination folder, and
+   * whether a restart failed files of it, which only an Import closed with failed files is asked.
+   */
+  def history(shown: Int): ImportHistory =
+    txManager.asReadOnly {
+      val listed = importDao.list(shown, page = 1)
+      val names =
+        app.DAO.user.getByIds(listed.records.flatMap(_.accountId).toSet).map(account => account.persistedId -> account.name).toMap
+      val destinations =
+        listed.records.flatMap(_.destFolderId).distinct.map(folderId => folderId -> pathOf(folderId, NamedPath.SEPARATOR)).toMap
+      val interrupted = fileDao.havingReason(
+        listed.records.filter(anImport => !anImport.isInProgress && anImport.failed > 0).map(_.persistedId).toSet,
+        ImportOutcome.Failed,
+        ImportService.INTERRUPTED)
+
+      val entries = listed.records.map {
+        anImport =>
+          ImportEntry(
+            anImport,
+            openedAt = anImport.createdAt.map(importDao.instantOf),
+            deliveredBy = anImport.accountId.flatMap(names.get),
+            destination = anImport.destFolderId.map(destinations),
+            isInterrupted = interrupted.contains(anImport.persistedId)
+          )
+      }
+      ImportHistory(entries, listed.total)
+    }
+
   /** The Import's files in path order, those of one outcome when `outcome` is given */
   def files(importId: String, outcome: Option[ImportOutcome] = None): List[ImportFile] =
     txManager.asReadOnly {
       // Fails with NotFoundException for an unknown Import, or another repository's
       importDao.getById(importId): Unit
       fileDao.ofImport(importId, outcome)
+    }
+
+  /**
+   * The Import with its first `shown` files in path order, those of one outcome when `outcome` is given, read in one transaction,
+   * so the Import's counters are the numbers of the files the outcomes hold
+   */
+  def filesShown(importId: String, outcome: Option[ImportOutcome], shown: Int): ImportFiles =
+    txManager.asReadOnly {
+      ImportFiles(importDao.getById(importId), outcome, fileDao.ofImport(importId, outcome, Some(shown)))
+    }
+
+  /**
+   * Tells `listener` of every change to an Import from now on, with the repository's ID and the Import as the change committed
+   * it: one opened, given a file, a file of it settled, or marked complete. A change that rolls back is not told.
+   */
+  def onChange(listener: (String, Import) => Unit): Unit = listeners.add(listener): Unit
+
+  /**
+   * Tells the listeners that the Import changed, once the transaction that changes it has committed
+   * (`TransactionManager.afterCommit`): the Import is read then, so what is told is what was committed, never a state inside a
+   * transaction that changes it twice. Changes committed at once may be told out of order, each with an Import at least as far
+   * along as its own change left it.
+   */
+  private def changed(importId: String): Unit =
+    val repositoryId = RequestContext.getRepository.persistedId
+    txManager.afterCommit {
+      val committed = getById(importId)
+      listeners.forEach(_(repositoryId, committed))
     }

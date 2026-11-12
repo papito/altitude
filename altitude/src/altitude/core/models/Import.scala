@@ -34,4 +34,17 @@ case class Import(
     failed: Int = 0,
     createdAt: Option[LocalDateTime] = None,
     updatedAt: Option[LocalDateTime] = None)
-  extends BaseModel
+  extends BaseModel:
+
+  def isInProgress: Boolean = closedAt.isEmpty
+
+  /** How many of its files have the outcome */
+  def count(outcome: ImportOutcome): Int = outcome match
+    case ImportOutcome.Pending => pending
+    case ImportOutcome.Imported => imported
+    case ImportOutcome.Duplicate => duplicate
+    case ImportOutcome.Unsupported => unsupported
+    case ImportOutcome.Failed => failed
+
+  /** Its files in all, whatever became of them */
+  def total: Int = ImportOutcome.values.map(count).sum

@@ -4,17 +4,19 @@ import java.time.LocalDateTime
 
 /**
  * What became of an Import file. Persist `dbValue`, never the enum name; it is also the name of the Import's counter of the
- * outcome.
+ * outcome. `label` is what the Import history calls it.
  */
-enum ImportOutcome(val dbValue: String):
-  case Pending extends ImportOutcome("pending")
-  case Imported extends ImportOutcome("imported")
-  // Already in the Library
-  case Duplicate extends ImportOutcome("duplicate")
-  case Unsupported extends ImportOutcome("unsupported")
-  case Failed extends ImportOutcome("failed")
+enum ImportOutcome(val dbValue: String, val label: String):
+  case Pending extends ImportOutcome("pending", "pending")
+  case Imported extends ImportOutcome("imported", "imported")
+  case Duplicate extends ImportOutcome("duplicate", "already in the Library")
+  case Unsupported extends ImportOutcome("unsupported", "unsupported")
+  case Failed extends ImportOutcome("failed", "failed")
 
 object ImportOutcome:
+  /** The outcomes a file settles with, in the order the Import history shows them */
+  val settled: List[ImportOutcome] = List(Imported, Duplicate, Unsupported, Failed)
+
   def fromDbValue(value: String): ImportOutcome =
     values.find(_.dbValue == value).getOrElse(throw IllegalArgumentException(s"Unknown Import outcome: $value"))
 

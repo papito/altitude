@@ -139,6 +139,10 @@
     --import-page-max-width: 75rem;
     --import-uploads-min-width: 18.75rem;
     --import-history-min-width: 26.25rem;
+    /* The Import history (htmx/import_history.css, includes/import_status.css): the node of an Import on the timeline and
+       the height of its progress bar */
+    --import-node-size: 0.625rem;
+    --import-bar-height: 0.625rem;
     --account-card-width: 17rem;
     --account-avatar-size: 2.5rem;
     --account-username-max-width: 11rem;

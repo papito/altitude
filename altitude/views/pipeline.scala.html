@@ -1,8 +1,9 @@
 @import altitude.core.Const
 @import altitude.core.RequestContext
+@import altitude.core.models.ImportHistory
 @import altitude.core.models.Stats
 
-@(stats: Stats)
+@(stats: Stats, history: ImportHistory)
 
 <!DOCTYPE html>
 
@@ -21,7 +22,7 @@
     </nav>
 
     @* Two columns, which stack in this order on a narrow screen (static/css/pages/pipeline.css): the upload sections, and
-       the Import history, which for now holds the status feed's ticker *@
+       the Import history, which the status feed keeps live *@
     <main>
       @includes.html.upload_sections()
 
@@ -29,12 +30,11 @@
         <h2 id="importHistoryTitle">Import history</h2>
         @* Shown once the status feed gives up reconnecting (js/import-status.js) *@
         <p id="importStatusLost" class="notice warning" hidden>The import status stopped. Reload the page to reconnect.</p>
-        @* Each status message from the server is a full <div id="statusText"> that replaces the current one *@
-        <div hx-ws:connect="/import/status"
-             hx-target="#statusText"
-             hx-swap="outerHTML">
-          <div id="statusText"></div>
-        </div>
+        @* The Library's status feed (ImportController.pipelineStatus). Each message is JSON that names the element it
+           replaces, an Import's status in the history below, so the element itself takes nothing; the page's script reads
+           the history again for an Import it does not show yet and for one that closed (js/import-status.js) *@
+        <div hx-ws:connect="/import/r/@{RequestContext.getRepository.persistedId}/status"></div>
+        @htmx.html.import_history(history, Const.ImportHistory.IMPORTS_STEP)
       </section>
     </main>
 
@@ -56,34 +56,5 @@
 
     <script src="/static/js/lib/hx-ws.js" defer></script>
     <script type="module" src="/static/js/upload-form-page.js"></script>
-
-    <script type="module">
-      htmx.on("htmx:ws:after:connection", function () {
-          console.debug("WS connection is OPEN")
-      })
-
-      htmx.on("htmx:ws:close", function () {
-          console.debug("WS connection is CLOSED")
-      })
-
-      // The server also sends plain-text frames ("connected" on open, keep-alive pings).
-      // Only markup is meant for the ticker - hx-ws would otherwise swap the raw text in.
-      htmx.on("htmx:ws:before:message:incoming", function (evt) {
-          if (!String(evt.detail.message.data).trimStart().startsWith("<")) {
-              evt.preventDefault()
-          }
-      })
-
-      htmx.on("htmx:ws:after:message:incoming", function () {
-          // The swap above has already replaced the element by now
-          const statusTextEl = htmx.find("#statusText")
-          statusTextEl.style.display = "block"
-
-          setTimeout(function () {
-              statusTextEl.innerHTML = ""
-              statusTextEl.style.display = "none"
-          }, 3000)
-      })
-    </script>
   </body>
 </html>

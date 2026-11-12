@@ -214,3 +214,14 @@ object Api:
       val SIZE_BYTES = "sizeBytes"
       val OUTCOME = "outcome"
       val REASON = "reason"
+
+    // A message of the import status feed (ImportStatusWsActor), as `hx-ws` reads one: the markup to swap in, the element it
+    // replaces and how, and for the page's script the Import it is the status of and whether that Import is closed; or, alone,
+    // that the socket is connected
+    object ImportStatus:
+      val TARGET = "target"
+      val SWAP = "swap"
+      val CONTENT = "content"
+      val IMPORT_ID = "importId"
+      val IS_CLOSED = "closed"
+      val CONNECTED = "connected"

@@ -110,6 +110,20 @@ object Const:
    * The entries of the shared nav (`includes/nav`), by the key a page marks its own entry with (`current`): the main page's three
    * views, then a page each.
    */
+  // The Import history of the Import page (htmx/import_history) and the files of an expanded Import (htmx/import_files): how
+  // many each shows at first and adds with each "Show earlier Imports" or "Show more", the most each shows, and the IDs of an
+  // Import's elements there, which the status feed's messages (ImportStatusWsActor) and the page's script address
+  object ImportHistory:
+    val IMPORTS_STEP = 20
+    val MAX_IMPORTS = 500
+    val FILES_STEP = 50
+    val MAX_FILES = 500
+
+    def statusId(importId: String): String = s"importStatus-$importId"
+    def titleId(importId: String): String = s"importTitle-$importId"
+    def filesId(importId: String): String = s"importFiles-$importId"
+    def fileListId(importId: String): String = s"importFileList-$importId"
+
   object NavEntry:
     val BROWSE: String = Search.View.DEFAULT
     val TRIAGE: String = Search.View.TRIAGE

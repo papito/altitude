@@ -36,7 +36,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 ```
 views/
   *.scala.html          ← full pages (index, login, setup, pipeline, settings, users, style_guide)
-  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title, a filtered search's chips, an advanced search option, a person's cover on a search chip, a combobox field of chips, the Import page's upload sections)
+  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title, a filtered search's chips, an advanced search option, a person's cover on a search chip, a combobox field of chips, the Import page's upload sections, an Import's status and title in the Import history)
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
@@ -212,7 +212,7 @@ in either theme:
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
-| `js/upload-form-page.js`, `js/settings-page.js`, `js/users-page.js`, `js/nav-page.js` | the page modules of `pipeline.scala.html`, `settings.scala.html` and `users.scala.html`, and what they share. Each starts with `startNavPage()` (`nav-page.js`): Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store), the `contextMenu` component and the advanced search panel's components and host (`bindSearchPanel`), the htmx request rule and the dialog wiring (`listeners/dialogs.js`) with a minimal app, whose hydration is the `modal` fragments and the choice menus, and the nav's Library menu built; that is the nav's menus and the dialogs they open (New library, Change password, whose outcome `listeners/account.js` confirms, connecting the page's WebSocket feeds again). The import page's registers its component first (`importUploads`, the upload sections') and the status feed's end after (`js/import-status.js`), Settings' registers its own listeners, and Users' registers its components first (`usersPage`, `accountForm`, `passwordField`) and its listener after; see **Settings screen** and **Users page** |
+| `js/upload-form-page.js`, `js/settings-page.js`, `js/users-page.js`, `js/nav-page.js` | the page modules of `pipeline.scala.html`, `settings.scala.html` and `users.scala.html`, and what they share. Each starts with `startNavPage()` (`nav-page.js`): Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store), the `contextMenu` component and the advanced search panel's components and host (`bindSearchPanel`), the htmx request rule and the dialog wiring (`listeners/dialogs.js`) with a minimal app, whose hydration is the `modal` fragments and the choice menus, and the nav's Library menu built; that is the nav's menus and the dialogs they open (New library, Change password, whose outcome `listeners/account.js` confirms, connecting the page's WebSocket feeds again). The import page's registers its component first (`importUploads`, the upload sections') and what keeps the Import history live after (`js/import-status.js`: the status feed's messages, the history's reads, the feed's end), Settings' registers its own listeners, and Users' registers its components first (`usersPage`, `accountForm`, `passwordField`) and its listener after; see **Settings screen** and **Users page** |
 | `js/theme-boot.js` | a plain blocking script of `includes/header_common`'s head, on every page with a nav: declares the remembered theme on `<html>` before the first paint, from the key in its `data-key`; see **Themes** |
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
@@ -320,6 +320,10 @@ Const.attributes.chipRemove        // "data-chip-remove"  (the remove button of 
 Const.attributes.filter            // "data-app-filter"  (a chip of a filtered search's results title, its parameters in `data-app-filter-<param>` literals)
 Const.attributes.editFilters       // "data-app-edit-filters"  (that title's Edit, which opens the advanced search panel)
 Const.attributes.filterCount       // "data-app-filter-count"  (the badge of the nav's filter button: the number of filters in force, or in the open panel's form)
+Const.attributes.importId          // "data-import-id"  (an Import's entry in the Import history)
+Const.attributes.importFiles       // "data-app-import-files"  (the `<details>` of an entry's Import files)
+Const.attributes.viewUrl           // "data-app-view-url"  (a part of the Import history, the list or an Import's files: the route of the view it shows, by which it is read again)
+Const.attributes.view              // "data-app-view"  (a control in such a part: the route of the view it asks for instead)
 ```
 
 A Curation set's root carries `data-opening-pinned-id` and `data-opening-focused-id`, and the
@@ -400,16 +404,19 @@ Two-layer event bus, both on `document.body`:
   `hx-target` / `hx-swap`. Do not rely on a parent's attributes (add `:inherited` if you ever must).
 - Extensions activate by script inclusion, there is no `hx-ext`. Forms that post JSON carry the
   boolean `hx-json-enc` attribute (`json-enc.js`); the import status stream uses `hx-ws:connect`
-  with an explicit `hx-target` / `hx-swap` on the connection element (`hx-ws.js`), to
-  `/import/status` with no query string: the server takes the account from the session cookie the
-  handshake carries, refuses a handshake without a login with a 401 and one from another origin
-  with a 403, and closes the account's sockets when the account changes (1013, which `hx-ws.js`
-  reconnects on, checking the login again) or its sessions are revoked (1008, which it does not: a password change, a
-  deactivation). The page connects its feed again after the account changes its own password (`js/listeners/account.js`
-  swaps the `hx-ws:connect` element for a copy, which htmx cleans up and processes again; the new cookie is set by then), and
-  stops reconnecting after `MAX_RECONNECTS` (5) failed reconnects in a row, by cancelling the next in
-  `htmx:ws:before:connection` (`js/import-status.js`; the vendored library is not patched), saying in the status area,
-  `#importStatusLost`, to reload. No Alpine
+  (`hx-ws.js`), to the Library's socket, `/import/r/:repoId/status`, with no query string and no `hx-target`: every
+  message is JSON that names the element it replaces (`target`, `swap`, `content`: an Import's status in the Import
+  history, **Import page**), and one with no `content` (`{"connected": true}`) swaps nothing. The server takes the
+  account from the session cookie the handshake carries, refuses a handshake without a login with a 401, one from
+  another origin, a Guest's and that of an account without Import in the Library with a 403, and one for a Library the
+  account cannot see with a 404, and closes the account's sockets when the account changes (1013, which `hx-ws.js`
+  reconnects on, checking the login and the Permission again) or its sessions are revoked (1008, which it does not: a
+  password change, a deactivation). The page connects its feed again after the account changes its own password
+  (`js/listeners/account.js` swaps the `hx-ws:connect` element for a copy, which htmx cleans up and processes again;
+  the new cookie is set by then), and stops reconnecting after `MAX_RECONNECTS` (5) failed reconnects in a row, by
+  cancelling the next in `htmx:ws:before:connection` (`js/import-status.js`; the vendored library is not patched),
+  saying in the status area, `#importStatusLost`, to reload. `hx-ws` closes the socket while the tab is hidden and
+  opens it again when it shows; every opening after the first reads the history again. No Alpine
   compatibility shim is loaded: Alpine's mutation observer initializes swapped-in markup, and
   nothing calls `Alpine.initTree` on it.
 - Polling is declarative: the import page refreshes the nav with
@@ -2231,7 +2238,7 @@ to an Admin only (`RequestContext.account`), so `NavController` requires login a
 
 **Import page** — `pipeline.scala.html` (`/pipeline/r/:repoId`, for a holder of Import) is two columns, five parts to
 seven (`pages/pipeline.css`): the upload sections (`#importUploads`, `includes/upload_sections`) and the Import history
-(`#importHistory`), which for now holds the status feed's ticker. `main` is a wrapping flex row whose columns grow from a
+(`#importHistory`: the status feed's element and `htmx/import_history`, below). `main` is a wrapping flex row whose columns grow from a
 least width each (`--import-uploads-min-width`, `--import-history-min-width`), so they stack, the uploads first, once the
 page is narrower than the two together; it is as wide as the window at the most (`min(100%, 100vw)`, within
 `--import-page-max-width`) and centered in it, also under a nav wider than the window, when the body's one column is as
@@ -2269,6 +2276,46 @@ of 3.3 MB", with the failed ones) and Cancel, and both sections take nothing: th
 the destination fields inert and the zones dimmed (`.waiting`). When it ends the section says what it came to in a
 `.notice` (`.warning` when files failed or were not sent); a failure to start, and a refusal that ended it, go to the
 snackbar in the server's words.
+
+The **Import history** (`htmx/import_history`, `static/css/htmx/import_history.css`; the page renders it, and
+`GET /htmx/import/r/:repoId/history?shown=` reads it again) is a vertical timeline, one node per Import
+(`li.import[data-import-id]`, the node its `::before` on the list's left edge), the Imports in progress under "In
+progress" above "Earlier", the newest first in each; a Library with no Import says so (`.empty`). The node of an Import
+in progress is the accent's, in a halo of it. An entry is a header (the kind's icon, a folder upload's, an upload of
+files' or, by the Import's `source`, a Watch folder scan's, named for a screen reader; the title,
+`includes/import_title`; then who delivered it, an account's name or "Watch folder", when, a `<time>` the `localTime`
+component shows in the viewer's zone, where it went, "into Triage" or the destination's path, and "interrupted by a
+restart" when a restart failed files of it), the status (`includes/import_status`, `static/css/includes/import_status.css`),
+and a `<details>` ("Files") holding the host of its Import files. The status is a bar segmented by outcome, each
+segment's share its number of files (`--files`, a flex factor), the pending ones the bare track, under diagonal stripes
+while the Import is in progress, which move unless the system asks for reduced motion; and the counts as chips, a zero
+count left out, with the files remaining (those given to the Import and still pending) while it is in progress. An
+outcome's color is declared once, by its class, on whatever it marks (`pages/pipeline.css`: `--outcome-color`, the
+success, info, warning and error colors and the muted neutral for `imported`, `duplicate`, `unsupported`, `failed` and
+`pending`, and `--outcome-fill`, a tint of it); the bar's imported segment alone is the accent. The outcome `duplicate`
+reads "already in the Library" (`ImportOutcome.label`). The history shows a step of Imports and offers the earlier ones
+("Show earlier Imports"), up to the most it shows (`Const.ImportHistory`).
+
+An expanded Import's files (`htmx/import_files`, `static/css/htmx/import_files.css`,
+`GET /htmx/import/r/:repoId/imports/:importId/files?outcome=&shown=`) are the outcome filter (a chip for every file
+and one per outcome that has files, each with its number, `aria-pressed` on the one shown), the first files of the
+filter in path order, each with its path, its outcome and its reason on a second line (a duplicate's reads "Already in
+the Library: " and the place), and "Showing 50 of 4,812 files" with "Show more". An imported file links to its asset's
+page while the asset exists, in a new tab, since leaving the page ends an upload.
+
+`js/import-status.js` keeps it live, with no Alpine component (the `<time>`s aside). The feed's message for an Import
+replaces its status, and its title out of band (an upload of files is titled by its number of files, which grows). A
+status of an Import the page does not show (one just opened, by anyone) is dropped and the history read again; so it
+is after a status that says the Import closed, which moves it to "Earlier", and when the feed opens again after it was
+lost. An Import whose files are shown has them read again with each of its statuses. Each part of the history, the
+list and each Import's files, carries the route of the view it shows (`data-app-view-url`) and is read through one
+sequence of requests (`htmx.ajax`, replacing the part): one at a time, and what is asked for meanwhile, a re-read or
+the view a control names (`data-app-view`: a filter chip, "Show more", "Show earlier Imports"), is read once the one on
+its way has answered, so a view the user picked is never undone by a read that began before the click. The `<details>`
+of an Import is `hx-preserve`, so reading the history again leaves an expanded Import open with its filter and its
+files (it is moved, not rebuilt: its scroll state survives where the browser has `moveBefore`), and the script scrolls
+the page by as much as the expanded Import in view moved, so it stays where it was on the screen. The upload sections
+announce nothing to the history: the uploader's page learns of its own Import from the feed, as every other page does.
 
 **Users page** — `users.scala.html` (`/users/r/:repoId`, `UsersController`, for an Admin or a holder of Create Users or
 Create Guests in any Library, `requireAccountCreator`, so it opens from every Library the account sees) is shaped like Settings: `header_common`, the nav (`current` `Const.NavEntry.USERS`), one
@@ -3218,6 +3265,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/htmx/search_panel.scala.html`, `search_options_folders.scala.html`, `search_options_people.scala.html`, `search_options_locations.scala.html`, `views/includes/search_path_option.scala.html` | The advanced search panel's fragments (`SearchPanelController`): its form filled in from a search's parameters, each filter an input under its parameter's name and the folder, people and Locations as chips, its IDs under a prefix the caller can change, and the `role="option"` elements of its three comboboxes, a folder's and a Location's sharing the include (**Advanced search panel fragments**); styled by `static/css/htmx/search_panel.css`, Flatpickr's calendar included |
 | `views/includes/filter_combobox.scala.html` | A combobox field of chips, the `filterCombobox` component's markup: the panel's Folder, People and Locations fields and the destination folder of the Import page's upload sections |
 | `views/includes/upload_sections.scala.html`, `static/css/includes/upload_sections.css`, `static/js/alpine/components/import-uploads.js`, `static/js/import/chosen-files.js`, `upload-run.js` | The Import page's File upload and Folder upload sections: the markup, the styles, the `importUploads` component, what a section sends and under which paths, and the sending (**Import page**) |
+| `views/htmx/import_history.scala.html`, `import_files.scala.html`, `views/includes/import_status.scala.html`, `import_title.scala.html`, their stylesheets, `static/js/import-status.js` | The Import page's Import history: the timeline of Imports, an Import's files by outcome, the status and title the status feed replaces, and the script that keeps them live |
 | `views/includes/search_chip.scala.html`, `search_filter_icon.scala.html`, `search_person_cover.scala.html` | The parts the panel and a filtered search's results title share: a chosen filter's chip (its kind, label, lead, carried attributes and remove button), the icon of a kind of filter, and a person's cover Face or its placeholder, on a chip and, loaded lazily, in a People option |
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal (the box fitted from the shown element's size, the Detail panel told of each asset and size shown), and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
 | `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing, the results title read again when the viewed Person is named, and the destination's results on closing when the viewed Person is merged away or merged into) |

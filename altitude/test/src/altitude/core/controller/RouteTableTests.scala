@@ -40,9 +40,10 @@ import altitude.core.routes.decorators.requirePermission
   /**
    * Who may call a route: anyone, for the reason given; any account logged in, and with access to the Library of the path when it
    * names one, as `requireLogin` checks it, or as the route checks it itself, for the reason given (`LoginInRoute`); a member, an
-   * account that is no Guest (`requireMember`); the holder of any one of `anyOf` in the path's Library (`requirePermission`); an
-   * Admin or the holder of Create Users or Create Guests in any Library (`requireAccountCreator`); an Admin or an account with
-   * the Create Libraries flag (`requireLibraryCreator`); an Admin alone (`requireAdmin`).
+   * account that is no Guest (`requireMember`); the holder of any one of `anyOf` in the path's Library (`requirePermission`), or
+   * as the route checks it itself, for the reason given (`HolderInRoute`); an Admin or the holder of Create Users or Create
+   * Guests in any Library (`requireAccountCreator`); an Admin or an account with the Create Libraries flag
+   * (`requireLibraryCreator`); an Admin alone (`requireAdmin`).
    */
   private enum Access:
     case Public(reason: String)
@@ -50,6 +51,7 @@ import altitude.core.routes.decorators.requirePermission
     case LoginInRoute(reason: String)
     case Member
     case Holder(anyOf: Set[Permission])
+    case HolderInRoute(anyOf: Set[Permission], reason: String)
     case AccountCreator
     case LibraryCreator
     case Admin
@@ -62,15 +64,16 @@ import altitude.core.routes.decorators.requirePermission
       case Public(_) | Login | LoginInRoute(_) => true
       case Member => accountType != AccountType.Guest
       case Holder(anyOf) => accountType == AccountType.Admin || anyOf.exists(permissions.has)
+      case HolderInRoute(anyOf, _) => accountType == AccountType.Admin || anyOf.exists(permissions.has)
       case AccountCreator =>
         accountType == AccountType.Admin || Access.creates.exists(permissions.has)
       case LibraryCreator => accountType == AccountType.Admin || canCreateLibraries
       case Admin => accountType == AccountType.Admin
     }
 
-    /** What the route's decorators declare of this: nothing for a route anyone calls or that checks the login itself */
+    /** What the route's decorators declare of this: nothing for a route anyone calls or that checks who calls it itself */
     def declared: Option[Access] = this match {
-      case Public(_) | LoginInRoute(_) => None
+      case Public(_) | LoginInRoute(_) | HolderInRoute(_, _) => None
       case access => Some(access)
     }
 
@@ -218,7 +221,6 @@ import altitude.core.routes.decorators.requirePermission
     none(POST, "/htmx/setup", publicRoute("setup runs before any account exists, and refuses once the instance is set up")),
     none(GET, "/static/", publicRoute("the app's own scripts, styles and fonts")),
     none(GET, "/assets/:name", publicRoute("the app's stylesheet bundle")),
-    none(WEBSOCKET, "/import/status", Access.LoginInRoute("a WebSocket handshake, which no decorator wraps, checks it")),
     // Pages
     none(GET, "/", Access.LoginInRoute("sends a request with no login to the login page, and one with a login to its Library")),
     probed(GET, "/r/:repoId") {
@@ -246,6 +248,14 @@ import altitude.core.routes.decorators.requirePermission
     probed(POST, "/import/r/:repoId/imports/:importId/close") {
       fx => List(Probe(404, path = Map("importId" -> fx.anImport), json = true))
     }.needs(Permission.Import),
+    none(
+      WEBSOCKET,
+      "/import/r/:repoId/status",
+      Access.HolderInRoute(Set(Permission.Import), "a WebSocket handshake, which no decorator wraps, checks the login and Import")
+    ),
+    none(GET, "/htmx/import/r/:repoId/history").needs(Permission.Import),
+    probed(GET, "/htmx/import/r/:repoId/imports/:importId/files")(fx => List(Probe(404, path = Map("importId" -> fx.anImport))))
+      .needs(Permission.Import),
     probed(GET, "/content/r/:repoId/:dataType/:itemId") {
       fx =>
         List(
@@ -716,8 +726,11 @@ import altitude.core.routes.decorators.requirePermission
         }
         .orElse(decorators.collectFirst { case _: requireLogin | _: requireLoginOrSignature => Access.Login })
 
-    /** A route that changes something in a Library: any method but GET under `/r/:repoId` */
-    def changesLibrary: Boolean = method != GET && path.contains(LIBRARY_PATH)
+    /**
+     * A route that changes something in a Library: any method under `/r/:repoId` but GET and a WebSocket's handshake, which only
+     * opens a feed
+     */
+    def changesLibrary: Boolean = method != GET && method != WEBSOCKET && path.contains(LIBRARY_PATH)
 
     /** The parameters that name a row: `id`, or any `...Id` but the repository's, which the path's own check covers */
     def idParams: Set[String] = params.filter(RouteTableTests.isIdName).toSet - "repoId"
@@ -755,6 +768,20 @@ import altitude.core.routes.decorators.requirePermission
     host + pathParam.replaceAllIn(
       path,
       m => Regex.quoteReplacement(if m.group(1) == "repoId" then repoId else values(m.group(1))))
+
+  /**
+   * The status a route answers a request with no body and `values` as its path parameters: a WebSocket's handshake is answered
+   * what it is refused with, or 101 when it opens
+   */
+  private def statusOf(
+      host: String,
+      row: Row,
+      repoId: String,
+      values: Map[String, String],
+      cookies: Map[String, java.net.HttpCookie]): Int =
+    if (row.method == WEBSOCKET)
+      ImportControllerTests.importStatusHandshake(host, cookies, path = url("", row.path, repoId, values)).left.getOrElse(101)
+    else send(host, row, Probe(0, path = values), repoId, cookies).statusCode
 
   private def send(
       host: String,
@@ -882,14 +909,7 @@ import altitude.core.routes.decorators.requirePermission
       host =>
         for (row <- table if !row.access.isInstanceOf[Access.Public]) withClue(s"[${row.method} ${row.path}]: ") {
           val values = pathParam.findAllMatchIn(row.path).map(_.group(1) -> UUID.randomUUID.toString).toMap
-          val status =
-            if (row.method == WEBSOCKET)
-              ImportControllerTests
-                .importStatusHandshake(host, Map.empty, path = url("", row.path, repoId, values))
-                .left
-                .getOrElse(101)
-            else send(host, row, Probe(0, path = values), repoId, cookies = Map.empty).statusCode
-          List(302, 401) should contain(status)
+          List(302, 401) should contain(statusOf(host, row, repoId, values, cookies = Map.empty))
         }
     }
   }
@@ -912,7 +932,7 @@ import altitude.core.routes.decorators.requirePermission
      *
      * Edge cases:
      *
-     * A public row, and a route that checks the login itself (`/` and the import status WebSocket), have none of these
+     * A public row, and a route that checks who calls it itself (`/` and the import status WebSocket), have none of these
      * decorators.
      */
     val rows = table.map(row => row.key -> row).toMap
@@ -946,7 +966,7 @@ import altitude.core.routes.decorators.requirePermission
      * Edge cases:
      *
      * The requests carry no body and random IDs, so an account let through is answered whatever the route answers such a request,
-     * a 400 or a 404 among them, but never 403. The import status WebSocket names no Library and is left out.
+     * a 400 or a 404 among them, but never 403. The import status WebSocket's handshake is refused with a 403 or opens.
      */
     val library = testContext.persistRepository()
     val repoId = library.persistedId
@@ -970,9 +990,10 @@ import altitude.core.routes.decorators.requirePermission
           (AccountType.User, Permissions(Permissions.all.mask & ~Permissions.of(anyOf.toSeq*).mask), false) ::
             anyOf.toList.map(permission => (AccountType.User, Permissions.of(permission), false))
 
-        for (row <- table if row.method != WEBSOCKET) withClue(s"[${row.method} ${row.path}] ") {
+        for (row <- table) withClue(s"[${row.method} ${row.path}] ") {
           val holders: List[(AccountType, Permissions, Boolean)] = row.access match {
             case Access.Holder(anyOf) => holding(anyOf)
+            case Access.HolderInRoute(anyOf, _) => holding(anyOf)
             case Access.AccountCreator => holding(Access.creates)
             case _ => Nil
           }
@@ -988,7 +1009,7 @@ import altitude.core.routes.decorators.requirePermission
             withClue(s"as a $accountType holding $permissions${if (canCreateLibraries) " with the flag" else ""}: ") {
               val values = pathParam.findAllMatchIn(row.path).map(_.group(1) -> UUID.randomUUID.toString).toMap
               val cookies = session(accountType, permissions, canCreateLibraries)
-              val status = send(host, row, Probe(0, path = values), repoId, cookies).statusCode
+              val status = statusOf(host, row, repoId, values, cookies)
               (status == 403) shouldBe !row.access.allows(accountType, permissions, canCreateLibraries)
             }
         }
@@ -1017,7 +1038,7 @@ import altitude.core.routes.decorators.requirePermission
         val cookies = cookiesOf(host, stranger)
         for (row <- table if row.path.contains(LIBRARY_PATH)) withClue(s"[${row.method} ${row.path}]: ") {
           val values = pathParam.findAllMatchIn(row.path).map(_.group(1) -> UUID.randomUUID.toString).toMap
-          send(host, row, Probe(0, path = values), library.persistedId, cookies).statusCode shouldBe 404
+          statusOf(host, row, library.persistedId, values, cookies) shouldBe 404
         }
     }
   }

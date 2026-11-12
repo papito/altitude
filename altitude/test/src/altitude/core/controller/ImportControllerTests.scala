@@ -10,6 +10,7 @@ import java.net.http.WebSocketHandshakeException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.ExecutionException
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import org.scalatest.DoNotDiscover
 import org.scalatest.concurrent.Eventually
@@ -23,6 +24,8 @@ import scala.jdk.CollectionConverters.*
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.RequestContext
+import altitude.core.actors.ImportStatusWsActor
 import altitude.core.models.AccountType
 import altitude.core.models.ImportOutcome
 import altitude.core.models.ImportSource
@@ -32,23 +35,38 @@ import altitude.core.routes.web.SessionController
 
 object ImportControllerTests {
 
-  /** An open WebSocket: its first message, and the status code it is closed with, each when it comes */
-  final case class OpenSocket(socket: WebSocket, firstMessage: CompletableFuture[String], closedWith: CompletableFuture[Int])
+  /** An open WebSocket: the messages it was sent, in order, and the status code it is closed with, when it comes */
+  final case class OpenSocket(socket: WebSocket, messages: LinkedBlockingQueue[String], closedWith: CompletableFuture[Int]) {
+
+    /** The next message the socket was sent, waiting for it */
+    def next(): String =
+      Option(messages.poll(60, TimeUnit.SECONDS)).getOrElse(throw new AssertionError("The socket was sent no message"))
+  }
+
+  /** The path of a Library's import status stream */
+  def statusPath(repoId: String): String = s"/import/r/$repoId/status"
 
   /**
-   * Opens the WebSocket at `path` (the import status stream's by default) of the server at `host` with `cookies`, and `origin` as
-   * the handshake's Origin header when given: the open socket, or the response the handshake was refused with
+   * Opens the WebSocket at `path` (a Library's import status stream, [[statusPath]]) of the server at `host` with `cookies`, and
+   * `origin` as the handshake's Origin header when given: the open socket, or the response the handshake was refused with
    */
   def openImportStatus(
       host: String,
       cookies: Map[String, HttpCookie],
-      origin: Option[String] = None,
-      path: String = "/import/status"): Either[HttpResponse[?], OpenSocket] = {
-    val firstMessage = new CompletableFuture[String]()
+      path: String,
+      origin: Option[String] = None): Either[HttpResponse[?], OpenSocket] = {
+    val messages = new LinkedBlockingQueue[String]()
     val closedWith = new CompletableFuture[Int]()
     val listener = new WebSocket.Listener {
+      // A message can come in parts
+      private val parts = new StringBuilder
+
       override def onText(socket: WebSocket, data: CharSequence, last: Boolean): CompletionStage[?] = {
-        firstMessage.complete(data.toString)
+        parts.append(data)
+        if (last) {
+          messages.add(parts.toString)
+          parts.clear()
+        }
         // A WebSocket client receives one message per request, the closing one included
         socket.request(1)
         null
@@ -65,7 +83,7 @@ object ImportControllerTests {
 
     try {
       val socket = builder.buildAsync(URI.create(s"${host.replace("http://", "ws://")}$path"), listener).get(10, TimeUnit.SECONDS)
-      Right(OpenSocket(socket, firstMessage, closedWith))
+      Right(OpenSocket(socket, messages, closedWith))
     } catch {
       case e: ExecutionException =>
         e.getCause match {
@@ -79,12 +97,12 @@ object ImportControllerTests {
   def importStatusHandshake(
       host: String,
       cookies: Map[String, HttpCookie],
-      origin: Option[String] = None,
-      path: String = "/import/status"): Either[Int, String] =
-    openImportStatus(host, cookies, origin, path) match {
+      path: String,
+      origin: Option[String] = None): Either[Int, String] =
+    openImportStatus(host, cookies, path, origin) match {
       case Left(response) => Left(response.statusCode())
       case Right(open) =>
-        try Right(open.firstMessage.get(10, TimeUnit.SECONDS))
+        try Right(open.next())
         finally open.socket.abort()
     }
 
@@ -101,7 +119,9 @@ object ImportControllerTests {
 @DoNotDiscover class ImportControllerTests extends ControllerTestCore {
   import ImportControllerTests.*
 
-  test("The import status WebSocket opens for a logged-in account and refuses an anonymous handshake") {
+  private val CONNECTED = ImportStatusWsActor.CONNECTED
+
+  test("A Library's import status WebSocket opens for an account holding Import there and refuses an anonymous handshake") {
 
     /**
      * Setup:
@@ -110,25 +130,25 @@ object ImportControllerTests {
      *
      * Assertions:
      *
-     * The handshake with the session cookie opens the socket, whose first message says it is connected; one with no cookie is
-     * refused with a 401 that sets no cookie.
+     * The handshake with the session cookie opens the Library's socket, whose first message says it is connected; one with no
+     * cookie is refused with a 401 that sets no cookie.
      *
      * Edge cases:
      *
      * A handshake with a cookie that is no token is refused with a 401 that clears the session cookie.
      */
-    loginAs(AccountType.User, Permissions.of(Permission.Import))
+    val path = statusPath(loginAs(AccountType.User, Permissions.of(Permission.Import)))
 
     withServer(App) {
       host =>
-        importStatusHandshake(host, testContext.cookies) shouldBe Right("connected")
+        importStatusHandshake(host, testContext.cookies, path) shouldBe Right(CONNECTED)
 
-        val anonymous = openImportStatus(host, Map.empty).left.toOption.get
+        val anonymous = openImportStatus(host, Map.empty, path).left.toOption.get
         anonymous.statusCode() shouldBe 401
         setSessionCookie(anonymous) shouldBe None
 
         val forged = testContext.cookies.map((name, cookie) => name -> HttpCookie(cookie.getName, "v2.local.forged"))
-        val refused = openImportStatus(host, forged).left.toOption.get
+        val refused = openImportStatus(host, forged, path).left.toOption.get
         refused.statusCode() shouldBe 401
         // Undertow writes an empty value quoted
         setSessionCookie(refused).map(cookie => (cookie.getValue.stripPrefix("\"").stripSuffix("\""), cookie.getMaxAge)) shouldBe
@@ -147,9 +167,38 @@ object ImportControllerTests {
      *
      * The Guest's handshake is refused with a 403: a Guest imports nothing, so it has no import feed.
      */
-    loginAs(AccountType.Guest, Permissions.none)
+    val path = statusPath(loginAs(AccountType.Guest, Permissions.none))
 
-    withServer(App)(host => importStatusHandshake(host, testContext.cookies) shouldBe Left(403))
+    withServer(App)(host => importStatusHandshake(host, testContext.cookies, path) shouldBe Left(403))
+  }
+
+  test("A Library's import status WebSocket refuses an account that does not hold Import there") {
+
+    /**
+     * Setup:
+     *
+     * A Library, and three Users: one holding every Permission in it but Import, one holding Import in another Library and no
+     * grant in this one, and one holding Import alone in it.
+     *
+     * Assertions:
+     *
+     * The handshake of the User without Import is refused with a 403. The handshake of the User with no grant in the Library is
+     * refused with a 404, as one for a Library that does not exist is. The handshake of the User holding Import opens.
+     */
+    val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
+    val library = testContext.repository
+    val withoutImport = testContext.persistUser()
+    testContext.grant(withoutImport, library, Permissions(Permissions.all.mask & ~Permissions.of(Permission.Import).mask))
+    val stranger = testContext.persistUser()
+    testContext.grant(stranger, testContext.persistRepository(), Permissions.of(Permission.Import))
+
+    withServer(App) {
+      host =>
+        importStatusHandshake(host, cookiesOf(host, withoutImport), statusPath(repoId)) shouldBe Left(403)
+        importStatusHandshake(host, cookiesOf(host, stranger), statusPath(repoId)) shouldBe Left(404)
+        importStatusHandshake(host, testContext.cookies, statusPath(java.util.UUID.randomUUID.toString)) shouldBe Left(404)
+        importStatusHandshake(host, testContext.cookies, statusPath(repoId)) shouldBe Right(CONNECTED)
+    }
   }
 
   test("The import status WebSocket refuses a handshake from another origin") {
@@ -165,15 +214,15 @@ object ImportControllerTests {
      * own (its scheme, host and port, as the Host header names them) opens, and so does one with no Origin, which only a client
      * that is no browser sends.
      */
-    loginAs(AccountType.User, Permissions.of(Permission.Import))
+    val path = statusPath(loginAs(AccountType.User, Permissions.of(Permission.Import)))
 
     withServer(App) {
       host =>
-        importStatusHandshake(host, testContext.cookies, origin = Some("http://evil.example")) shouldBe Left(403)
-        importStatusHandshake(host, testContext.cookies, origin = Some("http://localhost:9999")) shouldBe Left(403)
-        importStatusHandshake(host, testContext.cookies, origin = Some("null")) shouldBe Left(403)
-        importStatusHandshake(host, testContext.cookies, origin = Some(host)) shouldBe Right("connected")
-        importStatusHandshake(host, testContext.cookies) shouldBe Right("connected")
+        importStatusHandshake(host, testContext.cookies, path, origin = Some("http://evil.example")) shouldBe Left(403)
+        importStatusHandshake(host, testContext.cookies, path, origin = Some("http://localhost:9999")) shouldBe Left(403)
+        importStatusHandshake(host, testContext.cookies, path, origin = Some("null")) shouldBe Left(403)
+        importStatusHandshake(host, testContext.cookies, path, origin = Some(host)) shouldBe Right(CONNECTED)
+        importStatusHandshake(host, testContext.cookies, path) shouldBe Right(CONNECTED)
     }
   }
 
@@ -190,14 +239,14 @@ object ImportControllerTests {
      * The raise closes both sockets with 1013 (try again later), which the client reconnects on, its handshake checking the login
      * again; the revocation closes the third with 1008 (policy violation), which it does not reconnect on.
      */
-    loginAs(AccountType.User, Permissions.of(Permission.Import))
+    val path = statusPath(loginAs(AccountType.User, Permissions.of(Permission.Import)))
     val accountId = testContext.user.persistedId
 
     withServer(App) {
       host =>
         def open(): OpenSocket = {
-          val socket = openImportStatus(host, testContext.cookies).toOption.get
-          socket.firstMessage.get(10, TimeUnit.SECONDS) shouldBe "connected"
+          val socket = openImportStatus(host, testContext.cookies, path).toOption.get
+          socket.next() shouldBe CONNECTED
           socket
         }
 
@@ -211,7 +260,7 @@ object ImportControllerTests {
     }
   }
 
-  test("The Import page connects to the import status WebSocket naming no account") {
+  test("The Import page connects to its Library's import status WebSocket naming no account") {
 
     /**
      * Setup:
@@ -220,14 +269,15 @@ object ImportControllerTests {
      *
      * Assertions:
      *
-     * The Import page connects to `/import/status` with no query string: the server takes the account from the session.
+     * The Import page connects to the Library's import status stream with no query string: the server takes the account from the
+     * session.
      */
     val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
 
     withServer(App) {
       host =>
         val page = requests.get(s"$host/pipeline/r/$repoId", cookies = testContext.cookies).text()
-        page.contains("""hx-ws:connect="/import/status"""") shouldBe true
+        page.contains(s"""hx-ws:connect="${statusPath(repoId)}"""") shouldBe true
         page.contains("userId") shouldBe false
     }
   }
@@ -561,6 +611,327 @@ object ImportControllerTests {
         sendFile(host, repoId, unknown, "lost.jpg", imageBytes()).statusCode shouldBe 404
         recordFailed(unknown).statusCode shouldBe 404
         closeImport(host, repoId, unknown).statusCode shouldBe 404
+    }
+  }
+
+  private def imports = testApp.service.imports
+
+  /** An htmx partial of the Import history, as the logged-in account gets it */
+  private def partial(host: String, path: String, params: Map[String, String] = Map.empty): requests.Response =
+    requests.get(s"$host/htmx/import/r/$path", params = params, cookies = testContext.cookies, check = false)
+
+  // What opens a file's path in the files partial
+  private val PATH = """<span class="path">"""
+
+  /** How many times `part` occurs in `text` */
+  private def occurrences(text: String, part: String): Int = text.sliding(part.length).count(_ == part)
+
+  test("The Import history lists the Library's Imports with who delivered each, where it went and its counts") {
+
+    /**
+     * Setup:
+     *
+     * A User logged in with Import in a Library with a folder Clients and its subfolder Wedding. The User's upload of the folder
+     * "Wedding 2026" into Wedding is closed with two files imported, one already in the Library and one failed; a Watch folder's
+     * scan "Phone sync", which no account delivers, is closed with one file imported; the User's upload of files is in progress
+     * with one file imported and one pending. Another Library has an Import "Theirs".
+     *
+     * Assertions:
+     *
+     * The history partial holds the three Imports, the upload of files under "In progress" and the other two under "Earlier". The
+     * folder upload is titled by its name, with the User's name, its destination's path and its counts by outcome, the duplicate
+     * as "already in the Library"; the scan by its name, delivered by "Watch folder" into Triage; the upload of files by its
+     * number of files, with its files remaining. The Import page holds the same history.
+     *
+     * Edge cases:
+     *
+     * The other Library's Import is in neither. A Library with no Import says that nothing was imported yet, in the partial and
+     * on the page.
+     */
+    val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
+    val clients = testApp.service.folder.add("Clients")
+    val wedding = testApp.service.folder.add("Wedding", parentId = clients.id)
+
+    def fileOf(importId: String, path: String, outcome: ImportOutcome, reason: Option[String] = None): Unit =
+      imports.settle(imports.addFile(importId, path, sizeBytes = 10).persistedId, outcome, reason)
+
+    val folderUpload = imports.open(ImportSource.Upload, name = Some("Wedding 2026"), destFolderId = wedding.id).persistedId
+    fileOf(folderUpload, "a.jpg", ImportOutcome.Imported)
+    fileOf(folderUpload, "b.jpg", ImportOutcome.Imported)
+    fileOf(folderUpload, "c.jpg", ImportOutcome.Duplicate, Some("Triage"))
+    fileOf(folderUpload, "d.jpg", ImportOutcome.Failed, Some("Cannot decode image"))
+    imports.close(folderUpload)
+
+    val scan =
+      RequestContext.account.withValue(None)(imports.open(ImportSource.WatchFolder, name = Some("Phone sync")).persistedId)
+    fileOf(scan, "IMG_0001.jpg", ImportOutcome.Imported)
+    imports.close(scan)
+
+    val filesUpload = imports.open(ImportSource.Upload).persistedId
+    fileOf(filesUpload, "one.jpg", ImportOutcome.Imported)
+    imports.addFile(filesUpload, "two.jpg", sizeBytes = 10)
+
+    val first = testContext.repositories.head
+    testApp.service.repository.switchContextToRepository(testContext.persistRepository())
+    imports.open(ImportSource.Upload, name = Some("Theirs"))
+    // Adding a Library makes it the context's
+    val empty = addLibrary(s"Empty ${java.util.UUID.randomUUID}", testContext.user)
+    testApp.service.repository.switchContextToRepository(first)
+
+    withServer(App) {
+      host =>
+        val history = partial(host, s"$repoId/history")
+        history.statusCode shouldBe 200
+        val page = requests.get(s"$host/pipeline/r/$repoId", cookies = testContext.cookies).text()
+
+        for (shown <- List(history.text(), page)) {
+          occurrences(shown, "data-import-id=") shouldBe 3
+          shown.indexOf("In progress") should be < shown.indexOf(s"""data-import-id="$filesUpload"""")
+          shown.indexOf(s"""data-import-id="$filesUpload"""") should be < shown.indexOf("Earlier")
+          shown.indexOf("Earlier") should be < shown.indexOf(s"""data-import-id="$scan"""")
+          shown.indexOf(s"""data-import-id="$scan"""") should be < shown.indexOf(s"""data-import-id="$folderUpload"""")
+
+          for (
+            said <- List(
+              "Wedding 2026",
+              testContext.user.name,
+              "Clients › Wedding",
+              "2 imported",
+              "1 already in the Library",
+              "1 failed",
+              "Phone sync",
+              "Watch folder",
+              "into Triage",
+              "2 files",
+              "1 remaining"
+            )
+          ) shown should include(said)
+          (shown should not).include("Theirs")
+          (shown should not).include("Nothing imported yet")
+        }
+
+        for (
+          nothing <- List(
+            partial(host, s"${empty.persistedId}/history").text(),
+            requests.get(s"$host/pipeline/r/${empty.persistedId}", cookies = testContext.cookies).text())
+        ) {
+          nothing should include("Nothing imported yet")
+          (nothing should not).include("data-import-id=")
+        }
+    }
+  }
+
+  test("The Import history shows a number of Imports at a time and offers the earlier ones") {
+
+    /**
+     * Setup:
+     *
+     * A User logged in with Import in a Library holding one Import more than the history shows at first.
+     *
+     * Assertions:
+     *
+     * The history partial shows as many Imports as it shows at first, says how many there are, and offers the earlier ones by the
+     * route that shows one step more. Asked for that many, it shows every Import and offers nothing.
+     *
+     * Edge cases:
+     *
+     * Asked for fewer Imports than it shows at first, it shows as many as it shows at first.
+     */
+    val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
+    val step = Const.ImportHistory.IMPORTS_STEP
+    for (_ <- 0 to step) imports.close(imports.open(ImportSource.Upload).persistedId)
+
+    withServer(App) {
+      host =>
+        val top = partial(host, s"$repoId/history").text()
+        occurrences(top, "data-import-id=") shouldBe step
+        top should include(s"Showing $step of ${step + 1} Imports")
+        top should include(s"/htmx/import/r/$repoId/history?shown=${step * 2}")
+
+        val all = partial(host, s"$repoId/history", Map("shown" -> (step * 2).toString)).text()
+        occurrences(all, "data-import-id=") shouldBe step + 1
+        (all should not).include("Showing")
+
+        occurrences(partial(host, s"$repoId/history", Map("shown" -> "1")).text(), "data-import-id=") shouldBe step
+    }
+  }
+
+  test("An Import's files are listed by outcome a number at a time, an imported one linking to its asset") {
+
+    /**
+     * Setup:
+     *
+     * A User logged in with Import in a Library, whose Import holds a file of every outcome: a.jpg imported, with its asset;
+     * b.jpg already in the Library, in the folder Clients/Wedding; c.pdf unsupported; d.jpg failed, undecodable; e.jpg imported,
+     * its asset gone; and as many pending files as the list shows at first. Another Library has an Import.
+     *
+     * Assertions:
+     *
+     * The files partial shows the first files in path order, as many as it shows at first, says how many the Import has and
+     * offers more by the route that shows one step more, which shows them all and offers nothing. Its filter offers every file
+     * and each outcome with its number of files. a.jpg links to its asset's page; e.jpg, whose asset is gone, links nowhere;
+     * b.jpg says where the Library has it; d.jpg says why it failed. Filtered by an outcome, it shows that outcome's files alone
+     * and their number.
+     *
+     * Edge cases:
+     *
+     * An outcome that is none is a 400. The other Library's Import and an unknown one are each a 404.
+     */
+    val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
+    val step = Const.ImportHistory.FILES_STEP
+    val asset = testContext.insertAsset(testContext.makeAsset())
+    val importId = imports.open(ImportSource.Upload).persistedId
+    def fileOf(path: String) = imports.addFile(importId, path, sizeBytes = 10).persistedId
+
+    imports.settle(fileOf("a.jpg"), ImportOutcome.Imported, assetId = asset.id)
+    imports.settle(fileOf("b.jpg"), ImportOutcome.Duplicate, reason = Some("Clients/Wedding"))
+    imports.settle(fileOf("c.pdf"), ImportOutcome.Unsupported, reason = Some("Unsupported media type"))
+    imports.settle(fileOf("d.jpg"), ImportOutcome.Failed, reason = Some("Cannot decode image"))
+    imports.settle(fileOf("e.jpg"), ImportOutcome.Imported)
+    for (n <- 1 to step) fileOf(f"pending/$n%03d.jpg")
+    val total = step + 5
+
+    val first = testContext.repositories.head
+    testApp.service.repository.switchContextToRepository(testContext.persistRepository())
+    val theirs = imports.open(ImportSource.Upload).persistedId
+    testApp.service.repository.switchContextToRepository(first)
+
+    withServer(App) {
+      host =>
+        val files = s"$repoId/imports/$importId/files"
+        val top = partial(host, files)
+        top.statusCode shouldBe 200
+        val shown = top.text()
+
+        occurrences(shown, PATH) shouldBe step
+        shown should include(s"Showing $step of $total files")
+        shown should include(s"/htmx/import/r/$files?shown=${step * 2}")
+        for (path <- List("a.jpg", "b.jpg", "c.pdf", "d.jpg", "e.jpg", f"pending/${step - 5}%03d.jpg"))
+          shown should include(s"$PATH$path<")
+        (shown should not).include(f"${PATH}pending/${step - 4}%03d.jpg<")
+        for (
+          filter <- List(s"All $total", "imported 2", "already in the Library 1", "unsupported 1", "failed 1", s"pending $step")
+        )
+          shown should include(filter)
+
+        occurrences(shown, s"/r/$repoId/asset/") shouldBe 1
+        shown should include(s"""href="/r/$repoId/asset/${asset.persistedId}"""")
+        shown should include("Already in the Library: Clients/Wedding")
+        shown should include("Cannot decode image")
+
+        val all = partial(host, files, Map("shown" -> (step * 2).toString)).text()
+        occurrences(all, PATH) shouldBe total
+        (all should not).include("Showing")
+
+        val failed = partial(host, files, Map("outcome" -> "failed")).text()
+        occurrences(failed, PATH) shouldBe 1
+        failed should include(s"${PATH}d.jpg<")
+        failed should include(s"/htmx/import/r/$files?outcome=failed")
+
+        partial(host, files, Map("outcome" -> "lost")).statusCode shouldBe 400
+        partial(host, s"$repoId/imports/$theirs/files").statusCode shouldBe 404
+        partial(host, s"$repoId/imports/${java.util.UUID.randomUUID}/files").statusCode shouldBe 404
+    }
+  }
+
+  test("A file or folder name holding markup is escaped in the Import history and in an Import's files") {
+
+    /**
+     * Setup:
+     *
+     * A User logged in with Import in a Library, whose Import is named by an uploaded folder whose name is a script element, and
+     * holds a file whose name is an image element with a handler, failed for a reason that holds markup too.
+     *
+     * Assertions:
+     *
+     * The history partial and the Import page hold the Import's name with its markup escaped, and no script element of that name.
+     * The files partial holds the file's name and its reason escaped, and no image element.
+     */
+    val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
+    val importId = imports.open(ImportSource.Upload, name = Some("<script>alert(1)</script>")).persistedId
+    val file = imports.addFile(importId, "<img src=x onerror=alert(1)>.jpg", sizeBytes = 10)
+    imports.settle(file.persistedId, ImportOutcome.Failed, reason = Some("<b>bold</b>"))
+
+    withServer(App) {
+      host =>
+        for (
+          shown <- List(
+            partial(host, s"$repoId/history").text(),
+            requests.get(s"$host/pipeline/r/$repoId", cookies = testContext.cookies).text())
+        ) {
+          shown should include("&lt;script&gt;alert(1)&lt;/script&gt;")
+          (shown should not).include("<script>alert(1)")
+        }
+
+        val files = partial(host, s"$repoId/imports/$importId/files").text()
+        files should include("&lt;img src=x onerror=alert(1)&gt;.jpg")
+        files should include("&lt;b&gt;bold&lt;/b&gt;")
+        (files should not).include("<img")
+        (files should not).include("<b>")
+    }
+  }
+
+  test("An upload's progress is pushed to every import status socket of its Library, and to no other Library's") {
+
+    /**
+     * Setup:
+     *
+     * A Library with two Users holding Import, each with an import status socket open, and a third User holding Import in another
+     * Library, with a socket open on that one. Over HTTP the first User opens an Import named by a folder whose name holds
+     * markup, sends it one image and closes it.
+     *
+     * Assertions:
+     *
+     * Both sockets of the upload's Library are sent the Import's status as `hx-ws` takes it: every message replaces the Import's
+     * status element, and the last one says the Import is closed, with its one file imported and none remaining. The Import's
+     * name comes escaped, in the title sent beside the status.
+     *
+     * Edge cases:
+     *
+     * The socket on the other Library is sent nothing of it.
+     */
+    val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
+    val watcher = testContext.persistUser()
+    testContext.grant(watcher, testContext.repository, Permissions.of(Permission.Import))
+    val elsewhere = testContext.persistRepository()
+    val outsider = testContext.persistUser()
+    testContext.grant(outsider, elsewhere, Permissions.of(Permission.Import))
+
+    withServer(App) {
+      host =>
+        def socket(cookies: Map[String, HttpCookie], library: String): OpenSocket = {
+          val opened = openImportStatus(host, cookies, statusPath(library)).toOption.get
+          opened.next() shouldBe CONNECTED
+          opened
+        }
+        val mine = socket(testContext.cookies, repoId)
+        val theirs = socket(cookiesOf(host, watcher), repoId)
+        val outside = socket(cookiesOf(host, outsider), elsewhere.persistedId)
+
+        val importId = openedImport(host, repoId, ujson.Obj(Api.Field.Import.NAME -> "<b>Holiday</b>"))
+        sendFile(host, repoId, importId, "sea.jpg", imageBytes()).statusCode shouldBe 200
+        closeImport(host, repoId, importId).statusCode shouldBe 200
+
+        for (told <- List(mine, theirs)) {
+          // The socket's messages up to the one that says the Import is closed
+          val statuses = scala.collection.mutable.ListBuffer(ujson.read(told.next()))
+          while (!statuses.last(Api.Field.ImportStatus.IS_CLOSED).bool) statuses += ujson.read(told.next())
+
+          for (status <- statuses) {
+            status(Api.Field.ImportStatus.IMPORT_ID).str shouldBe importId
+            status(Api.Field.ImportStatus.TARGET).str shouldBe s"#${Const.ImportHistory.statusId(importId)}"
+            status(Api.Field.ImportStatus.SWAP).str shouldBe "outerHTML"
+          }
+          val content = statuses.last(Api.Field.ImportStatus.CONTENT).str
+          content should include("1 imported")
+          (content should not).include("remaining")
+          content should include("&lt;b&gt;Holiday&lt;/b&gt;")
+          (content should not).include("<b>")
+        }
+
+        mine.messages.asScala.toList shouldBe empty
+        theirs.messages.asScala.toList shouldBe empty
+        outside.messages.asScala.toList shouldBe empty
     }
   }
 }

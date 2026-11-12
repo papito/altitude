@@ -33,19 +33,33 @@
   font-size: var(--font-size-medium);
 }
 
-/* The status feed's ticker: each line is served by the server over the WebSocket, and shown by the page's script */
-#statusText {
-  display: none;
-  color: var(--success-color);
-  font-weight: var(--font-weight-bold);
-  padding: var(--space-5);
-  font-size: var(--font-size-medium);
+/* The notice that the status feed stopped, above the history */
+#importStatusLost {
+  margin-bottom: var(--space-6);
 }
 
-#statusText.warning {
-  color: var(--warning-color);
+/* What marks an outcome in the Import history, on a segment of an Import's bar, a count, a filter chip and a file's
+   outcome: its color, and the fill of a chip in it, a tint of the color */
+#importHistory :is(.imported, .duplicate, .unsupported, .failed, .pending) {
+  --outcome-fill: hsl(from var(--outcome-color) h s l / 0.16);
 }
 
-#statusText span {
-  color: var(--theme-neutral-4);
+#importHistory .imported {
+  --outcome-color: var(--success-color);
+}
+
+#importHistory .duplicate {
+  --outcome-color: var(--info-color);
+}
+
+#importHistory .unsupported {
+  --outcome-color: var(--warning-color);
+}
+
+#importHistory .failed {
+  --outcome-color: var(--error-color);
+}
+
+#importHistory .pending {
+  --outcome-color: var(--theme-neutral-3);
 }

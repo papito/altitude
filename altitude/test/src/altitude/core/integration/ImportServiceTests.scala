@@ -14,6 +14,8 @@ import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
 
+import scala.jdk.CollectionConverters.*
+
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.DuplicateException
@@ -362,6 +364,166 @@ import altitude.core.util.Query
     imports.list(rpp = 2, page = 3).records shouldBe empty
   }
 
+  test("The Import history names who delivered each Import, where its files went and whether a restart interrupted it") {
+
+    /**
+     * Setup:
+     *
+     * A repository with a folder Clients and its subfolder Wedding, and an Admin. A second account uploads a folder into Wedding
+     * and leaves one of its two files pending; a Watch folder's scan, which no account delivers, imports a file to Triage and
+     * closes. The restart's step then runs. After it the context account opens an upload of files, left in progress. Another
+     * repository has an Import of its own.
+     *
+     * Assertions:
+     *
+     * The history holds the repository's three Imports: the one in progress first, then the closed ones, the newest first. The
+     * upload of files names the context account, no destination, and no interruption. The scan names nobody, no destination and
+     * no interruption. The folder upload names the account that delivered it, its destination by the folder's path, and that a
+     * restart interrupted it. Each carries the moment it was opened, as an instant: within the last minute.
+     *
+     * Edge cases:
+     *
+     * Once the Admin deletes the second account, the folder upload names nobody. Asked for two Imports, the history holds the
+     * first two and still counts three. The other repository's Import is in neither.
+     */
+    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
+    val uploader = testContext.persistUser()
+    val clients = testApp.service.folder.add("Clients")
+    val wedding = testApp.service.folder.add("Wedding", parentId = clients.id)
+
+    switchContextUser(uploader)
+    val folderUpload = imports.open(ImportSource.Upload, name = Some("Wedding 2026"), destFolderId = wedding.id)
+    val List(done, _) = List("done.jpg", "lost.jpg").map(imports.addFile(folderUpload.persistedId, _, sizeBytes = 10)): @unchecked
+    imports.settle(done.persistedId, ImportOutcome.Imported)
+    switchContextUser(testContext.users.head)
+
+    val scan = RequestContext.account.withValue(None)(imports.open(ImportSource.WatchFolder, name = Some("Phone sync")))
+    val scanned = imports.addFile(scan.persistedId, "IMG_0001.jpg", sizeBytes = 10)
+    imports.settle(scanned.persistedId, ImportOutcome.Imported)
+    imports.close(scan.persistedId)
+
+    imports.failInterrupted()
+    val filesUpload = imports.open(ImportSource.Upload)
+
+    val first = testContext.repositories.head
+    switchContextRepo(testContext.persistRepository())
+    imports.open(ImportSource.Upload, name = Some("Theirs"))
+    switchContextRepo(first)
+
+    val history = imports.history(shown = 10)
+    history.total shouldBe 3
+    history.entries.map(_.anImport.id) shouldBe List(filesUpload.id, scan.id, folderUpload.id)
+    history.inProgress.map(_.anImport.id) shouldBe List(filesUpload.id)
+    history.earlier.map(_.anImport.id) shouldBe List(scan.id, folderUpload.id)
+    history.entries.map(entry => (entry.deliveredBy, entry.destination, entry.isInterrupted)) shouldBe List(
+      (Some(testContext.users.head.name), None, false),
+      (None, None, false),
+      (Some(uploader.name), Some("Clients › Wedding"), true))
+    for (entry <- history.entries)
+      java.time.Duration.between(entry.openedAt.value, java.time.Instant.now()).abs.toSeconds should be < 60L
+
+    testApp.service.user.delete(admin.persistedId, uploader.persistedId)
+    imports.history(shown = 10).entries.last.deliveredBy shouldBe None
+
+    val top = imports.history(shown = 2)
+    top.entries.map(_.anImport.id) shouldBe List(filesUpload.id, scan.id)
+    top.total shouldBe 3
+  }
+
+  test("An Import's files are read from the first in path order, a number at a time, all of them or those of one outcome") {
+
+    /**
+     * Setup:
+     *
+     * An Import with five files, added out of path order: a.jpg and c.jpg imported, b.jpg failed, d.jpg and e.jpg pending.
+     * Another repository has an Import with a file.
+     *
+     * Assertions:
+     *
+     * Asked for three files of any outcome, the Import gives a.jpg, b.jpg and c.jpg, of five in all. Asked for its imported files
+     * it gives a.jpg and c.jpg, of two; asked for one pending file, d.jpg, of two; and for its duplicates none, of none. Each
+     * answer carries the Import with its counters.
+     *
+     * Edge cases:
+     *
+     * The other repository's Import is not found.
+     */
+    val (opened, files) = importOf("e.jpg", "c.jpg", "a.jpg", "d.jpg", "b.jpg")
+    val byPath = files.map(file => file.relPath -> file.persistedId).toMap
+    imports.settle(byPath("a.jpg"), ImportOutcome.Imported)
+    imports.settle(byPath("c.jpg"), ImportOutcome.Imported)
+    imports.settle(byPath("b.jpg"), ImportOutcome.Failed, reason = Some("Cannot decode image"))
+
+    val first = testContext.repositories.head
+    switchContextRepo(testContext.persistRepository())
+    val (theirs, _) = importOf("theirs.jpg")
+    switchContextRepo(first)
+
+    def shown(outcome: Option[ImportOutcome], count: Int) = {
+      val read = imports.filesShown(opened.persistedId, outcome, count)
+      read.anImport shouldBe stored(opened)
+      (read.files.map(_.relPath), read.total)
+    }
+
+    shown(None, 3) shouldBe (List("a.jpg", "b.jpg", "c.jpg"), 5)
+    shown(Some(ImportOutcome.Imported), 3) shouldBe (List("a.jpg", "c.jpg"), 2)
+    shown(Some(ImportOutcome.Pending), 1) shouldBe (List("d.jpg"), 2)
+    shown(Some(ImportOutcome.Duplicate), 3) shouldBe (Nil, 0)
+
+    intercept[NotFoundException](imports.filesShown(theirs.persistedId, None, 3))
+  }
+
+  test("A change to an Import is told once it has committed, with the Import as committed, and never when it rolls back") {
+
+    /**
+     * Setup:
+     *
+     * A listener of the Import record's changes, kept to the Imports of this test's repository. An Import is opened, given a
+     * file, and the file is settled as imported twice: first inside a transaction that then fails, then on its own. The Import is
+     * closed.
+     *
+     * Assertions:
+     *
+     * The listener hears of the opening with every counter at zero, of the file with one pending, of the settle that committed
+     * with one imported and none pending, and of the close with the Import closed, each once, in that order and under the
+     * repository's ID. The settle that rolled back is not heard of, and left the file pending.
+     *
+     * Edge cases:
+     *
+     * A file that is added and failed in one transaction, as one the page could not send is, is never told as pending: what is
+     * heard is the Import as that transaction committed it.
+     */
+    val repositoryId = testContext.repository.persistedId
+    val heard = new java.util.concurrent.CopyOnWriteArrayList[Import]()
+    imports.onChange((inRepository, changed) => if (inRepository == repositoryId) heard.add(changed): Unit)
+    def counts = heard.asScala.toList.map(told => (told.pending, told.imported, told.failed, told.closedAt.isDefined))
+
+    val (opened, List(file)) = importOf("photo.jpg"): @unchecked
+    counts shouldBe List((0, 0, 0, false), (1, 0, 0, false))
+    heard.asScala.map(_.id).toSet shouldBe Set(opened.id)
+
+    intercept[IllegalStateException] {
+      testApp.txManager.withTransaction {
+        imports.settle(file.persistedId, ImportOutcome.Imported)
+        throw new IllegalStateException("the completion fails after its settle")
+      }
+    }
+    counts should have size 2
+    stored(file).outcome shouldBe ImportOutcome.Pending
+
+    imports.settle(file.persistedId, ImportOutcome.Imported)
+    counts.drop(2) shouldBe List((0, 1, 0, false))
+
+    imports.close(opened.persistedId)
+    counts.drop(3) shouldBe List((0, 1, 0, true))
+    heard.asScala.last shouldBe stored(opened)
+
+    heard.clear()
+    val unsent = imports.open(ImportSource.Upload)
+    imports.addFailedFile(unsent.persistedId, "unsent.jpg", sizeBytes = 10)
+    counts.drop(1).distinct shouldBe List((0, 0, 1, false))
+  }
+
   test("An Import file keeps its path and outcome when its asset is purged, and points at no asset after") {
 
     /**
@@ -404,7 +566,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Every pending file, in both repositories, is failed with the reason "interrupted by a restart", and every Import that was
+     * Every pending file, in both repositories, is failed with the reason "Interrupted by a restart", and every Import that was
      * in progress is complete and closed, counting its pending files as failed and none pending. The context is the first
      * repository again.
      *
@@ -434,7 +596,7 @@ import altitude.core.util.Query
     RequestContext.getRepository.persistedId shouldBe first.persistedId
     for (lost <- List(lostOne, lostTwo, lostThree)) {
       val read = stored(lost)
-      (read.outcome, read.reason, read.assetId) shouldBe (ImportOutcome.Failed, Some("interrupted by a restart"), None)
+      (read.outcome, read.reason, read.assetId) shouldBe (ImportOutcome.Failed, Some("Interrupted by a restart"), None)
     }
     stored(done).outcome shouldBe ImportOutcome.Imported
     counters(interrupted) shouldBe (0, 1, 0, 0, 2)
@@ -449,7 +611,7 @@ import altitude.core.util.Query
 
     switchContextRepo(second)
     stored(theirLost).outcome shouldBe ImportOutcome.Failed
-    stored(theirLost).reason shouldBe Some("interrupted by a restart")
+    stored(theirLost).reason shouldBe Some("Interrupted by a restart")
     counters(theirs) shouldBe (0, 0, 0, 0, 1)
     stored(theirs).closedAt should not be empty
   }
@@ -564,7 +726,7 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * The pending file of the recent Import is failed, "interrupted by a restart", and its Import is closed, counting it failed.
+     * The pending file of the recent Import is failed, "Interrupted by a restart", and its Import is closed, counting it failed.
      * The closed Import opened 200 days ago is gone with its file, though no daily prune ran. The closed Import opened 10 days
      * ago is as it was.
      *
@@ -583,7 +745,7 @@ import altitude.core.util.Query
     imports.startup()
 
     val failed = stored(lost)
-    (failed.outcome, failed.reason) shouldBe (ImportOutcome.Failed, Some("interrupted by a restart"))
+    (failed.outcome, failed.reason) shouldBe (ImportOutcome.Failed, Some("Interrupted by a restart"))
     counters(interrupted) shouldBe (0, 0, 0, 0, 1)
     stored(interrupted).closedAt should not be empty
     for (gone <- List(expired, stale)) {

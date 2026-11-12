@@ -59,7 +59,7 @@ abstract class ImportFileDao(override val config: Config) extends BaseDao[Import
     addRecord(sql, List(id, repositoryId, file.importId, file.relPath, file.sizeBytes))
     file.copy(id = Some(id))
 
-  override def ofImport(importId: String, outcome: Option[ImportOutcome]): List[ImportFile] =
+  override def ofImport(importId: String, outcome: Option[ImportOutcome], limit: Option[Int]): List[ImportFile] =
     val sql = s"""
       SELECT *
         FROM $tableName
@@ -67,9 +67,27 @@ abstract class ImportFileDao(override val config: Config) extends BaseDao[Import
          AND ${FieldConst.ImportFile.IMPORT_ID} = ?
          ${outcome.fold("")(_ => s"AND ${FieldConst.ImportFile.OUTCOME} = ?")}
        ORDER BY ${FieldConst.ImportFile.REL_PATH}, ${FieldConst.ID}
+       ${limit.fold("")(_ => "LIMIT ?")}
     """
 
-    manyBySqlQuery(sql, List(repositoryId, importId) ++ outcome.map(_.dbValue)).map(makeModel)
+    manyBySqlQuery(sql, List(repositoryId, importId) ++ outcome.map(_.dbValue) ++ limit).map(makeModel)
+
+  // Reads the files of that outcome alone, by the index on a file's Import and outcome
+  override def havingReason(importIds: Set[String], outcome: ImportOutcome, reason: String): Set[String] =
+    if importIds.isEmpty then return Set.empty
+
+    val sql = s"""
+      SELECT DISTINCT ${FieldConst.ImportFile.IMPORT_ID}
+        FROM $tableName
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.ImportFile.IMPORT_ID} IN (${importIds.toList.map(_ => "?").mkString(", ")})
+         AND ${FieldConst.ImportFile.OUTCOME} = ?
+         AND ${FieldConst.ImportFile.REASON} = ?
+    """
+
+    manyBySqlQuery(sql, (repositoryId :: importIds.toList) ++ List(outcome.dbValue, reason))
+      .map(_(FieldConst.ImportFile.IMPORT_ID).asInstanceOf[String])
+      .toSet
 
   // Only a pending file takes an outcome, so of two writers settling one file the second changes nothing
   override def settle(fileId: String, outcome: ImportOutcome, reason: Option[String], assetId: Option[String]): Int =

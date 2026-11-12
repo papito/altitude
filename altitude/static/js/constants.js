@@ -231,6 +231,13 @@ export const Const = {
         // The badge of the nav's filter button (includes/nav): the number of filters in force, or of those in
         // the open panel's form
         filterCount: "data-app-filter-count",
+        // The Import history (htmx/import_history, htmx/import_files): an Import's entry, the `<details>` of its
+        // Import files, the route of the view a part of the history shows (the history itself, an Import's files),
+        // by which the page reads it again, and on a control the route of the view it asks for instead
+        importId: "data-import-id",
+        importFiles: "data-app-import-files",
+        viewUrl: "data-app-view-url",
+        view: "data-app-view",
     },
 
     context: {

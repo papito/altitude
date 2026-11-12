@@ -7,6 +7,7 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.IllegalOperationException
+import altitude.core.RequestContext
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.actors.ImportStatusWsActor
 import altitude.core.models.AccountType
@@ -30,7 +31,8 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
   @cask.get("/pipeline/r/:repoId")
   def pipeline(repoId: String): cask.Response[String] =
     val stats = App.altitude.service.stats.getStats
-    val payload = "<!doctype html>" + html.pipeline(stats = stats)
+    val history = imports.history(Const.ImportHistory.IMPORTS_STEP)
+    val payload = "<!doctype html>" + html.pipeline(stats = stats, history = history)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   /**
@@ -129,21 +131,23 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
     jsonResponse(json)
 
   /**
-   * The import status stream of the logged-in account: the account comes from the login (`decorators.authenticate`), never from
-   * the request, so no one opens another account's feed. A handshake from a page of another origin is refused with a 403
+   * The import status stream of the path's Library, for an account that holds Import in it: every socket of the Library is told
+   * of its Imports as they change (`ImportStatusWsActor`), whichever account delivers them. The account comes from the login
+   * (`decorators.authenticate`), never from the request. A handshake from a page of another origin is refused with a 403
    * (`decorators.isSameOriginOrNone`; one with no Origin, which no browser sends, is let through to the login check), and one
-   * with no login with a 401, which clears a session cookie whose token was refused, and a Guest's with a 403: a Guest imports
-   * nothing, so it has no feed. A RawDecorator cannot wrap a WebSocket endpoint, whose result is no response, so the login is
-   * checked here rather than by `requireLogin`. A stale token's rebuild is not set as a cookie, which the upgrade's answer cannot
-   * carry; the next page load sets it. The account's sockets close when its versions change (`ImportStatusWsActor.CloseAllFor`).
+   * with no login with a 401, which clears a session cookie whose token was refused. A Library the account cannot see, or that
+   * does not exist, is a 404, as `requireLogin` answers it; a Guest's handshake, and that of an account without Import in the
+   * Library, a 403. A RawDecorator cannot wrap a WebSocket endpoint, whose result is no response, so all of it is checked here
+   * rather than by `requireLogin` and `requirePermission`. A stale token's rebuild is not set as a cookie, which the upgrade's
+   * answer cannot carry; the next page load sets it. The account's sockets close when its versions change
+   * (`ImportStatusWsActor.CloseAllFor`), as when a grant of it does, so a socket never outlives the Permission that opened it.
    */
-  @cask.websocket("/import/status")
-  def pipelineStatus()(using request: cask.Request): cask.WebsocketResult =
+  @cask.websocket("/import/r/:repoId/status")
+  def pipelineStatus(repoId: String)(using request: cask.Request): cask.WebsocketResult =
     if !isSameOriginOrNone(request) then
       logger.warn(
         s"Refused an import status handshake from another origin [${Util.printable(Option(request.exchange.getRequestHeaders.getFirst("Origin")).getOrElse(""), 200)}]")
-      return WebsocketResult.Response(
-        cask.Response("Forbidden: another origin", statusCode = 403, headers = Seq("Content-Type" -> "text/plain")))
+      return refused(403, "Forbidden: another origin")
 
     authenticate(request) match
       case Left(noLogin) =>
@@ -153,24 +157,41 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
             statusCode = 401,
             headers = Seq("Content-Type" -> "text/plain"),
             cookies = noLogin.cookies))
-      case Right(login) if login.claims.account.accountType == AccountType.Guest =>
-        logger.warn(s"Refused an import status handshake of Guest [${login.claims.account.persistedId}]")
-        WebsocketResult.Response(forbidden(Const.Msg.Err.FORBIDDEN_GUEST, json = false))
       case Right(login) =>
-        val userId = login.claims.account.persistedId
-        cask.WsHandler {
-          wsClient =>
-            App.altitude.actorSystem ! ImportStatusWsActor.AddClient(userId, wsClient)
-            wsClient.send(cask.Ws.Text("connected"))
+        val account = login.claims.account
+        val userId = account.persistedId
+        // The Library `repoContext` found for the path, and the account's Permissions in it, if it can see it
+        val granted = RequestContext.repository.value.flatMap(
+          repository => login.claims.permissionsIn(repository.persistedId).map(repository.persistedId -> _))
 
-            cask.WsActor {
-              case cask.Ws.Error(e) =>
-                logger.warn("Connection error: " + e.getMessage)
-                App.altitude.actorSystem ! ImportStatusWsActor.RemoveClient(userId, wsClient)
-              case cask.Ws.Close(_, _) | cask.Ws.ChannelClosed() =>
-                logger.debug("Connection closed.")
-                App.altitude.actorSystem ! ImportStatusWsActor.RemoveClient(userId, wsClient)
+        granted match
+          case None =>
+            logger.warn(
+              s"Refused an import status handshake of account [$userId]: no access to repository [${Util.printable(repoId, 64)}]")
+            refused(404, Const.Msg.Err.LIBRARY_NOT_FOUND)
+          case Some(_) if account.accountType == AccountType.Guest =>
+            logger.warn(s"Refused an import status handshake of Guest [$userId]")
+            WebsocketResult.Response(forbidden(Const.Msg.Err.FORBIDDEN_GUEST, json = false))
+          case Some((_, permissions)) if !permissions.has(Permission.Import) =>
+            logger.warn(s"Refused an import status handshake of account [$userId]: no Import in the repository")
+            WebsocketResult.Response(forbidden(Const.Msg.Err.FORBIDDEN_PERMISSION.format(Permission.Import.label), json = false))
+          case Some((repositoryId, _)) =>
+            cask.WsHandler {
+              wsClient =>
+                App.altitude.actorSystem ! ImportStatusWsActor.AddClient(repositoryId, userId, wsClient)
+
+                cask.WsActor {
+                  case cask.Ws.Error(e) =>
+                    logger.warn("Connection error: " + e.getMessage)
+                    App.altitude.actorSystem ! ImportStatusWsActor.RemoveClient(repositoryId, userId, wsClient)
+                  case cask.Ws.Close(_, _) | cask.Ws.ChannelClosed() =>
+                    logger.debug("Connection closed.")
+                    App.altitude.actorSystem ! ImportStatusWsActor.RemoveClient(repositoryId, userId, wsClient)
+                }
             }
-        }
+
+  /** A handshake's refusal in plain text */
+  private def refused(status: Int, why: String): cask.WebsocketResult =
+    WebsocketResult.Response(cask.Response(why, statusCode = status, headers = Seq("Content-Type" -> "text/plain")))
 
   initialize()

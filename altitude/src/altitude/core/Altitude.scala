@@ -355,7 +355,7 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
 
   /**
    * Where the import pipeline's stages do their work (`PipelineUtils.guardedAsync`), so the stream actors on the default
-   * dispatcher, which the status ticker, the SQLite optimize schedule and the Import history prune share, only route
+   * dispatcher, which the import status feed, the SQLite optimize schedule and the Import history prune share, only route
    */
   final val importDispatcher: ExecutionContextExecutor =
     actorSystem.dispatchers.lookup(DispatcherSelector.fromConfig("altitude.import-dispatcher"))
@@ -420,6 +420,9 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
 
   // An account's import status sockets close when its versions change, so a deactivated, deleted or revoked account's feed ends
   service.accountVersions.onChange((accountId, change) => actorSystem ! ImportStatusWsActor.CloseAllFor(accountId, change))
+
+  // The import status sockets of a Library are told of each change to one of its Imports, once it has committed
+  service.imports.onChange((repositoryId, anImport) => actorSystem ! ImportStatusWsActor.ImportChanged(repositoryId, anImport))
 
   // A staged file outlives nothing: whatever is there was left by a run that did not finish. After `parallelism`, which the
   // services read as they are wired up.

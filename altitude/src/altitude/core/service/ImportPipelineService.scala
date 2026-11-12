@@ -33,7 +33,6 @@ import altitude.core.pipeline.flows.RecognizeFacesFlow
 import altitude.core.pipeline.flows.SettleImportFileFlow
 import altitude.core.pipeline.flows.StripBinaryDataFlow
 import altitude.core.pipeline.sinks.AssetErrorLoggingSink
-import altitude.core.pipeline.sinks.WsAssetProcessedNotificationSink
 
 class ImportPipelineService(app: Altitude):
   val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -54,7 +53,6 @@ class ImportPipelineService(app: Altitude):
   private val discardDroppedFlow = DiscardDroppedFlow(app)
   private val settleImportFileFlow = SettleImportFileFlow(app)
   private val stripBinaryDataFlow = StripBinaryDataFlow()
-  private val wsNotificationSink = WsAssetProcessedNotificationSink(app)
   private val errorLoggingSink = AssetErrorLoggingSink()
 
   /**
@@ -86,7 +84,6 @@ class ImportPipelineService(app: Altitude):
     .via(settleImportFileFlow)
     .via(stripBinaryDataFlow)
     .mergeSubstreams
-    .alsoTo(wsNotificationSink)
     .alsoTo(errorLoggingSink)
 
   private val queue = QueuedPipeline[TDataAssetWithContext](

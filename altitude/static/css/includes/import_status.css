@@ -1,0 +1,85 @@
+/* An Import's status in the Import history (includes/import_status): its progress bar and its counts. Scoped by the
+   history's section, the only place it is rendered; an outcome's colors are pages/pipeline.css's */
+
+#importHistory .status {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The bar: a track with a segment per outcome, each as wide as its share of the Import's files (--files, set by the
+   template, is its number of them, and so its share of the room), the pending ones the rest of the track */
+#importHistory .bar {
+  position: relative;
+  display: flex;
+  height: var(--import-bar-height);
+  overflow: hidden;
+  border-radius: var(--chip-border-radius);
+  background-color: var(--theme-secondary);
+}
+
+#importHistory .bar span {
+  flex: var(--files) 0 0;
+  background-color: var(--outcome-color);
+}
+
+/* What is imported is the accent's, as the node of an Import in progress is; the count beside it keeps the success color */
+#importHistory .bar .imported {
+  background-color: var(--theme-accent);
+}
+
+/* The files still pending are the bare track */
+#importHistory .bar .pending {
+  background: none;
+}
+
+/* While the Import is in progress, diagonal stripes lie over the whole bar, a stripe as wide as the gap after it; they
+   move, by one period a turn, unless the system asks for reduced motion */
+#importHistory .status.in-progress .bar::after {
+  --stripe: var(--space-3);
+  /* A period of the 45 degree gradient measured along the bar: two stripe widths times the square root of two */
+  --stripe-period: calc(var(--stripe) * 2.8284);
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(45deg, hsl(from var(--theme-neutral-4) h s l / 0.16) 0 var(--stripe), hsl(from var(--theme-neutral-4) h s l / 0) var(--stripe) calc(var(--stripe) * 2));
+  background-size: var(--stripe-period) 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #importHistory .status.in-progress .bar::after {
+    animation: import-stripes 700ms linear infinite;
+  }
+}
+
+@keyframes import-stripes {
+  to {
+    background-position: var(--stripe-period) 0;
+  }
+}
+
+/* The counts: a chip per outcome in its colors, and the files remaining as an outlined one */
+#importHistory .counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#importHistory .counts li {
+  padding: var(--chip-padding);
+  border: var(--border-hairline) var(--outcome-fill);
+  border-radius: var(--chip-border-radius);
+  background-color: var(--outcome-fill);
+  color: var(--outcome-color);
+  font-size: var(--font-size-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+#importHistory .counts .pending {
+  border-color: var(--outcome-color);
+  background: none;
+}

@@ -6,8 +6,11 @@ import altitude.core.models.ImportOutcome
 
 /** The Import files of the context repository */
 trait ImportFileDao extends BaseDao[ImportFile]:
-  /** The Import's files in path order, those of one outcome when `outcome` is given */
-  def ofImport(importId: String, outcome: Option[ImportOutcome]): List[ImportFile]
+  /** The Import's files in path order, those of one outcome when `outcome` is given, and the first `limit` when one is given */
+  def ofImport(importId: String, outcome: Option[ImportOutcome], limit: Option[Int] = None): List[ImportFile]
+
+  /** Those of the Imports that have a file of `outcome` with `reason` */
+  def havingReason(importIds: Set[String], outcome: ImportOutcome, reason: String): Set[String]
 
   /** Gives a pending file its outcome; 0 for a file that is not pending any more, and for one that is not there */
   def settle(fileId: String, outcome: ImportOutcome, reason: Option[String], assetId: Option[String]): Int

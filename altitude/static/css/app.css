@@ -12,6 +12,7 @@
 @import "includes/account_libraries.css";
 @import "includes/cannot_organize.css";
 @import "includes/upload_sections.css";
+@import "includes/import_status.css";
 @import "htmx/folders.css";
 @import "htmx/albums.css";
 @import "htmx/locations.css";
@@ -40,3 +41,5 @@
 @import "htmx/account_info_dialog.css";
 @import "htmx/quick_view_modal.css";
 @import "htmx/search_panel.css";
+@import "htmx/import_history.css";
+@import "htmx/import_files.css";
