@@ -16,7 +16,6 @@ import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 
 import altitude.core.Altitude
-import altitude.core.Const
 import altitude.core.FieldConst
 import altitude.core.NotFoundException
 import altitude.core.models.Asset
@@ -37,30 +36,6 @@ import altitude.core.util.Query
 
   /** Has the database refuse to change the Person's cover, as a failing statement would, until the returned cleanup runs */
   private def refuseMovingCover(personId: String): () => Unit = refuse("UPDATE OF cover_face_id", "person", personId)
-
-  /** Has the database refuse `event` (`DELETE`, `UPDATE OF <column>`) on the row of `table` with the ID until the cleanup runs */
-  private def refuse(event: String, table: String, rowId: String): () => Unit = {
-    val (create, drop) = testApp.dataSourceType match {
-      case Const.DbEngineName.POSTGRES =>
-        (
-          List(
-            "CREATE FUNCTION refused_by_test() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'Refused by the test'; END $$ " +
-              "LANGUAGE plpgsql",
-            s"CREATE TRIGGER refused_by_test BEFORE $event ON $table FOR EACH ROW WHEN (OLD.id = '$rowId') " +
-              "EXECUTE FUNCTION refused_by_test()"
-          ),
-          List(s"DROP TRIGGER refused_by_test ON $table", "DROP FUNCTION refused_by_test()"))
-      case _ =>
-        (
-          List(
-            s"CREATE TRIGGER refused_by_test BEFORE $event ON $table WHEN OLD.id = '$rowId' " +
-              "BEGIN SELECT RAISE(ABORT, 'Refused by the test'); END"),
-          List("DROP TRIGGER refused_by_test"))
-    }
-
-    testApp.txManager.withTransaction(create.foreach(update(_)))
-    () => testApp.txManager.withTransaction(drop.foreach(update(_)))
-  }
 
   test("Purging assets should remove asset data from DB and file store") {
 

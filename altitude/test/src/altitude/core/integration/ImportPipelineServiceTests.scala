@@ -56,6 +56,11 @@ import altitude.core.VideoException
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.AssetWithData
+import altitude.core.models.Import
+import altitude.core.models.ImportFile
+import altitude.core.models.ImportOrigin
+import altitude.core.models.ImportOutcome
+import altitude.core.models.ImportSource
 import altitude.core.models.Person
 import altitude.core.models.Repository
 import altitude.core.pipeline.PipelineTypes.InvalidAsset
@@ -921,6 +926,154 @@ import altitude.core.util.Query
     left(1) shouldBe 0.0 +- 8
     left(2) shouldBe 255.0 +- 8
     preview.get(100, 150)(3) shouldBe 0.0
+  }
+
+  /** The element as a file of the Import: a pending Import file by its file name, which the element carries as its origin */
+  private def asFileOf(anImport: Import, dataAsset: AssetWithData): (AssetWithData, ImportFile) =
+    val file = testApp.service.imports.addFile(anImport.persistedId, dataAsset.asset.fileName, dataAsset.asset.sizeBytes)
+    (dataAsset.copy(origin = Some(ImportOrigin(file.persistedId))), file)
+
+  /** The Import file as stored now */
+  private def storedFile(file: ImportFile): ImportFile =
+    testApp.service.imports.files(file.importId).find(_.id == file.id).get
+
+  /** A staged random image under an asset with the checksum of `existing`, as a second copy of its file would arrive */
+  private def copyOf(existing: Asset): AssetWithData =
+    testContext.makeAssetWithData(Some(testContext.makeAsset().copy(checksum = existing.checksum)))
+
+  test("The files of an Import are settled by what the pipeline made of them, and the Import's counters agree with the Library") {
+
+    /**
+     * Setup:
+     *
+     * An asset already in the Library, in Triage. An upload's Import of four files, marked complete as its last file is sent, run
+     * through the import pipeline in one stream, each carrying its Import file as its origin: a new image, a second copy of the
+     * asset already there, a file of a made-up media type, and bytes no image reader takes under a JPEG name.
+     *
+     * Assertions:
+     *
+     * The pipeline imports the first and drops the other three, and each Import file is settled accordingly: the first imported,
+     * pointing at the asset it became, which is complete in the Library; the second a duplicate, pointing at the asset already
+     * there; the third unsupported and the fourth failed, each with its reason. The Import counts one file of each outcome and
+     * none pending, and is closed. The Library holds two completed assets: the one it had and the one imported.
+     */
+    val existing = testContext.persistAsset(isTriaged = true)
+    val context = PipelineContext(testContext.repository, Some(testContext.user))
+    val imports = testApp.service.imports
+    val opened = imports.open(ImportSource.Upload)
+
+    val (photo, photoFile) = asFileOf(opened, testContext.makeAssetWithData())
+    val (copy, copyFile) = asFileOf(opened, copyOf(existing))
+    val (document, documentFile) =
+      asFileOf(
+        opened,
+        testContext.makeAssetWithData(Some(testContext.makeAsset().copy(assetType = AssetType("bad", "type", "mime")))))
+    val (broken, brokenFile) = asFileOf(opened, notAnImage())
+    imports.close(opened.persistedId)
+    imports.getById(opened.persistedId).closedAt shouldBe None
+
+    val results = runPipeline(List(photo, copy, document, broken).map((_, context))*)
+
+    val importedAsset = resultFor(results, photo.asset.fileName)._1.left.getOrElse(fail("Expected the new image to import"))
+    results.count(_._1.isRight) shouldBe 3
+
+    def settled(file: ImportFile) =
+      val read = storedFile(file)
+      (read.outcome, read.reason, read.assetId)
+
+    settled(photoFile) shouldBe (ImportOutcome.Imported, None, importedAsset.id)
+    testApp.service.asset.getById(importedAsset.persistedId).isPipelineProcessed shouldBe true
+    settled(copyFile) shouldBe (ImportOutcome.Duplicate, Some("Triage"), existing.id)
+    settled(documentFile) shouldBe (ImportOutcome.Unsupported, Some("Unsupported media type"), None)
+    settled(brokenFile) shouldBe (ImportOutcome.Failed, Some("Cannot decode image"), None)
+
+    val closed = imports.getById(opened.persistedId)
+    (closed.pending, closed.imported, closed.duplicate, closed.unsupported, closed.failed) shouldBe (0, 1, 1, 1, 1)
+    closed.closedAt should not be empty
+    importedCount() shouldBe 2
+  }
+
+  test("A duplicate's Import file names where the asset already in the Library is") {
+
+    /**
+     * Setup:
+     *
+     * Three assets already in the Library: one in Triage, one in the folder 2024 under the folder Travel, and one in the root
+     * folder. An Import of a second copy of each, run through the import pipeline.
+     *
+     * Assertions:
+     *
+     * Every copy is dropped as a duplicate, and its Import file is a duplicate pointing at the asset already there, with where
+     * that asset is as its reason: "Triage", the folder path "Travel/2024", and "Top level" for the root folder. The Import
+     * counts three duplicates.
+     */
+    val travel = testApp.service.folder.add("Travel")
+    val year = testApp.service.folder.add("2024", travel.id)
+    val inTriage = testContext.persistAsset(isTriaged = true)
+    val inFolder = testContext.persistAsset(folder = Some(year))
+    val inRoot = testContext.persistAsset()
+
+    val context = PipelineContext(testContext.repository, Some(testContext.user))
+    val opened = testApp.service.imports.open(ImportSource.Upload)
+    val copies = List(inTriage, inFolder, inRoot).map(existing => asFileOf(opened, copyOf(existing)))
+
+    val results = runPipeline(copies.map((copy, _) => (copy, context))*)
+
+    results.map(_._1.fold(_ => None, _.cause.map(_.getClass))) shouldBe List.fill(3)(Some(classOf[DuplicateException]))
+    copies.map((_, file) => storedFile(file)).map(file => (file.outcome, file.reason, file.assetId)) shouldBe List(
+      (ImportOutcome.Duplicate, Some("Triage"), inTriage.id),
+      (ImportOutcome.Duplicate, Some("Travel/2024"), inFolder.id),
+      (ImportOutcome.Duplicate, Some("Top level"), inRoot.id)
+    )
+    testApp.service.imports.getById(opened.persistedId).duplicate shouldBe 3
+  }
+
+  test("A file that fails in a stage after its asset is persisted is settled failed, and leaves no asset") {
+
+    /**
+     * Setup:
+     *
+     * A repository whose file store cannot store a file, and an Import of one image run through the import pipeline there.
+     *
+     * Assertions:
+     *
+     * The file is dropped at the file store with a storage error, its Import file is failed with that as its reason and points at
+     * no asset, and the Import counts it failed. Nothing of the asset is left in the repository.
+     */
+    val repository = testContext.repository
+    val opened = testApp.service.imports.open(ImportSource.Upload)
+    val (photo, file) = asFileOf(opened, testContext.makeAssetWithData())
+    breakFileStore(repository)
+
+    val result =
+      try dropped(runPipeline((photo, PipelineContext(repository, Some(testContext.user)))))
+      finally restoreFileStore(repository)
+
+    result.cause.get shouldBe a[StorageException]
+    val settled = storedFile(file)
+    (settled.outcome, settled.reason, settled.assetId) shouldBe (ImportOutcome.Failed, Some("Storage error"), None)
+    testApp.service.imports.getById(opened.persistedId).failed shouldBe 1
+    rowCount("asset") shouldBe 0
+  }
+
+  test("A file whose Import file cannot be settled is not imported") {
+
+    /**
+     * Setup:
+     *
+     * An image run through the import pipeline with an origin that names no Import file.
+     *
+     * Assertions:
+     *
+     * The completion, which settles the Import file in the transaction that completes the asset, fails as a whole: the file is
+     * dropped with the Import file not found, and no asset, complete or not, is left in the repository.
+     */
+    val orphan = testContext.makeAssetWithData().copy(origin = Some(ImportOrigin("no-such-import-file")))
+
+    val result = dropped(runPipeline((orphan, PipelineContext(testContext.repository, Some(testContext.user)))))
+
+    result.cause.get shouldBe a[NotFoundException]
+    rowCount("asset") shouldBe 0
   }
 
   /** `people/affleck.jpg` scaled to 640 by 893 on a white canvas `extraWidth` pixels wider, so frames of one face differ */

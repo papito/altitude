@@ -151,6 +151,9 @@ case class Settings(private val text: Map[String, String], private val defaults:
   /** 0 means what the machine affords, see `util.ImportParallelism` */
   val importParallelism: Int = number(IMPORT_PARALLELISM).toInt
 
+  /** Days an Import stays in the Import history; 0 keeps every Import */
+  val importHistoryDays: Int = number(IMPORT_HISTORY_DAYS).toInt
+
 object Settings:
   val FACE_YUNET_CONFIDENCE_THRESHOLD = "face.yunet.confidence_threshold"
   val FACE_YUNET_NMS_THRESHOLD = "face.yunet.nms_threshold"
@@ -183,6 +186,7 @@ object Settings:
   val DB_POSTGRES_READ_STATEMENT_TIMEOUT = "db.postgres.read_statement_timeout"
   val PIPELINE_SHUTDOWN_TIMEOUT = "pipeline.shutdown_timeout"
   val IMPORT_PARALLELISM = "import.parallelism"
+  val IMPORT_HISTORY_DAYS = "import.history.days"
 
   import SettingGroup.*
   import SettingType.*
@@ -439,6 +443,14 @@ object Settings:
         "config caps this, whatever is set here.",
       Integer(0),
       kind = SettingKind.Restart
+    ),
+    SettingDef(
+      IMPORT_HISTORY_DAYS,
+      Operations,
+      "Import history (days)",
+      "An Import and its Import files leave the Import history once the Import is closed and older than this many days; a " +
+        "daily prune deletes them. The assets they imported stay. 0 keeps the history forever.",
+      Integer(0)
     )
   )
 

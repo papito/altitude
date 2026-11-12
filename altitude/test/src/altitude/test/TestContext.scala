@@ -83,7 +83,10 @@ object TestContext {
     "metadata_field",
     "metadata_parameter",
     "stats",
-    "search_document")
+    "search_document",
+    "import",
+    "import_file"
+  )
 }
 
 class TestContext(val testApp: Altitude) {

@@ -31,6 +31,7 @@ import altitude.core.service.FaceRecognitionService
 import altitude.core.service.FolderService
 import altitude.core.service.GeocoderService
 import altitude.core.service.ImportPipelineService
+import altitude.core.service.ImportService
 import altitude.core.service.LibraryService
 import altitude.core.service.LocationService
 import altitude.core.service.MetadataExtractionService
@@ -285,6 +286,18 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
       case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
+    val imports: dao.ImportDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.ImportDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.ImportDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val importFile: dao.ImportFileDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.ImportFileDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.ImportFileDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
     val setting: dao.SettingDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.jdbc.SettingDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new dao.jdbc.SettingDao(app.config) with dao.sqlite.SqliteOverrides
@@ -342,7 +355,7 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
 
   /**
    * Where the import pipeline's stages do their work (`PipelineUtils.guardedAsync`), so the stream actors on the default
-   * dispatcher, which the status ticker and the SQLite optimize schedule share, only route
+   * dispatcher, which the status ticker, the SQLite optimize schedule and the Import history prune share, only route
    */
   final val importDispatcher: ExecutionContextExecutor =
     actorSystem.dispatchers.lookup(DispatcherSelector.fromConfig("altitude.import-dispatcher"))
@@ -351,6 +364,11 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
   private val sqliteOptimizing: Option[Cancellable] = Option.when(dataSourceType == Const.DbEngineName.SQLITE) {
     actorSystem.scheduler.scheduleAtFixedRate(1.hour, 1.hour)(() => txManager.optimize())(actorSystem.executionContext)
   }
+
+  // The Import history is pruned daily of the Imports past the `import.history.days` Setting, and once at startup (`App`). A
+  // prune that fails is logged and not thrown: a scheduled task that throws is not run again
+  private val importHistoryPruning: Cancellable =
+    actorSystem.scheduler.scheduleAtFixedRate(1.day, 1.day)(() => service.imports.pruneOrLog())(actorSystem.executionContext)
 
   /**
    * The Scene models every imported still image is embedded with (`AssetService.measureImage`), built before the services, so a
@@ -382,6 +400,7 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
     val person: PersonService = PersonService(app)
     val faceDetection: FaceDetectionService = FaceDetectionService(app)
     val faceRecognition: FaceRecognitionService = FaceRecognitionService(app)
+    val imports: ImportService = ImportService(app)
     val importPipeline: ImportPipelineService = ImportPipelineService(app)
     val purgePipeline: PurgePipelineService = PurgePipelineService(app)
     val urlService: UrlService = UrlService()
@@ -419,6 +438,7 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
     sceneEmbedder.close()
 
     sqliteOptimizing.foreach(_.cancel())
+    importHistoryPruning.cancel(): Unit
     txManager.optimize()
     txManager.shutdown()
     sqlExplainer.foreach(_.close())

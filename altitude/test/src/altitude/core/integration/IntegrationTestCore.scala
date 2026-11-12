@@ -209,6 +209,30 @@ abstract class IntegrationTestCore
     firstFailure.get.foreach(throw _)
   }
 
+  /** Has the database refuse `event` (`DELETE`, `UPDATE OF <column>`) on the row of `table` with the ID until the cleanup runs */
+  protected def refuse(event: String, table: String, rowId: String): () => Unit = {
+    val (create, drop) = testApp.dataSourceType match {
+      case Const.DbEngineName.POSTGRES =>
+        (
+          List(
+            "CREATE FUNCTION refused_by_test() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'Refused by the test'; END $$ " +
+              "LANGUAGE plpgsql",
+            s"CREATE TRIGGER refused_by_test BEFORE $event ON $table FOR EACH ROW WHEN (OLD.id = '$rowId') " +
+              "EXECUTE FUNCTION refused_by_test()"
+          ),
+          List(s"DROP TRIGGER refused_by_test ON $table", "DROP FUNCTION refused_by_test()"))
+      case _ =>
+        (
+          List(
+            s"CREATE TRIGGER refused_by_test BEFORE $event ON $table WHEN OLD.id = '$rowId' " +
+              "BEGIN SELECT RAISE(ABORT, 'Refused by the test'); END"),
+          List("DROP TRIGGER refused_by_test"))
+    }
+
+    testApp.txManager.withTransaction(create.foreach(update(_)))
+    () => testApp.txManager.withTransaction(drop.foreach(update(_)))
+  }
+
   /** Runs `f` with the Setting saved as `value`, and saves its default back afterwards, so the other suites see the seed */
   def withSetting[T](name: String, value: String)(f: => T): T = {
     testApp.settings.save(Map(name -> value))

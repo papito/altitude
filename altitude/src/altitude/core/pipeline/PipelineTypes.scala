@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
+import altitude.core.models.ImportOrigin
 import altitude.core.models.Permissions
 import altitude.core.models.Repository
 import altitude.core.models.User
@@ -16,12 +17,19 @@ object PipelineTypes:
    */
   case class PipelineContext(repository: Repository, account: Option[User], permissions: Permissions = Permissions.none)
 
-  /** An asset the pipeline dropped, with its staged file if it still has one, for the pipeline's end to discard */
-  case class InvalidAsset(payload: Asset, cause: Option[Throwable], stagedFile: Option[Path] = None)
+  /**
+   * An asset the pipeline dropped, with its staged file if it still has one, for the pipeline's end to discard, and the Import
+   * file it is a file of, if any, for the pipeline's end to settle
+   */
+  case class InvalidAsset(
+      payload: Asset,
+      cause: Option[Throwable],
+      stagedFile: Option[Path] = None,
+      origin: Option[ImportOrigin] = None)
 
   object InvalidAsset:
     def apply(dataAsset: AssetWithData, cause: Throwable): InvalidAsset =
-      InvalidAsset(dataAsset.asset, Some(cause), Some(dataAsset.path))
+      InvalidAsset(dataAsset.asset, Some(cause), Some(dataAsset.path), dataAsset.origin)
 
   type TAssetOrInvalid = Either[Asset, InvalidAsset]
   type TDataAssetOrInvalid = Either[AssetWithData, InvalidAsset]

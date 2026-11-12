@@ -44,8 +44,8 @@ import altitude.core.util.QueryResult
 
   /**
    * A second repository with a row of every scoped table: an asset (with its Search document), a folder, an album and a Location
-   * holding the asset, a Person with a Face on it, a metadata field with a value on it, and a stat of its own. The context is the
-   * first repository again when it returns.
+   * holding the asset, a Person with a Face on it, a metadata field with a value on it, an Import with a pending file, and a stat
+   * of its own. The context is the first repository again when it returns.
    */
   private def twoRepositories(): TwoRepositories = {
     val first = testContext.repository
@@ -62,6 +62,8 @@ import altitude.core.util.QueryResult
     val face = testContext.addTestFace(person, asset, TestContext.unitVector(1))
     val field = testApp.service.metadata.addField(UserMetadataField(name = "theirs", fieldType = FieldType.KEYWORD))
     testApp.service.metadata.setMetadata(asset.persistedId, UserMetadata(Map(field.persistedId -> Set("value"))))
+    val opened = testApp.service.imports.open(ImportSource.Upload)
+    val importFile = testApp.service.imports.addFile(opened.persistedId, "theirs.jpg", sizeBytes = 1)
     testApp.txManager.withTransaction(testApp.DAO.stats.add(Stat(isolationDimension, 0)))
 
     switchContextRepo(first)
@@ -93,6 +95,19 @@ import altitude.core.util.QueryResult
         testApp.DAO.metadataField,
         FieldConst.ID -> field.persistedId,
         FieldConst.MetadataField.NAME -> "changed"),
+      ScopedRow(
+        "import",
+        testApp.DAO.imports,
+        FieldConst.ID -> opened.persistedId,
+        FieldConst.Import.NAME -> "changed",
+        Some(ImportOutcome.Pending.dbValue)),
+      ScopedRow(
+        "import_file",
+        testApp.DAO.importFile,
+        FieldConst.ID -> importFile.persistedId,
+        FieldConst.ImportFile.REL_PATH -> "changed",
+        Some(FieldConst.ImportFile.SIZE_BYTES)
+      ),
       ScopedRow("stats", testApp.DAO.stats, FieldConst.Stat.DIMENSION -> isolationDimension, FieldConst.Stat.DIM_VAL -> 7L)
     )
 
@@ -115,7 +130,7 @@ import altitude.core.util.QueryResult
      * Setup:
      *
      * Two repositories, the second holding a row of every scoped table that a DAO reads: an asset, a folder, an album, a
-     * Location, a Person, a Face, a metadata field and a stat of a dimension only it has.
+     * Location, a Person, a Face, a metadata field, an Import, an Import file and a stat of a dimension only it has.
      *
      * Assertions:
      *
@@ -163,7 +178,8 @@ import altitude.core.util.QueryResult
      * Setup:
      *
      * Two repositories, the second holding a row of every scoped table: an asset with its Search document, a folder, an album and
-     * a Location each holding the asset, a Person with a Face on it, a metadata field with a value on it, and its stats.
+     * a Location each holding the asset, a Person with a Face on it, a metadata field with a value on it, an Import with a
+     * pending file, and its stats.
      *
      * Assertions:
      *
@@ -515,7 +531,8 @@ import altitude.core.util.QueryResult
 
   /**
    * In the first repository, a row of every scoped table: an asset with its Search document in a folder, an album and a Location
-   * holding it, a Person with a Face on it, and a metadata field with an indexed value on it. Its IDs by table.
+   * holding it, a Person with a Face on it, a metadata field with an indexed value on it, and an Import with a pending file. Its
+   * IDs by table.
    */
   private def rowsInFirst(repos: TwoRepositories): Map[String, String] = {
     val asset = testContext.insertAsset(testContext.makeAsset(repository = Some(repos.first)))
@@ -529,6 +546,8 @@ import altitude.core.util.QueryResult
     val field = testApp.service.metadata.addField(UserMetadataField(name = "mine", fieldType = FieldType.KEYWORD))
     // Indexed, unlike `setMetadata`'s value, so it has a `metadata_parameter` row
     testApp.service.metadata.addMetadataValue(asset.persistedId, field.persistedId, "value")
+    val opened = testApp.service.imports.open(ImportSource.Upload)
+    val importFile = testApp.service.imports.addFile(opened.persistedId, "mine.jpg", sizeBytes = 1)
 
     Map(
       "asset" -> asset.persistedId,
@@ -537,7 +556,9 @@ import altitude.core.util.QueryResult
       "location" -> location.persistedId,
       "person" -> person.persistedId,
       "face" -> face.persistedId,
-      "metadata_field" -> field.persistedId
+      "metadata_field" -> field.persistedId,
+      "import" -> opened.persistedId,
+      "import_file" -> importFile.persistedId
     )
   }
 
@@ -547,14 +568,16 @@ import altitude.core.util.QueryResult
      * Setup:
      *
      * Two repositories, each with an asset (with its Search document) in a folder, an album and a Location holding it, a Person
-     * with a Face on it and a metadata field with a value on it; the second also has a Location category.
+     * with a Face on it, a metadata field with a value on it and an Import with a pending file; the second also has a Location
+     * category.
      *
      * Assertions:
      *
      * A hand-written update of a row of the first repository that points one of its references at the second repository's row is
      * refused by a foreign key violation, one per reference: a Face's asset and Person, an album membership's album and asset, a
      * Location membership's Location and asset, a metadata value's asset and field, a Search document's asset, a Location's
-     * category, a folder's parent and an asset's folder. Every row of both repositories is as it was.
+     * category, a folder's parent, an asset's folder, an Import file's Import and an Import's destination folder. Every row of
+     * both repositories is as it was.
      */
     val repos = twoRepositories()
     val mine = rowsInFirst(repos)
@@ -579,6 +602,8 @@ import altitude.core.util.QueryResult
     foreignKey("UPDATE location SET category_id = ? WHERE id = ?", theirCategory.persistedId, mine("location"))
     foreignKey("UPDATE folder SET parent_id = ? WHERE id = ?", idOf(repos, "folder"), mine("folder"))
     foreignKey("UPDATE asset SET folder_id = ? WHERE id = ?", idOf(repos, "folder"), mine("asset"))
+    foreignKey("UPDATE import_file SET import_id = ? WHERE id = ?", idOf(repos, "import"), mine("import_file"))
+    foreignKey("UPDATE import SET dest_folder_id = ? WHERE id = ?", idOf(repos, "folder"), mine("import"))
 
     testContext.rowsOf(repos.first) shouldEqual firstBefore
     testContext.rowsOf(repos.second) shouldEqual secondBefore
@@ -590,7 +615,7 @@ import altitude.core.util.QueryResult
      * Setup:
      *
      * A repository with a row of every scoped table: an asset with its Search document, a folder, an album and a Location holding
-     * the asset, a Person with a Face on it, a metadata field with a value on it, and its stats.
+     * the asset, a Person with a Face on it, a metadata field with a value on it, an Import with a pending file, and its stats.
      *
      * Assertions:
      *

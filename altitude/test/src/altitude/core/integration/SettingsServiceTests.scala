@@ -83,6 +83,39 @@ import altitude.core.models.Settings
     current.dbPostgresReadStatementTimeout shouldBe 30
     current.pipelineShutdownTimeout shouldBe 30
     current.importParallelism shouldBe 0
+    current.importHistoryDays shouldBe 90
+  }
+
+  test("The Import history Setting is a Live setting of the Operations section, in whole days from 0") {
+
+    /**
+     * Setup:
+     *
+     * The registry's entry of the Import history Setting, and values validated and saved for it.
+     *
+     * Assertions:
+     *
+     * It is a Live setting of the Operations section on both engines. A whole number of days from 0 up is valid, 0 among them,
+     * which keeps the history forever. A saved value reaches its accessor at once, with no restart waiting.
+     *
+     * Edge cases:
+     *
+     * A negative number and a fraction of a day are refused.
+     */
+    val name = Settings.IMPORT_HISTORY_DAYS
+    val definition = Settings.byName(name)
+    definition.group shouldBe SettingGroup.Operations
+    definition.kind shouldBe SettingKind.Live
+    definition.engine shouldBe None
+
+    testApp.settings.validate(Map(name -> "0")) shouldBe empty
+    testApp.settings.validate(Map(name -> "3650")) shouldBe empty
+    testApp.settings.validate(Map(name -> "-1")) shouldBe Map(name -> "Must be at least 0")
+    testApp.settings.validate(Map(name -> "1.5")) shouldBe Map(name -> "Must be a whole number")
+
+    testApp.settings.save(Map(name -> "30"))
+    testApp.settings.current.importHistoryDays shouldBe 30
+    testApp.settings.pendingRestart shouldBe empty
   }
 
   test("A save replaces the snapshot and the rows, and a value not submitted keeps its current value") {

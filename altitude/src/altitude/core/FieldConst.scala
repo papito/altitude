@@ -153,6 +153,24 @@ object FieldConst:
     val ALBUM_ID = "album_id"
     val ASSET_ID = "asset_id"
 
+  // An Import's five counters are columns named by the outcome they count (`ImportOutcome.dbValue`)
+  object Import:
+    val SOURCE = "source"
+    val NAME = "name"
+    val WATCH_FOLDER_ID = "watch_folder_id"
+    val ACCOUNT_ID = "account_id"
+    val DEST_FOLDER_ID = "dest_folder_id"
+    val IS_COMPLETE = "is_complete"
+    val CLOSED_AT = "closed_at"
+
+  object ImportFile:
+    val IMPORT_ID = "import_id"
+    val REL_PATH = "rel_path"
+    val OUTCOME = "outcome"
+    val REASON = "reason"
+    val ASSET_ID = "asset_id"
+    val SIZE_BYTES = "size_bytes"
+
   object Location:
     val CATEGORY_ID = "category_id"
     val KIND = "kind"

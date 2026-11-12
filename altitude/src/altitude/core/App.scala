@@ -61,6 +61,9 @@ object App extends cask.Main:
   // Check if the instance is in setup mode, and cache the value of isInitialized in memory for quick access.
   altitude.setIsInitializedState()
 
+  // Before anything is offered to the import queue: what is pending now was cut off when the server last stopped. The Import
+  // history is pruned here too, for a server that restarts more often than the daily prune runs
+  altitude.service.imports.startup()
   altitude.service.library.pruneDanglingAssets()
   altitude.service.library.requeuePurgePending()
   altitude.service.library.reconcileStats()

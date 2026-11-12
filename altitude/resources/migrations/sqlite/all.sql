@@ -1,8 +1,8 @@
 -- A row of a repository's table holds its repository (repository_id NOT NULL), and a reference from one such row to another is
 -- a foreign key over (repository_id, <ref>_id), so the database refuses a reference into another repository. Each table such a
 -- key names has UNIQUE (id, repository_id) for it, led by the ID so that it never competes with the indexes that lead with the
--- repository. A NULL reference is not checked. A person's cover is the one reference that is not such a key: a single column,
--- at the person table.
+-- repository. A NULL reference is not checked. A person's cover and an Import file's asset are the references that are not such
+-- keys: a single column each, at the person and import_file tables.
 
 CREATE TABLE system (
   id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1), -- the one and only row: the key rejects a second, the check pins its id
@@ -53,7 +53,8 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('map.geocoder.url', 'https://nominatim.openstreetmap.org/search', 'https://nominatim.openstreetmap.org/search'),
   ('db.postgres.read_statement_timeout', '30', '30'),
   ('pipeline.shutdown_timeout', '30', '30'),
-  ('import.parallelism', '0', '0');
+  ('import.parallelism', '0', '0'),
+  ('import.history.days', '90', '90');
 
 -- email_key and username_key are the name keys of the email address and the username (User.emailKey and User.usernameKey:
 -- NameKey.of, folded in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
@@ -499,3 +500,67 @@ CREATE TRIGGER search_document_after_update AFTER UPDATE ON search_document BEGI
   INSERT INTO search_document_fts (search_document_fts, rowid, body) VALUES ('delete', old.id, old.body);
   INSERT INTO search_document_fts (rowid, body) VALUES (new.id, new.body);
 END;
+
+-- An Import: the stored record of one delivery of files to a Library, an upload from a browser or one scan of a Watch folder
+-- that found files (ImportService). The five counters are its Import files by outcome, kept by the write that sets a file's
+-- outcome, so a listing reads no file.
+CREATE TABLE import (
+  id CHAR(36) PRIMARY KEY,
+  repository_id CHAR(36) NOT NULL,
+  source TEXT NOT NULL
+    CHECK (source IN ('upload', 'watch_folder')),
+  -- The uploaded folder's or the Watch folder's name; NULL for an upload of files
+  name TEXT,
+  -- The Watch folder whose scan this is; NULL for an upload. A plain column until the watch_folder table arrives, which adds
+  -- its reference (ON DELETE SET NULL)
+  watch_folder_id CHAR(36),
+  -- The account that delivered it; NULL once that account is deleted
+  account_id CHAR(36) REFERENCES account (id) ON DELETE SET NULL,
+  -- The folder its files are sorted into; NULL = Triage
+  dest_folder_id CHAR(36),
+  -- No more files will be added: the upload closed it, or the scan offered its last file
+  is_complete TINYINT NOT NULL DEFAULT 0,
+  -- Set once the Import is complete and none of its files is pending; NULL while it is in progress
+  closed_at DATETIME,
+  pending INT NOT NULL DEFAULT 0 CHECK (pending >= 0),
+  imported INT NOT NULL DEFAULT 0 CHECK (imported >= 0),
+  duplicate INT NOT NULL DEFAULT 0 CHECK (duplicate >= 0),
+  unsupported INT NOT NULL DEFAULT 0 CHECK (unsupported >= 0),
+  failed INT NOT NULL DEFAULT 0 CHECK (failed >= 0),
+  created_at DATETIME DEFAULT (datetime('now', 'utc')),
+  updated_at DATETIME DEFAULT NULL,
+  UNIQUE (id, repository_id),
+  FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
+  -- No delete action, as no folder is ever deleted on its own (a deleted folder is recycled)
+  FOREIGN KEY (repository_id, dest_folder_id) REFERENCES folder (repository_id, id)
+);
+
+-- A Library's Import history by age: its listing, and the prune of the Imports past import.history.days
+CREATE INDEX import_01 ON import (repository_id, created_at);
+
+-- An Import file: one file of an Import with its outcome. rel_path is the file's path as it was delivered, its name for an
+-- upload of files.
+CREATE TABLE import_file (
+  id CHAR(36) PRIMARY KEY,
+  repository_id CHAR(36) NOT NULL,
+  import_id CHAR(36) NOT NULL,
+  rel_path TEXT NOT NULL,
+  outcome TEXT NOT NULL DEFAULT 'pending'
+    CHECK (outcome IN ('pending', 'imported', 'duplicate', 'unsupported', 'failed')),
+  -- Why the file has its outcome, where there is something to say: where the asset a duplicate matches is, why a file failed
+  reason TEXT,
+  -- The asset an imported file became, or the asset of the Library a duplicate matches, until that asset is purged; the row
+  -- keeps its path after. A single column: a composite key's SET NULL would clear repository_id too, so the code checks that
+  -- the asset is the Library's (ImportService.settle).
+  asset_id CHAR(36) REFERENCES asset (id) ON DELETE SET NULL,
+  size_bytes BIGINT NOT NULL,
+  created_at DATETIME DEFAULT (datetime('now', 'utc')),
+  updated_at DATETIME DEFAULT NULL,
+  FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
+  FOREIGN KEY (repository_id, import_id) REFERENCES import (repository_id, id) ON DELETE CASCADE
+);
+
+-- An Import's files by outcome, the pending ones a restart fails among them, and the cascade from a pruned Import
+CREATE INDEX import_file_01 ON import_file (import_id, outcome);
+-- The files that point at an asset, for the key's delete action when the asset is purged
+CREATE INDEX import_file_02 ON import_file (asset_id) WHERE asset_id IS NOT NULL;

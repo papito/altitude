@@ -36,6 +36,8 @@ import altitude.core.dao.sql.tables._
       AuditEventRow -> DbApi.renderSql(AuditEventRow.select, Db.config, dialect),
       FaceRow -> DbApi.renderSql(FaceRow.select, Db.config, dialect),
       FolderRow -> DbApi.renderSql(FolderRow.select, Db.config, dialect),
+      ImportRow -> DbApi.renderSql(ImportRow.select, Db.config, dialect),
+      ImportFileRow -> DbApi.renderSql(ImportFileRow.select, Db.config, dialect),
       LocationRow -> DbApi.renderSql(LocationRow.select, Db.config, dialect),
       LocationAssetRow -> DbApi.renderSql(LocationAssetRow.select, Db.config, dialect),
       MetadataFieldRow -> DbApi.renderSql(MetadataFieldRow.select, Db.config, dialect),
@@ -56,7 +58,7 @@ import altitude.core.dao.sql.tables._
     /**
      * Setup:
      *
-     * The rendered `SELECT` of each of the 17 row classes on both engines, and the `CREATE TABLE` columns parsed from each
+     * The rendered `SELECT` of each of the 19 row classes on both engines, and the `CREATE TABLE` columns parsed from each
      * engine's `all.sql`, with PostgreSQL's inherited `_core` columns folded in.
      *
      * Assertions:
