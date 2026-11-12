@@ -31,7 +31,7 @@ _Avoid_: Date Added, Date Imported when referring to capture time.
 
 **Date Imported**:
 The date and time an asset was added to the library, distinct from when it was
-captured. Its calendar day is determined in UTC.
+captured. Its calendar day is a day in the server's time zone.
 _Avoid_: Date Taken when referring to import time.
 
 **Import**:

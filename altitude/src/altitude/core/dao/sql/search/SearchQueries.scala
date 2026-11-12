@@ -2,6 +2,8 @@ package altitude.core.dao.sql.search
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import scalasql.Sc
 import scalasql.Table
 import scalasql.core.Context
@@ -27,7 +29,9 @@ import altitude.core.dao.sql.tables.PersonRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.models.LocationKind
 import altitude.core.util.BoundingBox
+import altitude.core.util.DateRange
 import altitude.core.util.NameKey
+import altitude.core.util.PeopleMatch
 import altitude.core.util.Query
 import altitude.core.util.Query.QueryParam
 import altitude.core.util.ResolvedSearchGroup
@@ -52,7 +56,8 @@ import altitude.core.util.TriageSubset
  * Each of the joined-in filters is a semi-join on `asset.id` rather than a comma join: a search then reads `FROM asset` alone,
  * with no `GROUP BY`/`HAVING` on the outer query and no duplicate rows to deduplicate.
  *
- * These are pure functions of their arguments; the repository is passed in rather than read from `RequestContext`.
+ * These are pure functions of their arguments; the repository is passed in rather than read from `RequestContext`. The one thing
+ * read from the JVM is its time zone, the server's, in which the days of a Date Imported range begin ([[matching]]).
  */
 object SearchQueries:
 
@@ -63,17 +68,23 @@ object SearchQueries:
    */
   private val PATH_SEPARATOR: String = 1.toChar.toString
 
-  /** Every asset a search matches, unordered and unpaged; with Search text it refers to the text's CTEs ([[statement]]) */
+  /**
+   * Every asset a search matches, unordered and unpaged; with Search text it refers to the text's CTEs ([[statement]]). The days
+   * of a Date Imported range are those of the server's time zone as the relation is built.
+   */
   def matching(engine: SearchDialect, query: SearchQuery, repositoryId: String): Select[AssetRow[Expr], AssetRow[Sc]] =
     import engine.dialect.*
 
     AssetRow.select
       .filter(asset => (asset.repositoryId `=` repositoryId) && (asset.isPipelineProcessed `=` true))
       .filter(asset => DynamicFilter(AssetRow, Columns.of(AssetRow, asset, engine.dialect), query, engine.dialect))
+      .filterIf(query.takenRange.isDefined)(asset => takenFilter(engine, asset, query.takenRange.get))
+      .filterIf(query.importedRange.isDefined)(
+        asset => importedFilter(engine, asset, query.importedRange.get, ZoneId.systemDefault))
       .filterIf(query.folderIds.nonEmpty)(asset => folderFilter(engine, asset, query.folderIds))
       .filterIf(query.isText)(asset => textFilter(engine, asset, query.requireResolvedText))
       .filterIf(query.hasMetadataFilters)(asset => metadataFilter(engine, asset, query, repositoryId))
-      .filterIf(query.personIds.nonEmpty)(asset => personFilter(engine, asset, query.personIds))
+      .filterIf(query.personIds.nonEmpty)(asset => peopleFilter(engine, asset, query.personIds, query.peopleMatch))
       .filterIf(query.albumIds.nonEmpty)(asset => albumFilter(engine, asset, query.albumIds))
       .filterIf(query.locationIds.nonEmpty)(asset => locationFilter(engine, asset, query.locationIds))
       .filterIf(query.subset.contains(TriageSubset.UnknownPeople))(asset => unknownPeopleFilter(engine, asset))
@@ -1251,6 +1262,60 @@ object SearchQueries:
   /** Assets in any of the given folders themselves; a subtree is the caller's to expand */
   private def folderFilter(engine: SearchDialect, asset: AssetRow[Expr], folderIds: Set[String]): Expr[Boolean] =
     Columns.isInSet(asset.folderId, folderIds, engine.dialect)
+
+  /**
+   * Assets captured on a day of the range, by the camera's wall clock. The day is the engine's capture-day expression, the one
+   * `asset_search_date_taken` is built on, so a range is a seek in that index. An asset with no capture time has no day: NULL
+   * fails either comparison, so it is in no range, not even one open at an end.
+   */
+  private def takenFilter(engine: SearchDialect, asset: AssetRow[Expr], range: DateRange): Expr[Boolean] =
+    import engine.dialect.*
+
+    val day = engine.day(asset, FieldConst.Asset.ORIGINAL_CREATED_AT)
+    val fromFirst = range.from.map(first => Expr[Boolean](implicit ctx => sql"$day >= $first"))
+    val toLast = range.to.map(last => Expr[Boolean](implicit ctx => sql"$day <= $last"))
+
+    withinBoth(engine, fromFirst, toLast)
+
+  /**
+   * Assets imported on a day of the range, the days being those of `zone`: from the instant the first day begins there to just
+   * before the instant the day after the last does, so a day the clocks change is as long as the zone makes it. The import time
+   * is compared as the column stores it, with no day expression around it, so a range is a seek in `asset_search_created`; the
+   * dialect binds each instant the way its engine stores one (a `timestamptz` on PostgreSQL, the UTC wall clock as text on
+   * SQLite, which orders as the instants do). A legacy SQLite row with no import time is in no range.
+   */
+  private def importedFilter(engine: SearchDialect, asset: AssetRow[Expr], range: DateRange, zone: ZoneId): Expr[Boolean] =
+    import engine.dialect.*
+
+    def startOf(day: LocalDate): OffsetDateTime = day.atStartOfDay(zone).toOffsetDateTime
+    val fromFirst = range.from.map(first => Expr[Boolean](implicit ctx => sql"${asset.createdAt} >= ${startOf(first)}"))
+    val beforeNext = range.to.map(last => Expr[Boolean](implicit ctx => sql"${asset.createdAt} < ${startOf(last.plusDays(1))}"))
+
+    withinBoth(engine, fromFirst, beforeNext)
+
+  /** The bounds of a date range AND-ed: both, or the one it has, a range having at least one end ([[DateRange]]) */
+  private def withinBoth(engine: SearchDialect, lower: Option[Expr[Boolean]], upper: Option[Expr[Boolean]]): Expr[Boolean] =
+    import engine.dialect.*
+
+    (lower ++ upper).reduce(_ && _)
+
+  /**
+   * Assets the given people appear in: any of them in one semi-join over the set, or all of them in one semi-join per person,
+   * AND-ed. A person's faces are read from an index alone: `face_02`, which leads with the person and carries the asset, or
+   * `face_01` where PostgreSQL probes by the asset instead. The cost follows the chosen people's Face sets and not the library.
+   * With one person the two are the same statement.
+   */
+  private def peopleFilter(
+      engine: SearchDialect,
+      asset: AssetRow[Expr],
+      personIds: Set[String],
+      peopleMatch: PeopleMatch): Expr[Boolean] =
+    import engine.dialect.*
+
+    peopleMatch match
+      case PeopleMatch.Any => personFilter(engine, asset, personIds)
+      // In ID order, so one search always renders one statement
+      case PeopleMatch.All => personIds.toList.sorted.map(id => personFilter(engine, asset, Set(id))).reduce(_ && _)
 
   /** Assets any of the given people appear in: the face's own person ID is all it reads */
   private def personFilter(engine: SearchDialect, asset: AssetRow[Expr], personIds: Set[String]): Expr[Boolean] =

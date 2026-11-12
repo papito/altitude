@@ -4,6 +4,8 @@ import altitude.core.Api
 import altitude.core.Const
 import altitude.core.FieldConst
 import altitude.core.util.BoundingBox
+import altitude.core.util.DateRange
+import altitude.core.util.PeopleMatch
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchQuery
@@ -36,7 +38,11 @@ object SearchRequestParser:
       albumIds: Set[String],
       locationIds: Set[String],
       bbox: Option[BoundingBox],
-      subset: Option[TriageSubset]):
+      subset: Option[TriageSubset],
+      // How several people combine, and the Date Taken and Date Imported ranges; `parse` leaves them at these defaults
+      peopleMatch: PeopleMatch = PeopleMatch.All,
+      takenRange: Option[DateRange] = None,
+      importedRange: Option[DateRange] = None):
     def query(
         rpp: Int = 0,
         searchSort: List[SearchSort] = Nil,
@@ -47,8 +53,11 @@ object SearchRequestParser:
         text = text,
         folderIds = folderIds,
         personIds = personIds,
+        peopleMatch = peopleMatch,
         albumIds = albumIds,
         locationIds = locationIds,
+        takenRange = takenRange,
+        importedRange = importedRange,
         bbox = bbox,
         subset = subset,
         rpp = rpp,

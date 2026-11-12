@@ -1,5 +1,7 @@
 package altitude.core.integration
 
+import altitude.test.IntegrationTestUtil.withJvmTimeZone
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import org.apache.pekko.stream.scaladsl.Source
@@ -208,12 +210,252 @@ import altitude.core.util.*
      *
      * Assertions:
      *
-     * Filtering by all three people counts all of their nine assets.
+     * Filtering by any of the three people counts all of their nine assets.
      */
     val f = fixtureForPersonFilter
-    val q = new SearchQuery(rpp = PAGE_SIZE, personIds = f.people.map(_.persistedId).toSet)
+    val q = new SearchQuery(rpp = PAGE_SIZE, personIds = f.people.map(_.persistedId).toSet, peopleMatch = PeopleMatch.Any)
     val results = search(q)
     results.total shouldBe Some(f.assetsPerPersonCount * f.people.length)
+  }
+
+  test("People matched all are the assets every one of them appears in; matched any, those any of them does") {
+
+    /**
+     * Setup:
+     *
+     * Alice, Bob and Carol, and five assets: one with a Face of Alice and of Bob, where Alice has a second Face, one with Alice
+     * alone, one with Bob alone, one with all three, and one with no Face. Dave is in no asset.
+     *
+     * Assertions:
+     *
+     * Matching all of Alice and Bob finds the two assets both are in, and matching any of them the four either is in; all of the
+     * three finds the one asset they share. A search that does not say matches all. The page's total and the exact count agree
+     * with the page.
+     *
+     * Edge cases:
+     *
+     * An asset with two Faces of one person is found once. One person alone is the same search either way. All of a set with a
+     * person who is in no asset is nothing, while any of it is the others' assets.
+     */
+    val alice = addPerson("Alice")
+    val bob = addPerson("Bob")
+    val carol = addPerson("Carol")
+    val dave = addPerson("Dave")
+    def assetOf(people: Person*): String = {
+      val asset = testContext.persistAsset()
+      people.foreach(addFace(_, asset))
+      asset.persistedId
+    }
+    val both = assetOf(alice, bob, alice)
+    val aliceOnly = assetOf(alice)
+    val bobOnly = assetOf(bob)
+    val allThree = assetOf(alice, bob, carol)
+    assetOf()
+
+    def matching(peopleMatch: PeopleMatch, people: Person*): List[String] = {
+      val query = new SearchQuery(rpp = PAGE_SIZE, personIds = people.map(_.persistedId).toSet, peopleMatch = peopleMatch)
+      val result = search(query)
+      result.total shouldBe Some(result.records.size)
+      count(query) shouldBe result.records.size
+      result.records.map(_.persistedId).sorted
+    }
+
+    matching(PeopleMatch.All, alice, bob) shouldBe List(both, allThree).sorted
+    matching(PeopleMatch.Any, alice, bob) shouldBe List(both, aliceOnly, bobOnly, allThree).sorted
+    matching(PeopleMatch.All, alice, bob, carol) shouldBe List(allThree)
+
+    // A search that does not say matches all
+    val unsaid = new SearchQuery(rpp = PAGE_SIZE, personIds = Set(alice.persistedId, bob.persistedId))
+    search(unsaid).records.map(_.persistedId).sorted shouldBe List(both, allThree).sorted
+
+    matching(PeopleMatch.All, alice) shouldBe List(both, aliceOnly, allThree).sorted
+    matching(PeopleMatch.Any, alice) shouldBe List(both, aliceOnly, allThree).sorted
+
+    matching(PeopleMatch.All, alice, dave) shouldBe Nil
+    matching(PeopleMatch.Any, alice, dave) shouldBe List(both, aliceOnly, allThree).sorted
+  }
+
+  test("A Date Taken range holds whole capture days, both ends included or either left open, and never an undated asset") {
+
+    /**
+     * Setup:
+     *
+     * Six assets: captured in the last second of May 2024, at the first midnight of June, in mid-June, half a second before June
+     * ends, at the first midnight of July, and one with no capture time. All were imported at one moment.
+     *
+     * Assertions:
+     *
+     * The range of June holds the three June assets, both of its end days whole. The first of June alone holds the asset of that
+     * midnight. A range open at its start holds everything up to its last day, and one open at its end everything from its first.
+     * The page's total and the exact count agree with the page.
+     *
+     * Edge cases:
+     *
+     * The undated asset is in no range, not even an open one. The days are the camera's: a server far east or far west of UTC
+     * finds the same assets.
+     */
+    def captured(taken: Option[String]): String = {
+      val asset = testContext.persistAsset()
+      testContext.setAssetDates(asset.persistedId, taken.map(LocalDateTime.parse), OffsetDateTime.parse("2026-09-07T12:00:00Z"))
+      asset.persistedId
+    }
+    val lastOfMay = captured(Some("2024-05-31T23:59:59"))
+    val firstOfJune = captured(Some("2024-06-01T00:00:00"))
+    val midJune = captured(Some("2024-06-15T12:00:00"))
+    val lastOfJune = captured(Some("2024-06-30T23:59:59.5"))
+    val firstOfJuly = captured(Some("2024-07-01T00:00:00"))
+    captured(None)
+
+    def taken(range: Option[DateRange]): Set[String] = foundWithin(takenRange = range)
+
+    taken(days("2024-06-01", "2024-06-30")) shouldBe Set(firstOfJune, midJune, lastOfJune)
+    taken(days("2024-06-01", "2024-06-01")) shouldBe Set(firstOfJune)
+    taken(days(to = "2024-06-01")) shouldBe Set(lastOfMay, firstOfJune)
+    taken(days(from = "2024-06-30")) shouldBe Set(lastOfJune, firstOfJuly)
+
+    // The camera's days, wherever the server is
+    for (zone <- List("Pacific/Kiritimati", "Pacific/Pago_Pago")) withClue(zone) {
+      withJvmTimeZone(zone) {
+        taken(days("2024-06-01", "2024-06-30")) shouldBe Set(firstOfJune, midJune, lastOfJune)
+      }
+    }
+  }
+
+  test("A Date Imported range holds whole days of the server's zone, both ends included or either left open") {
+
+    /**
+     * Setup:
+     *
+     * Six assets imported around three midnights of a server in New York, four hours behind UTC: in the last second of 31 May, at
+     * the first midnight of 1 June, a microsecond before 1 June ends, at the first midnight of 2 June, in the last second of 2
+     * June and at the first midnight of 3 June, New York time. None has a capture time.
+     *
+     * Assertions:
+     *
+     * On the New York server, 1 June alone holds the two assets imported between its two midnights there, though the later one
+     * was imported on 2 June by UTC; 1 to 2 June holds the four of those two days, both end days whole. A range open at its start
+     * holds everything up to its last day, and one open at its end everything from its first. The page's total and the exact
+     * count agree with the page.
+     *
+     * Edge cases:
+     *
+     * The same range on a server in UTC holds the days of UTC: 1 June there is the two assets imported before New York's second
+     * midnight.
+     */
+    def imported(instant: String): String = {
+      val asset = testContext.persistAsset()
+      testContext.setAssetDates(asset.persistedId, None, OffsetDateTime.parse(instant))
+      asset.persistedId
+    }
+    val endOfMay = imported("2024-06-01T03:59:59Z")
+    val startOfFirst = imported("2024-06-01T04:00:00Z")
+    val endOfFirst = imported("2024-06-02T03:59:59.999999Z")
+    val startOfSecond = imported("2024-06-02T04:00:00Z")
+    val endOfSecond = imported("2024-06-03T03:59:59Z")
+    val startOfThird = imported("2024-06-03T04:00:00Z")
+
+    def importedWithin(range: Option[DateRange]): Set[String] = foundWithin(importedRange = range)
+
+    withJvmTimeZone("America/New_York") {
+      importedWithin(days("2024-06-01", "2024-06-01")) shouldBe Set(startOfFirst, endOfFirst)
+      importedWithin(days("2024-06-01", "2024-06-02")) shouldBe Set(startOfFirst, endOfFirst, startOfSecond, endOfSecond)
+      importedWithin(days(to = "2024-06-01")) shouldBe Set(endOfMay, startOfFirst, endOfFirst)
+      importedWithin(days(from = "2024-06-02")) shouldBe Set(startOfSecond, endOfSecond, startOfThird)
+    }
+
+    // The days of whatever zone the server is in
+    withJvmTimeZone("UTC") {
+      importedWithin(days("2024-06-01", "2024-06-01")) shouldBe Set(endOfMay, startOfFirst)
+    }
+  }
+
+  test("The people match and each date range narrow a search with text, a folder subtree and a grouping") {
+
+    /**
+     * Setup:
+     *
+     * The folder Trips with its subfolder Lisbon, the folder Other, and Alice and Bob. Two assets match every filter of the
+     * search: "beach-1.jpg" in Lisbon and "beach-6.jpg" in Trips, both with a Face of Alice and of Bob, captured on 10 and 11
+     * June 2024 and imported on 1 July. Five more each miss one filter: "lake.jpg" the text, "beach-2.jpg" in Other the folder,
+     * "beach-3.jpg" with Alice alone the people, "beach-4.jpg" captured in August the Date Taken range, and "beach-5.jpg"
+     * imported in September the Date Imported range. The search is the text "beach" in Trips, all of Alice and Bob, captured in
+     * June and imported around 1 July.
+     *
+     * Assertions:
+     *
+     * The flat page, the exact count and the page grouped by capture day hold the two assets alone, the groups newest day first
+     * with their counts. Matching any of the two people instead adds the asset with Alice alone, the search without its Date
+     * Taken range the one captured in August, and the search without its Date Imported range the one imported in September, on
+     * the flat page and in the day groups alike.
+     *
+     * Edge cases:
+     *
+     * The folder is its subtree and the text is resolved for the search, each of which copies the query: the filters survive the
+     * copies.
+     */
+    val trips: Folder = testApp.service.folder.add("Trips")
+    val lisbon: Folder = testApp.service.folder.add(name = "Lisbon", parentId = trips.id)
+    val other: Folder = testApp.service.folder.add("Other")
+    val alice = addPerson("Alice")
+    val bob = addPerson("Bob")
+
+    def asset(
+        fileName: String,
+        folder: Folder,
+        people: List[Person] = List(alice, bob),
+        taken: String = "2024-06-10T10:00:00",
+        imported: String = "2024-07-01T12:00:00Z"): String = {
+      val added = importAsset(fileName, folder = Some(folder))
+      people.foreach(addFace(_, added))
+      testContext.setAssetDates(added.persistedId, Some(LocalDateTime.parse(taken)), OffsetDateTime.parse(imported))
+      added.persistedId
+    }
+    val inLisbon = asset("beach-1.jpg", lisbon)
+    val inTrips = asset("beach-6.jpg", trips, taken = "2024-06-11T10:00:00")
+    asset("lake.jpg", lisbon)
+    asset("beach-2.jpg", other)
+    val aliceAlone = asset("beach-3.jpg", trips, people = List(alice))
+    val inAugust = asset("beach-4.jpg", trips, taken = "2024-08-01T10:00:00")
+    val inSeptember = asset("beach-5.jpg", trips, imported = "2024-09-01T12:00:00Z")
+
+    // The import days are a day wider than the import itself, so the server's zone does not decide the test
+    def query(
+        peopleMatch: PeopleMatch = PeopleMatch.All,
+        takenRange: Option[DateRange] = days("2024-06-01", "2024-06-30"),
+        importedRange: Option[DateRange] = days("2024-06-30", "2024-07-02"),
+        grouping: Option[SearchGrouping] = None): SearchQuery =
+      new SearchQuery(
+        text = Some("beach"),
+        folderIds = Set(trips.persistedId),
+        personIds = Set(alice.persistedId, bob.persistedId),
+        peopleMatch = peopleMatch,
+        takenRange = takenRange,
+        importedRange = importedRange,
+        rpp = PAGE_SIZE,
+        searchSort = List(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)),
+        grouping = grouping
+      )
+    val byDay = Some(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))
+    def flat(query: SearchQuery): List[String] = search(query).records.map(_.persistedId)
+    def grouped(query: SearchQuery): Set[String] = searchGrouped(query).assets.map(_.persistedId).toSet
+
+    flat(query()) shouldBe List(inLisbon, inTrips)
+    search(query()).total shouldBe Some(2)
+    count(query()) shouldBe 2
+
+    val dayGroups = searchGrouped(query(grouping = byDay))
+    dayGroups.groups.map(group => (group.total, group.assets.map(_.persistedId))) shouldBe
+      List((1, List(inTrips)), (1, List(inLisbon)))
+    dayGroups.total shouldBe Some(2)
+
+    flat(query(peopleMatch = PeopleMatch.Any)) shouldBe List(inLisbon, aliceAlone, inTrips)
+    grouped(query(peopleMatch = PeopleMatch.Any, grouping = byDay)) shouldBe Set(inLisbon, aliceAlone, inTrips)
+
+    flat(query(takenRange = None)) shouldBe List(inLisbon, inAugust, inTrips)
+    grouped(query(takenRange = None, grouping = byDay)) shouldBe Set(inLisbon, inAugust, inTrips)
+
+    flat(query(importedRange = None)) shouldBe List(inLisbon, inSeptember, inTrips)
+    grouped(query(importedRange = None, grouping = byDay)) shouldBe Set(inLisbon, inSeptember, inTrips)
   }
 
   test("The Unknown people subset matches the assets with a Face of an unnamed, visible, live person, in Triage and Browse") {
@@ -1186,6 +1428,115 @@ import altitude.core.util.*
       plan should include("asset_search_date_taken")
       if (isPostgres) plan should include("Incremental Sort")
       else plan should include("USE TEMP B-TREE FOR LAST TERM OF ORDER BY")
+    }
+  }
+
+  test("A count within a Date Taken range seeks the capture-day index, and within a Date Imported range the import-time index") {
+
+    /**
+     * Setup:
+     *
+     * An asset seeded into 5,000 copies for the planner, imported a minute apart over three and a half days and each given its
+     * import time as its capture time, so the capture days differ too; they are rolled back once the plans are read. The capped
+     * count of the default view within a Date Taken range of one of those days, and within a Date Imported range of it.
+     *
+     * Assertions:
+     *
+     * Each count reads one index and not the table (an index-only scan on PostgreSQL, a covering index on SQLite), bounded by the
+     * range at both of its ends: `asset_search_date_taken` by the capture day, `asset_search_created` by the import time.
+     */
+    val template = testContext.persistAsset()
+    val noon = "2024-06-15T12:00:00"
+    testContext.setAssetDates(template.persistedId, Some(LocalDateTime.parse(noon)), OffsetDateTime.parse(s"${noon}Z"))
+    val repositoryId = RequestContext.getRepository.persistedId
+    val oneDay = days("2024-06-13", "2024-06-13")
+    def countPlan(query: SearchQuery): String =
+      indexOnlyPlanOf(SearchQueries.cappedCount(searchDialect, query, repositoryId), "asset")
+
+    val (takenPlan, importedPlan) = atScale {
+      seedCopies(template.persistedId, copies = 5000, folders = 500)
+      // Every copy captured when it was imported, by the wall clock of UTC
+      val importTime = if (isPostgres) "created_at AT TIME ZONE 'UTC'" else "created_at"
+      update(s"UPDATE asset SET original_created_at = $importTime WHERE repository_id = ?", repositoryId)
+    } {
+      (
+        countPlan(new SearchQuery(params = browsingView, takenRange = oneDay)),
+        countPlan(new SearchQuery(params = browsingView, importedRange = oneDay)))
+    }
+
+    def covering(index: String): String =
+      if (isPostgres) s"Index Only Scan using $index on asset" else s"USING COVERING INDEX $index "
+    // Both ends of the range bound the read of the index
+    val captureDays =
+      if (isPostgres) "Index Cond: .*\\(original_created_at\\)::date\\) >= .*\\(original_created_at\\)::date\\) <= "
+      else "asset_search_date_taken \\(.*<expr>>\\? AND <expr><\\?\\)"
+    val importTimes =
+      if (isPostgres) "Index Cond: .*created_at >= .*created_at < "
+      else "asset_search_created \\(.*created_at>\\? AND created_at<\\?\\)"
+
+    withClue(takenPlan) {
+      takenPlan should include(covering("asset_search_date_taken"))
+      captureDays.r.findFirstIn(takenPlan).isDefined shouldBe true
+    }
+    withClue(importedPlan) {
+      importedPlan should include(covering("asset_search_created"))
+      importTimes.r.findFirstIn(importedPlan).isDefined shouldBe true
+    }
+  }
+
+  test("People matched all are read through the index that leads with the person and carries the asset") {
+
+    /**
+     * Setup:
+     *
+     * An asset with a Face of Alice and a Face of Bob, seeded into 5,000 copies for the planner, every copy with Bob's Face and
+     * one in ten with Alice's too; they are rolled back once the plan is read. The capped count of the default view matching all
+     * of Alice and Bob.
+     *
+     * Assertions:
+     *
+     * The plan reads `face` twice, once per person, each time from an index alone and never from the table: Alice's faces, the
+     * smaller set, from `face_02`, which leads with the person and carries the asset, and Bob's from `face_02` as well or, on
+     * PostgreSQL, by a probe of `face_01` for each of Alice's assets.
+     */
+    val template = testContext.persistAsset()
+    val alice = addPerson("Alice")
+    val bob = addPerson("Bob")
+    List(alice, bob).foreach(addFace(_, template))
+    val query =
+      new SearchQuery(params = browsingView, personIds = Set(alice.persistedId, bob.persistedId), peopleMatch = PeopleMatch.All)
+
+    val plan = atScale {
+      seedCopies(template.persistedId, copies = 5000, folders = 500)
+      // The template's two Faces copied onto the copies, none enrolled, which keeps them out of PostgreSQL's vector index:
+      // Bob's onto every copy, Alice's onto those whose zero-padded number ends in 0
+      update(
+        """INSERT INTO face (id, repository_id, asset_id, person_id, x1, y1, width, height, detection_score, features, checksum,
+          |                  quality, is_enrolled)
+          |SELECT substr(t.id, 1, 8) || substr(a.id, 9), a.repository_id, a.id, t.person_id, t.x1, t.y1, t.width, t.height,
+          |       t.detection_score, t.features, t.checksum, t.quality, FALSE
+          |  FROM asset a CROSS JOIN face t
+          | WHERE t.asset_id = ? AND a.id <> t.asset_id AND a.repository_id = t.repository_id
+          |   AND (t.person_id = ? OR substr(a.id, 36, 1) = '0')""".stripMargin,
+        template.persistedId,
+        bob.persistedId
+      )
+    } {
+      indexOnlyPlanOf(SearchQueries.cappedCount(searchDialect, query, RequestContext.getRepository.persistedId), "asset", "face")
+    }
+
+    // One read of `face` per person, each of an index alone
+    val faceReads = plan.linesIterator.filter(_.contains(if (isPostgres) " on face " else " face")).toList
+    val indexAlone =
+      if (isPostgres) "Index Only Scan using face_0[12] on face " else "SEARCH face\\d+ USING COVERING INDEX face_02 "
+    val byPerson =
+      if (isPostgres) "(?s)Index Only Scan using face_02 on face .*?Index Cond: \\(person_id = "
+      else "face_02 \\(person_id=\\?\\)"
+
+    withClue(plan) {
+      faceReads.size shouldBe 2
+      faceReads.foreach(read => indexAlone.r.findFirstIn(read).isDefined shouldBe true)
+      byPerson.r.findFirstIn(plan).isDefined shouldBe true
     }
   }
 
@@ -2208,6 +2559,21 @@ import altitude.core.util.*
   /** Gives the asset a capture time, the tiebreaker of equally relevant matches */
   private def takenAt(asset: Asset, taken: String): Unit =
     testContext.setAssetDates(asset.persistedId, Some(LocalDateTime.parse(taken)), OffsetDateTime.parse("2026-09-07T12:00:00Z"))
+
+  /** A range of whole days from ISO dates; an end left out is open */
+  private def days(from: String = "", to: String = ""): Option[DateRange] = {
+    def day(iso: String): Option[LocalDate] = Option.when(iso.nonEmpty)(LocalDate.parse(iso))
+    Some(DateRange(day(from), day(to)))
+  }
+
+  /** The IDs of the assets inside the given date ranges, once the page's total and the exact count agree with the page */
+  private def foundWithin(takenRange: Option[DateRange] = None, importedRange: Option[DateRange] = None): Set[String] = {
+    val query = new SearchQuery(rpp = PAGE_SIZE, takenRange = takenRange, importedRange = importedRange)
+    val result = search(query)
+    result.total shouldBe Some(result.records.size)
+    count(query) shouldBe result.records.size
+    result.records.map(_.persistedId).toSet
+  }
 
   /** The IDs of the assets a Search text matches */
   private def found(text: String): Set[String] =
