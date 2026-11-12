@@ -9,8 +9,8 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- A row of a repository's table holds its repository (repository_id NOT NULL), and a reference from one such row to another is
 -- a foreign key over (repository_id, <ref>_id), so the database refuses a reference into another repository. Each table such a
 -- key names has UNIQUE (id, repository_id) for it, led by the ID so that it never competes with the indexes that lead with the
--- repository. A NULL reference is not checked. A person's cover and an Import file's asset are the references that are not such
--- keys: a single column each, at the person and import_file tables.
+-- repository. A NULL reference is not checked. A person's cover, an Import file's asset and an Import's Watch folder are the
+-- references that are not such keys: a single column each, at the person, import_file and import tables.
 
 CREATE TABLE _core (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
