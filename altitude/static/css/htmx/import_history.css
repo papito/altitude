@@ -94,7 +94,7 @@
 #importHistoryList .empty {
   margin: 0;
   padding: var(--space-9);
-  border: var(--border-dashed) hsl(from var(--theme-neutral-3) h s l / 0.45);
+  border: var(--border-dashed) var(--dashed-border-color);
   border-radius: var(--radius-large);
   color: var(--theme-neutral-3);
   text-align: center;

@@ -27,7 +27,7 @@
   justify-self: stretch;
   gap: var(--space-5);
   padding: var(--space-9) var(--space-6);
-  border: var(--border-dashed) hsl(from var(--theme-neutral-3) h s l / 0.45);
+  border: var(--border-dashed) var(--dashed-border-color);
   border-radius: var(--radius-large);
   text-align: center;
   transition: background-color 160ms ease-out, border-color 160ms ease-out;
