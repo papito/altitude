@@ -47,13 +47,15 @@
  * count, or, when the viewed Person was deleted, the results go back to the whole repository.
  *
  * A Change on a Face of a Person with no name can name or merge that Person as a whole. When the
- * viewed Person is the one named, the results title is read again at once and shows the name. When
- * the viewed Person is the one merged, every cell of the grid is the destination's now, so the cells
- * stay, the destination stands in for the viewed Person in later corrections, and on closing (not on
- * a step) the results become the destination's (`runSearch` with their `personId`). When the viewed
- * Person is the destination, the same search on closing reads their results again, so the grid gains
- * the merged Person's assets, and the total and the title's count-dependent links follow. Naming or
- * merging another Person changes nothing in the grid.
+ * viewed Person is the one named, the results title is read again at once and shows the name; when
+ * a filtered search's title has a chip of the Person named, the search runs again on closing, which
+ * renders the chip with the name. When the viewed Person is the one merged, every cell of the grid
+ * is the destination's now, so the cells stay, the destination stands in for the viewed Person in
+ * later corrections, and on closing (not on a step) the results become the destination's
+ * (`runSearch` with their `personId`). When the viewed Person is the destination, the same search
+ * on closing reads their results again, so the grid gains the merged Person's assets, and the total
+ * and the title's count-dependent links follow. Naming or merging another Person changes nothing in
+ * the grid.
  *
  * The side and share are written on the fragment (`data-detail-dock-side`, `--detail-panel-share`)
  * and whether the panel is open as `data-app-detail-panel-open`; `view_image_detail_modal.css`
@@ -74,6 +76,7 @@ import {
     FRAME_TIME_TOLERANCE_MS,
     LAYER_ID,
 } from "./face-highlights.js"
+import { showsPersonChip } from "./filtered-title.js"
 import { reloadPersonTitle } from "./person-title.js"
 import { runSearch } from "./search.js"
 
@@ -104,6 +107,9 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
     // The Person the viewed Person was merged into from the panel, or the viewed Person when another
     // was merged into them: the results are searched for them on closing
     let mergedInto = null
+    // A Person with a chip in a filtered search's results title was named from the panel: the chip
+    // shows the name the search found, so the results are searched again on closing
+    let hasStaleChip = false
 
     const highlights = createFaceHighlights()
     const corrections = createFaceCorrections({
@@ -411,6 +417,12 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         if (namedPersonId && namedPersonId === searchedPersonId) {
             reloadPersonTitle(context.getRepoId(), namedPersonId)
         }
+        if (namedPersonId && showsPersonChip(namedPersonId)) {
+            hasStaleChip = true
+            if (getActiveModalHost() !== ModalHost.assetDetail) {
+                flushLeaving({ closing: true })
+            }
+        }
         if (
             mergedPersonId &&
             [mergedPersonId, mergedIntoId].includes(searchedPersonId)
@@ -493,14 +505,17 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
      * a map pin has no cell, so only the title. On `closing`, the results of a viewed Person merged
      * away become the destination's, and those of a viewed destination are read again; until then
      * the title, the merged Person's or the destination's before the merge, is left for that search
-     * to replace.
+     * to replace. On `closing` too, a filtered search whose title has a chip of a Person named from
+     * the panel is searched again, which renders the chip with the name.
      */
     function flushLeaving({ closing = false } = {}) {
         const left = leaving
         const destinationId = closing ? mergedInto : null
+        const namedInTitle = closing && hasStaleChip
         leaving = null
         if (closing) {
             mergedInto = null
+            hasStaleChip = false
         }
 
         if (left) {
@@ -524,6 +539,8 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
                 searchParams.viewedPersonId(),
                 destinationId,
             )
+            runSearch()
+        } else if (namedInTitle) {
             runSearch()
         } else if (left && !mergedInto) {
             reloadPersonTitle(context.getRepoId(), left.personId)

@@ -44,7 +44,7 @@
    in place or navigates to Browse; elsewhere the form's own submit opens Browse with the text as `q`. `hx-preserve`
    keeps this very element, and with it the text being typed, when the nav is reloaded for fresh counts. The clear (×)
    control empties the text. The filter button opens the advanced search panel beside the form (`popovertarget`), and
-   carries the number of filters in force in its badge, the empty `span` (js/search-results/search-panel.js).
+   carries the number of filters in force in its badge, `data-app-filter-count` (js/search-results/search-panel.js).
 
    The panel is a native popover under the form, empty until it opens: opening loads its form (htmx/search_panel) from
    `data-panel-url` for the search in force. It is `hx-preserve` too, so a nav reload keeps the open panel and what is
@@ -54,7 +54,7 @@
     <i class="fas fa-search"></i>
     <input type="search" name="@{Api.Field.Search.QUERY_TEXT}" aria-label="Quick search" placeholder="quick search" autocomplete="off">
     <button type="button" class="clear" aria-label="Clear search"><i class="fas fa-times"></i></button>
-    <button type="button" class="filters" popovertarget="searchPanel" title="Advanced search" aria-label="Advanced search"><i class="fas fa-sliders-h" aria-hidden="true"></i><span aria-hidden="true"></span></button>
+    <button type="button" class="filters" popovertarget="searchPanel" title="Advanced search" aria-label="Advanced search"><i class="fas fa-sliders-h" aria-hidden="true"></i><span aria-hidden="true" data-app-filter-count></span></button>
   </form>
   <dialog id="searchPanel" class="search-panel" popover="auto" aria-label="Advanced search" data-panel-url="/htmx/search/r/@repoId/panel" hx-preserve></dialog>
 </div>

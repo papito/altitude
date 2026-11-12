@@ -414,6 +414,7 @@ import altitude.core.util.QueryResult
         }
     }
     testApp.service.folder.getAncestors(theirChild.persistedId) shouldBe empty
+    testApp.service.folder.getPath(theirChild.persistedId) shouldBe empty
 
     intercept[NotFoundException](testApp.service.folder.rename(theirs, "changed"))
     intercept[NotFoundException](testApp.service.folder.move(theirs, mine.persistedId))

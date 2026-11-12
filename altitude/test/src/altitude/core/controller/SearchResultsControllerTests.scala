@@ -1,9 +1,16 @@
 package altitude.core.controller
 
 import altitude.test.TestContext
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import java.time.{ LocalDateTime, OffsetDateTime, ZoneOffset }
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ empty, include, not, should, shouldBe }
+import org.slf4j.LoggerFactory
+
+import scala.jdk.CollectionConverters.*
 
 import altitude.core.Api
 import altitude.core.App
@@ -12,6 +19,7 @@ import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.Person
+import altitude.core.service.SearchService
 import altitude.core.util.TriageSubset
 import altitude.core.util.Util
 
@@ -1572,6 +1580,73 @@ import altitude.core.util.Util
     }
   }
 
+  test("A continuation of a filtered search names no filter: only a first page has the title") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the person Alice and three assets with a Face of hers, all captured in June 2026, and a
+     * filtered search of Alice within that month, two assets a page.
+     *
+     * Assertions:
+     *
+     * The first page, which renders the results title, reads the names behind the search's IDs once (`SearchService.filterNames`,
+     * by its DEBUG line); the page that continues it, which renders cells alone, reads none, and still renders the third asset.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val alice = testApp.service.person.addPerson(Person(name = Some("Alice")))
+        val assets = List("a.jpg", "b.jpg", "c.jpg").map {
+          filename =>
+            val asset = persistDated("2026-06-06T10:00:00", filename)
+            testContext.addTestFace(alice, asset, TestContext.unitVector(1))
+            asset
+        }
+        val filtered = Map(
+          Api.Field.Search.PERSON_ID -> alice.persistedId,
+          Api.Field.Search.TAKEN_FROM -> "2026-06-01",
+          Api.Field.Search.TAKEN_TO -> "2026-06-30",
+          "sort" -> "filename0",
+          "rpp" -> "2"
+        )
+
+        var firstPage = ""
+        filterNamesReadDuring { firstPage = htmlSearch(host, repoId, filtered).text() } shouldBe 1
+        firstPage should include("Search results")
+
+        var continued = ""
+        filterNamesReadDuring {
+          continued =
+            htmlSearch(host, repoId, filtered ++ Map("after" -> cursorOf(firstPage).head, "isContinuousScroll" -> "true")).text()
+        } shouldBe 0
+        continued should include(cell(assets.last))
+    }
+  }
+
+  /** How many times the names behind a search's IDs are read while the block runs, by `SearchService.filterNames`' DEBUG line */
+  private def filterNamesReadDuring(block: => Unit): Int = {
+    val logger = LoggerFactory.getLogger(classOf[SearchService]).asInstanceOf[Logger]
+    val appender = ListAppender[ILoggingEvent]()
+    val level = logger.getLevel
+    val additive = logger.isAdditive
+    appender.start()
+    logger.addAppender(appender)
+    logger.setLevel(Level.DEBUG)
+    // The lines go to this appender alone, not on to the console
+    logger.setAdditive(false)
+    try block
+    finally {
+      logger.detachAppender(appender)
+      logger.setLevel(level)
+      logger.setAdditive(additive)
+    }
+    appender.list.asScala.count(_.getFormattedMessage.startsWith("Search filters named"))
+  }
+
   test("Several Locations match the assets in any of them") {
 
     /**
@@ -1786,13 +1861,14 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * A date that is not an ISO day, a range whose start is after its end, a `peopleMatch` that is neither `all` nor `any`, and
-     * eleven people or eleven Locations in one parameter are each a plain-text 400. So are a date range, two people and two
-     * Locations with the trash view, naming the trash.
+     * A date that is not an ISO day, a year of five digits included, a range whose start is after its end, a `peopleMatch` that
+     * is neither `all` nor `any`, eleven people or eleven Locations in one parameter, and an album or a Triage subset beside a
+     * date range or two people are each a plain-text 400. So are a date range, two people and two Locations with the trash view,
+     * naming the trash.
      *
      * Edge cases:
      *
-     * Ten people in one parameter, and one person and one Location with the trash view, are served.
+     * Ten people in one parameter, and ten followed by a comma, which is no eleventh, are served.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1811,7 +1887,10 @@ import altitude.core.util.Util
           Map(Api.Field.Search.IMPORTED_FROM -> "2024-06-02", Api.Field.Search.IMPORTED_TO -> "2024-06-01"),
           Map(Api.Field.Search.PEOPLE_MATCH -> "some"),
           Map(Api.Field.Search.PERSON_ID -> ids(11)),
-          Map(Api.Field.Search.LOCATION_ID -> ids(11))
+          Map(Api.Field.Search.LOCATION_ID -> ids(11)),
+          Map(Api.Field.Search.TAKEN_TO -> "+10000-01-01"),
+          Map(Api.Field.Search.TAKEN_FROM -> "2024-06-01", Api.Field.Search.ALBUM_ID -> ids(1)),
+          Map(Api.Field.Search.PERSON_ID -> ids(2), Api.Field.Search.SUBSET -> TriageSubset.NoLocation.apiValue)
         )
         for (params <- malformed; shape <- shapes) withClue(s"$params $shape: ") {
           val response = htmlSearch(host, repoId, params ++ shape)
@@ -1833,18 +1912,19 @@ import altitude.core.util.Util
         }
 
         htmlSearch(host, repoId, Map(Api.Field.Search.PERSON_ID -> ids(10))).statusCode shouldBe 200
+        htmlSearch(host, repoId, Map(Api.Field.Search.PERSON_ID -> s"${ids(10)},")).statusCode shouldBe 200
     }
   }
 
   /**
-   * A chip of a filtered search's results title: the search parameters its × leaves out of the search, each with the value its
-   * remove button carries (`data-app-filter-<param>`, the parameter in kebab case), and the text it shows
+   * A chip of a filtered search's results title: the search parameters its × leaves out of the search, each with the value the
+   * chip carries (`data-app-filter-<param>`, the parameter in kebab case), and the text it shows
    */
   private case class FilterChip(filter: Map[String, String], text: String)
 
-  /** The chips of the results title in `html`, in document order */
+  /** The chips of the results title in `html` (`data-app-filter`), in document order */
   private def filterChipsIn(html: String): List[FilterChip] =
-    """(?s)<li\b[^>]*>(?:(?!</li>).)*\bdata-app-filter-.*?</li>""".r.findAllIn(html).toList.map {
+    """(?s)<li\b[^>]*\bdata-app-filter=.*?</li>""".r.findAllIn(html).toList.map {
       element =>
         FilterChip(
           filter = """\bdata-app-filter-([a-z-]+)="([^"]*)"""".r.findAllMatchIn(element).map(m => m.group(1) -> m.group(2)).toMap,

@@ -128,7 +128,8 @@ import altitude.core.util.Query
     viewAssetIds(Const.Search.View.TRASHBIN, triaged = Some(false)) shouldBe Set(recycled.persistedId)
     viewAssetIds(Const.Search.View.TRIAGE, triaged = Some(true)) shouldBe Set(triaged.persistedId)
 
-    val refused = SearchRequestParser.parse(Const.Search.View.TRIAGE, None, None, None, None, None, None, triaged = Some(false))
+    val refused =
+      SearchRequestParser.parse(SearchRequestParser.Params(view = Const.Search.View.TRIAGE, triaged = Some(false)))
     refused.left.toOption.value should include("triage")
   }
 
@@ -191,6 +192,7 @@ import altitude.core.util.Query
 
   /** The IDs of the assets a search in the view's scope returns, as the search results route parses the view */
   private def viewAssetIds(view: String, triaged: Option[Boolean] = None, albumId: Option[String] = None): Set[String] =
-    val scope = SearchRequestParser.parse(view, None, None, None, albumId, None, None, triaged).toOption.value
+    val params = SearchRequestParser.Params(view = view, albumId = albumId, triaged = triaged)
+    val scope = SearchRequestParser.parse(params).toOption.value
     testApp.service.library.search(scope.query(rpp = 10)).records.map(_.persistedId).toSet
 }

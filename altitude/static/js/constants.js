@@ -215,14 +215,21 @@ export const Const = {
         maxChosen: "data-max-chosen",
         maxChosenMessage: "data-max-chosen-message",
         // What an option of such a field and the chip of a chosen one carry (htmx/search_options_*, htmx/search_panel):
-        // the ID a search takes, the label a chip shows, and a Person's cover Face URL
+        // the ID a search takes and the label a chip shows; and their parts: the element that shows the name, and a
+        // Person's cover Face, which a new chip copies (includes/search_chip, includes/search_person_cover)
         optionId: "data-option-id",
         optionLabel: "data-option-label",
-        optionCoverUrl: "data-option-cover-url",
-        // A chip's remove button in a filtered search's results title (includes/search_filter_chips), which carries the
-        // parameters the chip stands for as `data-app-filter-<param>` literals; and the title's Edit, which opens the panel
+        optionName: "data-option-name",
+        optionCover: "data-option-cover",
+        // The remove button of a chosen filter's chip, in the panel and in a filtered search's results title
+        // (includes/search_chip)
+        chipRemove: "data-chip-remove",
+        // A chip of a filtered search's results title (includes/search_filter_chips), which carries the parameters it
+        // stands for as `data-app-filter-<param>` literals; and the title's Edit, which opens the panel
         filter: "data-app-filter",
         editFilters: "data-app-edit-filters",
+        // The badge of the nav's filter button (includes/nav): the number of filters in force
+        filterCount: "data-app-filter-count",
     },
 
     context: {
@@ -298,6 +305,9 @@ export const Const = {
         sortRelevance: "relevance",
         // The largest page size the server serves (`Const.Search.MAX_RPP`); it refuses a larger one
         maxRpp: 500,
+        // The most people, and the most Locations, one search names (`SearchRequestParser.MAX_IDS`); the server refuses
+        // more in either parameter
+        maxIds: 10,
     },
 
     http: {

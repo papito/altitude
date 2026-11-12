@@ -936,4 +936,31 @@ import altitude.core.models.Repository
     val ancestors = testApp.service.folder.getAncestors(leaf.persistedId)
     ancestors.map(_.persistedId) shouldEqual List(top.persistedId, middle.persistedId, lower.persistedId)
   }
+
+  test("A folder's path is its ancestors and then the folder itself") {
+
+    /**
+     * Setup:
+     *
+     * A chain of three folders under the repository root.
+     *
+     * Assertions:
+     *
+     * The deepest folder's path lists the top-level folder, the middle one and the folder itself, in that order, without the
+     * repository root; a top-level folder's path is the folder alone.
+     *
+     * Edge cases:
+     *
+     * The root's path is the root alone, and an ID that names no folder has no path.
+     */
+    val top: Folder = testApp.service.folder.add("top")
+    val middle: Folder = testApp.service.folder.add(name = "middle", parentId = top.id)
+    val leaf: Folder = testApp.service.folder.add(name = "leaf", parentId = middle.id)
+    val folders = testApp.service.folder
+
+    folders.getPath(leaf.persistedId).map(_.persistedId) shouldEqual List(top.persistedId, middle.persistedId, leaf.persistedId)
+    folders.getPath(top.persistedId).map(_.persistedId) shouldEqual List(top.persistedId)
+    folders.getPath(testContext.repository.rootFolderId).map(_.persistedId) shouldEqual List(testContext.repository.rootFolderId)
+    folders.getPath(java.util.UUID.randomUUID.toString) shouldEqual Nil
+  }
 }

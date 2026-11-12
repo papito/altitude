@@ -92,7 +92,9 @@ comboboxes ask for their options as the user types; how the panel behaves is und
 its styles are `static/css/htmx/search_panel.css`.
 
 - `htmx/search_panel.scala.html` (`GET /htmx/search/r/:repoId/panel`) is `form#searchPanelForm` (`role="search"`,
-  `x-data="searchPanel"`, its submit `search()`), filled in from a search's parameters. Every filter is an input under
+  `x-data="searchPanel"`, its submit `search()`), filled in from a search's parameters. Every ID of the form opens with
+  the template's `idPrefix`, `searchPanel` in the nav's panel; the style guide's specimen passes its own, so the nav's
+  panel can open beside it with no ID on the page twice. Every filter is an input under
   its search parameter's name, holding the value a search takes: the text field `q` (`#searchPanelText`), and hidden
   inputs for `folderId`, `personId` and `locationId` (IDs separated by commas), `peopleMatch` (`all` or `any`) and
   `takenFrom`, `takenTo`, `importedFrom` and `importedTo` (ISO dates). `.fields` holds one `.field` per filter, each
@@ -105,28 +107,38 @@ its styles are `static/css/htmx/search_panel.css`.
   `<template>` a new chip is cloned from, the empty `role="listbox"` (`popover="manual"`) its options go into and a
   visually hidden `role="status"`. `data-options-url` is the field's options route; `data-multiple` marks the two
   fields that take several, with `data-max-chosen`, the most one search takes (`SearchRequestParser.MAX_IDS`), and
-  `data-max-chosen-message`, the line the listbox shows once the field holds them. A chip (`li.chip`, `.person` for a
-  Person) carries `data-option-id`, `data-option-label` and, for a Person with a cover, `data-option-cover-url`, shows
-  its label in `.name` (a folder's path, a Location with its Category, a Person's name led by their cover Face,
-  `.cover`, or the `.no-cover` placeholder, `includes/search_person_cover`, which a filtered search's title chips share)
-  and ends with its remove button, named "Remove <label>". The server names
-  the chips: an ID that names nothing in the Library has no chip and no place in its input.
+  `data-max-chosen-message`, the line the listbox shows once the field holds them. The People field's route ends
+  `?triaged=true` when the panel was asked for with the search's triage filter on, so its options count what the search
+  will find. A chip is `includes/search_chip.scala.html`, the one chip of the panel and of a filtered search's title:
+  `li.chip` with its kind as a class (`folder`, `person`, `location`; the title's also `search-text` and `dates`),
+  carrying `data-option-id` and `data-option-label`, its label in `.name` (`data-option-name`: a folder's path, a
+  Location with its Category, a Person's name led by their cover Face, `.cover`, or the `.no-cover` placeholder, both
+  `data-option-cover`, `includes/search_person_cover`), and ending with its remove button (`data-chip-remove`), named
+  "Remove <label>". A field's icon, and a title chip's, is `includes/search_filter_icon.scala.html`, the one place a
+  kind's icon is named. The server names the chips: an ID that names nothing in the Library has no chip and no place in
+  its input.
 - The people match is the `.switch` beside the People label, the two in `.label-row` (`#searchPanelPeopleMatch`,
   in `.match` between the words Any and All, on for `all`), its value in the hidden `peopleMatch` input beside it;
-  `.match` is shown once two people are chosen (`x-show="hasSeveral"`, the server rendering it hidden with fewer).
+  `.match` is shown once two people are chosen (`x-show="hasSeveral"`, the server rendering it hidden with fewer). The
+  row is as tall as the switch with or without it (`min-height: var(--switch-height)`), so nothing below moves when the
+  second person is chosen.
 - A date range field (`.field` with `x-data="dateRange"`) is a label and a `.box` with a calendar icon, a read-only
-  text input showing the range (no `name`), the two hidden inputs of its days and a clear button, shown while it
-  holds a range.
+  text input showing the range (no `name`; `aria-haspopup="dialog"`, `aria-expanded` following the calendar, and the
+  range as its `title`, for one cut short), the two hidden inputs of its days and a clear button, shown while it holds
+  a range.
 - `htmx/search_options_folders.scala.html`, `search_options_people.scala.html` and
   `search_options_locations.scala.html` (`GET /htmx/search/r/:repoId/options/folders`, `/people`, `/locations`,
   each with the text typed so far as `q`) are the options of the three comboboxes: `li[role="option"]` elements
   alone, at most 50, an empty fragment when nothing matches. An option carries what its chip needs,
-  `data-option-id`, `data-option-label` and a Person's `data-option-cover-url`, and has the ID
-  `searchOption-<id>`. A folder's and a Location's option is `includes/search_path_option.scala.html`: `.name`,
-  holding the names above its own in `.ancestors` (`Trips › 2024 › `, a Location's Category) and then its own. A
-  Person's is their cover (`img.cover`, or `.cover.no-cover`), `.name` and `.count`, their number of assets, which
-  a `.visually-hidden` "assets" follows. The server matches the text and orders the options, so the fragment is
-  rendered as it comes; the combobox marks the matched starts of words in `.name` and copies `.cover` onto the chip.
+  `data-option-id` and `data-option-label`, and has the ID `searchOption-<id>`. A folder's and a Location's option is
+  `includes/search_path_option.scala.html`: `.name` (`data-option-name`), holding the names above its own in
+  `.ancestors` (`Trips › 2024 › `, a Location's Category) and then its own. A Person's is their cover
+  (`includes/search_person_cover`, loaded lazily: `img.cover`, or `.cover.no-cover`, `data-option-cover`), `.name`
+  (`data-option-name`) and `.count`, the number of assets a search of them finds (the People tab's number,
+  `ListedPerson.visibleCount`, grouped as `1,840`), which a `.visually-hidden` "assets" follows; the people route takes
+  `triaged=true` to count triaged assets, and offers nobody a search finds nothing for. The server matches the text and
+  orders the options, so the fragment is rendered as it comes; the combobox marks the matched starts of words in the
+  name and copies the cover onto the chip.
 
 The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">` in a
 `role="tablist"`, styled by `tabs.css` on `aria-selected="true"`); the initial tab is loaded through
@@ -298,9 +310,12 @@ Const.attributes.multiple          // "data-multiple"  (a combobox field that ta
 Const.attributes.maxChosen         // "data-max-chosen"  (the most such a field takes, with the line that says so in `data-max-chosen-message`)
 Const.attributes.optionId          // "data-option-id"  (an option of a combobox field and the chip of a chosen one: the ID a search takes)
 Const.attributes.optionLabel       // "data-option-label"  (the label its chip shows)
-Const.attributes.optionCoverUrl    // "data-option-cover-url"  (a Person's cover Face)
-Const.attributes.filter            // "data-app-filter"  (a chip's remove button in a filtered search's results title, its parameters in `data-app-filter-<param>` literals)
+Const.attributes.optionName        // "data-option-name"  (the element that shows the name, in an option and in a chip)
+Const.attributes.optionCover       // "data-option-cover"  (a Person's cover Face in an option, which a new chip copies)
+Const.attributes.chipRemove        // "data-chip-remove"  (the remove button of a chosen filter's chip, in the panel and in a filtered search's results title)
+Const.attributes.filter            // "data-app-filter"  (a chip of a filtered search's results title, its parameters in `data-app-filter-<param>` literals)
 Const.attributes.editFilters       // "data-app-edit-filters"  (that title's Edit, which opens the advanced search panel)
+Const.attributes.filterCount       // "data-app-filter-count"  (the badge of the nav's filter button: the number of filters in force)
 ```
 
 A Curation set's root carries `data-opening-pinned-id` and `data-opening-focused-id`, and the
@@ -1469,24 +1484,29 @@ does not show through it while it sticks). The scopes:
   Search text, a folder, a person and a Location; the root folder counts as no folder) as "Search results" under the
   advanced search panel's sliders icon, over its filters in place of a subtitle: `includes/search_filter_chips`, a
   wrapping row (`.filters`) of `ul.chips`, one chip per filter in the order of the panel's fields, then **Edit**. The
-  chips are the panel's (the chosen filter's chip of `core.css`, **Advanced search panel**), each led by its kind's
-  icon, dimmed (`fa-search`, `fa-folder`, `fa-map-marker-alt`, `fa-calendar-alt`), or a Person's cover Face: the Search
+  chips are the panel's (`includes/search_chip`, the chosen filter's chip of `core.css`, **Advanced search panel**), each
+  led by its kind's icon, dimmed (`includes/search_filter_icon`: `fa-search`, `fa-folder`, `fa-map-marker-alt`,
+  `fa-calendar-alt`), or a Person's cover Face: the Search
   text in curly quotes (`.chip.search-text`), the folder's path (`Trips › 2024 › Lisbon`), each person by name, each Location
   with its Category (`Portugal › Lisbon`), and each date range as "Taken" or "Imported" and its days, as the panel's
-  date field reads them (`DateRange.label`, the server's copy of `rangeLabel`): `Taken 1 Jun – 30 Jun 2024`,
-  `Imported 28 Dec 2023 – 3 Jan 2024`, `Taken 8 Jun 2024` for one day, `Taken from 8 Jun 2024` and
-  `Imported until 21 Jun 2024` for an open end. With two people or more, "all of" or "any of" (`.match`, dimmed) comes
+  date field reads them (`DateRange.label`, the server's copy of `rangeLabel`, each naming a month by its first three
+  letters in English, September `Sep`, from its own fixed source: `Util.humanReadableShortDate`, and `MONTHS` in
+  `date-range.js`): `Taken 1 Jun – 30 Jun 2024`, `Imported 28 Dec 2023 – 3 Jan 2024`, `Taken 8 Jun 2024` for one day,
+  `Taken from 8 Jun 2024` and `Imported until 21 Jun 2024` for an open end. With two people or more, "all of" or "any of" (`.match`, dimmed) comes
   before their chips, the people match. `SearchResultsController.isFiltered` decides it, and the names are
-  `SearchService.filterNames`', so an ID that names nothing in the Library has no chip and matches nothing. A chip's ×
-  (`data-app-filter`, carrying the chip's parameters as `data-app-filter-<param>` literals: the text, the folder, its
-  own person's or Location's ID, both days of a range) removes that filter and searches again by what the other chips
-  name, the search's people match kept (`js/search-results/filtered-title.js`, through the panel's `searchByFilters`,
-  so `replaceFilters` and `runSearch` in Browse, and Browse with the search as its query string anywhere else): an ID
-  with no chip goes with the first removal, as with a search from the panel, and the last chip of a kind left alone
-  turns the search into one of a single scope, titled as that scope. Edit (`.action-button.small` with the sliders icon,
-  `data-app-edit-filters`) opens the panel on the search in force (`openSearchPanel()`). A filtered search has no
-  `#person` block, so the person title's reloads (`reloadPersonTitle`) find nothing to read again in it, and a chip
-  shows a person's name as the search found it until the next search
+  `SearchService.filterNames`', so an ID that names nothing in the Library has no chip and matches nothing. A chip is
+  `data-app-filter` and carries its parameters as `data-app-filter-<param>` literals (the text, the folder, its own
+  person's or Location's ID, both days of a range). Its × (`data-chip-remove`) takes the chip off the page at once and
+  searches again by what the chips left on the page name, the search's people match kept
+  (`js/search-results/filtered-title.js`, through the panel's `searchByFilters`, so `replaceFilters` and `runSearch` in
+  Browse, and Browse with the search as its query string anywhere else), so a second × before the first search has
+  answered searches without both: an ID with no chip goes with the first removal, as with a search from the panel, and
+  the last chip of a kind left alone turns the search into one of a single scope, titled as that scope. Edit
+  (`.action-button.small` with the sliders icon, `data-app-edit-filters`) opens the panel on the search in force
+  (`openSearchPanel()`). A filtered search has no `#person` block, so the person title's reloads (`reloadPersonTitle`)
+  find nothing to read again in it: a chip shows a person's name and cover as the search found them, so when a Person
+  with a chip is renamed the search runs again (`searchAgainForPersonChip`: at once on `personNameEdited`, the rename
+  from a People cell's pencil, and on closing Asset detail after a Face correction in the Detail panel named them)
 
 The way back is the `.clear-scope` × after the title: a search trigger carrying an empty `personId`, which the store's scope
 rules (see **Search parameters**) widen to clearing every place, a folder, an album, a Location or a Triage subset alike,
@@ -1766,7 +1786,7 @@ hand-built with core Alpine on the ARIA combobox pattern of `docs/reference/alpi
 input with `role="combobox"` (`aria-expanded`, `aria-controls`, `aria-activedescendant`) that takes the buttons' place, an X
 beside it, and a `role="listbox"` manual popover (`.face-listbox`, in the top layer so the panel's scrolling never clips it)
 anchored under the input by CSS anchor positioning with an anchor name per Face, as wide as the input, flipped above when
-there is no room below, capped at `--face-listbox-max-height` and scrolling. Opening loads the options once per opening
+there is no room below, capped at `--listbox-max-height`, the cap of every combobox's listbox, and scrolling. Opening loads the options once per opening
 from `GET /htmx/people/r/:repoId/assignable?faceId=…` (`assignablePeopleUrl`, the one place the URL is built), parses the
 fragment's `role="option"` rows wherever they sit (`parseAssignablePeople`: each Person's ID, name, whether named, whether
 Hidden, cover and Suggested mark), and focuses the input once the combobox is drawn. The focus waits for the draw
@@ -2497,13 +2517,18 @@ panel until Search or a dismissal.
   host once, from `FrontendApp.start()` and from `startNavPage()`, so the panel works on every page with the nav.
 - **Load on open.** Each opening (`beforetoggle`, which fires for every one) empties the panel and reads its form from
   the host's `data-panel-url` (`GET /htmx/search/r/:repoId/panel`) with the filters of the search in force
-  (`searchParams.filters()`; none on a page with no search of its own), so the server names the chips. The read goes
+  (`searchParams.filters()`; none on a page with no search of its own), so the server names the chips, and with the
+  search's triage filter (`triaged`), which a search from the panel keeps and the form's People options count by. The
+  read goes
   through the axios client and only the latest opening's answer is put in the panel; a failure is an error snackbar and
-  the panel closes. The panel is invisible while empty (`.search-panel:empty`), takes focus in its text field once the
-  form is in, and is emptied again as it closes (`toggle`), which removes its components with their listeners and
-  calendars. `openSearchPanel(filters)` opens it from a script with `filters`, each under its search parameter's name,
-  laid over the ones in force, and loads an already open panel again: a folder's Search here passes `{ folderId }`
-  (**Context menus**), and a filtered search's Edit nothing (**Results title**).
+  the panel closes. The panel is invisible while empty (`.search-panel:empty`), takes focus in its text field
+  (`#searchPanelText`) once the form is in, and is emptied again as it closes (`toggle`), which removes its components
+  with their listeners and calendars. `openSearchPanel(filters)` opens it from a script with `filters`, each under its
+  search parameter's name, laid over the ones in force, and loads an already open panel again: a folder's Search here
+  passes `{ folderId }` (**Context menus**), and a filtered search's Edit nothing (**Results title**). A closing panel
+  hands focus back to what had it as the panel opened: the filter button, or Edit. An entry of a menu is gone by then,
+  the panel's opening having closed its menu, so `openSearchPanel` called with focus inside another popover moves the
+  focus to the filter button first, and Search here returns there.
 - **Text.** The panel's text field and the nav's quick search input hold one value: the input's text, searched or only
   typed, is the `q` the form is asked for as the panel opens, and a search from the panel writes its text into the
   input.
@@ -2523,18 +2548,25 @@ panel until Search or a dismissal.
   options route, whether several can be chosen and how many, and the chip's `<template>`. Typing asks the route for the
   options of the text, 150 ms after the last key, and only the latest answer is shown; Down, Up and a click on the box
   open the listbox on every name. The server's `role="option"` elements go into the listbox as they come, less the ones
-  already chosen, and the component marks in each `.name` the start of every word a typed word matches (`<mark>`, by
-  the server's rule: lower case, no diacritics, a word starting at a letter run, a digit run or a camelCase hump). Down
-  and Up move the active option (`aria-selected`, `aria-activedescendant`), wrapping; Enter picks it, the first option
-  once something is typed, and never submits the form; a click picks; Escape closes the listbox alone, consumed by the
-  input's handler. A pick appends a chip cloned from the field's template, carrying the option's `data-option-*`
-  attributes, its label and a copy of its `.cover`, clears the text and closes the listbox; a field of one (the folder)
-  replaces its chip. A chip's × and Backspace in an empty input remove a chip. The chips are the state: their IDs, in
+  already chosen, and the component marks in each name (`data-option-name`) the start of every word a typed word matches
+  (`<mark>`, by the server's rule: lower case, no diacritics, a word starting at a letter run, a digit run or a
+  camelCase hump). Down and Up move the active option (`aria-selected`, `aria-activedescendant`), wrapping; Enter picks
+  it, the first option once something is typed, and never submits the form; a click picks; Escape closes the listbox
+  alone, consumed by the input's handler. While the options of what was just typed are on their way (`isLoading`), the
+  ones shown are of the text before: typing clears the active option, Enter asks for the new options at once and picks
+  the first of them when they arrive, never one of the old, and Escape drops the request and is consumed, as it is with
+  the listbox open. Whether the listbox is open (`expanded`, the input's `aria-expanded`) is written as it is shown and
+  hidden, not from the popover's `toggle` event, which comes later: a second Escape straight after the first finds the
+  listbox closed and closes the panel. A pick appends a chip cloned from the field's template (`includes/search_chip`),
+  carrying the option's `data-option-id` and `data-option-label`, its label and a copy of its cover
+  (`data-option-cover`), clears the text and closes the listbox; a field of one (the folder) replaces its chip. A
+  chip's × (`data-chip-remove`) and Backspace in an empty input remove a chip. The chips are the state: their IDs, in
   order and separated by commas, are the hidden input's value (`syncChosen`). The empty input's placeholder says what
-  the field means with nothing chosen ("anyone"), then "add…" in a field of several and nothing in a field of one. A
-  field of several takes at most `data-max-chosen` names, the server's 10: at that number it asks for no options, and
-  its listbox holds one line, `data-max-chosen-message` ("At most 10 people in one search"), as it holds "No matches"
-  when nothing matches. A visually hidden `role="status"` says each chip added or removed and the full field's line.
+  the field means with nothing chosen ("anyone"), then "add…" in a field of several that takes more, and nothing in a
+  field of one or a full one. A field of several takes at most `data-max-chosen` names, the server's 10: at that number
+  it asks for no options, and its listbox holds one line, `data-max-chosen-message` ("At most 10 people in one
+  search"), as it holds "No matches" when nothing matches. A visually hidden `role="status"` says what the listbox
+  shows each time its options arrive ("12 options", or the line in their place) and each chip added or removed.
   The listbox is a manual popover in the top layer, anchored under the field's `.box` (`--search-field-box`, scoped to
   the field by `anchor-scope`) and as wide as it; a click in it is inside the panel, so the panel stays open.
 - **People match.** The `.switch` beside the People label is the form's state (`matchesAll`, on for all), shown by the
@@ -2543,16 +2575,27 @@ panel until Search or a dismissal.
   `dateFormat: "Y-m-d"`, two months), loaded with its stylesheet by the first field (`loadFlatpickr` of
   `js/common/vendor-loader.js`). The component holds the range as its `from` and `to` ISO days, the values of the
   field's two hidden inputs; the read-only input shows it as `8 Jun – 21 Jun 2024` (`rangeLabel`: each end with its
-  year when they differ, a single day once, `from …` or `until …` for the open-ended range a URL can hold), written
-  again after every pick, since Flatpickr writes its own text there. Both ends are picked on one calendar; from the
+  year when they differ, a single day once, `from …` or `until …` for the open-ended range a URL can hold, a month by
+  its first three letters from the module's own table, `MONTHS`, as the server's `DateRange.label` names it), written
+  again after every pick, since Flatpickr writes its own text there, and the input's `title` too. The input is empty
+  while the calendar is made: Flatpickr reads the days to mark from the input's text when it is given none, so an
+  open-ended range, which the calendar marks no day for, would otherwise mark the day it read out of the label. Both
+  ends are picked on one calendar; from the
   field Down moves into the days, the arrows move through them and Enter picks. One day picked alone is that day as
   both ends: closing the calendar after one pick completes the range with the same day (`onCalendarClosed`), where
-  Flatpickr alone would drop it. The × and Clear empty the range. The week starts on the day the browser's language
-  starts it on. The calendar is appended to the field (`appendTo`), so it is inside the panel: appended to `body` it
+  Flatpickr alone would drop it. The × and Clear empty the range; the ×, which goes with the range it cleared, hands
+  focus to the field (`clearFromButton`), whose focus opens the calendar, so it is closed again at once (`focusField`,
+  as Escape does). The week starts on the day the browser's language starts it on. The calendar is appended to the field (`appendTo`), so it is inside the panel: appended to `body` it
   would be drawn beneath the panel, which is in the top layer, and a click on it would light-dismiss the panel. It is
   a manual popover of its own, shown and hidden with Flatpickr's open state, and CSS anchor positioning places it
   under the field's box, starting at the box's left edge, flipped to end at its right edge or to sit above where the
-  viewport has no room; Flatpickr's own placement is switched off (`position`). Escape with the calendar open closes
+  viewport has no room; Flatpickr's own placement is switched off (`position`). To a screen reader the calendar is a
+  dialog named after its field (`role="dialog"`, `aria-label="Date Taken calendar"`), which the input says it opens
+  (`aria-haspopup="dialog"`) and whether it is open (`aria-expanded`, the component's `open`). The two fields share a
+  row in equal halves (`.dates`, a wrapping flex row): a range wider than its half, one across two years, takes the
+  room it needs from the other field (the input is `field-sizing: content`, so the field is never narrower than its
+  range), and when the two do not fit one row the second goes under the first; a range that still does not fit is cut
+  with an ellipsis and said whole by the input's `title`. Escape with the calendar open closes
   it alone: the field's root takes the key on its way down (`keydown.escape.capture`), before Flatpickr or `global.js`
   sees it. Enter in the field opens the calendar and submits nothing.
 - **Flatpickr's look.** `static/css/flatpickr.css` is the release's file, loaded by `loadFlatpickr` as
@@ -2562,7 +2605,7 @@ panel until Search or a dismissal.
   floating surface, a month `--search-panel-month-width` of days, a day a pill under the pointer, the range a band of
   the accent at 0.2 between two ends in the accent, so the calendar follows the light and the dark theme. The focus
   ring on a day is the app's.
-- **Filter button.** Its badge, the `span` in it, shows how many of the panel's fields the search in force fills
+- **Filter button.** Its badge (`data-app-filter-count`) shows how many of the panel's fields the search in force fills
   (`searchParams.filterCount()`: the text, the folder, the people, the Locations and each date range count once), from
   one up, written by an `Alpine.effect` with the button's accessible name ("Advanced search: 3 filters in force"). A
   page with no search store shows none.
@@ -2576,8 +2619,8 @@ panel until Search or a dismissal.
   title alike (`:is(.search-panel, .results-title) .chip`, in its CHIPS section): a rounded rectangle (`--radius`) on
   the chips' fill (`--chip-fill`, which `core.css` declares for it and the filter chip), a Person's led by the cover Face
   as a circle of `--search-panel-chip-cover-size` (20px); an option shows the cover at `--search-panel-option-cover-size` (28px),
-  the name, the names above a folder's or a Location's own set back, a Person's number of assets, and the active one
-  the accent at 0.2. The listbox and the calendar wear the floating surface of every popover. Clear, a plain
+  the name, the names above a folder's or a Location's own set back, the number of assets a search of a Person finds,
+  and the active one the accent at 0.2. The listbox and the calendar wear the floating surface of every popover. Clear, a plain
   `.action-button`, is at the left and Search, `.action-button.primary`, at the right. The style guide's Menus &
   dialogs section holds the form over sample names and a static listbox, and its navigation specimen the filter
   button with a badge.
@@ -3113,7 +3156,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/includes/person_name_taken.scala.html` | The error row of a rename to a name another live person holds, with its "Merge into X…" button; rendered by the inline name editor and the rename dialog, each naming the row (`errorId`) and supplying the `x-data` scope its button needs; the dialog also passes its `pane`, which the offer sends to the Merge people modal |
 | `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read, and whether the Person is named and their number of assets, which the combobox reads; under each row, for a live asset, Change and Remove and the Change combobox's markup, with the "This face only" switch for a Person with no name, its listbox rendering the Suggested group and then the list from one option block, each option with its armed label and suffix; a correction's response, its root carrying the result message, any deleted Person and, after a merge, the merged Person and the destination) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
 | `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu; its grid and the highlights' look are `static/css/htmx/view_image_detail_modal.css` |
-| `static/js/stores/search-params.js` | the search parameter set, its defaults, the scope rules that decide what a change clears, and the advanced search panel's filters set together (`replaceFilters`, `filters`, `filterCount`, `viewedPersonId`, `viewedLocationId`; `applySearchFilters`, `idsOf`), and a searched Person's or Location's ID replaced or dropped (`names`, `replaceId`) |
+| `static/js/stores/search-params.js` | the search parameter set, its defaults, the scope rules that decide what a change clears, and the advanced search panel's filters set together (`replaceFilters`, `filters`, `filterCount`, `viewedPersonId`, `viewedLocationId`; `applySearchFilters`, `idsOf`, `ID_LISTS`), and a searched Person's or Location's ID replaced or dropped (`names`, `replaceId`) |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch`, and routes a trigger's click by the view (`routeOf`: in Triage a folder, Person or Location trigger asks the scope route, `requestScopeDialog`, and the root folder's does nothing; in the trash a folder trigger does nothing); `runTriggerSearch`, the search a trigger declares, which a 204 from the scope route runs |
 | `static/js/listeners/triage.js` | the Triage summary's reload: `registerTriageListeners` (on `peopleChanged`) and `reloadTriageSummary`, one request per change, issued from the host so the reloads take turns |
@@ -3121,16 +3164,17 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/search-results/search-input.js` | `bindSearchInput`: the nav's Search input (`#searchForm`), submitting and clearing `q` and following the store |
 | `static/js/search-results/search-panel.js` | the nav's advanced search panel (`#searchPanel`): `bindSearchPanel` (the form loaded on every opening, the panel emptied on closing, the filter button's count), `openSearchPanel(filters)`, `closeOpenSearchPanel` for Escape, and `searchByFilters`, the search its form asks for, in place in Browse and by navigating to Browse elsewhere (**Advanced search panel**) |
 | `static/js/alpine/components/search-panel.js` | the `searchPanel` Alpine component of the panel's form: Search (the form's entries as the filters), Clear, and the people match switch |
-| `static/js/alpine/components/filter-combobox.js` | the `filterCombobox` Alpine component of the panel's Folder, People and Locations fields: the options asked for as typed (the latest answer alone shown), the matched starts of words marked (`typedWords`, `matchedRanges`), the keys, the anchored listbox popover, the chips and the hidden input of their IDs, a field of one or of several up to its most |
-| `static/js/alpine/components/date-range.js` | the `dateRange` Alpine component of the panel's Date Taken and Date Imported fields: Flatpickr in range mode in a popover of its own inside the field, the range as two ISO days in hidden inputs, its label (`rangeLabel`), one day picked alone, clear, and Escape closing the calendar alone |
-| `views/htmx/search_panel.scala.html`, `search_options_folders.scala.html`, `search_options_people.scala.html`, `search_options_locations.scala.html`, `views/includes/search_path_option.scala.html` | The advanced search panel's fragments (`SearchPanelController`): its form filled in from a search's parameters, each filter an input under its parameter's name and the folder, people and Locations as chips, and the `role="option"` elements of its three comboboxes, a folder's and a Location's sharing the include (**Advanced search panel fragments**); styled by `static/css/htmx/search_panel.css`, Flatpickr's calendar included |
+| `static/js/alpine/components/filter-combobox.js` | the `filterCombobox` Alpine component of the panel's Folder, People and Locations fields: the options asked for as typed (the latest answer alone shown), the matched starts of words marked (`markMatches`), the keys, Enter and Escape while an answer is on its way, the anchored listbox popover, the status a screen reader is told, the chips and the hidden input of their IDs, a field of one or of several up to its most |
+| `static/js/alpine/components/date-range.js` | the `dateRange` Alpine component of the panel's Date Taken and Date Imported fields: Flatpickr in range mode in a popover of its own inside the field, the range as two ISO days in hidden inputs, its label (`rangeLabel`, months from `MONTHS`), one day picked alone, clear and where focus goes after it, the calendar as a named dialog, and Escape closing the calendar alone |
+| `views/htmx/search_panel.scala.html`, `search_options_folders.scala.html`, `search_options_people.scala.html`, `search_options_locations.scala.html`, `views/includes/search_path_option.scala.html` | The advanced search panel's fragments (`SearchPanelController`): its form filled in from a search's parameters, each filter an input under its parameter's name and the folder, people and Locations as chips, its IDs under a prefix the caller can change, and the `role="option"` elements of its three comboboxes, a folder's and a Location's sharing the include (**Advanced search panel fragments**); styled by `static/css/htmx/search_panel.css`, Flatpickr's calendar included |
+| `views/includes/search_chip.scala.html`, `search_filter_icon.scala.html`, `search_person_cover.scala.html` | The parts the panel and a filtered search's results title share: a chosen filter's chip (its kind, label, lead, carried attributes and remove button), the icon of a kind of filter, and a person's cover Face or its placeholder, on a chip and, loaded lazily, in a People option |
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal (the box fitted from the shown element's size, the Detail panel told of each asset and size shown), and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
 | `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing, the results title read again when the viewed Person is named, and the destination's results on closing when the viewed Person is merged away or merged into) |
 | `static/js/search-results/detail-url.js` | `createDetailUrl`: Asset detail's URL, its history entry and Back and Forward over it, the opening of the asset a URL names (`openAssetInLocation`), and the search URL held while it is open (see **Detail navigation**) |
 | `static/js/search-results/detail-fullscreen.js` | `createDetailFullscreen`: Asset detail in fullscreen (`toggle`, on `f` and the toolbar's toggle, which it removes where `document.fullscreenEnabled` is false), the player's `fullscreenElement` set to the host on each fragment (`attach`), the toggle's pressed state and the snackbar's stacks raised on `fullscreenchange` |
-| `static/js/search-results/filtered-title.js` | `bindFilteredTitle`: a filtered search's results title, each chip's × searching by what the other chips name (through `searchByFilters`) and Edit opening the advanced search panel |
-| `views/includes/search_filter_chips.scala.html`, `search_person_cover.scala.html` | A filtered search's filters under its results title, a chip each with its remove button's parameters, and Edit; a person's cover Face on a chip of the title or of the advanced search panel |
-| `static/js/search-results/person-title.js` | `reloadPersonTitle`: a Person's results title (`#person`) read again from the title route when it shows that Person, after a rename from a People cell's pencil and after a Detail panel correction |
+| `static/js/search-results/filtered-title.js` | `bindFilteredTitle`: a filtered search's results title, each chip's × taking the chip off the page and searching by what the chips left name (through `searchByFilters`) and Edit opening the advanced search panel; `showsPersonChip` and `searchAgainForPersonChip`, the search run again when a Person with a chip is renamed |
+| `views/includes/search_filter_chips.scala.html` | A filtered search's filters under its results title, a chip each carrying the parameters it stands for, and Edit |
+| `static/js/search-results/person-title.js` | `reloadPersonTitle`: a Person's results title (`#person`) read again from the title route when it shows that Person, after a rename from a People cell's pencil and after a Detail panel correction; a filtered search's chip of them is `filtered-title.js`'s |
 | `static/js/search-results/face-corrections.js` | `createFaceCorrections`: Remove's two clicks and their reset, the Change pick's request by its `action` (a move, or a name or a merge of the Face's Person), and what each answer means (the section to swap in, a message, a stale section to reload); `parsePeopleSection` |
 | `static/js/alpine/components/face-combobox.js` | the `faceCombobox` Alpine component of a People row's Change: the options loaded once per opening for the Face (`assignablePeopleUrl`, `parseAssignablePeople`), the Suggested group while nothing is typed, the rest filtered as typed, the Create row, the keys, the anchored listbox popover, the two modes by the row's Person with the "This face only" switch, the two-step merge (`armedKey`), the pick (with its `action`) and the X announced as events; `closeOpenFaceCombobox` for Escape |
 | `static/js/search-results/face-highlights.js` | `createFaceHighlights`: draws the Face highlights into `#faceHighlights` (`show`: a toggle button per Face placed by fractions of the shown size, its badge anchored to it; `clear`), and `FRAME_TIME_TOLERANCE_MS`, how far from its Frame time a Video's Face counts as current |
@@ -3213,7 +3257,10 @@ and a view, clears `q`. The whole `CLEARS` table:
 | `q` | `view`, `folderId`, `personId`, `albumId`, `locationId`, `subset`, the panel's five, `bbox` |
 
 The **advanced search panel** is the one widget that combines them (**Advanced search panel**). `personId` and
-`locationId` then hold several IDs, separated by commas (`idsOf`), and five parameters are the panel's alone
+`locationId` then hold several IDs, separated by commas (`idsOf`; `ID_LISTS`), each once and at most
+`Const.search.maxIds` (10, the client's copy of `SearchRequestParser.MAX_IDS`): `normalize` drops the empty segments, the
+repeats and the IDs past the tenth of a hand-edited URL, which the server would refuse the whole search for. Five
+parameters are the panel's alone
 (`PANEL_FILTERS`): `peopleMatch` (`all` or `any`, how several people combine; only `any` is ever stored, with two
 people or more, since all is the server's rule with none given) and the two date ranges, `takenFrom` and `takenTo`,
 `importedFrom` and `importedTo` (ISO days). A search from the panel goes around the table, through the store's
@@ -3240,10 +3287,13 @@ default applies (Relevance with text, newest import without). The triage filter 
 survives a place or `q`, but it is the repository view's: the View
 settings dialog's "Show triaged items" switch (see **Inline dialogs**) is shown in that view alone, and a
 change of view clears it. The People tab reads it too, on every load of a pane, and reloads its panes when it changes, so each
-Person's number follows the switch (see **People tab**). The combinations the server refuses
+Person's number follows the switch (see **People tab**), and the advanced search panel sends it with the request for
+its form, so the People options count what the search will find (**Advanced search panel**). The combinations the server refuses
 are settled by the store itself (`withoutRefusedCombinations`, on seeding from the URL and after every
 change): `q` with the trash view becomes the repository view, as a date range and several people or Locations do,
-a date range whose first day is after its last is dropped, `peopleMatch` goes with the second person, `sort=relevance`
+a date range whose first day is after its last is dropped, `peopleMatch` goes with the second person, what only the
+panel combines (a date range, several people or Locations, or more than one of `q`, a folder, a person and a Location:
+`combinesFilters`, the server's rule) drops an album and a subset, `sort=relevance`
 (`Const.search.sortRelevance`) without `q` drops the sort, so Relevance is the one sort that ends with
 the text it ranked, and `triaged` in any view but the repository view is dropped (the triage view
 refuses it). The server also refuses a page size outside 1 to 500; the store keeps only whole numbers

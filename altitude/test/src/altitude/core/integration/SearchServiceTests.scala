@@ -1,6 +1,10 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil.withJvmTimeZone
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -9,11 +13,13 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
 import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shouldNot }
+import org.slf4j.LoggerFactory
 import scalasql.core.SqlStr
 import scalasql.core.SqlStr.SqlStringSyntax
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
+import scala.jdk.CollectionConverters.*
 import scala.language.reflectiveCalls
 import scala.util.Random
 
@@ -366,6 +372,36 @@ import altitude.core.util.*
     // The days of whatever zone the server is in
     withJvmTimeZone("UTC") {
       importedWithin(days("2024-06-01", "2024-06-01")) shouldBe Set(endOfMay, startOfFirst)
+    }
+  }
+
+  test("A Date Imported range that ends on the last day of year 9999 is open at its end") {
+
+    /**
+     * Setup:
+     *
+     * Two assets, imported in June 2024 and in June 2025, searched on a server in New York, behind UTC, on one in UTC and on one
+     * in Tokyo, ahead of it. The day after 31 December 9999 begins in year 10000 for the first two, a year the engines do not
+     * write as they write the others.
+     *
+     * Assertions:
+     *
+     * In every zone a range from 1 January 2025 to 31 December 9999 holds the later asset, and a range open at its start that
+     * ends on that day holds both, on both engines.
+     */
+    def imported(instant: String): String = {
+      val asset = testContext.persistAsset()
+      testContext.setAssetDates(asset.persistedId, None, OffsetDateTime.parse(instant))
+      asset.persistedId
+    }
+    val earlier = imported("2024-06-15T12:00:00Z")
+    val later = imported("2025-06-15T12:00:00Z")
+
+    for (zone <- List("America/New_York", "UTC", "Asia/Tokyo")) withClue(s"$zone: ") {
+      withJvmTimeZone(zone) {
+        foundWithin(importedRange = days("2025-01-01", "9999-12-31")) shouldBe Set(later)
+        foundWithin(importedRange = days(to = "9999-12-31")) shouldBe Set(earlier, later)
+      }
     }
   }
 
@@ -2642,20 +2678,26 @@ import altitude.core.util.*
      * Setup:
      *
      * The folder Lisbon under 2024 under Trips, and the folder "Lisbon office"; the Category Portugal holding the Locations
-     * Lisbon and Porto, and the Location Sintra in no Category; the named people "Alice Liddell", with a Face on one asset, and
-     * "Alan Lisle", and three people a Search text does not name: one hidden, one marked as a bad match and one with no name.
+     * Lisbon and Porto, and the Location Sintra in no Category; the named people "Alice Liddell", with a Face on one sorted
+     * asset, "Alan Lisle", with a Face on a sorted and on a triaged asset, "Alma Triaged", with a Face on the triaged asset
+     * alone, and "Alto Nowhere", with no Face; and four people a Search text does not name: one hidden, one marked as a bad match
+     * and one with no name, each with a Face on the sorted asset, and "Alva Merged", merged into Alma.
      *
      * Assertions:
      *
      * With nothing typed the folder options are every folder by its path, a folder directly before the folders below it, the
-     * Location options every Location by its own name with its Category before it, and the people options the two named, visible,
-     * live people by name, Alice with her cover and her one asset. Typed text offers the names with a word starting with it:
-     * "lis" the two Lisbon folders, the Location Lisbon and Alan Lisle.
+     * Location options every Location by its own name with its Category before it, and the people options the named, visible,
+     * live people a search finds something for, by name, each with their cover and the number of assets the search finds: Alan
+     * and Alice with one each while triaged items are hidden, and Alan with two, Alice with one and Alma with one once they are
+     * shown. Typed text offers the names with a word starting with it: "lis" the two Lisbon folders, the Location Lisbon and Alan
+     * Lisle.
      *
      * Edge cases:
      *
      * The root folder and a Category are no option, and text naming a Category or an ancestor folder offers nothing below it. The
-     * hidden person, the bad match and the person with no name are never offered.
+     * hidden person, the bad match, the person merged away and the person with no name are never offered, nor is the person with
+     * no Face, whose search finds nothing either way: the people offered with triaged items shown are the ones a Search text
+     * resolves names against (`SearchDao.searchNames`), less that one.
      */
     val trips = testApp.service.folder.add("Trips")
     val year = testApp.service.folder.add("2024", parentId = trips.id)
@@ -2665,12 +2707,24 @@ import altitude.core.util.*
     val lisbon = testApp.service.location.addLocation("Lisbon", 38.72, -9.14, Some(portugal.persistedId))
     val porto = testApp.service.location.addLocation("Porto", 41.15, -8.61, Some(portugal.persistedId))
     val sintra = testApp.service.location.addLocation("Sintra", 38.8, -9.39)
+    val sorted = importAsset("one.jpg")
+    val triaged = testContext.persistAsset(isTriaged = true)
     val alice = addPerson("Alice Liddell")
-    val face = addFace(alice, importAsset("one.jpg"))
+    val face = addFace(alice, sorted)
     val alan = addPerson("Alan Lisle")
-    testApp.service.person.setVisibility(addPerson("Lisa Hidden"), isHidden = true)
-    testApp.service.person.markAsBadMatch(addPerson("Lise Badmatch"))
-    testApp.service.person.addPerson(Person())
+    addFace(alan, sorted)
+    addFace(alan, triaged)
+    val alma = addPerson("Alma Triaged")
+    addFace(alma, triaged)
+    val alto = addPerson("Alto Nowhere")
+    testApp.service.person.merge(dest = alma, source = addPerson("Alva Merged"))
+    val hidden = addPerson("Lisa Hidden")
+    addFace(hidden, sorted)
+    testApp.service.person.setVisibility(hidden, isHidden = true)
+    val badMatch = addPerson("Lise Badmatch")
+    addFace(badMatch, sorted)
+    testApp.service.person.markAsBadMatch(badMatch)
+    addFace(testApp.service.person.addPerson(Person()), sorted)
     val options = testApp.service.search
 
     options.folderOptions("") shouldBe List(
@@ -2691,15 +2745,91 @@ import altitude.core.util.*
     options.locationOptions("lis").map(_.id) shouldBe List(lisbon.persistedId)
     options.locationOptions("portugal") shouldBe empty
 
-    val people = options.peopleOptions("")
-    people.map(_.persistedId) shouldBe List(alan.persistedId, alice.persistedId)
-    people.last.coverFaceId shouldBe Some(face.persistedId)
-    people.last.numOfFaces shouldBe 1
-    people.head.coverFaceId shouldBe None
-    options.peopleOptions("lis").map(_.persistedId) shouldBe List(alan.persistedId)
-    options.peopleOptions("al").map(_.persistedId) shouldBe List(alan.persistedId, alice.persistedId)
-    options.peopleOptions("liddell").map(_.persistedId) shouldBe List(alice.persistedId)
-    options.peopleOptions(PersonService.UNKNOWN_NAME_PREFIX) shouldBe empty
+    def people(typed: String, showTriaged: Boolean = false): List[(String, Int)] =
+      options.peopleOptions(typed, showTriaged).map(listed => listed.person.persistedId -> listed.visibleCount)
+
+    people("") shouldBe List(alan.persistedId -> 1, alice.persistedId -> 1)
+    people("", showTriaged = true) shouldBe List(alan.persistedId -> 2, alice.persistedId -> 1, alma.persistedId -> 1)
+    options.peopleOptions("liddell", showTriaged = false).map(_.person.coverFaceId) shouldBe List(Some(face.persistedId))
+    people("lis").map(_._1) shouldBe List(alan.persistedId)
+    people("al").map(_._1) shouldBe List(alan.persistedId, alice.persistedId)
+    people("al", showTriaged = true).map(_._1) shouldBe List(alan.persistedId, alice.persistedId, alma.persistedId)
+    people("liddell").map(_._1) shouldBe List(alice.persistedId)
+    people("alto", showTriaged = true) shouldBe empty
+    people(PersonService.UNKNOWN_NAME_PREFIX, showTriaged = true) shouldBe empty
+
+    // The people offered are the ones a Search text resolves names against, less the one a search finds nothing for
+    val searchable =
+      testApp.txManager.asReadOnly(testApp.DAO.search.searchNames(Set(SearchSource.Person)))(SearchSource.Person).map(_.id).toSet
+    people("", showTriaged = true).map(_._1).toSet shouldBe searchable - alto.persistedId
+  }
+
+  test("Advanced search options and filter names read the names they use, and a Search text every name source") {
+
+    /**
+     * Setup:
+     *
+     * A folder, a Location in a Category, an album, and a named person with a Face on one asset.
+     *
+     * Assertions:
+     *
+     * By the name candidates the DAO reads (its TRACE line, one per read, naming each source read), the folder options read the
+     * folders alone and the Location options the Locations and the Categories; the people options and the filter names, which are
+     * read by ID, read no candidates at all. Resolving a Search text reads every name source in one read.
+     */
+    val folder = testApp.service.folder.add("Trips")
+    val portugal = testApp.service.location.addCategory("Portugal")
+    val lisbon = testApp.service.location.addLocation("Lisbon", 38.72, -9.14, Some(portugal.persistedId))
+    testApp.service.album.add("Best")
+    val alice = addPerson("Alice")
+    addFace(alice, importAsset("one.jpg"))
+    val options = testApp.service.search
+
+    def sources(names: SearchSource*): List[Set[String]] = List(names.map(_.toString).toSet)
+
+    candidatesReadDuring(options.folderOptions("tri").map(_.id) shouldBe List(folder.persistedId)) shouldBe
+      sources(SearchSource.Folder)
+    candidatesReadDuring(options.locationOptions("lis").map(_.id) shouldBe List(lisbon.persistedId)) shouldBe
+      sources(SearchSource.Location, SearchSource.Category)
+    candidatesReadDuring(options.peopleOptions("ali", showTriaged = false).size shouldBe 1) shouldBe Nil
+    candidatesReadDuring {
+      val names = options.filterNames(Some(folder.persistedId), List(alice.persistedId), List(lisbon.persistedId))
+      names.folder.map(_.path) shouldBe Some(List("Trips"))
+      names.people.map(_.persistedId) shouldBe List(alice.persistedId)
+      names.locations.map(_.path) shouldBe List(List("Portugal", "Lisbon"))
+    } shouldBe Nil
+    candidatesReadDuring(options.resolveText(SearchText.parse("alice").value)) shouldBe sources(
+      SearchSource.Person,
+      SearchSource.Location,
+      SearchSource.Category,
+      SearchSource.Folder,
+      SearchSource.Album)
+  }
+
+  /**
+   * The name sources each read of the name candidates named while the block ran, a set per read, by the TRACE line
+   * `SearchDao.searchNames` writes (`Search name candidates: Person=2, Folder=5`)
+   */
+  private def candidatesReadDuring(block: => Unit): List[Set[String]] = {
+    val logger = LoggerFactory.getLogger(testApp.DAO.search.getClass).asInstanceOf[Logger]
+    val appender = ListAppender[ILoggingEvent]()
+    val level = logger.getLevel
+    val additive = logger.isAdditive
+    appender.start()
+    logger.addAppender(appender)
+    logger.setLevel(Level.TRACE)
+    // The lines go to this appender alone, not on to the console
+    logger.setAdditive(false)
+    try block
+    finally {
+      logger.detachAppender(appender)
+      logger.setLevel(level)
+      logger.setAdditive(additive)
+    }
+    val prefix = "Search name candidates: "
+    appender.list.asScala.toList.map(_.getFormattedMessage).filter(_.startsWith(prefix)).map {
+      line => line.stripPrefix(prefix).split(", ").map(_.takeWhile(_ != '=')).toSet
+    }
   }
 
   test("Advanced search filter names: the names behind a search's IDs, in the order given, less those that name nothing") {

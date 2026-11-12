@@ -1,0 +1,14 @@
+@(kind: String)
+
+@* The icon of a kind of search filter (`search-text`, `folder`, `location`, `dates`): it leads the filter's field in the advanced
+   search panel (htmx/search_panel) and its chip in a filtered search's results title (includes/search_filter_chips). A person
+   has none: their chip leads with their cover Face (includes/search_person_cover). *@
+@name = @{
+  kind match {
+    case "search-text" => "fa-search"
+    case "folder" => "fa-folder"
+    case "location" => "fa-map-marker-alt"
+    case "dates" => "fa-calendar-alt"
+  }
+}
+<i class="fas @name" aria-hidden="true"></i>

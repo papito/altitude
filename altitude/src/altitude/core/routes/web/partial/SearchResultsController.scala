@@ -116,22 +116,23 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       case Some(refusal) => return refusal
       case None =>
 
-    val parsed = SearchRequestParser.parse(
-      view,
-      q,
-      folderId,
-      personId,
-      albumId,
-      locationId,
-      bbox,
-      triaged,
-      subset,
-      peopleMatch,
-      takenFrom,
-      takenTo,
-      importedFrom,
-      importedTo)
-    val scope = parsed match
+    val params = SearchRequestParser.Params(
+      view = view,
+      q = q,
+      folderId = folderId,
+      personId = personId,
+      albumId = albumId,
+      locationId = locationId,
+      peopleMatch = peopleMatch,
+      takenFrom = takenFrom,
+      takenTo = takenTo,
+      importedFrom = importedFrom,
+      importedTo = importedTo,
+      bbox = bbox,
+      triaged = triaged,
+      subset = subset
+    )
+    val scope = SearchRequestParser.parse(params) match
       case Left(message) => return textError(message, 400)
       case Right(scope) => scope
 
@@ -152,11 +153,13 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     // What the results title names. A filtered search is named by its filters, a chip each, through what its IDs name in the
     // repository (`SearchService.filterNames`): an ID that names nothing there, unknown or another repository's, matches nothing and
-    // has no chip. Any other search names one scope at most, the person, the folder's path, the album, the Location or the subset
-    // the results are scoped to, read by ID, and one that is not the repository's is a 404 that names nothing of it
-    val filters = Option.when(isFiltered(scope))(filtersOf(scope, folderId, personId, locationId))
+    // has no chip. Its names are read for a first page alone, since a continuation renders cells and no title. Any other search
+    // names one scope at most, the person, the folder's path, the album, the Location or the subset the results are scoped to,
+    // read by ID on every page, and one that is not the repository's is a 404 that names nothing of it
+    val isFilteredSearch = isFiltered(scope)
+    val filters = Option.when(isFilteredSearch && !isContinuousScroll)(filtersOf(scope))
     val (person, folderPath, album, location) =
-      if filters.isDefined then (null, Nil, None, None)
+      if isFilteredSearch then (null, Nil, None, None)
       else
         try
           (
@@ -167,21 +170,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         catch case ex: NotFoundException => return textError(ex.getMessage, 404)
 
     val browserUrl = browserViewUrl(
-      view,
+      params,
       effectiveSort,
-      q,
-      folderId,
-      personId,
-      albumId,
-      locationId,
-      peopleMatch,
-      takenFrom,
-      takenTo,
-      importedFrom,
-      importedTo,
-      bbox,
-      triaged,
-      subset,
       layout,
       if layout == Const.Search.Layout.MAP then None else groupBy,
       if layout == Const.Search.Layout.MAP then None else groupDirection,
@@ -402,15 +392,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     scopes.count(identity) > 1
 
   /** The filters a filtered search's title names, the people and the Locations in the order the request gives them */
-  private def filtersOf(
-      scope: SearchRequestParser.Scope,
-      folderId: Option[String],
-      personId: Option[String],
-      locationId: Option[String]): SearchFilters =
+  private def filtersOf(scope: SearchRequestParser.Scope): SearchFilters =
     SearchFilters(
       text = scope.text,
-      names = App.altitude.service.search
-        .filterNames(folderId, SearchRequestParser.idsOf(personId), SearchRequestParser.idsOf(locationId)),
+      names = App.altitude.service.search.filterNames(scope.folderIds.headOption, scope.personIds, scope.locationIds),
       peopleMatch = scope.peopleMatch,
       takenRange = scope.takenRange,
       importedRange = scope.importedRange
@@ -442,41 +427,28 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * first page.
    */
   private def browserViewUrl(
-      view: String,
+      search: SearchRequestParser.Params,
       sort: String,
-      q: Option[String],
-      folderId: Option[String],
-      personId: Option[String],
-      albumId: Option[String],
-      locationId: Option[String],
-      peopleMatch: Option[String],
-      takenFrom: Option[String],
-      takenTo: Option[String],
-      importedFrom: Option[String],
-      importedTo: Option[String],
-      bbox: Option[String],
-      triaged: Option[Boolean],
-      subset: Option[String],
       layout: String,
       groupBy: Option[String],
       groupDirection: Option[String],
       request: Request): String =
     val params = Seq(
-      Option.when(view != Const.Search.View.DEFAULT)(Api.Field.Search.VIEW -> view),
-      folderId.map(Api.Field.Search.FOLDER_ID -> _),
-      personId.map(Api.Field.Search.PERSON_ID -> _),
-      albumId.map(Api.Field.Search.ALBUM_ID -> _),
-      locationId.map(Api.Field.Search.LOCATION_ID -> _),
-      peopleMatch.map(Api.Field.Search.PEOPLE_MATCH -> _),
-      takenFrom.map(Api.Field.Search.TAKEN_FROM -> _),
-      takenTo.map(Api.Field.Search.TAKEN_TO -> _),
-      importedFrom.map(Api.Field.Search.IMPORTED_FROM -> _),
-      importedTo.map(Api.Field.Search.IMPORTED_TO -> _),
-      subset.map(Api.Field.Search.SUBSET -> _),
-      bbox.map(Api.Field.Search.BBOX -> _),
-      triaged.map(Api.Field.Search.TRIAGED -> _.toString),
+      Option.when(search.view != Const.Search.View.DEFAULT)(Api.Field.Search.VIEW -> search.view),
+      search.folderId.map(Api.Field.Search.FOLDER_ID -> _),
+      search.personId.map(Api.Field.Search.PERSON_ID -> _),
+      search.albumId.map(Api.Field.Search.ALBUM_ID -> _),
+      search.locationId.map(Api.Field.Search.LOCATION_ID -> _),
+      search.peopleMatch.map(Api.Field.Search.PEOPLE_MATCH -> _),
+      search.takenFrom.map(Api.Field.Search.TAKEN_FROM -> _),
+      search.takenTo.map(Api.Field.Search.TAKEN_TO -> _),
+      search.importedFrom.map(Api.Field.Search.IMPORTED_FROM -> _),
+      search.importedTo.map(Api.Field.Search.IMPORTED_TO -> _),
+      search.subset.map(Api.Field.Search.SUBSET -> _),
+      search.bbox.map(Api.Field.Search.BBOX -> _),
+      search.triaged.map(Api.Field.Search.TRIAGED -> _.toString),
       Option.when(layout != Const.Search.Layout.GRID)(Api.Field.Search.LAYOUT -> layout),
-      q.map(Api.Field.Search.QUERY_TEXT -> _),
+      search.q.map(Api.Field.Search.QUERY_TEXT -> _),
       Some(Api.Field.Search.SORT -> sort),
       groupBy.map(Api.Field.Search.GROUP_BY -> _),
       groupDirection.map(Api.Field.Search.GROUP_DIRECTION -> _)

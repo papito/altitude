@@ -117,14 +117,15 @@ const DATE_RANGES = [
     ["importedFrom", "importedTo"],
 ]
 
-/** The parameters that hold one ID or several, separated by commas */
-const ID_LISTS = ["personId", "locationId"]
+/** The parameters that hold one ID or several, separated by commas, at most `Const.search.maxIds` of them */
+export const ID_LISTS = ["personId", "locationId"]
 
 const PARAM_NAMES = Object.keys(DEFAULTS)
 
 /**
  * Search parameters read out of a browser URL's query string. Unknown parameters are ignored, and so
- * is a page size, a subset, a people match or a day the server would refuse (`normalize`). The layout is the one
+ * is a page size, a subset, a people match or a day the server would refuse, and a list of people or
+ * Locations is held to the IDs the server takes (`normalize`). The layout is the one
  * exception to "the URL, then the defaults": a URL that says nothing about it gets the layout last
  * chosen in this browser (`localStorage`), so a map user opens on the map.
  */
@@ -148,7 +149,9 @@ export function seedSearchParams(search) {
  * that clears the text drops it, so the server's default applies, while any other sort stays; and
  * the triage filter is the repository view's, so another view drops it (the server refuses it with
  * the triage view, and the toolbar offers it nowhere else). A URL can ask for any of them as well.
- * A people match says nothing of fewer than two people, so it goes with the second of them.
+ * A people match says nothing of fewer than two people, so it goes with the second of them. What
+ * only the advanced search panel combines searches by the panel's filters alone, so it drops an
+ * album and a Triage subset (`combinesFilters`), which the server refuses beside it.
  */
 function withoutRefusedCombinations(params) {
     DATE_RANGES.forEach(([from, to]) => {
@@ -164,6 +167,11 @@ function withoutRefusedCombinations(params) {
 
     if (idsOf(params.personId).length < 2) {
         params.peopleMatch = DEFAULTS.peopleMatch
+    }
+
+    if (combinesFilters(params)) {
+        params.albumId = DEFAULTS.albumId
+        params.subset = DEFAULTS.subset
     }
 
     if (searchesOutsideTrash(params) && params.view === Const.views.trashbin) {
@@ -183,11 +191,31 @@ function withoutRefusedCombinations(params) {
 
 /** Text, a date range, or several people or Locations: what the server searches the repository view for, never the trash */
 function searchesOutsideTrash(params) {
+    return params.q !== null || hasPanelFilter(params)
+}
+
+/** A date range, or several people or Locations: what only the advanced search panel sets */
+function hasPanelFilter(params) {
     return (
-        params.q !== null ||
         DATE_PARAMS.some((name) => params[name] !== null) ||
         ID_LISTS.some((name) => idsOf(params[name]).length > 1)
     )
+}
+
+/**
+ * What only the advanced search panel combines, as the server tells it (`SearchRequestParser`): a
+ * date range, several people or Locations, or more than one of the text, a folder, a person and a
+ * Location
+ */
+function combinesFilters(params) {
+    const places = [
+        params.q,
+        params.folderId,
+        params.personId,
+        params.locationId,
+    ].filter((value) => value !== null)
+
+    return hasPanelFilter(params) || places.length > 1
 }
 
 /** The IDs a parameter holds: none, one, or several separated by commas */
@@ -336,8 +364,8 @@ export function createSearchParamsStore() {
 
         /**
          * A search from the advanced search panel: its filters replace the ones in force and the
-         * scope returns to the repository view (`applySearchFilters`). Removing one filter is the
-         * current ones (`filters()`) with that one set to null.
+         * scope returns to the repository view (`applySearchFilters`). A filtered search's results
+         * title removes one filter the same way, with the filters its other chips name.
          */
         replaceFilters(filters) {
             Object.assign(this, applySearchFilters(this.snapshot(), filters))
@@ -427,7 +455,8 @@ function isOmitted(name, value) {
 /**
  * A parameter's value as the store keeps it. A number, a word or a day the server would refuse is no
  * opinion, like an empty one, so a hand-edited URL cannot turn every search into a 400: the server's
- * default applies.
+ * default applies. A list of people or Locations is its IDs, each once, without the empty segments
+ * and the IDs past the most a search names, which the server would refuse the whole list for.
  */
 function normalize(name, value) {
     if (value === null || value === undefined || value === "") {
@@ -450,6 +479,11 @@ function normalize(name, value) {
 
     if (DATE_PARAMS.includes(name)) {
         return isIsoDate(String(value)) ? String(value) : DEFAULTS[name]
+    }
+
+    if (ID_LISTS.includes(name)) {
+        const ids = [...new Set(idsOf(value))].slice(0, Const.search.maxIds)
+        return ids.join(",") || DEFAULTS[name]
     }
 
     return String(value)

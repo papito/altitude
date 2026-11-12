@@ -1,6 +1,6 @@
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
-import { datasetKeySuffixToDetailKey } from "../fragments/helpers.js"
+import { literalsOf } from "../fragments/helpers.js"
 import { runSearch } from "./search.js"
 
 /**
@@ -112,17 +112,7 @@ function triggerElements(root) {
 
 /** The `data-app-search-<param>` literals of `triggerEl`, keyed by parameter name */
 function searchParamsOf(triggerEl) {
-    const params = {}
-
-    Object.entries(triggerEl.dataset).forEach(([key, value]) => {
-        if (!key.startsWith(PREFIX) || RESERVED_KEYS.has(key)) {
-            return
-        }
-
-        params[datasetKeySuffixToDetailKey(key.slice(PREFIX.length))] = value
-    })
-
-    return params
+    return literalsOf(triggerEl, PREFIX, RESERVED_KEYS)
 }
 
 /**

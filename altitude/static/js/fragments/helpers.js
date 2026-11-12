@@ -91,6 +91,26 @@ export function readSuccessEvent(el, sourceEl) {
     return { name, detail }
 }
 
+/**
+ * The literals an element declares under a prefix, keyed by what follows it: the
+ * `data-app-search-<param>` values of a search trigger (`prefix` `appSearch`, the dataset's own
+ * spelling) are `{ personId: "abc" }` for `data-app-search-person-id="abc"`. The marker itself (the
+ * attribute that is the prefix alone) and the `reserved` dataset keys are no literal.
+ */
+export function literalsOf(el, prefix, reserved = new Set()) {
+    const literals = {}
+
+    Object.entries(el.dataset).forEach(([key, value]) => {
+        if (!key.startsWith(prefix) || key === prefix || reserved.has(key)) {
+            return
+        }
+
+        literals[datasetKeySuffixToDetailKey(key.slice(prefix.length))] = value
+    })
+
+    return literals
+}
+
 export function datasetKeySuffixToDetailKey(keySuffix) {
     if (!keySuffix) {
         return ""

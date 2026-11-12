@@ -350,7 +350,7 @@
              <code>js/alpine/components/face-combobox.js</code>): a field at <code>--font-size-small</code> with
              <code>role="combobox"</code> and a quiet × beside it in <code>--theme-neutral-3</code>, and under it the listbox
              (<code>.face-listbox</code>), a popover wearing the floating surface and as wide as the field, capped at
-             <code>--face-listbox-max-height</code>; its options are the People rows' shape, the active one tinted
+             <code>--listbox-max-height</code>; its options are the People rows' shape, the active one tinted
              <code>--theme-neutral-4</code> at 0.08, and the Create row, offered for a name no Person has, is a plus in the
              cover's place with the label in <code>--theme-primary-text</code>. While nothing is typed the listbox opens with
              the Suggested group (<code>.suggested</code>): the people nearest the Face under a heading
@@ -713,22 +713,23 @@
              (<code>--radius</code>) on the chips' fill, <code>--chip-fill</code>, a Person's led by the cover Face as a
              circle of <code>--search-panel-chip-cover-size</code>, each ending with its remove control; the folder takes
              one chip, people and Locations ten. Its options open in a listbox under the box, on the floating surface,
-             capped at <code>--face-listbox-max-height</code>: a Person's cover Face at
+             capped at <code>--listbox-max-height</code>: a Person's cover Face at
              <code>--search-panel-option-cover-size</code>, the name, with the start of each word a typed word matches
              in the accent, bold, the names above a folder's or a Location's own in <code>--theme-neutral-3</code>, a
              Person's number of assets, and the active option tinted with the accent at 0.2; a field that holds as many
              as a search takes says so in place of its options. Two people or more show the match beside the People
              label, a <code>.switch</code> between Any and All, the word in force in the text color. A date range
              (<code>dateRange</code>) reads <code>8 Jun – 21 Jun 2024</code> after a calendar icon, with a clear control;
-             its calendar, Flatpickr's in the theme's tokens, shows two months, each
+             the two ranges share a row in equal halves, a range wider than its half taking the room it needs from the
+             other, and the second going under the first when both do not fit; its calendar, Flatpickr's in the theme's tokens, shows two months, each
              <code>--search-panel-month-width</code> of days, the range a band of the accent at 0.2 between two ends in
              the accent itself. Clear, a secondary button, is at the left and Search, the accent button, at the right.
              The specimen is the panel's form with sample values; its comboboxes offer this Library's names and its
              calendars open, and its Search searches nothing. The listbox under it is a static one.</p>
           @* The panel's real form (htmx/search_panel) over sample names, inside the panel's class, which the rules of
              static/css/htmx/search_panel.css are scoped by. The wrapper takes the form's submit on its way down, so
-             Search searches nothing; Clear and the fields are live. The nav's own panel is empty while it is closed, so
-             the form's IDs are on the page once *@
+             Search searches nothing; Clear and the fields are live. Its IDs open with a prefix of its own, so the nav's
+             panel, which holds the same form while it is open, repeats none of them *@
           <div class="sg-row">
             <div class="search-panel" x-data x-on:submit.capture.prevent.stop>
               @htmx.html.search_panel(
@@ -743,7 +744,8 @@
                           NamedPath("styleGuideSintra", List("Sintra")))),
                   peopleMatch = PeopleMatch.All,
                   takenRange = Some(DateRange(Some(LocalDate.of(2024, 6, 8)), Some(LocalDate.of(2024, 6, 21)))),
-                  importedRange = None)
+                  importedRange = None,
+                  idPrefix = "styleGuideSearchPanel")
             </div>
             @* A combobox's listbox as its options fill it: a match marked, the active option, a path, the line of a full field *@
             <div class="search-panel">

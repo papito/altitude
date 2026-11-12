@@ -127,7 +127,8 @@ class TriageController(using logger: Logger) extends BaseController:
       folderId: Option[String],
       personId: Option[String],
       locationId: Option[String]): SearchRequestParser.Scope =
-    SearchRequestParser.parse(view, q = None, folderId, personId, albumId = None, locationId, bbox = None) match
+    val params = SearchRequestParser.Params(view = view, folderId = folderId, personId = personId, locationId = locationId)
+    SearchRequestParser.parse(params) match
       case Right(scope) => scope
       case Left(message) => throw IllegalStateException(message)
 

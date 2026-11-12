@@ -1,7 +1,11 @@
 package altitude.core.routes
 
 import java.time.LocalDate
+import java.time.chrono.IsoChronology
+import java.time.format.DateTimeFormatterBuilder
 import java.time.format.DateTimeParseException
+import java.time.format.ResolverStyle
+import java.time.temporal.ChronoField
 
 import altitude.core.Api
 import altitude.core.Const
@@ -37,20 +41,42 @@ import altitude.core.util.TriageSubset
  * (`importedFrom`, `importedTo`), each end an ISO date and either left out. `peopleMatch` says whether several people match `all`
  * of them, as they do when it is left out, or `any`. An ID that names nothing in the repository matches nothing. An advanced
  * search searches outside the trash, as text does: a date range, several people or several Locations with the trash view are
- * refused.
+ * refused. It searches by the panel's filters alone, so what only the panel combines (a date range, several people, several
+ * Locations, or more than one of the Search text, a folder, a person and a Location) is refused with an album or a subset.
  */
 object SearchRequestParser:
 
   /** The most people, and the most Locations, one search names */
   val MAX_IDS = 10
 
+  /**
+   * A search's own parameters as a request spells them, each under its name: what [[parse]] reads into a [[Scope]]. A route
+   * builds one from its query parameters, by name, and hands it on whole, so no two of them can change places on the way.
+   */
+  case class Params(
+      view: String = Const.Search.View.DEFAULT,
+      q: Option[String] = None,
+      folderId: Option[String] = None,
+      personId: Option[String] = None,
+      albumId: Option[String] = None,
+      locationId: Option[String] = None,
+      peopleMatch: Option[String] = None,
+      takenFrom: Option[String] = None,
+      takenTo: Option[String] = None,
+      importedFrom: Option[String] = None,
+      importedTo: Option[String] = None,
+      bbox: Option[String] = None,
+      triaged: Option[Boolean] = None,
+      subset: Option[String] = None)
+
+  /** A search's scope as read: the people and the Locations are in the order the request names them, each once */
   case class Scope(
       params: Map[String, Any],
       text: Option[String],
       folderIds: Set[String],
-      personIds: Set[String],
+      personIds: List[String],
       albumIds: Set[String],
-      locationIds: Set[String],
+      locationIds: List[String],
       bbox: Option[BoundingBox],
       subset: Option[TriageSubset],
       // How several people combine, all of them unless the request says any, and the Date Taken and Date Imported ranges
@@ -66,10 +92,10 @@ object SearchRequestParser:
         params = params,
         text = text,
         folderIds = folderIds,
-        personIds = personIds,
+        personIds = personIds.toSet,
         peopleMatch = peopleMatch,
         albumIds = albumIds,
-        locationIds = locationIds,
+        locationIds = locationIds.toSet,
         takenRange = takenRange,
         importedRange = importedRange,
         bbox = bbox,
@@ -80,21 +106,9 @@ object SearchRequestParser:
         cursor = cursor
       )
 
-  def parse(
-      view: String,
-      q: Option[String],
-      folderId: Option[String],
-      personId: Option[String],
-      albumId: Option[String],
-      locationId: Option[String],
-      bbox: Option[String],
-      triaged: Option[Boolean] = None,
-      subset: Option[String] = None,
-      peopleMatch: Option[String] = None,
-      takenFrom: Option[String] = None,
-      takenTo: Option[String] = None,
-      importedFrom: Option[String] = None,
-      importedTo: Option[String] = None): Either[String, Scope] =
+  def parse(request: Params): Either[String, Scope] =
+    val view = request.view
+    val triaged = request.triaged
     if view == Const.Search.View.TRIAGE && triaged.contains(false) then
       return Left(s"The ${Const.Search.View.TRIAGE} view holds only triaged assets")
 
@@ -108,47 +122,56 @@ object SearchRequestParser:
       case _ => Option.unless(triaged.contains(true))(FieldConst.Asset.IS_TRIAGED -> false)
     val params = viewParams ++ triageParam
 
-    val text = q.filter(SearchText.parse(_).isDefined)
+    val text = request.q.filter(SearchText.parse(_).isDefined)
     val isTrash = view == Const.Search.View.TRASHBIN
     if text.isDefined && isTrash then return Left("Search text does not search the trash")
 
-    val personIds = idsOf(personId)
-    val locationIds = idsOf(locationId)
+    val personIds = idsOf(request.personId)
+    val locationIds = idsOf(request.locationId)
     if personIds.size > MAX_IDS then return Left(s"A search names at most $MAX_IDS people")
     if locationIds.size > MAX_IDS then return Left(s"A search names at most $MAX_IDS Locations")
-    if isTrash && (personIds.size > 1 || locationIds.size > 1) then
-      return Left("Several people or Locations do not search the trash")
+    val names = personIds.size > 1 || locationIds.size > 1
+    if isTrash && names then return Left("Several people or Locations do not search the trash")
 
-    val matched = peopleMatch.map(PeopleMatch.fromApiValue) match
+    val matched = request.peopleMatch.map(PeopleMatch.fromApiValue) match
       case None => PeopleMatch.All
       case Some(None) => return Left(s"Unknown ${Api.Field.Search.PEOPLE_MATCH} value")
       case Some(Some(found)) => found
 
-    val takenRange = rangeOf(Api.Field.Search.TAKEN_FROM, takenFrom, Api.Field.Search.TAKEN_TO, takenTo) match
-      case Left(message) => return Left(message)
-      case Right(range) => range
-    val importedRange = rangeOf(Api.Field.Search.IMPORTED_FROM, importedFrom, Api.Field.Search.IMPORTED_TO, importedTo) match
-      case Left(message) => return Left(message)
-      case Right(range) => range
-    if isTrash && (takenRange.isDefined || importedRange.isDefined) then return Left("A date range does not search the trash")
+    val takenRange =
+      rangeOf(Api.Field.Search.TAKEN_FROM, request.takenFrom, Api.Field.Search.TAKEN_TO, request.takenTo) match
+        case Left(message) => return Left(message)
+        case Right(range) => range
+    val importedRange =
+      rangeOf(Api.Field.Search.IMPORTED_FROM, request.importedFrom, Api.Field.Search.IMPORTED_TO, request.importedTo) match
+        case Left(message) => return Left(message)
+        case Right(range) => range
+    val dates = takenRange.isDefined || importedRange.isDefined
+    if isTrash && dates then return Left("A date range does not search the trash")
 
     val box =
-      try bbox.map(BoundingBox.parse)
+      try request.bbox.map(BoundingBox.parse)
       catch case ex: IllegalArgumentException => return Left(s"Invalid bbox: ${ex.getMessage}")
 
-    val triageSubset = subset.map(TriageSubset.fromApiValue) match
+    val triageSubset = request.subset.map(TriageSubset.fromApiValue) match
       case None => None
       case Some(None) => return Left(s"Unknown ${Api.Field.Search.SUBSET} value")
       case Some(found) => found
+
+    // What only the advanced search panel combines, which replaces the album and the subset of the search before it. A folder
+    // counts whichever it is: the root is told apart where a repository is at hand (`SearchResultsController.isFiltered`)
+    val places = Seq(text.isDefined, request.folderId.isDefined, personIds.nonEmpty, locationIds.nonEmpty).count(identity)
+    if (dates || names || places > 1) && (request.albumId.isDefined || triageSubset.isDefined) then
+      return Left("A search by several filters takes no album and no subset")
 
     Right(
       Scope(
         params = params,
         text = text,
-        folderIds = folderId.toSet,
-        personIds = personIds.toSet,
-        albumIds = albumId.toSet,
-        locationIds = locationIds.toSet,
+        folderIds = request.folderId.toSet,
+        personIds = personIds,
+        albumIds = request.albumId.toSet,
+        locationIds = locationIds,
         bbox = box,
         subset = triageSubset,
         peopleMatch = matched,
@@ -156,13 +179,31 @@ object SearchRequestParser:
         importedRange = importedRange
       ))
 
-  /** The IDs a comma-separated parameter names, each once, in the order given; none for a parameter left out */
-  def idsOf(value: Option[String]): List[String] =
-    value.toList.flatMap(_.split(",", -1)).distinct
+  /**
+   * The IDs a comma-separated parameter names, each once, in the order given. An empty segment is no ID, so a parameter left out,
+   * an empty one and one of commas alone name nothing, as the browser's store reads them (`idsOf` in js/stores/search-params.js).
+   */
+  private def idsOf(value: Option[String]): List[String] =
+    value.toList.flatMap(_.split(",")).filter(_.nonEmpty).distinct
 
   /**
-   * The range of days two date parameters make, none when both are left out. A date that is not an ISO day, and a range whose
-   * first day is after its last, is the message of a 400 naming the parameters.
+   * A day as a search parameter spells it, `2024-06-01`: four digits of year, two of month and two of day, of a day the calendar
+   * has. `LocalDate.parse` would also read a longer, signed year (`+10000-01-01`), whose instants SQLite's text does not order
+   * with the others.
+   */
+  private val ISO_DAY = new DateTimeFormatterBuilder()
+    .appendValue(ChronoField.YEAR, 4)
+    .appendLiteral('-')
+    .appendValue(ChronoField.MONTH_OF_YEAR, 2)
+    .appendLiteral('-')
+    .appendValue(ChronoField.DAY_OF_MONTH, 2)
+    .toFormatter
+    .withChronology(IsoChronology.INSTANCE)
+    .withResolverStyle(ResolverStyle.STRICT)
+
+  /**
+   * The range of days two date parameters make, none when both are left out. A date that is not an ISO day ([[ISO_DAY]]), and a
+   * range whose first day is after its last, is the message of a 400 naming the parameters.
    */
   private def rangeOf(
       fromName: String,
@@ -170,7 +211,7 @@ object SearchRequestParser:
       toName: String,
       to: Option[String]): Either[String, Option[DateRange]] =
     def day(name: String, value: Option[String]): Either[String, Option[LocalDate]] =
-      try Right(value.map(LocalDate.parse))
+      try Right(value.map(LocalDate.parse(_, ISO_DAY)))
       catch case _: DateTimeParseException => Left(s"$name must be a date, as 2024-06-01")
 
     for

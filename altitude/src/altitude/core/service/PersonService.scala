@@ -21,7 +21,6 @@ import altitude.core.models.Person
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.NameKey
 import altitude.core.util.Query
-import altitude.core.util.QueryResult
 import altitude.core.util.SearchQuery
 import altitude.core.util.Util.newDuplicateExceptionOrRethrow
 
@@ -126,12 +125,9 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
    * marked as a bad match, of another repository's or of nobody has no entry
    */
   def getLive(personIds: Set[String]): List[Person] =
-    if personIds.isEmpty then return Nil
-
-    val live = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet[Any])))
-      .add(FieldConst.Person.IS_DELETED -> false)
-      .add(FieldConst.Person.IS_BAD_MATCH -> false)
-    query(live).records
+    txManager.asReadOnly {
+      peopleByIds(personIds, FieldConst.Person.IS_DELETED -> false, FieldConst.Person.IS_BAD_MATCH -> false)
+    }
 
   /**
    * Stores the Face as the person's in the asset, sets it as the cover when the person has none, and counts the asset toward
@@ -677,13 +673,10 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
   /** The people the faces belong to; to be called in the transaction the faces were read in */
   private def peopleOf(faces: List[Face]): List[Person] = peopleByIds(faces.map(_.personId.get).toSet)
 
-  /** The people of the IDs, in no order */
-  private def peopleByIds(personIds: Set[String]): List[Person] =
-    if personIds.isEmpty then List()
-    else
-      val q = new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet[Any])))
-      val qRes: QueryResult[Person] = dao.query(q)
-      qRes.records
+  /** The people of the IDs who meet every one of `conditions` (a column and its value), in no order */
+  private def peopleByIds(personIds: Set[String], conditions: (String, Any)*): List[Person] =
+    if personIds.isEmpty then Nil
+    else dao.query(new Query(params = Map(FieldConst.ID -> Query.IN(personIds.toSet[Any]))).add(conditions*)).records
 
   /**
    * Makes the Face the Person's cover, and answers the Person as they are after. Under the Person's lock, so a purge moving
@@ -795,12 +788,34 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
   def getListedInBuckets(buckets: Set[String], showTriaged: Boolean): ListedPeople =
     txManager.asReadOnly {
       val people = dao.getInBuckets(buckets)
-      val triagedCounts = if showTriaged then Map.empty[String, Int] else dao.getTriagedAssetCounts
-      val listed = people
-        .map(person => ListedPerson(person, person.numOfFaces - triagedCounts.getOrElse(person.persistedId, 0)))
-        .filter(_.visibleCount > 0)
+      val listed = listedOf(people, showTriaged)
       ListedPeople(listed, leftOffByTriage = people.nonEmpty && listed.isEmpty)
     }
+
+  /**
+   * The people a Search text finds by name (`SearchQueries.searchablePeople`: named, and neither hidden, merged away nor a bad
+   * match), in no order, each with the count the People tab shows for them ([[getListedInBuckets]]), read in one snapshot. A
+   * Person with nothing left to find is left off, as the tab leaves them off: the advanced search panel offers these.
+   */
+  def getListedSearchable(showTriaged: Boolean): List[ListedPerson] =
+    txManager.asReadOnly {
+      val searchable = new Query().add(
+        FieldConst.Person.IS_NAMED -> true,
+        FieldConst.Person.IS_HIDDEN -> false,
+        FieldConst.Person.IS_DELETED -> false,
+        FieldConst.Person.IS_BAD_MATCH -> false)
+      listedOf(dao.query(searchable).records, showTriaged)
+    }
+
+  /**
+   * The people, in their order, each with the number of assets opening them from the repository view finds: `numOfFaces`, less
+   * the Person's triaged assets when triaged items are hidden. Those with nothing to find are left off.
+   */
+  private def listedOf(people: List[Person], showTriaged: Boolean): List[ListedPerson] =
+    val triagedCounts = if showTriaged then Map.empty[String, Int] else dao.getTriagedAssetCounts
+    people
+      .map(person => ListedPerson(person, person.numOfFaces - triagedCounts.getOrElse(person.persistedId, 0)))
+      .filter(_.visibleCount > 0)
 
   /**
    * The bucket names of a comma-separated list, trimmed, empties dropped and nothing validated: `getInBuckets` refuses an unknown

@@ -257,7 +257,7 @@
     backdrop-filter: var(--popover-backdrop-filter);
     box-shadow: var(--sheen-shadow), var(--float-shadow);
     font-size: var(--font-size-small);
-    max-height: var(--face-listbox-max-height);
+    max-height: var(--listbox-max-height);
     overflow-y: auto;
 }
 

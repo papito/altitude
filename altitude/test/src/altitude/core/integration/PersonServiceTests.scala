@@ -1480,7 +1480,7 @@ import altitude.core.util.Util
   /** What opening the Person from the repository view finds with triaged items hidden: the search `SearchRequestParser` builds */
   private def foundInRepositoryView(person: Person): Int = {
     val scope = SearchRequestParser
-      .parse(Const.Search.View.DEFAULT, None, None, Some(person.persistedId), None, None, None)
+      .parse(SearchRequestParser.Params(personId = Some(person.persistedId)))
       .getOrElse(fail("The repository view of a Person is a valid scope"))
     testApp.service.library.count(scope.query())
   }

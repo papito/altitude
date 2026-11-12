@@ -193,35 +193,40 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     logger.trace(s"Map bounds over $count points")
     Option.when(count > 0)(MapBounds(south = south.get, west = west.get, north = north.get, east = east.get, count = count))
 
-  override def searchNames: Map[SearchSource, Seq[SearchName]] =
+  override def searchNames(sources: Set[SearchSource]): Map[SearchSource, Seq[SearchName]] =
     import dialect.*
 
     val repository = RequestContext.getRepository
     val repositoryId = repository.persistedId
 
-    val people = SearchQueries.searchablePeople(searchDialect, repositoryId)
-    val locations = LocationRow.select
-      .filter(location => location.repositoryId `=` repositoryId)
-      .map(location => (location.id, location.name, location.kind, location.categoryId))
-    val folders = FolderRow.select
-      .filter {
-        folder =>
-          (folder.repositoryId `=` repositoryId) && (folder.isRecycled `=` false) && (folder.id <> repository.rootFolderId)
-      }
-      .map(folder => (folder.id, folder.name, folder.parentId))
-    val albums = AlbumRow.select.filter(album => album.repositoryId `=` repositoryId).map(album => (album.id, album.name))
-
-    // Categories and Locations are one table, told apart by kind
-    val (categoryRows, locationRows) =
+    // Categories and Locations are one table, told apart by kind: one read gives both, and either
+    lazy val (categoryRows, locationRows) =
+      val locations = LocationRow.select
+        .filter(location => location.repositoryId `=` repositoryId)
+        .map(location => (location.id, location.name, location.kind, location.categoryId))
       Db.read(dialect)(_.run(locations)).partition((_, _, kind, _) => kind == LocationKind.Category.dbValue)
 
-    val names = Map(
-      SearchSource.Person -> Db.read(dialect)(_.run(people)).map((id, name) => SearchName(id, name)),
-      SearchSource.Location -> locationRows.map((id, name, _, categoryId) => SearchName(id, name, categoryId)),
-      SearchSource.Category -> categoryRows.map((id, name, _, _) => SearchName(id, name)),
-      SearchSource.Folder -> Db.read(dialect)(_.run(folders)).map((id, name, parentId) => SearchName(id, name, Some(parentId))),
-      SearchSource.Album -> Db.read(dialect)(_.run(albums)).map((id, name) => SearchName(id, name))
-    )
+    def candidates(source: SearchSource): Seq[SearchName] = source match
+      case SearchSource.Person =>
+        val people = SearchQueries.searchablePeople(searchDialect, repositoryId)
+        Db.read(dialect)(_.run(people)).map((id, name) => SearchName(id, name))
+      case SearchSource.Location => locationRows.map((id, name, _, categoryId) => SearchName(id, name, categoryId))
+      case SearchSource.Category => categoryRows.map((id, name, _, _) => SearchName(id, name))
+      case SearchSource.Folder =>
+        val folders = FolderRow.select
+          .filter {
+            folder =>
+              (folder.repositoryId `=` repositoryId) && (folder.isRecycled `=` false) && (folder.id <> repository.rootFolderId)
+          }
+          .map(folder => (folder.id, folder.name, folder.parentId))
+        Db.read(dialect)(_.run(folders)).map((id, name, parentId) => SearchName(id, name, Some(parentId)))
+      case SearchSource.Album =>
+        val albums = AlbumRow.select.filter(album => album.repositoryId `=` repositoryId).map(album => (album.id, album.name))
+        Db.read(dialect)(_.run(albums)).map((id, name) => SearchName(id, name))
+      case SearchSource.Document => throw IllegalArgumentException("The Search document is no name source")
+
+    // In the sources' own order, so one set of sources is one sequence of reads
+    val names = SearchSource.values.filter(sources.contains).map(source => source -> candidates(source)).toMap
     logger.trace(s"Search name candidates: ${names.map((source, candidates) => s"$source=${candidates.size}").mkString(", ")}")
     names
 

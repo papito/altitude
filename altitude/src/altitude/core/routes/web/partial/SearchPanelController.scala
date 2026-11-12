@@ -8,6 +8,7 @@ import altitude.core.App
 import altitude.core.Const
 import altitude.core.routes.BaseController
 import altitude.core.routes.SearchRequestParser
+import altitude.core.routes.decorators.refusedView
 import altitude.core.routes.decorators.requireLogin
 
 /**
@@ -27,11 +28,19 @@ class SearchPanelController(using logger: Logger) extends BaseController:
   def folderOptions(repoId: String, q: String = "")(using request: Request): Response[String] =
     htmlResponse(htmx.html.search_options_folders(App.altitude.service.search.folderOptions(q)))
 
-  /** The people a Search text finds by name, with their cover and number of assets, by name */
+  /**
+   * The people a Search text finds by name, with their cover and the number of assets a search of them finds, by name: only
+   * `triaged=true` counts their triaged assets, the repository view's rule (`SearchRequestParser`), which a Guest, who sees
+   * Browse alone, is refused with a 403 (`refusedView`); a Person with nothing to find is no option
+   */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/options/people")
-  def peopleOptions(repoId: String, q: String = "")(using request: Request): Response[String] =
-    htmlResponse(htmx.html.search_options_people(App.altitude.service.search.peopleOptions(q)))
+  def peopleOptions(repoId: String, q: String = "", triaged: Option[Boolean] = None)(using request: Request): Response[String] =
+    refusedView(Const.Search.View.DEFAULT, triaged) match
+      case Some(refusal) => return refusal
+      case None =>
+    htmlResponse(
+      htmx.html.search_options_people(App.altitude.service.search.peopleOptions(q, showTriaged = triaged.contains(true))))
 
   /** The Locations, each with its Category before its name, by name; a Category is no option */
   @requireLogin()
@@ -41,8 +50,10 @@ class SearchPanelController(using logger: Logger) extends BaseController:
 
   /**
    * The panel's form filled in from a search's parameters, which the client sends verbatim: the text as typed, the folder, the
-   * people and the Locations as chips named on the server, the people match and the two date ranges. The parameters that are no
-   * filter of the panel (the view, the sort, the layout, paging) are accepted and ignored (`cask.QueryParams`).
+   * people and the Locations as chips named on the server, the people match and the two date ranges. `triaged` is the search's
+   * triage filter, which the form hands to its People options, so they count what the search will find; with `triaged=true` a
+   * Guest is refused as a search is (`refusedView`). The parameters that are no filter of the panel (the view, the sort, the
+   * layout, paging) are accepted and ignored (`cask.QueryParams`).
    *
    * The parameters are read as a search of the repository view reads them (`SearchRequestParser`), so what a search refuses is a
    * plain-text 400 here too. An ID that names nothing in the repository, one that no longer exists or another repository's, is
@@ -61,35 +72,35 @@ class SearchPanelController(using logger: Logger) extends BaseController:
       takenTo: Option[String] = None,
       importedFrom: Option[String] = None,
       importedTo: Option[String] = None,
+      triaged: Option[Boolean] = None,
       params: cask.QueryParams /* allow unknown params */ )(using request: Request): Response[String] =
+    refusedView(Const.Search.View.DEFAULT, triaged) match
+      case Some(refusal) => return refusal
+      case None =>
     val parsed = SearchRequestParser.parse(
-      view = Const.Search.View.DEFAULT,
-      q = q,
-      folderId = folderId,
-      personId = personId,
-      albumId = None,
-      locationId = locationId,
-      bbox = None,
-      peopleMatch = peopleMatch,
-      takenFrom = takenFrom,
-      takenTo = takenTo,
-      importedFrom = importedFrom,
-      importedTo = importedTo
-    )
+      SearchRequestParser.Params(
+        q = q,
+        folderId = folderId,
+        personId = personId,
+        locationId = locationId,
+        peopleMatch = peopleMatch,
+        takenFrom = takenFrom,
+        takenTo = takenTo,
+        importedFrom = importedFrom,
+        importedTo = importedTo
+      ))
     val scope = parsed match
       case Left(message) => return textError(message, 400)
       case Right(scope) => scope
 
-    // The chips keep the order the IDs were given in, which the scope's sets do not
-    val names = App.altitude.service.search
-      .filterNames(folderId, SearchRequestParser.idsOf(personId), SearchRequestParser.idsOf(locationId))
-
     htmlResponse(
       htmx.html.search_panel(
         text = q.getOrElse(""),
-        names = names,
+        names = App.altitude.service.search.filterNames(scope.folderIds.headOption, scope.personIds, scope.locationIds),
         peopleMatch = scope.peopleMatch,
         takenRange = scope.takenRange,
-        importedRange = scope.importedRange))
+        importedRange = scope.importedRange,
+        showTriaged = triaged.contains(true)
+      ))
 
   initialize()

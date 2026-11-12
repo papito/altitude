@@ -11,6 +11,11 @@ enum SearchSource(val relevance: Int):
   /** The asset's own Search document: its file name and user metadata values */
   case Document extends SearchSource(1)
 
+object SearchSource:
+
+  /** The sources that are names of the repository, read and matched before a search runs: every one but the Search document */
+  val names: Set[SearchSource] = values.toSet - Document
+
 /** A candidate of a name source: `parentId` is a folder's parent, or the Category of a Location that has one */
 case class SearchName(id: String, name: String, parentId: Option[String] = None)
 

@@ -5,20 +5,22 @@
  * field appears (`loadFlatpickr`): both ends are picked on it with the span highlighted, the arrow
  * keys move through its days from the field (Down enters it) and Enter picks one.
  *
- * The component root is the field (`.field[data-date-range]`). It holds the range as two ISO days,
- * `from` and `to`, whole days with both ends inclusive, which are the values of the field's two
- * hidden inputs, the search parameters; the input the user sees is read-only and shows the range as
- * `8 Jun – 21 Jun 2024` (`rangeLabel`). One day picked alone is that single day, sent as both
- * ends: closing the calendar after one pick completes the range with the same day, where Flatpickr
- * alone would drop the pick. The × (`clear`) and `search-panel-clear`, which the panel's Clear
- * dispatches on every field, empty the range.
+ * The component root is the field (`.field` with `x-data="dateRange"`). It holds the range as two
+ * ISO days, `from` and `to`, whole days with both ends inclusive, which are the values of the
+ * field's two hidden inputs, the search parameters; the input the user sees is read-only and shows
+ * the range as `8 Jun – 21 Jun 2024` (`rangeLabel`), which is its tooltip too. One day picked alone
+ * is that single day, sent as both ends: closing the calendar after one pick completes the range
+ * with the same day, where Flatpickr alone would drop the pick. The × (`clearFromButton`) and
+ * `search-panel-clear`, which the panel's Clear dispatches on every field, empty the range.
  *
  * The calendar is appended to the field (`appendTo`), so it is inside the panel that holds the
  * field: appended to `body` it would be drawn beneath the panel, which is in the top layer, and a
  * click on it would light-dismiss the panel. It is a manual popover of its own, shown and hidden
  * with Flatpickr's open state, so it is in the top layer too, over the panel's edge, and CSS anchor
  * positioning places it under the field's box (`htmx/search_panel.css`); Flatpickr's own placement
- * is switched off (`position`). Escape with the calendar open closes the calendar alone and is
+ * is switched off (`position`). To a screen reader it is a dialog named after the field ("Date Taken
+ * calendar"), which the input says it opens (`aria-haspopup`) and whether it is open
+ * (`aria-expanded`, `open`). Escape with the calendar open closes the calendar alone and is
  * consumed, so the panel stays; Enter in the field opens the calendar and never submits the panel.
  */
 import { showErrorSnackBar } from "../../common/snackbar.js"
@@ -30,16 +32,28 @@ const MONTHS_SHOWN = 2
 // The days as the server reads them, Flatpickr's format for an ISO day
 const ISO_DAY = "Y-m-d"
 
-const DAY_AND_MONTH = new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-})
+// A month as a range's label names it, its first three letters in English: the server's table too (`DateRange.label`,
+// `Util.humanReadableShortDate`), so the field and a filtered search's chip read one range alike in every browser
+const MONTHS = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+]
 
 /** "8 Jun" for the ISO day, with its year when asked */
 function dayLabel(isoDay, withYear) {
-    const label = DAY_AND_MONTH.format(new Date(`${isoDay}T00:00:00Z`))
-    return withYear ? `${label} ${isoDay.slice(0, 4)}` : label
+    const [year, month, day] = isoDay.split("-")
+    const label = `${Number(day)} ${MONTHS[Number(month) - 1]}`
+    return withYear ? `${label} ${year}` : label
 }
 
 /**
@@ -48,7 +62,7 @@ function dayLabel(isoDay, withYear) {
  * A range with one end open, which a search's URL can hold though the calendar picks none, reads
  * `from 8 Jun 2024` or `until 21 Jun 2024`.
  */
-export function rangeLabel(from, to) {
+function rangeLabel(from, to) {
     if (!from && !to) {
         return ""
     }
@@ -86,10 +100,17 @@ export function dateRange() {
         // The first and the last day of the range, ISO days; both empty for no range
         from: "",
         to: "",
+        // The calendar is open: the input's `aria-expanded`
+        open: false,
 
         /** The field holds a range, which its × clears */
         get hasRange() {
             return Boolean(this.from || this.to)
+        },
+
+        /** The range as the field shows it, its tooltip too, for a range wider than the field */
+        get label() {
+            return rangeLabel(this.from, this.to)
         },
 
         async init() {
@@ -108,7 +129,11 @@ export function dateRange() {
                 return
             }
 
-            picker = flatpickr(this.$refs.input, {
+            // Flatpickr reads the days to mark from the input's text when it is given none, and would read some day out of
+            // the label: the input is empty while the calendar is made
+            const inputEl = this.$refs.input
+            inputEl.value = ""
+            picker = flatpickr(inputEl, {
                 mode: "range",
                 dateFormat: ISO_DAY,
                 showMonths: MONTHS_SHOWN,
@@ -124,9 +149,15 @@ export function dateRange() {
                 onValueUpdate: (days) => this.onPicked(days),
             })
 
-            // In the top layer, over the panel's edge; and nothing in it is Alpine's to walk
-            picker.calendarContainer.popover = "manual"
-            picker.calendarContainer.setAttribute("x-ignore", "")
+            // In the top layer, over the panel's edge; a dialog named after the field; and nothing in it is Alpine's to walk
+            const calendarEl = picker.calendarContainer
+            calendarEl.popover = "manual"
+            calendarEl.setAttribute("role", "dialog")
+            calendarEl.setAttribute(
+                "aria-label",
+                `${inputEl.labels[0].textContent} calendar`,
+            )
+            calendarEl.setAttribute("x-ignore", "")
             this.showLabel()
         },
 
@@ -146,7 +177,7 @@ export function dateRange() {
 
         /** Flatpickr writes its own text into the field on every pick; the field shows the range's label instead */
         showLabel() {
-            this.$refs.input.value = rangeLabel(this.from, this.to)
+            this.$refs.input.value = this.label
         },
 
         /** A pick on the calendar: one day is the range of that day, two are its ends */
@@ -160,6 +191,7 @@ export function dateRange() {
             if (!calendarEl.matches(":popover-open")) {
                 calendarEl.showPopover()
             }
+            this.open = true
         },
 
         /**
@@ -176,6 +208,7 @@ export function dateRange() {
             if (calendarEl.matches(":popover-open")) {
                 calendarEl.hidePopover()
             }
+            this.open = false
         },
 
         /**
@@ -190,16 +223,26 @@ export function dateRange() {
 
             event.preventDefault()
             event.stopPropagation()
-            // Focus first, as Flatpickr does: the field's focus opens a closed calendar
-            this.$refs.input.focus()
-            picker.close()
+            this.focusField()
         },
 
-        /** The × and the panel's Clear: no range */
+        /** Focus in the field with the calendar closed: the field's focus opens a closed calendar, which is closed again at once */
+        focusField() {
+            this.$refs.input.focus()
+            picker?.close()
+        },
+
+        /** The panel's Clear: no range, the calendar closed */
         clear() {
             picker?.clear(false)
             picker?.close()
             this.setRange("", "")
+        },
+
+        /** The ×: no range, and focus in the field, since the × goes with the range it cleared */
+        clearFromButton() {
+            this.clear()
+            this.focusField()
         },
     }
 }

@@ -4,6 +4,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import scalasql.Sc
 import scalasql.Table
 import scalasql.core.Context
@@ -1283,15 +1284,26 @@ object SearchQueries:
    * is compared as the column stores it, with no day expression around it, so a range is a seek in `asset_search_created`; the
    * dialect binds each instant the way its engine stores one (a `timestamptz` on PostgreSQL, the UTC wall clock as text on
    * SQLite, which orders as the instants do). A legacy SQLite row with no import time is in no range.
+   *
+   * A range that ends on the last day of year 9999 is open at that end: the day after begins, by UTC, in a year of five digits,
+   * which SQLite's text writes with a sign and so orders before every other, and no import is that late. With no first day
+   * either, it holds every asset with an import time.
    */
   private def importedFilter(engine: SearchDialect, asset: AssetRow[Expr], range: DateRange, zone: ZoneId): Expr[Boolean] =
     import engine.dialect.*
 
     def startOf(day: LocalDate): OffsetDateTime = day.atStartOfDay(zone).toOffsetDateTime
     val fromFirst = range.from.map(first => Expr[Boolean](implicit ctx => sql"${asset.createdAt} >= ${startOf(first)}"))
-    val beforeNext = range.to.map(last => Expr[Boolean](implicit ctx => sql"${asset.createdAt} < ${startOf(last.plusDays(1))}"))
+    val beforeNext = range.to
+      .map(last => startOf(last.plusDays(1)))
+      .filter(_.withOffsetSameInstant(ZoneOffset.UTC).getYear <= MAX_STORED_YEAR)
+      .map(next => Expr[Boolean](implicit ctx => sql"${asset.createdAt} < $next"))
 
-    withinBoth(engine, fromFirst, beforeNext)
+    if fromFirst.isEmpty && beforeNext.isEmpty then Expr[Boolean](implicit ctx => sql"${asset.createdAt} IS NOT NULL")
+    else withinBoth(engine, fromFirst, beforeNext)
+
+  // The last year an instant is stored in on both engines in one form: four digits
+  private val MAX_STORED_YEAR = 9999
 
   /** The bounds of a date range AND-ed: both, or the one it has, a range having at least one end ([[DateRange]]) */
   private def withinBoth(engine: SearchDialect, lower: Option[Expr[Boolean]], upper: Option[Expr[Boolean]]): Expr[Boolean] =

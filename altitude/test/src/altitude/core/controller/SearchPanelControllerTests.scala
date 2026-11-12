@@ -8,7 +8,9 @@ import org.scalatest.matchers.should.Matchers.*
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.FieldConst
 import altitude.core.models.Person
+import altitude.core.models.Repository
 import altitude.core.util.Util
 
 /** The advanced search panel's routes: the options its comboboxes are offered, and its form filled in from a search */
@@ -17,8 +19,8 @@ import altitude.core.util.Util
   private val fields = Api.Field.Search
 
   /**
-   * What a fragment says of an option, or of a chosen one in the panel's form: the ID, the label a chip shows and the cover's URL
-   * its element carries, whether the element is a listbox option, and the text it shows
+   * What a fragment says of an option, or of a chosen one in the panel's form: the ID and the label a chip shows, which its
+   * element carries, the URL of the cover Face it shows, whether the element is a listbox option, and the text it shows
    */
   private case class Carried(id: String, label: String, coverUrl: Option[String], isOption: Boolean, text: String)
 
@@ -31,7 +33,7 @@ import altitude.core.util.Util
         Carried(
           id = attribute("data-option-id").get,
           label = attribute("data-option-label").get,
-          coverUrl = attribute("data-option-cover-url"),
+          coverUrl = """<img\b[^>]*\bclass="cover"[^>]*\bsrc="([^"]*)"""".r.findFirstMatchIn(element).map(_.group(1)),
           isOption = attribute("role").contains("option"),
           text = element.replaceAll("<[^>]*>", " ").replaceAll("\\s+", " ").trim
         )
@@ -134,19 +136,20 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A logged-in user's repository with the named people Alice Anders, on two assets, Alan Bo and Bob Alto, with no Face, and
-     * Carol; and four people a search does not name: one with no name, the hidden "Alina Hidden", "Alba Bad" marked as a bad
-     * match, and "Alma Merged" merged into Carol.
+     * A logged-in user's repository with the named people Alice Anders, on two assets, and Alan Bo, Bob Alto and Carol, on one of
+     * them; and five people a search does not offer: one with no name, the hidden "Alina Hidden", "Alba Bad" marked as a bad
+     * match, "Alma Merged" merged into Carol, and "Alto Noface", named, with no Face on any asset.
      *
      * Assertions:
      *
-     * With nothing typed, the options are the four named, visible, live people by name, each carrying their ID and name; Alice's
-     * carries the URL of her cover Face and shows her two assets, and one with no Face carries no cover. "al" offers the three
-     * with a word of their name starting with it.
+     * With nothing typed, the options are the four named, visible, live people by name, each carrying their ID and name and
+     * showing their cover Face; Alice's shows hers and her two assets, Alan's his one asset. "al" offers the three with a word of
+     * their name starting with it.
      *
      * Edge cases:
      *
-     * The person with no name, the hidden one, the bad match and the one merged away are never options, typed or not.
+     * The person with no name, the hidden one, the bad match, the one merged away and the one a search finds nothing for are
+     * never options, typed or not. No option carries its cover's URL as an attribute: a new chip copies the cover it shows.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -155,19 +158,23 @@ import altitude.core.util.Util
     withServer(App) {
       host =>
         val people = testApp.service.person
-        val alice = people.addPerson(Person(name = Some("Alice Anders")))
+        val shared = testContext.persistAsset()
+        def onShared(person: Person): Person = {
+          testContext.addTestFace(person, shared, TestContext.unitVector(1))
+          person
+        }
+        val alice = onShared(people.addPerson(Person(name = Some("Alice Anders"))))
         testContext.addTestFace(alice, testContext.persistAsset(), TestContext.unitVector(1))
-        testContext.addTestFace(alice, testContext.persistAsset(), TestContext.unitVector(1))
-        val alan = people.addPerson(Person(name = Some("Alan Bo")))
-        val bob = people.addPerson(Person(name = Some("Bob Alto")))
-        val carol = people.addPerson(Person(name = Some("Carol")))
-        val unnamed = people.addPerson(Person())
-        testContext.addTestFace(unnamed, testContext.persistAsset(), TestContext.unitVector(2))
-        val hidden = people.setVisibility(people.addPerson(Person(name = Some("Alina Hidden"))), isHidden = true)
-        val badMatch = people.markAsBadMatch(people.addPerson(Person(name = Some("Alba Bad"))))
+        val alan = onShared(people.addPerson(Person(name = Some("Alan Bo"))))
+        val bob = onShared(people.addPerson(Person(name = Some("Bob Alto"))))
+        val carol = onShared(people.addPerson(Person(name = Some("Carol"))))
+        val unnamed = onShared(people.addPerson(Person()))
+        val hidden = people.setVisibility(onShared(people.addPerson(Person(name = Some("Alina Hidden")))), isHidden = true)
+        val badMatch = people.markAsBadMatch(onShared(people.addPerson(Person(name = Some("Alba Bad")))))
         val merged = people.addPerson(Person(name = Some("Alma Merged")))
         people.merge(dest = carol, source = merged)
-        val leftOut = List(unnamed, hidden, badMatch, merged).map(_.persistedId)
+        val noFace = people.addPerson(Person(name = Some("Alto Noface")))
+        val leftOut = List(unnamed, hidden, badMatch, merged, noFace).map(_.persistedId)
 
         val all = options(host, repoId, "people")
         all.map(_.label) shouldBe List("Alan Bo", "Alice Anders", "Bob Alto", "Carol")
@@ -179,15 +186,80 @@ import altitude.core.util.Util
         aliceOption.text should include("Alice Anders")
         aliceOption.text should include("2 assets")
         val alanOption = all.find(_.id == alan.persistedId).get
-        alanOption.coverUrl shouldBe None
-        alanOption.text should include("0 assets")
+        alanOption.coverUrl shouldBe defined
+        alanOption.text should include("1 asset")
+        (alanOption.text should not).include("1 assets")
+        (get(host, repoId, "options/people").text() should not).include("data-option-cover-url")
 
         val typed = options(host, repoId, "people", Some("al"))
         typed.map(_.id) shouldBe List(alan, alice, bob).map(_.persistedId)
 
-        for (name <- List("unknown", "alina", "alba", "alma")) withClue(s"$name: ") {
+        for (name <- List("unknown", "alina", "alba", "alma", "alto")) withClue(s"$name: ") {
           options(host, repoId, "people", Some(name)).map(_.id).intersect(leftOut) shouldBe empty
         }
+    }
+  }
+
+  test("A People option shows the number of assets a search of the Person finds, with triaged items hidden or shown") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the named people Alice, on two sorted and three triaged assets, Bella, on two triaged
+     * assets alone, and Cara, on one sorted asset with her count raised to 1,840.
+     *
+     * Assertions:
+     *
+     * With no `triaged` parameter Alice's option shows 2 assets, what the search finds, and Bella, whose search finds nothing, is
+     * no option, as the People tab lists neither more for Alice nor Bella at all. With `triaged=true` Alice shows 5 assets and
+     * Bella is offered with 2. Cara's count is grouped, "1,840". The panel's form asked for with `triaged=true` gives its People
+     * field the options route with it, and without it the route alone.
+     *
+     * Edge cases:
+     *
+     * Only `true` shows triaged items: `triaged=false` reads as the default does. A value that is no boolean is a 400.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val people = testApp.service.person
+        val alice = people.addPerson(Person(name = Some("Alice")))
+        testContext.addTestFacesAndAssets(alice, assetCount = 2)
+        testContext.addTestFacesAndAssets(alice, assetCount = 3, isTriaged = true)
+        val bella = people.addPerson(Person(name = Some("Bella")))
+        testContext.addTestFacesAndAssets(bella, assetCount = 2, isTriaged = true)
+        val cara = people.addPerson(Person(name = Some("Cara")))
+        testContext.addTestFacesAndAssets(cara)
+        people.increment(cara.persistedId, FieldConst.Person.NUM_OF_FACES, 1839)
+
+        def peopleOptions(params: Map[String, String]): Map[String, String] = {
+          val response = get(host, repoId, "options/people", params)
+          response.statusCode shouldBe 200
+          carriedIn(response.text()).map(option => option.label -> option.text).toMap
+        }
+
+        for (params <- List(Map.empty[String, String], Map("triaged" -> "false"))) withClue(s"$params: ") {
+          val hidden = peopleOptions(params)
+          hidden.keySet shouldBe Set("Alice", "Cara")
+          hidden("Alice") should include("2 assets")
+          hidden("Cara") should include("1,840 assets")
+        }
+
+        val shown = peopleOptions(Map("triaged" -> "true"))
+        shown.keySet shouldBe Set("Alice", "Bella", "Cara")
+        shown("Alice") should include("5 assets")
+        shown("Bella") should include("2 assets")
+        peopleOptions(Map("triaged" -> "true", fields.QUERY_TEXT -> "bel")).keySet shouldBe Set("Bella")
+        peopleOptions(Map(fields.QUERY_TEXT -> "bel")) shouldBe empty
+
+        get(host, repoId, "options/people", Map("triaged" -> "maybe")).statusCode shouldBe 400
+
+        val route = s"""data-options-url="/htmx/search/r/$repoId/options/people"""
+        get(host, repoId, "panel", Map("triaged" -> "true")).text() should include(route + """?triaged=true"""")
+        get(host, repoId, "panel").text() should include(route + '"')
     }
   }
 
@@ -239,7 +311,8 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * A logged-in user's repository with 55 folders, 55 named people and 55 Locations, each named with its number, 01 to 55.
+     * A logged-in user's repository with 55 folders, 55 named people, each with a Face on its one asset, and 55 Locations, each
+     * named with its number, 01 to 55.
      *
      * Assertions:
      *
@@ -256,9 +329,11 @@ import altitude.core.util.Util
     withServer(App) {
       host =>
         val numbers = (1 to 55).map(number => f"$number%02d").toList
+        val asset = testContext.persistAsset()
         for (number <- numbers) {
           testApp.service.folder.add(s"Folder $number")
-          testApp.service.person.addPerson(Person(name = Some(s"Person $number")))
+          val person = testApp.service.person.addPerson(Person(name = Some(s"Person $number")))
+          testContext.addTestFace(person, asset, TestContext.unitVector(1))
           testApp.service.location.addLocation(s"Location $number", 1, 2)
         }
 
@@ -278,7 +353,8 @@ import altitude.core.util.Util
      * Setup:
      *
      * A logged-in user with two repositories. The first has the folder "Mine", the person "Mine Too" and the Location "Mine
-     * Also"; the second a folder, a person and a Location each named "Theirs", and a folder whose name is HTML markup.
+     * Also"; the second a folder, a person and a Location each named "Theirs", and a folder whose name is HTML markup. Each
+     * person has a Face on an asset of their repository.
      *
      * Assertions:
      *
@@ -294,8 +370,12 @@ import altitude.core.util.Util
 
     withServer(App) {
       host =>
+        def addPersonWithFace(name: String, library: Repository): Unit = {
+          val person = testApp.service.person.addPerson(Person(name = Some(name)))
+          testContext.addTestFace(person, testContext.persistAsset(repository = Some(library)), TestContext.unitVector(1))
+        }
         testApp.service.folder.add("Mine")
-        testApp.service.person.addPerson(Person(name = Some("Mine Too")))
+        addPersonWithFace("Mine Too", mine)
         testApp.service.location.addLocation("Mine Also", 1, 2)
 
         val theirs = addLibrary("Second library", testContext.user)
@@ -303,7 +383,7 @@ import altitude.core.util.Util
         testApp.service.repository.switchContextToRepository(theirs)
         testApp.service.folder.add("Theirs")
         testApp.service.folder.add("<b>Theirs & co</b>")
-        testApp.service.person.addPerson(Person(name = Some("Theirs")))
+        addPersonWithFace("Theirs", theirs)
         testApp.service.location.addLocation("Theirs", 1, 2)
         testApp.service.repository.switchContextToRepository(mine)
 
@@ -338,7 +418,7 @@ import altitude.core.util.Util
      *
      * The panel asked for with a search's parameters is a form whose inputs hold them under their parameter names: the text, the
      * folder, the people and the Locations as given, comma-separated, the people match and the four dates. The folder is a chip
-     * labelled by its path, each person a chip with their name, Alice's with her cover's URL, and each Location a chip labelled
+     * labelled by its path, each person a chip with their name, Alice's showing her cover Face, and each Location a chip labelled
      * with its Category, the chips of a field in the order its IDs were given in.
      *
      * Edge cases:

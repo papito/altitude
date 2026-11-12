@@ -10,5 +10,5 @@
     id="searchOption-@{option.id}"
     data-option-id="@{option.id}"
     data-option-label="@{option.label}">
-    <span class="name">@if(option.ancestors.nonEmpty) {<span class="ancestors">@{option.ancestors.mkString(NamedPath.SEPARATOR)}@{NamedPath.SEPARATOR}</span>}@{option.name}</span>
+    <span class="name" data-option-name>@if(option.ancestors.nonEmpty) {<span class="ancestors">@{option.ancestors.mkString(NamedPath.SEPARATOR)}@{NamedPath.SEPARATOR}</span>}@{option.name}</span>
 </li>

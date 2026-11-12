@@ -23,21 +23,22 @@ import altitude.core.util.PeopleMatch
   private def parse(view: String, params: (String, String)*): Either[String, Scope] = {
     val values = params.toMap
     SearchRequestParser.parse(
-      view = view,
-      q = values.get(fields.QUERY_TEXT),
-      folderId = values.get(fields.FOLDER_ID),
-      personId = values.get(fields.PERSON_ID),
-      albumId = values.get(fields.ALBUM_ID),
-      locationId = values.get(fields.LOCATION_ID),
-      bbox = values.get(fields.BBOX),
-      triaged = values.get(fields.TRIAGED).map(_.toBoolean),
-      subset = values.get(fields.SUBSET),
-      peopleMatch = values.get(fields.PEOPLE_MATCH),
-      takenFrom = values.get(fields.TAKEN_FROM),
-      takenTo = values.get(fields.TAKEN_TO),
-      importedFrom = values.get(fields.IMPORTED_FROM),
-      importedTo = values.get(fields.IMPORTED_TO)
-    )
+      SearchRequestParser.Params(
+        view = view,
+        q = values.get(fields.QUERY_TEXT),
+        folderId = values.get(fields.FOLDER_ID),
+        personId = values.get(fields.PERSON_ID),
+        albumId = values.get(fields.ALBUM_ID),
+        locationId = values.get(fields.LOCATION_ID),
+        peopleMatch = values.get(fields.PEOPLE_MATCH),
+        takenFrom = values.get(fields.TAKEN_FROM),
+        takenTo = values.get(fields.TAKEN_TO),
+        importedFrom = values.get(fields.IMPORTED_FROM),
+        importedTo = values.get(fields.IMPORTED_TO),
+        bbox = values.get(fields.BBOX),
+        triaged = values.get(fields.TRIAGED).map(_.toBoolean),
+        subset = values.get(fields.SUBSET)
+      ))
   }
 
   private def browse(params: (String, String)*): Either[String, Scope] = parse(Const.Search.View.DEFAULT, params*)
@@ -53,32 +54,100 @@ import altitude.core.util.PeopleMatch
      *
      * Assertions:
      *
-     * A parameter left out is no filter, one ID is a set of one, and a comma-separated value is the set of its IDs; the folder
-     * and the album stay one ID each.
+     * A parameter left out is no filter, one ID is a list of one, and a comma-separated value is its IDs in the order given,
+     * which the query the scope builds takes as a set; the folder and the album stay one ID each.
      *
      * Edge cases:
      *
-     * An ID repeated in a parameter counts once.
+     * An ID repeated in a parameter counts once, at its first place.
      */
     val none = browse().value
     none.personIds shouldBe empty
     none.locationIds shouldBe empty
 
     val one = browse(fields.PERSON_ID -> "alice", fields.LOCATION_ID -> "lisbon").value
-    one.personIds shouldBe Set("alice")
-    one.locationIds shouldBe Set("lisbon")
+    one.personIds shouldBe List("alice")
+    one.locationIds shouldBe List("lisbon")
 
-    val several = browse(
-      fields.PERSON_ID -> "alice,bob,carol",
-      fields.LOCATION_ID -> "lisbon,sintra",
-      fields.FOLDER_ID -> "trips",
-      fields.ALBUM_ID -> "best").value
-    several.personIds shouldBe Set("alice", "bob", "carol")
-    several.locationIds shouldBe Set("lisbon", "sintra")
-    several.folderIds shouldBe Set("trips")
-    several.albumIds shouldBe Set("best")
+    val several = browse(fields.PERSON_ID -> "carol,alice,bob", fields.LOCATION_ID -> "sintra,lisbon").value
+    several.personIds shouldBe List("carol", "alice", "bob")
+    several.locationIds shouldBe List("sintra", "lisbon")
+    several.query().personIds shouldBe Set("alice", "bob", "carol")
+    several.query().locationIds shouldBe Set("lisbon", "sintra")
 
-    browse(fields.PERSON_ID -> "alice,alice").value.personIds shouldBe Set("alice")
+    val places = browse(fields.FOLDER_ID -> "trips", fields.ALBUM_ID -> "best").value
+    places.folderIds shouldBe Set("trips")
+    places.albumIds shouldBe Set("best")
+
+    browse(fields.PERSON_ID -> "bob,alice,bob").value.personIds shouldBe List("bob", "alice")
+  }
+
+  test("Empty segments of a person or Location parameter name nothing") {
+
+    /**
+     * Setup:
+     *
+     * Requests whose `personId` or `locationId` is empty, a lone comma, one ID followed by a comma, and IDs with empty segments
+     * before, between and after them.
+     *
+     * Assertions:
+     *
+     * An empty segment is no ID: a parameter of nothing but empty segments names nothing, as one left out does, and the IDs
+     * around an empty segment are taken in the order given.
+     *
+     * Edge cases:
+     *
+     * Ten IDs followed by a comma are ten IDs, not eleven, so they are taken.
+     */
+    for (value <- List("", ",", ",,")) withClue(s"'$value': ") {
+      val scope = browse(fields.PERSON_ID -> value, fields.LOCATION_ID -> value).value
+      scope.personIds shouldBe empty
+      scope.locationIds shouldBe empty
+    }
+
+    browse(fields.PERSON_ID -> "alice,").value.personIds shouldBe List("alice")
+    browse(fields.LOCATION_ID -> ",lisbon,,sintra,").value.locationIds shouldBe List("lisbon", "sintra")
+    browse(fields.PERSON_ID -> s"${ids(10)},").value.personIds should have size 10
+  }
+
+  test("An album or a Triage subset with the filters an advanced search combines is refused") {
+
+    /**
+     * Setup:
+     *
+     * Requests of the repository view with an album, and with a Triage subset, each beside what only the advanced search panel
+     * combines: a date range, two people, two Locations, and two of the Search text, a folder, a person and a Location.
+     *
+     * Assertions:
+     *
+     * Each is refused with a message naming the album and the subset: an advanced search searches the view by the panel's filters
+     * alone.
+     *
+     * Edge cases:
+     *
+     * An album or a subset beside one of the Search text, a folder, a person or a Location, and the same filters with neither an
+     * album nor a subset, are taken.
+     */
+    val combined = List(
+      List(fields.TAKEN_FROM -> "2024-06-01"),
+      List(fields.IMPORTED_TO -> "2024-06-30"),
+      List(fields.PERSON_ID -> "alice,bob"),
+      List(fields.LOCATION_ID -> "lisbon,sintra"),
+      List(fields.QUERY_TEXT -> "beach", fields.FOLDER_ID -> "trips"),
+      List(fields.PERSON_ID -> "alice", fields.LOCATION_ID -> "lisbon")
+    )
+    val scopes = List(fields.ALBUM_ID -> "best", fields.SUBSET -> "noLocation")
+
+    for (filters <- combined; scope <- scopes) withClue(s"$filters with $scope: ") {
+      val refusal = browse((filters :+ scope)*).left.value
+      refusal should include("album")
+      refusal should include("subset")
+    }
+    for (filters <- combined) withClue(s"$filters: ")(browse(filters*).isRight shouldBe true)
+
+    val single =
+      List(fields.QUERY_TEXT -> "beach", fields.FOLDER_ID -> "trips", fields.PERSON_ID -> "alice", fields.LOCATION_ID -> "lisbon")
+    for (filter <- single; scope <- scopes) withClue(s"$filter with $scope: ")(browse(filter, scope).isRight shouldBe true)
   }
 
   test("More than 10 IDs in one parameter are refused") {
@@ -186,11 +255,12 @@ import altitude.core.util.PeopleMatch
      *
      * Edge cases:
      *
-     * An empty date, a date without its leading zeros, a day the calendar does not have and a date with a time are all malformed.
+     * An empty date, a date without its leading zeros, a day the calendar does not have, a date with a time and a year that is
+     * not four digits, signed as ISO 8601 writes a longer one, are all malformed.
      */
     for (
       name <- List(fields.TAKEN_FROM, fields.TAKEN_TO, fields.IMPORTED_FROM, fields.IMPORTED_TO);
-      value <- List("", "june", "2024-6-1", "2024-02-30", "2024-06-01T10:00:00")
+      value <- List("", "june", "2024-6-1", "2024-02-30", "2024-06-01T10:00:00", "+10000-01-01", "-0001-06-01")
     ) withClue(s"$name=$value: ") {
       browse(name -> value).left.value should include(name)
     }
@@ -217,8 +287,8 @@ import altitude.core.util.PeopleMatch
      *
      * Edge cases:
      *
-     * The trash still takes one person, one Location, one folder and one album, and a range open at an end is refused there as a
-     * closed one is.
+     * The trash still takes one person, one Location or one folder, each alone or beside an album, and a range open at an end is
+     * refused there as a closed one is.
      */
     val advanced = List(
       List(fields.TAKEN_FROM -> "2024-06-01", fields.TAKEN_TO -> "2024-06-30"),
@@ -234,14 +304,10 @@ import altitude.core.util.PeopleMatch
       parse(Const.Search.View.TRIAGE, params*).isRight shouldBe true
     }
 
-    val single = parse(
-      Const.Search.View.TRASHBIN,
-      fields.PERSON_ID -> "alice",
-      fields.LOCATION_ID -> "lisbon",
-      fields.FOLDER_ID -> "trips",
-      fields.ALBUM_ID -> "best").value
-    single.personIds shouldBe Set("alice")
-    single.locationIds shouldBe Set("lisbon")
+    for (
+      single <- List(fields.PERSON_ID -> "alice", fields.LOCATION_ID -> "lisbon", fields.FOLDER_ID -> "trips");
+      album <- List(Nil, List(fields.ALBUM_ID -> "best"))
+    ) withClue(s"$single $album: ")(parse(Const.Search.View.TRASHBIN, (single +: album)*).isRight shouldBe true)
   }
 
   test("triaged=true adds the triaged assets to an advanced search") {

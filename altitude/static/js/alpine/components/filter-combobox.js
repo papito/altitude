@@ -8,27 +8,31 @@
  * active one `aria-selected`, with focus staying in the input throughout. The listbox is in the top
  * layer and anchored under the field's box by CSS (`htmx/search_panel.css`).
  *
- * The component root is the field (`.field[data-filter]`). The three fields differ only in what
- * their markup says: the options route (`data-options-url`), whether several can be chosen
- * (`data-multiple`), the most that can (`data-max-chosen`, with the line that says so,
+ * The component root is the field (`.field` with `x-data="filterCombobox"`). The three fields differ
+ * only in what their markup says: the options route (`data-options-url`), whether several can be
+ * chosen (`data-multiple`), the most that can (`data-max-chosen`, with the line that says so,
  * `data-max-chosen-message`) and the chip's markup (the field's `<template>`).
  *
  * The server matches and renders the options, and the component only places them: typing asks the
  * route for the options of the text (once typing pauses, and only the latest answer is shown), the
  * fragment's `role="option"` elements go into the listbox as they come, less the ones already
- * chosen, and the start of each word a typed word matches is marked (`markMatches`, the server's
- * rule: a typed word matches the start of a word of the name). Down and Up open the listbox and move
- * the active option, wrapping; Enter picks it, and so does a click; Escape closes the listbox alone.
+ * chosen, and the start of each word a typed word matches is marked in an option's name
+ * (`data-option-name`; `markMatches`, the server's rule: a typed word matches the start of a word of
+ * the name). Down and Up open the listbox and move the active option, wrapping; Enter picks it, and
+ * so does a click; Escape closes the listbox alone. While the options of what was just typed are on
+ * their way the ones shown are of the text before: none of them is active, and Enter asks for the
+ * new ones at once and picks the first when they arrive. The visually hidden `role="status"` says
+ * how many options are shown, or the line in their place, and each chip added or removed.
  *
- * A chosen option becomes a chip (`li.chip`, cloned from the field's template) carrying what the
- * option carried: `data-option-id`, `data-option-label` and a Person's `data-option-cover-url`, with
- * the option's label in its `.name` and in the name of its ×, led by a copy of the option's `.cover`
- * when it has one (a Person's cover Face, or the placeholder of a Person with none). The chips are
- * the state: the IDs of the chips, in order and separated by commas, are the value of the
- * field's hidden input, the search parameter. A chip's × removes it, Backspace in an empty input
- * removes the last one, and a field that takes one (the folder) replaces its chip. A field at its
- * most says so in place of its options. `search-panel-clear`, which the panel's Clear dispatches on
- * every field, removes every chip.
+ * A chosen option becomes a chip (`includes/search_chip`, cloned from the field's template) carrying
+ * what the option carried, `data-option-id` and `data-option-label`, with the option's label as its
+ * name (`data-option-name`) and in the name of its × (`data-chip-remove`), led by a copy of the
+ * option's cover when it has one (`data-option-cover`: a Person's cover Face, or the placeholder of
+ * a Person with none). The chips are the state: the IDs of the chips, in order and separated by
+ * commas, are the value of the field's hidden input, the search parameter. A chip's × removes it,
+ * Backspace in an empty input removes the last one, and a field that takes one (the folder) replaces
+ * its chip. A field at its most says so in place of its options. `search-panel-clear`, which the
+ * panel's Clear dispatches on every field, removes every chip.
  */
 import { Const } from "../../constants.js"
 import { showErrorSnackBar } from "../../common/snackbar.js"
@@ -43,6 +47,9 @@ const MORE_PLACEHOLDER = "add…"
 // The line shown in place of the options when there are none to show
 const NO_MATCH = "No matches"
 const NOTHING_TO_CHOOSE = "Nothing to choose"
+
+const OPTION = '[role="option"]'
+const CHIP = `[${Const.attributes.optionId}]`
 
 // A word of a name, as the server splits one (`SearchWords`): a run of letters, or a run of digits
 const WORD = /\p{L}[\p{L}\p{M}]*|\p{Nd}+/gu
@@ -59,7 +66,7 @@ function fold(text) {
 }
 
 /** The words of what was typed, as the server compares them */
-export function typedWords(text) {
+function typedWords(text) {
     return fold(text).match(WORD) ?? []
 }
 
@@ -90,7 +97,7 @@ function matchedLength(word, typed) {
  * The parts of `text` to mark for the typed words, as `[start, end)` offsets in order: the start of
  * each word, or of each camelCase hump in one, that begins with a typed word, the longest of them.
  */
-export function matchedRanges(text, words) {
+function matchedRanges(text, words) {
     if (words.length === 0) {
         return []
     }
@@ -149,8 +156,12 @@ function carriedBy(el) {
     return {
         id: el.getAttribute(Const.attributes.optionId),
         label: el.getAttribute(Const.attributes.optionLabel),
-        coverUrl: el.getAttribute(Const.attributes.optionCoverUrl),
     }
+}
+
+/** How many options a listbox shows, as its status says it */
+function countOf(options) {
+    return options.length === 1 ? "1 option" : `${options.length} options`
 }
 
 export function filterCombobox() {
@@ -158,15 +169,17 @@ export function filterCombobox() {
     let loadToken = 0
     // The request waiting for typing to pause
     let loadTimer = null
+    // A request for the options is waiting or out: the options shown, if any, are of the text before
+    let isLoading = false
 
     return {
-        // The listbox popover is open (the browser's state, followed through `toggle`)
+        // The listbox popover is open: written as it is shown and hidden, so a key that follows at once reads it
         expanded: false,
         // The IDs of the chips, in order
         chosen: [],
         // The active option's element ID, which Enter picks: `aria-activedescendant`; null with none
         activeOptionId: null,
-        // What a screen reader is told of a chip added or removed, and of a full field
+        // What a screen reader is told: the options shown or the line in their place, a chip added or removed
         status: "",
         // The input's placeholder while nothing is chosen, its markup's ("anyone")
         emptyPlaceholder: "",
@@ -178,8 +191,7 @@ export function filterCombobox() {
 
         /** A request in flight or waiting is dropped with the field */
         destroy() {
-            clearTimeout(loadTimer)
-            loadToken++
+            this.dropLoad()
         },
 
         get optionsUrl() {
@@ -199,13 +211,16 @@ export function filterCombobox() {
             return this.multiple && max > 0 && this.chosen.length >= max
         },
 
-        /** What the empty input says: what the field means with nothing chosen, then that more can be added */
+        /**
+         * What the empty input says: what the field means with nothing chosen, then that more can be
+         * added, and nothing once a field of one, or a full field of several, takes no more
+         */
         get placeholder() {
             if (this.chosen.length === 0) {
                 return this.emptyPlaceholder
             }
 
-            return this.multiple ? MORE_PLACEHOLDER : ""
+            return this.multiple && !this.isFull ? MORE_PLACEHOLDER : ""
         },
 
         /** Two names or more are chosen: the People field shows its match switch */
@@ -219,12 +234,12 @@ export function filterCombobox() {
         },
 
         chipEls() {
-            return [...this.$refs.chips.children]
+            return [...this.$refs.chips.querySelectorAll(CHIP)]
         },
 
         /** The options shown, in order */
         optionEls() {
-            return [...this.$refs.listbox.querySelectorAll('[role="option"]')]
+            return [...this.$refs.listbox.querySelectorAll(OPTION)]
         },
 
         activeOptionEl() {
@@ -234,14 +249,21 @@ export function filterCombobox() {
         /**
          * Asks for the options of what is typed and shows them, at once or, while typing, once it
          * pauses. `activate` names the option to make active when they arrive, `first` or `last`,
-         * for the arrow that opened the listbox. A full field asks for nothing and says it is full.
+         * for the arrow that opened the listbox; `pick` chooses the first of them on arrival, for an
+         * Enter that came before them; `announce` is whether the status says what is shown. A full
+         * field asks for nothing and says it is full.
          */
-        loadOptions({ whenTypingPauses = false, activate = null } = {}) {
-            clearTimeout(loadTimer)
-            const token = ++loadToken
+        loadOptions({
+            whenTypingPauses = false,
+            activate = null,
+            pick = false,
+            announce = true,
+        } = {}) {
+            this.dropLoad()
+            const token = loadToken
 
             if (this.isFull) {
-                this.showOptions("", activate)
+                this.showOptions("", { activate, announce })
                 return
             }
 
@@ -251,13 +273,19 @@ export function filterCombobox() {
                         params: { q: this.query() },
                     })
                     if (token === loadToken) {
-                        this.showOptions(response.data, activate)
+                        isLoading = false
+                        this.showOptions(response.data, {
+                            activate,
+                            pick,
+                            announce,
+                        })
                     }
                 } catch (error) {
                     if (token !== loadToken) {
                         return
                     }
 
+                    isLoading = false
                     console.error(
                         `Error loading the options of ${this.optionsUrl}: ${getHttpErrorMessage(error)}`,
                     )
@@ -265,6 +293,7 @@ export function filterCombobox() {
                 }
             }
 
+            isLoading = true
             if (whenTypingPauses) {
                 loadTimer = setTimeout(load, LOAD_DELAY_MS)
             } else {
@@ -272,13 +301,21 @@ export function filterCombobox() {
             }
         },
 
+        /** Drops the request for the options that is waiting or out: its answer, if one comes, is not shown */
+        dropLoad() {
+            clearTimeout(loadTimer)
+            loadToken++
+            isLoading = false
+        },
+
         /**
          * Puts the options fragment into the listbox and opens it: the options already chosen leave
          * the list, the typed words are marked in the rest, and with none left a line says why.
          * Enter picks the first option of what was typed; with nothing typed no option is active
-         * until an arrow moves to one.
+         * until an arrow moves to one. With `pick`, the first option of what was typed is chosen at
+         * once, the Enter having come before it.
          */
-        showOptions(html, activate) {
+        showOptions(html, { activate = null, pick = false, announce = true }) {
             const listboxEl = this.$refs.listbox
             const query = this.query()
             const words = typedWords(query)
@@ -291,12 +328,25 @@ export function filterCombobox() {
                 }
 
                 optionEl.setAttribute("aria-selected", "false")
-                markMatches(optionEl.querySelector(".name"), words)
+                markMatches(
+                    optionEl.querySelector(`[${Const.attributes.optionName}]`),
+                    words,
+                )
             })
 
             const options = this.optionEls()
-            if (options.length === 0) {
-                listboxEl.append(this.buildNotice(query))
+            if (pick && query && options.length > 0) {
+                this.pick(options[0])
+                return
+            }
+
+            const noticeEl =
+                options.length === 0 ? this.buildNotice(query) : null
+            if (noticeEl) {
+                listboxEl.append(noticeEl)
+            }
+            if (announce) {
+                this.status = noticeEl?.textContent ?? countOf(options)
             }
 
             if (activate === "last") {
@@ -320,7 +370,6 @@ export function filterCombobox() {
                 noticeEl.textContent = this.$root.getAttribute(
                     Const.attributes.maxChosenMessage,
                 )
-                this.status = noticeEl.textContent
             } else {
                 noticeEl.textContent = query ? NO_MATCH : NOTHING_TO_CHOOSE
             }
@@ -358,36 +407,34 @@ export function filterCombobox() {
             if (listboxEl.isConnected && !listboxEl.matches(":popover-open")) {
                 listboxEl.showPopover()
             }
+            this.expanded = listboxEl.matches(":popover-open")
         },
 
         /** Closes the listbox; a request for its options still out is dropped, so its answer does not open it again */
         hideListbox() {
-            clearTimeout(loadTimer)
-            loadToken++
+            this.dropLoad()
 
             const listboxEl = this.$refs.listbox
             if (listboxEl.matches(":popover-open")) {
                 listboxEl.hidePopover()
             }
+            this.expanded = false
+            this.setActive(null)
         },
 
-        /** The browser owns the popover's visibility; `expanded` follows it */
-        onToggle(event) {
-            this.expanded = event.newState === "open"
-            if (!this.expanded) {
-                this.setActive(null)
-            }
-        },
-
+        /** The options of the new text are asked for once typing pauses; until they come, Enter has none of the old to pick */
         onInput() {
+            this.setActive(null)
             this.loadOptions({ whenTypingPauses: true })
         },
 
         /**
          * Down and Up move the active option, wrapping, and open the listbox when it is closed, on
          * its first or its last option; Enter picks the active option, or opens the listbox when it
-         * is closed, and never submits the panel; Escape closes an open listbox alone, and is
-         * consumed, so the panel stays; Backspace in an empty input removes the last chip.
+         * is closed, or, with the options of what was typed still on their way, asks for them at
+         * once and picks the first, and never submits the panel; Escape closes an open listbox, or
+         * drops the request that would open it, and is consumed, so the panel stays; Backspace in an
+         * empty input removes the last chip.
          */
         onKeydown(event) {
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -402,12 +449,14 @@ export function filterCombobox() {
             } else if (event.key === "Enter") {
                 event.preventDefault()
 
-                if (!this.expanded) {
+                if (isLoading) {
+                    this.loadOptions({ pick: true })
+                } else if (!this.expanded) {
                     this.loadOptions()
                 } else if (this.activeOptionEl()) {
                     this.pick(this.activeOptionEl())
                 }
-            } else if (event.key === "Escape" && this.expanded) {
+            } else if (event.key === "Escape" && (this.expanded || isLoading)) {
                 event.preventDefault()
                 event.stopPropagation()
                 this.hideListbox()
@@ -421,7 +470,7 @@ export function filterCombobox() {
 
         /** A click on the box, outside a chip, puts the caret in the input and opens the listbox */
         onBoxClick(event) {
-            if (event.target.closest(`[${Const.attributes.optionId}]`)) {
+            if (event.target.closest(CHIP)) {
                 return
             }
 
@@ -433,7 +482,7 @@ export function filterCombobox() {
 
         /** A click on an option picks it; the listbox's `mousedown` is prevented, so focus stays in the input */
         onOptionClick(event) {
-            const optionEl = event.target.closest('[role="option"]')
+            const optionEl = event.target.closest(OPTION)
             if (optionEl) {
                 this.pick(optionEl)
             }
@@ -441,7 +490,7 @@ export function filterCombobox() {
 
         /** The pointer over an option makes it the active one, as the arrows would */
         onOptionHover(event) {
-            const optionEl = event.target.closest('[role="option"]')
+            const optionEl = event.target.closest(OPTION)
             if (optionEl && optionEl.id !== this.activeOptionId) {
                 this.setActive(optionEl)
             }
@@ -449,10 +498,8 @@ export function filterCombobox() {
 
         /** A click on a chip's × removes the chip */
         onChipClick(event) {
-            if (event.target.closest("button")) {
-                this.removeChip(
-                    event.target.closest(`[${Const.attributes.optionId}]`),
-                )
+            if (event.target.closest(`[${Const.attributes.chipRemove}]`)) {
+                this.removeChip(event.target.closest(CHIP))
             }
         },
 
@@ -478,7 +525,10 @@ export function filterCombobox() {
             }
 
             this.$refs.chips.append(
-                this.buildChip(option, optionEl.querySelector(".cover")),
+                this.buildChip(
+                    option,
+                    optionEl.querySelector(`[${Const.attributes.optionCover}]`),
+                ),
             )
             this.syncChosen()
             this.status = `${option.label} added`
@@ -488,23 +538,23 @@ export function filterCombobox() {
 
         /**
          * A chip for the option, from the field's template: what the option carried, its label as
-         * the chip's text and in the name of its ×, led by a copy of the option's cover (`coverEl`)
+         * the chip's name and in the name of its ×, led by a copy of the option's cover (`coverEl`)
          * when the option has one.
          */
-        buildChip({ id, label, coverUrl }, coverEl) {
+        buildChip({ id, label }, coverEl) {
             const chipEl =
                 this.$refs.chipTemplate.content.firstElementChild.cloneNode(
                     true,
                 )
-            const removeEl = chipEl.querySelector("button")
+            const removeEl = chipEl.querySelector(
+                `[${Const.attributes.chipRemove}]`,
+            )
 
             chipEl.setAttribute(Const.attributes.optionId, id)
             chipEl.setAttribute(Const.attributes.optionLabel, label)
-            if (coverUrl) {
-                chipEl.setAttribute(Const.attributes.optionCoverUrl, coverUrl)
-            }
-
-            chipEl.querySelector(".name").textContent = label
+            chipEl.querySelector(
+                `[${Const.attributes.optionName}]`,
+            ).textContent = label
             removeEl.setAttribute(
                 "aria-label",
                 `${removeEl.getAttribute("aria-label")} ${label}`,
@@ -522,9 +572,9 @@ export function filterCombobox() {
             this.syncChosen()
             this.$refs.input.focus()
 
-            // The name removed is offered again
+            // The name removed is offered again; the status has just said it was removed
             if (this.expanded) {
-                this.loadOptions()
+                this.loadOptions({ announce: false })
             }
         },
 

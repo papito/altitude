@@ -108,7 +108,7 @@
     --detail-cover-size: 2.5rem;
     /* The most height a combobox's listbox takes before it scrolls: the Change combobox's (htmx/detail_panel.css) and the
        advanced search panel's (htmx/search_panel.css) */
-    --face-listbox-max-height: 16rem;
+    --listbox-max-height: 16rem;
     /* The advanced search panel (htmx/search_panel.css): its width, a Person's cover Face on a chip and in the options, and
        the days of one month of its calendar */
     --search-panel-width: 26rem;

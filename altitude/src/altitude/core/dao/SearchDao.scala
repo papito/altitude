@@ -39,11 +39,12 @@ trait SearchDao:
   def mapBounds(query: SearchQuery): Option[MapBounds]
 
   /**
-   * The ID and name of every candidate of each name source a Search text can match, keyed by every name source, even one with no
-   * candidates: people who are named and neither hidden, merged away nor a bad match; Locations with their Category as the
-   * parent; Categories; folders with their parent, less the recycled ones and the root; albums.
+   * The ID and name of every candidate of each of the name sources asked for, keyed by each of them, even one with no candidates:
+   * people who are named and neither hidden, merged away nor a bad match; Locations with their Category as the parent;
+   * Categories; folders with their parent, less the recycled ones and the root; albums. A source not asked for is not read, and
+   * the Search document is no name source.
    */
-  def searchNames: Map[SearchSource, Seq[SearchName]]
+  def searchNames(sources: Set[SearchSource]): Map[SearchSource, Seq[SearchName]]
 
   /**
    * The hits of each positive group of the Search text, by group index, one past `limit` at most: a group with at most `limit`

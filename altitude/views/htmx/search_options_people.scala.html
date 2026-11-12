@@ -1,27 +1,22 @@
-@import altitude.core.Const
-@import altitude.core.models.Person
-@import altitude.core.util.Util
+@import altitude.core.models.ListedPerson
 
-@(people: List[Person])
+@(people: List[ListedPerson])
 
 @* The options of the advanced search panel's People combobox (GET /htmx/search/r/:repoId/options/people?q=): the
    people a Search text finds by name (named, and neither hidden, merged away nor a bad match) whose name has the text
-   typed so far (SearchService.peopleOptions), all of them with nothing typed, by name, the first
-   Const.Search.MAX_FILTER_OPTIONS of them. An option shows the Person's cover Face, or the no-cover placeholder
-   (`.no-cover`, core.css) for a Person with no Face, their name and their number of assets (`numOfFaces`), and carries
-   what its chip needs once it is chosen: the ID, the name as the label and the cover's URL. The fragment is the
+   typed so far and whose search finds something (SearchService.peopleOptions), all of them with nothing typed, by name,
+   the first Const.Search.MAX_FILTER_OPTIONS of them. An option shows the Person's cover Face, or the no-cover
+   placeholder (`.no-cover`, core.css) for a Person with no Face, their name and the number of assets a search of them
+   finds (`ListedPerson.visibleCount`, the People tab's number, grouped as 1,840), and carries what its chip needs once
+   it is chosen: the ID and the name as the label; the chip takes a copy of the cover. The fragment is the
    `role="option"` elements alone, for the combobox's listbox; with nobody to offer it is empty. *@
-@for(person <- people) {
+@for(ListedPerson(person, visibleCount) <- people) {
 <li role="option"
     id="searchOption-@{person.persistedId}"
     data-option-id="@{person.persistedId}"
-    data-option-label="@{person.name.getOrElse("")}"
-    @for(cover <- person.coverFaceId) { data-option-cover-url="@{Util.contentUrl(Const.DataStore.FACE, cover)}" }>
-    @person.coverFaceId match {
-    case Some(cover) => {<img class="cover" src="@{Util.contentUrl(Const.DataStore.FACE, cover)}" alt="" loading="lazy">}
-    case None => {<span class="cover no-cover"><i class="fas fa-user" aria-hidden="true"></i></span>}
-    }
-    <span class="name">@{person.name.getOrElse("")}</span>
-    <span class="count">@{person.numOfFaces}<span class="visually-hidden"> @if(person.numOfFaces == 1) {asset} else {assets}</span></span>
+    data-option-label="@{person.name.getOrElse("")}">
+    @includes.html.search_person_cover(person, isLazy = true)
+    <span class="name" data-option-name>@{person.name.getOrElse("")}</span>
+    <span class="count">@{f"$visibleCount%,d"}<span class="visually-hidden"> @if(visibleCount == 1) {asset} else {assets}</span></span>
 </li>
 }

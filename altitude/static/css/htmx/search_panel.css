@@ -38,10 +38,30 @@
     gap: var(--space-7);
 }
 
+/* Two equal halves while both ranges fit them. A range wider than its half, one across two years, takes the room it
+   needs from the other field, and when the two do not fit one row the second goes under the first */
 .search-panel .dates {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: var(--space-7);
+}
+
+.search-panel .dates .field {
+    flex: 1 1 0;
+    min-width: min-content;
+}
+
+/* A date range's box is as wide as its range at the least, on one line; a range that still does not fit is cut with an
+   ellipsis, and the input's tooltip says it whole */
+.search-panel .dates .box {
+    flex-wrap: nowrap;
+    min-width: auto;
+}
+
+.search-panel .dates .box input {
+    field-sizing: content;
+    min-width: min-content;
+    text-overflow: ellipsis;
 }
 
 /* A field names its box for the listbox or the calendar it opens, each field its own */
@@ -60,12 +80,14 @@
 }
 
 /* The People label and, once two people are chosen, the match beside it: Any, the switch, All, the word in force in
-   the text color */
+   the text color. The row is as tall as the switch with or without it, so the fields below stay where they are when the
+   second person is chosen */
 .search-panel .label-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
+    min-height: var(--switch-height);
 }
 
 .search-panel .match {
@@ -177,7 +199,7 @@
     background: var(--popover-background-color);
     backdrop-filter: var(--popover-backdrop-filter);
     box-shadow: var(--sheen-shadow), var(--float-shadow);
-    max-height: var(--face-listbox-max-height);
+    max-height: var(--listbox-max-height);
     overflow-y: auto;
 }
 

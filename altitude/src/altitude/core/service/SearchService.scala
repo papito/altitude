@@ -10,10 +10,10 @@ import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.dao.SearchDao
 import altitude.core.models.Asset
+import altitude.core.models.ListedPerson
 import altitude.core.models.MapBounds
 import altitude.core.models.MapCells
 import altitude.core.models.NamedPath
-import altitude.core.models.Person
 import altitude.core.models.SearchFilterNames
 import altitude.core.models.UserMetadataField
 import altitude.core.transactions.TransactionManager
@@ -80,7 +80,7 @@ class SearchService(val app: Altitude):
   def resolveText(expression: SearchExpression, probeLimit: Int = Const.Search.TEXT_PROBE_LIMIT): ResolvedSearchText =
     txManager.asReadOnly {
       val started = System.currentTimeMillis
-      val names = searchDao.searchNames
+      val names = searchDao.searchNames(SearchSource.names)
       // The readings of each name once, however many terms there are
       val variants = names.view.mapValues(_.map(name => name.id -> SearchWords.variants(name.name))).toMap
       val locationsByCategory = names(SearchSource.Location).groupMap(_.parentId)(_.id)
@@ -124,7 +124,7 @@ class SearchService(val app: Altitude):
    */
   def folderOptions(typed: String): List[NamedPath] =
     txManager.asReadOnly {
-      val folders = searchDao.searchNames(SearchSource.Folder)
+      val folders = searchDao.searchNames(Set(SearchSource.Folder))(SearchSource.Folder)
       val path = folderPaths(folders)
       offered(folders, typed)(folder => path(folder.id)).map(folder => NamedPath(folder.id, path(folder.id)))
     }
@@ -135,46 +135,53 @@ class SearchService(val app: Altitude):
    */
   def locationOptions(typed: String): List[NamedPath] =
     txManager.asReadOnly {
-      val names = searchDao.searchNames
-      val path = locationPaths(names)
+      val names = searchDao.searchNames(Set(SearchSource.Location, SearchSource.Category))
+      val categories = names(SearchSource.Category).map(category => category.id -> category.name).toMap
       offered(names(SearchSource.Location), typed)(location => List(location.name)).map(
-        location => NamedPath(location.id, path(location)))
+        location => NamedPath(location.id, location.parentId.flatMap(categories.get).toList :+ location.name))
     }
 
   /**
    * The people the advanced search panel offers for the text typed so far ([[offered]]), by name: the people a Search text
-   * resolves names against, named and neither hidden, merged away nor a bad match, each read with their cover and `numOfFaces`
+   * resolves names against, named and neither hidden, merged away nor a bad match, each with their cover and the number of assets
+   * a search of them finds, which counts their triaged assets only when the search shows triaged items. A Person the search would
+   * find nothing for is no option, as the People tab lists none (`PersonService.getListedSearchable`).
    */
-  def peopleOptions(typed: String): List[Person] =
+  def peopleOptions(typed: String, showTriaged: Boolean): List[ListedPerson] =
     txManager.asReadOnly {
-      val ids = offered(searchDao.searchNames(SearchSource.Person), typed)(person => List(person.name)).map(_.id)
-      val people = app.service.person.getLive(ids.toSet).map(person => person.persistedId -> person).toMap
-      ids.flatMap(people.get)
+      val listed =
+        app.service.person.getListedSearchable(showTriaged).map(listed => listed.person.persistedId -> listed).toMap
+      // A searchable Person is named
+      val names = listed.values.toSeq.map(listed => SearchName(listed.person.persistedId, listed.person.name.get))
+      offered(names, typed)(person => List(person.name)).map(person => listed(person.id))
     }
 
   /**
-   * What the IDs of a search name in the repository as it is now, read in one snapshot, for the chips of the advanced search
-   * panel. The folder is any but the root, which is the whole repository, and a recycled one; a person is any live one, hidden or
-   * with no name included, since a search can be scoped to them; a Location is no Category. An ID that names none of these (one
-   * that no longer exists, another repository's) has no entry.
+   * What the IDs of a search name in the repository as it is now, each read by its ID in one snapshot, for the chips of the
+   * advanced search panel and of a filtered search's results title. The folder is any but the root, which is the whole
+   * repository, and a recycled one; a person is any live one, hidden or with no name included, since a search can be scoped to
+   * them; a Location is no Category. An ID that names none of these (one that no longer exists, another repository's) has no
+   * entry.
    */
   def filterNames(folderId: Option[String], personIds: List[String], locationIds: List[String]): SearchFilterNames =
     txManager.asReadOnly {
-      val names = searchDao.searchNames
-      val folderPath = folderPaths(names(SearchSource.Folder))
-      val locations = names(SearchSource.Location).map(location => location.id -> location).toMap
-      val locationPath = locationPaths(names)
+      val folders = app.service.folder
+      // The path ends with the folder itself; an ID that names no folder has none
+      val folderPath = folderId.filterNot(folders.isRootFolder).map(folders.getPath).filter(_.lastOption.exists(!_.isRecycled))
       val people = app.service.person.getLive(personIds.toSet).map(person => person.persistedId -> person).toMap
+      val locations =
+        app.service.location.getLocationsByIds(locationIds.toSet).map(location => location.persistedId -> location).toMap
 
       val found = SearchFilterNames(
-        // A folder that is none of the names has no path
-        folder = folderId.map(id => NamedPath(id, folderPath(id))).filter(_.path.nonEmpty),
+        folder = folderPath.map(path => NamedPath(path.last.persistedId, path.map(_.name))),
         people = personIds.flatMap(people.get),
-        locations = locationIds.flatMap(locations.get).map(location => NamedPath(location.id, locationPath(location)))
+        locations = locationIds
+          .flatMap(locations.get)
+          .map(location => NamedPath(location.persistedId, location.categoryName.toList :+ location.name))
       )
       logger.debug(
-        s"Advanced search panel: ${found.folder.size} of ${folderId.size} folders, ${found.people.size} of " +
-          s"${personIds.size} people and ${found.locations.size} of ${locationIds.size} Locations named")
+        s"Search filters named: ${found.folder.size} of ${folderId.size} folders, ${found.people.size} of " +
+          s"${personIds.size} people and ${found.locations.size} of ${locationIds.size} Locations")
       found
     }
 
@@ -183,6 +190,9 @@ class SearchService(val app: Altitude):
    * segment), the first `Const.Search.MAX_FILTER_OPTIONS` of them. The text is read as a Search text is and matched as one
    * matches a name ([[SearchTerm.isIn]] over the readings of the name's [[SearchWords]]): every group of its terms must be in the
    * name itself, an excluded term must not, and text with no usable term, nothing typed included, is in every name.
+   *
+   * Each name's key is built once, and the first of them are picked without sorting the rest ([[firstOf]]), so a Library's whole
+   * folder tree, which nothing typed matches, costs one pass over it.
    */
   private def offered(names: Seq[SearchName], typed: String)(sortKey: SearchName => List[String]): List[SearchName] =
     val started = System.currentTimeMillis
@@ -194,17 +204,33 @@ class SearchService(val app: Altitude):
             expression.groups.forall(_.alternatives.exists(term => term.isIn(readings) != term.isExcluded))
         }
     }
-    // A name's key is computed once, however many paths it is a segment of
-    val keys = mutable.Map.empty[String, String]
-    val options = matching
-      .sortBy(name => sortKey(name).map(segment => keys.getOrElseUpdate(segment, NameKey.of(segment))))(using
-        Ordering.Implicits.seqOrdering)
-      .take(Const.Search.MAX_FILTER_OPTIONS)
-      .toList
+    // A segment's name key is computed once, however many paths it is a segment of
+    val segmentKeys = mutable.Map.empty[String, String]
+    val keyed =
+      matching.map(name => sortKey(name).map(segment => segmentKeys.getOrElseUpdate(segment, NameKey.of(segment))) -> name)
+    val byKey = Ordering.by[(List[String], SearchName), List[String]](_._1)(using Ordering.Implicits.seqOrdering)
+    val options = firstOf(keyed, Const.Search.MAX_FILTER_OPTIONS)(using byKey).map(_._2)
     logger.trace(
       s"Advanced search options: ${options.size} offered of ${matching.size} matching among ${names.size} names, " +
         s"in ${System.currentTimeMillis - started}ms")
     options
+
+  /**
+   * The first `count` of `items` in their order, as sorting them all and taking that many gives, items that compare equal in the
+   * order they came in: one pass that keeps the first so far in a heap with the last of them on top, so the rest are never sorted
+   */
+  private def firstOf[A](items: Seq[A], count: Int)(using order: Ordering[A]): List[A] =
+    // An item with its place among the items, which orders the ones that compare equal
+    val byOrderThenPlace = Ordering.Tuple2(using order, Ordering.Int)
+    val first = mutable.PriorityQueue.empty[(A, Int)](using byOrderThenPlace)
+    items.iterator.zipWithIndex.foreach {
+      placed =>
+        if first.size < count then first.enqueue(placed)
+        else if byOrderThenPlace.lt(placed, first.head) then
+          first.dequeue(): Unit
+          first.enqueue(placed)
+    }
+    first.dequeueAll.reverseIterator.map(_._1).toList
 
   /** Each folder's path by its ID: the names from its top-level ancestor down to its own, the root, which is no name, left out */
   private def folderPaths(folders: Seq[SearchName]): String => List[String] =
@@ -214,11 +240,6 @@ class SearchService(val app: Altitude):
       byId.get(id).fold(Nil)(folder => folder.parentId.fold(Nil)(path) :+ folder.name)
 
     path
-
-  /** A Location's path: its Category's name, when it has one, then its own */
-  private def locationPaths(names: Map[SearchSource, Seq[SearchName]]): SearchName => List[String] =
-    val categories = names(SearchSource.Category).map(category => category.id -> category.name).toMap
-    location => location.parentId.flatMap(categories.get).toList :+ location.name
 
   /**
    * The resolution with what its probe found: each positive group whose hits number at most the limit is complete, and the

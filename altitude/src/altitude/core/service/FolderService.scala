@@ -99,6 +99,15 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       dao.getAncestors(folderId)
     }
 
+  /**
+   * The folder's path, the top-level folder first and the folder itself last, the repository root not among them unless it is the
+   * folder; none for an ID that names no folder of the repository
+   */
+  def getPath(folderId: String): List[Folder] =
+    txManager.asReadOnly {
+      dao.getPath(folderId)
+    }
+
   override def deleteById(id: String): Int =
     throw NotImplementedError("Deleting a folder is handled by the library service")
 

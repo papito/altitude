@@ -24,7 +24,8 @@ import { runSearch } from "./search.js"
  * with the search as the query string, as the quick search does.
  *
  * Opening loads the form (`GET /htmx/search/r/:repoId/panel`, the host's `data-panel-url`) filled
- * in from the search parameters in force, so the server names the chips. The text is the quick
+ * in from the search parameters in force, so the server names the chips, with the search's triage
+ * filter, which the form's People options count by. The text is the quick
  * search input's, typed or not yet searched, so the two fields hold one value: the input's is
  * copied to the panel as it opens, and the panel's to the input as it searches. The form is read
  * through the axios client and put in the panel here, not by htmx, so that only the answer of the
@@ -33,6 +34,9 @@ import { runSearch } from "./search.js"
  */
 
 const PANEL_ID = "searchPanel"
+
+// The form's text field (htmx/search_panel), which takes focus once the form is in
+const TEXT_ID = "searchPanelText"
 
 // The latest load of the form; an earlier one's answer is dropped
 let loadToken = 0
@@ -72,6 +76,10 @@ export function bindSearchPanel() {
  * Opens the panel on the search in force with `filters` laid over it (`{ folderId }` for a folder's
  * Search here), each under its search parameter's name; an open panel is loaded again with them.
  * Nothing is searched until its Search.
+ *
+ * A closing panel hands focus back to what had it as the panel opened: a filtered title's Edit keeps
+ * it, but an entry of a menu is gone by then, since the panel's opening closes the menu, so from
+ * inside another popover the focus goes to the filter button first.
  */
 export function openSearchPanel(filters = {}) {
     const panelEl = document.getElementById(PANEL_ID)
@@ -79,10 +87,15 @@ export function openSearchPanel(filters = {}) {
 
     if (panelEl.matches(":popover-open")) {
         loadForm(panelEl)
-    } else {
-        // The button as the source, so focus returns to it and Tab goes on from it
-        panelEl.showPopover({ source: filterButtonEl() })
+        return
     }
+
+    const buttonEl = filterButtonEl()
+    if (document.activeElement?.closest(":popover-open")) {
+        buttonEl.focus()
+    }
+    // The button as the source, so Tab goes on from it
+    panelEl.showPopover({ source: buttonEl })
 }
 
 /** Closes the panel, if it is open, and returns whether it was: Escape's job in `global.js` */
@@ -137,15 +150,17 @@ function filterButtonEl() {
 
 /**
  * Loads the panel's form for the search in force, with the quick search input's text as its text
- * and the filters of `openSearchPanel` over both. The panel shows nothing meanwhile; a failure
- * closes it.
+ * and the filters of `openSearchPanel` over both, and with the search's triage filter, which a
+ * search from the panel keeps. The panel shows nothing meanwhile; a failure closes it.
  */
 async function loadForm(panelEl) {
     const token = ++loadToken
+    const searchParams = Alpine.store(Const.state.searchParams)
     const filters = {
-        ...Alpine.store(Const.state.searchParams)?.filters(),
+        ...searchParams?.filters(),
         q: quickSearchFormEl().elements.q.value.trim(),
         ...openingFilters,
+        triaged: searchParams?.triaged ?? null,
     }
     openingFilters = null
     panelEl.replaceChildren()
@@ -161,7 +176,7 @@ async function loadForm(panelEl) {
 
         // Alpine's mutation observer initializes the form's components
         panelEl.innerHTML = response.data
-        panelEl.querySelector('input[type="search"]')?.focus()
+        document.getElementById(TEXT_ID)?.focus()
     } catch (error) {
         if (token !== loadToken) {
             return
@@ -197,7 +212,8 @@ function showFilterCount(count) {
     const buttonEl = filterButtonEl()
     const name = buttonEl.title
 
-    buttonEl.querySelector("span").textContent = count > 0 ? count : ""
+    buttonEl.querySelector(`[${Const.attributes.filterCount}]`).textContent =
+        count > 0 ? count : ""
     buttonEl.setAttribute(
         "aria-label",
         count > 0

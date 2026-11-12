@@ -79,6 +79,40 @@ import altitude.core.util.SearchSort
     intercept[IllegalArgumentException](DateRange(Some(last), Some(first)))
   }
 
+  test("A date range reads as its days, each month by its three letters") {
+
+    /**
+     * Setup:
+     *
+     * A range within one year, a range across two years, a single day, a range open at its start and one open at its end, and the
+     * 8th of every month of 2024.
+     *
+     * Assertions:
+     *
+     * A range within a year names the year once, after its last day; across two years each end has its year; a single day is read
+     * once; an open end reads `from` or `until` its day. Every month is its first three letters in English, the fixed table the
+     * panel's date field reads the same range by (`MONTHS` in js/alpine/components/date-range.js).
+     *
+     * Edge cases:
+     *
+     * September is `Sep`, where British English abbreviates it `Sept`.
+     */
+    def day(iso: String) = Some(LocalDate.parse(iso))
+
+    DateRange(day("2024-06-01"), day("2024-06-30")).label shouldBe "1 Jun – 30 Jun 2024"
+    DateRange(day("2023-12-28"), day("2024-01-03")).label shouldBe "28 Dec 2023 – 3 Jan 2024"
+    DateRange(day("2024-06-08"), day("2024-06-08")).label shouldBe "8 Jun 2024"
+    DateRange(day("2024-06-08"), None).label shouldBe "from 8 Jun 2024"
+    DateRange(None, day("2024-06-21")).label shouldBe "until 21 Jun 2024"
+    DateRange(day("2024-09-08"), day("2024-09-21")).label shouldBe "8 Sep – 21 Sep 2024"
+
+    val months = List("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    for ((month, index) <- months.zipWithIndex) {
+      val eighth = Some(LocalDate.of(2024, index + 1, 8))
+      DateRange(eighth, eighth).label shouldBe s"8 $month 2024"
+    }
+  }
+
   test("A query matches all of its people unless told any, and every copy keeps its people match and date ranges") {
 
     /**
@@ -177,7 +211,7 @@ import altitude.core.util.SearchSort
      */
     val taken = DateRange(Some(LocalDate.parse("2024-06-01")), None)
     val imported = DateRange(None, Some(LocalDate.parse("2024-07-04")))
-    val plain = Scope(Map(), None, Set(), Set("p1", "p2"), Set(), Set(), None, None)
+    val plain = Scope(Map(), None, Set(), List("p1", "p2"), Set(), Nil, None, None)
 
     val query = plain.copy(peopleMatch = PeopleMatch.Any, takenRange = Some(taken), importedRange = Some(imported)).query()
     query.peopleMatch shouldBe PeopleMatch.Any

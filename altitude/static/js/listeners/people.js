@@ -6,6 +6,7 @@ import {
     isRequestSuccessful,
 } from "../common/htmx-events.js"
 import { showSuccessSnackBar } from "../common/snackbar.js"
+import { searchAgainForPersonChip } from "../search-results/filtered-title.js"
 import { reloadPersonTitle } from "../search-results/person-title.js"
 import { runSearch } from "../search-results/search.js"
 
@@ -107,7 +108,8 @@ export function registerPeopleListeners(app) {
      * bucket, with the cell's number and a hidden person's ", hidden" text intact. A results title
      * showing that person is read again (`reloadPersonTitle`), the name with the links a name
      * changes, unless the rename came from its own editor, whose response is the new name
-     * (`detail.titleShowsName`).
+     * (`detail.titleShowsName`). A filtered search's title has a chip for them instead, which the
+     * search renders: the search runs again (`searchAgainForPersonChip`).
      */
     document.body.addEventListener(Const.events.personNameEdited, (event) => {
         const { personId, titleShowsName } = event.detail
@@ -117,6 +119,7 @@ export function registerPeopleListeners(app) {
         if (!titleShowsName) {
             reloadPersonTitle(app.context.getRepoId(), personId)
         }
+        searchAgainForPersonChip(personId)
     })
 
     document.body.addEventListener(Const.events.personCoverFaceSet, (event) => {
