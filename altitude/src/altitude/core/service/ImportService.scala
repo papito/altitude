@@ -118,11 +118,15 @@ class ImportService(val app: Altitude):
       destFolderId.foreach {
         folderId =>
           app.service.folder.getById(folderId): Unit
-          if !RequestContext.holds(Permission.Organize) then
-            throw ForbiddenException(Const.Msg.Err.FORBIDDEN_PERMISSION.format(Permission.Organize.label))
+          requireOrganize()
       }
       open(ImportSource.Upload, name, destFolderId, expectedFiles = expectedFiles)
     }
+
+  // What an upload with a destination takes of the context account, beside Import: its files arrive sorted
+  private def requireOrganize(): Unit =
+    if !RequestContext.holds(Permission.Organize) then
+      throw ForbiddenException(Const.Msg.Err.FORBIDDEN_PERMISSION.format(Permission.Organize.label))
 
   /**
    * The folder the Import of the file sorts its files into, none for Triage, as the completion of the file's import reads it. A
@@ -158,15 +162,27 @@ class ImportService(val app: Altitude):
     found
 
   /**
+   * [[ownUpload]] for what gives the Import a file. An upload with a destination sorts its files, and creates the folders their
+   * paths name, so it takes a file only while the account holds Organize, as opening it did: an account whose Organize was taken
+   * away since is refused (`ForbiddenException`) from its next file on, and the page stops sending. Closing the Import takes
+   * [[ownUpload]] alone, so such an upload does not stay open.
+   */
+  private def ownUploadTakingFiles(importId: String): Import =
+    val found = ownUpload(importId)
+    if found.destFolderId.isDefined then requireOrganize()
+    found
+
+  /**
    * Whether the Import takes a file under the path from the context account, before anything of the file is read: a path the
    * uploads refuse (`RelPath.segments`) is a `ValidationException`, an Import that is not the context repository's a
-   * `NotFoundException`, one that is not the account's own upload a `ForbiddenException` ([[ownUpload]]), and one marked complete
-   * an `IllegalOperationException`. [[upload]] decides for good: an Import can be marked complete between the two.
+   * `NotFoundException`, one that is not the account's own upload, or that sorts its files while the account holds no Organize, a
+   * `ForbiddenException` ([[ownUploadTakingFiles]]), and one marked complete an `IllegalOperationException`. [[upload]] decides
+   * for good: an Import can be marked complete between the two.
    */
   def requireTakes(importId: String, relPath: String): Unit =
     RelPath.segments(relPath): Unit
     txManager.asReadOnly {
-      if ownUpload(importId).isComplete then throw complete(importId)
+      if ownUploadTakingFiles(importId).isComplete then throw complete(importId)
     }
 
   /**
@@ -180,7 +196,7 @@ class ImportService(val app: Altitude):
   def failForLostDestination(importId: String, relPath: String, sizeBytes: Long): Option[ImportFile] =
     RelPath.segments(relPath): Unit
     txManager.withTransaction {
-      lostDestination(ownUpload(importId)).map(addFailed(importId, relPath, sizeBytes, _))
+      lostDestination(ownUploadTakingFiles(importId)).map(addFailed(importId, relPath, sizeBytes, _))
     }
 
   /** Adds a file to the Import and fails it with the reason, in the caller's transaction; the file as failed */
@@ -199,14 +215,14 @@ class ImportService(val app: Altitude):
    * on, and the Import file is returned as it stands.
    *
    * A file that is not added is not staged any longer either, and fails the call: a path the uploads refuse or an empty file
-   * (`ValidationException`), an Import that is not the context account's own upload ([[ownUpload]]), and one that is not the
-   * repository's or that takes no more files, as [[addFile]] refuses them. A file of an Import whose destination is in the Trash
-   * is added and failed at once, saying so, its staged file deleted, and is never offered to the queue ([[lostDestination]]; the
-   * upload route asks [[failForLostDestination]] first, so such a file is usually not even staged). Once the file is added,
-   * nothing else settles it until the pipeline has it, so a failure from there on is settled here: a file that cannot be
-   * described, or that the queue refuses (`QueueRefusedException`), is failed with that as its reason
-   * (`PipelineUtils.dropReason`), its staged file deleted, and returned as failed rather than thrown, the file having been
-   * delivered and recorded.
+   * (`ValidationException`), an Import that is not the context account's own upload, or whose destination the account holds no
+   * Organize for any more ([[ownUploadTakingFiles]]), and one that is not the repository's or that takes no more files, as
+   * [[addFile]] refuses them. A file of an Import whose destination is in the Trash is added and failed at once, saying so, its
+   * staged file deleted, and is never offered to the queue ([[lostDestination]]; the upload route asks [[failForLostDestination]]
+   * first, so such a file is usually not even staged). Once the file is added, nothing else settles it until the pipeline has it,
+   * so a failure from there on is settled here: a file that cannot be described, or that the queue refuses
+   * (`QueueRefusedException`), is failed with that as its reason (`PipelineUtils.dropReason`), its staged file deleted, and
+   * returned as failed rather than thrown, the file having been delivered and recorded.
    */
   def upload(
       importId: String,
@@ -219,7 +235,7 @@ class ImportService(val app: Altitude):
         val size = Files.size(staged)
         if size == 0 then throw ValidationException(Const.Msg.Err.EMPTY_FILE)
         val file = txManager.withTransaction {
-          lostDestination(ownUpload(importId)) match
+          lostDestination(ownUploadTakingFiles(importId)) match
             case Some(reason) => addFailed(importId, relPath, size, reason)
             case None => addFile(importId, relPath, size)
         }
@@ -261,7 +277,7 @@ class ImportService(val app: Altitude):
   def addFailedFile(importId: String, relPath: String, sizeBytes: Long): ImportFile =
     RelPath.segments(relPath): Unit
     txManager.withTransaction {
-      ownUpload(importId): Unit
+      ownUploadTakingFiles(importId): Unit
       addFailed(importId, relPath, sizeBytes, ImportService.UPLOAD_FAILED)
     }
 

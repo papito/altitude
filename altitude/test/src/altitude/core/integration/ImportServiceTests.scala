@@ -960,6 +960,49 @@ import altitude.core.util.Query
     }
   }
 
+  test("An upload into a folder takes no more files once its account holds Organize no longer, and can still be closed") {
+
+    /**
+     * Setup:
+     *
+     * An account holding Import and Organize opens two uploads: one into a folder, one to Triage. Its Organize is then taken
+     * away, so it holds Import alone, as its requests do from the next one on.
+     *
+     * Assertions:
+     *
+     * The upload into the folder takes nothing more from the account: asking whether it takes a file, sending one, whose staged
+     * file is deleted, failing one for a lost destination and recording one the page could not send are each refused as
+     * forbidden, naming Organize, and the Import has no file. The account still closes it, so the Import does not stay open.
+     *
+     * Edge cases:
+     *
+     * The upload to Triage, which sorts nothing, takes its file as before.
+     */
+    val folder = testApp.service.folder.add("Sorted")
+    val (sorting, toTriage) = RequestContext.permissions.withValue(Permissions.of(Permission.Import, Permission.Organize)) {
+      (imports.openUpload(destFolderId = folder.id), imports.openUpload())
+    }
+
+    RequestContext.permissions.withValue(Permissions.of(Permission.Import)) {
+      val staged = stagedImage()
+      val refusals = List(
+        intercept[ForbiddenException](imports.requireTakes(sorting.persistedId, "a.jpg")),
+        intercept[ForbiddenException](imports.upload(sorting.persistedId, "New folder/a.jpg", staged)),
+        intercept[ForbiddenException](imports.failForLostDestination(sorting.persistedId, "a.jpg", sizeBytes = 10)),
+        intercept[ForbiddenException](imports.addFailedFile(sorting.persistedId, "a.jpg", sizeBytes = 10))
+      )
+      refusals.map(_.getMessage).toSet shouldBe Set(Const.Msg.Err.FORBIDDEN_PERMISSION.format(Permission.Organize.label))
+      Files.exists(staged) shouldBe false
+      imports.files(sorting.persistedId) shouldBe empty
+
+      imports.closeUpload(sorting.persistedId)
+      stored(sorting).isInProgress shouldBe false
+
+      imports.requireTakes(toTriage.persistedId, "b.jpg")
+      imports.addFailedFile(toTriage.persistedId, "b.jpg", sizeBytes = 10).outcome shouldBe ImportOutcome.Failed
+    }
+  }
+
   test("An uploaded file is added to its Import and imported by the queue into the folder its path names") {
 
     /**
