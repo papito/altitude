@@ -4,6 +4,7 @@ import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.contain
 import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shouldEqual, shouldNot }
+import org.scalatest.tagobjects.Slow
 
 import scala.language.reflectiveCalls
 
@@ -864,7 +865,7 @@ import altitude.core.models.Repository
     counts(rootFolderId) shouldEqual 0
   }
 
-  test("Folder counts are read from the capture-day index alone") {
+  test("Folder counts are read from the capture-day index alone", Slow) {
 
     /**
      * Setup:

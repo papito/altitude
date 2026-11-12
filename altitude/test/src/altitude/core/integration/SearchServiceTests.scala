@@ -13,6 +13,7 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
 import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe, shouldNot }
+import org.scalatest.tagobjects.Slow
 import org.slf4j.LoggerFactory
 import scalasql.core.SqlStr
 import scalasql.core.SqlStr.SqlStringSyntax
@@ -1384,7 +1385,7 @@ import altitude.core.util.*
     documentBody(asset) shouldBe Some("lake jpg")
   }
 
-  test("Folder browsing reads the folder index") {
+  test("Folder browsing reads the folder index", Slow) {
 
     /**
      * Setup:
@@ -1405,7 +1406,7 @@ import altitude.core.util.*
     withClue(plan)(plan should include("asset_folder"))
   }
 
-  test("A Date Imported page reads the import-time index alone") {
+  test("A Date Imported page reads the import-time index alone", Slow) {
 
     /**
      * Setup:
@@ -1441,7 +1442,7 @@ import altitude.core.util.*
     }
   }
 
-  test("A Date Taken page reads the capture-day index in order") {
+  test("A Date Taken page reads the capture-day index in order", Slow) {
 
     /**
      * Setup:
@@ -1467,7 +1468,9 @@ import altitude.core.util.*
     }
   }
 
-  test("A count within a Date Taken range seeks the capture-day index, and within a Date Imported range the import-time index") {
+  test(
+    "A count within a Date Taken range seeks the capture-day index, and within a Date Imported range the import-time index",
+    Slow) {
 
     /**
      * Setup:
@@ -1513,7 +1516,7 @@ import altitude.core.util.*
     }
   }
 
-  test("A page within a Date Taken range, sorted by Date Imported, reads the import-time index alone") {
+  test("A page within a Date Taken range, sorted by Date Imported, reads the import-time index alone", Slow) {
 
     /**
      * Setup:
@@ -1554,7 +1557,7 @@ import altitude.core.util.*
     plans.foreach(plan => withClue(plan)(orderedRead.r.findFirstIn(plan).isDefined shouldBe true))
   }
 
-  test("A page within a Date Imported range, sorted by Date Taken, reads the capture-day index alone") {
+  test("A page within a Date Imported range, sorted by Date Taken, reads the capture-day index alone", Slow) {
 
     /**
      * Setup:
@@ -1596,7 +1599,7 @@ import altitude.core.util.*
     plans.foreach(plan => withClue(plan)(orderedRead.r.findFirstIn(plan).isDefined shouldBe true))
   }
 
-  test("People matched all are read through the index that leads with the person and carries the asset") {
+  test("People matched all are read through the index that leads with the person and carries the asset", Slow) {
 
     /**
      * Setup:
@@ -1652,7 +1655,7 @@ import altitude.core.util.*
     }
   }
 
-  test("The triage view reads the indexes of the triaged assets alone") {
+  test("The triage view reads the indexes of the triaged assets alone", Slow) {
 
     /**
      * Setup:
@@ -1743,7 +1746,7 @@ import altitude.core.util.*
     withClue(plan)("person_0[13]".r.findFirstIn(plan).isDefined shouldBe true)
   }
 
-  test("The live copy of a content is looked up through the index of the live assets") {
+  test("The live copy of a content is looked up through the index of the live assets", Slow) {
 
     /**
      * Setup:
@@ -1817,7 +1820,7 @@ import altitude.core.util.*
     found("-zzz") shouldBe Set(beach)
   }
 
-  test("A selective search reads the assets by their primary key") {
+  test("A selective search reads the assets by their primary key", Slow) {
 
     /**
      * Setup:
@@ -1844,7 +1847,7 @@ import altitude.core.util.*
       (plan should include).regex(if (isPostgres) "asset_pkey|asset_id_repository_id_key" else "sqlite_autoindex_asset_[12]"))
   }
 
-  test("The name sources of a Search text are read from their indexes alone") {
+  test("The name sources of a Search text are read from their indexes alone", Slow) {
 
     /**
      * Setup:

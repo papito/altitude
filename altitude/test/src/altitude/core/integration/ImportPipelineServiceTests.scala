@@ -29,6 +29,7 @@ import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatest.tagobjects.Slow
 import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
@@ -748,7 +749,7 @@ import altitude.core.util.Query
     faceFiles should contain theSameElementsAs filesOfOriginal
   }
 
-  test("More photos of one person than the import has threads, imported at once, are one Person") {
+  test("More photos of one person than the import has threads, imported at once, are one Person", Slow) {
 
     /**
      * Setup:

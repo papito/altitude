@@ -6,6 +6,7 @@ import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatest.tagobjects.Slow
 import org.scalatest.time.Millis
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
@@ -402,7 +403,7 @@ import altitude.core.util.Query
     }
   }
 
-  test("A recycle bin larger than the purge queue admits at once is emptied completely") {
+  test("A recycle bin larger than the purge queue admits at once is emptied completely", Slow) {
 
     /**
      * Setup:

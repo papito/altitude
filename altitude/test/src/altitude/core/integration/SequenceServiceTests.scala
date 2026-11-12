@@ -4,6 +4,7 @@ import altitude.test.IntegrationTestUtil
 import altitude.test.TestVideos
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatest.tagobjects.Slow
 
 import altitude.core.Altitude
 import altitude.core.ConstraintException
@@ -139,7 +140,7 @@ import altitude.core.util.SequenceRule
     List(first, second).map(stored(_).sequenceId) shouldBe List(None, None)
   }
 
-  test("The candidates are read through the triage capture-day index") {
+  test("The candidates are read through the triage capture-day index", Slow) {
 
     /**
      * Setup:
@@ -169,7 +170,7 @@ import altitude.core.util.SequenceRule
     withClue(plan)(plan should include("asset_triage_date_taken"))
   }
 
-  test("The undated candidates are walked backwards through the undated triage index") {
+  test("The undated candidates are walked backwards through the undated triage index", Slow) {
 
     /**
      * Setup:

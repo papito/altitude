@@ -8,6 +8,7 @@ import java.util.concurrent.Executors
 import org.opencv.core.Mat
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatest.tagobjects.Slow
 
 import scala.jdk.CollectionConverters.*
 
@@ -201,7 +202,7 @@ import altitude.core.util.ImageUtil.matFromBytes
     testApp.service.faceDetection.extractFaces(bytes) shouldBe empty
   }
 
-  test("Embeddings computed concurrently match the ones computed one at a time") {
+  test("Embeddings computed concurrently match the ones computed one at a time", Slow) {
 
     /**
      * Setup:

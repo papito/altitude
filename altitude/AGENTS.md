@@ -489,7 +489,8 @@ The screen is `GET /settings/r/:repoId` (`routes/web/SettingsController`, a full
 make compile              # mill altitude.compile – always do this after editing
 make watch                # hot-reload dev server (ENV=dev)
 make lint                 # scalafmt + scalafix + prettier/eslint (eslint.config.js: no-undef, no-unused-vars, import/no-cycle)
-make test                 # the four suite bundles at once (needs the Postgres test container)
+make test                 # the four suite bundles at once, leaving out the tests tagged `Slow` (needs the Postgres test container)
+make test-with-slow       # `make test` with the `Slow` tests: NEVER run it unless the user asks for it
 make test-local           # the unit, SQLite and controller bundles at once: no Postgres needed
 make test-sqlite          # safe: no Postgres needed
 make test-controllers     # safe: controller-only tests
@@ -513,6 +514,12 @@ To focus a test, tag it with the `Focused` tag:
 ```scala
 test("my wip test", Focused) { ... }
 ```
+
+A test that seeds a library's worth of rows (`SearchPlans.atScale`), runs a model many times over, or binds tens of thousands of IDs is tagged `Slow` (`org.scalatest.tagobjects.Slow`, the per-test form of `org.scalatest.tags.Slow`, which on a `FunSuite` could only tag a whole suite):
+```scala
+test("A Date Taken page reads the capture-day index in order", Slow) { ... }
+```
+Every target but `make test-with-slow` and the `test-focused*` ones leaves them out (`-l org.scalatest.tags.Slow`, `SKIP_SLOW` in the `Makefile`), so a focused `Slow` test still runs. **Never run `make test-with-slow` unless the user asks for it.** To check a `Slow` test you changed, focus it.
 
 ## Test Structure
 

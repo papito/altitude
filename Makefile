@@ -36,11 +36,17 @@ lint:
 	mill mill.scalalib.scalafmt/
 
 
+# Tests tagged Slow (org.scalatest.tagobjects.Slow) are left out of every target but test-with-slow and the focused ones
+SKIP_SLOW = -l org.scalatest.tags.Slow
+
 test:
+	ENV=test mill -j4 altitude.test.testOnly '*SuiteBundle' -- $(SKIP_SLOW)
+
+test-with-slow:
 	ENV=test mill -j4 altitude.test.testOnly '*SuiteBundle'
 
 test-local:
-	ENV=test mill -j3 altitude.test.testOnly '*UnitSuiteBundle' '*SqliteSuiteBundle' '*ControllerSuiteBundle'
+	ENV=test mill -j3 altitude.test.testOnly '*UnitSuiteBundle' '*SqliteSuiteBundle' '*ControllerSuiteBundle' -- $(SKIP_SLOW)
 
 test-focused:
 	ENV=test mill -j4 altitude.test.testOnly '*SuiteBundle' -- -n focused -oD
@@ -58,16 +64,16 @@ test-focused-controllers:
 	ENV=test mill -j1 altitude.test.testOnly *ControllerSuiteBundle -- -n focused -oD
 
 test-psql:
-	ENV=test mill -j1 altitude.test.testOnly *PostgresSuiteBundle --show-output
+	ENV=test mill -j1 altitude.test.testOnly *PostgresSuiteBundle --show-output -- $(SKIP_SLOW)
 
 test-sqlite:
-	ENV=test mill -j1 altitude.test.testOnly *SqliteSuiteBundle --show-output
+	ENV=test mill -j1 altitude.test.testOnly *SqliteSuiteBundle --show-output -- $(SKIP_SLOW)
 
 test-unit:
-	ENV=test mill altitude.test.testOnly *UnitSuiteBundle --show-output
+	ENV=test mill altitude.test.testOnly *UnitSuiteBundle --show-output -- $(SKIP_SLOW)
 
 test-controllers:
-	ENV=test mill altitude.test.testOnly *ControllerSuiteBundle --show-output
+	ENV=test mill altitude.test.testOnly *ControllerSuiteBundle --show-output -- $(SKIP_SLOW)
 
 db:
 	docker compose -f docker-compose.yml -f docker-compose.test.yml up
