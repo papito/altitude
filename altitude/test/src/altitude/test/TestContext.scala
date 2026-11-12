@@ -316,22 +316,28 @@ class TestContext(val testApp: Altitude) {
 
   /**
    * Whether a scan of the Watch folder is running in the instance of `service`, or a file one handed to the import pipeline is in
-   * it still: the pipeline's last stage has not told the Watch folder what became of it. The service shows the first, on the
-   * Watch folder's card, and keeps the second to itself, in memory, with nothing stored to read it from, so the files in the
-   * pipeline are read off its field.
+   * it still: the pipeline's last stage has not told the Watch folder what became of it. The service keeps both in memory, for
+   * itself, with nothing stored to read the second from, and its cards show the first for the context repository's Watch folders
+   * alone, so both are read off its fields, whatever Library the Watch folder is in.
    */
   def isWatchFolderWorking(watchFolderId: String, service: WatchFolderService = testApp.service.watchFolder): Boolean = {
-    val inFlight = classOf[WatchFolderService].getDeclaredField("inFlight")
-    inFlight.setAccessible(true)
-    val ofWatchFolder = inFlight.get(service).asInstanceOf[java.util.Map[String, AnyRef]].values.asScala.map {
+    // A field of the service by its name in the source; the compiler prefixes the name of one a closure reads
+    def state(name: String): AnyRef = {
+      val field =
+        classOf[WatchFolderService].getDeclaredFields.find(f => f.getName == name || f.getName.endsWith("$$" + name)).get
+      field.setAccessible(true)
+      field.get(service)
+    }
+
+    val scanning = state("scanning").asInstanceOf[java.util.Set[String]]
+    val inFlight = state("inFlight").asInstanceOf[java.util.Map[String, AnyRef]].values.asScala.map {
       file =>
         val watchFolder = file.getClass.getDeclaredMethod("watchFolderId")
         watchFolder.setAccessible(true)
         watchFolder.invoke(file)
     }
 
-    service.cards().exists(card => card.watchFolder.id.contains(watchFolderId) && card.isScanning) ||
-    ofWatchFolder.exists(_ == watchFolderId)
+    scanning.contains(watchFolderId) || inFlight.exists(_ == watchFolderId)
   }
 
   /**
