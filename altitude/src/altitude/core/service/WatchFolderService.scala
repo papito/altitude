@@ -98,6 +98,48 @@ object WatchFolderService:
   // A file of a Watch folder's directory as a walk finds it: its path under the directory, and where it is
   private case class Found(relPath: String, path: Path, sizeBytes: Long, modifiedAt: FileTime)
 
+  // What a walk of a Watch folder's directory came to: its files in path order, and the directory of the app's own that the
+  // walk met, if it met one, at which it ended
+  private case class Walked(files: List[Found], own: Option[Path])
+
+  /**
+   * The directories the app stores into (`paths`, each where it really is, symbolic links resolved), which no Watch folder may
+   * read or delete from. A directory is told to be one of them by where it is and by what it is: its file key, the file system's
+   * identity of it (`Files.isSameFile` where the file system gives no key), which a second path to it shares that no symbolic
+   * link explains, such as a volume mounted twice.
+   */
+  private class OwnDirectories(val paths: List[Path]):
+    private val keys: Set[AnyRef] = paths.flatMap(path => attributesOf(path).flatMap(read => Option(read.fileKey))).toSet
+
+    private def attributesOf(path: Path): Option[BasicFileAttributes] =
+      try Some(Files.readAttributes(path, classOf[BasicFileAttributes]))
+      catch case _: IOException => None
+
+    /** Whether the directory, read with these attributes, is one of them */
+    def has(directory: Path, attributes: BasicFileAttributes): Boolean =
+      Option(attributes.fileKey) match
+        case Some(key) => keys.contains(key)
+        case None =>
+          paths.exists {
+            path =>
+              try Files.isSameFile(directory, path)
+              catch case _: IOException => false
+          }
+
+    /** The first of them that is the path or a directory above it, if any */
+    def at(path: Path): Option[Path] =
+      Iterator.iterate(path)(_.getParent).takeWhile(_ != null).find(step => attributesOf(step).exists(has(step, _)))
+
+    /**
+     * Whether the directory at the real path is one of them, lies inside one or holds one: by the paths, and by what the
+     * directory and each directory above it is, and what each directory above one of them is
+     */
+    def overlaps(real: Path): Boolean =
+      paths.exists(path => real.startsWith(path) || path.startsWith(real)) || at(real).isDefined || {
+        val candidate = OwnDirectories(List(real))
+        paths.exists(candidate.at(_).isDefined)
+      }
+
   // A file of a Watch folder that is in the import pipeline, as it was when its copy was staged
   private case class InFlight(watchFolderId: String, relPath: String, source: Path, sizeBytes: Long, modifiedAt: FileTime)
 
@@ -180,10 +222,11 @@ class WatchFolderService(val app: Altitude):
 
   /**
    * Adds a Watch folder to the context repository, owned by the context account. Its name is required; its path must be absolute
-   * and an existing directory the server can read, and write to when imported files are deleted, that overlaps neither the app's
-   * data directory nor another Watch folder of any Library (the same directory, or one inside the other), each compared by real
-   * path, symbolic links resolved; its destination, if it has one, must be a live folder of the repository. A refusal is a
-   * `ValidationException` naming every field refused; a destination that is no folder of the repository is not found.
+   * and an existing directory the server can read, and write to when imported files are deleted, that overlaps neither one of the
+   * app's own directories ([[ownDirectories]]) nor another Watch folder of any Library (the same directory, or one inside the
+   * other), each compared by real path, symbolic links resolved; its destination, if it has one, must be a live folder of the
+   * repository. A refusal is a `ValidationException` naming every field refused; a destination that is no folder of the
+   * repository is not found.
    */
   def add(spec: WatchFolderSpec): WatchFolder =
     txManager.withTransaction {
@@ -350,9 +393,12 @@ class WatchFolderService(val app: Altitude):
    */
   def fileCount(path: String, self: Option[String] = None): Option[Int] =
     val others = txManager.asReadOnly(dao.everywhere().filterNot(placed => self.contains(placed.watchFolder.persistedId)))
+    val own = ownDirectories()
     parsed(path).toOption
-      .filter(pathProblem(_, deletesImported = false, others).isEmpty)
-      .map(path => walk(path.toRealPath()).size)
+      .filter(pathProblem(_, deletesImported = false, others, own).isEmpty)
+      .map(path => walk(path.toRealPath(), own))
+      .filter(_.own.isEmpty)
+      .map(_.files.size)
 
   /** Pauses every Watch folder the account owns, in every Library, in the transaction that deactivates or demotes it */
   def pauseOwnedBy(accountId: String, reason: String): Unit =
@@ -425,7 +471,9 @@ class WatchFolderService(val app: Altitude):
         None
       case Right(path) =>
         val others = dao.everywhere().filterNot(placed => self.exists(_.id == placed.watchFolder.id))
-        pathProblem(path, spec.deletesImported, others).foreach(problem => refused.errors += F.PATH -> problem.error)
+        pathProblem(path, spec.deletesImported, others, ownDirectories()).foreach {
+          problem => refused.errors += F.PATH -> problem.error
+        }
         Some(path)
 
     // Not found, for a folder that is not the repository's
@@ -451,11 +499,36 @@ class WatchFolderService(val app: Altitude):
     catch case _: IOException => path.toAbsolutePath.normalize()
 
   /**
-   * What keeps the directory at the path from being a Watch folder's, if anything: it is missing, no directory, not readable, not
-   * writable when imported files are deleted, or it overlaps the app's data directory or one of `others`, the other Watch folders
-   * of the instance: the same directory, or one inside the other, by real path
+   * The directories the app stores into, each where it really is: the data directory, staging, the SQLite database's directory,
+   * and the file store, down to each Library's directory and the directories in it (its files, Previews and faces). Any of them
+   * may be a symbolic link that leads out of the data directory, a store kept on another volume, so each is resolved on its own
+   * rather than taken to lie under the data directory's real path. One that is not there is left out, but for the data directory,
+   * which is then taken as it is written.
    */
-  private def pathProblem(path: Path, deletesImported: Boolean, others: List[WatchFolderDao.Placed]): Option[PathProblem] =
+  private def ownDirectories(): OwnDirectories =
+    val data = Path.of(app.dataPath)
+    val store = data.resolve(Const.DataStore.REPOSITORIES)
+    val libraries = directoriesIn(store)
+    val parts = app.service.staging.dir :: store :: libraries ::: libraries.flatMap(directoriesIn) ::: app.sqliteDir.toList
+
+    OwnDirectories((realOrWritten(data) :: parts.filter(Files.isDirectory(_)).map(realOrWritten)).distinct)
+
+  // The directories in a directory, a symbolic link to one included; none for a directory that cannot be listed
+  private def directoriesIn(directory: Path): List[Path] =
+    try Using.resource(Files.newDirectoryStream(directory))(_.asScala.filter(Files.isDirectory(_)).toList)
+    catch case _: IOException => Nil
+
+  /**
+   * What keeps the directory at the path from being a Watch folder's, if anything: it is missing, no directory, not readable, not
+   * writable when imported files are deleted, or it overlaps one of the app's own directories (`own`) or one of `others`, the
+   * other Watch folders of the instance: the same directory, or one inside the other, by real path, and for the app's own
+   * directories by what the directories are as well (`OwnDirectories.overlaps`)
+   */
+  private def pathProblem(
+      path: Path,
+      deletesImported: Boolean,
+      others: List[WatchFolderDao.Placed],
+      own: OwnDirectories): Option[PathProblem] =
     val E = Const.Msg.Err
     val R = Const.WatchFolder
 
@@ -465,8 +538,7 @@ class WatchFolderService(val app: Altitude):
       val real = realOrWritten(path)
       if !isListable(real) then Some(PathProblem(E.WATCH_PATH_UNREADABLE, R.PATH_UNREADABLE))
       else if deletesImported && !Files.isWritable(real) then Some(PathProblem(E.WATCH_PATH_UNWRITABLE, R.PATH_UNWRITABLE))
-      else if overlap(real, realOrWritten(Path.of(app.dataPath))) then
-        Some(PathProblem(E.WATCH_PATH_OVERLAPS_DATA, R.PATH_OVERLAPS_DATA))
+      else if own.overlaps(real) then Some(PathProblem(E.WATCH_PATH_OVERLAPS_DATA, R.PATH_OVERLAPS_DATA))
       else
         others.iterator
           .flatMap {
@@ -484,9 +556,6 @@ class WatchFolderService(val app: Altitude):
               error.map(PathProblem(_, R.PATH_OVERLAPS.format(other.name)))
           }
           .nextOption()
-
-  // Whether one directory is the other, or inside it
-  private def overlap(one: Path, other: Path): Boolean = one.startsWith(other) || other.startsWith(one)
 
   // Whether the server can list the directory, which takes more than its permission bits say on some file systems
   private def isListable(directory: Path): Boolean =
@@ -619,18 +688,26 @@ class WatchFolderService(val app: Altitude):
             case None =>
               if notScanned.remove(id) != null then logger.info(s"Watch folder [$id] \"${watchFolder.name}\" is scanned again")
               val path = Path.of(watchFolder.path)
-              pathProblem(path, watchFolder.deletesImported, others) match
-                case Some(problem) =>
-                  available(watchFolder, Some(problem.reason))
-                  Left(ScanResult.Blocked(problem.reason))
+              val own = ownDirectories()
+
+              def unavailable(reason: String): Either[ScanResult, Run] =
+                available(watchFolder, Some(reason))
+                Left(ScanResult.Blocked(reason))
+
+              pathProblem(path, watchFolder.deletesImported, others, own) match
+                case Some(problem) => unavailable(problem.reason)
                 case None =>
                   val root = path.toRealPath()
                   // Before the walk: no file of it is looked at earlier than this
                   val walkStarted = Instant.now()
-                  val found = walk(root)
-                  val files = txManager.withTransaction(remember(watchFolder, found, walkStarted))
-                  logger.debug(s"Watch folder [$id] \"${watchFolder.name}\": ${found.size} files found, ${files.size} to read")
-                  Right(Run(repository, watchFolder, owner, root, files, pipeline))
+                  walk(root, own) match
+                    // Nothing of such a directory is remembered or read, the files beside the app's own included
+                    case Walked(_, Some(met)) => unavailable(Const.WatchFolder.PATH_HOLDS_DATA.format(met))
+                    case Walked(found, None) =>
+                      val files = txManager.withTransaction(remember(watchFolder, found, walkStarted))
+                      logger.debug(
+                        s"Watch folder [$id] \"${watchFolder.name}\": ${found.size} files found, ${files.size} to read")
+                      Right(Run(repository, watchFolder, owner, root, files, pipeline))
     }
 
   // The Watch folder, unless it was removed
@@ -663,17 +740,24 @@ class WatchFolderService(val app: Altitude):
    * The files of the directory and of the directories below it, in path order. A symbolic link is neither followed nor read, a
    * file or a directory under a name imports ignore is left out, a directory with everything in it, and so are an empty file and
    * anything that is no regular file. What cannot be read is left out, for a later scan.
+   *
+   * The walk never enters one of the app's own directories (`own`), whatever path it meets it under, the watched directory
+   * included: it ends there, with that directory, and whoever asked for the walk reads none of the files it found.
    */
-  private def walk(root: Path): List[Found] =
+  private def walk(root: Path, own: OwnDirectories): Walked =
     val found = List.newBuilder[Found]
+    var met: Option[Path] = None
 
     // Symbolic links are not followed, which is the walk's default: a link is visited as a file that is one
     Files.walkFileTree(
       root,
       new SimpleFileVisitor[Path]:
         override def preVisitDirectory(directory: Path, attributes: BasicFileAttributes): FileVisitResult =
+          if own.has(directory, attributes) then
+            met = Some(directory)
+            FileVisitResult.TERMINATE
           // The directory watched is the one the Admin named, whatever its name
-          if directory != root && IgnoredFiles.ignores(directory.getFileName.toString) then FileVisitResult.SKIP_SUBTREE
+          else if directory != root && IgnoredFiles.ignores(directory.getFileName.toString) then FileVisitResult.SKIP_SUBTREE
           else FileVisitResult.CONTINUE
 
         override def visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult =
@@ -686,7 +770,7 @@ class WatchFolderService(val app: Altitude):
           FileVisitResult.CONTINUE
     )
 
-    found.result().sortBy(_.relPath)
+    Walked(found.result().sortBy(_.relPath), met)
 
   // A file's path under the directory, as an Import file's is written: its names separated by "/"
   private def relPathOf(root: Path, file: Path): String =
@@ -880,7 +964,9 @@ class WatchFolderService(val app: Altitude):
    * written, while the file is remembered as it was staged (one that changed since is a new file):
    *
    *   - imported, or a duplicate of an asset of the Library whose own import is complete: handled, and not read again;
-   *   - of an unsupported type, or an image or video that cannot be decoded: final, until the file changes;
+   *   - of an unsupported type, or an image or video that cannot be decoded: final, until the file changes; and so is a duplicate
+   *     that is the stored file of the asset it matches, under another path ([[isStoredFileOf]]): a file of the app's own, which
+   *     is never handled, so never deleted;
    *   - failed for the Watch folder's sake rather than its own (the destination folder went to the Trash, the owner was
    *     deactivated or deleted), or a duplicate of an asset whose import is not complete or that is gone since: untouched, so a
    *     later scan reads it again;
@@ -901,7 +987,7 @@ class WatchFolderService(val app: Altitude):
     val deleting = txManager.withTransaction {
       find(file.watchFolderId).flatMap {
         watchFolder =>
-          whatBecame(asset, cause) match
+          whatBecame(file, asset, cause) match
             case Settled.Handled if watchFolder.deletesImported && watchFolder.isPaused =>
               logger.info(s"${file.source} is not deleted while its Watch folder is paused: it is read again once it resumes")
               None
@@ -920,24 +1006,44 @@ class WatchFolderService(val app: Altitude):
     deleting.foreach(deleteSource(_, file))
 
   // What a file's memory does with what became of the file
-  private def whatBecame(asset: Asset, cause: Option[Throwable]): Settled =
+  private def whatBecame(file: InFlight, asset: Asset, cause: Option[Throwable]): Settled =
     cause match
       case None => Settled.Handled
       // Only a copy whose own import is complete stands for the file: one still in the pipeline may yet fail
       case Some(_: DuplicateException) =>
-        if app.service.asset.getByChecksum(asset.checksum).exists(_.isPipelineProcessed) then Settled.Handled
-        else Settled.Untouched
+        app.service.asset.getByChecksum(asset.checksum).filter(_.isPipelineProcessed) match
+          case Some(existing) if isStoredFileOf(existing, file.source) =>
+            logger.warn(
+              s"${file.source} is the stored file of asset [${existing.persistedId}] itself, under another path: Watch folder " +
+                s"[${file.watchFolderId}] reads the app's own store. It is not deleted, and not read again until it changes")
+            Settled.Final
+          case Some(_) => Settled.Handled
+          case None => Settled.Untouched
       case Some(_: UnsupportedMediaTypeException | _: ImageException | _: VideoException) => Settled.Final
       case Some(_: ImporterUnavailableException) => Settled.Untouched
       case Some(lost: ImportDestinationException) if lost.getMessage == Const.Msg.Err.DESTINATION_IN_TRASH => Settled.Untouched
       case Some(_) => Settled.Failed
 
   /**
+   * Whether a Watch folder's file is the stored file of the asset, the same file under another path (a hard link to it, or the
+   * store reached through a second mount), which deleting would take from the Library. A file that cannot be told from it, an I/O
+   * error, counts as it: nothing is deleted on a doubt.
+   */
+  private def isStoredFileOf(asset: Asset, source: Path): Boolean =
+    val stored = app.service.fileStore.assetFile(asset.persistedId)
+    try Files.exists(stored) && Files.isSameFile(source, stored)
+    catch
+      case failure: IOException =>
+        logger.warn(s"Cannot tell $source from the stored file of asset [${asset.persistedId}]", failure)
+        true
+
+  /**
    * Deletes a handled file from its Watch folder's directory, and then the directories it leaves empty, up to the watched
    * directory, which stays. The file must be the one that was imported: under the directory's real path as it is now, below no
    * symbolic link, a regular file, and with the size and the modified time it had when its copy was staged; anything else is left
-   * where it is, a changed file for the next scan to read as a new one. A directory that still holds anything, an ignored file
-   * included, stays. A delete that fails is logged at WARN, and the file stays remembered as handled.
+   * where it is, a changed file for the next scan to read as a new one. A file in one of the app's own directories, or below one,
+   * whatever path leads there, is never deleted. A directory that still holds anything, an ignored file included, stays. A delete
+   * that fails is logged at WARN, and the file stays remembered as handled.
    */
   private def deleteSource(watchFolder: WatchFolder, file: InFlight): Unit =
     val source = file.source
@@ -948,6 +1054,10 @@ class WatchFolderService(val app: Altitude):
         logger.warn(s"$source is not in the directory of Watch folder [${watchFolder.persistedId}] any more: not deleted")
       else if !isUnchanged(source, file.sizeBytes, file.modifiedAt) then
         logger.info(s"$source changed since it was read, or is gone: not deleted")
+      else if ownDirectories().at(parent).isDefined then
+        logger.warn(
+          s"$source is in a directory of the app's own data, which Watch folder [${watchFolder.persistedId}] reaches under " +
+            "another path: not deleted")
       else
         Files.delete(source)
         logger.debug(s"Deleted $source, imported by Watch folder [${watchFolder.persistedId}]")

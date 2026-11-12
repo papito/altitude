@@ -199,6 +199,27 @@ import altitude.core.util.Sha256
   private def addLibrary(): Repository =
     testApp.service.repository.addRepository(name = TestContext.nextRepositoryName(), fileStoreType = Const.StorageEngineName.FS)
 
+  /** An asset of the Library imported from a file, by a Watch folder of its own, so its stored file has the content it names */
+  private def importedAsset(): Asset = {
+    val dir = directory("library")
+    val file = image(dir, "known.png")
+    scanTwice(watch(dir, name = "Library")) shouldBe ScanResult.Scanned(1)
+    assetOf(file).get
+  }
+
+  /**
+   * Keeps the store of the test's Library outside the data directory while `work` runs, as a store on another volume is kept: its
+   * directory in the data directory is a symbolic link to `target`
+   */
+  private def withStoreAt[T](target: Path)(work: => T): T = {
+    val inData = Path.of(testApp.dataPath, Const.DataStore.REPOSITORIES, testContext.repository.persistedId)
+    FileUtils.deleteDirectory(inData.toFile)
+    Files.createDirectories(inData.getParent)
+    Files.createSymbolicLink(inData, target)
+    try work
+    finally Files.delete(inData)
+  }
+
   test("A Watch folder is added for its Library with the account that adds it as its owner") {
 
     /**
@@ -352,6 +373,42 @@ import altitude.core.util.Sha256
     watchFolders.cards() shouldBe empty
     watch(sibling, name = "Sibling").path shouldBe sibling.toString
     switchContextRepo(firstLibrary)
+  }
+
+  test(
+    "A Watch folder is refused where a symbolic link in the data directory leads: on the store kept there, around it, inside it") {
+
+    /**
+     * Setup:
+     *
+     * A temporary directory "volume" holding "store" and "photos". The store of the test's Library is kept in "store": its
+     * directory in the data directory is a symbolic link to it. An asset imported into the Library, so the store holds its file.
+     *
+     * Assertions:
+     *
+     * A Watch folder on "store", on "volume", which holds it, and on the directory of the Library's files inside it is refused,
+     * on the path's field, as overlapping the app's data directory, although none of the three paths is under the data directory.
+     * Nothing is added.
+     *
+     * Edge cases:
+     *
+     * "photos", which lies beside the store, is taken.
+     */
+    val volume = directory("volume")
+    val store = Files.createDirectory(volume.resolve("store"))
+    val photos = Files.createDirectory(volume.resolve("photos"))
+
+    withStoreAt(store) {
+      val stored = testApp.service.fileStore.assetFile(testContext.persistAsset(user = Some(admin)).persistedId).toRealPath()
+      stored.startsWith(store) shouldBe true
+
+      List(store, volume, stored.getParent.getParent).foreach {
+        path => refusal(watch(path)) shouldBe Map(F.PATH -> E.WATCH_PATH_OVERLAPS_DATA)
+      }
+      watchFolders.cards() shouldBe empty
+
+      watch(photos).path shouldBe photos.toString
+    }
   }
 
   test("Of two Watch folders added at once on a directory and on one inside it, the second is refused") {
@@ -1375,6 +1432,89 @@ import altitude.core.util.Sha256
     Files.isSymbolicLink(dir.resolve("album")) shouldBe true
     Files.isSymbolicLink(top) shouldBe true
     Files.exists(nested) shouldBe true
+  }
+
+  test(
+    "A Watch folder whose directory has come to hold the app's store is unavailable: nothing of the store is read or deleted") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder that deletes imported files, on a temporary directory "volume" with an image in "photos". The store of the
+     * test's Library is then moved into "volume": its directory in the data directory becomes a symbolic link to "volume/store".
+     * An asset is imported into the Library, by another Watch folder, so "volume/store" holds its file and its Preview, both
+     * files a scan would take: the file a duplicate of the asset, the Preview a new image.
+     *
+     * Assertions:
+     *
+     * Two scans are both blocked, the path overlapping the app's data directory, which the card says beside Unavailable. No
+     * Import is opened, nothing is remembered, and the asset's stored file and its Preview are where they were, as is the image
+     * in "photos".
+     *
+     * Edge cases:
+     *
+     * The deletion notice counts no files for the directory.
+     */
+    val volume = directory("volume")
+    val photo = image(volume, "photos/new.png")
+    val store = Files.createDirectory(volume.resolve("store"))
+    val watchFolder = watch(volume, deletesImported = true)
+
+    withStoreAt(store) {
+      val stored = testApp.service.fileStore.assetFile(importedAsset().persistedId).toRealPath()
+      stored.startsWith(store) shouldBe true
+      val before = tree(volume)
+      before.count(_.endsWith(".webp")) shouldBe 1
+
+      scanAndSettle(watchFolder) shouldBe ScanResult.Blocked(Const.WatchFolder.PATH_OVERLAPS_DATA)
+      scanAndSettle(watchFolder) shouldBe ScanResult.Blocked(Const.WatchFolder.PATH_OVERLAPS_DATA)
+
+      val card = watchFolders.cards().find(_.watchFolder.id == watchFolder.id).get
+      (card.status, card.reason) shouldBe (WatchFolderStatus.Unavailable, Some(Const.WatchFolder.PATH_OVERLAPS_DATA))
+      importsOf(watchFolder) shouldBe empty
+      memory(watchFolder) shouldBe empty
+      tree(volume) shouldBe before
+      Files.exists(stored) shouldBe true
+      Files.exists(photo) shouldBe true
+      watchFolders.fileCount(volume.toString, watchFolder.id) shouldBe None
+    }
+  }
+
+  test("A file that is the stored file of the asset it duplicates is not deleted, nor remembered as handled") {
+
+    /**
+     * Setup:
+     *
+     * A Library holding an asset, imported by another Watch folder. A Watch folder that deletes imported files, on a temporary
+     * directory on the store's file system, beside the test's data directory, holding two files with the asset's content: a hard
+     * link to the asset's stored file, which is that file under a second path, and a copy of it.
+     *
+     * Assertions:
+     *
+     * After two scans both are recorded as already in the Library. The copy is deleted and remembered as handled. The link is
+     * still in the directory, and the asset's stored file in the store; the link is remembered as final, so no later scan reads
+     * it again.
+     */
+    val stored = testApp.service.fileStore.assetFile(importedAsset().persistedId).toRealPath()
+    // Beside the directory that holds the data directory: on its file system, which a hard link cannot leave, and outside it
+    val dir = Files.createTempDirectory(Path.of(testApp.dataPath).toRealPath().getParent.getParent, "watched-links")
+
+    try {
+      val link = Files.createLink(dir.resolve("link.png"), stored)
+      val copy = Files.copy(stored, dir.resolve("copy.png"))
+      val watchFolder = watch(dir, deletesImported = true)
+
+      scanTwice(watchFolder) shouldBe ScanResult.Scanned(2)
+
+      recorded(watchFolder).map(file => (file._1, file._2)).toSet shouldBe
+        Set(("copy.png", ImportOutcome.Duplicate), ("link.png", ImportOutcome.Duplicate))
+      Files.exists(copy) shouldBe false
+      Files.exists(link) shouldBe true
+      Files.exists(stored) shouldBe true
+      memory(watchFolder) shouldBe Map("copy.png" -> (WatchFileState.Handled, 0), "link.png" -> (WatchFileState.Final, 0))
+
+      scanAndSettle(watchFolder) shouldBe ScanResult.Scanned(0)
+    } finally FileUtils.deleteDirectory(dir.toFile)
   }
 
   test("A paused Watch folder deletes nothing, and reads the file again once it is resumed") {

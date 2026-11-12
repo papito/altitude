@@ -5,6 +5,7 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigValueFactory
 import java.io.File
 import java.lang.management.ManagementFactory
+import java.nio.file.Path
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
 import org.apache.pekko.actor.Cancellable
@@ -196,11 +197,17 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
 
   final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer, () => settings.currentIfLoaded)
 
-  // The folder of the SQLite database file, before the first transaction, which the migration below opens
-  if dataSourceType == Const.DbEngineName.SQLITE then
-    val dbFile = new File(config.getString(Const.Conf.SQLITE_URL).stripPrefix(SQLITE_URL_PREFIX)).getAbsoluteFile
-    logger.debug(s"Ensuring the SQLite database folder: ${dbFile.getParentFile}")
-    FileUtils.forceMkdir(dbFile.getParentFile)
+  /** The folder of the SQLite database file, on SQLite: one of the directories the app stores into */
+  final val sqliteDir: Option[Path] = Option.when(dataSourceType == Const.DbEngineName.SQLITE) {
+    Path.of(config.getString(Const.Conf.SQLITE_URL).stripPrefix(SQLITE_URL_PREFIX)).toAbsolutePath.getParent
+  }
+
+  // Ensured before the first transaction, which the migration below opens
+  sqliteDir.foreach {
+    dir =>
+      logger.debug(s"Ensuring the SQLite database folder: $dir")
+      FileUtils.forceMkdir(dir.toFile)
+  }
 
   object DAO {
     val systemMetadata: SystemMetadataDao = dataSourceType match {
