@@ -194,6 +194,8 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
   override def lockName(parentId: String, nameKey: String): Unit =
     advisoryLock(s"folder-name:${RequestContext.getRepository.persistedId}:$parentId:$nameKey")
 
+  override def lockTree(): Unit = advisoryLock(s"folder-tree:${RequestContext.getRepository.persistedId}")
+
   // This does NOT return the child counts. Both arms of the recursion carry the repository: another repository's folder has no
   // children here
   def getChildrenRecursive(parentId: String): List[Folder] =

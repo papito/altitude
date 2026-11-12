@@ -293,12 +293,16 @@ class LibraryService(val app: Altitude):
   /**
    * Delete a folder by ID, including its children. Does not allow deleting the root folder, or any system folders. A folder of
    * another repository, or none, is not found. The folders' assets are recycled ([[recycleAssets]]), so deleting a folder that
-   * holds any takes Recycle.
+   * holds any takes Recycle. The delete takes its turn with the imports that sort files into the tree (`FolderService.lockTree`),
+   * so no asset and no folder is left live under a deleted folder by an import completing meanwhile.
    */
   def deleteFolderById(id: String): Unit =
     if app.service.folder.isRootFolder(id) then throw IllegalOperationException("Cannot delete the root folder")
 
     txManager.withTransaction {
+      // Before anything is read: an import that is sorting a file into one of these folders has committed by then, so its
+      // asset, and the folders it created, are among what is recycled here
+      app.service.folder.lockTree()
       val folder: Folder = app.service.folder.getById(id)
       logger.debug(s"Deleting folder $folder")
 

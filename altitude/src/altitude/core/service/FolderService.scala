@@ -46,6 +46,17 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       names.foldLeft(getById(parentId))(ensureChild)
     }
 
+  /**
+   * The caller's turn, until its transaction ends, among the transactions that sort an import's file into the folder tree and
+   * those that delete a folder (`FolderDao.lockTree`). The completion of a file with a destination takes it before it reads the
+   * destination, and a delete before it reads what it deletes, so whichever goes second sees what the first committed: a
+   * completion finds its destination in the Trash, or a delete recycles the asset and the folders the completion put there.
+   */
+  def lockTree(): Unit =
+    txManager.withTransaction {
+      dao.lockTree()
+    }
+
   /** The folder of the name under `parent`: the one there, restored if it was recycled, or a new one */
   private def ensureChild(parent: Folder, name: String): Folder =
     val wanted = named(name, parent.persistedId)

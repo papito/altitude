@@ -27,6 +27,7 @@ import org.apache.pekko.stream.scaladsl.Flow
 import org.apache.pekko.stream.scaladsl.Sink
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
+import org.scalatest.LoneElement.*
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.tagobjects.Slow
@@ -60,6 +61,7 @@ import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.AssetWithData
 import altitude.core.models.ExtractedMetadata
+import altitude.core.models.Folder
 import altitude.core.models.Import
 import altitude.core.models.ImportFile
 import altitude.core.models.ImportOrigin
@@ -1385,6 +1387,61 @@ import altitude.core.util.Query
     val counted = testApp.service.imports.getById(opened.persistedId)
     (counted.failed, counted.duplicate) shouldBe (1, 0)
     rowCount("asset") shouldBe 0
+  }
+
+  test("A file sorted into a folder and a delete of the folder take turns, so nothing live is left under a deleted folder") {
+
+    /**
+     * Setup:
+     *
+     * Two folders, Clients and Archive, each the destination of an upload's Import with one file, at the path Wedding, whose
+     * asset its import has persisted and not completed. The completion of the file into Clients runs in a transaction held open
+     * until a delete of Clients waits for it: for the folder tree's advisory lock on PostgreSQL, for the write connection on
+     * SQLite. Then the other way round: a delete of Archive is held open until the completion of the file into it waits.
+     *
+     * Assertions:
+     *
+     * The delete of Clients, which went second, saw what the completion committed: Clients and the folder Wedding the completion
+     * created under it are in the Trash, and so is the asset, in Wedding. The completion into Archive, which went second, found
+     * its destination in the Trash and failed saying so: its asset is still unfinished and in no folder, and no folder was
+     * created under Archive. Without the turn-taking, on PostgreSQL neither waits for the other, which read before the other
+     * committed, and the asset and Wedding are left live under a folder in the Trash.
+     */
+    val folders = testApp.service.folder
+    val library = testApp.service.library
+
+    def unfinishedFileInto(destination: Folder): (Asset, ImportOrigin) = {
+      val opened = testApp.service.imports.open(ImportSource.Upload, destFolderId = destination.id)
+      val file = testApp.service.imports.addFile(opened.persistedId, "Wedding/photo.jpg", sizeBytes = 10)
+      (library.persistAndIndex(testContext.makeAsset(isTriaged = true)), ImportOrigin(file.persistedId, Seq("Wedding")))
+    }
+
+    val clients = folders.add("Clients")
+    val (sorted, sortedOrigin) = unfinishedFileInto(clients)
+    contend(
+      first = library.completeImport(sorted, Some(sortedOrigin)): Unit,
+      second = library.deleteFolderById(clients.persistedId))
+
+    // Every folder under the folder, those in the Trash too
+    def under(parent: Folder): List[Folder] = folders.getAll.filter(_.parentId == parent.persistedId)
+
+    val wedding = under(clients).loneElement
+    (wedding.name, wedding.isRecycled, folders.getById(clients.persistedId).isRecycled) shouldBe ("Wedding", true, true)
+    val recycled = testApp.service.asset.getById(sorted.persistedId)
+    (recycled.isPipelineProcessed, recycled.isRecycled, recycled.folderId) shouldBe (true, true, wedding.persistedId)
+
+    val archive = folders.add("Archive")
+    val (late, lateOrigin) = unfinishedFileInto(archive)
+    val lost = intercept[ImportDestinationException] {
+      contend(
+        first = library.deleteFolderById(archive.persistedId),
+        second = library.completeImport(late, Some(lateOrigin)): Unit)
+    }
+
+    lost.getMessage shouldBe Const.Msg.Err.DESTINATION_IN_TRASH
+    val unsorted = testApp.service.asset.getById(late.persistedId)
+    (unsorted.isPipelineProcessed, unsorted.isRecycled, unsorted.folderId) shouldBe (false, false, "")
+    under(archive) shouldBe empty
   }
 
   test("A second copy of a file whose import fails is failed too, saying its copy is not in the Library, and is no duplicate") {

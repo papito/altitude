@@ -142,11 +142,14 @@ class ImportService(val app: Altitude):
   /**
    * The folder the Import of the file sorts its files into, none for Triage, as the completion of the file's import reads it. A
    * destination recycled since the Import was opened is an `ImportDestinationException`: the file fails, and so does every file
-   * of the Import after it, while the folder stays in the Trash.
+   * of the Import after it, while the folder stays in the Trash. A destination is read in the completion's turn with the deletes
+   * of folders (`FolderService.lockTree`), which it holds until it ends: a delete that committed is seen here, and one that comes
+   * after sees the asset and the folders the completion sorts it into.
    */
   def destinationOf(importFileId: String): Option[Folder] =
     txManager.asReadOnly {
       val anImport = importDao.getById(fileDao.getById(importFileId).importId)
+      if anImport.destFolderId.isDefined then app.service.folder.lockTree()
       lostDestination(anImport).foreach(reason => throw ImportDestinationException(reason))
       anImport.destFolderId.map(app.service.folder.getById)
     }
