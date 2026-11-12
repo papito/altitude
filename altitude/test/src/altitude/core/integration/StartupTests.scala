@@ -123,7 +123,12 @@ import altitude.core.util.Sha256
      * Assertions:
      *
      * The first scan runs at once, with nobody asking: the file is remembered as seen, and the Watch folder has a last scan. The
-     * next scan follows an interval later and reads the file, which becomes an asset of the Library.
+     * scans that follow, an interval apart, read the file once it has rested, and it becomes an asset of the Library.
+     *
+     * Edge cases:
+     *
+     * The interval is the rest itself here, so the file is read by the second scan, or by the third when the second came a moment
+     * short of the rest.
      */
     val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
     switchContextUser(admin)

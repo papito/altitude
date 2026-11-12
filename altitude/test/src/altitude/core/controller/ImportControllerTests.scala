@@ -396,6 +396,50 @@ object ImportControllerTests {
     }
   }
 
+  test("Opening an Import takes the number of files the upload is about to send, a whole number from 0") {
+
+    /**
+     * Setup:
+     *
+     * An account holding Import in a Library, logged in.
+     *
+     * Assertions:
+     *
+     * An Import opened with 24 as its expected files is stored expecting 24, one opened with 0 expecting none, and one opened
+     * with no number, or with a null one, with none. The Import history titles the first "24 files" and counts 24 remaining,
+     * before any file is sent.
+     *
+     * Edge cases:
+     *
+     * A negative number, a fraction, a number past what an Import counts, a number written as text and a flag are each refused
+     * with a 400 that names the field, and open nothing.
+     */
+    val repoId = loginAs(AccountType.User, Permissions.of(Permission.Import))
+    def expecting(value: ujson.Value) = ujson.Obj(Api.Field.Import.EXPECTED_FILES -> value)
+
+    withServer(App) {
+      host =>
+        val expectsMany = openedImport(host, repoId, expecting(24))
+        val expectsNone = openedImport(host, repoId, expecting(0))
+        val unknowing = openedImport(host, repoId)
+        val nullified = openedImport(host, repoId, expecting(ujson.Null))
+        List(expectsMany, expectsNone, unknowing, nullified).map(imports.getById(_).expectedFiles) shouldBe
+          List(Some(24), Some(0), None, None)
+
+        val history = partial(host, s"$repoId/history").text()
+        val entry = history.split(s"""data-import-id="$expectsMany"""")(1).split("""data-import-id="""")(0)
+        (entry should include).regex(""">24\s+files</strong>""")
+        entry should include("""<li class="pending">24 remaining</li>""")
+
+        for (refused <- List[ujson.Value](-1, 1.5, 3000000000L, "24", true)) withClue(s"[$refused]: ") {
+          val response = openImport(host, repoId, expecting(refused))
+          response.statusCode shouldBe 400
+          response.text() should include(Api.Field.Import.EXPECTED_FILES)
+        }
+        imports.list(rpp = 10).total shouldBe 4
+    }
+  }
+
   test("Opening an Import with a destination takes Organize as well as Import, and an upload takes files from its opener alone") {
 
     /**

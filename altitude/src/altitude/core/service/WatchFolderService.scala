@@ -11,6 +11,7 @@ import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.FileTime
+import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
@@ -60,6 +61,7 @@ import altitude.core.models.ImportSource
 import altitude.core.models.NamedPath
 import altitude.core.models.Permissions
 import altitude.core.models.Repository
+import altitude.core.models.Settings
 import altitude.core.models.User
 import altitude.core.models.WatchFileState
 import altitude.core.models.WatchFolder
@@ -126,6 +128,11 @@ object WatchFolderService:
   // nothing; what the forgetting of absent files allows for
   private val LAST_SEEN_STEP = java.time.Duration.ofDays(1)
 
+  // How long a file rests before it is read: a scan reads a file only when a scan saw it with the same size and modified time
+  // at least this long before, whoever asked for the two scans. The scan interval's least, so two scheduled scans in a row
+  // always span it, while two presses of "Scan now" do not shorten it
+  private val REST = java.time.Duration.ofSeconds(Settings.MIN_WATCH_FOLDER_SCAN_INTERVAL)
+
   private val STOPPING = "the server is stopping"
   private val REMOVED = "the Watch folder was removed"
 
@@ -136,10 +143,11 @@ object WatchFolderService:
  *
  * A scan walks the directory, never following a symbolic link nor reading one, leaving out what imports ignore (`IgnoredFiles`)
  * and empty files, and remembers each file by its path under the directory, its size and its modified time (`watch_folder_file`).
- * A file is read once a scan finds it as the scan before did: a copy is staged and offered to the import queue, under the queue's
- * backpressure, in path order, as a file of the scan's Import, which is opened with the scan's first file and closed once its
- * last file settles. What becomes of a file in the pipeline is written to its memory by the pipeline's last working stage
- * ([[settled]]), which is also where the file is deleted.
+ * A file is read once a scan finds it as a scan found it at least the rest before (the scan interval's least, so as the scan
+ * before did, unless the two were asked for in quick succession): a copy is staged and offered to the import queue, under the
+ * queue's backpressure, in path order, as a file of the scan's Import, which is opened with the scan's first file, expecting the
+ * files the scan is about to offer, and closed once its last file settles. What becomes of a file in the pipeline is written to
+ * its memory by the pipeline's last working stage ([[settled]]), which is also where the file is deleted.
  */
 class WatchFolderService(val app: Altitude):
   import WatchFolderService.*
@@ -538,10 +546,10 @@ class WatchFolderService(val app: Altitude):
    * is not scanned, and neither is one whose directory is unavailable, by the path rules, which is stored as its status reason
    * and logged at WARN when it changes; each is tried again by the next scan, and none touches what the Watch folder remembers.
    *
-   * Otherwise the directory is walked ([[walk]]) and each file found is remembered ([[remember]]). A file found as the scan
-   * before found it, by its size and modified time, and not read yet, or to be read again, is staged and offered ([[take]]),
-   * unless it is in the pipeline still. The offers wait for the queue one after another without holding a thread of the import
-   * dispatcher, which the pipeline's stages need to make room in the queue.
+   * Otherwise the directory is walked ([[walk]]) and each file found is remembered ([[remember]]). A file found as a scan found
+   * it at least the rest before, by its size and modified time, and not read yet, or one to be read again, is staged and offered
+   * ([[take]]), unless it is in the pipeline still. The offers wait for the queue one after another without holding a thread of
+   * the import dispatcher, which the pipeline's stages need to make room in the queue.
    */
   def scan(id: String, pipeline: ImportPipelineService = app.service.importPipeline): Future[ScanResult] =
     val repository = RequestContext.getRepository
@@ -608,8 +616,10 @@ class WatchFolderService(val app: Altitude):
                   Left(ScanResult.Blocked(problem.reason))
                 case None =>
                   val root = path.toRealPath()
+                  // Before the walk: no file of it is looked at earlier than this
+                  val walkStarted = Instant.now()
                   val found = walk(root)
-                  val files = txManager.withTransaction(remember(watchFolder, found))
+                  val files = txManager.withTransaction(remember(watchFolder, found, walkStarted))
                   logger.debug(s"Watch folder [$id] \"${watchFolder.name}\": ${found.size} files found, ${files.size} to read")
                   Right(Run(repository, watchFolder, owner, root, files, pipeline))
     }
@@ -676,15 +686,19 @@ class WatchFolderService(val app: Altitude):
   /**
    * Writes what a walk found to the Watch folder's memory, in the caller's transaction, and returns the files to read, in path
    * order. A file found for the first time is remembered as seen; one whose size or modified time changed is a new file, seen and
-   * never tried, whatever became of it before. A file found as it is remembered is read when it is seen (found so by the scan
-   * before, and not read yet) or to be retried, unless it is in the pipeline still; a handled, final or parked one is left alone.
-   * A file is stamped as found only once its stamp is a day old, so a scan that finds nothing new writes one row. The walk found
-   * the directory available: its last scan is now, and what a scan found wrong with it before is cleared.
+   * never tried, whatever became of it before, stamped with this moment, after the walk. A file found as it is remembered is read
+   * when it is to be retried, or when it is seen (not read yet) and has rested: the stamp of its first sight with this size and
+   * modified time is at least `REST` older than `walkStarted`, the moment before this scan's walk, so the two looks at the file
+   * are that far apart whatever the walks took. A seen file that has not rested is left for a later scan, with nothing of it
+   * written. A file in the pipeline still is not read again, and a handled, final or parked one is left alone. A file is stamped
+   * as found again only once its stamp is a day old, so a scan that finds nothing new writes one row. The walk found the
+   * directory available: its last scan is now, and what a scan found wrong with it before is cleared.
    */
-  private def remember(watchFolder: WatchFolder, found: List[Found]): List[Found] =
+  private def remember(watchFolder: WatchFolder, found: List[Found], walkStarted: Instant): List[Found] =
     val id = watchFolder.persistedId
     val now = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
     val stale = now.minus(LAST_SEEN_STEP).toInstant
+    val restedBy = walkStarted.minus(REST)
     val remembered = fileDao.ofWatchFolder(id).map(file => file.relPath -> file).toMap
     val flying = inFlight.values.asScala.filter(_.watchFolderId == id).map(_.relPath).toSet
 
@@ -705,8 +719,10 @@ class WatchFolderService(val app: Altitude):
           case Some(known) if known.sizeBytes != file.sizeBytes || known.modifiedAt != modifiedAt =>
             fileDao.changed(id, file.relPath, file.sizeBytes, modifiedAt, now): Unit
           case Some(known) =>
-            if known.lastSeenAt.forall(fileDao.instantOf(_).isBefore(stale)) then foundAgain += file.relPath
-            val isDue = known.state == WatchFileState.Seen || known.state == WatchFileState.Retry
+            val lastSeen = known.lastSeenAt.map(fileDao.instantOf)
+            if lastSeen.forall(_.isBefore(stale)) then foundAgain += file.relPath
+            val isDue = known.state == WatchFileState.Retry ||
+              (known.state == WatchFileState.Seen && lastSeen.forall(!_.isAfter(restedBy)))
             if isDue && !flying.contains(file.relPath) then toRead += file
     }
 
@@ -788,14 +804,17 @@ class WatchFolderService(val app: Altitude):
             Taken.Skipped
     }
 
-  // The scan's Import, opened by the first file that needs it: titled by the Watch folder's name, with its destination
+  // The scan's Import, opened by the first file that needs it: titled by the Watch folder's name, with its destination, and
+  // expecting the files the scan is about to offer
   private def importOf(run: Run): Import =
     run.opened.get.getOrElse {
       val opened = app.service.imports.open(
         ImportSource.WatchFolder,
         name = Some(run.watchFolder.name),
         destFolderId = run.watchFolder.destFolderId,
-        watchFolderId = run.watchFolder.id)
+        watchFolderId = run.watchFolder.id,
+        expectedFiles = Some(run.files.size)
+      )
       run.opened.set(Some(opened))
       opened
     }

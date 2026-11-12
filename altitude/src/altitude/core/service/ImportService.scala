@@ -71,15 +71,20 @@ class ImportService(val app: Altitude):
   /**
    * Opens an Import delivered by the context account, if there is one: in progress, with no file yet. `name` is the uploaded
    * folder's or the Watch folder's name, none for an upload of files; `destFolderId` the folder its files are sorted into, none
-   * for Triage; `watchFolderId` the Watch folder whose scan it is. A destination that is no folder of the context repository, and
-   * a Watch folder that is none of its Watch folders, is a `NotFoundException`, and a destination in the Trash an
-   * `IllegalOperationException`; none opens anything.
+   * for Triage; `watchFolderId` the Watch folder whose scan it is; `expectedFiles` how many files it is about to be given, when
+   * whoever opens it knows (`Import.expectedTotal`). A destination that is no folder of the context repository, and a Watch
+   * folder that is none of its Watch folders, is a `NotFoundException`, a destination in the Trash an
+   * `IllegalOperationException`, and a negative number of files a `ValidationException`; none opens anything.
    */
   def open(
       source: ImportSource,
       name: Option[String] = None,
       destFolderId: Option[String] = None,
-      watchFolderId: Option[String] = None): Import =
+      watchFolderId: Option[String] = None,
+      expectedFiles: Option[Int] = None): Import =
+    // Checked here: SQLite reports the column's CHECK as it reports a duplicate
+    if expectedFiles.exists(_ < 0) then throw ValidationException(Const.Msg.Err.EXPECTED_FILES_INVALID)
+
     txManager.withTransaction {
       destFolderId.foreach {
         folderId =>
@@ -94,7 +99,9 @@ class ImportService(val app: Altitude):
           name = name,
           watchFolderId = watchFolderId,
           accountId = RequestContext.account.value.map(_.persistedId),
-          destFolderId = destFolderId))
+          destFolderId = destFolderId,
+          expectedFiles = expectedFiles
+        ))
       logger.info(
         s"Opened Import [${opened.persistedId}]: ${source.dbValue}${name.fold("")(n => s" \"$n\"")}. Repo: ${RequestContext.getRepository.persistedId}")
       changed(opened.persistedId)
@@ -106,7 +113,7 @@ class ImportService(val app: Altitude):
    * upload routes take, since its files arrive sorted: an account without it is refused (`ForbiddenException`) once the folder is
    * read, so a folder that is not the repository's is not found rather than refused.
    */
-  def openUpload(name: Option[String] = None, destFolderId: Option[String] = None): Import =
+  def openUpload(name: Option[String] = None, destFolderId: Option[String] = None, expectedFiles: Option[Int] = None): Import =
     txManager.withTransaction {
       destFolderId.foreach {
         folderId =>
@@ -114,7 +121,7 @@ class ImportService(val app: Altitude):
           if !RequestContext.holds(Permission.Organize) then
             throw ForbiddenException(Const.Msg.Err.FORBIDDEN_PERMISSION.format(Permission.Organize.label))
       }
-      open(ImportSource.Upload, name, destFolderId)
+      open(ImportSource.Upload, name, destFolderId, expectedFiles = expectedFiles)
     }
 
   /**

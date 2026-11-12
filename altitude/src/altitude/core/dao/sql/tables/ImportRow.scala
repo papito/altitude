@@ -12,6 +12,7 @@ case class ImportRow[T[_]](
     watchFolderId: T[Option[String]],
     accountId: T[Option[String]],
     destFolderId: T[Option[String]],
+    expectedFiles: T[Option[Int]],
     isComplete: T[Boolean],
     closedAt: T[Option[OffsetDateTime]],
     pending: T[Int],

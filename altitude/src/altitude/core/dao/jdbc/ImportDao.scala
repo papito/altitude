@@ -39,6 +39,7 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
       watchFolderId = row.watchFolderId,
       accountId = row.accountId,
       destFolderId = row.destFolderId,
+      expectedFiles = row.expectedFiles,
       isComplete = row.isComplete,
       closedAt = row.closedAt.map(toLocalDateTime),
       pending = row.pending,
@@ -61,6 +62,7 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
       watchFolderId = text(FieldConst.Import.WATCH_FOLDER_ID),
       accountId = text(FieldConst.Import.ACCOUNT_ID),
       destFolderId = text(FieldConst.Import.DEST_FOLDER_ID),
+      expectedFiles = Option(rec(FieldConst.Import.EXPECTED_FILES)).map(getIntField),
       isComplete = getBooleanField(rec(FieldConst.Import.IS_COMPLETE)),
       closedAt = getDateTimeField(rec.get(FieldConst.Import.CLOSED_AT)),
       pending = counter(ImportOutcome.Pending),
@@ -76,8 +78,9 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
     val sql = s"""
         INSERT INTO $tableName (${FieldConst.ID}, ${FieldConst.REPO_ID}, ${FieldConst.Import.SOURCE}, ${FieldConst.Import.NAME},
                                 ${FieldConst.Import.WATCH_FOLDER_ID}, ${FieldConst.Import.ACCOUNT_ID},
-                                ${FieldConst.Import.DEST_FOLDER_ID}, ${FieldConst.CREATED_AT})
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                ${FieldConst.Import.DEST_FOLDER_ID}, ${FieldConst.Import.EXPECTED_FILES},
+                                ${FieldConst.CREATED_AT})
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
 
     val id = model.id.getOrElse(BaseDao.genId)
@@ -94,6 +97,7 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
         model.watchFolderId.orNull,
         model.accountId.orNull,
         model.destFolderId.orNull,
+        model.expectedFiles.map(Int.box).orNull,
         nativeUtcTimestamp(createdAt)
       )
     )

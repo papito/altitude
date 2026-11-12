@@ -211,6 +211,8 @@ object Api:
     object Import:
       val NAME = "name"
       val DEST_FOLDER_ID = "destFolderId"
+      // How many files an upload is about to send to the Import it opens
+      val EXPECTED_FILES = "expectedFiles"
       val REL_PATH = "relPath"
       val SIZE_BYTES = "sizeBytes"
       val OUTCOME = "outcome"

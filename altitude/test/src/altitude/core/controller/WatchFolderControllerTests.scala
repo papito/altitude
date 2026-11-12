@@ -391,10 +391,10 @@ import altitude.core.models.WatchFolderSpec
      * Assertions:
      *
      * Pause answers 204 and the Watch folder is paused; "Scan now" is then a 409 that says it is paused. Resume answers 204 and
-     * it is watching again. "Scan now" answers 204 at once, and the scan it started remembers the file; a second one reads the
-     * file, which becomes an asset of the Library. Retry failed answers 204. The Remove dialog is titled by the Watch folder's
-     * name and says that its files and what it imported stay; the removal answers that it was removed, the cards say the Library
-     * has no Watch folder, and the image is still in the directory.
+     * it is watching again. "Scan now" answers 204 at once, and the scan it started remembers the file; a second one, once the
+     * file has rested, reads it, and it becomes an asset of the Library. Retry failed answers 204. The Remove dialog is titled by
+     * the Watch folder's name and says that its files and what it imported stay; the removal answers that it was removed, the
+     * cards say the Library has no Watch folder, and the image is still in the directory.
      *
      * Edge cases:
      *
@@ -423,6 +423,8 @@ import altitude.core.models.WatchFolderSpec
 
         scanned()
         eventually(watchFolders.memory(id).map(_.relPath) shouldBe List("a.png"))
+        // The interval between two scans, without the wait: the file has rested
+        testContext.letWatchedFilesRest()
         scanned()
         eventually(testApp.service.asset.getByChecksum(altitude.core.util.Sha256.hex(file)) should not be empty)
         eventually(App.altitude.service.watchFolder.isWorking(id) shouldBe false)

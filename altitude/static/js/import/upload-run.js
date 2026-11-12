@@ -3,9 +3,9 @@
  * `ImportController`), through the shared axios client, whose `onUploadProgress` drives the
  * section's progress; nothing of it is an htmx request.
  *
- * The Import is opened with its name and destination folder, each file is sent in a request of its
- * own, `CONCURRENCY` at a time, under its relative path, and the Import is closed once the last is
- * answered. A file whose request fails with no answer, or with a 5xx, is sent again, `RETRIES`
+ * The Import is opened with its name, its destination folder and the number of files about to be
+ * sent, each file is sent in a request of its own, `CONCURRENCY` at a time, under its relative
+ * path, and the Import is closed once the last is answered. A file whose request fails with no answer, or with a 5xx, is sent again, `RETRIES`
  * times after a pause; when the last try fails too, the page has the server record the file as
  * failed and goes on with the rest. A file the server answers as failed was recorded so by the
  * server, and one it refuses (a 400) was not recorded; neither is sent again. Any other refusal
@@ -63,6 +63,8 @@ export async function runUpload({
     const opened = await http.post(importsUrl, {
         ...(name ? { name } : {}),
         ...(destFolderId ? { destFolderId } : {}),
+        // What is about to be sent, the ignored files left out already: the history counts them as remaining
+        expectedFiles: files.length,
     })
     const importUrl = `${importsUrl}/${opened.data.id}`
 

@@ -126,14 +126,18 @@ import altitude.core.util.Sha256
   private def settle(watchFolder: WatchFolder): Unit =
     eventually(watchFolders.isWorking(watchFolder.persistedId) shouldBe false)
 
-  /** One scan of the Watch folder, and everything it handed to the pipeline settled */
+  /**
+   * One scan of the Watch folder, with everything it handed to the pipeline settled, and then the rest of the files it has not
+   * read yet let pass, as the interval before the next scan does: the next scan may read them
+   */
   private def scanAndSettle(watchFolder: WatchFolder): ScanResult = {
     val result = scan(watchFolder)
     settle(watchFolder)
+    testContext.letWatchedFilesRest()
     result
   }
 
-  /** Two scans, as it takes to read a file found for the first time, with everything settled */
+  /** Two scans an interval apart, as it takes to read a file found for the first time, with everything settled */
   private def scanTwice(watchFolder: WatchFolder): ScanResult = {
     scanAndSettle(watchFolder)
     scanAndSettle(watchFolder)
@@ -434,6 +438,85 @@ import altitude.core.util.Sha256
     scanAndSettle(watchFolder) shouldBe ScanResult.Scanned(1)
     memory(watchFolder)("growing.png") shouldBe (WatchFileState.Handled, 0)
     assetOf(growing) should not be empty
+  }
+
+  test("A file is read only once it has rested: two scans back to back do not read it, a scan past the rest does") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder on a directory with one image, scanned twice with nothing between the two scans, as two presses of "Scan
+     * now" would.
+     *
+     * Assertions:
+     *
+     * The first scan remembers the file as seen. The second, which finds it with the same size and modified time, reads nothing:
+     * the file was first seen less than the rest ago. It leaves what the Watch folder remembers as it was, the moment the file
+     * was first seen included, and opens no Import. A scan once the rest has passed, the scan interval's least, reads the file,
+     * which is imported.
+     *
+     * Edge cases:
+     *
+     * A third scan, still inside the rest, reads nothing either: the rest is counted from the first sight of the file, not from
+     * the scan before.
+     */
+    val dir = directory()
+    val file = image(dir, "a.png")
+    val watchFolder = watch(dir)
+    def firstSeen: List[AnyRef] = testApp.txManager.asReadOnly {
+      query("SELECT last_seen_at FROM watch_folder_file WHERE watch_folder_id = ?", watchFolder.persistedId).map(
+        _("last_seen_at"))
+    }
+
+    scan(watchFolder) shouldBe ScanResult.Scanned(0)
+    val seenAt = firstSeen
+    seenAt should have size 1
+
+    scan(watchFolder) shouldBe ScanResult.Scanned(0)
+    scan(watchFolder) shouldBe ScanResult.Scanned(0)
+    memory(watchFolder) shouldBe Map("a.png" -> (WatchFileState.Seen, 0))
+    firstSeen shouldBe seenAt
+    importsOf(watchFolder) shouldBe empty
+    assetOf(file) shouldBe None
+
+    // The rest itself, in real time: the one test that waits for it
+    Thread.sleep(Settings.MIN_WATCH_FOLDER_SCAN_INTERVAL * 1000L + 250)
+    scan(watchFolder) shouldBe ScanResult.Scanned(1)
+    settle(watchFolder)
+    memory(watchFolder) shouldBe Map("a.png" -> (WatchFileState.Handled, 0))
+    assetOf(file) should not be empty
+  }
+
+  test("A scan's Import expects the files the scan is about to hand to the pipeline") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder on a directory with three images, all seen by a first scan. The next scan runs through a pipeline that reads
+     * the scan's Import as the scan offers its first file.
+     *
+     * Assertions:
+     *
+     * At that moment the Import has one file and expects three, so two more are to come. Once the scan has settled, the Import is
+     * closed with three imported files, and still says it expected three.
+     */
+    val dir = directory()
+    for (name <- List("a.png", "b.png", "c.png")) image(dir, name)
+    val watchFolder = watch(dir)
+    scanAndSettle(watchFolder)
+    val repository = testContext.repository
+    var atFirstOffer: Option[Import] = None
+    val watching = pipelineThat(asAdmin(repository) { atFirstOffer = importsOf(watchFolder).headOption })
+
+    try {
+      scan(watchFolder, watching) shouldBe ScanResult.Scanned(3)
+      settle(watchFolder)
+    } finally watching.shutdown()
+
+    atFirstOffer.map(anImport => (anImport.total, anImport.expectedFiles, anImport.isInProgress)) shouldBe Some(
+      (1, Some(3), true))
+    importsOf(watchFolder).map(anImport => (anImport.imported, anImport.expectedFiles, anImport.isInProgress)) shouldBe
+      List((3, Some(3), false))
   }
 
   test("A handled file is not read again, and a file that changed is a new file") {
@@ -905,6 +988,7 @@ import altitude.core.util.Sha256
     def settleBoth(): Unit = {
       settle(firstWatch)
       settle(secondWatch)
+      testContext.letWatchedFilesRest()
     }
 
     watchFolders.scanAll()
@@ -1357,7 +1441,9 @@ import altitude.core.util.Sha256
     testApp.txManager.withTransaction {
       update("UPDATE watch_folder SET last_scan_at = ? WHERE id = ?", daysAgo(100), idle.persistedId)
     }
-    scanAndSettle(watchFolder)
+    // A scan alone, with no rest let pass after it: the moments the files were last found are the test's own
+    scan(watchFolder)
+    settle(watchFolder)
 
     imports.prune()
 
@@ -1371,7 +1457,8 @@ import altitude.core.util.Sha256
     Files.delete(newer)
     lastSeen("older.png", 40)
     lastSeen("newer.png", 20)
-    scanAndSettle(watchFolder)
+    scan(watchFolder)
+    settle(watchFolder)
 
     withSetting(Settings.IMPORT_HISTORY_DAYS, "0")(imports.prune())
 

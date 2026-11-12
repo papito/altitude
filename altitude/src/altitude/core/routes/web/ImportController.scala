@@ -8,6 +8,7 @@ import altitude.core.App
 import altitude.core.Const
 import altitude.core.IllegalOperationException
 import altitude.core.RequestContext
+import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.actors.ImportStatusWsActor
 import altitude.core.models.AccountType
@@ -38,9 +39,11 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
 
   /**
    * Opens the Import of an upload from the Import page, which then sends its files one request each ([[uploadFile]]) and closes
-   * it ([[closeImport]]). The JSON body may name it (`name`, the uploaded folder's) and give the folder its files are sorted into
-   * (`destFolderId`; none is Triage), which takes Organize as well as this route's Import: without it the answer is a 403. A
-   * destination that is no folder of the Library is a 404, and one in the Trash a 400. Answers the Import's ID.
+   * it ([[closeImport]]). The JSON body may name it (`name`, the uploaded folder's), give the folder its files are sorted into
+   * (`destFolderId`; none is Triage), which takes Organize as well as this route's Import: without it the answer is a 403, and
+   * say how many files the upload is about to send (`expectedFiles`, a whole number from 0), so the Import history counts the
+   * files yet to come as remaining. A destination that is no folder of the Library is a 404, and one in the Trash, or a number of
+   * files that is none, a 400. Answers the Import's ID.
    */
   @requireLogin()
   @requirePermission(Permission.Import)
@@ -50,9 +53,21 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
       val json = unscrubbedJson.get
       ApiRequestValidator(maxLengths = Map(Api.Field.Import.NAME -> Api.Constraints.MAX_IMPORT_NAME_LENGTH)).validate(json)
 
-      val opened =
-        imports.openUpload(name = text(json, Api.Field.Import.NAME), destFolderId = text(json, Api.Field.Import.DEST_FOLDER_ID))
+      val opened = imports.openUpload(
+        name = text(json, Api.Field.Import.NAME),
+        destFolderId = text(json, Api.Field.Import.DEST_FOLDER_ID),
+        expectedFiles = expectedFiles(json))
       jsonResponse(ujson.Obj(Api.Field.ID -> opened.persistedId))
+    }
+
+  /**
+   * The number of files an upload says it is about to send, none when the body has none (or a null one); anything but a whole
+   * number from 0 that an Import can count is a `ValidationException`
+   */
+  private def expectedFiles(json: ujson.Obj): Option[Int] =
+    json.obj.get(Api.Field.Import.EXPECTED_FILES).filterNot(_.isNull).map {
+      case ujson.Num(files) if files >= 0 && files <= Int.MaxValue && files == files.floor => files.toInt
+      case _ => throw ValidationException(Const.Msg.Err.EXPECTED_FILES_INVALID)
     }
 
   /** A text field of a JSON body, trimmed; none when it is absent, empty or no text */

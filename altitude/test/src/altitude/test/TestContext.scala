@@ -36,6 +36,7 @@ import altitude.core.models.Person
 import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.models.UserMetadata
+import altitude.core.models.WatchFileState
 import altitude.core.service.FaceDetectionService
 import altitude.core.service.FaceRecognitionService
 import altitude.core.util.Util
@@ -291,6 +292,28 @@ class TestContext(val testApp: Altitude) {
         taken.map(_ => "exif_original").orNull,
         assetId
       )
+    }
+  }
+
+  /**
+   * Lets the rest of the Watch folders' files pass without waiting for it: every file not read yet, of every Watch folder, is
+   * remembered as first seen a minute ago, so the next scan may read it. What a scan does within the rest is
+   * `WatchFolderServiceTests`' to wait for.
+   */
+  def letWatchedFilesRest(): Unit = {
+    val aMinuteAgo = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1)
+    val firstSeen: Any = testApp.dataSourceType match {
+      case C.DbEngineName.SQLITE => aMinuteAgo.toLocalDateTime.format(SqliteOverrides.DATETIME_FORMATTER)
+      case C.DbEngineName.POSTGRES => aMinuteAgo
+      case _ => throw new IllegalArgumentException("Unsupported data source type")
+    }
+
+    testApp.txManager.withTransaction {
+      new QueryRunner().update(
+        RequestContext.getConn,
+        "UPDATE watch_folder_file SET last_seen_at = ? WHERE state = ?",
+        firstSeen.asInstanceOf[Object],
+        WatchFileState.Seen.dbValue): Unit
     }
   }
 

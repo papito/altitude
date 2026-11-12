@@ -160,6 +160,7 @@ object FieldConst:
     val WATCH_FOLDER_ID = "watch_folder_id"
     val ACCOUNT_ID = "account_id"
     val DEST_FOLDER_ID = "dest_folder_id"
+    val EXPECTED_FILES = "expected_files"
     val IS_COMPLETE = "is_complete"
     val CLOSED_AT = "closed_at"
 

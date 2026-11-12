@@ -266,6 +266,42 @@ object ImportStatusWsActorTests {
     socket.taken() shouldBe List(pushed(ahead))
   }
 
+  test("An Import that expects more files than it has is pushed in the order of its changes") {
+
+    /**
+     * Setup:
+     *
+     * A socket on a Library, and an upload's Import there that expects 10 files, told three times: with 1 file, with 2 files of
+     * which 1 is settled, and closed with those 2.
+     *
+     * Assertions:
+     *
+     * The first change is pushed at once, the second once the interval ends, and the close at once: how far along an Import is
+     * goes by the files it has and what became of them, never by the number it expects.
+     *
+     * Edge cases:
+     *
+     * The first state told again after the second, late, is not pushed.
+     */
+    val socket = socketOf(LIBRARY)
+    val first = anImport("import", imported = 0, total = 1).copy(expectedFiles = Some(10))
+    val second = anImport("import", imported = 1, total = 2).copy(expectedFiles = Some(10))
+
+    changed(LIBRARY, first)
+    changed(LIBRARY, second)
+    changed(LIBRARY, first)
+    settle()
+    socket.taken() shouldBe List(pushed(first))
+
+    after(INTERVAL)
+    socket.taken() shouldBe List(pushed(second))
+
+    val done = closed(second)
+    changed(LIBRARY, done)
+    settle()
+    socket.taken() shouldBe List(pushed(done))
+  }
+
   test("An Import's status message carries its status element with its name escaped") {
 
     /**

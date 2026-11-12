@@ -486,7 +486,8 @@ CREATE TABLE watch_folder (
 CREATE INDEX watch_folder_01 ON watch_folder (repository_id);
 
 -- A Watch folder's memory of a file of its directory, by the file's path under it: what the last scan saw of it, and what
--- became of it. A file is read once its size and modified time are the same in two scans, and not again while they stay.
+-- became of it. A file is read once a scan finds it with the size and modified time a scan saw at least 5 seconds before
+-- (the scan interval's least), and not again while they stay.
 CREATE TABLE watch_folder_file (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
@@ -502,7 +503,8 @@ CREATE TABLE watch_folder_file (
     CHECK (state IN ('seen', 'handled', 'final', 'retry', 'parked')),
   attempts INT NOT NULL DEFAULT 0 CHECK (attempts >= 0),
   -- When a scan last found the file, to the day (a scan moves it once it is a day old): a file absent from the directory
-  -- is forgotten once this is past the retention period
+  -- is forgotten once this is past the retention period. For a file not read yet it is the moment it was first seen with
+  -- its size and modified time, which its rest before it is read is counted from
   last_seen_at TIMESTAMP WITH TIME ZONE NOT NULL,
   FOREIGN KEY (repository_id, watch_folder_id) REFERENCES watch_folder (repository_id, id) ON DELETE CASCADE
 ) INHERITS (_core);
@@ -528,6 +530,9 @@ CREATE TABLE import (
   account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE SET NULL,
   -- The folder its files are sorted into; NULL = Triage
   dest_folder_id CHAR(36) COLLATE "C",
+  -- How many files it was opened to hold: what an upload is about to send, what a scan is about to offer; NULL when it was
+  -- not told. Read only while it still takes files, to show the files yet to come as remaining
+  expected_files INT CHECK (expected_files >= 0),
   -- No more files will be added: the upload closed it, or the scan offered its last file
   is_complete BOOLEAN NOT NULL DEFAULT FALSE,
   -- Set once the Import is complete and none of its files is pending; NULL while it is in progress

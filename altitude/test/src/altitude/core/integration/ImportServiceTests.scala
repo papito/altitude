@@ -65,6 +65,47 @@ import altitude.core.util.Query
   /** The Import file as stored now, among the files of its Import */
   private def stored(file: ImportFile): ImportFile = imports.files(file.importId).find(_.id == file.id).get
 
+  test("An Import opened with the number of files to expect keeps it") {
+
+    /**
+     * Setup:
+     *
+     * Four Imports opened by the context account: one expecting 24 files, an upload opened expecting 3, one expecting no file at
+     * all, and one opened with no number.
+     *
+     * Assertions:
+     *
+     * Each is stored with the number it was opened with, or with none, as read by its ID, in the list of the Library's Imports
+     * and in the Import history. Files given to the first, and its close, leave the number as it is.
+     *
+     * Edge cases:
+     *
+     * A negative number is refused and opens nothing.
+     */
+    val expecting = imports.open(ImportSource.Upload, expectedFiles = Some(24))
+    val upload = imports.openUpload(expectedFiles = Some(3))
+    val empty = imports.open(ImportSource.Upload, expectedFiles = Some(0))
+    val unknowing = imports.open(ImportSource.Upload)
+    val opened = List(expecting, upload, empty, unknowing)
+    val numbers = List(Some(24), Some(3), Some(0), None)
+
+    opened.map(_.expectedFiles) shouldBe numbers
+    opened.map(stored(_).expectedFiles) shouldBe numbers
+    val listed = imports.list(rpp = 10).records.map(anImport => anImport.persistedId -> anImport.expectedFiles).toMap
+    opened.map(anImport => listed(anImport.persistedId)) shouldBe numbers
+    val shown = imports.history(shown = 10).entries.map(entry => entry.anImport.persistedId -> entry.anImport.expectedFiles).toMap
+    opened.map(anImport => shown(anImport.persistedId)) shouldBe numbers
+
+    val file = imports.addFile(expecting.persistedId, "photo.jpg", sizeBytes = 10)
+    imports.settle(file.persistedId, ImportOutcome.Failed, reason = Some("Upload failed"))
+    imports.close(expecting.persistedId)
+    val closed = stored(expecting)
+    (closed.isInProgress, closed.total, closed.expectedFiles) shouldBe (false, 1, Some(24))
+
+    intercept[ValidationException](imports.open(ImportSource.Upload, expectedFiles = Some(-1)))
+    imports.list(rpp = 10).total shouldBe 4
+  }
+
   test("An opened Import is in progress, with the account that delivers it, its name and its destination") {
 
     /**

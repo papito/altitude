@@ -52,7 +52,7 @@ case class WatchFolderCard(
 
 /** What a Watch folder's memory holds of a file. Persist `dbValue`, never the enum name. */
 enum WatchFileState(val dbValue: String):
-  /** Not read yet, or changed since it was: read once a scan finds its size and modified time as the scan before did */
+  /** Not read yet, or changed since it was: read once a scan finds its size and modified time as a scan did the rest before */
   case Seen extends WatchFileState("seen")
 
   /** Imported, or a duplicate of an asset of the Library: not read again */
