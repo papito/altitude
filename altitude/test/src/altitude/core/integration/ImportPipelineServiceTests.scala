@@ -1387,6 +1387,45 @@ import altitude.core.util.Query
     rowCount("asset") shouldBe 0
   }
 
+  test("A second copy of a file whose import fails is failed too, saying its copy is not in the Library, and is no duplicate") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import with the folder Clients as its destination, of two files with the same content run through the import
+     * pipeline one after the other: the first under a folder whose name is longer than a folder's name may be, the second under
+     * the folder Good.
+     *
+     * Assertions:
+     *
+     * The first fails at its completion, a folder of its path cannot be created, and the second is dropped as a duplicate of it.
+     * Neither is imported, so the second's Import file is failed, saying that the copy it matched is not in the Library, and
+     * points at no asset: nothing in the record says the content is in the Library. The Import counts two failed files and no
+     * duplicate, no asset is left, and no folder of either path exists.
+     */
+    val clients = testApp.service.folder.add("Clients")
+    val opened = testApp.service.imports.open(ImportSource.Upload, destFolderId = clients.id)
+    val tooLong = "x" * (Api.Constraints.MAX_FOLDER_NAME_LENGTH + 1)
+    val (first, firstFile) = asFileAt(opened, s"$tooLong/photo.jpg")
+    val (second, secondFile) = asFileAt(opened, "Good/photo.jpg", checksum = Some(first.asset.checksum))
+    val context = PipelineContext(testContext.repository, Some(testContext.user))
+
+    val results = runPipeline((first, context), (second, context))
+
+    results.flatMap(_._1.toOption).map(_.cause.get.getClass.getSimpleName) shouldBe
+      List("ImportDestinationException", "DuplicateException")
+    storedFile(firstFile).outcome shouldBe ImportOutcome.Failed
+    val settled = storedFile(secondFile)
+    (settled.outcome, settled.reason, settled.assetId) shouldBe (
+      ImportOutcome.Failed,
+      Some(Const.Msg.Err.COPY_NOT_IN_LIBRARY),
+      None)
+    val counted = testApp.service.imports.getById(opened.persistedId)
+    (counted.failed, counted.duplicate) shouldBe (2, 0)
+    rowCount("asset") shouldBe 0
+    folderNames shouldBe Set("Clients")
+  }
+
   /** `people/affleck.jpg` scaled to 640 by 893 on a white canvas `extraWidth` pixels wider, so frames of one face differ */
   private def portraitFrame(extraWidth: Int = 0): BufferedImage =
     val portrait = ImageIO.read(IntegrationTestUtil.getImportAsset("people/affleck.jpg").path.toFile)

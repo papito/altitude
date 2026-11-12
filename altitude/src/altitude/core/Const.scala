@@ -243,6 +243,9 @@ object Const:
       val FORBIDDEN_UPLOAD = "an upload takes files from the account that opened it"
       // The number of files an Import is opened to expect that is no whole number from 0 (ImportController.openImport)
       val EXPECTED_FILES_INVALID = "expectedFiles must be a whole number of files, 0 or more"
+      // A file dropped as a duplicate of a copy that is not an asset of the Library when the file is settled: the copy's own
+      // import failed, or the asset was recycled meanwhile (ImportService.settleDropped)
+      val COPY_NOT_IN_LIBRARY = "The copy it matched is not in the Library"
       // A destination folder an Import cannot sort its files into (ImportService.open, FolderService.ensurePath)
       val DESTINATION_IN_TRASH = "The destination folder is in the Trash"
       // A file of an Import below a folder name the folder rule refuses, with the rule's own words

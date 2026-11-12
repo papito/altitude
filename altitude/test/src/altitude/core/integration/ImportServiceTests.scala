@@ -261,9 +261,10 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * The two duplicates are settled as duplicates, the first pointing at the asset with "Triage" as its reason, the second with
-     * neither. The unsupported type is settled unsupported. Every other cause is settled failed, with the reason the cause has a
-     * name for. The Import counts two duplicates, one unsupported and six failed.
+     * The duplicate of the asset is settled as a duplicate, pointing at the asset with "Triage" as its reason. The duplicate of
+     * an asset that is not there is settled failed, saying that the copy it matched is not in the Library, and points at none:
+     * its content is in no Library. The unsupported type is settled unsupported. Every other cause is settled failed, with the
+     * reason the cause has a name for. The Import counts one duplicate, one unsupported and seven failed.
      *
      * Edge cases:
      *
@@ -276,7 +277,7 @@ import altitude.core.util.Query
 
     val causes: List[(Asset, Option[Throwable], (ImportOutcome, Option[String], Option[String]))] = List(
       (copy, Some(DuplicateException()), (ImportOutcome.Duplicate, Some("Triage"), existing.id)),
-      (other, Some(DuplicateException()), (ImportOutcome.Duplicate, None, None)),
+      (other, Some(DuplicateException()), (ImportOutcome.Failed, Some(Const.Msg.Err.COPY_NOT_IN_LIBRARY), None)),
       (other, Some(UnsupportedMediaTypeException(other)), (ImportOutcome.Unsupported, Some("Unsupported media type"), None)),
       (other, Some(ImageException("no reader")), (ImportOutcome.Failed, Some("Cannot decode image"), None)),
       (other, Some(VideoException("no frame")), (ImportOutcome.Failed, Some("Cannot decode video"), None)),
@@ -293,7 +294,7 @@ import altitude.core.util.Query
     for ((file, (asset, cause, _)) <- files.zip(causes)) imports.settleDropped(file.persistedId, asset, cause)
 
     files.map(stored).map(file => (file.outcome, file.reason, file.assetId)) shouldBe causes.map(_._3)
-    counters(opened) shouldBe (0, 0, 2, 1, 6)
+    counters(opened) shouldBe (0, 0, 1, 1, 7)
   }
 
   test("An Import closes once it is marked complete and none of its files is pending") {
@@ -1260,20 +1261,23 @@ import altitude.core.util.Query
     imports.files(opened.persistedId).size shouldBe 2
   }
 
-  test("A duplicate of a copy whose import is not complete yet names where its own Import is headed") {
+  test("A duplicate of a copy whose import is not complete is failed, saying the copy is not in the Library") {
 
     /**
      * Setup:
      *
-     * An asset persisted by an import that has not completed it: still as it was staged, triaged and in no folder. A second copy
-     * of it dropped as a duplicate in an Import whose destination is the folder Wedding under Clients, and in an Import to
-     * Triage.
+     * An asset persisted by an import that has not completed it, and never will: one whose discard failed, or that another stream
+     * is importing. A second copy of it dropped as a duplicate in an Import whose destination is the folder Wedding under
+     * Clients.
      *
      * Assertions:
      *
-     * Both Import files are duplicates pointing at the unfinished asset. The first names the Import's destination,
-     * "Clients/Wedding", as where the asset is: the unfinished copy is on its way there, whatever its row says. The second names
-     * Triage.
+     * The Import file is failed, saying that the copy it matched is not in the Library, and points at no asset: only a completed
+     * asset makes a file a duplicate. The Import counts it as failed.
+     *
+     * Edge cases:
+     *
+     * Once the copy's import completes, the next file with its content is a duplicate of it, naming where it is: Triage.
      */
     val clients = testApp.service.folder.add("Clients")
     val wedding = testApp.service.folder.add("Wedding", clients.id)
@@ -1281,16 +1285,23 @@ import altitude.core.util.Query
     val copy = testContext.makeAsset(isTriaged = true).copy(checksum = unfinished.checksum)
 
     val sorting = imports.open(ImportSource.Upload, destFolderId = wedding.id)
-    val sorted = imports.addFile(sorting.persistedId, "copy.jpg", sizeBytes = 10)
-    val (_, List(triaged)) = importOf("copy.jpg"): @unchecked
+    val early = imports.addFile(sorting.persistedId, "early.jpg", sizeBytes = 10)
+    val late = imports.addFile(sorting.persistedId, "late.jpg", sizeBytes = 10)
 
-    imports.settleDropped(sorted.persistedId, copy, Some(DuplicateException()))
-    imports.settleDropped(triaged.persistedId, copy, Some(DuplicateException()))
+    imports.settleDropped(early.persistedId, copy, Some(DuplicateException()))
 
-    (stored(sorted).outcome, stored(sorted).reason, stored(sorted).assetId) shouldBe (
+    (stored(early).outcome, stored(early).reason, stored(early).assetId) shouldBe (
+      ImportOutcome.Failed,
+      Some(Const.Msg.Err.COPY_NOT_IN_LIBRARY),
+      None)
+    counters(sorting) shouldBe (1, 0, 0, 0, 1)
+
+    testApp.service.library.completeImport(unfinished): Unit
+    imports.settleDropped(late.persistedId, copy, Some(DuplicateException()))
+
+    (stored(late).outcome, stored(late).reason, stored(late).assetId) shouldBe (
       ImportOutcome.Duplicate,
-      Some("Clients/Wedding"),
+      Some("Triage"),
       unfinished.id)
-    stored(triaged).reason shouldBe Some("Triage")
   }
 }

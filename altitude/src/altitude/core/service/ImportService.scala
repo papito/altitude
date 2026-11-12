@@ -306,32 +306,29 @@ class ImportService(val app: Altitude):
 
   /**
    * Settles the Import file of a file the import pipeline dropped, by the cause it was dropped for. A duplicate points at the
-   * asset of the context repository that has its content, with where that asset is as the reason; when no such asset is there
-   * (any more), it has neither. An unsupported media type is unsupported. Anything else is failed, with the cause as the reason
-   * (`PipelineUtils.dropReason`).
+   * asset of the context repository that has its content, with where that asset is as the reason. It is a duplicate only of an
+   * asset whose own import is complete: the pipeline settles a repository's files in the order they came, so by now the copy the
+   * file matched, an earlier file of the same queue, has completed or was dropped and discarded, and there is nothing to wait
+   * for. When no completed asset has the content (the copy's import failed for a reason that is not the content's, or the asset
+   * was recycled since), the content is in no Library, and the file is failed, saying so, rather than recorded as already there.
+   * An unsupported media type is unsupported. Anything else is failed, with the cause as the reason (`PipelineUtils.dropReason`).
    */
   def settleDropped(fileId: String, asset: Asset, cause: Option[Throwable]): Unit =
     txManager.withTransaction {
       cause match
         case Some(_: DuplicateException) =>
-          val existing = app.service.asset.getByChecksum(asset.checksum)
-          settle(fileId, ImportOutcome.Duplicate, reason = existing.map(placeOf(_, fileId)), assetId = existing.flatMap(_.id))
+          app.service.asset.getByChecksum(asset.checksum).filter(_.isPipelineProcessed) match
+            case Some(existing) =>
+              settle(fileId, ImportOutcome.Duplicate, reason = Some(placeOf(existing)), assetId = existing.id)
+            case None => settle(fileId, ImportOutcome.Failed, reason = Some(Const.Msg.Err.COPY_NOT_IN_LIBRARY))
         case Some(_: UnsupportedMediaTypeException) =>
           settle(fileId, ImportOutcome.Unsupported, reason = Some(PipelineUtils.dropReason(cause)))
         case _ => settle(fileId, ImportOutcome.Failed, reason = Some(PipelineUtils.dropReason(cause)))
     }
 
-  /**
-   * Where an asset is, for the Import file (`fileId`) of a duplicate of it: Triage, the path of its folder, or the top level of
-   * the Library. An asset whose import is not complete yet is still as it was staged, triaged and in no folder, whatever its
-   * Import does with it; the pipeline completes a repository's files in the order they came, so such a copy is an earlier file of
-   * the duplicate's own Import, and it is named where that Import is headed: its destination, or Triage.
-   */
-  private def placeOf(asset: Asset, fileId: String): String =
-    if !asset.isPipelineProcessed then
-      importDao.getById(fileDao.getById(fileId).importId).destFolderId.fold(ImportService.TRIAGE)(pathOf(_))
-    else if asset.isTriaged then ImportService.TRIAGE
-    else pathOf(asset.folderId)
+  /** Where an asset is, for the Import file of a duplicate of it: Triage, the path of its folder, or the top level of the Library */
+  private def placeOf(asset: Asset): String =
+    if asset.isTriaged then ImportService.TRIAGE else pathOf(asset.folderId)
 
   /**
    * A folder as an Import file names it, and as the Import history and a Watch folder's card name a destination under their own
