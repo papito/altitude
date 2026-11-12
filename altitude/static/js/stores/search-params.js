@@ -343,6 +343,33 @@ export function createSearchParamsStore() {
             Object.assign(this, applySearchFilters(this.snapshot(), filters))
         },
 
+        /** Whether the search names `id` in `param` (`personId`, `locationId`), alone or among several */
+        names(param, id) {
+            return idsOf(this[param]).includes(id)
+        },
+
+        /**
+         * The search with `toId` in place of `fromId` among the IDs of `param` (`personId`,
+         * `locationId`), or without `fromId` when `toId` is null: what a merge or a deletion of a
+         * searched Person, or a deletion of a searched Location, leaves of it. The view and every
+         * other filter stay; the map area goes, as it goes when the place changes, since it was
+         * drawn on the search before.
+         */
+        replaceId(param, fromId, toId) {
+            const ids = idsOf(this[param])
+                .map((id) => (id === fromId ? toId : id))
+                .filter(Boolean)
+
+            Object.assign(
+                this,
+                withoutRefusedCombinations({
+                    ...this.snapshot(),
+                    [param]: [...new Set(ids)].join(",") || null,
+                    bbox: DEFAULTS.bbox,
+                }),
+            )
+        },
+
         /** The advanced search panel's filters as they are in force */
         filters() {
             return searchFiltersOf(this.snapshot())

@@ -11,7 +11,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`. A nested rule extends its parent by a pseudo-class or a pseudo-element only (`&:focus-visible`, `&::picker(select)`), and a descendant takes a rule of its own: the design tweaks panel's element picker matches a nested selector with `closest()`, which cannot match a descendant one (`& option`).
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
 * Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--search-panel-background-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A color scoped to the elements it marks, rather than a token of `:root`, is declared by their rule from a theme or semantic color: a view's `--view-tint` and `--view-stripe` on its panes, and an account type's `--account-type-color` on `[data-account-type]` (an Admin's `--error-color`, a User's `--success-color`, a Guest's `--info-color`). A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, the nav's quick search field's glow, and a field of the advanced search panel, whose box draws the field's edge and ring around its chips and its input. The detail is under **Themes** below.
-* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius` (a chosen name's chip in the advanced search panel is a rectangular box, `--radius`), the advanced search panel with `--radius-xl`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), the 1 px width and height of `.visually-hidden`, and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
+* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius` (a chosen filter's chip, in the advanced search panel and a filtered search's results title, is a rectangular box, `--radius`), the advanced search panel with `--radius-xl`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), the 1 px width and height of `.visually-hidden`, and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide`, the brand's `--letter-spacing-medium` or the view band's `--letter-spacing-band`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the brand (the nav's and the login page's), the nav's entries and its quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the account info dialog's avatar's 2.5em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin, the close button, the snackbar's dismiss button, the nav's filter button and the remove and clear controls of the advanced search panel; the Font Awesome solid weight 900 selects the icon face.
 * Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; two popover panels hold an inline dialog: View settings, in its menu's panel, and, the second, the advanced search panel under the nav's quick search (**Advanced search panel**). A control that picks one of several values (the grid toolbar's Group and Sort, and any dropdown added later) is a **choice menu**: the same native popover panel, built by `buildChoiceMenuCtrl` from a server-rendered host of option buttons, never a `<select>`, which stays a form's field. Every menu panel wears the popover dialog's frosted surface. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
@@ -36,7 +36,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 ```
 views/
   *.scala.html          ← full pages (index, login, setup, pipeline, settings, users, style_guide)
-  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title, an advanced search option)
+  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title, a filtered search's chips, an advanced search option, a person's cover on a search chip)
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
@@ -108,7 +108,8 @@ its styles are `static/css/htmx/search_panel.css`.
   `data-max-chosen-message`, the line the listbox shows once the field holds them. A chip (`li.chip`, `.person` for a
   Person) carries `data-option-id`, `data-option-label` and, for a Person with a cover, `data-option-cover-url`, shows
   its label in `.name` (a folder's path, a Location with its Category, a Person's name led by their cover Face,
-  `.cover`, or the `.no-cover` placeholder) and ends with its remove button, named "Remove <label>". The server names
+  `.cover`, or the `.no-cover` placeholder, `includes/search_person_cover`, which a filtered search's title chips share)
+  and ends with its remove button, named "Remove <label>". The server names
   the chips: an ID that names nothing in the Library has no chip and no place in its input.
 - The people match is the `.switch` beside the People label, the two in `.label-row` (`#searchPanelPeopleMatch`,
   in `.match` between the words Any and All, on for `all`), its value in the hidden `peopleMatch` input beside it;
@@ -190,7 +191,7 @@ in either theme:
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), Curation's shell opening its host (`curation.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), the Triage summary's reload (`triage.js`), the Settings form's save (`settings.js`, the success snackbar), and the account's (`account.js`: a changed own password, on every page with the nav, and the Users page's changes, which reload its cards); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring, a 204 to an open handed back to its search trigger, and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
-| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`) and the advanced search panel beside it (`search-panel.js`: the load on opening, the filter button's count, the search its form asks for); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), a Person's results title read again after a rename or a correction (`person-title.js`), Asset detail's URL (`detail-url.js`: the address bar names the asset and the Detail panel's state, and Back closes it), Asset detail's fullscreen (`detail-fullscreen.js`: `f`, the toolbar's toggle and the player's button on the whole of Asset detail), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
+| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`) and the advanced search panel beside it (`search-panel.js`: the load on opening, the filter button's count, the search its form asks for); a filtered search's results title (`filtered-title.js`: a chip's × and Edit); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), a Person's results title read again after a rename or a correction (`person-title.js`), Asset detail's URL (`detail-url.js`: the address bar names the asset and the Detail panel's state, and Back closes it), Asset detail's fullscreen (`detail-fullscreen.js`: `f`, the toolbar's toggle and the player's button on the whole of Asset detail), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
@@ -298,6 +299,8 @@ Const.attributes.maxChosen         // "data-max-chosen"  (the most such a field 
 Const.attributes.optionId          // "data-option-id"  (an option of a combobox field and the chip of a chosen one: the ID a search takes)
 Const.attributes.optionLabel       // "data-option-label"  (the label its chip shows)
 Const.attributes.optionCoverUrl    // "data-option-cover-url"  (a Person's cover Face)
+Const.attributes.filter            // "data-app-filter"  (a chip's remove button in a filtered search's results title, its parameters in `data-app-filter-<param>` literals)
+Const.attributes.editFilters       // "data-app-edit-filters"  (that title's Edit, which opens the advanced search panel)
 ```
 
 A Curation set's root carries `data-opening-pinned-id` and `data-opening-focused-id`, and the
@@ -444,9 +447,10 @@ show the name there. Only a cover-face
 change patches cells, every one of the person, found by `data-person-id` under `#people`; a purge of the recycle bin announces
 `trashPurged`, which refreshes the counts. `personMerged`'s listener announces `peopleChanged` and confirms in the
 snackbar, and runs no search of its own, in Browse and Triage alike: results that are neither person's stay as they
-are. It reads the `searchParams` store's `personId`: results scoped to the source, who is gone, become the
-destination's, in the same view (`runSearch({ params: { personId: mergeDestId } })`), and results scoped to the
-destination are read again with the assets the merge gave it (`runSearch()` with no parameters). `confirmPersonMerge`'s listener sends the event's whole detail as the values of
+are. It asks the `searchParams` store whether the search names either (`names("personId", id)`, alone or among
+several): the source, who is gone, gives their place in the search to the destination (`replaceId`, in the same view
+and with every other filter of a filtered search) and the results are read again (`runSearch()`), and results naming
+the destination are read again with the assets the merge gave it (`runSearch()` with no parameters). `confirmPersonMerge`'s listener sends the event's whole detail as the values of
 the Merge people modal's request, so a `keepDirection: true` reaches `showMergePeopleModal` as a query parameter: with it
 the modal keeps the requested source and destination, and without it, as for a drop, the person with fewer faces is the
 source. The rename dialog's offer also sends `pane`, its pencil's pane, and the modal then declares that pencil of the
@@ -705,8 +709,15 @@ for a folder, `#albumMenu-{id}` for an album), all built by `buildContextMenuCtr
 `js/common/context-menu-markup.js` as the tree or list is rendered, so opening a menu sends no request.
 Each action requests its dialog into the popover host (`#popoverContent`), naming the menu's ⋯ trigger in
 `data-app-dialog-anchor`; the modal owner closes the menu when the response opens (the browser would close it too,
-since neither popover is the other's ancestor). Menu panels contain only their action buttons, with no inline form or
-dialog host. `buildModalTriggerCtrl` builds the Add folder, Add album, Add location, and Add category buttons
+since neither popover is the other's ancestor). An action may run a script instead (`run`), and an entry
+`{ separator: true }` is an `hr` between two groups of actions, drawn as a choice menu's separator. The one such action
+is a non-root folder's **Search here**, first in its menu and set apart from the folder's actions by a separator: it
+opens the advanced search panel with the folder chosen and every other field as the search in force has it
+(`openSearchPanel({ folderId })`, **Advanced search panel**), whose opening, an auto popover that is not the menu's
+descendant, closes the menu; nothing is searched until the panel's Search. Any account that can see the Library can
+search, so Search here follows no Permission: a Guest's non-root folder has a menu of Search here alone. The root
+folder is the whole repository and no filter, so its menu has none, and is the empty cell without Organize. Menu
+panels contain only their action buttons, with no inline form or dialog host. `buildModalTriggerCtrl` builds the Add folder, Add album, Add location, and Add category buttons
 (including empty-state controls) as direct requests: into the popover host, anchored to the button itself (`host`
 `ModalHost.popover`, the default), or into the general modal host with no anchor (`host` `ModalHost.general`, which
 Add location and "Add your first location" pass); any other host throws. Every trigger the module builds carries `anchor-name: --<its id>` (`_buildButton`),
@@ -947,8 +958,9 @@ Add location is a modal dialog (`add_location_dialog.scala.html`, it holds the p
 `#addFirstLocationBtn`, centered in the general modal host; Add category opens a popover dialog below `#addCategoryBtn`. The renderer builds all three into their hosts and shows one host or the
 other. Rename, Delete and Move to category open popover dialogs from the row's menu (`#locationMenuCtrl-{id}`
 is the trigger they return focus to; Delete returns focus to `#addLocationBtn`, since the row goes
-away); deleting the viewed Location runs a search back to the whole repository, and deleting a
-category leaves its Locations at the top level, a viewed one still green. `locationAdded` /
+away); deleting a Location the search names drops it from the search (`replaceId("locationId", id, null)`) and searches
+again: back to the whole repository when it was the search's one place, and with the other filters kept in a filtered
+search; deleting a category leaves its Locations at the top level, a viewed one still green. `locationAdded` /
 `categoryAdded` / `locationRenamed` / `locationMoved` / `locationDeleted` reload the list (`locationDeleted` the Triage
 summary too, since the Location's assets may be in no Location now), which
 restores the expanded categories and focus by ID, or focus to the visible add control when the
@@ -1419,7 +1431,7 @@ exported for tooling.
 **Results title** — The results fragment opens with the scope of the results, when it has one, as one block
 every scope renders the same way: `includes/results_title.scala.html` (styled by `static/css/includes/results_title.css`)
 wraps `includes/results_title_inner`, which lays out the kind's Font Awesome icon (`fa-user`, `fa-folder`, `fa-images`,
-`fa-map-marker-alt`, `fa-user-secret`, `fa-map-marker-alt slashed`, `fa-search`), the title the caller renders and the way back, then a subtitle when the scope has one. The results total stays in
+`fa-map-marker-alt`, `fa-user-secret`, `fa-map-marker-alt slashed`, `fa-search`, `fa-sliders-h`), the title the caller renders and the way back, then a subtitle when the scope has one, or a filtered search's filters. The results total stays in
 the toolbar. The title is `--font-size-display`, `--font-weight-semibold`, `--theme-primary-text`, and
 truncates with an ellipsis; the block has no fill of its own, only a hairline below in `--panel-border-color`, and is
 padded `--space-8` by `--space-6` (it paints the pane's background, `--theme-neutral-2` under the pane's tint, so the grid
@@ -1453,18 +1465,41 @@ does not show through it while it sticks). The scopes:
   `position: relative`, and its `::after` lays Font Awesome's own slash glyph (`fa-slash`, `\f715`, made to be laid over
   another icon) centered over it, since the free set has no slashed marker; no subtitle
 - the **Search text** (`.query`, in curly quotes drawn by CSS) with "in this library" as the subtitle
+- a **filtered search** (the glossary's: a date range, two people or more, two Locations or more, or more than one of the
+  Search text, a folder, a person and a Location; the root folder counts as no folder) as "Search results" under the
+  advanced search panel's sliders icon, over its filters in place of a subtitle: `includes/search_filter_chips`, a
+  wrapping row (`.filters`) of `ul.chips`, one chip per filter in the order of the panel's fields, then **Edit**. The
+  chips are the panel's (the chosen filter's chip of `core.css`, **Advanced search panel**), each led by its kind's
+  icon, dimmed (`fa-search`, `fa-folder`, `fa-map-marker-alt`, `fa-calendar-alt`), or a Person's cover Face: the Search
+  text in curly quotes (`.chip.search-text`), the folder's path (`Trips › 2024 › Lisbon`), each person by name, each Location
+  with its Category (`Portugal › Lisbon`), and each date range as "Taken" or "Imported" and its days, as the panel's
+  date field reads them (`DateRange.label`, the server's copy of `rangeLabel`): `Taken 1 Jun – 30 Jun 2024`,
+  `Imported 28 Dec 2023 – 3 Jan 2024`, `Taken 8 Jun 2024` for one day, `Taken from 8 Jun 2024` and
+  `Imported until 21 Jun 2024` for an open end. With two people or more, "all of" or "any of" (`.match`, dimmed) comes
+  before their chips, the people match. `SearchResultsController.isFiltered` decides it, and the names are
+  `SearchService.filterNames`', so an ID that names nothing in the Library has no chip and matches nothing. A chip's ×
+  (`data-app-filter`, carrying the chip's parameters as `data-app-filter-<param>` literals: the text, the folder, its
+  own person's or Location's ID, both days of a range) removes that filter and searches again by what the other chips
+  name, the search's people match kept (`js/search-results/filtered-title.js`, through the panel's `searchByFilters`,
+  so `replaceFilters` and `runSearch` in Browse, and Browse with the search as its query string anywhere else): an ID
+  with no chip goes with the first removal, as with a search from the panel, and the last chip of a kind left alone
+  turns the search into one of a single scope, titled as that scope. Edit (`.action-button.small` with the sliders icon,
+  `data-app-edit-filters`) opens the panel on the search in force (`openSearchPanel()`). A filtered search has no
+  `#person` block, so the person title's reloads (`reloadPersonTitle`) find nothing to read again in it, and a chip
+  shows a person's name as the search found it until the next search
 
 The way back is the `.clear-scope` × after the title: a search trigger carrying an empty `personId`, which the store's scope
 rules (see **Search parameters**) widen to clearing every place, a folder, an album, a Location or a Triage subset alike,
-the map area and the Search text while the view, the sort, the grouping and the layout stay, so a Triage URL scoped to a
+the advanced search panel's filters, the map area and the Search text while the view, the sort, the grouping and the layout stay, so a Triage URL scoped to a
 person or a subset goes back to all of Triage (an empty value names nothing, so the search hydrator searches it in
 Triage as anywhere). The block and the toolbar
 (`#searchControl`) are both `position: sticky` at the top of `#content` (`z-index: 2`, above the group headers), the toolbar
 under the title: `js/search-results/sticky-offsets.js`, run by the results hydrator, writes the title's rendered height to
 `--results-title-height` on the fragment (the toolbar's `top`; 0 without a title) and the two heights together to
 `--results-sticky-height` (the group headers' `top`, **Group headers**) through one `ResizeObserver`. The toolbar's former
-margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a wrapping flex row of three groups, `--space-9` apart: the lead (the total, then the batch ops while assets are selected, see **Batch ops**), the controls (the layout toggle and the View, Group and Sort menus) and the trail, empty but in the trash view, where the Purge button (`htmx/trashbin_header`, rendered into the toolbar) holds its right edge. The lead and the trail grow from the same zero basis, so they split what the controls leave evenly and the controls sit on the bar's center whatever the sides measure; neither side shrinks below its content, so the batch ops push the controls right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one, `--space-6` below, which the sticky offsets follow. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules; the template renders
-the first of person, folder, album, Location, subset and text that is set. The crowded-pin panel hides
+margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a wrapping flex row of three groups, `--space-9` apart: the lead (the total, then the batch ops while assets are selected, see **Batch ops**), the controls (the layout toggle and the View, Group and Sort menus) and the trail, empty but in the trash view, where the Purge button (`htmx/trashbin_header`, rendered into the toolbar) holds its right edge. The lead and the trail grow from the same zero basis, so they split what the controls leave evenly and the controls sit on the bar's center whatever the sides measure; neither side shrinks below its content, so the batch ops push the controls right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one, `--space-6` below, which the sticky offsets follow. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules, but for the
+advanced search panel's, which combines them into a filtered search; the template renders the filtered search's title
+when `filters` is set, and otherwise the first of person, folder, album, Location, subset and text that is set. The crowded-pin panel hides
 the fragment's title with its controls (`static/css/htmx/map_view.css`).
 
 In the Triage view `#curateQueue` follows the toolbar, a centered row holding `#curateSequences`, the small action button that
@@ -1810,15 +1845,16 @@ back keeps it, unless they were deleted): on stepping away, once the step has pi
 asset), or on closing (an `Alpine.effect` over the `modal` store), its cells leave the grid through
 `assetActions.removeAssetsFromGrid`, so the walk continues from the cells around them, and the results title is
 read again, as its Hide and Discard links depend on the count (`reloadPersonTitle`: `GET /htmx/people/r/:repoId/p/:personId/title` into `#person`), or, when the viewed Person was deleted, the
-results go back to the whole repository (`runSearch` with an empty `personId`, as the title's × does). A detail opened from
+search goes on without them (`replaceId("personId", viewed, null)` and `runSearch()`): back to the whole repository
+for a search of that Person alone, and with every other filter kept in a filtered search. A detail opened from
 no cell (a map pin) has no cell to remove and still refreshes the title; a Search text result stays until the next search.
 After a name or a merge of a Face's Person, the grid follows only when the viewed Person is the one changed or the
 merge's destination; naming or merging another Person changes nothing in it. The viewed Person named (`namedPersonId`)
 has the results title read again at once (`reloadPersonTitle`), which shows the name. The viewed Person merged away
 (`mergedPersonId`) leaves every cell of the grid the destination's, so the cells stay, the destination
 (`mergedInto`) stands in for the viewed Person in later corrections' `noteViewedPerson`, and on closing Asset detail, not
-on a step, the results become the destination's (`flushLeaving({ closing: true })` runs
-`runSearch({ params: { personId: mergedIntoId } })`), at once if Asset detail closed while the request was out; until
+on a step, the destination takes the viewed Person's place in the search, every other filter kept, and the results are
+read again (`flushLeaving({ closing: true })`, through `replaceId`), at once if Asset detail closed while the request was out; until
 then the title, still the merged Person's, is not read again, and that search replaces it. A merge into the viewed Person
 (`mergedIntoId`, as the People tab's merge into them) takes the same path: `mergedInto` is the viewed Person, and the
 search on closing reads their results again, so the grid gains the merged Person's assets, and the total and the
@@ -2466,7 +2502,8 @@ panel until Search or a dismissal.
   the panel closes. The panel is invisible while empty (`.search-panel:empty`), takes focus in its text field once the
   form is in, and is emptied again as it closes (`toggle`), which removes its components with their listeners and
   calendars. `openSearchPanel(filters)` opens it from a script with `filters`, each under its search parameter's name,
-  laid over the ones in force (`{ folderId }`), and loads an already open panel again.
+  laid over the ones in force, and loads an already open panel again: a folder's Search here passes `{ folderId }`
+  (**Context menus**), and a filtered search's Edit nothing (**Results title**).
 - **Text.** The panel's text field and the nav's quick search input hold one value: the input's text, searched or only
   typed, is the `q` the form is asked for as the panel opens, and a search from the panel writes its text into the
   input.
@@ -2535,9 +2572,10 @@ panel until Search or a dismissal.
   `--radius-xl` corners, `--space-5` of padding and `--space-7` between fields; one column, each label above its field
   in sentence case but for the glossary's Date Taken and Date Imported, the two date ranges side by side. A `.box`
   wears the field style in place of its input (the sunken fill, the hairline, the accent edge and ring with focus
-  anywhere in it). A chip is a rounded rectangle (`--radius`) on the chips' fill (`--chip-fill`, which `core.css`
-  declares for it and the filter chip), a Person's led by the cover Face as a circle of
-  `--search-panel-chip-cover-size` (20px); an option shows the cover at `--search-panel-option-cover-size` (28px),
+  anywhere in it). A chip is the chosen filter's chip that `core.css` draws for the panel and a filtered search's results
+  title alike (`:is(.search-panel, .results-title) .chip`, in its CHIPS section): a rounded rectangle (`--radius`) on
+  the chips' fill (`--chip-fill`, which `core.css` declares for it and the filter chip), a Person's led by the cover Face
+  as a circle of `--search-panel-chip-cover-size` (20px); an option shows the cover at `--search-panel-option-cover-size` (28px),
   the name, the names above a folder's or a Location's own set back, a Person's number of assets, and the active one
   the accent at 0.2. The listbox and the calendar wear the floating surface of every popover. Clear, a plain
   `.action-button`, is at the left and Search, `.action-button.primary`, at the right. The style guide's Menus &
@@ -2646,10 +2684,10 @@ builds or binds a control. Where each control follows:
   account's own); Curate Selected for a Curate Permission, and outside Triage for Recycle too, since the frames not picked
   are recycled and a sorted one takes Recycle; the Trash's Purge, and the toolbar's Purge recycle bin
   (`htmx/trashbin_header`), for Purge.
-- The explorer: the ⋯ menus and add buttons of the folder tree, the album list and the Location list
-  (`js/common/folder-tree.js`, `album-list.js`, `location-list.js`) for Organize; without it a row's menu cell is the
-  empty `buildNoMenuCell` (`js/common/context-menu-markup.js`), so the row's other cells keep their grid columns, and the
-  add hosts stay empty; in their place each tab opens with a warning saying why (`includes/cannot_organize`, a
+- The explorer: the ⋯ menus' actions and add buttons of the folder tree, the album list and the Location list
+  (`js/common/folder-tree.js`, `album-list.js`, `location-list.js`) for Organize, but a folder's Search here, which is
+  every account's (**Context menus**); a row's menu with no action left is the empty `buildNoMenuCell`
+  (`js/common/context-menu-markup.js`), so the row's other cells keep their grid columns, and the add hosts stay empty; in their place each tab opens with a warning saying why (`includes/cannot_organize`, a
   `.notice.warning` as far above the list as the add controls are): "You cannot create folders as you do not have the
   Permission to organize this Library", and the same for albums and Locations (`Const.UI.CANNOT_ORGANIZE`), a Guest's tabs
   included. A folder's Delete is offered with Recycle too, unless the folder holds no asset (its recursive
@@ -2893,8 +2931,10 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   person's, each with its rename pencil, which hover or focus reveals), hand-written to `htmx/people_list`'s markup
   inside an element with the tab's ID, `#people`, which the rules are scoped by, with `--face-box` set on it as the tab's
   shell sets it; the cells carry no `drag-drop` or `dropzone` class and no search trigger, so nothing binds to them, and
-  `.sg-cover` stands in for the cover face. The Results title's specimens in Panels & layout show a folder's path and a
-  Triage subset's struck-through marker (`.kind-icon.slashed`). The Triage summary (`.notice` with `htmx/triage_summary.css`) is in
+  `.sg-cover` stands in for the cover face. The Results title's specimens in Panels & layout show a folder's path, a
+  Triage subset's struck-through marker (`.kind-icon.slashed`) and a filtered search's title over the real
+  `includes/search_filter_chips` with sample names, whose remove buttons and Edit nothing binds, since only the results
+  hydrator binds them. The Triage summary (`.notice` with `htmx/triage_summary.css`) is in
   Feedback, in `.sg-triage-summary`, which gives it about an explorer's width and its text color there, its links no
   search triggers; Quick view (`htmx/quick_view_modal.css`) is in Menus & dialogs, its content hand-written to
   `htmx/quick_view_modal`'s markup inside an element with its ID, `#quickView`, which its rules are scoped by, with no
@@ -2916,8 +2956,10 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
     drift. The guide would show a comment directly above a `:root` token as its note; `core.css` has none, by design.
   - A new section also needs its `#styleGuideToc` link and its ID in `StyleGuideControllerTests`.
 - **Live specimens:** an Add button and a ⋯ menu built with `buildModalTriggerCtrl` / `buildContextMenuCtrl`
-  (`initStyleGuide()`, after the app has started: no template, so they are the explorer's own markup), both
-  opening `htmx/style_guide_sample_dialog.scala.html` as a popover dialog below the control, a one-field popover with
+  (`initStyleGuide()`, after the app has started: no template, so they are the explorer's own markup); the menu has a
+  folder's shape, Search here, which opens the nav's advanced search panel on the search in force, a separator, then
+  Rename and Delete. The Add button and the menu's two dialog actions open
+  `htmx/style_guide_sample_dialog.scala.html` as a popover dialog below the control, a one-field popover with
   no label (its input's `aria-label` is "Sample name"). A blank name returns the validation replacement, its error
   under the field; a name completes and dispatches `Const.events.styleGuideSampleSubmitted`, which the page answers with
   a snackbar. Nothing is persisted. The Forms section's Labelled fields button (`data-app-open-dialog`, see
@@ -3071,7 +3113,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/includes/person_name_taken.scala.html` | The error row of a rename to a name another live person holds, with its "Merge into X…" button; rendered by the inline name editor and the rename dialog, each naming the row (`errorId`) and supplying the `x-data` scope its button needs; the dialog also passes its `pane`, which the offer sends to the Merge people modal |
 | `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read, and whether the Person is named and their number of assets, which the combobox reads; under each row, for a live asset, Change and Remove and the Change combobox's markup, with the "This face only" switch for a Person with no name, its listbox rendering the Suggested group and then the list from one option block, each option with its armed label and suffix; a correction's response, its root carrying the result message, any deleted Person and, after a merge, the merged Person and the destination) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
 | `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu; its grid and the highlights' look are `static/css/htmx/view_image_detail_modal.css` |
-| `static/js/stores/search-params.js` | the search parameter set, its defaults, the scope rules that decide what a change clears, and the advanced search panel's filters set together (`replaceFilters`, `filters`, `filterCount`, `viewedPersonId`, `viewedLocationId`; `applySearchFilters`, `idsOf`) |
+| `static/js/stores/search-params.js` | the search parameter set, its defaults, the scope rules that decide what a change clears, and the advanced search panel's filters set together (`replaceFilters`, `filters`, `filterCount`, `viewedPersonId`, `viewedLocationId`; `applySearchFilters`, `idsOf`), and a searched Person's or Location's ID replaced or dropped (`names`, `replaceId`) |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch`, and routes a trigger's click by the view (`routeOf`: in Triage a folder, Person or Location trigger asks the scope route, `requestScopeDialog`, and the root folder's does nothing; in the trash a folder trigger does nothing); `runTriggerSearch`, the search a trigger declares, which a 204 from the scope route runs |
 | `static/js/listeners/triage.js` | the Triage summary's reload: `registerTriageListeners` (on `peopleChanged`) and `reloadTriageSummary`, one request per change, issued from the host so the reloads take turns |
@@ -3086,6 +3128,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing, the results title read again when the viewed Person is named, and the destination's results on closing when the viewed Person is merged away or merged into) |
 | `static/js/search-results/detail-url.js` | `createDetailUrl`: Asset detail's URL, its history entry and Back and Forward over it, the opening of the asset a URL names (`openAssetInLocation`), and the search URL held while it is open (see **Detail navigation**) |
 | `static/js/search-results/detail-fullscreen.js` | `createDetailFullscreen`: Asset detail in fullscreen (`toggle`, on `f` and the toolbar's toggle, which it removes where `document.fullscreenEnabled` is false), the player's `fullscreenElement` set to the host on each fragment (`attach`), the toggle's pressed state and the snackbar's stacks raised on `fullscreenchange` |
+| `static/js/search-results/filtered-title.js` | `bindFilteredTitle`: a filtered search's results title, each chip's × searching by what the other chips name (through `searchByFilters`) and Edit opening the advanced search panel |
+| `views/includes/search_filter_chips.scala.html`, `search_person_cover.scala.html` | A filtered search's filters under its results title, a chip each with its remove button's parameters, and Edit; a person's cover Face on a chip of the title or of the advanced search panel |
 | `static/js/search-results/person-title.js` | `reloadPersonTitle`: a Person's results title (`#person`) read again from the title route when it shows that Person, after a rename from a People cell's pencil and after a Detail panel correction |
 | `static/js/search-results/face-corrections.js` | `createFaceCorrections`: Remove's two clicks and their reset, the Change pick's request by its `action` (a move, or a name or a merge of the Face's Person), and what each answer means (the section to swap in, a message, a stale section to reload); `parsePeopleSection` |
 | `static/js/alpine/components/face-combobox.js` | the `faceCombobox` Alpine component of a People row's Change: the options loaded once per opening for the Face (`assignablePeopleUrl`, `parseAssignablePeople`), the Suggested group while nothing is typed, the rest filtered as typed, the Create row, the keys, the anchored listbox popover, the two modes by the row's Person with the "This face only" switch, the two-step merge (`armedKey`), the pick (with its `action`) and the X announced as events; `closeOpenFaceCombobox` for Escape |
@@ -3093,8 +3137,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/common/dock.js` | `createDock`: a docked panel's side, share, divider (drag and keys), Dock side menu upkeep and remembered state, configured by the explorer's and the Detail panel's docks; `isVerticalAxis` |
 | `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid, and its Curate button (`removeCurateButtons`) |
 | `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
-| `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint; patches the counts in place after asset mutations |
-| `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder, album or Location row, the dialog-trigger buttons and a choice menu from its host (`buildChoiceMenuCtrl`, with the compact, glyph-only variant of the Dock side menu, and the link options and the actions after a separator of the nav's Library menu) |
+| `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint (Search here, then the folder's actions); patches the counts in place after asset mutations |
+| `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder, album or Location row (dialog actions, script actions such as Search here, separators), the dialog-trigger buttons and a choice menu from its host (`buildChoiceMenuCtrl`, with the compact, glyph-only variant of the Dock side menu, and the link options and the actions after a separator of the nav's Library menu) |
 | `views/includes/library_menu.scala.html` | The nav's Browse cell: the Browse link to the current Library's main page, then the Library menu host: the account's Libraries as link options, the current one checked, and for an Admin or the Create Libraries flag a separator and New library…; `hx-preserve` (**Nav**) |
 | `views/htmx/new_library_dialog.scala.html` | The New library dialog: one name field, Create and Cancel, the Library name rule's errors under the field (**New library dialog**) |
 | `views/includes/page_title.scala.html` | The browser tab title of a page of a Library: "<page> · <Library> · Altitude", or "<Library> · Altitude" on the main page |
@@ -3118,8 +3162,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/design-tweaks.js` | the design tweaks panel's adapter: `createTokenTweaks` of the vendored tokentweak package with Altitude's storage key, host id, stylesheet, trigger, shortcut, sources URL, sections, scales, the two scoped tokens, the explorer control and the export file name |
 | `static/js/lib/tokentweak.js` | the tokentweak package (vendored, dev only): the panel, its store and adopted sheet, the controls per kind, Inspect, the exports; its options are its README's |
 | `static/js/lib/tokentweak-boot.js` | tokentweak's boot script (vendored, dev only): adopts the stored override sheet and theme before the first paint, keyed by its tag's `data-key` |
-| `views/includes/search_results.scala.html` | Search grid wrapper with the results title (**Results title**), the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell, and the scope the title names (the person, the folder's path, the album, the Location, the Triage subset). Its CSS (`static/css/includes/search_results.css`) gives `#assets` `overflow-anchor: none` and the page spacer its full row; `#assets` carries the preview size as `--preview-box` for the cell size |
-| `views/includes/results_title.scala.html`, `results_title_inner.scala.html` | The results title block and its inside (icon, title, the way back, subtitle; a person's cover face and actions); styled by `static/css/includes/results_title.css` |
+| `views/includes/search_results.scala.html` | Search grid wrapper with the results title (**Results title**), the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip; the controller passes in the rendered grid partial, or the map shell, and the scope the title names (the person, the folder's path, the album, the Location, the Triage subset), or a filtered search's filters (`includes/search_filter_chips`). Its CSS (`static/css/includes/search_results.css`) gives `#assets` `overflow-anchor: none` and the page spacer its full row; `#assets` carries the preview size as `--preview-box` for the cell size |
+| `views/includes/results_title.scala.html`, `results_title_inner.scala.html` | The results title block and its inside (icon, title, the way back, subtitle or a filtered search's filters; a person's cover face and actions); styled by `static/css/includes/results_title.css` |
 | `views/htmx/person.scala.html`, `person_inner.scala.html`, `view_person_name.scala.html`, `edit_person_name.scala.html` | The person scope's results title: the block that is the merge drop zone and the person actions' swap target, its inside, and the inline name editor's two states; the person's own styles are `static/css/htmx/person.css` |
 | `static/js/search-results/sticky-offsets.js` | `bindStickyOffsets`: writes the results title's rendered height to `--results-title-height` (the toolbar's sticky offset) and the title's and toolbar's together to `--results-sticky-height` (the group headers') on the fragment |
 | `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page, and the thumbnail its preview URL in `data-src`, a first page's in `src` too. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration switch like every other field |
@@ -3176,8 +3220,12 @@ people or more, since all is the server's rule with none given) and the two date
 `replaceFilters(filters)` (`applySearchFilters`): it sets `q`, `folderId`, `personId`, `locationId` and the panel's
 five as given, one left out being no filter, and returns `view`, `albumId`, `subset` and `bbox` to their defaults, so
 the search is the repository view's by the panel's filters alone; the layout, the grouping, the sort, `rpp` and the
-triage filter survive, under the rules below. Removing one filter is `replaceFilters` with the filters in force
-(`filters()`) and that one null. The other direction is the table's: the panel's five are among what looking somewhere
+triage filter survive, under the rules below. A filtered search's results title removes one filter through the same
+funnel, with the filters its other chips name (**Results title**). `names(param, id)` says whether the search names a
+Person or a Location (`personId`, `locationId`), alone or among several, and `replaceId(param, fromId, toId)` puts
+`toId` in its place, or drops it for a null `toId`, keeping the view and every other filter and clearing the map area:
+a merge or a deletion of a searched Person, and a deletion of a searched Location, go through it (**Event flow**,
+**Detail panel**, **Locations**). The other direction is the table's: the panel's five are among what looking somewhere
 else clears, so a folder, a person, an album, a Location, a subset or a view chosen in the explorer drops the panel's
 filters, and with its single ID the several the panel chose, and the quick search, which sets `q` alone, drops them
 too. `filterCount()` is how many of the panel's fields the search fills (the nav's filter button's badge),

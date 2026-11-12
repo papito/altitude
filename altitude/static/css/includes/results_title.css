@@ -90,18 +90,55 @@
 /* A folder's path wears the shared crumbs (.crumbs, core.css): the ancestors dimmed, each a link to its own folder, and
    the folder itself (.leaf) in the title style */
 
-/* The Search text, in curly quotes */
+/* The Search text, in curly quotes, as the title and as a filtered search's chip */
 .results-title .query::before,
-.results-title .query::after {
+.results-title .query::after,
+.results-title .chip.search-text .name::before,
+.results-title .chip.search-text .name::after {
   color: var(--theme-neutral-3);
 }
 
-.results-title .query::before {
+.results-title .query::before,
+.results-title .chip.search-text .name::before {
   content: "\201C";
 }
 
-.results-title .query::after {
+.results-title .query::after,
+.results-title .chip.search-text .name::after {
   content: "\201D";
+}
+
+/* A filtered search's filters under its title (includes/search_filter_chips): a wrapping row of chips, the chosen filter's
+   chip of core.css, each led by its kind's icon or a Person's cover Face, then Edit */
+.results-title .filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.results-title .chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A chip's kind, dimmed before its name */
+.results-title .chip > .fas {
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-xs);
+}
+
+/* How several people combine, before their chips: "all of" or "any of" */
+.results-title .chips .match {
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
 }
 
 .results-title .actions {

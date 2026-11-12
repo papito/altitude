@@ -20,8 +20,8 @@ import { ModalHost } from "./modal.js"
 
 /**
  * The cell of an explorer row's ⋯ menu for an account that holds none of its actions (every action
- * of a folder's, an album's or a Location's menu is Organize's): empty, so the row's other cells
- * keep their grid columns
+ * of an album's or a Location's menu, and of the root folder's, is Organize's): empty, so the row's
+ * other cells keep their grid columns
  */
 export function buildNoMenuCell() {
     const cellEl = document.createElement("span")
@@ -31,8 +31,11 @@ export function buildNoMenuCell() {
 
 /**
  * Builds a menu cell: the ⋯ trigger button and the native popover panel it opens, holding the
- * action buttons. Each action requests its dialog into the popover dialog host; opening the dialog
- * closes the menu through `common/modal.js`. The stable trigger is also the dialog's anchor.
+ * action buttons. An action requests its dialog into the popover dialog host (`url`, `vals`);
+ * opening the dialog closes the menu through `common/modal.js`, and the stable trigger is also the
+ * dialog's anchor. An action may instead run a script (`run`), which closes the menu by opening a
+ * popover of its own (a folder's Search here opens the advanced search panel), and an entry
+ * `{ separator: true }` is a rule between two groups of actions.
  *
  * `triggerId` and `panelId` must be stable across rebuilds: rebuilds restore focus by
  * ID, and the dialogs declare the trigger as their
@@ -63,14 +66,23 @@ export function buildContextMenuCtrl({
 
     const actionsEl = document.createElement("div")
     actionsEl.className = "actions"
-    actions.forEach(({ label, url, vals }) => {
+    actions.forEach(({ label, url, vals, run, separator }) => {
+        if (separator) {
+            actionsEl.appendChild(document.createElement("hr"))
+            return
+        }
+
         const actionEl = document.createElement("button")
         actionEl.type = "button"
-        _requestPopoverDialogOnClick(actionEl, {
-            url,
-            vals,
-            anchorId: triggerId,
-        })
+        if (run) {
+            actionEl.addEventListener("click", run)
+        } else {
+            _requestPopoverDialogOnClick(actionEl, {
+                url,
+                vals,
+                anchorId: triggerId,
+            })
+        }
         actionEl.textContent = label
         actionsEl.appendChild(actionEl)
     })

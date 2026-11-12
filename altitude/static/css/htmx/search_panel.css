@@ -152,49 +152,9 @@
     display: contents;
 }
 
-/* A chosen name: a rounded rectangle on the chips' fill, the name cut with an ellipsis, then its remove control. A
-   Person's leads with the cover Face as a circle */
-.search-panel .chip {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    max-width: 100%;
-    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
-    border-radius: var(--radius);
-    background: var(--chip-fill);
-    font-size: var(--font-size-small);
-    white-space: nowrap;
-    cursor: default;
-}
+/* A chosen name is the chip of a chosen filter that core.css draws for the panel and a filtered search's results title */
 
-.search-panel .chip.person {
-    padding-left: var(--space-1);
-}
-
-.search-panel .chip .name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.search-panel .chip button {
-    display: grid;
-    place-items: center;
-    padding: var(--space-1);
-    border: 0;
-    border-radius: 50%;
-    background: none;
-    color: var(--theme-neutral-3);
-    font-size: var(--font-size-xs);
-    line-height: 1;
-    cursor: pointer;
-}
-
-.search-panel .chip button:hover {
-    background: hsl(from var(--theme-neutral-3) h s l / 0.25);
-    color: var(--theme-neutral-4);
-}
-
-/* A Person's cover Face, or the placeholder of a Person with none: a circle, smaller on a chip than in the options */
+/* A Person's cover Face in the options, or the placeholder of a Person with none: a circle, larger than on a chip */
 .search-panel .cover {
     flex: none;
     width: var(--search-panel-option-cover-size);
@@ -202,12 +162,6 @@
     border-radius: 50%;
     object-fit: cover;
     font-size: var(--font-size-small);
-}
-
-.search-panel .chip .cover {
-    width: var(--search-panel-chip-cover-size);
-    height: var(--search-panel-chip-cover-size);
-    font-size: var(--font-size-xs);
 }
 
 /* A combobox's listbox: a manual popover in the top layer, anchored under its field's box and as wide as it, flipped

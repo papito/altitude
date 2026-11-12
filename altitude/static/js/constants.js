@@ -219,6 +219,10 @@ export const Const = {
         optionId: "data-option-id",
         optionLabel: "data-option-label",
         optionCoverUrl: "data-option-cover-url",
+        // A chip's remove button in a filtered search's results title (includes/search_filter_chips), which carries the
+        // parameters the chip stands for as `data-app-filter-<param>` literals; and the title's Edit, which opens the panel
+        filter: "data-app-filter",
+        editFilters: "data-app-edit-filters",
     },
 
     context: {

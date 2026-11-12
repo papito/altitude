@@ -6,6 +6,7 @@ import { setViewedFolderScope } from "../common/viewed-folder-scope.js"
 import { isInMapPanel, setMapPanelCount } from "../map/map-panel.js"
 import { disposeMapView } from "../map/map-view.js"
 import { bindBoxSelection } from "../search-results/box-selection.js"
+import { bindFilteredTitle } from "../search-results/filtered-title.js"
 import { bindInfiniteScroll } from "../search-results/infinite-scroll.js"
 import { bindLazyImages } from "../search-results/lazy-images.js"
 import { bindMetadataVisibility } from "../search-results/metadata-visibility.js"
@@ -18,7 +19,8 @@ import { ensureViewSettingsControl } from "../search-results/view-settings-contr
  * The search results fragment (`data-app-fragment="search-results"`, `includes/search_results.scala.html`):
  * the results title, the controls and the first page of the grid, re-swapped into `#content` on every
  * search. Each behaviour of the grid is its own module under `js/search-results/`, as are the sticky
- * offsets of the title, the toolbar and the group headers; this only runs them in order.
+ * offsets of the title, the toolbar and the group headers, and the chips and Edit of a filtered
+ * search's title; this only runs them in order.
  *
  * In map layout the fragment holds the map shell instead of `#assets` (hydrated next, as the
  * `map-view` fragment), and the same fragment is what the crowded-pin panel loads into
@@ -48,6 +50,7 @@ export function hydrateSearchResultsFragment({ fragmentEl }) {
         syncViewedScope(fragmentEl)
         ensureViewSettingsControl(fragmentEl)
         bindStickyOffsets({ fragmentEl })
+        bindFilteredTitle({ fragmentEl })
 
         // The toolbar's Curate button shows the number of Sequences in the queue
         if (fragmentEl.dataset.resultsView === Const.views.triage) {

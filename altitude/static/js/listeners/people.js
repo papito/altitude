@@ -55,14 +55,16 @@ export function registerPeopleListeners(app) {
         showSuccessSnackBar("Person merged successfully")
 
         // A merge runs no search of its own, in Browse and Triage alike: results that are neither
-        // person's stay as they are. Results scoped to one of the two are stale, though. The
-        // source is gone, so its results become the destination's, in the same view; the
-        // destination's are read again with the assets the merge gave it
-        const scopedPersonId = Alpine.store(Const.state.searchParams).personId
+        // person's stay as they are. Results of a search naming one of the two are stale, though.
+        // The source is gone, so the destination takes their place in the search, in the same view
+        // and with every other filter of a filtered search; results naming the destination are
+        // read again with the assets the merge gave it
+        const searchParams = Alpine.store(Const.state.searchParams)
 
-        if (scopedPersonId === mergeSourceId) {
-            runSearch({ params: { personId: mergeDestId } })
-        } else if (scopedPersonId === mergeDestId) {
+        if (searchParams.names("personId", mergeSourceId)) {
+            searchParams.replaceId("personId", mergeSourceId, mergeDestId)
+            runSearch()
+        } else if (searchParams.names("personId", mergeDestId)) {
             runSearch()
         }
     })

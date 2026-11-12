@@ -52,15 +52,8 @@
 @chip(Some(named.id -> named.label))
 }
 
-@personCover(person: Person) = {
-@coverUrlOf(person) match {
-case Some(url) => {<img class="cover" src="@url" alt="">}
-case None => {<span class="cover no-cover"><i class="fas fa-user" aria-hidden="true"></i></span>}
-}
-}
-
 @personChip(person: Person) = {
-@chip(Some(person.persistedId -> person.name.getOrElse("")), person = true, cover = Some(personCover(person)), coverUrl = coverUrlOf(person))
+@chip(Some(person.persistedId -> person.name.getOrElse("")), person = true, cover = Some(includes.html.search_person_cover(person)), coverUrl = coverUrlOf(person))
 }
 
 @* A combobox field: `key` names it in its IDs, `param` is the search parameter its hidden input holds, `kind` the

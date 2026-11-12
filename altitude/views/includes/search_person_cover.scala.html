@@ -1,0 +1,12 @@
+@import altitude.core.Const
+@import altitude.core.models.Person
+@import altitude.core.util.Util
+
+@(person: Person)
+
+@* A person's cover Face on a chip of the advanced search panel (htmx/search_panel) and of a filtered search's results title
+   (includes/search_filter_chips), or the placeholder of a person with none *@
+@person.coverFaceId match {
+case Some(cover) => {<img class="cover" src="@{Util.contentUrl(Const.DataStore.FACE, cover)}" alt="">}
+case None => {<span class="cover no-cover"><i class="fas fa-user" aria-hidden="true"></i></span>}
+}

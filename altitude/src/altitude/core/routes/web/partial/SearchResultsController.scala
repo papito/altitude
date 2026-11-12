@@ -17,6 +17,7 @@ import altitude.core.models.Folder
 import altitude.core.models.Location
 import altitude.core.models.Permission
 import altitude.core.models.Person
+import altitude.core.models.SearchFilters
 import altitude.core.routes.BaseController
 import altitude.core.routes.SearchRequestParser
 import altitude.core.routes.decorators.refusedView
@@ -53,7 +54,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * An advanced search (`SearchRequestParser`) names several people or Locations, comma-separated in `personId` and `locationId`,
    * says with `peopleMatch` whether the people match `all` or `any`, and narrows by the Date Taken range (`takenFrom`, `takenTo`)
    * and the Date Imported range (`importedFrom`, `importedTo`); a malformed one is a 400, as is any of them with the trash view,
-   * and the browser URL keeps them. The results title names a person or a Location only when the search names one.
+   * and the browser URL keeps them. A filtered search (`isFiltered`) is titled by its filters, a chip each, and an ID among them
+   * that names nothing in the repository is no 404: it matches nothing and has no chip.
    *
    * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
    * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
@@ -148,17 +150,21 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         s"${Api.Field.Search.SORT}=${Const.Search.SORT_RELEVANCE} needs Search text (${Api.Field.Search.QUERY_TEXT})",
         400)
 
-    // What the results title names: the person, the folder's path, the album, the Location or the subset the results are
-    // scoped to. One that is not the repository's, unknown or another repository's, is a 404 that names nothing of it. Several
-    // people, or several Locations, are named by no title, and one of them that names nothing matches nothing
+    // What the results title names. A filtered search is named by its filters, a chip each, through what its IDs name in the
+    // repository (`SearchService.filterNames`): an ID that names nothing there, unknown or another repository's, matches nothing and
+    // has no chip. Any other search names one scope at most, the person, the folder's path, the album, the Location or the subset
+    // the results are scoped to, read by ID, and one that is not the repository's is a 404 that names nothing of it
+    val filters = Option.when(isFiltered(scope))(filtersOf(scope, folderId, personId, locationId))
     val (person, folderPath, album, location) =
-      try
-        (
-          personOf(theOnly(scope.personIds)),
-          folderPathOf(folderId),
-          albumId.map(App.altitude.service.album.getById),
-          locationOf(theOnly(scope.locationIds)))
-      catch case ex: NotFoundException => return textError(ex.getMessage, 404)
+      if filters.isDefined then (null, Nil, None, None)
+      else
+        try
+          (
+            personOf(scope.personIds.headOption),
+            folderPathOf(folderId),
+            albumId.map(App.altitude.service.album.getById),
+            locationOf(scope.locationIds.headOption))
+        catch case ex: NotFoundException => return textError(ex.getMessage, 404)
 
     val browserUrl = browserViewUrl(
       view,
@@ -203,6 +209,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           album = album,
           location = location,
           subset = scope.subset,
+          filters = filters,
           view = view,
           folderId = folderId,
           albumId = albumId,
@@ -261,6 +268,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
           album = album,
           location = location,
           subset = scope.subset,
+          filters = filters,
           view = view,
           folderId = folderId,
           albumId = albumId,
@@ -305,6 +313,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         album = album,
         location = location,
         subset = scope.subset,
+        filters = filters,
         view = view,
         folderId = folderId,
         albumId = albumId,
@@ -377,9 +386,35 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   private def timedOut: Response[String] =
     textError(Const.Msg.Err.SEARCH_TIMED_OUT, 503)
 
-  /** The one ID of a set, none for a set of none or of several */
-  private def theOnly(ids: Set[String]): Option[String] =
-    Option.when(ids.size == 1)(ids.head)
+  /**
+   * Whether the search is a filtered search (`CONTEXT.md`): one with a date range, two people or more, two Locations or more, or
+   * more than one of the Search text, a folder, a person and a Location. The root folder is the whole repository, so it is no
+   * folder here. Any other search has one scope at most, which its results title names on its own.
+   */
+  private def isFiltered(scope: SearchRequestParser.Scope): Boolean =
+    val folders = App.altitude.service.folder
+    val scopes = List(
+      scope.text.isDefined,
+      scope.folderIds.exists(!folders.isRootFolder(_)),
+      scope.personIds.nonEmpty,
+      scope.locationIds.nonEmpty)
+    scope.takenRange.isDefined || scope.importedRange.isDefined || scope.personIds.size > 1 || scope.locationIds.size > 1 ||
+    scopes.count(identity) > 1
+
+  /** The filters a filtered search's title names, the people and the Locations in the order the request gives them */
+  private def filtersOf(
+      scope: SearchRequestParser.Scope,
+      folderId: Option[String],
+      personId: Option[String],
+      locationId: Option[String]): SearchFilters =
+    SearchFilters(
+      text = scope.text,
+      names = App.altitude.service.search
+        .filterNames(folderId, SearchRequestParser.idsOf(personId), SearchRequestParser.idsOf(locationId)),
+      peopleMatch = scope.peopleMatch,
+      takenRange = scope.takenRange,
+      importedRange = scope.importedRange
+    )
 
   private def personOf(personId: Option[String]): Person =
     personId.map(App.altitude.service.person.getById).orNull

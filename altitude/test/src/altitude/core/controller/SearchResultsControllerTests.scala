@@ -3,7 +3,7 @@ package altitude.core.controller
 import altitude.test.TestContext
 import java.time.{ LocalDateTime, OffsetDateTime, ZoneOffset }
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.should.Matchers.{ include, not, should, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ empty, include, not, should, shouldBe }
 
 import altitude.core.Api
 import altitude.core.App
@@ -1833,6 +1833,278 @@ import altitude.core.util.Util
         }
 
         htmlSearch(host, repoId, Map(Api.Field.Search.PERSON_ID -> ids(10))).statusCode shouldBe 200
+    }
+  }
+
+  /**
+   * A chip of a filtered search's results title: the search parameters its × leaves out of the search, each with the value its
+   * remove button carries (`data-app-filter-<param>`, the parameter in kebab case), and the text it shows
+   */
+  private case class FilterChip(filter: Map[String, String], text: String)
+
+  /** The chips of the results title in `html`, in document order */
+  private def filterChipsIn(html: String): List[FilterChip] =
+    """(?s)<li\b[^>]*>(?:(?!</li>).)*\bdata-app-filter-.*?</li>""".r.findAllIn(html).toList.map {
+      element =>
+        FilterChip(
+          filter = """\bdata-app-filter-([a-z-]+)="([^"]*)"""".r.findAllMatchIn(element).map(m => m.group(1) -> m.group(2)).toMap,
+          text = element.replaceAll("<[^>]*>", " ").replaceAll("\\s+", " ").trim
+        )
+    }
+
+  /** The title of a filtered search, which opens its block */
+  private val filteredTitle = "Search results"
+
+  /** The control of a filtered search's title that opens the advanced search panel */
+  private val editFilters = "data-app-edit-filters"
+
+  test("A filtered search is titled Search results over a chip per filter, in the order of the panel's fields") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the folder Lisbon under 2024 under Trips, the people Alice, with a Face and so a cover,
+     * and Bob, with none, the Location Lisbon in the Category Portugal and the Location Sintra.
+     *
+     * Assertions:
+     *
+     * A search by the text "beach", the folder, Bob and Alice matching any of them, Sintra and Lisbon, a Date Taken range and a
+     * Date Imported range is titled "Search results" with the Edit control, over one chip per filter, in the order of the panel's
+     * fields: the text, the folder by its path, each person by name in the order given, each Location with its Category in the
+     * order given, then the two ranges as "Taken" and "Imported" days. Each chip carries the parameters its × leaves out: the
+     * text, the folder, its own person or Location, or both days of its range. Alice's chip leads with her cover Face; the people
+     * are announced as "any of" them, and as "all of" them when the match is left out.
+     *
+     * Edge cases:
+     *
+     * The title of one scope is not rendered: no person block, no folder crumbs, no quoted text.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val trips = testApp.service.folder.add("Trips")
+        val year = testApp.service.folder.add("2024", parentId = trips.id)
+        val folder = testApp.service.folder.add("Lisbon", parentId = year.id)
+        val alice = testApp.service.person.addPerson(Person(name = Some("Alice")))
+        testContext.addTestFace(alice, testContext.persistAsset(), TestContext.unitVector(1))
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val portugal = testApp.service.location.addCategory("Portugal")
+        val lisbon = testApp.service.location.addLocation("Lisbon", 38.72, -9.14, Some(portugal.persistedId))
+        val sintra = testApp.service.location.addLocation("Sintra", 38.8, -9.39)
+        val filters = Map(
+          Api.Field.Search.QUERY_TEXT -> "beach",
+          Api.Field.Search.FOLDER_ID -> folder.persistedId,
+          Api.Field.Search.PERSON_ID -> s"${bob.persistedId},${alice.persistedId}",
+          Api.Field.Search.PEOPLE_MATCH -> "any",
+          Api.Field.Search.LOCATION_ID -> s"${sintra.persistedId},${lisbon.persistedId}",
+          Api.Field.Search.TAKEN_FROM -> "2024-06-01",
+          Api.Field.Search.TAKEN_TO -> "2024-06-30",
+          Api.Field.Search.IMPORTED_FROM -> "2025-01-08",
+          Api.Field.Search.IMPORTED_TO -> "2025-01-08"
+        )
+
+        val response = htmlSearch(host, repoId, filters)
+        response.statusCode shouldBe 200
+        val page = response.text()
+        page should include(filteredTitle)
+        page should include(editFilters)
+        (page should not).include("""id="person"""")
+        (page should not).include("""class="crumbs"""")
+        (page should not).include("""class="query"""")
+
+        filterChipsIn(page) shouldBe List(
+          FilterChip(Map("q" -> "beach"), "beach"),
+          FilterChip(Map("folder-id" -> folder.persistedId), "Trips › 2024 › Lisbon"),
+          FilterChip(Map("person-id" -> bob.persistedId), "Bob"),
+          FilterChip(Map("person-id" -> alice.persistedId), "Alice"),
+          FilterChip(Map("location-id" -> sintra.persistedId), "Sintra"),
+          FilterChip(Map("location-id" -> lisbon.persistedId), "Portugal › Lisbon"),
+          FilterChip(Map("taken-from" -> "2024-06-01", "taken-to" -> "2024-06-30"), "Taken 1 Jun – 30 Jun 2024"),
+          FilterChip(Map("imported-from" -> "2025-01-08", "imported-to" -> "2025-01-08"), "Imported 8 Jan 2025")
+        )
+        val cover = testApp.service.person.getById(alice.persistedId).coverFaceId.get
+        page should include(Util.contentUrl(Const.DataStore.FACE, cover))
+        ordered(page, "any of", "Bob")
+
+        val allOf = htmlSearch(host, repoId, filters - Api.Field.Search.PEOPLE_MATCH).text()
+        ordered(allOf, "all of", "Bob")
+        (allOf should not).include("any of")
+    }
+  }
+
+  test("A filtered search's chip reads a date range as its days, an open end as from or until") {
+
+    /**
+     * Setup:
+     *
+     * An empty repository.
+     *
+     * Assertions:
+     *
+     * A search by a date range alone is a filtered search: its one chip reads a range within a year with the year once ("Taken 1
+     * Jun – 30 Jun 2024"), a range across two years with both ("Imported 28 Dec 2023 – 3 Jan 2024"), a range of one day as that
+     * day ("Taken 8 Jun 2024"), a range with no last day as "from" its first ("Taken from 8 Jun 2024") and one with no first day
+     * as "until" its last ("Imported until 21 Jun 2024"), and carries the days the request gave, an open end none.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val ranges = List(
+          Map("takenFrom" -> "2024-06-01", "takenTo" -> "2024-06-30") -> "Taken 1 Jun – 30 Jun 2024",
+          Map("importedFrom" -> "2023-12-28", "importedTo" -> "2024-01-03") -> "Imported 28 Dec 2023 – 3 Jan 2024",
+          Map("takenFrom" -> "2024-06-08", "takenTo" -> "2024-06-08") -> "Taken 8 Jun 2024",
+          Map("takenFrom" -> "2024-06-08") -> "Taken from 8 Jun 2024",
+          Map("importedTo" -> "2024-06-21") -> "Imported until 21 Jun 2024"
+        )
+        def kebab(param: String): String = param.replaceAll("([A-Z])", "-$1").toLowerCase
+
+        for ((range, label) <- ranges) withClue(s"$range: ") {
+          val page = htmlSearch(host, repoId, range).text()
+          page should include(filteredTitle)
+          filterChipsIn(page) shouldBe List(FilterChip(range.map((param, day) => kebab(param) -> day), label))
+        }
+    }
+  }
+
+  test("Only a filtered search is titled by its filters; any other keeps the title of its one scope") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the folder Trips, the people Alice and Bob, Alice with Faces on two assets, and the
+     * Locations Lisbon and Sintra.
+     *
+     * Assertions:
+     *
+     * Two people alone, two Locations alone, the text with a folder, the text with a person, a folder with a Location, and a
+     * person with a Location are each a filtered search, titled "Search results" over their chips. One person alone keeps the
+     * person's block with the Hide link, one folder alone its crumbs, one Location alone its name, and the text alone its quoted
+     * text, none with a chip or the Edit control.
+     *
+     * Edge cases:
+     *
+     * The root folder is no filter: the text in the root folder keeps the text's title.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val trips = testApp.service.folder.add("Trips")
+        val alice = testApp.service.person.addPerson(Person(name = Some("Alice")))
+        testContext.addTestFace(alice, testContext.persistAsset(), TestContext.unitVector(1))
+        testContext.addTestFace(alice, testContext.persistAsset(), TestContext.unitVector(2))
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val lisbon = testApp.service.location.addLocation("Lisbon", 38.72, -9.14)
+        val sintra = testApp.service.location.addLocation("Sintra", 38.8, -9.39)
+        val fields = Api.Field.Search
+        val text = fields.QUERY_TEXT -> "beach"
+        val folder = fields.FOLDER_ID -> trips.persistedId
+        val person = fields.PERSON_ID -> alice.persistedId
+        val location = fields.LOCATION_ID -> lisbon.persistedId
+
+        val filtered = List(
+          Map(fields.PERSON_ID -> s"${alice.persistedId},${bob.persistedId}"),
+          Map(fields.LOCATION_ID -> s"${lisbon.persistedId},${sintra.persistedId}"),
+          Map(text, folder),
+          Map(text, person),
+          Map(folder, location),
+          Map(person, location)
+        )
+        for (params <- filtered) withClue(s"$params: ") {
+          val response = htmlSearch(host, repoId, params)
+          response.statusCode shouldBe 200
+          val page = response.text()
+          page should include(filteredTitle)
+          page should include(editFilters)
+          filterChipsIn(page).size shouldBe params.values.map(_.split(",").length).sum
+        }
+
+        def unfiltered(params: Map[String, String]): String = {
+          val page = htmlSearch(host, repoId, params).text()
+          (page should not).include(filteredTitle)
+          (page should not).include(editFilters)
+          filterChipsIn(page) shouldBe empty
+          page
+        }
+        val personPage = unfiltered(Map(person))
+        personPage should include(s"""id="person" class="results-title dropzone" x-data data-person-id="${alice.persistedId}"""")
+        personPage should include("""class="mark-hidden"""")
+        unfiltered(Map(folder)) should include("""<span class="leaf">Trips</span>""")
+        unfiltered(Map(location)) should include("""<span class="name">Lisbon</span>""")
+        unfiltered(Map(text)) should include("""<span class="query">beach</span>""")
+        unfiltered(Map(text, fields.FOLDER_ID -> testContext.repository.rootFolderId)) should include(
+          """<span class="query">beach</span>""")
+    }
+  }
+
+  test("In a filtered search an ID that names nothing in the repository has no chip and matches nothing") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with Alice, who has a Face on an asset taken on June 15, 2024, in the folder Trips and the
+     * Location Lisbon, and a second repository of theirs with the person Eve, the folder "Eve's folder" and the Location "Eve's
+     * place".
+     *
+     * Assertions:
+     *
+     * A search of June 2024 scoped to a person, a folder or a Location that is the other repository's, or that does not exist,
+     * answers 200 with no result and no chip but the range's, naming nothing of the other repository, in the grid and the map
+     * layouts. Beside Alice, an unknown person has no chip while Alice keeps hers, and the people matching all of the two match
+     * nothing.
+     *
+     * Edge cases:
+     *
+     * The same IDs beside June alone are matched as the scope: June 2024 alone finds the asset.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val alice = testApp.service.person.addPerson(Person(name = Some("Alice")))
+        val asset = persistDated("2024-06-15T10:00:00", "beach.jpg")
+        testContext.addTestFace(alice, asset, TestContext.unitVector(1))
+        val otherRepo = testContext.persistRepository()
+        testApp.service.repository.switchContextToRepository(otherRepo)
+        val scopes = List(
+          Api.Field.Search.PERSON_ID -> testApp.service.person.addPerson(Person(name = Some("Eve"))).persistedId,
+          Api.Field.Search.FOLDER_ID -> testApp.service.folder.add("Eve's folder").persistedId,
+          Api.Field.Search.LOCATION_ID -> testApp.service.location.addLocation("Eve's place", 1, 2).persistedId
+        )
+        testApp.service.repository.switchContextToRepository(repo)
+        val june = Map(Api.Field.Search.TAKEN_FROM -> "2024-06-01", Api.Field.Search.TAKEN_TO -> "2024-06-30")
+        val juneChip = FilterChip(Map("taken-from" -> "2024-06-01", "taken-to" -> "2024-06-30"), "Taken 1 Jun – 30 Jun 2024")
+
+        htmlSearch(host, repoId, june).text() should include(cell(asset))
+
+        for (
+          (param, foreignId) <- scopes;
+          id <- List(java.util.UUID.randomUUID.toString, foreignId);
+          layout <- List(Const.Search.Layout.GRID, Const.Search.Layout.MAP)
+        ) withClue(s"$param=$id $layout: ") {
+          val response = htmlSearch(host, repoId, june + (param -> id) + (Api.Field.Search.LAYOUT -> layout))
+          response.statusCode shouldBe 200
+          val page = response.text()
+          page should include("""data-results-total="0"""")
+          filterChipsIn(page) shouldBe List(juneChip)
+          (page should not).include("Eve")
+        }
+
+        val withNobody = Map(Api.Field.Search.PERSON_ID -> s"${alice.persistedId},${java.util.UUID.randomUUID}")
+        val response = htmlSearch(host, repoId, withNobody)
+        response.statusCode shouldBe 200
+        response.text() should include("""data-results-total="0"""")
+        filterChipsIn(response.text()) shouldBe List(FilterChip(Map("person-id" -> alice.persistedId), "Alice"))
     }
   }
 }

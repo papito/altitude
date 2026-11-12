@@ -1,0 +1,60 @@
+@import altitude.core.Api
+@import altitude.core.models.SearchFilters
+@import altitude.core.util.DateRange
+@import altitude.core.util.PeopleMatch
+
+@(filters: SearchFilters)
+
+@* The filters of a filtered search under its results title (includes/search_results, views/AGENTS.md **Results title**), a
+   chip each in the order of the advanced search panel's fields: the Search text, the folder by its path, each person led by
+   their cover Face, each Location with its Category, and each date range as its days ("Taken 1 Jun – 30 Jun 2024",
+   `DateRange.label`). With two people or more the people chips follow "all of" or "any of", the people match. An ID that names
+   nothing in the Library has no chip (SearchService.filterNames).
+
+   A chip ends with its remove button (`data-app-filter`), which carries the search parameters the chip stands for as
+   literals, `data-app-filter-<param>` (the text, the folder, a person's or a Location's own ID, both days of a range, an open
+   end none): the search its × runs is the one the other chips' buttons name (js/search-results/filtered-title.js). Edit
+   (`data-app-edit-filters`) opens the panel on the search in force. *@
+
+@attribute(param: String) = @{ "data-app-filter-" + param.replaceAll("([A-Z])", "-$1").toLowerCase }
+
+@icon(name: String) = {<i class="fas @name" aria-hidden="true"></i>}
+
+@chip(label: String, params: Seq[(String, Option[String])], lead: Html, kind: String, removes: String) = {
+<li class="chip @kind">
+    @lead
+    <span class="name">@label</span>
+    <button type="button" aria-label="Remove @removes" data-app-filter@for((param, value) <- params; literal <- value) { @attribute(param)="@literal"}><i class="fas fa-times" aria-hidden="true"></i></button>
+</li>
+}
+
+@range(prefix: String, fromParam: String, toParam: String, range: DateRange) = {
+@chip(s"$prefix ${range.label}", Seq(fromParam -> range.from.map(_.toString), toParam -> range.to.map(_.toString)), icon("fa-calendar-alt"), "dates", s"$prefix ${range.label}")
+}
+
+<div class="filters">
+    <ul class="chips" aria-label="Search filters">
+        @for(text <- filters.text) {
+        @chip(text, Seq(Api.Field.Search.QUERY_TEXT -> Some(text)), icon("fa-search"), "search-text", s"Search text $text")
+        }
+        @for(folder <- filters.names.folder) {
+        @chip(folder.label, Seq(Api.Field.Search.FOLDER_ID -> Some(folder.id)), icon("fa-folder"), "folder", folder.label)
+        }
+        @if(filters.names.people.size > 1) {
+        <li class="match">@if(filters.peopleMatch == PeopleMatch.All) {all of} else {any of}</li>
+        }
+        @for(person <- filters.names.people) {
+        @chip(person.name.getOrElse(""), Seq(Api.Field.Search.PERSON_ID -> Some(person.persistedId)), includes.html.search_person_cover(person), "person", person.name.getOrElse(""))
+        }
+        @for(location <- filters.names.locations) {
+        @chip(location.label, Seq(Api.Field.Search.LOCATION_ID -> Some(location.id)), icon("fa-map-marker-alt"), "location", location.label)
+        }
+        @for(taken <- filters.takenRange) {
+        @range("Taken", Api.Field.Search.TAKEN_FROM, Api.Field.Search.TAKEN_TO, taken)
+        }
+        @for(imported <- filters.importedRange) {
+        @range("Imported", Api.Field.Search.IMPORTED_FROM, Api.Field.Search.IMPORTED_TO, imported)
+        }
+    </ul>
+    <button type="button" class="action-button small" aria-label="Edit filters" title="Edit the filters in the advanced search panel" data-app-edit-filters><i class="fas fa-sliders-h" aria-hidden="true"></i><span>Edit</span></button>
+</div>

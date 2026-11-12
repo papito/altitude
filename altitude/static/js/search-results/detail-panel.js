@@ -507,11 +507,24 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
             assetActions.removeAssetsFromGrid([left.assetId])
         }
 
+        // The search goes on without the viewed Person, or with their destination in their place, and
+        // keeps every other filter of a filtered search
+        const searchParams = Alpine.store(Const.state.searchParams)
         if (left?.deleted) {
             mergedInto = null
-            runSearch({ params: { personId: "" } })
+            searchParams.replaceId(
+                "personId",
+                searchParams.viewedPersonId(),
+                null,
+            )
+            runSearch()
         } else if (destinationId) {
-            runSearch({ params: { personId: destinationId } })
+            searchParams.replaceId(
+                "personId",
+                searchParams.viewedPersonId(),
+                destinationId,
+            )
+            runSearch()
         } else if (left && !mergedInto) {
             reloadPersonTitle(context.getRepoId(), left.personId)
         }

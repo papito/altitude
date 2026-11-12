@@ -10,6 +10,7 @@
 @import altitude.core.models.Folder
 @import altitude.core.models.Location
 @import altitude.core.models.Person
+@import altitude.core.models.SearchFilters
 @import altitude.core.util.Util
 
 @* The results fragment, re-swapped into #content on every search: the controls and the first page of the grid, which the
@@ -18,8 +19,9 @@
    results were matched by, when `q` had a usable term: it is what makes the Relevance sort available. `total` counts the matches
    up to one past `totalCap`, which means more than the cap. `person`, `folderPath` (the folder's ancestors, top-level first,
    then the folder; empty for the root), `album`, `location` (with its category's name) and `subset` (a Triage subset)
-   are the scope the results title names (includes/results_title); `text` is its title when none of them is set. *@
-@(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None, subset: Option[TriageSubset] = None)
+   are the scope the results title names (includes/results_title); `text` is its title when none of them is set. `filters` are
+   a filtered search's, which the title names in their place, a chip each (includes/search_filter_chips). *@
+@(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None, subset: Option[TriageSubset] = None, filters: Option[SearchFilters] = None)
 
 @* The effective scope of these results, as the server resolved them from the search parameters it was sent;
    the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js).
@@ -44,8 +46,13 @@
 
 @* The results title (views/AGENTS.md **Results title**): one block for every scope, which the scope rules of the searchParams
    store keep exclusive. A person's block is also the person actions' swap target (htmx/person); a folder's title is the
-   path's breadcrumb, each ancestor a search trigger for that folder. *@
-@if(person != null) {
+   path's breadcrumb, each ancestor a search trigger for that folder. A filtered search, which the advanced search panel
+   combines, is "Search results" over its filters, under the panel's sliders icon. *@
+@if(filters.isDefined) {
+@includes.html.results_title("fa-sliders-h", filters = Some(includes.html.search_filter_chips(filters.get))) {
+<span class="name">Search results</span>
+}
+} else if (person != null) {
 @htmx.html.person(person)
 } else if (folderPath.nonEmpty) {
 @includes.html.results_title("fa-folder") {

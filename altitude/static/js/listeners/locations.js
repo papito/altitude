@@ -58,9 +58,13 @@ export function registerLocationListeners(app) {
             focusAddLocationControlIfFocusLost()
             showSuccessSnackBar(`"${name}" deleted`)
 
-            // The displayed results belonged to the deleted Location: go back to the whole repository
-            if (app.context.getCurrentLocationId() === id) {
-                runSearch({ params: { locationId: null } })
+            // The displayed results were searched in the deleted Location: the search goes on without
+            // it, back to the whole repository when it was the search's one place, with every other
+            // filter of a filtered search
+            const searchParams = Alpine.store(Const.state.searchParams)
+            if (searchParams.names("locationId", id)) {
+                searchParams.replaceId("locationId", id, null)
+                runSearch()
             }
         },
     )

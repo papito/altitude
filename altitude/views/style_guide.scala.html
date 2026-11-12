@@ -4,6 +4,7 @@
 @import altitude.core.models.NamedPath
 @import altitude.core.models.Person
 @import altitude.core.models.SearchFilterNames
+@import altitude.core.models.SearchFilters
 @import altitude.core.models.Stats
 @import altitude.core.util.DateRange
 @import altitude.core.util.PeopleMatch
@@ -208,7 +209,9 @@
              <code>--field-focus-shadow</code>, its edge in the accent.
              A rectangular box or control rounds its corners with <code>--radius</code>, a button and a toggle group's
              track with <code>--radius-large</code> (a segment inside the track with the track's radius less its
-             padding), a badge with <code>--radius-small</code>, and a chip is a pill, <code>--chip-border-radius</code>;
+             padding), a badge with <code>--radius-small</code>, and a chip is a pill, <code>--chip-border-radius</code>
+             (a chosen filter's chip, in the advanced search panel and a filtered search's results title, is a
+             rectangular box, <code>--radius</code>);
              the advanced search panel, the largest floating surface, rounds its corners with <code>--radius-xl</code>;
              a circle or an avatar writes its percentage.</p>
           @tokenCards("border shadow")
@@ -236,7 +239,11 @@
              A Triage subset, the assets one of the Triage summary's counts shows, is titled by its name with no subtitle: "Unknown people" under
              <code>fa-user-secret</code>, and "No Location" under the marker struck through, <code>.kind-icon.slashed</code>
              laying Font Awesome's own slash glyph over <code>fa-map-marker-alt</code>, since the free set has no slashed
-             marker.</p>
+             marker. A filtered search, which the advanced search panel combines, is titled "Search results" under the
+             panel's sliders icon, over a wrapping row of its filters (<code>includes/search_filter_chips</code>): the
+             chips of a chosen filter that the panel's fields hold, each led by its kind's icon, dimmed, or a Person's
+             cover Face, the Search text in curly quotes, "all of" or "any of" dimmed before two people or more, each
+             date range as its days, and Edit, a small action button with the sliders icon, which opens the panel.</p>
           <div class="results-title">
             <div class="text">
               <div class="title">
@@ -254,6 +261,28 @@
                 <span class="name">No Location</span>
                 <button type="button" class="clear-scope" title="Back to all results" aria-label="Back to all results">&times;</button>
               </div>
+            </div>
+          </div>
+          @* A filtered search's title over its real chips, whose remove buttons and Edit nothing binds here: the results
+             hydrator binds them (js/search-results/filtered-title.js) *@
+          <div class="results-title">
+            <div class="text">
+              <div class="title">
+                <i class="fas fa-sliders-h kind-icon" aria-hidden="true"></i>
+                <span class="name">Search results</span>
+                <button type="button" class="clear-scope" title="Back to all results" aria-label="Back to all results">&times;</button>
+              </div>
+              @includes.html.search_filter_chips(SearchFilters(
+                  text = Some("beach"),
+                  names = SearchFilterNames(
+                      folder = Some(NamedPath("styleGuideTitleFolder", List("Trips", "2024", "Lisbon"))),
+                      people = List(
+                          Person(id = Some("styleGuideTitleAnna"), name = Some("Anna Lindqvist")),
+                          Person(id = Some("styleGuideTitleDaniel"), name = Some("Daniel Okafor"))),
+                      locations = List(NamedPath("styleGuideTitleLisbon", List("Portugal", "Lisbon")))),
+                  peopleMatch = PeopleMatch.Any,
+                  takenRange = Some(DateRange(Some(LocalDate.of(2024, 6, 1)), Some(LocalDate.of(2024, 6, 30)))),
+                  importedRange = Some(DateRange(Some(LocalDate.of(2025, 1, 8)), None))))
             </div>
           </div>
           <p>A Person's cell on the People tab (<code>#people .cell</code>, <code>htmx/people_list</code>) is the cover face,
@@ -637,8 +666,10 @@
 
         <section id="menus-dialogs">
           <h2>Menus &amp; dialogs</h2>
-          <p>All three controls are live. A row's actions sit in a ⋯ context menu, which stays a list of actions; each action,
-             like an Add button, opens a popover dialog anchored below its control and centered on it: a translucent,
+          <p>All three controls are live. A row's actions sit in a ⋯ context menu, which stays a list of actions; a
+             folder's opens with Search here, which opens the advanced search panel (here on the search in force, with no
+             folder), set apart from the folder's own actions by a rule. Each of those, like an Add button, opens a popover
+             dialog anchored below its control and centered on it: a translucent,
              frosted surface with no scrim, which an outside click, Escape, the × or Tab out of it dismisses. A
              one-field dialog shows no label. Submit the dialog blank to see the validation state, or with a name to
              see a completed operation. A choice menu, the grid toolbar's Group and Sort, is a context menu that picks

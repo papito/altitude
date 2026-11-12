@@ -880,8 +880,8 @@ footer {
 /* CHIPS */
 /*       */
 
-/* The chips' fill: the filter chip's, and the fill of a chosen name in the advanced search panel (htmx/search_panel.css) */
-.filter-chip, .search-panel .chip {
+/* The chips' fill: the filter chip's, and the fill of a chosen filter's chip (below) */
+.filter-chip, :is(.search-panel, .results-title) .chip {
     --chip-fill: linear-gradient(in oklch 180deg, hsl(from var(--theme-primary) h s l / 0.12), var(--theme-neutral-2));
 }
 
@@ -897,6 +897,59 @@ footer {
 
 .filter-chip:hover {
     background: linear-gradient(hsl(from var(--theme-neutral-1) h s l / 0.08) 0 0), var(--chip-fill);
+}
+
+/* A chosen filter's chip: a name chosen in the advanced search panel (htmx/search_panel) and a filter of a filtered search's
+   results title (includes/search_filter_chips). A rounded rectangle on the chips' fill, the name cut with an ellipsis, then
+   its remove control. A Person's leads with the cover Face as a circle */
+:is(.search-panel, .results-title) .chip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    max-width: 100%;
+    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
+    border-radius: var(--radius);
+    background: var(--chip-fill);
+    font-size: var(--font-size-small);
+    white-space: nowrap;
+    cursor: default;
+}
+
+:is(.search-panel, .results-title) .chip.person {
+    padding-left: var(--space-1);
+}
+
+:is(.search-panel, .results-title) .chip .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+:is(.search-panel, .results-title) .chip button {
+    display: grid;
+    place-items: center;
+    padding: var(--space-1);
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-xs);
+    line-height: 1;
+    cursor: pointer;
+}
+
+:is(.search-panel, .results-title) .chip button:hover {
+    background: hsl(from var(--theme-neutral-3) h s l / 0.25);
+    color: var(--theme-neutral-4);
+}
+
+/* The Person's cover Face on a chip, or the placeholder of a Person with none */
+:is(.search-panel, .results-title) .chip .cover {
+    flex: none;
+    width: var(--search-panel-chip-cover-size);
+    height: var(--search-panel-chip-cover-size);
+    border-radius: 50%;
+    object-fit: cover;
+    font-size: var(--font-size-xs);
 }
 
 /*        */

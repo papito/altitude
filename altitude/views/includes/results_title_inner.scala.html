@@ -5,13 +5,14 @@
 @import altitude.core.models.Person
 
 @* The inside of a results title (see includes/results_title for the block, and views/AGENTS.md **Results title**): the kind's
-   icon, the title the caller renders, the way back to the whole result set, and the subtitle. A person's
+   icon, the title the caller renders, the way back to the whole result set, and the subtitle, or a filtered search's row of
+   filters (includes/search_filter_chips) in its place. A person's
    title also holds the cover face (the no-cover placeholder for a person with none) before the text and the Hide / Show /
    Discard link after it; those parts are the person
    scope's alone, so they are rendered here from the person rather than passed in. Rendered on its own by htmx/person_inner,
    which the Hide / Show / Discard responses swap into the person's block. Choosing the cover and Hide / Show / Discard are
    Organize's, rendered only for the account holding it (`RequestContext.holds`). *@
-@(icon: String, subtitle: Option[String] = None, person: Option[Person] = None)(title: Html)
+@(icon: String, subtitle: Option[String] = None, person: Option[Person] = None, filters: Option[Html] = None)(title: Html)
 
 @* What a click on the cover, or on the no-cover placeholder in its place, asks for: the Choose cover face modal *@
 @chooseCover(p: Person) = {hx-get="/htmx/people/r/@{RequestContext.getRepository.persistedId}/modals/choose-person-cover-face"
@@ -52,6 +53,7 @@
             data-app-search-person-id="">&times;</button>
   </div>
   @for(s <- subtitle) {<div class="subtitle">@s</div>}
+  @for(f <- filters) {@f}
 </div>
 
 @for(p <- person.filter(_ => organizes)) {
