@@ -4,7 +4,9 @@
  * each with its path, the names of the folders it is in and then its own, less the files imports
  * ignore. The list of ignored names is the server's (`IgnoredFiles`, which the page carries and the
  * upload routes enforce again): a file or a directory under such a name is left out, a directory
- * with everything in it, and so is a file with no content.
+ * with everything in it, and so is a file with no content. The one folder that was chosen, or
+ * dropped alone, is taken whatever its name: it is the folder the user named, as a Watch folder's
+ * directory is on the server, and its own name is no part of any path that is sent.
  */
 
 // A path's separator, the server's (`RelPath`)
@@ -45,9 +47,11 @@ function picked(files, topFolders) {
 /**
  * The files chosen in a section's picker: the file picker's are loose files, the folder picker's
  * (`webkitdirectory`) the files of one folder, each with its path from that folder down
- * (`webkitRelativePath`)
+ * (`webkitRelativePath`), whose first name, the chosen folder's own, is not held to the ignored
+ * names
  */
 export function filesOfInput(inputEl, ignored) {
+    const below = inputEl.webkitdirectory ? 1 : 0
     const files = [...inputEl.files]
         .map((file) => ({
             file,
@@ -56,7 +60,7 @@ export function filesOfInput(inputEl, ignored) {
         .filter(
             ({ file, path }) =>
                 file.size > 0 &&
-                !path.some((name) => ignoresName(ignored, name)),
+                !path.slice(below).some((name) => ignoresName(ignored, name)),
         )
     const isFolder = inputEl.webkitdirectory && files.length > 0
 
@@ -83,17 +87,19 @@ async function childrenOf(directoryEntry) {
     }
 }
 
-/** Collects the files at and below `entry` into `files`, each with its path under `parents`; a file that cannot be read is left out */
+/**
+ * Collects the files at and below `entry` into `files`, each with its path under `parents`,
+ * whatever the entry's own name is; an entry below it under an ignored name is left out, and so is
+ * a file that cannot be read
+ */
 async function walk(entry, parents, ignored, files) {
-    if (ignoresName(ignored, entry.name)) {
-        return
-    }
-
     const path = [...parents, entry.name]
 
     if (entry.isDirectory) {
         for (const child of await childrenOf(entry)) {
-            await walk(child, path, ignored, files)
+            if (!ignoresName(ignored, child.name)) {
+                await walk(child, path, ignored, files)
+            }
         }
     } else {
         try {
@@ -119,10 +125,17 @@ export function entriesOfDrop(dataTransfer) {
         .filter(Boolean)
 }
 
-/** The files of dropped entries, the dropped directories walked to their last file */
+/**
+ * The files of dropped entries, the dropped directories walked to their last file. A folder dropped
+ * alone is taken whatever its name, as the one chosen in the folder picker is; of several dropped
+ * items each is held to the ignored names, a folder among them being sent under its own.
+ */
 export async function filesOfEntries(entries, ignored) {
     const files = []
-    const tops = entries.filter((entry) => !ignoresName(ignored, entry.name))
+    const isOneFolder = entries.length === 1 && entries[0].isDirectory
+    const tops = isOneFolder
+        ? entries
+        : entries.filter((entry) => !ignoresName(ignored, entry.name))
 
     for (const entry of tops) {
         await walk(entry, [], ignored, files)

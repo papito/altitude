@@ -2266,7 +2266,10 @@ top, so its name is the Import's and no part of the paths, and its contents map 
 items is its own top, each dropped folder a folder of its name under the destination, and the Import is named "N
 folders". Dropped directories are walked with `webkitGetAsEntry`, their entries read in batches until a batch is empty.
 The names imports ignore are the server's list, on the root as `data-app-ignored-files`: a file or a directory under one
-is left out before anything is sent, a directory with everything in it, and so is an empty file. The root takes every
+is left out before anything is sent, a directory with everything in it, and so is an empty file. The one folder chosen
+in the folder picker, or dropped alone, is taken whatever its name (`.archive`, `Scans.tmp`): it is the folder the user
+named, as a Watch folder's directory is on the server, and its own name is no part of a path that is sent; of several
+dropped items each is held to the list, a folder among them being sent under its name. The root takes every
 `dragover` and `drop` of the window, so a file dropped beside a zone does not open in the tab.
 
 One upload runs at a time (`js/import/upload-run.js`): the Import is opened (the root's `data-app-imports-url`) with
