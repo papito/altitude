@@ -1,30 +1,51 @@
-/* The pipeline page's own layout. The bundle applies on every page, so these rules are scoped to its body's class;
-   :where() adds no specificity, so they win and lose exactly as they did inline */
+/* The Import page's own layout (pipeline.scala.html). The bundle applies on every page, so its rules are scoped to its
+   body's class, at zero specificity, and to the IDs only it renders */
 
+/* Two columns, the upload sections and the wider Import history, five parts to seven: each grows from a least width in
+   that ratio, and they stack, the uploads first, once the page is narrower than the two together. The page is as wide
+   as the window at the most, and centered in it, also under a nav that is wider than the window (the body's one column
+   is then as wide as the nav), so the columns stack by the window's width; the margin's 0px is a zero, which max()
+   takes only with a unit */
 :where(body.pipeline) main {
-  display: grid;
-  grid-template-rows: max-content auto;
-  row-gap: var(--section-vertical-space);
-}
-
-#importOptions {
-  padding-top: calc(var(--section-vertical-space) * 2);
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   align-items: start;
-  grid-template-columns: 1fr auto 1fr;
+  align-content: start;
+  gap: var(--space-9);
+  width: min(100%, 100vw);
+  max-width: var(--import-page-max-width);
+  margin: 0 max(0px, calc((min(100%, 100vw) - var(--import-page-max-width)) / 2));
+  padding: var(--space-8) var(--space-6);
 }
 
-#browseForFiles {
-  grid-column: 2;
-  width: 100%;
-  display: grid;
-  padding: var(--space-7);
-  border: var(--border-hairline) var(--theme-neutral-3);
-  border-radius: var(--radius);
-  place-items: center;
-  background-color: var(--theme-neutral-2);
+#importUploads {
+  flex: 5 1 var(--import-uploads-min-width);
 }
 
-#importLog {
-  border-top: var(--border-hairline) var(--theme-neutral-3);
+#importHistory {
+  flex: 7 1 var(--import-history-min-width);
+  min-width: 0;
+}
+
+/* A section's heading, the upload sections' too */
+:where(body.pipeline) main h2 {
+  margin: 0 0 var(--space-5);
+  font-size: var(--font-size-medium);
+}
+
+/* The status feed's ticker: each line is served by the server over the WebSocket, and shown by the page's script */
+#statusText {
+  display: none;
+  color: var(--success-color);
+  font-weight: var(--font-weight-bold);
+  padding: var(--space-5);
+  font-size: var(--font-size-medium);
+}
+
+#statusText.warning {
+  color: var(--warning-color);
+}
+
+#statusText span {
+  color: var(--theme-neutral-4);
 }

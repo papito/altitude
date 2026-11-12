@@ -36,7 +36,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 ```
 views/
   *.scala.html          ← full pages (index, login, setup, pipeline, settings, users, style_guide)
-  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title, a filtered search's chips, an advanced search option, a person's cover on a search chip)
+  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title, a filtered search's chips, an advanced search option, a person's cover on a search chip, a combobox field of chips, the Import page's upload sections)
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
@@ -100,7 +100,8 @@ its styles are `static/css/htmx/search_panel.css`.
   `takenFrom`, `takenTo`, `importedFrom` and `importedTo` (ISO dates). `.fields` holds one `.field` per filter, each
   label above its `.box`, the two date ranges side by side in `.dates`, and `.actions` holds Clear and Search, the
   form's submit (`.action-button.primary`).
-- A combobox field (`.field` with `x-data="filterCombobox"`) follows the ARIA combobox pattern of the Change
+- A combobox field (`.field` with `x-data="filterCombobox"`; its markup is `includes/filter_combobox`, which the Import
+  page's destination folder is too, **Import page**) follows the ARIA combobox pattern of the Change
   combobox: a label, then `.box` with the field's icon, the hidden input of its IDs, the chips of what is chosen
   (`ul.chips`) and the input typed into (`role="combobox"`, `aria-autocomplete="list"`, `aria-expanded`,
   `aria-controls`, `aria-activedescendant`; it has no `name`, so it is never submitted), and after the box the
@@ -204,11 +205,12 @@ in either theme:
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), Curation's shell opening its host (`curation.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), the Triage summary's reload (`triage.js`), the Settings form's save (`settings.js`, the success snackbar), and the account's (`account.js`: a changed own password, on every page with the nav, and the Users page's changes, which reload its cards); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring, a 204 to an open handed back to its search trigger, and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
 | `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`) and the advanced search panel beside it (`search-panel.js`: the load on opening, the filter button's count, the search its form asks for); a filtered search's results title (`filtered-title.js`: a chip's × and Edit); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), a Person's results title read again after a rename or a correction (`person-title.js`), Asset detail's URL (`detail-url.js`: the address bar names the asset and the Detail panel's state, and Back closes it), Asset detail's fullscreen (`detail-fullscreen.js`: `f`, the toolbar's toggle and the player's button on the whole of Asset detail), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
+| `js/import/` | an upload of the Import page, with no DOM of its own: what a section sends, from its picker or a drop walked to its last file, less the ignored files, and under which paths (`chosen-files.js`), and the sending, from the Import's opening to its closing (`upload-run.js`); see **Import page** |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
-| `js/upload-form-page.js`, `js/settings-page.js`, `js/users-page.js`, `js/nav-page.js` | the page modules of `pipeline.scala.html`, `settings.scala.html` and `users.scala.html`, and what they share. Each starts with `startNavPage()` (`nav-page.js`): Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store), the `contextMenu` component and the advanced search panel's components and host (`bindSearchPanel`), the htmx request rule and the dialog wiring (`listeners/dialogs.js`) with a minimal app, whose hydration is the `modal` fragments and the choice menus, and the nav's Library menu built; that is the nav's menus and the dialogs they open (New library, Change password, whose outcome `listeners/account.js` confirms, connecting the page's WebSocket feeds again). Then the import page's hydrates its upload form and registers the status feed's end (`js/import-status.js`), Settings' registers its own listeners, and Users' registers its components first (`usersPage`, `accountForm`, `passwordField`) and its listener after; see **Settings screen** and **Users page** |
+| `js/upload-form-page.js`, `js/settings-page.js`, `js/users-page.js`, `js/nav-page.js` | the page modules of `pipeline.scala.html`, `settings.scala.html` and `users.scala.html`, and what they share. Each starts with `startNavPage()` (`nav-page.js`): Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store), the `contextMenu` component and the advanced search panel's components and host (`bindSearchPanel`), the htmx request rule and the dialog wiring (`listeners/dialogs.js`) with a minimal app, whose hydration is the `modal` fragments and the choice menus, and the nav's Library menu built; that is the nav's menus and the dialogs they open (New library, Change password, whose outcome `listeners/account.js` confirms, connecting the page's WebSocket feeds again). The import page's registers its component first (`importUploads`, the upload sections') and the status feed's end after (`js/import-status.js`), Settings' registers its own listeners, and Users' registers its components first (`usersPage`, `accountForm`, `passwordField`) and its listener after; see **Settings screen** and **Users page** |
 | `js/theme-boot.js` | a plain blocking script of `includes/header_common`'s head, on every page with a nav: declares the remembered theme on `<html>` before the first paint, from the key in its `data-key`; see **Themes** |
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
@@ -216,7 +218,7 @@ in either theme:
 | `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's and the Detail panel's docks are made from), stored-state (a remembered object under one localStorage key that modules share: `readStoredObject` and `writeStoredFields`, which sets some fields and keeps the rest; the Detail panel's view is read and written through it by `detail-panel.js` and `dock.js`), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font), name-key (the server's name fold, `nameKey` and `partialMatchKey`: the Change combobox's and the Users page filter's), request-failure (a failed htmx request in the snackbar: a 403 or 409 refusal in plain text as its text, a 401 nowhere, anything else by its path and status), session (a 401 sends the window to the login, back to the page: `goToLogin`) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell), `face-combobox.js` (the Change combobox of a People row in the Detail panel), and the advanced search panel's `search-panel.js` (its form: Search, Clear, the people match), `filter-combobox.js` (a combobox of names chosen as chips) and `date-range.js` (a date range picked on a Flatpickr calendar); `index.js` registers them, and `nav-page.js` the panel's three as well. The Users page's own, `users-page.js` (the tab and the filter), `account-form.js` (the account form's type and Permission matrix) and `password-field.js` (Generate and Show), are registered by its page module |
+| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell), `face-combobox.js` (the Change combobox of a People row in the Detail panel), and the advanced search panel's `search-panel.js` (its form: Search, Clear, the people match), `filter-combobox.js` (a combobox of names chosen as chips) and `date-range.js` (a date range picked on a Flatpickr calendar); `index.js` registers them, and `nav-page.js` the panel's three as well. The Users page's own, `users-page.js` (the tab and the filter), `account-form.js` (the account form's type and Permission matrix) and `password-field.js` (Generate and Show), are registered by its page module, as the Import page's `import-uploads.js` (the upload sections) is by its own |
 
 ## Alpine.js Stores (initialized in `js/stores/app-stores.js` and `js/stores/html-common.js`)
 
@@ -430,9 +432,9 @@ Two-layer event bus, both on `document.body`:
   listener (htmx fires `htmx:error`), so it is never reported there either way.
 - Global config (`defaultTimeout`, `noSwap`) is the `htmx-config` meta tag in
   `views/includes/header_common.scala.html`; 4xx/5xx bodies are not swapped, listeners report them.
-- The file upload (`js/fragments/upload-form.js`) is **not** an HTMX request: it posts through the
-  shared axios client so `onUploadProgress` can drive the progress bar, then swaps the returned
-  fragment itself.
+- An upload (`js/import/upload-run.js`, run by the `importUploads` component) is **not** an HTMX request: it opens its
+  Import, sends each file and closes the Import through the shared axios client, whose `onUploadProgress` drives the
+  section's progress (see **Import page**).
 - A Curation set's fragment is **not** an HTMX request either (its shell is): the `curation` component reads it through the
   axios client and puts it in `#curationSet` itself, since it has to see the answer before anything is swapped (a 204 passes
   over a Sequence or leaves the too-few state, and a preload keeps only the opening frames) and reports a failure itself, in the
@@ -1308,8 +1310,7 @@ Alpine binding keeps in step with the setting; the track, `--switch-width` by `-
 pseudo-element, slides across it. The View settings dialog's switches, the People tab's bucket switches, the advanced search panel's people match and the Change combobox's "This face only"
 switch use it. The last is the one whose label does not flip it natively: focus has to stay in the combobox's input, so the switch's and the
 label's `mousedown` is prevented, and the label's click, prevented too, calls the component's `toggleFaceOnly` (see **Detail panel**). Every rule of the section starts at `body:not(.setup)`, so the setup form's fields and error box are
-`htmx/setup_form.css`'s alone; the login page's take the field style like any page's (**Login page**). The upload form's file input takes the field's
-box and keeps its own `--theme-neutral-2` fill (`htmx/upload_form.css`). A field keeps the width its page gives it,
+`htmx/setup_form.css`'s alone; the login page's take the field style like any page's (**Login page**). A field keeps the width its page gives it,
 except in a popover dialog, whose form fills `--popover-form-width` with its action `--space-5` below its fields
 (see **Modals**). A field in error carries the `error` class: the error fill
 (`--error-background-color`) with `--theme-neutral-4` text and the `--error-color` edge, which it keeps on focus,
@@ -2226,6 +2227,46 @@ the first row with its Reset and spans everything after them, and `core.css`'s e
 covers a select as it does an input; the page adds none. `includes/nav` shows the Settings link (`.menu.settings`)
 to an Admin only (`RequestContext.account`), so `NavController` requires login and both nav loads happen behind one.
 
+**Import page** — `pipeline.scala.html` (`/pipeline/r/:repoId`, for a holder of Import) is two columns, five parts to
+seven (`pages/pipeline.css`): the upload sections (`#importUploads`, `includes/upload_sections`) and the Import history
+(`#importHistory`), which for now holds the status feed's ticker. `main` is a wrapping flex row whose columns grow from a
+least width each (`--import-uploads-min-width`, `--import-history-min-width`), so they stack, the uploads first, once the
+page is narrower than the two together; it is as wide as the window at the most (`min(100%, 100vw)`, within
+`--import-page-max-width`) and centered in it, also under a nav wider than the window, when the body's one column is as
+wide as the nav.
+
+The upload sections are the `importUploads` component (`js/alpine/components/import-uploads.js`) on their root: File
+upload and Folder upload, each a form holding a dashed drop zone (`--border-dashed`; the accent's edge and a tint of it
+while files are dragged over it), with its button inside, which opens the hidden file picker or folder picker
+(`webkitdirectory`), and under it, for a holder of Organize, its option, a two-way `.toggle-group`: "To Triage", or
+"Skip Triage" / "Keep folder structure", which shows the destination folder. That field is the advanced search panel's
+Folder field, `includes/filter_combobox` with the panel's folder options, in an element of the panel's class
+(`.search-panel.destination`, which draws no box: `display: contents`), so the panel's rules style it; the component
+reads the chosen folder off the field's `change`. Under Folder upload's destination is the mapping example, one line: a
+path of an uploaded tree and where it lands under the folder chosen, which it follows. Asking for an upload with the
+option on and no folder chosen says so under the field (`div.error`) and uploads nothing.
+
+Each section applies its own option to what is chosen in it or dropped on it (`js/import/chosen-files.js`). File upload
+sends every file under its bare name, the files of a dropped folder too, so with Skip Triage they all land in the
+destination itself. Folder upload sends each file under its path in the tree: a single folder, chosen or dropped, is the
+top, so its name is the Import's and no part of the paths, and its contents map onto the destination; a drop of several
+items is its own top, each dropped folder a folder of its name under the destination, and the Import is named "N
+folders". Dropped directories are walked with `webkitGetAsEntry`, their entries read in batches until a batch is empty.
+The names imports ignore are the server's list, on the root as `data-app-ignored-files`: a file or a directory under one
+is left out before anything is sent, a directory with everything in it, and so is an empty file. The root takes every
+`dragover` and `drop` of the window, so a file dropped beside a zone does not open in the tab.
+
+One upload runs at a time (`js/import/upload-run.js`): the Import is opened (the root's `data-app-imports-url`), the
+files are sent one request each, three at a time, each with its relative path, and the Import is closed. A request that
+fails with no answer or a 5xx is sent again twice, after 1 s and 3 s; then the page has the server record the file as
+failed and goes on. A file the server answers as failed, or refuses with a 400, is not sent again; any other refusal
+ends the upload. Cancel stops the sending and closes the Import, and so does leaving the page, by a beacon. While it
+runs, the section that started it shows a `<progress>` of the bytes sent, the files and bytes done ("3 of 8 files · 1.6
+of 3.3 MB", with the failed ones) and Cancel, and both sections take nothing: their buttons and options are disabled,
+the destination fields inert and the zones dimmed (`.waiting`). When it ends the section says what it came to in a
+`.notice` (`.warning` when files failed or were not sent); a failure to start, and a refusal that ended it, go to the
+snackbar in the server's words.
+
 **Users page** — `users.scala.html` (`/users/r/:repoId`, `UsersController`, for an Admin or a holder of Create Users or
 Create Guests in any Library, `requireAccountCreator`, so it opens from every Library the account sees) is shaped like Settings: `header_common`, the nav (`current` `Const.NavEntry.USERS`), one
 `main`, `html_common`, `json-enc.js` and the page module `js/users-page.js`, which registers the page's components and
@@ -2756,6 +2797,7 @@ builds or binds a control. Where each control follows:
   which asks nothing without one). Inside, every control is offered: a set holds only the frames the account may curate,
   its own alone with Curate own (`AssetRules.curatedOwner`).
 
+- The Import page (**Import page**): each upload section's option, with its destination folder, for Organize; without it the sections upload to Triage, and the server refuses a destination all the same.
 - The Users page (**Users page**): Add User for a holder of Create Users or Create Guests in any Library, as the page itself; each card's ⋯
   menu for an Admin alone, without Deactivate and Delete on its own card; the Add User form renders nothing above the
   creator's ceiling.
@@ -2872,7 +2914,7 @@ a token too, `--popover-backdrop-filter` (`blur(10px) saturate(200%)`), since th
 draw it, and the advanced search panel's is its own, `--search-panel-backdrop-filter` (`blur(15px) saturate(200%)`),
 more blurred. A border
 token holds a width and a style and no color: `--border-hairline` (`1px solid`), `--border-heavy` (`2px solid`, its
-width also `--border-heavy-width` for a size that clears the edge) and `--border-double` (`2px double`). A rule writes
+width also `--border-heavy-width` for a size that clears the edge), `--border-double` (`2px double`) and `--border-dashed` (the heavy width, dashed: a drop zone's edge). A rule writes
 the edge's color after it, in place (`border: var(--border-hairline) var(--theme-neutral-3)`): `--theme-neutral-3`
 on a hairline around a cell, a menu or a quiet control and on a heavy edge around a modal dialog; at 0.3 on the
 hairline dividing a context menu's actions; at 0.45 on a
@@ -3171,6 +3213,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/alpine/components/filter-combobox.js` | the `filterCombobox` Alpine component of the panel's Folder, People and Locations fields: the options asked for as typed (the latest answer alone shown), the matched starts of words marked (`markMatches`), the keys, Enter and Escape while an answer is on its way, the anchored listbox popover, the status a screen reader is told, the chips and the hidden input of their IDs, a field of one or of several up to its most |
 | `static/js/alpine/components/date-range.js` | the `dateRange` Alpine component of the panel's Date Taken and Date Imported fields: Flatpickr in range mode in a popover of its own inside the field, the range as two ISO days in hidden inputs, its label (`rangeLabel`, months from `MONTHS`), one day picked alone, clear and where focus goes after it, the calendar as a named dialog, and Escape closing the calendar alone |
 | `views/htmx/search_panel.scala.html`, `search_options_folders.scala.html`, `search_options_people.scala.html`, `search_options_locations.scala.html`, `views/includes/search_path_option.scala.html` | The advanced search panel's fragments (`SearchPanelController`): its form filled in from a search's parameters, each filter an input under its parameter's name and the folder, people and Locations as chips, its IDs under a prefix the caller can change, and the `role="option"` elements of its three comboboxes, a folder's and a Location's sharing the include (**Advanced search panel fragments**); styled by `static/css/htmx/search_panel.css`, Flatpickr's calendar included |
+| `views/includes/filter_combobox.scala.html` | A combobox field of chips, the `filterCombobox` component's markup: the panel's Folder, People and Locations fields and the destination folder of the Import page's upload sections |
+| `views/includes/upload_sections.scala.html`, `static/css/includes/upload_sections.css`, `static/js/alpine/components/import-uploads.js`, `static/js/import/chosen-files.js`, `upload-run.js` | The Import page's File upload and Folder upload sections: the markup, the styles, the `importUploads` component, what a section sends and under which paths, and the sending (**Import page**) |
 | `views/includes/search_chip.scala.html`, `search_filter_icon.scala.html`, `search_person_cover.scala.html` | The parts the panel and a filtered search's results title share: a chosen filter's chip (its kind, label, lead, carried attributes and remove button), the icon of a kind of filter, and a person's cover Face or its placeholder, on a chip and, loaded lazily, in a People option |
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal (the box fitted from the shown element's size, the Detail panel told of each asset and size shown), and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
 | `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing, the results title read again when the viewed Person is named, and the destination's results on closing when the viewed Person is merged away or merged into) |

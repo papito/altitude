@@ -1,5 +1,8 @@
 package altitude.core.integration
 
+import altitude.test.IntegrationTestUtil
+import java.nio.file.Files
+import java.nio.file.Path
 import java.sql.SQLException
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -14,6 +17,7 @@ import org.scalatest.time.Span
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.DuplicateException
+import altitude.core.ForbiddenException
 import altitude.core.IllegalOperationException
 import altitude.core.ImageException
 import altitude.core.ImporterUnavailableException
@@ -21,6 +25,7 @@ import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.StorageException
 import altitude.core.UnsupportedMediaTypeException
+import altitude.core.ValidationException
 import altitude.core.VideoException
 import altitude.core.dao.sqlite.SqliteOverrides
 import altitude.core.models.Asset
@@ -28,7 +33,10 @@ import altitude.core.models.Import
 import altitude.core.models.ImportFile
 import altitude.core.models.ImportOutcome
 import altitude.core.models.ImportSource
+import altitude.core.models.Permission
+import altitude.core.models.Permissions
 import altitude.core.models.Settings
+import altitude.core.service.ImportPipelineService
 import altitude.core.util.Query
 
 /** The Import record: an Import and its Import files, their outcomes, the Import's counters and its closing */
@@ -676,5 +684,357 @@ import altitude.core.util.Query
     stored(myFile).outcome shouldBe ImportOutcome.Pending
     stored(myFile).assetId shouldBe None
     counters(mine) shouldBe (1, 0, 0, 0, 0)
+  }
+
+  private def eventually[T](f: => T): T =
+    Eventually.eventually(Eventually.timeout(Span(60, Seconds)), Eventually.interval(Span(100, Millis)))(f)
+
+  /** A random image staged as an upload's request stages it */
+  private def stagedImage(): Path =
+    testApp.service.staging.stage(IntegrationTestUtil.generateRandomImagBytesBgr(dimensions = 150))
+
+  test("An Import is not opened into a folder in the Trash") {
+
+    /**
+     * Setup:
+     *
+     * A folder of the context repository, recycled by a delete.
+     *
+     * Assertions:
+     *
+     * Opening an Import with that folder as its destination is refused, saying that the destination folder is in the Trash, and
+     * opens nothing.
+     */
+    val folder = testApp.service.folder.add("Gone")
+    testApp.service.library.deleteFolderById(folder.persistedId)
+
+    val refused = intercept[IllegalOperationException](imports.open(ImportSource.Upload, destFolderId = folder.id))
+
+    refused.getMessage shouldBe Const.Msg.Err.DESTINATION_IN_TRASH
+    imports.list(rpp = 10).total shouldBe 0
+  }
+
+  test("An upload's Import with a destination takes Organize as well as Import") {
+
+    /**
+     * Setup:
+     *
+     * A folder of the context repository, and a folder of another repository. An account holding Import alone, and one holding
+     * Import and Organize.
+     *
+     * Assertions:
+     *
+     * The account with Import alone opens an upload's Import to Triage, under the name it gives, and is refused one into the
+     * folder, which opens nothing. The account with Organize too opens one into the folder.
+     *
+     * Edge cases:
+     *
+     * Another repository's folder is not found for the account with Import alone, rather than refused: the folder is read in the
+     * repository before the Permission is checked.
+     */
+    val folder = testApp.service.folder.add("Sorted")
+    val otherRepository = testContext.persistRepository()
+    switchContextRepo(otherRepository)
+    val theirFolder = testApp.service.folder.add("Theirs")
+    switchContextRepo(testContext.repositories.head)
+
+    RequestContext.permissions.withValue(Permissions.of(Permission.Import)) {
+      val toTriage = imports.openUpload(name = Some("Holiday"))
+      (stored(toTriage).source, stored(toTriage).name, stored(toTriage).destFolderId) shouldBe (
+        ImportSource.Upload,
+        Some("Holiday"),
+        None)
+
+      intercept[ForbiddenException](imports.openUpload(destFolderId = folder.id))
+      intercept[NotFoundException](imports.openUpload(destFolderId = theirFolder.id))
+      imports.list(rpp = 10).total shouldBe 1
+    }
+
+    RequestContext.permissions.withValue(Permissions.of(Permission.Import, Permission.Organize)) {
+      stored(imports.openUpload(destFolderId = folder.id)).destFolderId shouldBe folder.id
+    }
+  }
+
+  test("An uploaded file is added to its Import and imported by the queue into the folder its path names") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import with the folder Clients as its destination, and two staged images uploaded to it: one under the path
+     * Ceremony/vows.jpg and one under its bare name.
+     *
+     * Assertions:
+     *
+     * Each upload returns its Import file, pending, under the path it was uploaded with and with the staged file's size, and the
+     * Import counts it. The import queue then imports both: each file is settled imported, the first as an asset named vows.jpg
+     * in Clients/Ceremony, the second in Clients itself, and the Import, once closed, counts two imported.
+     */
+    val clients = testApp.service.folder.add("Clients")
+    val opened = imports.openUpload(name = Some("Wedding"), destFolderId = clients.id)
+    val (nested, top) = (stagedImage(), stagedImage())
+    val nestedSize = Files.size(nested)
+
+    val nestedFile = imports.upload(opened.persistedId, "Ceremony/vows.jpg", nested)
+    val topFile = imports.upload(opened.persistedId, "top.jpg", top)
+    imports.close(opened.persistedId)
+
+    (nestedFile.relPath, nestedFile.sizeBytes, nestedFile.outcome) shouldBe (
+      "Ceremony/vows.jpg",
+      nestedSize,
+      ImportOutcome.Pending)
+    topFile.relPath shouldBe "top.jpg"
+
+    eventually(stored(opened).closedAt should not be empty)
+    counters(opened) shouldBe (0, 2, 0, 0, 0)
+    val vows = testApp.service.asset.getById(stored(nestedFile).assetId.get)
+    vows.fileName shouldBe "vows.jpg"
+    testApp.service.folder.getPath(vows.folderId).map(_.name) shouldBe List("Clients", "Ceremony")
+    testApp.service.asset.getById(stored(topFile).assetId.get).folderId shouldBe clients.persistedId
+  }
+
+  test("An uploaded file the import queue refuses is recorded failed") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import, and an import queue of the test's own, shut down. A staged image is uploaded to the Import through that
+     * queue.
+     *
+     * Assertions:
+     *
+     * The upload returns the Import file as failed, saying that the import queue is unavailable, and it is stored so: the Import
+     * counts one failed and none pending. The staged file is gone.
+     */
+    val opened = imports.openUpload()
+    val pipeline = ImportPipelineService(testApp)
+    pipeline.shutdown()
+    val staged = stagedImage()
+
+    val file = imports.upload(opened.persistedId, "photo.jpg", staged, pipeline)
+
+    (file.outcome, file.reason) shouldBe (ImportOutcome.Failed, Some("Import queue unavailable"))
+    (stored(file).outcome, stored(file).reason) shouldBe (ImportOutcome.Failed, Some("Import queue unavailable"))
+    counters(opened) shouldBe (0, 0, 0, 0, 1)
+    Files.exists(staged) shouldBe false
+  }
+
+  test("An uploaded file that fails before it is offered to the import queue is recorded failed") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import, and a directory in staging in place of a staged file, which has a size but cannot be read as a file.
+     *
+     * Assertions:
+     *
+     * The upload returns the Import file as failed, with the failure's class as its reason, and it is stored so: the Import
+     * counts one failed and none pending. What was staged is gone.
+     */
+    val opened = imports.openUpload()
+    val unreadable = Files.createDirectories(testApp.service.staging.dir.resolve(java.util.UUID.randomUUID.toString))
+
+    val file = imports.upload(opened.persistedId, "photo.jpg", unreadable)
+
+    file.outcome shouldBe ImportOutcome.Failed
+    stored(file).outcome shouldBe ImportOutcome.Failed
+    stored(file).reason shouldBe Some("IOException")
+    counters(opened) shouldBe (0, 0, 0, 0, 1)
+    Files.exists(unreadable) shouldBe false
+  }
+
+  test("An upload refuses a path with an ignored name, a \"..\" or an empty name, and an empty file") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import, and a staged image for each path: one with a name starting with a dot, as a file and as a folder, the
+     * operating systems' and the NAS's own names in any case, the names a download in progress leaves, a path with "..", and
+     * paths with an empty name (empty, a leading, a doubled and a trailing separator). And an empty staged file under a fine
+     * name.
+     *
+     * Assertions:
+     *
+     * Every one is refused as a bad request, and its staged file is deleted. The Import has no file and counts nothing.
+     *
+     * Edge cases:
+     *
+     * A name that only holds an ignored name (a dot inside it, "thumbs.db.jpg", "apart") is fine: the file is added, pending.
+     */
+    val opened = imports.openUpload()
+    val refusedPaths = List(
+      ".hidden.jpg",
+      ".git/photo.jpg",
+      "Thumbs.db",
+      "DESKTOP.INI",
+      "Album/@eaDir/photo.jpg",
+      "#recycle/photo.jpg",
+      "$RECYCLE.BIN/photo.jpg",
+      "photo.jpg.part",
+      "photo.TMP",
+      "photo.jpg.crdownload",
+      "../photo.jpg",
+      "Album/../photo.jpg",
+      "",
+      "/photo.jpg",
+      "Album//photo.jpg",
+      "Album/"
+    )
+
+    for (path <- refusedPaths) withClue(s"[$path]: ") {
+      val staged = stagedImage()
+      intercept[ValidationException](imports.upload(opened.persistedId, path, staged))
+      Files.exists(staged) shouldBe false
+    }
+
+    val emptyFile = testApp.service.staging.stage(Array.emptyByteArray)
+    intercept[ValidationException](
+      imports.upload(opened.persistedId, "photo.jpg", emptyFile)).message shouldBe Const.Msg.Err.EMPTY_FILE
+    Files.exists(emptyFile) shouldBe false
+
+    imports.files(opened.persistedId) shouldBe empty
+    counters(opened) shouldBe (0, 0, 0, 0, 0)
+
+    val fine = List("my.photo.jpg", "thumbs.db.jpg", "apart", "Album.tmp.d/photo.jpg")
+    fine.foreach(path => imports.upload(opened.persistedId, path, stagedImage()).outcome shouldBe ImportOutcome.Pending)
+    imports.files(opened.persistedId).map(_.relPath).toSet shouldBe fine.toSet
+  }
+
+  test("An upload to an Import that takes no more files, or that is not the repository's, stores nothing") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import marked complete, and a staged image for it and for an Import that does not exist.
+     *
+     * Assertions:
+     *
+     * The upload to the complete Import is refused as an illegal operation and the one to the unknown Import is not found. Each
+     * staged file is deleted, and the complete Import has no file.
+     */
+    val opened = imports.openUpload()
+    imports.close(opened.persistedId)
+    val (late, lost) = (stagedImage(), stagedImage())
+
+    intercept[IllegalOperationException](imports.upload(opened.persistedId, "late.jpg", late))
+    intercept[NotFoundException](imports.upload("no-such-import", "lost.jpg", lost))
+
+    Files.exists(late) shouldBe false
+    Files.exists(lost) shouldBe false
+    imports.files(opened.persistedId) shouldBe empty
+  }
+
+  test("An upload's Import takes files from, and is closed by, the account that opened it alone") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import into the folder Sorted, opened by one account, and a Watch folder's Import. A second account of the
+     * repository is then the context account.
+     *
+     * Assertions:
+     *
+     * From the second account, a file uploaded to the first account's Import, a failed file recorded for it and its close are
+     * each refused as forbidden: the Import has no file and stays in progress, and the staged file is deleted. The same goes, for
+     * either account, for the Watch folder's Import, which is no upload.
+     *
+     * Edge cases:
+     *
+     * The account that opened the upload still uploads to it and closes it.
+     */
+    val sorted = testApp.service.folder.add("Sorted")
+    val opener = testContext.user
+    val upload = imports.openUpload(destFolderId = sorted.id)
+    val scan = imports.open(ImportSource.WatchFolder, name = Some("Phone sync"))
+    val other = testContext.persistUser()
+
+    def refusedFor(anImport: Import): Unit = {
+      val staged = stagedImage()
+      intercept[ForbiddenException](imports.requireTakes(anImport.persistedId, "photo.jpg"))
+      intercept[ForbiddenException](imports.upload(anImport.persistedId, "photo.jpg", staged))
+      intercept[ForbiddenException](imports.addFailedFile(anImport.persistedId, "photo.jpg", sizeBytes = 10))
+      intercept[ForbiddenException](imports.closeUpload(anImport.persistedId))
+      Files.exists(staged) shouldBe false
+      imports.files(anImport.persistedId) shouldBe empty
+      stored(anImport).isComplete shouldBe false
+    }
+
+    switchContextUser(other)
+    refusedFor(upload)
+    refusedFor(scan)
+
+    switchContextUser(opener)
+    refusedFor(scan)
+    imports.upload(upload.persistedId, "photo.jpg", stagedImage()).outcome shouldBe ImportOutcome.Pending
+    imports.closeUpload(upload.persistedId)
+    stored(upload).isComplete shouldBe true
+  }
+
+  test("A file the page could not send is recorded failed") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import with one pending file.
+     *
+     * Assertions:
+     *
+     * Recording a file that was not received adds it to the Import as failed, under its path and size, saying that the upload
+     * failed, and the Import counts it failed, with its one file still pending.
+     *
+     * Edge cases:
+     *
+     * A path the uploads refuse is refused here too, and a complete Import takes no such file either; neither records anything.
+     */
+    val (opened, _) = importOf("sent.jpg")
+
+    val file = imports.addFailedFile(opened.persistedId, "Ceremony/lost.jpg", sizeBytes = 2048)
+
+    val read = stored(file)
+    (read.relPath, read.sizeBytes, read.outcome, read.reason, read.assetId) shouldBe (
+      "Ceremony/lost.jpg",
+      2048,
+      ImportOutcome.Failed,
+      Some("Upload failed"),
+      None)
+    counters(opened) shouldBe (1, 0, 0, 0, 1)
+
+    intercept[ValidationException](imports.addFailedFile(opened.persistedId, ".hidden/lost.jpg", sizeBytes = 1))
+    imports.close(opened.persistedId)
+    intercept[IllegalOperationException](imports.addFailedFile(opened.persistedId, "late.jpg", sizeBytes = 1))
+    imports.files(opened.persistedId).size shouldBe 2
+  }
+
+  test("A duplicate of a copy whose import is not complete yet names where its own Import is headed") {
+
+    /**
+     * Setup:
+     *
+     * An asset persisted by an import that has not completed it: still as it was staged, triaged and in no folder. A second copy
+     * of it dropped as a duplicate in an Import whose destination is the folder Wedding under Clients, and in an Import to
+     * Triage.
+     *
+     * Assertions:
+     *
+     * Both Import files are duplicates pointing at the unfinished asset. The first names the Import's destination,
+     * "Clients/Wedding", as where the asset is: the unfinished copy is on its way there, whatever its row says. The second names
+     * Triage.
+     */
+    val clients = testApp.service.folder.add("Clients")
+    val wedding = testApp.service.folder.add("Wedding", clients.id)
+    val unfinished = testApp.service.library.persistAndIndex(testContext.makeAsset(isTriaged = true))
+    val copy = testContext.makeAsset(isTriaged = true).copy(checksum = unfinished.checksum)
+
+    val sorting = imports.open(ImportSource.Upload, destFolderId = wedding.id)
+    val sorted = imports.addFile(sorting.persistedId, "copy.jpg", sizeBytes = 10)
+    val (_, List(triaged)) = importOf("copy.jpg"): @unchecked
+
+    imports.settleDropped(sorted.persistedId, copy, Some(DuplicateException()))
+    imports.settleDropped(triaged.persistedId, copy, Some(DuplicateException()))
+
+    (stored(sorted).outcome, stored(sorted).reason, stored(sorted).assetId) shouldBe (
+      ImportOutcome.Duplicate,
+      Some("Clients/Wedding"),
+      unfinished.id)
+    stored(triaged).reason shouldBe Some("Triage")
   }
 }

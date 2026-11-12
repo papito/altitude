@@ -29,6 +29,9 @@ object Api:
 
     val MAX_METADATA_FIELD_NAME_LENGTH = 250
 
+    // An Import's name is an uploaded folder's, which no file system lets pass 255
+    val MAX_IMPORT_NAME_LENGTH = 255
+
   object Field:
     val USER_ID = "userId"
     val ASSET_ID = "assetId"
@@ -202,5 +205,12 @@ object Api:
     object Sort:
       val DIRECTION = "direction"
 
-    object Upload:
-      val UPLOAD_ID = "uploadId"
+    // The upload routes of the Import page (ImportController): an Import's name and destination folder as it is opened, a
+    // file's relative path and size, and what an answer says of the Import file
+    object Import:
+      val NAME = "name"
+      val DEST_FOLDER_ID = "destFolderId"
+      val REL_PATH = "relPath"
+      val SIZE_BYTES = "sizeBytes"
+      val OUTCOME = "outcome"
+      val REASON = "reason"

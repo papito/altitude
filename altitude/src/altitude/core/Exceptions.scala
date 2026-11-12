@@ -49,6 +49,12 @@ case class StorageException(msg: String) extends Exception(msg)
  */
 case class ImporterUnavailableException(msg: String) extends Exception(msg)
 
+/**
+ * A file of an Import cannot be sorted into the folder it lands in (`FolderService.ensurePath`): the Import's destination is in
+ * the Trash, or a folder of the file's path has a name the folder rule refuses. The file fails with this, saying which.
+ */
+case class ImportDestinationException(msg: String) extends Exception(msg)
+
 /** The external geocoder could not be reached or did not answer with a list of places */
 case class GeocoderException(msg: String) extends Exception(msg)
 

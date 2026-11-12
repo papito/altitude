@@ -17,6 +17,7 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.models.AccountType
+import altitude.core.models.ImportSource
 import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.Person
@@ -151,11 +152,12 @@ import altitude.core.routes.decorators.requirePermission
       category: String,
       person: String,
       face: String,
-      sequence: String) {
+      sequence: String,
+      anImport: String) {
 
     /** The other repository's IDs, which an answer may show only when the request sent them */
     def theirIds: List[String] =
-      List(asset, recycled, folder, album, location, category, person, face, sequence, theirs.rootFolderId) ++ frames
+      List(asset, recycled, folder, album, location, category, person, face, sequence, anImport, theirs.rootFolderId) ++ frames
 
     /** The same requests with every ID of the other repository replaced by one that does not exist */
     def unknown: Fixtures = {
@@ -170,7 +172,8 @@ import altitude.core.routes.decorators.requirePermission
         category = random,
         person = random,
         face = random,
-        sequence = random
+        sequence = random,
+        anImport = random
       )
     }
   }
@@ -229,14 +232,20 @@ import altitude.core.routes.decorators.requirePermission
     probed(GET, "/r/:repoId/asset/:assetId")(fx => List(Probe(404, path = Map("assetId" -> fx.asset)))),
     none(GET, "/pipeline/r/:repoId").needs(Permission.Import),
     none(GET, "/settings/r/:repoId").forAdmins,
-    Row(
-      POST,
-      "/r/:repoId/upload/:uploadId/cancel",
-      Ids.NotEntity(Set("uploadId"), "the client's token for one upload, no row of a repository")).needs(Permission.Import),
-    Row(
-      POST,
-      "/import/r/:repoId/upload/:uploadId",
-      Ids.NotEntity(Set("uploadId"), "the client's token for one upload, no row of a repository")).needs(Permission.Import),
+    probed(POST, "/import/r/:repoId/imports") {
+      fx => List(Probe(404, body = json(Api.Field.Import.DEST_FOLDER_ID -> fx.folder), json = true))
+    }.needs(Permission.Import).ignoring(Api.Field.ID -> "the ID of the Import it opened, written into its answer"),
+    probed(POST, "/import/r/:repoId/imports/:importId/files") {
+      fx => List(Probe(404, path = Map("importId" -> fx.anImport), query = Map("relPath" -> "photo.jpg"), json = true))
+    }.needs(Permission.Import).ignoring(Api.Field.ID -> "the ID of the Import file, written into its answer"),
+    probed(POST, "/import/r/:repoId/imports/:importId/failures") {
+      fx =>
+        List(
+          Probe(404, path = Map("importId" -> fx.anImport), body = json(Api.Field.Import.REL_PATH -> "photo.jpg"), json = true))
+    }.needs(Permission.Import).ignoring(Api.Field.ID -> "the ID of the Import file, written into its answer"),
+    probed(POST, "/import/r/:repoId/imports/:importId/close") {
+      fx => List(Probe(404, path = Map("importId" -> fx.anImport), json = true))
+    }.needs(Permission.Import),
     probed(GET, "/content/r/:repoId/:dataType/:itemId") {
       fx =>
         List(
@@ -798,7 +807,8 @@ import altitude.core.routes.decorators.requirePermission
       category = id,
       person = id,
       face = id,
-      sequence = id
+      sequence = id,
+      anImport = id
     )
   }
 
@@ -1015,8 +1025,8 @@ import altitude.core.routes.decorators.requirePermission
   /**
    * The user's repository with an asset, a folder, an album, a Location and an unnamed Person with a Face, and their other
    * repository with an imported asset (with a Preview, a point, a Face with its files, a folder, an album and a Location in a
-   * category holding it), a Person with that Face, two triaged assets in one Sequence and a recycled asset. The context is the
-   * user's repository again when it returns.
+   * category holding it), a Person with that Face, two triaged assets in one Sequence, a recycled asset and an Import in
+   * progress. The context is the user's repository again when it returns.
    */
   private def fixtures(mine: Repository): Fixtures = {
     val myAsset = testContext.insertAsset(testContext.makeAsset(repository = Some(mine)))
@@ -1045,6 +1055,7 @@ import altitude.core.routes.decorators.requirePermission
     testContext.setAssetSequence(frames, sequence)
     val recycled = testContext.insertAsset(testContext.makeAsset(repository = Some(theirs)))
     testApp.service.library.recycleAssets(Set(recycled.persistedId))
+    val anImport = testApp.service.imports.open(ImportSource.Upload, name = Some(s"$MARK upload"))
     testApp.service.repository.switchContextToRepository(mine)
 
     Fixtures(
@@ -1067,7 +1078,8 @@ import altitude.core.routes.decorators.requirePermission
       category = category.persistedId,
       person = person.persistedId,
       face = face.persistedId,
-      sequence = sequence
+      sequence = sequence,
+      anImport = anImport.persistedId
     )
   }
 
@@ -1079,7 +1091,7 @@ import altitude.core.routes.decorators.requirePermission
      * A logged-in User's repository with an asset, a folder, an album, a Location and a Person with a Face, and a second
      * repository of theirs (the User holds every Permission in both) holding a row of every kind a route takes an ID of, each
      * named with a mark: an asset with a Preview, a point, a Face with its files, a folder, an album and a Location in a
-     * category, a Person with that Face, two triaged assets in a Sequence and a recycled asset.
+     * category, a Person with that Face, two triaged assets in a Sequence, a recycled asset and an Import in progress.
      *
      * Assertions:
      *

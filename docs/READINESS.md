@@ -109,7 +109,7 @@ As built, a Library has no owner: an Admin reaches every Library by its account 
 - ✅ The permission matrix is tested route by route ([RouteTableTests]): each row says who may call its route and must be what the route's decorators declare, read off the instances cask builds from the annotations; a route that changes a Library and declares no gate fails it. Every route is sent a request by an Admin, a Guest, a User holding no Permission, a User holding every Permission, a User with the Create Libraries flag and, for a route that needs a Permission, a User holding all but it and a User holding each alone, and answers 403 exactly where its row refuses. An account with no grant in a Library gets a 404 on every route of it, every route but the public ones refuses an anonymous request, and every route answers another repository's IDs, of a Library the user holds every Permission in too, as it answers unknown ones, changing nothing.
 - ✅ One active Admin is always left. An Admin cannot deactivate, delete or demote its own account, and every Admin's write locks the active Admins' rows first and checks, under that lock, that the actor is one of them: the actor is an active Admin and never the one it removes, so two Admins removing each other at once leave one, the second refused as no longer an Admin ([UserService] `update`, `deactivate`, `delete` and `setPassword` over [UserDao] `lockActiveAdmins`). [AccountManagementTests] (both engines) runs four such races, the second write waiting on the first's lock: deactivate × deactivate, demote × demote, delete × delete, and a demotion × a delete of its actor; each was proved red on PostgreSQL with `lockActiveAdmins` replaced by an unlocked read in the method under test (`deactivate`, `update`, `delete`, `delete` respectively). `setPassword`'s use of the lock is not raced by a test. A creator's row is locked too, and a creator deactivated since its login creates nothing.
 - ✅ A change of access takes effect at the session's next request: a grant, and every account write, bumps the account's version, and the token is rebuilt from the database ([Login and sessions](#login-and-sessions)). Share links, once they exist, need revoking of their own ([Sharing with clients](#sharing-with-clients)).
-- [ ] Upload cancellation is a global map keyed by an ID from non-secure `Random` ([ImportController] `uploadCancelRequest`). The repository cache is never invalidated ([RepositoryService] `getById`). [LOW]
+- [ ] The repository cache is never invalidated ([RepositoryService] `getById`). [LOW]
 
 ### Web security
 
@@ -134,8 +134,8 @@ As built, a Library has no owner: an Admin reaches every Library by its account 
 
 ### Malicious files
 
-- [ ] No size caps and no disk-space check. cask 0.9.7 leaves Undertow's `MAX_ENTITY_SIZE` at `-1` ([App] does not configure the server), and the upload form sends every selected file in one POST ([upload-form.js]). There is no per-file cap ([ImportController], [LibraryService] `stagedFileToAsset`) and no `getUsableSpace` anywhere. Undertow writes to `java.io.tmpdir` first: on tmpfs the upload fills RAM, and on another filesystem the move into staging is a copy. Upload threads wait with `Await.result(..., Duration.Inf)`. [HIGH]
-  - Fix: Undertow `MAX_ENTITY_SIZE` and `MULTIPART_MAX_ENTITY_SIZE`, a per-file cap, Undertow's temp directory under `../data/staging`, and a free-space check against a reserve; a test with an oversized multipart upload.
+- [ ] No size caps and no disk-space check. cask 0.9.7 leaves Undertow's `MAX_ENTITY_SIZE` at `-1` ([App] does not configure the server). An upload is one file per request ([upload-run.js]), its body streamed straight into staging ([ImportController] `uploadFile`, [StagingService] `stage`), but there is no per-file cap ([ImportService] `upload`) and no `getUsableSpace` anywhere. Upload threads wait with `Await.result(..., Duration.Inf)`. [HIGH]
+  - Fix: Undertow `MAX_ENTITY_SIZE`, a per-file cap, and a free-space check against a reserve; a test with an oversized upload.
 - ✅ Types come from the content: Tika's `DefaultDetector` on the UUID-named staged file ([MetadataExtractionService] `detectAssetType`).
 - [ ] Every `image/*` and `video/*` subtype is accepted, so the decoder surface is wider than needed: JPEG 2000, HDR, PxM, and JBIG2 and PCX (`tika-parser-image-module` brings `jai-imageio-core` and `jbig2-imageio` into the ImageIO fallback), plus every FFmpeg demuxer. The test media type `"x-none"` is in the production allowlist ([LibraryService] `SUPPORTED_MEDIA_TYPES`). [MEDIUM]
   - Fix: allow named formats only, run FFmpeg with a format whitelist, and drop the JBIG2 and JAI plugins.
@@ -146,8 +146,7 @@ As built, a Library has no owner: an Admin reaches every Library by its account 
 - [ ] Decoders are not hardened. OpenCV and FFmpeg run in the server process through JNI with no timeout, so a crafted file can hang an import and a segfault kills the server. Video decoding is in software, with up to 120 seeks for faces plus up to 120 for the preview. FFmpeg opens files with every demuxer and protocol ([VideoService] `withGrabber`), not `protocol_whitelist=file`. For decoder versions, see [Dependencies](#operations-and-hygiene). [HIGH]
   - Fix: a per-asset timeout and `protocol_whitelist=file` now; then decoding in a separate worker process with time and memory limits (cgroups or rlimits, seccomp), where `PipelineUtils.stage` is the seam. Newer: libvips through its `vips` command, decoders compiled to WASM (Wasmtime, or Chicory on the JVM), gVisor for a decoder container.
 - ✅ A file that fails to decode drops only that asset ([PipelineUtils] `guard`, [ImportPipelineServiceTests]), and the cleanup means a crash does not leave the import looping.
-- [ ] A staged file leaks until restart if detection or hashing throws (the upload handler in [ImportController]). [LOW]
-  - Fix: delete staged files in a `finally`.
+- ✅ A staged file does not outlive an upload that fails: a refused one is deleted, and one that fails in detection or hashing, or that the import queue refuses, is deleted and its Import file recorded failed ([ImportService] `upload`, tested in [ImportServiceTests]).
 
 ### Data safety
 
@@ -273,9 +272,9 @@ Decoder limits and timeouts are under [Malicious files](#malicious-files).
 ### Library and media
 
 - ✅ Uploads show progress and an import status over a WebSocket.
-- [ ] Upload cancel answers 404. The form posts to `/import/r/…/upload/…/cancel` ([upload_form.scala.html]), but the route is `/r/…/upload/…/cancel` ([ImportController] `cancelUpload`), and no other route matches. [MEDIUM]
-  - Fix: one prefix for both; a [controller test](test-coverage.md#import-orchestration-and-asynchronous-processing) through the URL the form carries.
-- [ ] Uploads cannot resume: each batch is one multipart POST ([upload-form.js]), so a dropped connection at 95% loses the batch. Effort: M.
+- ✅ Cancelling an upload closes its Import: the page stops sending and posts to the Import's close route ([upload-run.js], [ImportController] `closeImport`, tested in [ImportControllerTests]); leaving the page closes it too, by a beacon.
+- ✅ A dropped connection costs one file, not the upload: each file is a request of its own, sent again twice and then recorded failed while the rest go on ([upload-run.js]), and choosing the same files again skips the ones already in the Library as duplicates.
+- [ ] A single file's upload cannot resume: a connection dropped at 95% of a large video sends that file again from the start. Effort: M.
   - Fix: tus resumable uploads with Uppy on the client, one asset per upload.
 - [ ] No export, so the library is locked in. Originals download one at a time; XMP is only read on import ([MetadataExtractionService] `extract`); names, folders, albums, people, Locations and metadata exist only in the database. An RFC 6266 `Content-Disposition` encoder and the signature-gated content route are already there. Effort: M–L.
   - Fix: a streamed ZIP64 export of a selection, album or folder under original names and folder paths, then XMP sidecars (MWG face regions, Locations, albums, metadata) through the Adobe XMP Toolkit.
@@ -450,6 +449,7 @@ Entries leave this list when their items close.
 [FolderService]: ../altitude/src/altitude/core/service/FolderService.scala
 [ImportPipelineService]: ../altitude/src/altitude/core/service/ImportPipelineService.scala
 [LibraryService]: ../altitude/src/altitude/core/service/LibraryService.scala
+[ImportService]: ../altitude/src/altitude/core/service/ImportService.scala
 [MetadataExtractionService]: ../altitude/src/altitude/core/service/MetadataExtractionService.scala
 [MigrationService]: ../altitude/src/altitude/core/service/MigrationService.scala
 [PasetoService]: ../altitude/src/altitude/core/service/PasetoService.scala
@@ -473,6 +473,7 @@ Entries leave this list when their items close.
 [ContentViewControllerTests]: ../altitude/test/src/altitude/core/controller/ContentViewControllerTests.scala
 [LoginTokenTests]: ../altitude/test/src/altitude/core/integration/LoginTokenTests.scala
 [ImportControllerTests]: ../altitude/test/src/altitude/core/controller/ImportControllerTests.scala
+[ImportServiceTests]: ../altitude/test/src/altitude/core/integration/ImportServiceTests.scala
 [LoginControllerTests]: ../altitude/test/src/altitude/core/controller/LoginControllerTests.scala
 [RouteTableTests]: ../altitude/test/src/altitude/core/controller/RouteTableTests.scala
 [SettingsControllerTests]: ../altitude/test/src/altitude/core/controller/SettingsControllerTests.scala
@@ -491,13 +492,12 @@ Entries leave this list when their items close.
 [pipeline.scala.html]: ../altitude/views/pipeline.scala.html
 [result_cell.scala.html]: ../altitude/views/htmx/result_cell.scala.html
 [trashbin_header.scala.html]: ../altitude/views/htmx/trashbin_header.scala.html
-[upload_form.scala.html]: ../altitude/views/htmx/upload_form.scala.html
 [core.css]: ../altitude/static/css/core.css
 [global.js]: ../altitude/static/js/global.js
 [album-list.js]: ../altitude/static/js/common/album-list.js
 [location-list.js]: ../altitude/static/js/common/location-list.js
 [snackbar.js]: ../altitude/static/js/common/snackbar.js
-[upload-form.js]: ../altitude/static/js/fragments/upload-form.js
+[upload-run.js]: ../altitude/static/js/import/upload-run.js
 [map-view.js]: ../altitude/static/js/map/map-view.js
 [box-selection.js]: ../altitude/static/js/search-results/box-selection.js
 [detail-navigator.js]: ../altitude/static/js/search-results/detail-navigator.js

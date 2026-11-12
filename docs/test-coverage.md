@@ -247,7 +247,7 @@ Sources: [LibraryService](../altitude/src/altitude/core/service/LibraryService.s
 - ✅ HTTP: the `/import/status` WebSocket opens for a logged-in account, whose first message is "connected", and refuses a handshake with no cookie or with a cookie that is no token with a 401, the second clearing the cookie; one whose Origin is another site, another port or `null` is a 403, and one with the server's own Origin or none opens; an account's open sockets close with 1013 when its version is raised and with 1008 when its tokens are revoked; the Import page connects to it with no query string, naming no account ([ImportControllerTests](../altitude/test/src/altitude/core/controller/ImportControllerTests.scala)).
 - [ ] Assert a file name with markup reaches the import ticker escaped. [CRITICAL]
 - [ ] Upload an SVG and assert it is dropped as an unsupported type; today only the lack of an ImageIO reader drops it. [MEDIUM]
-- [ ] Cancel an upload through the URL the upload form carries; the form and the route disagree on the prefix, so today it answers 404. [MEDIUM]
+- ✅ An upload over HTTP: an Import opened, its files sent one request each and the Import closed, which is also how an upload is cancelled; a destination takes Organize as well as Import; an ignored name, a "..", an empty name and an empty file are refused and recorded nowhere; a closed Import takes no file (409) and an unknown one is a 404; a file the page could not send is recorded failed (`ImportControllerTests`).
 
 ## Extracted metadata and capture dates
 

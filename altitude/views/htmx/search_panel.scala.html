@@ -16,16 +16,13 @@
    in the text field, searches by those entries, and Clear empties every field. `idPrefix` opens every ID of the form,
    `searchPanel` in the nav's panel; the style guide's specimen passes its own, so the two can be on one page.
 
-   A combobox field is the `filterCombobox` component (js/alpine/components/filter-combobox.js), on the ARIA combobox
-   pattern: its `.box` holds the hidden input of the IDs, the chips of what is chosen and the input typed into
-   (`role="combobox"`, which has no name, so it is not submitted), and after the box the template a new chip is cloned
-   from and the `role="listbox"` its options are loaded into from `data-options-url` (htmx/search_options_folders,
-   _people, _locations). `data-multiple` marks a field that takes several, with the most one search takes
-   (`data-max-chosen`) and the line the listbox shows once it holds them. A chip (includes/search_chip) carries what an
-   option carries (`data-option-id`, `data-option-label`), shows its label, a person's led by their cover Face, and ends
-   with its remove button. The server names the chips: an ID of the search that names nothing in the Library has neither
-   a chip nor a place in its input (SearchService.filterNames). The People field asks for its options with the search's
-   triage filter (`showTriaged`, `triaged=true`), so an option's number of assets is what the search will find.
+   A combobox field is includes/filter_combobox, the `filterCombobox` component
+   (js/alpine/components/filter-combobox.js), with its options from htmx/search_options_folders, _people and _locations.
+   A chip (includes/search_chip) carries what an option carries (`data-option-id`, `data-option-label`), shows its
+   label, a person's led by their cover Face, and ends with its remove button. The server names the chips: an ID of the
+   search that names nothing in the Library has neither a chip nor a place in its input (SearchService.filterNames). The
+   People field asks for its options with the search's triage filter (`showTriaged`, `triaged=true`), so an option's
+   number of assets is what the search will find.
 
    The people match is the switch after the People label, on for `all`, with its value in the hidden input beside it;
    it shows once two people are chosen. A date range field is the `dateRange` component
@@ -40,60 +37,10 @@
 @includes.html.search_chip(kind, label, lead = lead, attributes = Seq("data-option-id" -> id, "data-option-label" -> label))
 }
 
-@* A combobox field: `key` names it in its IDs, `param` is the search parameter its hidden input holds, `options` the
-   options route with its query string, `kind` the kind of its chips, whose icon leads the box when it has one (a person
-   has none), `fullMessage` what a field of several says once it holds as many as a search takes (a field of one has
-   none), and `afterLabel` what shares the label's row (`.label-row`), when anything does *@
+@* A combobox field of the form (includes/filter_combobox): `options` is its options route under the panel's, with its
+   query string *@
 @combobox(key: String, label: String, param: String, options: String, kind: String, placeholder: String, ids: List[String], fullMessage: Option[String] = None, afterLabel: Option[Html] = None)(chips: Html) = {
-<div class="field"
-     x-data="filterCombobox"
-     x-on:focusout="onFocusOut($event)"
-     x-on:search-panel-clear="clear()"
-     data-options-url="/htmx/search/r/@repoId/options/@options"
-     @for(message <- fullMessage) { data-multiple data-max-chosen="@{SearchRequestParser.MAX_IDS}" data-max-chosen-message="@message" }>
-    @afterLabel match {
-    case Some(control) => {
-    <div class="label-row">
-        <label for="@idPrefix@key">@label</label>
-        @control
-    </div>
-    }
-    case None => {<label for="@idPrefix@key">@label</label>}
-    }
-    <div class="box" x-on:click="onBoxClick($event)">
-        @if(kind != "person") {@includes.html.search_filter_icon(kind)}
-        <input type="hidden" name="@param" value="@{ids.mkString(",")}" x-ref="ids">
-        <ul class="chips" aria-label="@label chosen" x-ref="chips" x-on:click="onChipClick($event)">
-            @chips
-        </ul>
-        <input type="text"
-               id="@idPrefix@key"
-               role="combobox"
-               autocomplete="off"
-               spellcheck="false"
-               placeholder="@placeholder"
-               aria-autocomplete="list"
-               aria-haspopup="listbox"
-               aria-controls="@{idPrefix + key}Options"
-               x-ref="input"
-               :placeholder="placeholder"
-               :aria-expanded="expanded"
-               :aria-activedescendant="activeOptionId"
-               x-on:input="onInput()"
-               x-on:keydown="onKeydown($event)">
-    </div>
-    <template x-ref="chipTemplate">@includes.html.search_chip(kind, "")</template>
-    <ul id="@{idPrefix + key}Options"
-        class="listbox"
-        role="listbox"
-        popover="manual"
-        aria-label="@label"
-        x-ref="listbox"
-        x-on:mousedown.prevent
-        x-on:click="onOptionClick($event)"
-        x-on:mouseover="onOptionHover($event)"></ul>
-    <span class="visually-hidden" role="status" x-text="status"></span>
-</div>
+@includes.html.filter_combobox(idPrefix + key, label, param, s"/htmx/search/r/$repoId/options/$options", kind, placeholder, ids, fullMessage, afterLabel)(chips)
 }
 
 @* The people match: a switch that is on for all of the people and off for any of them, the form's own state

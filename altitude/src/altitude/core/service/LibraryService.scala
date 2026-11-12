@@ -106,20 +106,45 @@ class LibraryService(val app: Altitude):
 
   /**
    * The import pipeline's completion stage, one transaction: the asset marked complete, with its Image quality and perceptual
-   * hash stored alongside the flag (`markAsCompleted`), put in the Sequence of its burst if it has one (`SequenceService.assign`,
-   * for which the earlier uploads of the burst are completed candidates already), counted in the stats, and, when it is a file of
-   * an Import (`origin`), its Import file settled as imported with the asset (`ImportService.settle`), so the record says
-   * imported exactly when the asset is complete. An asset that never gets here is purged at startup, so it is never counted.
+   * hash stored alongside the flag (`markAsCompleted`), then placed and counted in the stats, and, when it is a file of an Import
+   * (`origin`), its Import file settled as imported with the asset (`ImportService.settle`), so the record says imported exactly
+   * when the asset is complete. A file of an Import with no destination, and an asset with no origin, stays in Triage, in the
+   * Sequence of its burst if it has one (`SequenceService.assign`, for which the earlier uploads of the burst are completed
+   * candidates already). A file of an Import with a destination is sorted on arrival ([[sortInto]]): into the folder its path
+   * names under the destination, which is where a folder is born, with the first asset that lands in or below it. A destination
+   * in the Trash, and a folder name the folder rule refuses, fail the completion with `ImportDestinationException`, which is a
+   * drop that creates nothing. An asset that never gets here is purged at startup, so it is never counted.
    */
   def completeImport(asset: Asset, origin: Option[ImportOrigin] = None): Asset =
     txManager.withTransaction {
       val completed = app.service.asset.markAsCompleted(asset)
-      val sequenced = app.service.sequence.assign(completed)
-      app.service.stats.addAsset(asset)
+      val destination = origin.flatMap(o => app.service.imports.destinationOf(o.importFileId).map((_, o.folderPath)))
+      val placed = destination match
+        case Some((folder, folderPath)) => sortInto(completed, folder, folderPath)
+        case None => app.service.sequence.assign(completed)
+      app.service.stats.addAsset(placed)
       origin.foreach(o => app.service.imports.settle(o.importFileId, ImportOutcome.Imported, assetId = asset.id))
       logger.trace(s"Import of asset [${asset.persistedId}] complete")
-      sequenced
+      placed
     }
+
+  /**
+   * Sorts a just-completed asset into the folder `folderPath` names under `destination`, the destination itself for no names
+   * (`FolderService.ensurePath`: the folders of the path that exist are reused, a recycled one restored, a missing one created),
+   * and returns it as it is then: in that folder and out of Triage, so in no Sequence, as an asset moved out of Triage is.
+   */
+  private def sortInto(asset: Asset, destination: Folder, folderPath: Seq[String]): Asset =
+    val folder =
+      try app.service.folder.ensurePath(destination.persistedId, folderPath)
+      catch
+        case refused: ValidationException =>
+          throw ImportDestinationException(altitude.core.Const.Msg.Err.DESTINATION_FOLDER_NAME.format(refused.message))
+
+    app.service.asset.updateById(
+      asset.persistedId,
+      Map(FieldConst.Asset.FOLDER_ID -> folder.persistedId, FieldConst.Asset.IS_TRIAGED -> false)): Unit
+    logger.debug(s"Sorted asset [${asset.persistedId}] into folder [${folder.persistedId}]")
+    asset.copy(folderId = folder.persistedId, isTriaged = false)
 
   /**
    * Undoes what the import of an asset wrote, for an asset the pipeline dropped or an import a crash cut off. Nothing to undo for

@@ -11,7 +11,9 @@ import scala.util.control.NonFatal
 
 import altitude.core.DuplicateException
 import altitude.core.ImageException
+import altitude.core.ImportDestinationException
 import altitude.core.ImporterUnavailableException
+import altitude.core.QueueRefusedException
 import altitude.core.RequestContext
 import altitude.core.SamePersonDetectedTwiceException
 import altitude.core.StorageException
@@ -43,7 +45,7 @@ object PipelineUtils:
   /** A cause a file can have for being dropped, which the user is told and the log records in one line, without a stack trace */
   def isExpectedDrop(cause: Throwable): Boolean = cause match
     case _: UnsupportedMediaTypeException | _: ImageException | _: VideoException | _: DuplicateException |
-        _: SamePersonDetectedTwiceException | _: ImporterUnavailableException =>
+        _: SamePersonDetectedTwiceException | _: ImporterUnavailableException | _: ImportDestinationException =>
       true
     case _ => false
 
@@ -57,8 +59,12 @@ object PipelineUtils:
     case Some(_: ImageException) => "Cannot decode image"
     case Some(_: VideoException) => "Cannot decode video"
     case Some(_: StorageException) => "Storage error"
+    case Some(_: QueueRefusedException) => "Import queue unavailable"
     // Its message is one of two fixed texts (Const.Msg.Err.IMPORTER_GONE, IMPORTER_DEACTIVATED)
     case Some(unavailable: ImporterUnavailableException) => unavailable.getMessage
+    // Its message is a fixed text (Const.Msg.Err.DESTINATION_IN_TRASH), or one around the folder rule's own
+    // (DESTINATION_FOLDER_NAME), which names a length at most
+    case Some(destination: ImportDestinationException) => destination.getMessage
     case other => other.fold("Unknown error")(_.getClass.getSimpleName)
 
   /** Runs a stage for one asset in its pipeline context; whatever it throws drops the asset with that cause */

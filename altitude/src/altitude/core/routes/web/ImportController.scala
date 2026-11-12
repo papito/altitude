@@ -1,24 +1,18 @@
 package altitude.core.routes.web
 
 import cask.endpoints.WebsocketResult
-import cask.model.Response
-import io.undertow.server.handlers.form.FormData
-import io.undertow.server.handlers.form.FormDataParser
 import org.slf4j.Logger
-
-import scala.collection.concurrent.TrieMap
-import scala.concurrent.Await
-import scala.concurrent.duration.Duration
-import scala.jdk.CollectionConverters._
 
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
-import altitude.core.RequestContext
+import altitude.core.IllegalOperationException
+import altitude.core.Validators.ApiRequestValidator
 import altitude.core.actors.ImportStatusWsActor
 import altitude.core.models.AccountType
+import altitude.core.models.ImportFile
 import altitude.core.models.Permission
-import altitude.core.pipeline.PipelineTypes.PipelineContext
+import altitude.core.routes.BaseController
 import altitude.core.routes.decorators.authenticate
 import altitude.core.routes.decorators.forbidden
 import altitude.core.routes.decorators.isSameOriginOrNone
@@ -27,13 +21,9 @@ import altitude.core.routes.decorators.requireLogin
 import altitude.core.routes.decorators.requirePermission
 import altitude.core.util.Util
 
-object ImportController:
-  private val uploadCancelRequest = TrieMap[String, Boolean]()
+class ImportController(using logger: Logger, caskLogger: cask.Logger, context: castor.Context) extends BaseController:
+  private def imports = App.altitude.service.imports
 
-  def isCancelled(uploadId: String): Boolean =
-    uploadCancelRequest.contains(uploadId)
-
-class ImportController(using logger: Logger, caskLogger: cask.Logger, context: castor.Context) extends cask.Routes:
   @requireLogin()
   @requirePermission(Permission.Import)
   @rememberRepository()
@@ -43,63 +33,94 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
     val payload = "<!doctype html>" + html.pipeline(stats = stats)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
+  /**
+   * Opens the Import of an upload from the Import page, which then sends its files one request each ([[uploadFile]]) and closes
+   * it ([[closeImport]]). The JSON body may name it (`name`, the uploaded folder's) and give the folder its files are sorted into
+   * (`destFolderId`; none is Triage), which takes Organize as well as this route's Import: without it the answer is a 403. A
+   * destination that is no folder of the Library is a 404, and one in the Trash a 400. Answers the Import's ID.
+   */
   @requireLogin()
   @requirePermission(Permission.Import)
-  @cask.post(s"/r/:repoId/upload/:${Api.Field.Upload.UPLOAD_ID}/cancel")
-  def cancelUpload(repoId: String, uploadId: String): cask.Response[String] =
-    logger.warn(s"CANCELLING upload ID: $uploadId for repo $repoId")
-    ImportController.uploadCancelRequest.update(uploadId, true)
-    Response("", 200, Seq("Content-Type" -> "text/plain"), Nil)
+  @cask.post("/import/r/:repoId/imports")
+  def openImport(repoId: String)(using request: cask.Request): cask.Response[String] =
+    answeringJson {
+      val json = unscrubbedJson.get
+      ApiRequestValidator(maxLengths = Map(Api.Field.Import.NAME -> Api.Constraints.MAX_IMPORT_NAME_LENGTH)).validate(json)
 
-  @requireLogin
+      val opened =
+        imports.openUpload(name = text(json, Api.Field.Import.NAME), destFolderId = text(json, Api.Field.Import.DEST_FOLDER_ID))
+      jsonResponse(ujson.Obj(Api.Field.ID -> opened.persistedId))
+    }
+
+  /** A text field of a JSON body, trimmed; none when it is absent, empty or no text */
+  private def text(json: ujson.Obj, field: String): Option[String] =
+    json.obj.get(field).flatMap(_.strOpt).map(_.trim).filter(_.nonEmpty)
+
+  /**
+   * Takes one file of an upload's Import: the request's body is the file, and `relPath` (a query parameter) its path relative to
+   * what was chosen, its name for a file chosen on its own. The file is staged, added to the Import and offered to the import
+   * queue (`ImportService.upload`), the request waiting while the queue is full. Answers the Import file with its outcome:
+   * pending, or failed with its reason when it was recorded and then could not be handed to the pipeline, which is no failure of
+   * the request, so the page does not send the file again.
+   *
+   * A refused file is a 400 and is not recorded: a path with an ignored name, a ".." or an empty name, and an empty file. It is
+   * refused before its body is read where the path says so. An Import that is not the Library's is a 404, one that is not an
+   * upload the account itself opened a 403, and one that takes no more files a 409, on each of which the page stops sending.
+   */
+  @requireLogin()
   @requirePermission(Permission.Import)
-  @cask.postForm("/import/r/:repoId/upload/:uploadId")
-  def uploadFilesForm(files: Seq[cask.FormEntry] = Seq.empty, repoId: String, uploadId: String)(using
-      request: cask.Request): cask.Response[String] =
-    logger.debug(s"Uploading selected files. Upload ID: $uploadId")
+  @cask.post("/import/r/:repoId/imports/:importId/files")
+  def uploadFile(repoId: String, importId: String, relPath: String = "")(using request: cask.Request): cask.Response[String] =
+    answeringUpload {
+      imports.requireTakes(importId, relPath)
+      val staged = App.altitude.service.staging.stage(request.data)
+      fileResponse(imports.upload(importId, relPath, staged))
+    }
 
-    val formData: FormData = request.exchange.getAttachment(FormDataParser.FORM_DATA)
+  /**
+   * Records a file of an upload that the page could not send, after its retries, as failed (`ImportService.addFailedFile`): the
+   * JSON body gives its path (`relPath`) and its size (`sizeBytes`). Refused as [[uploadFile]] refuses a path and an Import.
+   */
+  @requireLogin()
+  @requirePermission(Permission.Import)
+  @cask.post("/import/r/:repoId/imports/:importId/failures")
+  def recordFailedFile(repoId: String, importId: String)(using request: cask.Request): cask.Response[String] =
+    answeringUpload {
+      val json = unscrubbedJson.get
+      ApiRequestValidator(required = List(Api.Field.Import.REL_PATH)).validate(json)
+      val sizeBytes = json.obj.get(Api.Field.Import.SIZE_BYTES).flatMap(_.numOpt).map(_.toLong).filter(_ >= 0).getOrElse(0L)
 
-    val uploadFormPayload = "<!doctype html>" + htmx.html.upload_form()
-    if formData == null then
-      logger.error("Not a multipart upload")
-      return cask.Response(uploadFormPayload, 200, Seq(("Content-Type", "text/html")))
+      fileResponse(imports.addFailedFile(importId, json(Api.Field.Import.REL_PATH).str, sizeBytes))
+    }
 
-    val pipelineContext = PipelineContext(
-      repository = RequestContext.getRepository,
-      account = Some(RequestContext.getAccount),
-      permissions = RequestContext.permissions.value)
+  /**
+   * Closes an upload's Import: no more files will come, whether the page sent them all or the upload was cancelled, which is the
+   * same to the Import. It stays in progress until the files it has are settled. An Import that is not the Library's is a 404,
+   * and one that is not an upload the account itself opened a 403.
+   */
+  @requireLogin()
+  @requirePermission(Permission.Import)
+  @cask.post("/import/r/:repoId/imports/:importId/close")
+  def closeImport(repoId: String, importId: String): cask.Response[String] =
+    answeringJson {
+      imports.closeUpload(importId)
+      jsonResponse(ujson.Obj())
+    }
 
-    // Get all form field names and process file uploads
-    val fieldNames = formData.iterator().asScala.toList
+  /**
+   * [[answeringJson]] for the routes that add a file to an open upload: an Import that takes no more files is a 409, which the
+   * page tells from a refused file's 400
+   */
+  private def answeringUpload(f: => cask.Response[String]): cask.Response[String] =
+    answeringJson {
+      try f
+      catch case ex: IllegalOperationException => jsonError(ex.getMessage, 409)
+    }
 
-    for fieldName <- fieldNames if !ImportController.isCancelled(uploadId)
-    do
-      val formValues = formData.get(fieldName).asScala.toList
-      for formValue <- formValues if formValue.isFileItem && !ImportController.isCancelled(uploadId) do
-        logger.trace("Next file")
-
-        val fileItem = formValue.getFileItem
-        val fileName = formValue.getFileName
-        logger.debug(s"Received file: $fileName")
-
-        // Undertow deletes its temp file when the request ends, before the queued pipeline runs, so the file is moved out
-        // of its hands; a small item it kept in memory is written out instead
-        val staged =
-          if fileItem.isInMemory then
-            val inputStream = fileItem.getInputStream
-            try App.altitude.service.staging.stage(inputStream.readAllBytes())
-            finally inputStream.close()
-          else App.altitude.service.staging.stageMove(fileItem.getFile)
-        val assetWithData = App.altitude.service.library.stagedFileToAsset(fileName, staged)
-
-        logger.debug(s"Adding file to import queue: $fileName")
-        // Waits while the queue is full. A file the queue refuses fails the request, and the rest of the upload with it.
-        val fut = App.altitude.service.importPipeline.addToQueue((assetWithData, pipelineContext))
-        Await.result(fut, Duration.Inf)
-
-    logger.debug("All files sent to queue")
-    cask.Response(uploadFormPayload, 200, Seq(("Content-Type", "text/html")))
+  private def fileResponse(file: ImportFile): cask.Response[String] =
+    val json = ujson.Obj(Api.Field.ID -> file.persistedId, Api.Field.Import.OUTCOME -> file.outcome.dbValue)
+    file.reason.foreach(json(Api.Field.Import.REASON) = _)
+    jsonResponse(json)
 
   /**
    * The import status stream of the logged-in account: the account comes from the login (`decorators.authenticate`), never from

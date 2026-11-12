@@ -964,4 +964,106 @@ import altitude.core.models.Repository
     folders.getPath(testContext.repository.rootFolderId).map(_.persistedId) shouldEqual List(testContext.repository.rootFolderId)
     folders.getPath(java.util.UUID.randomUUID.toString) shouldEqual Nil
   }
+
+  test("Ensuring a path reuses the folders that exist, restores the recycled ones and adds the missing ones") {
+
+    /**
+     * Setup:
+     *
+     * A folder Clients with the live folder Wedding under it, which holds the folder Ceremony, recycled with its own subfolder
+     * Vows by a delete.
+     *
+     * Assertions:
+     *
+     * Ensuring the path Wedding / Ceremony / Portraits under Clients returns a new folder Portraits under Ceremony: Wedding is
+     * the folder that was there, Ceremony is the recycled folder, live again, and Portraits is added. Ensuring the same path
+     * again returns the same folder and adds nothing. Ensuring no names is the parent itself.
+     *
+     * Edge cases:
+     *
+     * A name that differs from an existing folder's only by case and by spaces around it is that folder. Restoring Ceremony
+     * restores it alone: its recycled subfolder Vows stays recycled.
+     */
+    val folders = testApp.service.folder
+    val clients = folders.add("Clients")
+    val wedding = folders.add("Wedding", clients.id)
+    val ceremony = folders.add("Ceremony", wedding.id)
+    val vows = folders.add("Vows", ceremony.id)
+    testApp.service.library.deleteFolderById(ceremony.persistedId)
+    folders.getById(ceremony.persistedId).isRecycled shouldBe true
+    val before = folders.getAll.size
+
+    val portraits = folders.ensurePath(clients.persistedId, Seq(" wedding ", "CEREMONY", "Portraits"))
+
+    portraits.name shouldBe "Portraits"
+    portraits.parentId shouldBe ceremony.persistedId
+    folders.getPath(portraits.persistedId).map(_.persistedId) shouldBe List(
+      clients.persistedId,
+      wedding.persistedId,
+      ceremony.persistedId,
+      portraits.persistedId)
+    folders.getById(ceremony.persistedId).isRecycled shouldBe false
+    folders.getById(vows.persistedId).isRecycled shouldBe true
+    folders.getAll.size shouldBe before + 1
+
+    folders.ensurePath(clients.persistedId, Seq("Wedding", "Ceremony", "Portraits")).persistedId shouldBe portraits.persistedId
+    folders.getAll.size shouldBe before + 1
+    folders.ensurePath(clients.persistedId, Nil).persistedId shouldBe clients.persistedId
+  }
+
+  test("Ensuring a path refuses a name the folder rule refuses, and a parent that is no folder of the repository") {
+
+    /**
+     * Setup:
+     *
+     * A folder Clients.
+     *
+     * Assertions:
+     *
+     * A path with a name longer than a folder's name may be, or a name of spaces alone, is a `ValidationException`, and nothing
+     * of the path is added, not even the valid name before the refused one. A parent that does not exist is not found.
+     */
+    val folders = testApp.service.folder
+    val clients = folders.add("Clients")
+    val before = folders.getAll.size
+
+    intercept[ValidationException] {
+      folders.ensurePath(clients.persistedId, Seq("Wedding", "x" * (Api.Constraints.MAX_FOLDER_NAME_LENGTH + 1)))
+    }
+    intercept[ValidationException] {
+      folders.ensurePath(clients.persistedId, Seq("Wedding", "  "))
+    }
+    folders.getAll.size shouldBe before
+
+    intercept[NotFoundException] {
+      folders.ensurePath(java.util.UUID.randomUUID.toString, Seq("Wedding"))
+    }
+  }
+
+  test("Two transactions ensuring one missing folder at once end up with one folder") {
+
+    /**
+     * Setup:
+     *
+     * A folder Clients with no folder under it. Two transactions each ensure the path Wedding / Ceremony under it, the first held
+     * open until the second waits for it: for the name's advisory lock on PostgreSQL, for the write connection on SQLite.
+     *
+     * Assertions:
+     *
+     * Both return the same folder Ceremony, under one folder Wedding: the second finds the folders the first created. Without the
+     * turn-taking, the second, which read before the first committed, would add Wedding itself and fail on the unique index of a
+     * folder's name among its siblings.
+     */
+    val folders = testApp.service.folder
+    val clients = folders.add("Clients")
+    val ensured = new java.util.concurrent.ConcurrentLinkedQueue[String]()
+
+    def ensure(): Unit = ensured.add(folders.ensurePath(clients.persistedId, Seq("Wedding", "Ceremony")).persistedId): Unit
+
+    contend(first = ensure(), second = ensure())
+
+    ensured.size shouldBe 2
+    ensured.toArray.distinct.length shouldBe 1
+    folders.getChildren(clients.persistedId).map(_.name) shouldBe List("Wedding")
+  }
 }

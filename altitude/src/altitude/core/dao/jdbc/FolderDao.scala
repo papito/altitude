@@ -179,6 +179,21 @@ abstract class FolderDao(override val config: Config) extends BaseDao[Folder] wi
     val recs: List[Map[String, AnyRef]] = manyBySqlQuery(sql, List(folderId, repositoryId, repositoryId, firstLevel))
     recs.map(makeModel)
 
+  override def getChild(parentId: String, nameKey: String): Option[Folder] =
+    val sql = s"""
+      SELECT *
+        FROM $tableName
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Folder.PARENT_ID} = ?
+         AND ${FieldConst.Folder.NAME_KEY} = ?
+         AND ${FieldConst.ID} <> ${FieldConst.Folder.PARENT_ID}
+    """
+
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, parentId, nameKey)).headOption.map(makeModel)
+
+  override def lockName(parentId: String, nameKey: String): Unit =
+    advisoryLock(s"folder-name:${RequestContext.getRepository.persistedId}:$parentId:$nameKey")
+
   // This does NOT return the child counts. Both arms of the recursion carry the repository: another repository's folder has no
   // children here
   def getChildrenRecursive(parentId: String): List[Folder] =

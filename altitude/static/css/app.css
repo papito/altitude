@@ -11,6 +11,7 @@
 @import "includes/results_title.css";
 @import "includes/account_libraries.css";
 @import "includes/cannot_organize.css";
+@import "includes/upload_sections.css";
 @import "htmx/folders.css";
 @import "htmx/albums.css";
 @import "htmx/locations.css";
@@ -19,7 +20,6 @@
 @import "htmx/map_view.css";
 @import "htmx/setup_form.css";
 @import "htmx/settings_form.css";
-@import "htmx/upload_form.css";
 @import "htmx/trashbin_header.css";
 @import "htmx/trashbin_purged.css";
 @import "htmx/view_settings_dialog.css";

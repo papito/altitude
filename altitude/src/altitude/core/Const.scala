@@ -184,6 +184,19 @@ object Const:
       // A file whose importing account is gone or deactivated when the import inserts it (LibraryService.persistAndIndex)
       val IMPORTER_GONE = "The account that imported this file no longer exists"
       val IMPORTER_DEACTIVATED = "The account that imported this file is deactivated"
+      // An uploaded file's relative path the upload routes refuse (RelPath.segments)
+      val PATH_EMPTY_NAME = "The path has an empty name"
+      val PATH_PARENT = "The path holds \"..\""
+      val PATH_IGNORED = "\"%s\" is a name imports ignore"
+      // An uploaded file with no content, which imports ignore
+      val EMPTY_FILE = "Empty files are not imported"
+      // A file sent to, or a close of, an upload's Import by another account than the one that opened it, or of an Import
+      // that is no upload (ImportService.ownUpload)
+      val FORBIDDEN_UPLOAD = "an upload takes files from the account that opened it"
+      // A destination folder an Import cannot sort its files into (ImportService.open, FolderService.ensurePath)
+      val DESTINATION_IN_TRASH = "The destination folder is in the Trash"
+      // A file of an Import below a folder name the folder rule refuses, with the rule's own words
+      val DESTINATION_FOLDER_NAME = "A folder of the path cannot be created: %s"
       // An Admin's own account, which it cannot deactivate, delete or take the Admin type from
       val OWN_ACCOUNT = "You cannot deactivate, delete or demote your own account"
       val INVALID_CONTENT_TYPE = "Invalid content type"

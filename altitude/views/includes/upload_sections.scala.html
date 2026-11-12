@@ -1,0 +1,93 @@
+@import altitude.core.Api
+@import altitude.core.RequestContext
+@import altitude.core.models.NamedPath
+@import altitude.core.models.Permission
+@import altitude.core.util.IgnoredFiles
+
+@()
+
+@* The Import page's two upload sections (pipeline.scala.html), File upload and Folder upload, the `importUploads` component
+   (js/alpine/components/import-uploads.js). Each is a dashed drop zone with its button inside, which opens the file picker
+   or the folder picker (`webkitdirectory`), and applies its own option to what is dropped on it or chosen in it: File
+   upload sends every file under its bare name, the files of a dropped folder too; Folder upload sends each file under
+   its path in the tree. One upload runs at a time: the section that started it shows its progress (files and bytes) and
+   Cancel, and the other is disabled until it ends. The root carries the route that opens an Import
+   (`data-app-imports-url`, ImportController) and the names imports ignore (`data-app-ignored-files`, IgnoredFiles), which
+   the component leaves out before it sends anything, and takes every `dragover` and `drop` of the window, so a file
+   dropped beside a zone does not open in the tab.
+
+   The option, a two-way `.toggle-group` under the zone, is rendered for a holder of Organize alone (**Controls follow
+   Permissions**): "To Triage", or "Skip Triage" / "Keep folder structure", which shows the destination folder, the
+   advanced search panel's Folder field (includes/filter_combobox, in an element of the panel's class, which its rules
+   are scoped by), and under Folder upload's a line with an example of the mapping, a path of the tree and where it
+   lands under the folder chosen. The option and its field take no change while an upload runs. Without Organize both
+   sections upload to Triage. *@
+
+@repoId = @{ RequestContext.getRepository.persistedId }
+
+@* One section. `kind` is `file` or `folder`, as the component names it; `prompt` what its zone says, `choose` its button's
+   text under `icon`, `picker` its input, `sorted` the option's second choice, and `mapping` what follows the destination
+   field, if anything. *@
+@uploadSection(kind: String, title: String, prompt: String, choose: String, icon: String, sorted: String, mapping: Html = Html(""))(picker: Html) = {
+<section aria-labelledby="@{kind}UploadTitle">
+    <h2 id="@{kind}UploadTitle">@title</h2>
+    <form x-on:submit.prevent :aria-busy="isRunning('@kind')">
+        <div class="drop-zone"
+             :class="zoneClasses('@kind')"
+             x-on:dragover="onDragOver($event, '@kind')"
+             x-on:dragleave="onDragLeave($event, '@kind')"
+             x-on:drop="onDrop($event, '@kind')">
+            <i class="fas fa-upload" aria-hidden="true"></i>
+            <strong>@prompt</strong>
+            <button type="button" class="action-button primary" :disabled="isBusy" x-on:click="choose('@kind')"><i class="fas @icon" aria-hidden="true"></i> @choose</button>
+            @picker
+        </div>
+
+        @if(RequestContext.holds(Permission.Organize)) {
+        <div class="toggle-group" role="group" aria-label="Where a @{kind} upload lands">
+            <button type="button" aria-pressed="true" :aria-pressed="!isSorting('@kind')" :disabled="isBusy" x-on:click="setSorting('@kind', false)">To Triage</button>
+            <button type="button" aria-pressed="false" :aria-pressed="isSorting('@kind')" :disabled="isBusy" x-on:click="setSorting('@kind', true)">@sorted</button>
+        </div>
+        <div class="search-panel destination" x-show="isSorting('@kind')" style="display: none" :inert="isBusy" x-on:change="onDestination($event, '@kind')">
+            @includes.html.filter_combobox(s"${kind}UploadDestination", "into", Api.Field.Import.DEST_FOLDER_ID, s"/htmx/search/r/$repoId/options/folders", "folder", "choose a folder", Nil)(Html(""))
+            <div class="error" role="alert" x-show="lacksDestination('@kind')" style="display: none">Choose the folder to sort into</div>
+            @mapping
+        </div>
+        }
+
+        <div class="progress" x-show="isRunning('@kind')" style="display: none">
+            <progress max="100" :value="percent" aria-label="@title progress"></progress>
+            <div>
+                <span x-text="progressText"></span>
+                <button type="button" class="action-button small error" :disabled="isCancelling" x-on:click="cancel()">Cancel</button>
+            </div>
+            <small>Keep this page open until the upload ends.</small>
+        </div>
+
+        <p class="notice" role="status" :class="noticeClasses('@kind')" x-show="hasNotice('@kind')" x-text="noticeOf('@kind')" style="display: none"></p>
+    </form>
+</section>
+}
+
+@* The example of the mapping, once a destination is chosen: a path of an uploaded tree, whose top folder lands on the
+   destination itself, and the folder of the Library its file lands in *@
+@folderMapping = {
+<p class="mapping" x-show="hasDestination('folder')" style="display: none">
+    Wedding 2026/Ceremony/DSC_0412.jpg <span aria-label="lands in">→</span> <span x-text="destinationLabel('folder')"></span>@{NamedPath.SEPARATOR}Ceremony
+</p>
+}
+
+<div id="importUploads"
+     x-data="importUploads"
+     x-on:dragover.window.prevent
+     x-on:drop.window.prevent
+     data-app-imports-url="/import/r/@repoId/imports"
+     data-app-ignored-files="@{IgnoredFiles.toJson.render()}">
+    @uploadSection("file", "File upload", "Drop files here", "Choose files", "fa-file", "Skip Triage") {
+        <input type="file" multiple hidden aria-label="Files to upload" x-ref="fileInput" x-on:change="onChosen($event, 'file')">
+    }
+
+    @uploadSection("folder", "Folder upload", "Drop a folder here", "Choose folder", "fa-folder", "Keep folder structure", folderMapping) {
+        <input type="file" webkitdirectory hidden aria-label="Folder to upload" x-ref="folderInput" x-on:change="onChosen($event, 'folder')">
+    }
+</div>
