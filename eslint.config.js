@@ -7,8 +7,9 @@ import globals from "globals"
  * ESLint flat config for the front-end modules under altitude/static/js. The vendored libraries
  * in static/js/lib are not linted. Two entries share the settings and the rules and differ in
  * their globals. The page modules see the browser's, plus the libraries loaded as plain scripts:
- * `htmx` and `interact` by the page templates, Leaflet (`L`) and supercluster (`Supercluster`)
- * by js/common/vendor-loader.js; Alpine is imported from its ES module wherever it is used. A
+ * `htmx` and `interact` by the page templates, Leaflet (`L`), supercluster (`Supercluster`) and
+ * Flatpickr (`flatpickr`) by js/common/vendor-loader.js; Alpine is imported from its ES module
+ * wherever it is used. A
  * Worker (`*-worker.js`: the setup background's scene) sees the Worker scope's and no `document`.
  */
 
@@ -53,6 +54,7 @@ export default [
                 interact: "readonly",
                 L: "readonly",
                 Supercluster: "readonly",
+                flatpickr: "readonly",
             },
         },
         settings,

@@ -15,6 +15,7 @@ import { createDetailPanel } from "./search-results/detail-panel.js"
 import { createSearchDetailCoordinator } from "./search-results/detail-navigator.js"
 import { createDetailUrl } from "./search-results/detail-url.js"
 import { bindSearchInput } from "./search-results/search-input.js"
+import { bindSearchPanel } from "./search-results/search-panel.js"
 import { initializeFrontendStores } from "./stores/app-stores.js"
 
 /**
@@ -60,6 +61,7 @@ export class FrontendApp {
         Alpine.start()
         bindAppDragDrop(this)
         bindSearchInput()
+        bindSearchPanel()
 
         /*
          * Hydrate any declarative app fragments already present in the initial page HTML.

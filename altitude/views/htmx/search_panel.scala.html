@@ -4,6 +4,7 @@
 @import altitude.core.models.NamedPath
 @import altitude.core.models.Person
 @import altitude.core.models.SearchFilterNames
+@import altitude.core.routes.SearchRequestParser
 @import altitude.core.util.DateRange
 @import altitude.core.util.PeopleMatch
 @import altitude.core.util.Util
@@ -11,40 +12,44 @@
 @(text: String, names: SearchFilterNames, peopleMatch: PeopleMatch, takenRange: Option[DateRange], importedRange: Option[DateRange])
 
 @* The form of the advanced search panel (GET /htmx/search/r/:repoId/panel), filled in from the parameters of a search:
-   the Search text, one folder, people, Locations, and the Date Taken and Date Imported ranges. Every filter is an input
-   under its search parameter's name (`Api.Field.Search`), holding the value a search takes: `q`, `folderId`, `personId`
-   and `locationId` (IDs separated by commas), `peopleMatch` (`all` or `any`), and `takenFrom`, `takenTo`,
-   `importedFrom` and `importedTo` (ISO dates).
+   the Search text, one folder, people, Locations, and the Date Taken and Date Imported ranges. The nav's panel loads it
+   on opening (includes/nav, js/search-results/search-panel.js). Every filter is an input under its search parameter's
+   name (`Api.Field.Search`), holding the value a search takes: `q`, `folderId`, `personId` and `locationId` (IDs
+   separated by commas), `peopleMatch` (`all` or `any`), and `takenFrom`, `takenTo`, `importedFrom` and `importedTo` (ISO
+   dates). The form is the `searchPanel` component (js/alpine/components/search-panel.js): its submit, Search and Enter
+   in the text field, searches by those entries, and Clear empties every field.
 
-   A combobox field (`data-filter`) is the ARIA combobox pattern: its `.box` holds the hidden input of the IDs, the chips
-   of what is chosen and the input typed into (`role="combobox"`, which has no name, so it is not submitted), and after
-   the box the `role="listbox"` its options are loaded into from `data-options-url` (htmx/search_options_folders,
-   _people, _locations). `data-multiple` marks a field that takes several. A chip carries what an option carries
+   A combobox field is the `filterCombobox` component (js/alpine/components/filter-combobox.js), on the ARIA combobox
+   pattern: its `.box` holds the hidden input of the IDs, the chips of what is chosen and the input typed into
+   (`role="combobox"`, which has no name, so it is not submitted), and after the box the template a new chip is cloned
+   from and the `role="listbox"` its options are loaded into from `data-options-url` (htmx/search_options_folders,
+   _people, _locations). `data-multiple` marks a field that takes several, with the most one search takes
+   (`data-max-chosen`) and the line the listbox shows once it holds them. A chip carries what an option carries
    (`data-option-id`, `data-option-label`, a person's `data-option-cover-url`), shows its label, a person's led by
    their cover Face, and ends with its remove button. The server names the chips: an ID of the search that names
    nothing in the Library has neither a chip nor a place in its input (SearchService.filterNames).
 
    The people match is the switch after the People label, on for `all`, with its value in the hidden input beside it;
-   it is hidden until two people are chosen. A date range field (`data-date-range`) holds its two days in hidden inputs
-   and shows them in its text input, `2024-06-01 to 2024-06-30`. *@
+   it shows once two people are chosen. A date range field is the `dateRange` component
+   (js/alpine/components/date-range.js): it holds its two days in hidden inputs and shows them in its read-only input,
+   `8 Jun – 21 Jun 2024`, which opens the calendar. *@
 
 @repoId = @{ RequestContext.getRepository.persistedId }
 
 @coverUrlOf(person: Person) = @{ person.coverFaceId.map(Util.contentUrl(Const.DataStore.FACE, _)) }
 
-@chip(id: String, label: String, cover: Option[Html] = None, coverUrl: Option[String] = None) = {
-<li class="chip@if(cover.isDefined) { person}"
-    data-option-id="@id"
-    data-option-label="@label"
-    @for(url <- coverUrl) { data-option-cover-url="@url" }>
+@* A chip of `named`, the ID and the label of what is chosen; with none, the chip a field's template holds, which the
+   component fills in for a new choice *@
+@chip(named: Option[(String, String)], person: Boolean = false, cover: Option[Html] = None, coverUrl: Option[String] = None) = {
+<li class="chip@if(person) { person}"@for((id, label) <- named) { data-option-id="@id" data-option-label="@label"}@for(url <- coverUrl) { data-option-cover-url="@url"}>
     @for(image <- cover) {@image}
-    <span class="name">@label</span>
-    <button type="button" class="remove" aria-label="Remove @label"><i class="fas fa-times" aria-hidden="true"></i></button>
+    <span class="name">@for((_, label) <- named) {@label}</span>
+    <button type="button" aria-label="Remove@for((_, label) <- named) { @label}"><i class="fas fa-times" aria-hidden="true"></i></button>
 </li>
 }
 
 @pathChip(named: NamedPath) = {
-@chip(named.id, named.label)
+@chip(Some(named.id -> named.label))
 }
 
 @personCover(person: Person) = {
@@ -55,16 +60,20 @@ case None => {<span class="cover no-cover"><i class="fas fa-user" aria-hidden="t
 }
 
 @personChip(person: Person) = {
-@chip(person.persistedId, person.name.getOrElse(""), cover = Some(personCover(person)), coverUrl = coverUrlOf(person))
+@chip(Some(person.persistedId -> person.name.getOrElse("")), person = true, cover = Some(personCover(person)), coverUrl = coverUrlOf(person))
 }
 
-@* A combobox field: `key` names it in its IDs and in `data-filter`, `param` is the search parameter its hidden input
-   holds, `kind` the options route, and `afterLabel` what shares the label's row (`.label-row`), when anything does *@
-@combobox(key: String, label: String, param: String, kind: String, placeholder: String, ids: List[String], icon: Option[String] = None, multiple: Boolean = false, afterLabel: Option[Html] = None)(chips: Html) = {
+@* A combobox field: `key` names it in its IDs, `param` is the search parameter its hidden input holds, `kind` the
+   options route, `fullMessage` what a field of several says once it holds as many as a search takes (a field of one
+   has none), `person` whether its chips are people's, and `afterLabel` what shares the label's row (`.label-row`), when
+   anything does *@
+@combobox(key: String, label: String, param: String, kind: String, placeholder: String, ids: List[String], icon: Option[String] = None, fullMessage: Option[String] = None, person: Boolean = false, afterLabel: Option[Html] = None)(chips: Html) = {
 <div class="field"
-     data-filter="@{key.toLowerCase}"
+     x-data="filterCombobox"
+     x-on:focusout="onFocusOut($event)"
+     x-on:search-panel-clear="clear()"
      data-options-url="/htmx/search/r/@repoId/options/@kind"
-     @if(multiple) { data-multiple="true" }>
+     @for(message <- fullMessage) { data-multiple data-max-chosen="@{SearchRequestParser.MAX_IDS}" data-max-chosen-message="@message" }>
     @afterLabel match {
     case Some(control) => {
     <div class="label-row">
@@ -74,10 +83,10 @@ case None => {<span class="cover no-cover"><i class="fas fa-user" aria-hidden="t
     }
     case None => {<label for="searchPanel@key">@label</label>}
     }
-    <div class="box">
+    <div class="box" x-on:click="onBoxClick($event)">
         @for(name <- icon) {<i class="fas @name" aria-hidden="true"></i>}
-        <input type="hidden" name="@param" value="@{ids.mkString(",")}">
-        <ul class="chips" aria-label="@label chosen">
+        <input type="hidden" name="@param" value="@{ids.mkString(",")}" x-ref="ids">
+        <ul class="chips" aria-label="@label chosen" x-ref="chips" x-on:click="onChipClick($event)">
             @chips
         </ul>
         <input type="text"
@@ -88,47 +97,73 @@ case None => {<span class="cover no-cover"><i class="fas fa-user" aria-hidden="t
                placeholder="@placeholder"
                aria-autocomplete="list"
                aria-haspopup="listbox"
-               aria-expanded="false"
-               aria-controls="searchPanel@{key}Options">
+               aria-controls="searchPanel@{key}Options"
+               x-ref="input"
+               :placeholder="placeholder"
+               :aria-expanded="expanded"
+               :aria-activedescendant="activeOptionId"
+               x-on:input="onInput()"
+               x-on:keydown="onKeydown($event)">
     </div>
-    <ul id="searchPanel@{key}Options" class="listbox" role="listbox" popover="manual" aria-label="@label"></ul>
+    <template x-ref="chipTemplate">@chip(None, person = person)</template>
+    <ul id="searchPanel@{key}Options"
+        class="listbox"
+        role="listbox"
+        popover="manual"
+        aria-label="@label"
+        x-ref="listbox"
+        x-on:toggle="onToggle($event)"
+        x-on:mousedown.prevent
+        x-on:click="onOptionClick($event)"
+        x-on:mouseover="onOptionHover($event)"></ul>
+    <span class="visually-hidden" role="status" x-text="status"></span>
 </div>
 }
 
-@* The people match: a switch that is on for all of the people and off for any of them *@
+@* The people match: a switch that is on for all of the people and off for any of them, the form's own state
+   (`matchesAll`), shown by the People field once it holds two people (`hasSeveral`) *@
 @peopleMatchSwitch = {
-<span class="match" @if(names.people.size < 2) { hidden }>
+<span class="match" x-show="hasSeveral" @if(names.people.size < 2) { style="display: none" }>
     <input type="hidden" name="@{Api.Field.Search.PEOPLE_MATCH}" value="@{peopleMatch.apiValue}">
     <span aria-hidden="true">Any</span>
     <button type="button"
             role="switch"
             class="switch"
             id="searchPanelPeopleMatch"
-            aria-checked="@{peopleMatch == PeopleMatch.All}"></button>
+            aria-checked="@{peopleMatch == PeopleMatch.All}"
+            :aria-checked="matchesAll"
+            x-on:click="toggleMatch()"></button>
     <label for="searchPanelPeopleMatch"><span class="visually-hidden">Match </span>All</label>
 </span>
 }
 
 @day(range: Option[DateRange], end: DateRange => Option[java.time.LocalDate]) = @{ range.flatMap(end).fold("")(_.toString) }
 
+@* A date range field: `key` names it in its IDs, and the two parameters are the search's for its first and last day.
+   Enter in its input opens the calendar and submits nothing; Escape on its way down closes an open calendar alone *@
 @dateRange(key: String, label: String, fromParam: String, toParam: String, range: Option[DateRange]) = {
-<div class="field" data-date-range="@{key.toLowerCase}">
+<div class="field"
+     x-data="dateRange"
+     x-on:search-panel-clear="clear()"
+     x-on:keydown.escape.capture="onEscape($event)">
     <label for="searchPanel@key">@label</label>
     <div class="box">
         <i class="fas fa-calendar-alt" aria-hidden="true"></i>
         <input type="text"
                id="searchPanel@key"
+               readonly
                autocomplete="off"
                placeholder="any time"
-               value="@{range.toList.flatMap(found => List(found.from, found.to).flatten).mkString(" to ")}">
-        <input type="hidden" name="@fromParam" value="@day(range, _.from)">
-        <input type="hidden" name="@toParam" value="@day(range, _.to)">
-        <button type="button" class="clear" aria-label="Clear @label"><i class="fas fa-times" aria-hidden="true"></i></button>
+               x-ref="input"
+               x-on:keydown.enter.prevent>
+        <input type="hidden" name="@fromParam" value="@day(range, _.from)" x-ref="from">
+        <input type="hidden" name="@toParam" value="@day(range, _.to)" x-ref="to">
+        <button type="button" aria-label="Clear @label" x-show="hasRange" x-on:click="clear()"><i class="fas fa-times" aria-hidden="true"></i></button>
     </div>
 </div>
 }
 
-<form id="searchPanelForm" role="search" aria-label="Advanced search" method="get" action="/r/@repoId">
+<form id="searchPanelForm" role="search" x-data="searchPanel" x-on:submit.prevent="search()">
     <div class="fields">
         <div class="field">
             <label for="searchPanelText">Search text</label>
@@ -147,11 +182,11 @@ case None => {<span class="cover no-cover"><i class="fas fa-user" aria-hidden="t
             @for(folder <- names.folder) {@pathChip(folder)}
         }
 
-        @combobox("People", "People", Api.Field.Search.PERSON_ID, "people", "anyone", names.people.map(_.persistedId), multiple = true, afterLabel = Some(peopleMatchSwitch)) {
+        @combobox("People", "People", Api.Field.Search.PERSON_ID, "people", "anyone", names.people.map(_.persistedId), fullMessage = Some(s"At most ${SearchRequestParser.MAX_IDS} people in one search"), person = true, afterLabel = Some(peopleMatchSwitch)) {
             @for(person <- names.people) {@personChip(person)}
         }
 
-        @combobox("Locations", "Locations", Api.Field.Search.LOCATION_ID, "locations", "anywhere", names.locations.map(_.id), icon = Some("fa-map-marker-alt"), multiple = true) {
+        @combobox("Locations", "Locations", Api.Field.Search.LOCATION_ID, "locations", "anywhere", names.locations.map(_.id), icon = Some("fa-map-marker-alt"), fullMessage = Some(s"At most ${SearchRequestParser.MAX_IDS} Locations in one search")) {
             @for(location <- names.locations) {@pathChip(location)}
         }
 
@@ -162,7 +197,7 @@ case None => {<span class="cover no-cover"><i class="fas fa-user" aria-hidden="t
     </div>
 
     <div class="actions">
-        <button type="button" class="action-button" data-app-search-panel-clear>Clear</button>
-        <button type="submit" class="action-button accent">Search</button>
+        <button type="button" class="action-button" x-on:click="clear()">Clear</button>
+        <button type="submit" class="action-button primary">Search</button>
     </div>
 </form>

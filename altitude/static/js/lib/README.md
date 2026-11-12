@@ -18,6 +18,7 @@ this table whenever a file is replaced. `.prettierignore` excludes this director
 | `supercluster.min.js` | supercluster                      | 9.1.0                  | `dist/supercluster.min.js` in https://registry.npmjs.org/supercluster/-/supercluster-9.1.0.tgz, byte-identical (kdbush is bundled); its ISC license is `supercluster.LICENSE` |
 | `viselect.esm.js`     | Viselect (`@viselect/vanilla`)    | 3.9.0                  | `dist/viselect.mjs` in https://registry.npmjs.org/@viselect/vanilla/-/vanilla-3.9.0.tgz, byte-identical; renamed to `.js` so it is served as JavaScript. Its MIT license is `viselect.LICENSE` |
 | `media-chrome.js`     | media-chrome                      | 4.19.2                 | `dist/iife/index.js` in https://registry.npmjs.org/media-chrome/-/media-chrome-4.19.2.tgz, byte-identical, renamed; its MIT license is `media-chrome.LICENSE` |
+| `flatpickr.min.js`    | Flatpickr                         | 4.6.13                 | `dist/flatpickr.min.js` in https://registry.npmjs.org/flatpickr/-/flatpickr-4.6.13.tgz, byte-identical; its MIT license (`LICENSE.md` of the tarball) is `flatpickr.LICENSE`. `dist/flatpickr.css` of the same tarball is `static/css/flatpickr.css`, byte-identical |
 | `tokentweak.js`       | tokentweak                        | 0.3.0                  | `dist/tokentweak.js` in `tokentweak-0.3.0.tgz` (`npm pack` of the author's own package, built from `~/projects/tokentweak`; not on the registry yet), byte-identical; its MIT license is `tokentweak.LICENSE`. Refreshed by `make vendor-tokentweak`, below |
 | `tokentweak-boot.js`  | tokentweak boot script            | 0.3.0                  | `dist/boot.js` in the same tarball, byte-identical, renamed                                                      |
 
@@ -49,8 +50,15 @@ before them. Leaflet is a plain script (`window.L`, like interact.js) for the Lo
 view's on-screen clustering (`js/map/map-view.js`); `js/common/vendor-loader.js` loads them, with
 `static/css/leaflet.css`, when the first editor or map asks. media-chrome, a plain script defining the
 `<media-*>` custom elements of asset detail's video player, is loaded the same way by the first Video shown
-(`js/search-results/detail-navigator.js`); the player's markup is on the page before and upgrades then. No module
-imports these three.
+(`js/search-results/detail-navigator.js`); the player's markup is on the page before and upgrades then. Flatpickr, a
+plain script (`window.flatpickr`), is loaded the same way with `static/css/flatpickr.css` by the first date range field
+of the advanced search panel (`js/alpine/components/date-range.js`), in range mode. No module imports these four.
+
+Flatpickr's stylesheet is the one loaded in a cascade layer: `loadFlatpickr()` adds a `<style>` element holding
+`@import url("/static/css/flatpickr.css") layer(flatpickr);`, so every rule of the application's bundle, which is in
+no layer, outranks every rule of the library's, whatever their selectors and whichever loads last. The file itself is
+the release's; `static/css/htmx/search_panel.css` restates its colors, radii and spacing in the theme's tokens (see
+**Advanced search panel** in `views/AGENTS.md`).
 
 The focus plugin is registered with `Alpine.plugin(focus)` by `registerHtmlCommonBindings()` in
 `static/js/stores/html-common.js`, which every page including `views/includes/html_common.scala.html` calls once
@@ -74,12 +82,13 @@ whose inputs are in shadow DOM, and focus is pulled back to the control before t
    - at startup: a `defer` `<script>` in the templates of the pages that use it, or in
      `views/includes/header_common.scala.html` for every page (axios, interact.js);
    - by some views only: a `load…()` export in `js/common/vendor-loader.js` (Leaflet, supercluster,
-     media-chrome), awaited by the view.
+     media-chrome, Flatpickr), awaited by the view.
 
    Either way, its global goes in `eslint.config.js`. An htmx extension is a `defer` script on the pages that
    use it, which runs before htmx starts.
 4. A library's stylesheet is copied unchanged to `static/css/<name>.css` and linked on its own, or loaded with
-   the script through `vendor-loader.js` (`leaflet.css`). It is never `@import`ed into `static/css/app.css`: the
+   the script through `vendor-loader.js` (`leaflet.css`; `flatpickr.css`, in a cascade layer of its own, for a library
+   whose look the application restates in its tokens). It is never `@import`ed into `static/css/app.css`: the
    bundle is served from `/assets/`, where the stylesheet's relative URLs (fonts, images under `static/`) would
    not resolve, and it would no longer match its source. Its file name goes in `StyleGuideController.excludedFiles`,
    so the style guide's token audit does not list its color literals as the app's.

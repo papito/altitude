@@ -55,7 +55,12 @@ A text input that filters a list of options as you type, with single or multiple
 
 ## Notes for Altitude
 
-The nav search box posts to HTMX. The one combobox is the Change combobox of Asset detail's People rows
+The nav search box posts to HTMX. There are two comboboxes. The advanced search panel's `filterCombobox`
+(`static/js/alpine/components/filter-combobox.js`, views/AGENTS.md **Advanced search panel**) is the multiple (tags)
+variant, and the single one for its folder: the chosen options are removable chips inside the field, the options are
+matched and rendered by the server for the text typed (debounced, the latest answer alone shown) and put in the listbox
+as they come, with the matched starts of words marked on the client, and Backspace in an empty input removes the last
+chip. The other is the Change combobox of Asset detail's People rows
 (`static/js/alpine/components/face-combobox.js`, views/AGENTS.md **Detail panel**), hand-built with core Alpine since
 `@alpinejs/ui` is not vendored: the input carries `role="combobox"`, `aria-autocomplete="list"`, `aria-expanded`,
 `aria-controls` and `aria-activedescendant`; the options (`role="option"`, the active one `aria-selected`) live in a

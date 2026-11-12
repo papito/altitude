@@ -10,10 +10,10 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Always prefer CSS Grid and Flexbox.
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`. A nested rule extends its parent by a pseudo-class or a pseudo-element only (`&:focus-visible`, `&::picker(select)`), and a descendant takes a rule of its own: the design tweaks panel's element picker matches a nested selector with `closest()`, which cannot match a descendant one (`& option`).
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
-* Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A color scoped to the elements it marks, rather than a token of `:root`, is declared by their rule from a theme or semantic color: a view's `--view-tint` and `--view-stripe` on its panes, and an account type's `--account-type-color` on `[data-account-type]` (an Admin's `--error-color`, a User's `--success-color`, a Guest's `--info-color`). A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the two fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, and the nav's quick search field's glow. The detail is under **Themes** below.
-* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), the 1 px width and height of `.visually-hidden`, and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
-* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide`, the brand's `--letter-spacing-medium` or the view band's `--letter-spacing-band`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the brand (the nav's and the login page's), the nav's entries and its quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the account info dialog's avatar's 2.5em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin, the close button and the snackbar's dismiss button; the Font Awesome solid weight 900 selects the icon face.
-* Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; only View settings holds an inline dialog, in its menu's popover panel. A control that picks one of several values (the grid toolbar's Group and Sort, and any dropdown added later) is a **choice menu**: the same native popover panel, built by `buildChoiceMenuCtrl` from a server-rendered host of option buttons, never a `<select>`, which stays a form's field. Every menu panel wears the popover dialog's frosted surface. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
+* Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--search-panel-background-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A color scoped to the elements it marks, rather than a token of `:root`, is declared by their rule from a theme or semantic color: a view's `--view-tint` and `--view-stripe` on its panes, and an account type's `--account-type-color` on `[data-account-type]` (an Admin's `--error-color`, a User's `--success-color`, a Guest's `--info-color`). A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, the nav's quick search field's glow, and a field of the advanced search panel, whose box draws the field's edge and ring around its chips and its input. The detail is under **Themes** below.
+* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius` (a chosen name's chip in the advanced search panel is a rectangular box, `--radius`), the advanced search panel with `--radius-xl`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), the 1 px width and height of `.visually-hidden`, and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
+* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide`, the brand's `--letter-spacing-medium` or the view band's `--letter-spacing-band`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the brand (the nav's and the login page's), the nav's entries and its quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the account info dialog's avatar's 2.5em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin, the close button, the snackbar's dismiss button, the nav's filter button and the remove and clear controls of the advanced search panel; the Font Awesome solid weight 900 selects the icon face.
+* Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; two popover panels hold an inline dialog: View settings, in its menu's panel, and, the second, the advanced search panel under the nav's quick search (**Advanced search panel**). A control that picks one of several values (the grid toolbar's Group and Sort, and any dropdown added later) is a **choice menu**: the same native popover panel, built by `buildChoiceMenuCtrl` from a server-rendered host of option buttons, never a `<select>`, which stays a form's field. Every menu panel wears the popover dialog's frosted surface. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
 
 ## Stack
 
@@ -22,12 +22,13 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 - **No bundler** — all JS uses native ES modules (`<script type="module">`, `import`/`export`)
 - Libraries are checked into `static/js/lib/` (htmx, Alpine and its focus plugin, Split.js, interact.js, axios,
   Viselect for box selection, Leaflet for the Location pin editor and the map, supercluster for the map's on-screen
-  clustering, media-chrome for the asset detail's video player, tokentweak for the dev-only design tweaks panel); versions
+  clustering, media-chrome for the asset detail's video player, Flatpickr for the advanced search panel's date
+  ranges, tokentweak for the dev-only design tweaks panel); versions
   and sources are listed in `static/js/lib/README.md`,
   whose **Adding a library** says how a new one is vendored, loaded and linted
 - No library blocks the first render except htmx: the pages' plain library scripts are `defer` (htmx is not, so it still
   starts on DOMContentLoaded, after its extensions and the modules), and the libraries only some views need (Leaflet
-  and its stylesheet, supercluster, media-chrome) are loaded by the first view that asks, through
+  and its stylesheet, supercluster, media-chrome, Flatpickr and its stylesheet) are loaded by the first view that asks, through
   `js/common/vendor-loader.js`
 
 ## Template Layout
@@ -86,32 +87,35 @@ explorer tab that issued a load is marked selected from `htmx:after:request`
 `.asset-count`) live in `core.css`.
 
 **Advanced search panel fragments** — `SearchPanelController` renders the panel's form and the options of its
-comboboxes (`../AGENTS.md`, **Advanced search panel**). No template includes the form and no script requests it or
-its options: they are reached by their routes alone, and have no stylesheet.
+comboboxes (`../AGENTS.md`, **Advanced search panel**). The nav's panel loads the form on opening, and the form's
+comboboxes ask for their options as the user types; how the panel behaves is under **Advanced search panel** below, and
+its styles are `static/css/htmx/search_panel.css`.
 
 - `htmx/search_panel.scala.html` (`GET /htmx/search/r/:repoId/panel`) is `form#searchPanelForm` (`role="search"`,
-  a `get` to the Library's main page), filled in from a search's parameters. Every filter is an input under its
-  search parameter's name, holding the value a search takes: the text field `q` (`#searchPanelText`), and hidden
+  `x-data="searchPanel"`, its submit `search()`), filled in from a search's parameters. Every filter is an input under
+  its search parameter's name, holding the value a search takes: the text field `q` (`#searchPanelText`), and hidden
   inputs for `folderId`, `personId` and `locationId` (IDs separated by commas), `peopleMatch` (`all` or `any`) and
-  `takenFrom`, `takenTo`, `importedFrom` and `importedTo` (ISO dates). `.fields` holds one `.field` per filter, the
-  two date ranges side by side in `.dates`, and `.actions` holds Clear (`data-app-search-panel-clear`, a button
-  that submits nothing) and Search, the form's submit.
-- A combobox field (`.field[data-filter]`, `folder`, `people` or `locations`) follows the ARIA combobox pattern of
-  the Change combobox: a label, then `.box` with the field's icon, the hidden input of its IDs, the chips of what
-  is chosen (`ul.chips`) and the input typed into (`role="combobox"`, `aria-autocomplete="list"`, `aria-expanded`,
-  `aria-controls`; it has no `name`, so it is never submitted), and after the box the empty `role="listbox"`
-  (`popover="manual"`) its options go into. `data-options-url` is the field's options route, and `data-multiple`
-  marks the two fields that take several. A chip (`li.chip`, `.person` for a Person) carries `data-option-id`,
-  `data-option-label` and, for a Person with a cover, `data-option-cover-url`, shows its label (a folder's path,
-  a Location with its Category, a Person's name led by their cover Face, `.cover`, or the `.no-cover` placeholder)
-  and ends with its remove button (`.remove`, named "Remove <label>"). The server names the chips: an ID that names
-  nothing in the Library has no chip and no place in its input.
+  `takenFrom`, `takenTo`, `importedFrom` and `importedTo` (ISO dates). `.fields` holds one `.field` per filter, each
+  label above its `.box`, the two date ranges side by side in `.dates`, and `.actions` holds Clear and Search, the
+  form's submit (`.action-button.primary`).
+- A combobox field (`.field` with `x-data="filterCombobox"`) follows the ARIA combobox pattern of the Change
+  combobox: a label, then `.box` with the field's icon, the hidden input of its IDs, the chips of what is chosen
+  (`ul.chips`) and the input typed into (`role="combobox"`, `aria-autocomplete="list"`, `aria-expanded`,
+  `aria-controls`, `aria-activedescendant`; it has no `name`, so it is never submitted), and after the box the
+  `<template>` a new chip is cloned from, the empty `role="listbox"` (`popover="manual"`) its options go into and a
+  visually hidden `role="status"`. `data-options-url` is the field's options route; `data-multiple` marks the two
+  fields that take several, with `data-max-chosen`, the most one search takes (`SearchRequestParser.MAX_IDS`), and
+  `data-max-chosen-message`, the line the listbox shows once the field holds them. A chip (`li.chip`, `.person` for a
+  Person) carries `data-option-id`, `data-option-label` and, for a Person with a cover, `data-option-cover-url`, shows
+  its label in `.name` (a folder's path, a Location with its Category, a Person's name led by their cover Face,
+  `.cover`, or the `.no-cover` placeholder) and ends with its remove button, named "Remove <label>". The server names
+  the chips: an ID that names nothing in the Library has no chip and no place in its input.
 - The people match is the `.switch` beside the People label, the two in `.label-row` (`#searchPanelPeopleMatch`,
   in `.match` between the words Any and All, on for `all`), its value in the hidden `peopleMatch` input beside it;
-  `.match` is `hidden` with fewer than two people chosen.
-- A date range field (`.field[data-date-range]`, `taken` or `imported`) is a label and a `.box` with a calendar
-  icon, a text input showing the range (`2024-06-01 to 2024-06-30`, no `name`), the two hidden inputs of its days
-  and a clear button (`.clear`).
+  `.match` is shown once two people are chosen (`x-show="hasSeveral"`, the server rendering it hidden with fewer).
+- A date range field (`.field` with `x-data="dateRange"`) is a label and a `.box` with a calendar icon, a read-only
+  text input showing the range (no `name`), the two hidden inputs of its days and a clear button, shown while it
+  holds a range.
 - `htmx/search_options_folders.scala.html`, `search_options_people.scala.html` and
   `search_options_locations.scala.html` (`GET /htmx/search/r/:repoId/options/folders`, `/people`, `/locations`,
   each with the text typed so far as `q`) are the options of the three comboboxes: `li[role="option"]` elements
@@ -121,7 +125,7 @@ its options: they are reached by their routes alone, and have no stylesheet.
   holding the names above its own in `.ancestors` (`Trips › 2024 › `, a Location's Category) and then its own. A
   Person's is their cover (`img.cover`, or `.cover.no-cover`), `.name` and `.count`, their number of assets, which
   a `.visually-hidden` "assets" follows. The server matches the text and orders the options, so the fragment is
-  rendered as it comes.
+  rendered as it comes; the combobox marks the matched starts of words in `.name` and copies `.cover` onto the chip.
 
 The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">` in a
 `role="tablist"`, styled by `tabs.css` on `aria-selected="true"`); the initial tab is loaded through
@@ -186,12 +190,12 @@ in either theme:
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), Curation's shell opening its host (`curation.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
 | `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), the Triage summary's reload (`triage.js`), the Settings form's save (`settings.js`, the success snackbar), and the account's (`account.js`: a changed own password, on every page with the nav, and the Users page's changes, which reload its cards); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring, a 204 to an open handed back to its search trigger, and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
-| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), a Person's results title read again after a rename or a correction (`person-title.js`), Asset detail's URL (`detail-url.js`: the address bar names the asset and the Detail panel's state, and Back closes it), Asset detail's fullscreen (`detail-fullscreen.js`: `f`, the toolbar's toggle and the player's button on the whole of Asset detail), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
+| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`) and the advanced search panel beside it (`search-panel.js`: the load on opening, the filter button's count, the search its form asks for); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), a Person's results title read again after a rename or a correction (`person-title.js`), Asset detail's URL (`detail-url.js`: the address bar names the asset and the Detail panel's state, and Back closes it), Asset detail's fullscreen (`detail-fullscreen.js`: `f`, the toolbar's toggle and the player's button on the whole of Asset detail), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
 | `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
-| `js/upload-form-page.js`, `js/settings-page.js`, `js/users-page.js`, `js/nav-page.js` | the page modules of `pipeline.scala.html`, `settings.scala.html` and `users.scala.html`, and what they share. Each starts with `startNavPage()` (`nav-page.js`): Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store) and the `contextMenu` component, the htmx request rule and the dialog wiring (`listeners/dialogs.js`) with a minimal app, whose hydration is the `modal` fragments and the choice menus, and the nav's Library menu built; that is the nav's menus and the dialogs they open (New library, Change password, whose outcome `listeners/account.js` confirms, connecting the page's WebSocket feeds again). Then the import page's hydrates its upload form and registers the status feed's end (`js/import-status.js`), Settings' registers its own listeners, and Users' registers its components first (`usersPage`, `accountForm`, `passwordField`) and its listener after; see **Settings screen** and **Users page** |
+| `js/upload-form-page.js`, `js/settings-page.js`, `js/users-page.js`, `js/nav-page.js` | the page modules of `pipeline.scala.html`, `settings.scala.html` and `users.scala.html`, and what they share. Each starts with `startNavPage()` (`nav-page.js`): Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store), the `contextMenu` component and the advanced search panel's components and host (`bindSearchPanel`), the htmx request rule and the dialog wiring (`listeners/dialogs.js`) with a minimal app, whose hydration is the `modal` fragments and the choice menus, and the nav's Library menu built; that is the nav's menus and the dialogs they open (New library, Change password, whose outcome `listeners/account.js` confirms, connecting the page's WebSocket feeds again). Then the import page's hydrates its upload form and registers the status feed's end (`js/import-status.js`), Settings' registers its own listeners, and Users' registers its components first (`usersPage`, `accountForm`, `passwordField`) and its listener after; see **Settings screen** and **Users page** |
 | `js/theme-boot.js` | a plain blocking script of `includes/header_common`'s head, on every page with a nav: declares the remembered theme on `<html>` before the first paint, from the key in its `data-key`; see **Themes** |
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
@@ -199,7 +203,7 @@ in either theme:
 | `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's and the Detail panel's docks are made from), stored-state (a remembered object under one localStorage key that modules share: `readStoredObject` and `writeStoredFields`, which sets some fields and keeps the rest; the Detail panel's view is read and written through it by `detail-panel.js` and `dock.js`), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font), name-key (the server's name fold, `nameKey` and `partialMatchKey`: the Change combobox's and the Users page filter's), request-failure (a failed htmx request in the snackbar: a 403 or 409 refusal in plain text as its text, a 401 nowhere, anything else by its path and status), session (a 401 sends the window to the login, back to the page: `goToLogin`) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell) and `face-combobox.js` (the Change combobox of a People row in the Detail panel); `index.js` registers them. The Users page's own, `users-page.js` (the tab and the filter), `account-form.js` (the account form's type and Permission matrix) and `password-field.js` (Generate and Show), are registered by its page module |
+| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell), `face-combobox.js` (the Change combobox of a People row in the Detail panel), and the advanced search panel's `search-panel.js` (its form: Search, Clear, the people match), `filter-combobox.js` (a combobox of names chosen as chips) and `date-range.js` (a date range picked on a Flatpickr calendar); `index.js` registers them, and `nav-page.js` the panel's three as well. The Users page's own, `users-page.js` (the tab and the filter), `account-form.js` (the account form's type and Permission matrix) and `password-field.js` (Generate and Show), are registered by its page module |
 
 ## Alpine.js Stores (initialized in `js/stores/app-stores.js` and `js/stores/html-common.js`)
 
@@ -287,6 +291,13 @@ Const.attributes.frameTimeMs       // "data-frame-time-ms"  (a People row of a F
 Const.attributes.detailDimensions  // "data-app-detail-dimensions"  (the Detail panel's dimensions row, which reads the shown element's size)
 Const.attributes.detailPanelOpen   // "data-app-detail-panel-open"  (the Asset detail fragment while the Detail panel is open; the stylesheet lays the grid out from it)
 Const.attributes.appAssetId        // "data-app-asset-id"  (the asset of the Detail panel's fragment and of its People section; not `data-asset-id`, which finds the grid's cells)
+Const.attributes.panelUrl          // "data-panel-url"  (the advanced search panel's host in the nav: the route of its form)
+Const.attributes.optionsUrl        // "data-options-url"  (a combobox field of the panel: the route of its options)
+Const.attributes.multiple          // "data-multiple"  (a combobox field that takes several names)
+Const.attributes.maxChosen         // "data-max-chosen"  (the most such a field takes, with the line that says so in `data-max-chosen-message`)
+Const.attributes.optionId          // "data-option-id"  (an option of a combobox field and the chip of a chosen one: the ID a search takes)
+Const.attributes.optionLabel       // "data-option-label"  (the label its chip shows)
+Const.attributes.optionCoverUrl    // "data-option-cover-url"  (a Person's cover Face)
 ```
 
 A Curation set's root carries `data-opening-pinned-id` and `data-opening-focused-id`, and the
@@ -380,7 +391,7 @@ Two-layer event bus, both on `document.body`:
   compatibility shim is loaded: Alpine's mutation observer initializes swapped-in markup, and
   nothing calls `Alpine.initTree` on it.
 - Polling is declarative: the import page refreshes the nav with
-  `hx-trigger="every[document.visibilityState === 'visible' && !document.querySelector('nav .context-menu:popover-open, #popoverDialog:popover-open')] 5s"`
+  `hx-trigger="every[document.visibilityState === 'visible' && !document.querySelector('nav .context-menu:popover-open, #searchPanel:popover-open, #popoverDialog:popover-open')] 5s"`
   (its `hx-get` carries `current=import`, so the swap marks the page's entry again; see **Nav refresh**). htmx 4 reads a
   trigger's filter only right after the event's name, with no space (`every[…] 5s`, `click[!event.shiftKey]`): the
   htmx 2 spelling `every 5s […]` parses, and its filter is silently dropped.
@@ -408,6 +419,10 @@ Two-layer event bus, both on `document.body`:
   axios client and puts it in `#curationSet` itself, since it has to see the answer before anything is swapped (a 204 passes
   over a Sequence or leaves the too-few state, and a preload keeps only the opening frames) and reports a failure itself, in the
   unread state (see **Curation**). The queue's rows, the Sequence rail's fragment, are read the same way, into the rail's host.
+- The advanced search panel's form and its comboboxes' options are **not** HTMX requests either: `search-panel.js` and the
+  `filterCombobox` component read them through the axios client and put them in place themselves, since only the answer
+  of the latest opening, or of the latest text typed, may be shown, and report a failure themselves (**Advanced search
+  panel**). Alpine's mutation observer initializes the form's components.
 
 Batch ops escalate a single-asset drag to a batch when the asset is among the selected ones: the
 `assetMoved`/`assetTrashed` handlers in `js/listeners/assets.js` re-dispatch
@@ -558,7 +573,9 @@ a background inline edit survives: in fullscreen it is the browser's, which leav
 open (see **Detail navigation**); else the open listbox of a People row's Change combobox in the Detail panel closes
 alone (see **Detail panel**); else an open context menu closes alone, with focus back on its trigger, so the Detail
 panel's Dock side menu leaves Asset detail open (no other menu is open together with a dialog: opening a dialog closes
-the menus, and a menu's opening light-dismisses the popover dialog); else, in Asset detail, the selected Face clears (see **Detail panel**); else the active dialog; else the map view's
+the menus, and a menu's opening light-dismisses the popover dialog); else the advanced search panel closes, with focus
+back on its filter button (an open listbox or calendar inside it closes alone first, consuming the key itself:
+**Advanced search panel**); else, in Asset detail, the selected Face clears (see **Detail panel**); else the active dialog; else the map view's
 crowded-pin panel; and with none of those it is broadcast for such an edit to cancel. An open select picker's Escape
 is left to the picker, which closes itself and not the dialog holding it. General dialogs and Curation ignore backdrop clicks, asset detail closes on them. The general
 modal is centered, 100px from the top, `--modal-content-width` wide (the Location map editor's dialog and Quick view
@@ -638,8 +655,9 @@ membership change applied) arrives as JSON in the `App-Success-Detail` response 
 controls, are **popover dialogs**, and so are the Triage explorer's scope dialog, the Users page's Set password and
 Delete dialogs, the account info dialog and its Change password; Add location, Add to location, the people dialogs, the purge
 confirmation, Quick view and the Users page's Add User and edit form are **modal dialogs**. Only View settings is an
-**inline dialog** (`data-app-fragment="inline-dialog"`, see **Context menus**); its switches apply
-immediately without submitting an operation.
+**inline dialog** fragment (`data-app-fragment="inline-dialog"`, see **Context menus**); its switches apply
+immediately without submitting an operation. The advanced search panel, the second inline dialog in a popover panel, is
+no fragment kind: its host loads its form and gives it focus (**Advanced search panel**).
 
 A dialog the page already holds needs no request: a button with `data-app-open-dialog="#id"`
 names a `<template>` whose content is a `modal` fragment; `js/fragments/dialog-openers.js` copies
@@ -912,10 +930,10 @@ add buttons, the menus and the drops work as in Browse: **The explorer in Triage
 drop adds memberships (`PUT /api/location/r/:repoId/assets`, `assetActions.addAssetsToLocation`;
 assets already in the Location are skipped and reported), the grid does not change, and the counts
 are patched in place (`refreshLocationCounts`, also called by `refreshCounts` after every asset
-mutation, because recycling drops an asset from its Locations). While a Location's results are
-displayed (`searchParams.locationId`, mirrored by `data-results-location-id`, which marks the row
+mutation, because recycling drops an asset from its Locations). While one Location's results are
+displayed (`searchParams.viewedLocationId()`, the store's `locationId` when it holds one ID, mirrored by `data-results-location-id`, which marks the row
 `data-viewed-scope` and colors its own icon green, top-level or inside a category, whose icon stays
-plain; inside a collapsed category the viewed Location stays hidden until it is expanded) the batch ops offer "Remove from location", which
+plain; inside a collapsed category the viewed Location stays hidden until it is expanded; an advanced search of several Locations marks no row and has no viewed Location) the batch ops offer "Remove from location", which
 deletes the memberships of the selected assets and removes their cells. They always offer "Add
 to location" outside the trash: it dispatches `batchAddToLocationRequested`, the listener requests
 `add_to_location_dialog` into the modal host, and `js/fragments/add-to-location.js` fills its hidden
@@ -1199,7 +1217,7 @@ without a panel; "Show only these in the grid" runs `runSearch({ params: { layou
 keeps the area, so the grid opens scoped to it with the chip to clear it.
 
 `js/map/map-state.js` keeps the center and zoom per scope fingerprint (the repository and the
-store's `view`, `folderId`, `personId`, `albumId`, `locationId`, `subset` and `q`; not the sort, layout,
+store's `view`, `folderId`, `personId`, `albumId`, `locationId`, `peopleMatch`, `takenFrom`, `takenTo`, `importedFrom`, `importedTo`, `subset` and `q`; not the sort, layout,
 grouping, paging or `bbox`) in `sessionStorage` (`Const.sessionStore.mapViews`, the 50 scopes looked
 at last), so a re-render for a sort change, a panel, a trip to the grid and back, or a reload of the
 tab keeps the view, while a new scope, or a new tab or window, fits the server's bounds. A move is
@@ -1257,10 +1275,10 @@ of `core.css`: text, search, email, password and file inputs, textareas and sele
 accent edge and ring in place of the focus ring (see **Themes**). Its selector sits inside `:where()`, so any page's
 own rule outranks it, and is written once: the focus rule is nested in the field rule (`&:focus-visible`), as the
 picker's rules are in the select's, while the options take a rule of their own. Checkboxes, radios, ranges, hidden and submit inputs take none of it, nor does the
-nav's quick search field, which keeps its own look. A setting that applies as it is flipped, with nothing to submit, is a `.switch` of the SWITCH
+nav's quick search field, which keeps its own look, nor any field of the nav (`:not(nav *)`): a field of the advanced search panel is a `.box` that wears the field style around its icon, its chips and its bare input (**Advanced search panel**). A setting that applies as it is flipped, with nothing to submit, is a `.switch` of the SWITCH
 section: a `button[role="switch"]` before its `<label for>` (a button is labelable, so the label's click flips it with no script), whose `aria-checked` an
 Alpine binding keeps in step with the setting; the track, `--switch-width` by `--switch-height`, takes `--theme-primary` when on, and the knob, a
-pseudo-element, slides across it. The View settings dialog's switches, the People tab's bucket switches and the Change combobox's "This face only"
+pseudo-element, slides across it. The View settings dialog's switches, the People tab's bucket switches, the advanced search panel's people match and the Change combobox's "This face only"
 switch use it. The last is the one whose label does not flip it natively: focus has to stay in the combobox's input, so the switch's and the
 label's `mousedown` is prevented, and the label's click, prevented too, calls the component's `toggleFaceOnly` (see **Detail panel**). Every rule of the section starts at `body:not(.setup)`, so the setup form's fields and error box are
 `htmx/setup_form.css`'s alone; the login page's take the field style like any page's (**Login page**). The upload form's file input takes the field's
@@ -1460,8 +1478,8 @@ do not count it. The row, line included, is hidden until the count arrives and w
 it with the toolbar.
 
 **Batch ops** — What the selection can do (`includes/batch_ops`): Move (a drag handle, see **Tooltip**), Recycle, Add to
-album, Remove from album while an album's results are displayed, Add to location, Remove from location while a Location's
-are, Curate Selected while two images or more are selected, and Deselect all (×, an icon button with an accessible name); in the trash
+album, Remove from album while an album's results are displayed, Add to location, Remove from location while one Location's
+are (`searchParams.viewedLocationId()`, none for an advanced search of several), Curate Selected while two images or more are selected, and Deselect all (×, an icon button with an accessible name); in the trash
 view Purge, Restore and Deselect all. The
 count shows once ("3 selected"), after the actions and directly before Deselect all, which the views share; the buttons carry no count of their own, and they are the small action
 button (`--space-4` × `--space-5` padding, `--font-size-small`, as the trash view's Purge button) and sit `--space-6`
@@ -1786,7 +1804,7 @@ A 400 (a reserved name, a name another Person took meanwhile) is the server's me
 changes; a 404 or 409 (the Face gone or moved meanwhile, a merge's destination no longer live, the asset recycled, the
 Person named meanwhile) means the section is stale: the message is shown and the panel loads the asset's details again
 (`reloadSection`), so a row whose Person was named elsewhere comes back as a named Person's, with no switch. One
-correction at a time per Face. While viewing a Person (`searchParams.personId`), an asset they have no Face left on after
+correction at a time per Face. While viewing a Person (the one Person the search names, `searchParams.viewedPersonId()`; a search of several people has none, and its grid waits for the next search), an asset they have no Face left on after
 a correction stays in Asset detail and is noted as leaving (`noteViewedPerson`; a later correction that gives them a Face
 back keeps it, unless they were deleted): on stepping away, once the step has picked its target (`showAsset` for another
 asset), or on closing (an `Alpine.effect` over the `modal` store), its cells leave the grid through
@@ -2428,6 +2446,104 @@ the divider as it did to Split.js: the context menus close through their `Resize
 resizes through its own, the sticky offsets through theirs. The style guide's Panels & layout section shows the
 divider in both orientations.
 
+**Advanced search panel** — The panel that combines the filters of one search: the Search text, one folder, people,
+Locations, and the Date Taken and Date Imported ranges (`../AGENTS.md`, **Advanced search panel**, for the routes and
+what a search takes). It is the second inline dialog in a popover panel after View settings: a form that stays in its
+panel until Search or a dismissal.
+
+- **Host.** `includes/nav` renders it on every page, in the `.search` cell beside the quick search form: `#searchPanel`,
+  a native `<dialog popover="auto">` (`.search-panel`), empty until it opens, and the filter button inside the form
+  (`.filters`, `popovertarget="searchPanel"`, the sliders icon), which opens it. The browser owns its visibility; CSS
+  anchor positioning places it under the form (`anchor-name: --search-form`, scoped to the cell by `anchor-scope`,
+  since the style guide holds a second nav), centered on it (`position-area: bottom`, `justify-self: anchor-center`),
+  `--space-3` below it and `--search-panel-width` (26rem) wide. Both are `hx-preserve`, so a nav reload keeps the
+  open panel and its listeners (**Nav refresh**). `bindSearchPanel()` (`js/search-results/search-panel.js`) binds the
+  host once, from `FrontendApp.start()` and from `startNavPage()`, so the panel works on every page with the nav.
+- **Load on open.** Each opening (`beforetoggle`, which fires for every one) empties the panel and reads its form from
+  the host's `data-panel-url` (`GET /htmx/search/r/:repoId/panel`) with the filters of the search in force
+  (`searchParams.filters()`; none on a page with no search of its own), so the server names the chips. The read goes
+  through the axios client and only the latest opening's answer is put in the panel; a failure is an error snackbar and
+  the panel closes. The panel is invisible while empty (`.search-panel:empty`), takes focus in its text field once the
+  form is in, and is emptied again as it closes (`toggle`), which removes its components with their listeners and
+  calendars. `openSearchPanel(filters)` opens it from a script with `filters`, each under its search parameter's name,
+  laid over the ones in force (`{ folderId }`), and loads an already open panel again.
+- **Text.** The panel's text field and the nav's quick search input hold one value: the input's text, searched or only
+  typed, is the `q` the form is asked for as the panel opens, and a search from the panel writes its text into the
+  input.
+- **Search and Clear** are the form's (`x-data="searchPanel"`, `js/alpine/components/search-panel.js`). Search, the
+  submit, so Enter in the text field too, reads the form's entries (`FormData`: every filter is an input under its
+  parameter's name) and hands them to `searchByFilters`: the text trimmed, and `peopleMatch` only as `any` with two
+  people or more. In Browse the store takes them (`searchParams.replaceFilters`, see **Search parameters**), the panel
+  closes and `runSearch()` reads the results again; on any other page, and in Triage and the Trash, whose pages are
+  laid out for their view, the window goes to Browse, the quick search form's `action`, with the search as its query
+  string, as the quick search does. Clear empties every field and searches nothing: the text, the people match back
+  to all, and each field through a `search-panel-clear` event dispatched on its component's root. Escape and a click
+  outside close the panel without searching; what was changed in it is dropped, and the next opening shows the search
+  in force.
+- **Combobox** (`x-data="filterCombobox"`, `js/alpine/components/filter-combobox.js`), one component for the folder,
+  the people and the Locations, on the ARIA combobox pattern of `docs/reference/alpine-components/headless-combobox.md`
+  as the Change combobox is; `faceCombobox` stays the Face correction's own. The three differ only in their markup: the
+  options route, whether several can be chosen and how many, and the chip's `<template>`. Typing asks the route for the
+  options of the text, 150 ms after the last key, and only the latest answer is shown; Down, Up and a click on the box
+  open the listbox on every name. The server's `role="option"` elements go into the listbox as they come, less the ones
+  already chosen, and the component marks in each `.name` the start of every word a typed word matches (`<mark>`, by
+  the server's rule: lower case, no diacritics, a word starting at a letter run, a digit run or a camelCase hump). Down
+  and Up move the active option (`aria-selected`, `aria-activedescendant`), wrapping; Enter picks it, the first option
+  once something is typed, and never submits the form; a click picks; Escape closes the listbox alone, consumed by the
+  input's handler. A pick appends a chip cloned from the field's template, carrying the option's `data-option-*`
+  attributes, its label and a copy of its `.cover`, clears the text and closes the listbox; a field of one (the folder)
+  replaces its chip. A chip's × and Backspace in an empty input remove a chip. The chips are the state: their IDs, in
+  order and separated by commas, are the hidden input's value (`syncChosen`). The empty input's placeholder says what
+  the field means with nothing chosen ("anyone"), then "add…" in a field of several and nothing in a field of one. A
+  field of several takes at most `data-max-chosen` names, the server's 10: at that number it asks for no options, and
+  its listbox holds one line, `data-max-chosen-message` ("At most 10 people in one search"), as it holds "No matches"
+  when nothing matches. A visually hidden `role="status"` says each chip added or removed and the full field's line.
+  The listbox is a manual popover in the top layer, anchored under the field's `.box` (`--search-field-box`, scoped to
+  the field by `anchor-scope`) and as wide as it; a click in it is inside the panel, so the panel stays open.
+- **People match.** The `.switch` beside the People label is the form's state (`matchesAll`, on for all), shown by the
+  People field once it holds two people (`hasSeveral`); its value is the hidden `peopleMatch` input's.
+- **Date range** (`x-data="dateRange"`, `js/alpine/components/date-range.js`): Flatpickr in range mode (`mode: "range"`,
+  `dateFormat: "Y-m-d"`, two months), loaded with its stylesheet by the first field (`loadFlatpickr` of
+  `js/common/vendor-loader.js`). The component holds the range as its `from` and `to` ISO days, the values of the
+  field's two hidden inputs; the read-only input shows it as `8 Jun – 21 Jun 2024` (`rangeLabel`: each end with its
+  year when they differ, a single day once, `from …` or `until …` for the open-ended range a URL can hold), written
+  again after every pick, since Flatpickr writes its own text there. Both ends are picked on one calendar; from the
+  field Down moves into the days, the arrows move through them and Enter picks. One day picked alone is that day as
+  both ends: closing the calendar after one pick completes the range with the same day (`onCalendarClosed`), where
+  Flatpickr alone would drop it. The × and Clear empty the range. The week starts on the day the browser's language
+  starts it on. The calendar is appended to the field (`appendTo`), so it is inside the panel: appended to `body` it
+  would be drawn beneath the panel, which is in the top layer, and a click on it would light-dismiss the panel. It is
+  a manual popover of its own, shown and hidden with Flatpickr's open state, and CSS anchor positioning places it
+  under the field's box, starting at the box's left edge, flipped to end at its right edge or to sit above where the
+  viewport has no room; Flatpickr's own placement is switched off (`position`). Escape with the calendar open closes
+  it alone: the field's root takes the key on its way down (`keydown.escape.capture`), before Flatpickr or `global.js`
+  sees it. Enter in the field opens the calendar and submits nothing.
+- **Flatpickr's look.** `static/css/flatpickr.css` is the release's file, loaded by `loadFlatpickr` as
+  `@import … layer(flatpickr)` in a `<style>` element, so it sits in a cascade layer of its own and every rule of the
+  bundle, which is in no layer, outranks every rule of it whatever the selectors and the load order.
+  `htmx/search_panel.css` restates its colors, radii and spacing in the theme's tokens under `.search-panel`: the
+  floating surface, a month `--search-panel-month-width` of days, a day a pill under the pointer, the range a band of
+  the accent at 0.2 between two ends in the accent, so the calendar follows the light and the dark theme. The focus
+  ring on a day is the app's.
+- **Filter button.** Its badge, the `span` in it, shows how many of the panel's fields the search in force fills
+  (`searchParams.filterCount()`: the text, the folder, the people, the Locations and each date range count once), from
+  one up, written by an `Alpine.effect` with the button's accessible name ("Advanced search: 3 filters in force"). A
+  page with no search store shows none.
+- **Look.** `static/css/htmx/search_panel.css`, scoped by `.search-panel`: frosted glass of its own, clearer and more
+  blurred than the popover dialog's (`--search-panel-background-color`, `--theme-neutral-2` at 0.81, under
+  `--search-panel-backdrop-filter`, `blur(15px) saturate(200%)`), the popover's hairline and `--float-shadow`,
+  `--radius-xl` corners, `--space-5` of padding and `--space-7` between fields; one column, each label above its field
+  in sentence case but for the glossary's Date Taken and Date Imported, the two date ranges side by side. A `.box`
+  wears the field style in place of its input (the sunken fill, the hairline, the accent edge and ring with focus
+  anywhere in it). A chip is a rounded rectangle (`--radius`) on the chips' fill (`--chip-fill`, which `core.css`
+  declares for it and the filter chip), a Person's led by the cover Face as a circle of
+  `--search-panel-chip-cover-size` (20px); an option shows the cover at `--search-panel-option-cover-size` (28px),
+  the name, the names above a folder's or a Location's own set back, a Person's number of assets, and the active one
+  the accent at 0.2. The listbox and the calendar wear the floating surface of every popover. Clear, a plain
+  `.action-button`, is at the left and Search, `.action-button.primary`, at the right. The style guide's Menus &
+  dialogs section holds the form over sample names and a static listbox, and its navigation specimen the filter
+  button with a badge.
+
 **Nav** — `includes/nav` is the bar of every page behind a login, inside the page's `<nav>`, styled by the NAVIGATION
 block of `core.css`: the `.brand` (the `fa-chevron-up` mark in `--theme-accent` and the name, lowercase, in `--font-nav`
 at `--font-size-xl`, on a `--theme-primary` to `--theme-accent` gradient clipped to the text, which glows in the primary
@@ -2438,10 +2554,14 @@ count as a `.count` pill inside the label, `--theme-secondary` on the chip token
 color, `currentColor`, while the entry is hovered, so an empty one does not react). Between Browse and Triage sits the
 `.search` cell, as wide as an entry, holding the quick search form (**Search input**) centred in it at
 `--nav-search-width`: the form is `--font-nav` at `--font-size-base` in
-`--theme-neutral-4`, centred text, with no border or fill, a `fa-search` mark and the placeholder "quick search" at 0.6 alpha, and a
-`.clear` (`fa-times`) control shown while there is text. While the field has focus the form widens to
+`--theme-neutral-4`, centred text, with no border or fill, a `fa-search` mark and the placeholder "quick search" at 0.6 alpha, a
+`.clear` (`fa-times`) control shown while there is text, and the filter button (`.filters`, `fa-sliders-h` in a circle
+of the accent at 0.2), which opens the advanced search panel and carries the number of filters in force as a badge on
+its corner, a pill of the accent in `--font-size-xs`, shown from one up (**Advanced search panel**). The form's rules
+are the cell's own form's (`nav .search > form`), since the panel beside it holds a form too. While the field has focus the form widens to
 `--nav-search-focus-width` and glows in `--theme-accent` (a 1px ring and a 14px halo at 0.55 alpha); that glow is the
-field's focus indicator, one of the two places a rule sets `outline: none` (see **Themes**). The bar is
+field's focus indicator, one of the places a rule sets `outline: none` (see **Themes**); focus on the filter button,
+where a closing panel returns it, is no focus in the field, and the button draws the focus ring. The bar is
 `--theme-primary` at 0.1 alpha over the page. The entry of the page shown carries `aria-current="page"`, which the
 server renders from the include's `current` parameter, a `Const.NavEntry` key: the main page's three views
 (`IndexController` passes the `view` query parameter, `repository` by default, the same value the client seeds its
@@ -2574,9 +2694,10 @@ and the reload (`NavController`, `includes/nav`'s `reload`) renders the host emp
 htmx drops the one it carries: htmx 4 parks each element of the page that a `hx-preserve` element of the response names
 by ID, swaps, then moves the parked element in place of the new one and removes the new one. The move is
 `Element.moveBefore` where the browser has it, which keeps an open popover open, and `insertBefore` elsewhere, which
-takes the element out of the document and closes its open panel. So the import page's poll skips a tick while the
-nav's menu panel or the popover dialog (the New library dialog) is open (**HTMX 4 conventions**), so the poll never
-reloads the nav under either, in any browser.
+takes the element out of the document and closes its open panel. The advanced search panel (`#searchPanel`) is `hx-preserve` in the same way: it is rendered empty, a reload keeps the
+page's own with its form and what is typed in it, and its filter button is inside the preserved form. So the import page's poll skips a tick while the
+nav's menu panel, the advanced search panel or the popover dialog (the New library dialog) is open (**HTMX 4 conventions**), so the poll never
+reloads the nav under any of them, in any browser.
 
 Asset mutations (move, recycle, purge, restore, sorting from triage) also call
 `app.reloadFolderCounts()`, which runs `refreshFolderCounts(repoId)` from `js/common/folder-tree.js`:
@@ -2659,10 +2780,12 @@ as a theme color: `--scrim-color` and `--asset-detail-backdrop-color` (`--shadow
 `--dnd-dragging-background-color` (`--theme-neutral-3` at 0.48), `--panel-border-color` (`--shadow-color` at
 0.18, the edge of a chrome panel and the divider inside one), `--popover-background-color` and
 `--popover-border-color` (`--theme-neutral-2` at 0.84 and `--theme-neutral-3` at 0.3, the surface and the edge of a
-floating surface: the popover dialog and an open select's picker), and `--field-background-color` (`--shadow-color`
+floating surface: the popover dialog and an open select's picker), `--search-panel-background-color`
+(`--theme-neutral-2` at 0.81, the advanced search panel's surface, a little clearer than a popover's), and `--field-background-color` (`--shadow-color`
 at 0.23, a field's sunken fill); a veil follows the pair of the color it reads. The frost behind a floating surface is
 a token too, `--popover-backdrop-filter` (`blur(10px) saturate(200%)`), since the popover dialog and the picker both
-draw it. A border
+draw it, and the advanced search panel's is its own, `--search-panel-backdrop-filter` (`blur(15px) saturate(200%)`),
+more blurred. A border
 token holds a width and a style and no color: `--border-hairline` (`1px solid`), `--border-heavy` (`2px solid`, its
 width also `--border-heavy-width` for a size that clears the edge) and `--border-double` (`2px double`). A rule writes
 the edge's color after it, in place (`border: var(--border-hairline) var(--theme-neutral-3)`): `--theme-neutral-3`
@@ -2688,12 +2811,13 @@ snackbar's text, a pin's frame) reads `--theme-neutral-4`; what is drawn on the 
 `--theme-on-primary`, and on the accent fill `--theme-on-accent`. A light theme is therefore the light side of every
 pair; both sides are real, and the style guide's switch shows either. Keyboard focus is one ring: `:focus-visible { outline: var(--border-heavy) var(--theme-primary); outline-offset: 2px }` in
 `core.css`, on every element, inset (`outline-offset: -2px`) where a panel clips its rows; the browser withholds it
-after a pointer, including the focus a closing dialog returns to its trigger, so no rule removes an outline, with two
+after a pointer, including the focus a closing dialog returns to its trigger, so no rule removes an outline, with three
 exceptions, each a field that draws its own focus indicator in place of the ring: a text-like field (see **Forms**)
 sets `outline: none` on `:focus-visible`, which it matches after a pointer too, and turns its edge `--theme-accent`
-with `--field-focus-shadow` around it, while a field in error keeps its `--error-color` edge with no ring; and the
+with `--field-focus-shadow` around it, while a field in error keeps its `--error-color` edge with no ring; the
 nav's quick search input sets `outline: none` because its form's accent glow on `:focus-within` is that field's focus
-indicator (see **Nav**). The setup
+indicator (see **Nav**); and an input of the advanced search panel sets it because its `.box`, which holds the chips
+beside it, takes the field's accent edge and `--field-focus-shadow` on `:focus-within` (see **Advanced search panel**). The setup
 page's palette is no `:root` token: `pages/setup.css` declares the `--setup-*` tokens on `body:where(.setup)`, as
 literals with no pairs, since the page is an illustration and a form in a look of its own, which it keeps in either
 theme (see **Setup background**), and recolors the focus ring there to the form's accent
@@ -2712,8 +2836,9 @@ toggle group's track the secondary at 0.5, and an entry's hover glow its own tex
 hovered button lightens its own fill by 0.04 in OKLCH, `oklch(from var(--button-fill) calc(l + 0.04) c h)`, one rule
 for every variant: `.action-button` and each variant declare the fill as `--button-fill` on their own rule (as the
 triage and trash views declare `--view-tint`), and `background` reads it. The filter chip's fill is a gradient,
-`--chip-fill` on its rule (`linear-gradient(in oklch 180deg, …)`, the primary at 0.12 down to `--theme-neutral-2`),
-and its hover lays `--theme-neutral-1` at 0.08 over it as a one-color gradient (`linear-gradient(<color> 0 0)`).
+`--chip-fill` (`linear-gradient(in oklch 180deg, …)`, the primary at 0.12 down to `--theme-neutral-2`), declared by one
+rule of `core.css` for the filter chip and for a chosen name's chip in the advanced search panel,
+and the filter chip's hover lays `--theme-neutral-1` at 0.08 over it as a one-color gradient (`linear-gradient(<color> 0 0)`).
 The SVG data URI of `static/css/includes/search_results.css` (the check of a selected asset) carries its fill as a
 literal, because a data URI cannot read a token.
 
@@ -2745,7 +2870,7 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   (the veils, such as `--scrim-color`, `--asset-detail-backdrop-color`, `--popover-background-color` and
   `--field-background-color`, each a theme color or `--shadow-color` at an alpha). The lengths are
   **Scale** (`--space-*`), **Roles** (a length referencing a step, which its From line names) and **Sizes** (any other
-  length, such as a width or the radii, `--radius`, `--radius-small`, `--radius-large` and the pill `--chip-border-radius`); a value of space-separated lengths, such as a padding shorthand, is a length,
+  length, such as a width or the radii, `--radius`, `--radius-small`, `--radius-large`, `--radius-xl` and the pill `--chip-border-radius`); a value of space-separated lengths, such as a padding shorthand, is a length,
   drawn as a padded "Padding" sample. The typography tokens (`--font-size-*`, `--font-weight-*`, `--letter-spacing-*`,
   `--line-height-*`) are a kind by name rather than by value, since a font size is a length and a weight a bare
   number, each drawn on sample text in the Typography section (`@tokenCards("typography")`). "Off palette" marks a color, border or shadow token outside the Theme colors
@@ -2774,7 +2899,12 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   search triggers; Quick view (`htmx/quick_view_modal.css`) is in Menus & dialogs, its content hand-written to
   `htmx/quick_view_modal`'s markup inside an element with its ID, `#quickView`, which its rules are scoped by, with no
   `data-app-fragment`, so nothing opens it, `.sg-quick-view` giving it the modal's width for it and `.sg-preview`
-  standing in for each Preview. Specimens
+  standing in for each Preview; the advanced search panel (`htmx/search_panel.css`) follows it there: the panel's real
+  form, `htmx/search_panel` rendered over sample names inside an element of the panel's class, `.search-panel`, which
+  its rules are scoped by, its comboboxes and calendars live over this Library's names and its Search stopped by the
+  wrapper, which takes the form's submit on its way down, and beside it a static listbox with a marked match, the
+  active option, a path and the line of a full field; the navigation specimen's quick search holds the filter button
+  with a badge. Specimens
   use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements
   under `body.style-guide`) only lay the page out, from the `:root` variables.
   Three more things keep the page current:
@@ -2824,7 +2954,7 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   button and, for that token, the slider row: an input cannot sit inside a button.
 
 The scan leaves the guide's own files out, so a specimen never counts as a use of the token it demonstrates, and the
-vendored stylesheets of `static/css` (`font-awesome.min.css`, `leaflet.css`), whose literals are not the app's to
+vendored stylesheets of `static/css` (`font-awesome.min.css`, `leaflet.css`, `flatpickr.css`), whose literals are not the app's to
 tokenize, `pages/setup.css`, whose `--setup-*` palette is the setup page's own, and the design tweaks panel's adapter
 (`js/design-tweaks.js`), which names tokens to configure the panel, not to use them; all are listed in
 `StyleGuideController.excludedFiles` (the panel itself is under `lib/`, which the scan skips). The same scan is served
@@ -2915,7 +3045,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/search-results/metadata-visibility.js` | keeps the `show-<field>` classes on `#assets` in step with the metadata fields set |
 | `static/js/listeners/htmx-requests.js` | the outcome of every htmx request: failures, validation replacements (no event), declared success events, tab selection, fragment hydration |
 | `static/js/settings-page.js` | the Settings page module: `startNavPage()` (`nav-page.js`), the save listener, the Reset buttons |
-| `static/js/nav-page.js` | `startNavPage()`: the start of the pages with the nav outside the main app (Import, Settings): Alpine with what `html_common` binds and the `contextMenu` component, the request rule and the dialog wiring, the nav's Library menu built |
+| `static/js/nav-page.js` | `startNavPage()`: the start of the pages with the nav outside the main app (Import, Settings, Users): Alpine with what `html_common` binds, the `contextMenu` component and the advanced search panel's components, the request rule and the dialog wiring, the nav's Library menu built, the advanced search panel bound |
 | `static/js/listeners/settings.js` | `SETTINGS_SAVED_EVENT` → the success snackbar |
 | `views/settings.scala.html` | The Settings page: nav, `main` with the form, `html_common` |
 | `views/users.scala.html`, `views/htmx/user_accounts.scala.html` | The Users page: nav, the header (title, filter box, Add User) on the `usersPage` component, and the account cards under their three tabs, each with its ⋯ menu for an Admin; styled by `static/css/pages/users.css` |
@@ -2941,13 +3071,17 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/includes/person_name_taken.scala.html` | The error row of a rename to a name another live person holds, with its "Merge into X…" button; rendered by the inline name editor and the rename dialog, each naming the row (`errorId`) and supplying the `x-data` scope its button needs; the dialog also passes its `pane`, which the offer sends to the Merge people modal |
 | `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read, and whether the Person is named and their number of assets, which the combobox reads; under each row, for a live asset, Change and Remove and the Change combobox's markup, with the "This face only" switch for a Person with no name, its listbox rendering the Suggested group and then the list from one option block, each option with its armed label and suffix; a correction's response, its root carrying the result message, any deleted Person and, after a merge, the merged Person and the destination) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
 | `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu; its grid and the highlights' look are `static/css/htmx/view_image_detail_modal.css` |
-| `static/js/stores/search-params.js` | the search parameter set, its defaults, and the scope rules that decide what a change clears |
+| `static/js/stores/search-params.js` | the search parameter set, its defaults, the scope rules that decide what a change clears, and the advanced search panel's filters set together (`replaceFilters`, `filters`, `filterCount`, `viewedPersonId`, `viewedLocationId`; `applySearchFilters`, `idsOf`) |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch`, and routes a trigger's click by the view (`routeOf`: in Triage a folder, Person or Location trigger asks the scope route, `requestScopeDialog`, and the root folder's does nothing; in the trash a folder trigger does nothing); `runTriggerSearch`, the search a trigger declares, which a 204 from the scope route runs |
 | `static/js/listeners/triage.js` | the Triage summary's reload: `registerTriageListeners` (on `peopleChanged`) and `reloadTriageSummary`, one request per change, issued from the host so the reloads take turns |
 | `views/htmx/triage_summary.scala.html`, `triage_scope_dialog.scala.html`, `quick_view_modal.scala.html` | The Triage explorer's fragments (`TriageController`): the Triage summary above its tabs, the scope dialog of a folder, Person or Location, and Quick view of a folder; styled by `static/css/htmx/triage_summary.css`, `triage_scope_dialog.css` and `quick_view_modal.css` |
 | `static/js/search-results/search-input.js` | `bindSearchInput`: the nav's Search input (`#searchForm`), submitting and clearing `q` and following the store |
-| `views/htmx/search_panel.scala.html`, `search_options_folders.scala.html`, `search_options_people.scala.html`, `search_options_locations.scala.html`, `views/includes/search_path_option.scala.html` | The advanced search panel's fragments (`SearchPanelController`): its form filled in from a search's parameters, each filter an input under its parameter's name and the folder, people and Locations as chips, and the `role="option"` elements of its three comboboxes, a folder's and a Location's sharing the include (**Advanced search panel fragments**) |
+| `static/js/search-results/search-panel.js` | the nav's advanced search panel (`#searchPanel`): `bindSearchPanel` (the form loaded on every opening, the panel emptied on closing, the filter button's count), `openSearchPanel(filters)`, `closeOpenSearchPanel` for Escape, and `searchByFilters`, the search its form asks for, in place in Browse and by navigating to Browse elsewhere (**Advanced search panel**) |
+| `static/js/alpine/components/search-panel.js` | the `searchPanel` Alpine component of the panel's form: Search (the form's entries as the filters), Clear, and the people match switch |
+| `static/js/alpine/components/filter-combobox.js` | the `filterCombobox` Alpine component of the panel's Folder, People and Locations fields: the options asked for as typed (the latest answer alone shown), the matched starts of words marked (`typedWords`, `matchedRanges`), the keys, the anchored listbox popover, the chips and the hidden input of their IDs, a field of one or of several up to its most |
+| `static/js/alpine/components/date-range.js` | the `dateRange` Alpine component of the panel's Date Taken and Date Imported fields: Flatpickr in range mode in a popover of its own inside the field, the range as two ISO days in hidden inputs, its label (`rangeLabel`), one day picked alone, clear, and Escape closing the calendar alone |
+| `views/htmx/search_panel.scala.html`, `search_options_folders.scala.html`, `search_options_people.scala.html`, `search_options_locations.scala.html`, `views/includes/search_path_option.scala.html` | The advanced search panel's fragments (`SearchPanelController`): its form filled in from a search's parameters, each filter an input under its parameter's name and the folder, people and Locations as chips, and the `role="option"` elements of its three comboboxes, a folder's and a Location's sharing the include (**Advanced search panel fragments**); styled by `static/css/htmx/search_panel.css`, Flatpickr's calendar included |
 | `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal (the box fitted from the shown element's size, the Detail panel told of each asset and size shown), and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
 | `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing, the results title read again when the viewed Person is named, and the destination's results on closing when the viewed Person is merged away or merged into) |
 | `static/js/search-results/detail-url.js` | `createDetailUrl`: Asset detail's URL, its history entry and Back and Forward over it, the opening of the asset a URL names (`openAssetInLocation`), and the search URL held while it is open (see **Detail navigation**) |
@@ -2992,7 +3126,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor |
 | `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day, Location or Sequence, infinite-scroll trigger by cursor |
 | `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, and the crowded-pin panel `#mapPanel`; its CSS, the pin styles included, is `static/css/htmx/map_view.css` |
-| `static/js/common/vendor-loader.js` | loads Leaflet (with its stylesheet), supercluster and media-chrome once, when a view first needs them |
+| `static/js/common/vendor-loader.js` | loads Leaflet (with its stylesheet), supercluster, media-chrome and Flatpickr (with its stylesheet, in a cascade layer of its own) once, when a view first needs them |
 | `static/js/map/map-view.js` | the map view: Leaflet map, viewport cells requests, supercluster pins and their clicks, one map at a time (`disposeMapView`) |
 | `static/js/map/map-panel.js` | the crowded-pin panel: `openMapPanel` runs the `bbox` search into `#mapPanelContent`; close, "Show only these in the grid" |
 | `static/js/map/map-state.js` | the map view remembered per search scope in `sessionStorage`, and the displayed map's live view for the pin editor |
@@ -3015,7 +3149,7 @@ it knows about; the `searchParams` store supplies the rest. Nothing else builds 
 `/htmx/search/r/:repoId`.
 
 `js/stores/search-params.js` owns the parameters (`view`, `folderId`, `personId`, `albumId`,
-`locationId`, `subset`, `q`, `bbox`, `triaged`, `layout`, `sort`, `groupBy`, `groupDirection`, `rpp`) and the rules for combining them:
+`locationId`, `peopleMatch`, `takenFrom`, `takenTo`, `importedFrom`, `importedTo`, `subset`, `q`, `bbox`, `triaged`, `layout`, `sort`, `groupBy`, `groupDirection`, `rpp`, serialized in that order) and the rules for combining them:
 the five **places** (`PLACES`) are a folder, a person, an album, a Location and a Triage subset (`subset`, the assets one
 of the Triage summary's counts shows: `unknownPeople`, the assets with a Face of an Unknown person, or `noLocation`, those in no
 Location); choosing one clears the other four, and a view clears all five. A place set to nothing still clears the
@@ -3030,9 +3164,27 @@ and a view, clears `q`. The whole `CLEARS` table:
 
 | Changed | Cleared (back to its default) |
 |---|---|
-| `view` | `folderId`, `personId`, `albumId`, `locationId`, `subset`, `bbox`, `q`, `triaged` |
-| `folderId`, `personId`, `albumId`, `locationId` or `subset` | the other four, `bbox`, `q` |
-| `q` | `view`, `folderId`, `personId`, `albumId`, `locationId`, `subset`, `bbox` |
+| `view` | `folderId`, `personId`, `albumId`, `locationId`, `subset`, the panel's five, `bbox`, `q`, `triaged` |
+| `folderId`, `personId`, `albumId`, `locationId` or `subset` | the other four, the panel's five, `bbox`, `q` |
+| `q` | `view`, `folderId`, `personId`, `albumId`, `locationId`, `subset`, the panel's five, `bbox` |
+
+The **advanced search panel** is the one widget that combines them (**Advanced search panel**). `personId` and
+`locationId` then hold several IDs, separated by commas (`idsOf`), and five parameters are the panel's alone
+(`PANEL_FILTERS`): `peopleMatch` (`all` or `any`, how several people combine; only `any` is ever stored, with two
+people or more, since all is the server's rule with none given) and the two date ranges, `takenFrom` and `takenTo`,
+`importedFrom` and `importedTo` (ISO days). A search from the panel goes around the table, through the store's
+`replaceFilters(filters)` (`applySearchFilters`): it sets `q`, `folderId`, `personId`, `locationId` and the panel's
+five as given, one left out being no filter, and returns `view`, `albumId`, `subset` and `bbox` to their defaults, so
+the search is the repository view's by the panel's filters alone; the layout, the grouping, the sort, `rpp` and the
+triage filter survive, under the rules below. Removing one filter is `replaceFilters` with the filters in force
+(`filters()`) and that one null. The other direction is the table's: the panel's five are among what looking somewhere
+else clears, so a folder, a person, an album, a Location, a subset or a view chosen in the explorer drops the panel's
+filters, and with its single ID the several the panel chose, and the quick search, which sets `q` alone, drops them
+too. `filterCount()` is how many of the panel's fields the search fills (the nav's filter button's badge),
+`viewedPersonId()` the one Person a search names, none for several (**Detail panel**), and `viewedLocationId()` the one
+Location, which the batch ops' Remove from location is offered for and `context.getCurrentLocationId()` answers. Every request built from the
+store carries the panel's parameters, since all are serialized from it: the results and their continuations
+(`runSearch`), the map's cells (`map-view.js`) and a navigation to Browse.
 
 The layout, the grouping, `rpp` and the sort narrow or reorder what is already in scope and survive
 all of those: a chosen sort is kept from one place to the next, and with no sort chosen the server's
@@ -3042,7 +3194,8 @@ settings dialog's "Show triaged items" switch (see **Inline dialogs**) is shown 
 change of view clears it. The People tab reads it too, on every load of a pane, and reloads its panes when it changes, so each
 Person's number follows the switch (see **People tab**). The combinations the server refuses
 are settled by the store itself (`withoutRefusedCombinations`, on seeding from the URL and after every
-change): `q` with the trash view becomes the repository view, `sort=relevance`
+change): `q` with the trash view becomes the repository view, as a date range and several people or Locations do,
+a date range whose first day is after its last is dropped, `peopleMatch` goes with the second person, `sort=relevance`
 (`Const.search.sortRelevance`) without `q` drops the sort, so Relevance is the one sort that ends with
 the text it ranked, and `triaged` in any view but the repository view is dropped (the triage view
 refuses it). The server also refuses a page size outside 1 to 500; the store keeps only whole numbers
@@ -3050,16 +3203,18 @@ in that range (`normalize`, with
 `Const.search.maxRpp` the client's copy of `Const.Search.MAX_RPP`) and turns anything else into its
 default, so a hand-edited `?rpp=1000` falls back to the server's page size instead of failing every
 search. A word the server reads is held to the values it accepts in the same way (`ALLOWED_VALUES`): a `subset` that
-is neither `unknownPeople` nor `noLocation` is no subset. A parameter still at
+is neither `unknownPeople` nor `noLocation` is no subset, and a `peopleMatch` that is neither `all` nor `any` no match; a day that is no ISO date
+(`DATE_PARAMS`) is no day. A parameter still at
 its default is left out of the request, so a default is never spelled out on both sides — except
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
 
 The Search input is `#searchForm` in `includes/nav` (`role="search"`: an `<input type="search" name="q">`
-labelled "quick search" by its placeholder, and a `.clear` button; no submit button), rendered in every page's nav
+labelled "quick search" by its placeholder, a `.clear` button and the `.filters` button; no submit button), rendered in every page's nav
 (see **Nav refresh**) and bound once by `bindSearchInput()` (`js/search-results/search-input.js`) from
 `FrontendApp.start()` on the pages that run it (the main page and the style guide); on the others (import, settings)
 the form's own `action`, a GET of `/r/:repoId`, opens Browse with the text as `q`, which seeds the search there.
-On the main page Enter submits the form, which runs `runSearch({ params: { q } })` with the trimmed value; the
+The form's last control is the filter button of the advanced search panel, which `search-panel.js` binds
+(**Advanced search panel**). On the main page Enter submits the form, which runs `runSearch({ params: { q } })` with the trimmed value; the
 clear control (which empties the input and submits), the input's native clear (Escape: the `search` event with an
 empty value; the stylesheet hides the native button) and an empty submit clear `q` the same way, and an
 empty submit with no `q` in the store does nothing, so it never leaves the folder or view being looked

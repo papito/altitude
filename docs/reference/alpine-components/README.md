@@ -9,7 +9,7 @@ reference. Consult the site for the full, styled implementations.
 Reviewed on 2026-09-05. All pages declare `alpinejs v3.x`; extra dependencies are listed per note.
 Altitude vendors Alpine 3.13.10 and the focus plugin (`altitude/static/js/lib/README.md`); the
 `@alpinejs/ui`, `@alpinejs/collapse`, and `@alpinejs/intersect` plugins and the third-party
-libraries below are not vendored.
+libraries below are not vendored, except flatpickr.
 
 ## Lessons (hand-built with core Alpine)
 
@@ -63,7 +63,11 @@ libraries below are not vendored.
 - The folder and album context menus are native HTML popovers coordinated by core Alpine
   (`static/js/alpine/components/context-menu.js`); see the Altitude notes in [Dropdown](dropdown.md)
   and [Popover](headless-popover.md). [Menu](headless-menu.md) remains the reference if it ever
-  needs roving arrow-key focus; [Flatpickr](flatpickr.md) for a date filter in search.
+  needs roving arrow-key focus.
+- The advanced search panel's date ranges (`static/js/alpine/components/date-range.js`) follow the
+  [Flatpickr](flatpickr.md) recipe in range mode, and its Folder, People and Locations fields
+  (`static/js/alpine/components/filter-combobox.js`) the [Combobox](headless-combobox.md) pattern's multiple (tags)
+  variant with core Alpine; see their Altitude notes.
 - The snackbar (`static/js/common/snackbar.js`) follows the [Notifications](notifications.md) lesson;
   see its Altitude notes.
 - The View settings dialog's switches (`static/js/alpine/components/view-settings.js`, `.switch` in

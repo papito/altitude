@@ -35,8 +35,9 @@
             </template>
             @* Opens the Add to location dialog for the selection (js/listeners/locations.js); Locations are pointers like albums *@
             <button type="button" class="action-button" @@click="$dispatch(window.Const.events.batchAddToLocationRequested)"><i class="fas fa-map-marker-alt"></i>Add to location</button>
-            @* While a Location's results are displayed: drop the selected assets from that Location *@
-            <template x-if="$store.searchParams.locationId">
+            @* While one Location's results are displayed, not an advanced search's several: drop the selected assets from that
+               Location *@
+            <template x-if="$store.searchParams.viewedLocationId()">
                 <button type="button" class="action-button warning" @@click="$dispatch(window.Const.events.batchAssetsRemovedFromLocation)"><i class="fas fa-minus-circle"></i>Remove from location</button>
             </template>
             }

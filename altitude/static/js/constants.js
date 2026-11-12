@@ -206,6 +206,19 @@ export const Const = {
         // htmx/detail_panel_people); not `data-asset-id`, which finds the cells of the grid
         detailPanelOpen: "data-app-detail-panel-open",
         appAssetId: "data-app-asset-id",
+        // The advanced search panel's host in the nav (includes/nav): the route its form is loaded from
+        panelUrl: "data-panel-url",
+        // A combobox field of the panel's form (htmx/search_panel): the route of its options, whether it takes several
+        // names, the most it takes and the line that says so once it holds them
+        optionsUrl: "data-options-url",
+        multiple: "data-multiple",
+        maxChosen: "data-max-chosen",
+        maxChosenMessage: "data-max-chosen-message",
+        // What an option of such a field and the chip of a chosen one carry (htmx/search_options_*, htmx/search_panel):
+        // the ID a search takes, the label a chip shows, and a Person's cover Face URL
+        optionId: "data-option-id",
+        optionLabel: "data-option-label",
+        optionCoverUrl: "data-option-cover-url",
     },
 
     context: {
@@ -270,6 +283,12 @@ export const Const = {
         subsets: {
             unknownPeople: "unknownPeople",
             noLocation: "noLocation",
+        },
+        // How several people of one search combine (`PeopleMatch.apiValue`), sent as the `peopleMatch` parameter: the
+        // assets with all of them, the server's rule when the parameter is left out, or with any of them
+        peopleMatch: {
+            all: "all",
+            any: "any",
         },
         // The sort by match quality (`Const.Search.SORT_RELEVANCE`), which the server refuses without Search text
         sortRelevance: "relevance",

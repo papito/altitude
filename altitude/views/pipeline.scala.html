@@ -45,12 +45,12 @@
     @includes.html.html_common()
 
     @* Keeps the nav counts fresh while imports run; `current` keeps this page's entry marked. The filter (htmx 4 reads it
-       after the event's name) skips a tick while the page is hidden, and while the nav's Library menu or the New library
-       dialog is open: the Library menu's host is `hx-preserve` (includes/library_menu), which keeps an open panel open only
-       where the browser has `moveBefore`. A failed tick is not reported (`data-app-silent-failure`): the next one tries
+       after the event's name) skips a tick while the page is hidden, and while the nav's Library menu, its advanced search
+       panel or the New library dialog is open: the Library menu's host and the search panel are `hx-preserve`
+       (includes/library_menu, includes/nav), which keeps an open panel open only where the browser has `moveBefore`. A failed tick is not reported (`data-app-silent-failure`): the next one tries
        again, and a server answering 5xx while it restarts would otherwise raise an error every 5 s *@
     <div hx-get="/htmx/nav/r/@{RequestContext.getRepository.persistedId}?current=@{Const.NavEntry.IMPORT}"
-         hx-trigger="every[document.visibilityState === 'visible' && !document.querySelector('nav .context-menu:popover-open, #popoverDialog:popover-open')] 5s"
+         hx-trigger="every[document.visibilityState === 'visible' && !document.querySelector('nav .context-menu:popover-open, #searchPanel:popover-open, #popoverDialog:popover-open')] 5s"
          hx-target="nav"
          hx-swap="innerHTML"
          data-app-silent-failure></div>

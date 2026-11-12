@@ -1,0 +1,454 @@
+/* The advanced search panel (views/AGENTS.md, **Advanced search panel**): the panel the nav hosts (includes/nav) and the
+   form it loads (htmx/search_panel), with the options of its comboboxes (htmx/search_options_*). The rules are scoped by
+   the panel's class, which the style guide's specimen wears too */
+
+/* The surface: frosted glass of its own, clearer and more blurred than the popover dialog's, on its hairline and the
+   floating shadow. Its comboboxes' listboxes and its calendars are popovers of their own, in the top layer, so nothing
+   it holds is clipped */
+.search-panel {
+    width: var(--search-panel-width);
+    padding: var(--space-5);
+    border: var(--border-hairline) var(--popover-border-color);
+    border-radius: var(--radius-xl);
+    color: var(--theme-neutral-4);
+    background: var(--search-panel-background-color);
+    backdrop-filter: var(--search-panel-backdrop-filter);
+    box-shadow: var(--float-shadow);
+}
+
+/* The nav's panel: under the quick search form and centered on it, its inset and margins replacing the UA popover's */
+.search-panel[popover] {
+    inset: auto;
+    position-anchor: --search-form;
+    position-area: bottom;
+    justify-self: anchor-center;
+    margin: var(--space-3) var(--viewport-gap) var(--viewport-gap);
+    max-width: calc(100vw - 2 * var(--viewport-gap));
+    overflow: visible;
+}
+
+/* Open, and waiting for its form */
+.search-panel:empty {
+    visibility: hidden;
+}
+
+/* One column of fields, each label above its field, the two date ranges side by side */
+.search-panel .fields {
+    display: grid;
+    gap: var(--space-7);
+}
+
+.search-panel .dates {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-7);
+}
+
+/* A field names its box for the listbox or the calendar it opens, each field its own */
+.search-panel .field {
+    display: grid;
+    align-content: start;
+    gap: var(--space-2);
+    min-width: 0;
+    anchor-scope: --search-field-box;
+}
+
+.search-panel label {
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-small);
+    font-weight: var(--font-weight-medium);
+}
+
+/* The People label and, once two people are chosen, the match beside it: Any, the switch, All, the word in force in
+   the text color */
+.search-panel .label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+}
+
+.search-panel .match {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-small);
+}
+
+.search-panel .match:has([aria-checked="false"]) > span,
+.search-panel .match:has([aria-checked="true"]) > label {
+    color: var(--theme-neutral-4);
+    font-weight: var(--font-weight-semibold);
+}
+
+/* A field's box wears the field style in place of the input inside it: the sunken fill and the hairline, and with focus
+   anywhere in it the accent edge and ring. It holds the field's icon, the chips of what is chosen and the input, which
+   wrap */
+.search-panel .box {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    padding: var(--space-1) var(--space-4);
+    border: var(--border-hairline) hsl(from var(--theme-neutral-3) h s l / 0.25);
+    border-radius: var(--radius-small);
+    background-color: var(--field-background-color);
+    anchor-name: --search-field-box;
+    cursor: text;
+}
+
+.search-panel .box:focus-within {
+    border-color: var(--theme-accent);
+    box-shadow: var(--field-focus-shadow);
+}
+
+.search-panel .box > i {
+    color: var(--theme-neutral-3);
+}
+
+.search-panel .box input {
+    flex: 1 1 var(--space-9);
+    min-width: var(--space-9);
+    padding: var(--space-2) 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    color: inherit;
+    font: inherit;
+    caret-color: var(--theme-accent);
+}
+
+/* The box draws the focus indicator */
+.search-panel .box input:focus-visible {
+    outline: none;
+}
+
+.search-panel .box input::placeholder {
+    color: var(--theme-neutral-3);
+}
+
+.search-panel .box input[readonly] {
+    cursor: pointer;
+}
+
+/* A date range's clear control */
+.search-panel .box > button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--theme-neutral-3);
+    line-height: 1;
+    cursor: pointer;
+}
+
+.search-panel .box > button:hover {
+    color: var(--theme-neutral-4);
+}
+
+/* The chips sit in the box beside the input: the list itself takes no box */
+.search-panel .chips {
+    display: contents;
+}
+
+/* A chosen name: a rounded rectangle on the chips' fill, the name cut with an ellipsis, then its remove control. A
+   Person's leads with the cover Face as a circle */
+.search-panel .chip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    max-width: 100%;
+    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
+    border-radius: var(--radius);
+    background: var(--chip-fill);
+    font-size: var(--font-size-small);
+    white-space: nowrap;
+    cursor: default;
+}
+
+.search-panel .chip.person {
+    padding-left: var(--space-1);
+}
+
+.search-panel .chip .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-panel .chip button {
+    display: grid;
+    place-items: center;
+    padding: var(--space-1);
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-xs);
+    line-height: 1;
+    cursor: pointer;
+}
+
+.search-panel .chip button:hover {
+    background: hsl(from var(--theme-neutral-3) h s l / 0.25);
+    color: var(--theme-neutral-4);
+}
+
+/* A Person's cover Face, or the placeholder of a Person with none: a circle, smaller on a chip than in the options */
+.search-panel .cover {
+    flex: none;
+    width: var(--search-panel-option-cover-size);
+    height: var(--search-panel-option-cover-size);
+    border-radius: 50%;
+    object-fit: cover;
+    font-size: var(--font-size-small);
+}
+
+.search-panel .chip .cover {
+    width: var(--search-panel-chip-cover-size);
+    height: var(--search-panel-chip-cover-size);
+    font-size: var(--font-size-xs);
+}
+
+/* A combobox's listbox: a manual popover in the top layer, anchored under its field's box and as wide as it, flipped
+   above when there is no room below; its height is capped and its rows scroll. It wears the frosted surface of every
+   floating panel */
+.search-panel .listbox {
+    margin: 0;
+    padding: var(--space-2);
+    list-style: none;
+    border: var(--border-hairline) var(--popover-border-color);
+    border-radius: var(--radius-large);
+    color: var(--theme-neutral-4);
+    background: var(--popover-background-color);
+    backdrop-filter: var(--popover-backdrop-filter);
+    box-shadow: var(--sheen-shadow), var(--float-shadow);
+    max-height: var(--face-listbox-max-height);
+    overflow-y: auto;
+}
+
+.search-panel .listbox[popover] {
+    inset: auto;
+    position-anchor: --search-field-box;
+    position-area: bottom;
+    position-try-fallbacks: flip-block;
+    width: anchor-size(width);
+    margin: var(--space-1) 0;
+}
+
+/* An option: a Person's cover Face, the name, which wraps, and a Person's number of assets. The active one, which Enter
+   picks, is tinted as a checked option is */
+.search-panel .listbox [role="option"] {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-small);
+    cursor: pointer;
+}
+
+.search-panel .listbox [role="option"][aria-selected="true"] {
+    background: hsl(from var(--theme-accent) h s l / 0.2);
+}
+
+.search-panel .listbox .name {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* The names above a folder's or a Location's own are set back */
+.search-panel .listbox .ancestors {
+    color: var(--theme-neutral-3);
+}
+
+/* The start of a word that a typed word matches */
+.search-panel .listbox mark {
+    background: none;
+    color: var(--theme-accent);
+    font-weight: var(--font-weight-bold);
+}
+
+.search-panel .listbox .count {
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-small);
+    font-variant-numeric: tabular-nums;
+}
+
+/* The line in place of the options: nothing matches, or the field holds as many as a search takes */
+.search-panel .listbox .empty {
+    padding: var(--space-3);
+    color: var(--theme-neutral-3);
+}
+
+/* Clear at the left, Search at the right */
+.search-panel .actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--space-7);
+}
+
+/* The calendar of a date range field: Flatpickr's (static/css/flatpickr.css, loaded in a cascade layer of its own, so
+   every rule here outranks it whatever its selector), in the theme's tokens. It is a manual popover in the top layer,
+   anchored under its field's box and starting at the box's left edge, flipped to end at its right edge or to sit above
+   when the viewport has no room. Flatpickr sizes it for its months from the width of one month's days, which the token
+   sets; the width it writes is the content's, so the padding and the edge are outside it */
+.search-panel .flatpickr-calendar {
+    position: fixed;
+    inset: auto;
+    position-anchor: --search-field-box;
+    position-area: bottom span-right;
+    position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+    box-sizing: content-box;
+    margin: var(--space-1) 0;
+    padding: var(--space-4) 0;
+    border: var(--border-hairline) var(--popover-border-color);
+    border-radius: var(--radius-large);
+    color: var(--theme-neutral-4);
+    background: var(--popover-background-color);
+    backdrop-filter: var(--popover-backdrop-filter);
+    box-shadow: var(--sheen-shadow), var(--float-shadow);
+    font-size: var(--font-size-small);
+    line-height: var(--line-height-text);
+    overflow: visible;
+}
+
+/* The pointers Flatpickr draws toward its field */
+.search-panel .flatpickr-calendar::before,
+.search-panel .flatpickr-calendar::after {
+    display: none;
+}
+
+/* A month's name and year, and the two arrows that turn the months */
+.search-panel .flatpickr-months .flatpickr-month {
+    color: inherit;
+    fill: currentColor;
+}
+
+.search-panel .flatpickr-current-month {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+}
+
+.search-panel .flatpickr-current-month .cur-month {
+    font-weight: inherit;
+}
+
+.search-panel .flatpickr-current-month .cur-month:hover,
+.search-panel .numInputWrapper:hover,
+.search-panel .numInputWrapper span:hover {
+    background: hsl(from var(--theme-neutral-4) h s l / 0.08);
+}
+
+.search-panel .flatpickr-current-month input.cur-year {
+    padding: 0 0 0 var(--space-2);
+    border: 0;
+    background: none;
+    box-shadow: none;
+    color: inherit;
+    font: inherit;
+}
+
+/* The year's two steppers */
+.search-panel .numInputWrapper span {
+    border-color: var(--popover-border-color);
+}
+
+.search-panel .flatpickr-current-month .numInputWrapper span.arrowUp::after {
+    border-bottom-color: var(--theme-neutral-3);
+}
+
+.search-panel .flatpickr-current-month .numInputWrapper span.arrowDown::after {
+    border-top-color: var(--theme-neutral-3);
+}
+
+.search-panel .flatpickr-months .flatpickr-prev-month,
+.search-panel .flatpickr-months .flatpickr-next-month {
+    color: var(--theme-neutral-3);
+    fill: currentColor;
+}
+
+.search-panel .flatpickr-months .flatpickr-prev-month:hover,
+.search-panel .flatpickr-months .flatpickr-next-month:hover {
+    color: var(--theme-neutral-4);
+}
+
+.search-panel .flatpickr-months .flatpickr-prev-month:hover svg,
+.search-panel .flatpickr-months .flatpickr-next-month:hover svg {
+    fill: currentColor;
+}
+
+/* The months side by side, each inset from the next by its own padding, since Flatpickr sizes the calendar from the
+   width of a month */
+.search-panel .flatpickr-weekdays .flatpickr-weekdaycontainer,
+.search-panel .dayContainer {
+    padding: 0 var(--space-4);
+}
+
+.search-panel .dayContainer {
+    width: calc(var(--search-panel-month-width) + 2 * var(--space-4));
+    min-width: calc(var(--search-panel-month-width) + 2 * var(--space-4));
+    max-width: calc(var(--search-panel-month-width) + 2 * var(--space-4));
+}
+
+.search-panel .dayContainer + .dayContainer {
+    box-shadow: none;
+}
+
+.search-panel span.flatpickr-weekday {
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+}
+
+/* A day: a seventh of its month, a pill under the pointer or with focus, as a menu's hovered option is tinted */
+.search-panel .flatpickr-day {
+    max-width: none;
+    height: auto;
+    padding: var(--space-2) 0;
+    border-radius: var(--chip-border-radius);
+    color: var(--theme-neutral-4);
+    line-height: var(--line-height-text);
+}
+
+.search-panel .flatpickr-day:hover,
+.search-panel .flatpickr-day:focus {
+    border-color: hsl(from var(--theme-neutral-4) h s l / 0);
+    background: hsl(from var(--theme-neutral-4) h s l / 0.08);
+    color: var(--theme-neutral-4);
+}
+
+.search-panel .flatpickr-day.today {
+    border-color: hsl(from var(--theme-neutral-3) h s l / 0.45);
+}
+
+/* The days of the range: a band of the accent between its two ends, which are the accent itself, rounded outward; a day
+   picked alone is the accent too */
+.search-panel .flatpickr-day.inRange {
+    border-color: hsl(from var(--theme-accent) h s l / 0);
+    border-radius: 0;
+    background: hsl(from var(--theme-accent) h s l / 0.2);
+    box-shadow: none;
+}
+
+.search-panel .flatpickr-day.selected,
+.search-panel .flatpickr-day.startRange,
+.search-panel .flatpickr-day.endRange {
+    border-color: var(--theme-accent);
+    background: var(--theme-accent);
+    box-shadow: none;
+    color: var(--theme-on-accent);
+    font-weight: var(--font-weight-bold);
+}
+
+.search-panel .flatpickr-day.startRange {
+    border-radius: var(--chip-border-radius) 0 0 var(--chip-border-radius);
+}
+
+.search-panel .flatpickr-day.endRange {
+    border-radius: 0 var(--chip-border-radius) var(--chip-border-radius) 0;
+}
+
+.search-panel .flatpickr-day.startRange.endRange {
+    border-radius: var(--chip-border-radius);
+}
