@@ -419,7 +419,7 @@ import altitude.core.models.WatchFolderSpec
         def at(path: String) = route(host, repoId, path)
         def scanned(): Unit = {
           send("PUT", at("scan"), named(id)).statusCode shouldBe 204
-          eventually(App.altitude.service.watchFolder.isWorking(id) shouldBe false)
+          eventually(testContext.isWatchFolderWorking(id, App.altitude.service.watchFolder) shouldBe false)
         }
 
         send("PUT", at("pause"), named(id)).statusCode shouldBe 204
@@ -431,12 +431,12 @@ import altitude.core.models.WatchFolderSpec
         watchFolders.getById(id).isPaused shouldBe false
 
         scanned()
-        eventually(watchFolders.memory(id).map(_.relPath) shouldBe List("a.png"))
+        eventually(testContext.watchFolderMemory(id).map(_.relPath) shouldBe List("a.png"))
         // The interval between two scans, without the wait: the file has rested
         testContext.letWatchedFilesRest()
         scanned()
         eventually(testApp.service.asset.getByChecksum(altitude.core.util.Sha256.hex(file)) should not be empty)
-        eventually(App.altitude.service.watchFolder.isWorking(id) shouldBe false)
+        eventually(testContext.isWatchFolderWorking(id, App.altitude.service.watchFolder) shouldBe false)
 
         send("PUT", at("retry"), named(id)).statusCode shouldBe 204
         send("PUT", at("pause")).statusCode shouldBe 400

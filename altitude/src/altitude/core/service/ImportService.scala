@@ -40,7 +40,6 @@ import altitude.core.models.Permission
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineUtils
 import altitude.core.transactions.TransactionManager
-import altitude.core.util.QueryResult
 import altitude.core.util.RelPath
 import altitude.core.util.Util
 
@@ -451,16 +450,11 @@ class ImportService(val app: Altitude):
       importDao.getById(importId)
     }
 
-  /** A page of the context repository's Imports with their total: the ones in progress first, then the newest first */
-  def list(rpp: Int, page: Int = 1): QueryResult[Import] =
-    txManager.asReadOnly {
-      importDao.list(rpp, page)
-    }
-
   /**
-   * The top of the context repository's Import history, its first `shown` Imports as [[list]] orders them, each with what the
-   * history says of it beside its record: the name of the account that delivered it, the path of its destination folder, and
-   * whether a restart failed files of it, which only an Import closed with failed files is asked.
+   * The top of the context repository's Import history, its first `shown` Imports, the ones in progress first and then the newest
+   * first (`ImportDao.list`), each with what the history says of it beside its record: the name of the account that delivered it,
+   * the path of its destination folder, and whether a restart failed files of it, which only an Import closed with failed files
+   * is asked.
    */
   def history(shown: Int): ImportHistory =
     txManager.asReadOnly {
@@ -487,21 +481,13 @@ class ImportService(val app: Altitude):
       ImportHistory(entries, listed.total)
     }
 
-  /** The Import's files in path order, those of one outcome when `outcome` is given */
-  def files(importId: String, outcome: Option[ImportOutcome] = None): List[ImportFile] =
-    txManager.asReadOnly {
-      // Fails with NotFoundException for an unknown Import, or another repository's
-      importDao.getById(importId): Unit
-      fileDao.ofImport(importId, outcome)
-    }
-
   /**
    * The Import with its first `shown` files in path order, those of one outcome when `outcome` is given, read in one transaction,
    * so the Import's counters are the numbers of the files the outcomes hold
    */
   def filesShown(importId: String, outcome: Option[ImportOutcome], shown: Int): ImportFiles =
     txManager.asReadOnly {
-      ImportFiles(importDao.getById(importId), outcome, fileDao.ofImport(importId, outcome, Some(shown)))
+      ImportFiles(importDao.getById(importId), outcome, fileDao.ofImport(importId, outcome, shown))
     }
 
   /**

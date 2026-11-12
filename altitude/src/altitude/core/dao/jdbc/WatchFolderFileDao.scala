@@ -70,10 +70,6 @@ abstract class WatchFolderFileDao(override val config: Config)
     val sql = s"SELECT * FROM $tableName WHERE ${FieldConst.REPO_ID} = ? AND ${F.WATCH_FOLDER_ID} = ?"
     manyBySqlQuery(sql, List(repositoryId, watchFolderId)).map(makeModel)
 
-  override def find(watchFolderId: String, relPath: String): Option[WatchFolderFile] =
-    val sql = s"SELECT * FROM $tableName WHERE ${FieldConst.REPO_ID} = ? AND ${F.WATCH_FOLDER_ID} = ? AND ${F.REL_PATH} = ?"
-    manyBySqlQuery(sql, List(repositoryId, watchFolderId, relPath)).headOption.map(makeModel)
-
   // A new file is `seen` and never tried, by the columns' defaults; several rows a statement, since a first scan may find many
   override def addAll(files: Seq[WatchFolderFile], seenAt: OffsetDateTime): Unit =
     files.grouped(WatchFolderFileDao.CHUNK).foreach {

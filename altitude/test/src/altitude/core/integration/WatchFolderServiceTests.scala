@@ -128,7 +128,7 @@ import altitude.core.util.Sha256
 
   /** Waits until nothing of the Watch folder is being scanned or is in the import pipeline */
   private def settle(watchFolder: WatchFolder): Unit =
-    eventually(watchFolders.isWorking(watchFolder.persistedId) shouldBe false)
+    eventually(testContext.isWatchFolderWorking(watchFolder.persistedId) shouldBe false)
 
   /**
    * One scan of the Watch folder, with everything it handed to the pipeline settled, and then the rest of the files it has not
@@ -149,15 +149,15 @@ import altitude.core.util.Sha256
 
   /** What the Watch folder remembers: each file's state and attempts, by its path */
   private def memory(watchFolder: WatchFolder): Map[String, (WatchFileState, Int)] =
-    watchFolders.memory(watchFolder.persistedId).map(file => file.relPath -> (file.state, file.attempts)).toMap
+    testContext.watchFolderMemory(watchFolder.persistedId).map(file => file.relPath -> (file.state, file.attempts)).toMap
 
   /** The Imports of the Watch folder's scans in the history, the oldest first */
   private def importsOf(watchFolder: WatchFolder): List[Import] =
-    imports.list(rpp = 100).records.filter(_.watchFolderId == watchFolder.id).sortBy(_.createdAt)
+    testContext.imports.filter(_.watchFolderId == watchFolder.id).sortBy(_.createdAt)
 
   /** The files of the Watch folder's Imports, the oldest Import's first: path, outcome and reason */
   private def recorded(watchFolder: WatchFolder): List[(String, ImportOutcome, Option[String])] =
-    importsOf(watchFolder).flatMap(anImport => imports.files(anImport.persistedId)).map(recordOf)
+    importsOf(watchFolder).flatMap(anImport => testContext.importFiles(anImport.persistedId)).map(recordOf)
 
   private def recordOf(file: ImportFile): (String, ImportOutcome, Option[String]) = (file.relPath, file.outcome, file.reason)
 
@@ -1370,7 +1370,7 @@ import altitude.core.util.Sha256
     Files.exists(firstFile) shouldBe true
     Files.exists(secondFile) shouldBe true
     scanImports.map(imports.getById).map(_.watchFolderId) shouldBe List(None, None)
-    imports.list(rpp = 10).total shouldBe 2
+    testContext.imports.size shouldBe 2
 
     val theirs = watch(firstDir, name = "Theirs")
     switchContextRepo(addLibrary())
@@ -1712,7 +1712,7 @@ import altitude.core.util.Sha256
 
     memory(watchFolder) shouldBe Map("a.png" -> (WatchFileState.Seen, 0), "b.png" -> (WatchFileState.Seen, 0))
     scanAndSettle(watchFolder) shouldBe ScanResult.Scanned(2)
-    imports.files(importsOf(watchFolder).last.persistedId).map(file => (file.relPath, file.outcome)) shouldBe
+    testContext.importFiles(importsOf(watchFolder).last.persistedId).map(file => (file.relPath, file.outcome)) shouldBe
       List(("a.png", ImportOutcome.Duplicate), ("b.png", ImportOutcome.Imported))
     tree(dir) shouldBe empty
     Files.exists(kept) shouldBe false

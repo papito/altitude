@@ -31,14 +31,19 @@ import altitude.core.models.FaceImages
 import altitude.core.models.Folder
 import altitude.core.models.Histogram
 import altitude.core.models.ImageQuality
+import altitude.core.models.Import
+import altitude.core.models.ImportFile
+import altitude.core.models.ImportOutcome
 import altitude.core.models.Permissions
 import altitude.core.models.Person
 import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.models.UserMetadata
 import altitude.core.models.WatchFileState
+import altitude.core.models.WatchFolderFile
 import altitude.core.service.FaceDetectionService
 import altitude.core.service.FaceRecognitionService
+import altitude.core.service.WatchFolderService
 import altitude.core.util.Util
 
 object TestContext {
@@ -293,6 +298,40 @@ class TestContext(val testApp: Altitude) {
         assetId
       )
     }
+  }
+
+  /** The context repository's Imports as the Import history lists them: the ones in progress first, then the newest first */
+  def imports: List[Import] = testApp.service.imports.history(shown = Int.MaxValue).entries.map(_.anImport)
+
+  /**
+   * The files of an Import of the context repository in path order, those of one outcome when `outcome` is given; an Import that
+   * is not the repository's is not found
+   */
+  def importFiles(importId: String, outcome: Option[ImportOutcome] = None): List[ImportFile] =
+    testApp.service.imports.filesShown(importId, outcome, shown = Int.MaxValue).files
+
+  /** What a Watch folder of the context repository remembers of the files of its directory */
+  def watchFolderMemory(watchFolderId: String): List[WatchFolderFile] =
+    testApp.txManager.asReadOnly(testApp.DAO.watchFolderFile.ofWatchFolder(watchFolderId))
+
+  /**
+   * Whether a scan of the Watch folder is running in the instance of `service`, or a file one handed to the import pipeline is in
+   * it still: the pipeline's last stage has not told the Watch folder what became of it. The service shows the first, on the
+   * Watch folder's card, and keeps the second to itself, in memory, with nothing stored to read it from, so the files in the
+   * pipeline are read off its field.
+   */
+  def isWatchFolderWorking(watchFolderId: String, service: WatchFolderService = testApp.service.watchFolder): Boolean = {
+    val inFlight = classOf[WatchFolderService].getDeclaredField("inFlight")
+    inFlight.setAccessible(true)
+    val ofWatchFolder = inFlight.get(service).asInstanceOf[java.util.Map[String, AnyRef]].values.asScala.map {
+      file =>
+        val watchFolder = file.getClass.getDeclaredMethod("watchFolderId")
+        watchFolder.setAccessible(true)
+        watchFolder.invoke(file)
+    }
+
+    service.cards().exists(card => card.watchFolder.id.contains(watchFolderId) && card.isScanning) ||
+    ofWatchFolder.exists(_ == watchFolderId)
   }
 
   /**

@@ -59,7 +59,7 @@ abstract class ImportFileDao(override val config: Config) extends BaseDao[Import
     addRecord(sql, List(id, repositoryId, file.importId, file.relPath, file.sizeBytes))
     file.copy(id = Some(id))
 
-  override def ofImport(importId: String, outcome: Option[ImportOutcome], limit: Option[Int]): List[ImportFile] =
+  override def ofImport(importId: String, outcome: Option[ImportOutcome], limit: Int): List[ImportFile] =
     val sql = s"""
       SELECT *
         FROM $tableName
@@ -67,10 +67,10 @@ abstract class ImportFileDao(override val config: Config) extends BaseDao[Import
          AND ${FieldConst.ImportFile.IMPORT_ID} = ?
          ${outcome.fold("")(_ => s"AND ${FieldConst.ImportFile.OUTCOME} = ?")}
        ORDER BY ${FieldConst.ImportFile.REL_PATH}, ${FieldConst.ID}
-       ${limit.fold("")(_ => "LIMIT ?")}
+       LIMIT ?
     """
 
-    manyBySqlQuery(sql, List(repositoryId, importId) ++ outcome.map(_.dbValue) ++ limit).map(makeModel)
+    manyBySqlQuery(sql, List(repositoryId, importId) ++ outcome.map(_.dbValue) :+ limit).map(makeModel)
 
   // Reads the files of that outcome alone, by the index on a file's Import and outcome
   override def havingReason(importIds: Set[String], outcome: ImportOutcome, reason: String): Set[String] =

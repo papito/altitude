@@ -69,7 +69,7 @@ import altitude.core.util.Query
   }
 
   /** The Import file as stored now, among the files of its Import */
-  private def stored(file: ImportFile): ImportFile = imports.files(file.importId).find(_.id == file.id).get
+  private def stored(file: ImportFile): ImportFile = testContext.importFiles(file.importId).find(_.id == file.id).get
 
   test("An Import opened with the number of files to expect keeps it") {
 
@@ -97,7 +97,7 @@ import altitude.core.util.Query
 
     opened.map(_.expectedFiles) shouldBe numbers
     opened.map(stored(_).expectedFiles) shouldBe numbers
-    val listed = imports.list(rpp = 10).records.map(anImport => anImport.persistedId -> anImport.expectedFiles).toMap
+    val listed = testContext.imports.map(anImport => anImport.persistedId -> anImport.expectedFiles).toMap
     opened.map(anImport => listed(anImport.persistedId)) shouldBe numbers
     val shown = imports.history(shown = 10).entries.map(entry => entry.anImport.persistedId -> entry.anImport.expectedFiles).toMap
     opened.map(anImport => shown(anImport.persistedId)) shouldBe numbers
@@ -109,7 +109,7 @@ import altitude.core.util.Query
     (closed.isInProgress, closed.total, closed.expectedFiles) shouldBe (false, 1, Some(24))
 
     intercept[ValidationException](imports.open(ImportSource.Upload, expectedFiles = Some(-1)))
-    imports.list(rpp = 10).total shouldBe 4
+    testContext.imports.size shouldBe 4
   }
 
   test("An opened Import is in progress, with the account that delivers it, its name and its destination") {
@@ -144,7 +144,7 @@ import altitude.core.util.Query
       read.closedAt shouldBe None
       read.createdAt should not be empty
       counters(opened) shouldBe (0, 0, 0, 0, 0)
-      imports.files(opened.persistedId) shouldBe empty
+      testContext.importFiles(opened.persistedId) shouldBe empty
     }
     stored(named).name shouldBe Some("Holiday")
     stored(named).destFolderId shouldBe folder.id
@@ -158,7 +158,7 @@ import altitude.core.util.Query
 
     intercept[NotFoundException](imports.open(ImportSource.Upload, destFolderId = theirFolder.id))
     intercept[NotFoundException](imports.open(ImportSource.Upload, destFolderId = Some("no-such-folder")))
-    imports.list(rpp = 10).total shouldBe 2
+    testContext.imports.size shouldBe 2
   }
 
   test("A file added to an Import is pending, and the Import counts it") {
@@ -180,7 +180,7 @@ import altitude.core.util.Query
      */
     val (opened, List(second, first)) = importOf("b/second.jpg", "a/first.jpg"): @unchecked
 
-    val files = imports.files(opened.persistedId)
+    val files = testContext.importFiles(opened.persistedId)
     files.map(_.relPath) shouldBe List("a/first.jpg", "b/second.jpg")
     files.map(_.id) shouldBe List(first.id, second.id)
     for (file <- files) {
@@ -191,13 +191,13 @@ import altitude.core.util.Query
       file.sizeBytes shouldBe 10
     }
     counters(opened) shouldBe (2, 0, 0, 0, 0)
-    imports.files(opened.persistedId, Some(ImportOutcome.Pending)) shouldBe files
-    imports.files(opened.persistedId, Some(ImportOutcome.Imported)) shouldBe empty
+    testContext.importFiles(opened.persistedId, Some(ImportOutcome.Pending)) shouldBe files
+    testContext.importFiles(opened.persistedId, Some(ImportOutcome.Imported)) shouldBe empty
 
     imports.close(opened.persistedId)
     intercept[IllegalOperationException](imports.addFile(opened.persistedId, "late.jpg", sizeBytes = 10))
     intercept[NotFoundException](imports.addFile("no-such-import", "lost.jpg", sizeBytes = 10))
-    imports.files(opened.persistedId) shouldBe files
+    testContext.importFiles(opened.persistedId) shouldBe files
     counters(opened) shouldBe (2, 0, 0, 0, 0)
   }
 
@@ -241,8 +241,8 @@ import altitude.core.util.Query
     settled(unsupported) shouldBe (ImportOutcome.Unsupported, None, None)
     settled(failed) shouldBe (ImportOutcome.Failed, Some("Storage error"), None)
     for ((file, outcome) <- List(imported, duplicate, unsupported, failed).zip(ImportOutcome.values.tail))
-      imports.files(opened.persistedId, Some(outcome)).map(_.id) shouldBe List(file.id)
-    imports.files(opened.persistedId, Some(ImportOutcome.Pending)) shouldBe empty
+      testContext.importFiles(opened.persistedId, Some(outcome)).map(_.id) shouldBe List(file.id)
+    testContext.importFiles(opened.persistedId, Some(ImportOutcome.Pending)) shouldBe empty
 
     stored(opened).isComplete shouldBe false
     stored(opened).closedAt shouldBe None
@@ -377,7 +377,7 @@ import altitude.core.util.Query
     stored(two).outcome shouldBe ImportOutcome.Failed
   }
 
-  test("The Import history lists the Imports in progress first, then the newest first, a page at a time") {
+  test("The Import history lists the Imports in progress first, then the newest first, as many as it is asked for") {
 
     /**
      * Setup:
@@ -387,12 +387,13 @@ import altitude.core.util.Query
      *
      * Assertions:
      *
-     * Listed two a page, the first page holds the two Imports in progress, the newer first, and the second page the two closed
-     * ones, the newer first; each page reports the four Imports of the repository.
+     * Asked for two, the history holds the two Imports in progress, the newer first; asked for three, the newer of the closed
+     * ones after them; asked for more than there are, all four, the closed ones after those in progress, the newer first. Each
+     * reports the four Imports of the repository.
      *
      * Edge cases:
      *
-     * The other repository's Import is on no page and in no total, and a page past the last is empty.
+     * The other repository's Import is in no list and in no total.
      */
     val List(firstClosed, firstOpen, secondClosed, secondOpen) = List.fill(4)(imports.open(ImportSource.Upload)): @unchecked
     imports.close(firstClosed.persistedId)
@@ -403,13 +404,14 @@ import altitude.core.util.Query
     imports.open(ImportSource.Upload)
     switchContextRepo(testContext.repositories.head)
 
-    val firstPage = imports.list(rpp = 2)
-    firstPage.records.map(_.id) shouldBe List(secondOpen.id, firstOpen.id)
-    firstPage.total shouldBe 4
-    val secondPage = imports.list(rpp = 2, page = 2)
-    secondPage.records.map(_.id) shouldBe List(secondClosed.id, firstClosed.id)
-    secondPage.total shouldBe 4
-    imports.list(rpp = 2, page = 3).records shouldBe empty
+    def top(shown: Int): (List[Option[String]], Int) = {
+      val history = imports.history(shown)
+      (history.entries.map(_.anImport.id), history.total)
+    }
+
+    top(2) shouldBe (List(secondOpen.id, firstOpen.id), 4)
+    top(3) shouldBe (List(secondOpen.id, firstOpen.id, secondClosed.id), 4)
+    top(10) shouldBe (List(secondOpen.id, firstOpen.id, secondClosed.id, firstClosed.id), 4)
   }
 
   test("The Import history names who delivered each Import, where its files went and whether a restart interrupted it") {
@@ -596,7 +598,7 @@ import altitude.core.util.Query
       testApp.service.asset.queryAll(new Query()).total shouldBe 0
     }
 
-    val files = imports.files(opened.persistedId)
+    val files = testContext.importFiles(opened.persistedId)
     files.map(file => (file.relPath, file.outcome, file.reason, file.assetId)) shouldBe List(
       ("copy.jpg", ImportOutcome.Duplicate, Some("Triage"), None),
       ("kept.jpg", ImportOutcome.Imported, None, None))
@@ -725,10 +727,10 @@ import altitude.core.util.Query
     fileRows(expired) shouldBe 0
     stored(recentFile).outcome shouldBe ImportOutcome.Imported
     stored(pendingFile).outcome shouldBe ImportOutcome.Pending
-    imports.list(rpp = 10).records.map(_.id) shouldBe List(inProgress.id, recent.id)
+    testContext.imports.map(_.id) shouldBe List(inProgress.id, recent.id)
 
     switchContextRepo(second)
-    imports.list(rpp = 10).records shouldBe empty
+    testContext.imports shouldBe empty
     fileRows(theirs) shouldBe 0
   }
 
@@ -751,14 +753,14 @@ import altitude.core.util.Query
     withSetting(Settings.IMPORT_HISTORY_DAYS, "0") {
       imports.prune()
     }
-    imports.list(rpp = 10).records.map(_.id) shouldBe List(recent.id, ancient.id)
+    testContext.imports.map(_.id) shouldBe List(recent.id, ancient.id)
     stored(recentFile).outcome shouldBe ImportOutcome.Imported
     stored(ancientFile).outcome shouldBe ImportOutcome.Imported
 
     withSetting(Settings.IMPORT_HISTORY_DAYS, "30") {
       imports.prune()
     }
-    imports.list(rpp = 10).records.map(_.id) shouldBe List(recent.id)
+    testContext.imports.map(_.id) shouldBe List(recent.id)
     fileRows(ancient) shouldBe 0
     stored(recentFile).outcome shouldBe ImportOutcome.Imported
   }
@@ -885,7 +887,7 @@ import altitude.core.util.Query
     val before = testContext.rowsOf(second)
 
     intercept[NotFoundException](imports.getById(theirs.persistedId))
-    intercept[NotFoundException](imports.files(theirs.persistedId))
+    intercept[NotFoundException](testContext.importFiles(theirs.persistedId))
     intercept[NotFoundException](imports.addFile(theirs.persistedId, "intruder.jpg", sizeBytes = 10))
     intercept[NotFoundException](imports.close(theirs.persistedId))
     intercept[NotFoundException](imports.settle(theirFile.persistedId, ImportOutcome.Failed))
@@ -922,7 +924,7 @@ import altitude.core.util.Query
     val refused = intercept[IllegalOperationException](imports.open(ImportSource.Upload, destFolderId = folder.id))
 
     refused.getMessage shouldBe Const.Msg.Err.DESTINATION_IN_TRASH
-    imports.list(rpp = 10).total shouldBe 0
+    testContext.imports.size shouldBe 0
   }
 
   test("An upload's Import with a destination takes Organize as well as Import") {
@@ -958,7 +960,7 @@ import altitude.core.util.Query
 
       intercept[ForbiddenException](imports.openUpload(destFolderId = folder.id))
       intercept[NotFoundException](imports.openUpload(destFolderId = theirFolder.id))
-      imports.list(rpp = 10).total shouldBe 1
+      testContext.imports.size shouldBe 1
     }
 
     RequestContext.permissions.withValue(Permissions.of(Permission.Import, Permission.Organize)) {
@@ -999,7 +1001,7 @@ import altitude.core.util.Query
       )
       refusals.map(_.getMessage).toSet shouldBe Set(Const.Msg.Err.FORBIDDEN_PERMISSION.format(Permission.Organize.label))
       Files.exists(staged) shouldBe false
-      imports.files(sorting.persistedId) shouldBe empty
+      testContext.importFiles(sorting.persistedId) shouldBe empty
 
       imports.closeUpload(sorting.persistedId)
       stored(sorting).isInProgress shouldBe false
@@ -1193,12 +1195,12 @@ import altitude.core.util.Query
       imports.upload(opened.persistedId, "photo.jpg", emptyFile)).message shouldBe Const.Msg.Err.EMPTY_FILE
     Files.exists(emptyFile) shouldBe false
 
-    imports.files(opened.persistedId) shouldBe empty
+    testContext.importFiles(opened.persistedId) shouldBe empty
     counters(opened) shouldBe (0, 0, 0, 0, 0)
 
     val fine = List("my.photo.jpg", "thumbs.db.jpg", "apart", "Album.tmp.d/photo.jpg")
     fine.foreach(path => imports.upload(opened.persistedId, path, stagedImage()).outcome shouldBe ImportOutcome.Pending)
-    imports.files(opened.persistedId).map(_.relPath).toSet shouldBe fine.toSet
+    testContext.importFiles(opened.persistedId).map(_.relPath).toSet shouldBe fine.toSet
   }
 
   test("An upload to an Import that takes no more files, or that is not the repository's, stores nothing") {
@@ -1222,7 +1224,7 @@ import altitude.core.util.Query
 
     Files.exists(late) shouldBe false
     Files.exists(lost) shouldBe false
-    imports.files(opened.persistedId) shouldBe empty
+    testContext.importFiles(opened.persistedId) shouldBe empty
   }
 
   test("An upload's Import takes files from, and is closed by, the account that opened it alone") {
@@ -1256,7 +1258,7 @@ import altitude.core.util.Query
       intercept[ForbiddenException](imports.addFailedFile(anImport.persistedId, "photo.jpg", sizeBytes = 10))
       intercept[ForbiddenException](imports.closeUpload(anImport.persistedId))
       Files.exists(staged) shouldBe false
-      imports.files(anImport.persistedId) shouldBe empty
+      testContext.importFiles(anImport.persistedId) shouldBe empty
       stored(anImport).isComplete shouldBe false
     }
 
@@ -1299,7 +1301,7 @@ import altitude.core.util.Query
     stopped.shutdown()
 
     imports.failForLostDestination(opened.persistedId, "early.jpg", sizeBytes = 2048) shouldBe None
-    imports.files(opened.persistedId) shouldBe empty
+    testContext.importFiles(opened.persistedId) shouldBe empty
 
     testApp.service.library.deleteFolderById(sorted.persistedId)
     val announced = imports.failForLostDestination(opened.persistedId, "Beach/sea.jpg", sizeBytes = 2048)
@@ -1311,7 +1313,9 @@ import altitude.core.util.Query
       ("Beach/sea.jpg", 2048, ImportOutcome.Failed, lost))
     (uploaded.outcome, uploaded.reason) shouldBe (ImportOutcome.Failed, lost)
     Files.exists(staged) shouldBe false
-    imports.files(opened.persistedId).map(file => (file.relPath, file.outcome, file.reason, file.assetId)) shouldBe List(
+    testContext
+      .importFiles(opened.persistedId)
+      .map(file => (file.relPath, file.outcome, file.reason, file.assetId)) shouldBe List(
       ("Beach/sea.jpg", ImportOutcome.Failed, lost, None),
       ("sand.jpg", ImportOutcome.Failed, lost, None))
     counters(opened) shouldBe (0, 0, 0, 0, 2)
@@ -1320,7 +1324,7 @@ import altitude.core.util.Query
 
     imports.failForLostDestination(imports.openUpload().persistedId, "photo.jpg", sizeBytes = 10) shouldBe None
     intercept[ValidationException](imports.failForLostDestination(opened.persistedId, ".hidden.jpg", sizeBytes = 10))
-    imports.files(opened.persistedId).size shouldBe 2
+    testContext.importFiles(opened.persistedId).size shouldBe 2
   }
 
   test("A file the page could not send is recorded failed") {
@@ -1355,7 +1359,7 @@ import altitude.core.util.Query
     intercept[ValidationException](imports.addFailedFile(opened.persistedId, ".hidden/lost.jpg", sizeBytes = 1))
     imports.close(opened.persistedId)
     intercept[IllegalOperationException](imports.addFailedFile(opened.persistedId, "late.jpg", sizeBytes = 1))
-    imports.files(opened.persistedId).size shouldBe 2
+    testContext.importFiles(opened.persistedId).size shouldBe 2
   }
 
   test("A duplicate of a copy whose import is not complete is failed, saying the copy is not in the Library") {

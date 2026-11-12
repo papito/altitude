@@ -11,9 +11,6 @@ trait WatchFolderFileDao extends BaseDao[WatchFolderFile]:
   /** Everything the Watch folder remembers */
   def ofWatchFolder(watchFolderId: String): List[WatchFolderFile]
 
-  /** What the Watch folder remembers of the file at the path, if anything */
-  def find(watchFolderId: String, relPath: String): Option[WatchFolderFile]
-
   /** Remembers files a scan saw for the first time, each seen at `seenAt` */
   def addAll(files: Seq[WatchFolderFile], seenAt: OffsetDateTime): Unit
 

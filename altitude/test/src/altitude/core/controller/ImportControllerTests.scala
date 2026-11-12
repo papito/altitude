@@ -388,7 +388,7 @@ object ImportControllerTests {
           Some("Holiday"),
           None,
           2)
-        val files = imports.files(importId)
+        val files = testContext.importFiles(importId)
         files.map(_.relPath) shouldBe List("Beach/sea.jpg", "sand.jpg")
         val assets = files.map(file => testApp.service.asset.getById(file.assetId.get))
         assets.map(asset => (asset.isTriaged, asset.folderId)) shouldBe List((true, ""), (true, ""))
@@ -436,7 +436,7 @@ object ImportControllerTests {
           response.statusCode shouldBe 400
           response.text() should include(Api.Field.Import.EXPECTED_FILES)
         }
-        imports.list(rpp = 10).total shouldBe 4
+        testContext.imports.size shouldBe 4
     }
   }
 
@@ -475,7 +475,7 @@ object ImportControllerTests {
       host =>
         openImport(host, repoId, into(sorted.persistedId)).statusCode shouldBe 403
         openImport(host, repoId, into(unknown)).statusCode shouldBe 404
-        testApp.service.imports.list(rpp = 10).total shouldBe 0
+        testContext.imports.size shouldBe 0
         openImport(host, repoId).statusCode shouldBe 200
 
         testContext.cookies = cookiesOf(host, organizer)
@@ -483,7 +483,7 @@ object ImportControllerTests {
         val inTrash = openImport(host, repoId, into(gone.persistedId))
         inTrash.statusCode shouldBe 400
         ujson.read(inTrash.text())(Api.Field.ERROR).str shouldBe Const.Msg.Err.DESTINATION_IN_TRASH
-        testApp.service.imports.list(rpp = 10).total shouldBe 1
+        testContext.imports.size shouldBe 1
 
         val importId = openedImport(host, repoId, into(sorted.persistedId))
         testApp.service.imports.getById(importId).destFolderId shouldBe sorted.id
@@ -506,8 +506,8 @@ object ImportControllerTests {
         testContext.cookies = cookiesOf(host, organizer)
         closeImport(host, repoId, importId).statusCode shouldBe 200
         eventually(testApp.service.imports.getById(importId).closedAt should not be empty)
-        testApp.service.imports.files(importId).map(_.relPath) shouldBe List("Beach/sea.jpg")
-        val asset = testApp.service.asset.getById(testApp.service.imports.files(importId).head.assetId.get)
+        testContext.importFiles(importId).map(_.relPath) shouldBe List("Beach/sea.jpg")
+        val asset = testApp.service.asset.getById(testContext.importFiles(importId).head.assetId.get)
         asset.isTriaged shouldBe false
         testApp.service.folder.getPath(asset.folderId).map(_.name) shouldBe List("Sorted", "Beach")
         testContext.cookies = importer
@@ -549,7 +549,7 @@ object ImportControllerTests {
         stagedFiles shouldBe stagedBefore
 
         val imports = testApp.service.imports
-        imports.files(importId).map(file => (file.relPath, file.outcome, file.reason, file.assetId)) shouldBe List(
+        testContext.importFiles(importId).map(file => (file.relPath, file.outcome, file.reason, file.assetId)) shouldBe List(
           ("Beach/sea.jpg", ImportOutcome.Failed, Some(Const.Msg.Err.DESTINATION_IN_TRASH), None),
           ("sand.jpg", ImportOutcome.Failed, Some(Const.Msg.Err.DESTINATION_IN_TRASH), None)
         )
@@ -605,7 +605,7 @@ object ImportControllerTests {
           ujson.Obj(Api.Field.Import.REL_PATH -> "Album/.hidden.jpg", Api.Field.Import.SIZE_BYTES -> 10)).statusCode shouldBe 400
         recordFailed(ujson.Obj(Api.Field.Import.SIZE_BYTES -> 10)).statusCode shouldBe 400
 
-        testApp.service.imports.files(importId) shouldBe empty
+        testContext.importFiles(importId) shouldBe empty
     }
   }
 
@@ -643,7 +643,7 @@ object ImportControllerTests {
         recorded.statusCode shouldBe 200
         val answer = ujson.read(recorded.text())
         (answer(Api.Field.Import.OUTCOME).str, answer(Api.Field.Import.REASON).str) shouldBe ("failed", "Upload failed")
-        def files = testApp.service.imports.files(importId).map(file => (file.relPath, file.sizeBytes, file.outcome))
+        def files = testContext.importFiles(importId).map(file => (file.relPath, file.sizeBytes, file.outcome))
         files shouldBe List(("Beach/sea.jpg", 2048, ImportOutcome.Failed))
 
         closeImport(host, repoId, importId).statusCode shouldBe 200

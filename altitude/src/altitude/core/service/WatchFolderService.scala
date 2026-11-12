@@ -340,18 +340,9 @@ class WatchFolderService(val app: Altitude):
       retried
     }
 
-  /** Whether a scan of the Watch folder is running, or a file one handed to the import pipeline is in it still */
-  def isWorking(id: String): Boolean = scanning.contains(id) || inFlight.values.asScala.exists(_.watchFolderId == id)
-
   def getById(id: String): WatchFolder =
     txManager.asReadOnly {
       dao.getById(id)
-    }
-
-  /** What the Watch folder remembers of the files of its directory */
-  def memory(id: String): List[WatchFolderFile] =
-    txManager.asReadOnly {
-      fileDao.ofWatchFolder(id)
     }
 
   /** The context repository's Watch folders as the Import page's cards show them, by name */

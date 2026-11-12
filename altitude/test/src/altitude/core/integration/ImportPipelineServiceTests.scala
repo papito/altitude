@@ -984,7 +984,7 @@ import altitude.core.util.Query
 
   /** The Import file as stored now */
   private def storedFile(file: ImportFile): ImportFile =
-    testApp.service.imports.files(file.importId).find(_.id == file.id).get
+    testContext.importFiles(file.importId).find(_.id == file.id).get
 
   /** A staged random image under an asset with the checksum of `existing`, as a second copy of its file would arrive */
   private def copyOf(existing: Asset): AssetWithData =
