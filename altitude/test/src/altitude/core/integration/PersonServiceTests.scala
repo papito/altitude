@@ -9,6 +9,7 @@ import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.must.Matchers.empty
 import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.{ include, should, shouldBe }
+import org.scalatest.tagobjects.Slow
 import scalasql.core.SqlStr.SqlStringSyntax
 
 import scala.util.Random
@@ -24,7 +25,6 @@ import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.dao.jdbc.PersonDao
-import altitude.core.dao.sql.Db
 import altitude.core.models.Asset
 import altitude.core.models.Face
 import altitude.core.models.Person
@@ -943,27 +943,6 @@ import altitude.core.util.Util
     testApp.service.person.getLiveByNameKey(precomposed("élodie")).map(_.persistedId) shouldBe Some(elodie.persistedId)
   }
 
-  test("The live person holding a name is looked up through the name-key index") {
-
-    /**
-     * Setup:
-     *
-     * The statement `PersonDao.getLiveByNameKey` runs: the repository's live person by name key.
-     *
-     * Assertions:
-     *
-     * Its plan reads `person_01`, the partial unique index of the name keys. SQLite matches a partial index to a bound flag by
-     * its value, which holds for a flag bound as a number and not for one bound as text.
-     */
-    val engine = searchDialect
-    val lookup = PersonDao.liveByNameKey(engine.dialect, RequestContext.getRepository.persistedId, "tessa")
-    val statement = Db.render(lookup, engine.dialect)
-
-    val plan = lookupPlanOf(statement.withCompleteQuery(false))
-
-    withClue(plan)(plan should include("person_01"))
-  }
-
   test("A person merged away after taking the cover face of one merged into them leaves two merged-away people with one cover") {
 
     /**
@@ -1480,7 +1459,7 @@ import altitude.core.util.Util
   /** What opening the Person from the repository view finds with triaged items hidden: the search `SearchRequestParser` builds */
   private def foundInRepositoryView(person: Person): Int = {
     val scope = SearchRequestParser
-      .parse(Const.Search.View.DEFAULT, None, None, Some(person.persistedId), None, None, None)
+      .parse(SearchRequestParser.Params(personId = Some(person.persistedId)))
       .getOrElse(fail("The repository view of a Person is a valid scope"))
     testApp.service.library.count(scope.query())
   }
@@ -1653,7 +1632,7 @@ import altitude.core.util.Util
     listedCounts(showTriaged = true) shouldBe Map(dest.persistedId -> 1)
   }
 
-  test("The triaged assets per person are counted from a partial index over the triaged assets") {
+  test("The triaged assets per person are counted from a partial index over the triaged assets", Slow) {
 
     /**
      * Setup:

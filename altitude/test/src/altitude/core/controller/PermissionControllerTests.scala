@@ -89,8 +89,9 @@ import altitude.core.models.Permissions
      * Assertions:
      *
      * The Guest's request for the Triage view or the Trash view of the main page, the search results and the map's cells and
-     * bounds, or for the triaged assets Browse adds with `triaged=true` (the search, and the People list of Triage's explorer),
-     * is a 403, in JSON from the map; the same requests for Browse answer 200.
+     * bounds, or for the triaged assets Browse adds with `triaged=true` (the search, the People list of Triage's explorer, and
+     * the advanced search panel's form and People options, which count them), is a 403, in JSON from the map; the same requests
+     * for Browse answer 200.
      *
      * Edge cases:
      *
@@ -130,6 +131,11 @@ import altitude.core.models.Permissions
         }
         withClue("the People list of triaged assets: ") {
           get(s"$host/htmx/people/r/$guestLibrary/list", Map("triaged" -> "true"), guestCookies).statusCode shouldBe 403
+        }
+        for (route <- List("options/people", "panel")) withClue(s"the advanced search panel's $route with triaged assets: ") {
+          val url = s"$host/htmx/search/r/$guestLibrary/$route"
+          get(url, Map("triaged" -> "true"), guestCookies).statusCode shouldBe 403
+          get(url, Map.empty, guestCookies).statusCode shouldBe 200
         }
 
         for ((url, query) <- viewRequests(host, guestLibrary, Map.empty)) withClue(s"[$url]: ") {

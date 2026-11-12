@@ -2,6 +2,7 @@ package altitude.core.integration
 
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.shouldBe
+import org.scalatest.tagobjects.Slow
 
 import altitude.core.*
 import altitude.core.models.*
@@ -189,7 +190,7 @@ import altitude.core.util.Query
     testApp.service.person.getById(person.persistedId).numOfFaces shouldBe 0
   }
 
-  test("A selection larger than a statement's parameter limit is recycled and moved back") {
+  test("A selection larger than a statement's parameter limit is recycled and moved back", Slow) {
 
     /**
      * Setup:

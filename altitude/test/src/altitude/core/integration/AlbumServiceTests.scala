@@ -3,6 +3,7 @@ package altitude.core.integration
 import java.util.Locale
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ shouldBe, shouldEqual }
+import org.scalatest.tagobjects.Slow
 
 import altitude.core.Altitude
 import altitude.core.Api
@@ -375,7 +376,7 @@ import altitude.core.util.SearchQuery
     testApp.service.album.getAssetIds(album.persistedId) shouldEqual Set(asset.persistedId)
   }
 
-  test("A selection larger than a statement's parameter limit is added to and removed from an album") {
+  test("A selection larger than a statement's parameter limit is added to and removed from an album", Slow) {
 
     /**
      * Setup:

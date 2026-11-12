@@ -14,6 +14,11 @@ const DEFAULTS = {
     personId: null,
     albumId: null,
     locationId: null,
+    peopleMatch: null,
+    takenFrom: null,
+    takenTo: null,
+    importedFrom: null,
+    importedTo: null,
     subset: null,
     q: null,
     bbox: null,
@@ -49,12 +54,35 @@ const DEFAULTS = {
  * repository view, off by default) survives them too, but belongs to that view: a change of view
  * clears it, and the store drops it from any other view. This table is what the server's old `newSearch=true` flag used to express, and it is the whole
  * reason a widget can send just the one parameter it knows about.
+ *
+ * The advanced search panel is the one widget that combines them: it sets the text, a folder,
+ * people and Locations together (`personId` and `locationId` then hold several IDs, separated by
+ * commas), with how several people combine (`peopleMatch`) and the Date Taken and Date Imported
+ * ranges, through `applySearchFilters`, which goes around this table. The panel's own parameters
+ * (`PANEL_FILTERS`) are what looking somewhere else clears as well: a place, a view or new text
+ * drops them, and with a place's single ID the several the panel chose.
  */
 const PLACES = ["folderId", "personId", "albumId", "locationId", "subset"]
+
+/** The parameters only the advanced search panel sets: how several people combine, and the two date ranges */
+const PANEL_FILTERS = [
+    "peopleMatch",
+    "takenFrom",
+    "takenTo",
+    "importedFrom",
+    "importedTo",
+]
+
+/** Every filter of the advanced search panel, which a search from it sets together (`applySearchFilters`) */
+const FILTERS = ["q", "folderId", "personId", "locationId", ...PANEL_FILTERS]
+
+/** What a search from the panel returns to its default: it searches the repository view by its filters alone */
+const FILTER_RESETS = ["view", "albumId", "subset", "bbox"]
 
 /** What looking at `place` (or, with none, at another view) clears */
 const elsewhere = (place) => [
     ...PLACES.filter((name) => name !== place),
+    ...PANEL_FILTERS,
     "bbox",
     "q",
 ]
@@ -66,7 +94,7 @@ const CLEARS = {
     albumId: elsewhere("albumId"),
     locationId: elsewhere("locationId"),
     subset: elsewhere("subset"),
-    q: ["view", ...PLACES, "bbox"],
+    q: ["view", ...PLACES, ...PANEL_FILTERS, "bbox"],
 }
 
 /** The numbers the server reads, each held to the whole values it accepts: a page size up to its bound */
@@ -77,13 +105,27 @@ const NUMBER_RANGES = {
 /** The words the server reads, each held to the values it accepts: a subset is one of the Triage subsets */
 const ALLOWED_VALUES = {
     subset: Object.values(Const.search.subsets),
+    peopleMatch: Object.values(Const.search.peopleMatch),
 }
+
+/** The days the server reads, each an ISO date (`2024-06-01`) */
+const DATE_PARAMS = ["takenFrom", "takenTo", "importedFrom", "importedTo"]
+
+/** The two ends of each date range, the first no later than the last */
+const DATE_RANGES = [
+    ["takenFrom", "takenTo"],
+    ["importedFrom", "importedTo"],
+]
+
+/** The parameters that hold one ID or several, separated by commas, at most `Const.search.maxIds` of them */
+export const ID_LISTS = ["personId", "locationId"]
 
 const PARAM_NAMES = Object.keys(DEFAULTS)
 
 /**
  * Search parameters read out of a browser URL's query string. Unknown parameters are ignored, and so
- * is a page size or a subset the server would refuse (`normalize`). The layout is the one
+ * is a page size, a subset, a people match or a day the server would refuse, and a list of people or
+ * Locations is held to the IDs the server takes (`normalize`). The layout is the one
  * exception to "the URL, then the defaults": a URL that says nothing about it gets the layout last
  * chosen in this browser (`localStorage`), so a map user opens on the map.
  */
@@ -101,14 +143,38 @@ export function seedSearchParams(search) {
 }
 
 /**
- * The combinations the server refuses, settled the way the scope rules would have: text searches
- * the repository view, not the trash; the Relevance sort goes with the text: a change that clears
- * the text drops it, so the server's default applies, while any other sort stays; and the triage
- * filter is the repository view's, so another view drops it (the server refuses it with the triage
- * view, and the toolbar offers it nowhere else). A URL can ask for any of them as well.
+ * The combinations the server refuses, settled the way the scope rules would have: text, a date
+ * range and several people or Locations search the repository view, not the trash; a date range
+ * whose first day is after its last is no range; the Relevance sort goes with the text: a change
+ * that clears the text drops it, so the server's default applies, while any other sort stays; and
+ * the triage filter is the repository view's, so another view drops it (the server refuses it with
+ * the triage view, and the toolbar offers it nowhere else). A URL can ask for any of them as well.
+ * A people match says nothing of fewer than two people, so it goes with the second of them. What
+ * only the advanced search panel combines searches by the panel's filters alone, so it drops an
+ * album and a Triage subset (`combinesFilters`), which the server refuses beside it.
  */
 function withoutRefusedCombinations(params) {
-    if (params.q !== null && params.view === Const.views.trashbin) {
+    DATE_RANGES.forEach(([from, to]) => {
+        if (
+            params[from] !== null &&
+            params[to] !== null &&
+            params[from] > params[to]
+        ) {
+            params[from] = DEFAULTS[from]
+            params[to] = DEFAULTS[to]
+        }
+    })
+
+    if (idsOf(params.personId).length < 2) {
+        params.peopleMatch = DEFAULTS.peopleMatch
+    }
+
+    if (combinesFilters(params)) {
+        params.albumId = DEFAULTS.albumId
+        params.subset = DEFAULTS.subset
+    }
+
+    if (searchesOutsideTrash(params) && params.view === Const.views.trashbin) {
         params.view = DEFAULTS.view
     }
 
@@ -121,6 +187,46 @@ function withoutRefusedCombinations(params) {
     }
 
     return params
+}
+
+/** Text, a date range, or several people or Locations: what the server searches the repository view for, never the trash */
+function searchesOutsideTrash(params) {
+    return params.q !== null || hasPanelFilter(params)
+}
+
+/** A date range, or several people or Locations: what only the advanced search panel sets */
+function hasPanelFilter(params) {
+    return (
+        DATE_PARAMS.some((name) => params[name] !== null) ||
+        ID_LISTS.some((name) => idsOf(params[name]).length > 1)
+    )
+}
+
+/**
+ * What only the advanced search panel combines, as the server tells it (`SearchRequestParser`): a
+ * date range, several people or Locations, or more than one of the text, a folder, a person and a
+ * Location
+ */
+function combinesFilters(params) {
+    const places = [
+        params.q,
+        params.folderId,
+        params.personId,
+        params.locationId,
+    ].filter((value) => value !== null)
+
+    return hasPanelFilter(params) || places.length > 1
+}
+
+/** The IDs a parameter holds: none, one, or several separated by commas */
+export function idsOf(value) {
+    return value ? String(value).split(",").filter(Boolean) : []
+}
+
+/** The ID a parameter holds when it holds exactly one, else null */
+function oneIdOf(value) {
+    const ids = idsOf(value)
+    return ids.length === 1 ? ids[0] : null
 }
 
 function rememberedLayout() {
@@ -154,6 +260,45 @@ export function applySearchParamChanges(current, changes) {
     })
 
     return withoutRefusedCombinations(next)
+}
+
+/**
+ * `current` as a search from the advanced search panel leaves it: every filter of the panel
+ * (`FILTERS`) is set as `filters` gives it, one left out being no filter, and the view, the album,
+ * the Triage subset and the map area return to their defaults, so the search is the repository
+ * view's by the panel's filters alone. The layout, the grouping, the sort, the page size and the
+ * triage filter stay, under the rules every change is held to (`withoutRefusedCombinations`).
+ */
+export function applySearchFilters(current, filters) {
+    const next = { ...current }
+
+    FILTERS.forEach((name) => {
+        next[name] = normalize(name, filters[name])
+    })
+    FILTER_RESETS.forEach((name) => {
+        next[name] = DEFAULTS[name]
+    })
+
+    return withoutRefusedCombinations(next)
+}
+
+/** The advanced search panel's filters among `params`, each as the store holds it (null for none) */
+export function searchFiltersOf(params) {
+    return Object.fromEntries(FILTERS.map((name) => [name, params[name]]))
+}
+
+/**
+ * How many of the advanced search panel's fields `params` fill: the text, the folder, the people,
+ * the Locations and each date range count once, however many people or Locations are chosen.
+ */
+export function countSearchFilters(params) {
+    return [
+        params.q,
+        params.folderId,
+        params.personId,
+        params.locationId,
+        ...DATE_RANGES.map(([from, to]) => params[from] ?? params[to]),
+    ].filter((value) => value !== null).length
 }
 
 /**
@@ -217,6 +362,68 @@ export function createSearchParamsStore() {
             Object.assign(this, next)
         },
 
+        /**
+         * A search from the advanced search panel: its filters replace the ones in force and the
+         * scope returns to the repository view (`applySearchFilters`). A filtered search's results
+         * title removes one filter the same way, with the filters its other chips name.
+         */
+        replaceFilters(filters) {
+            Object.assign(this, applySearchFilters(this.snapshot(), filters))
+        },
+
+        /** Whether the search names `id` in `param` (`personId`, `locationId`), alone or among several */
+        names(param, id) {
+            return idsOf(this[param]).includes(id)
+        },
+
+        /**
+         * The search with `toId` in place of `fromId` among the IDs of `param` (`personId`,
+         * `locationId`), or without `fromId` when `toId` is null: what a merge or a deletion of a
+         * searched Person, or a deletion of a searched Location, leaves of it. The view and every
+         * other filter stay; the map area goes, as it goes when the place changes, since it was
+         * drawn on the search before.
+         */
+        replaceId(param, fromId, toId) {
+            const ids = idsOf(this[param])
+                .map((id) => (id === fromId ? toId : id))
+                .filter(Boolean)
+
+            Object.assign(
+                this,
+                withoutRefusedCombinations({
+                    ...this.snapshot(),
+                    [param]: [...new Set(ids)].join(",") || null,
+                    bbox: DEFAULTS.bbox,
+                }),
+            )
+        },
+
+        /** The advanced search panel's filters as they are in force */
+        filters() {
+            return searchFiltersOf(this.snapshot())
+        },
+
+        /**
+         * The Person whose results are displayed, when the search names exactly one: none for a
+         * search of several people, whose assets a correction of one Face does not sort.
+         */
+        viewedPersonId() {
+            return oneIdOf(this.personId)
+        },
+
+        /**
+         * The Location whose results are displayed, when the search names exactly one: none for a
+         * search of several Locations, which the batch ops can remove a selection from none of.
+         */
+        viewedLocationId() {
+            return oneIdOf(this.locationId)
+        },
+
+        /** How many of the panel's fields the search in force fills: the number on the nav's filter button */
+        filterCount() {
+            return countSearchFilters(this.snapshot())
+        },
+
         snapshot() {
             const params = {}
             PARAM_NAMES.forEach((name) => {
@@ -246,9 +453,10 @@ function isOmitted(name, value) {
 }
 
 /**
- * A parameter's value as the store keeps it. A number or a word the server would refuse is no opinion,
- * like an empty one, so a hand-edited URL cannot turn every search into a 400: the server's default
- * applies.
+ * A parameter's value as the store keeps it. A number, a word or a day the server would refuse is no
+ * opinion, like an empty one, so a hand-edited URL cannot turn every search into a 400: the server's
+ * default applies. A list of people or Locations is its IDs, each once, without the empty segments
+ * and the IDs past the most a search names, which the server would refuse the whole list for.
  */
 function normalize(name, value) {
     if (value === null || value === undefined || value === "") {
@@ -269,5 +477,24 @@ function normalize(name, value) {
             : DEFAULTS[name]
     }
 
+    if (DATE_PARAMS.includes(name)) {
+        return isIsoDate(String(value)) ? String(value) : DEFAULTS[name]
+    }
+
+    if (ID_LISTS.includes(name)) {
+        const ids = [...new Set(idsOf(value))].slice(0, Const.search.maxIds)
+        return ids.join(",") || DEFAULTS[name]
+    }
+
     return String(value)
+}
+
+/** Whether `value` is a calendar day written as the server reads one, `2024-06-01` */
+function isIsoDate(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return false
+    }
+
+    const day = new Date(`${value}T00:00:00Z`)
+    return !Number.isNaN(day.getTime()) && day.toISOString().startsWith(value)
 }

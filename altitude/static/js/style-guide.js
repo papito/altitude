@@ -50,6 +50,7 @@ import {
     TOKEN_REFERENCE,
 } from "./common/token-kinds.js"
 import { Const } from "./constants.js"
+import { openSearchPanel } from "./search-results/search-panel.js"
 import { Alpine } from "./lib/alpine.esm.min.js"
 
 // Two lengths are equal by coincidence far more often than by design, so they are not duplicates
@@ -513,7 +514,10 @@ function mountMenuSpecimens() {
             ariaLabel: "Actions for the sample row",
             entityAttr: "data-style-guide-specimen",
             entityId: "sample",
+            // A folder's shape: Search here, which opens the nav's advanced search panel, a rule, then the dialogs
             actions: [
+                { label: "Search here", run: () => openSearchPanel() },
+                { separator: true },
                 { label: "Rename", url },
                 { label: "Delete", url },
             ],

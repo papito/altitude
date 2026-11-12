@@ -6,6 +6,7 @@ import {
     isRequestSuccessful,
 } from "../common/htmx-events.js"
 import { showSuccessSnackBar } from "../common/snackbar.js"
+import { searchAgainForPersonChip } from "../search-results/filtered-title.js"
 import { reloadPersonTitle } from "../search-results/person-title.js"
 import { runSearch } from "../search-results/search.js"
 
@@ -55,14 +56,16 @@ export function registerPeopleListeners(app) {
         showSuccessSnackBar("Person merged successfully")
 
         // A merge runs no search of its own, in Browse and Triage alike: results that are neither
-        // person's stay as they are. Results scoped to one of the two are stale, though. The
-        // source is gone, so its results become the destination's, in the same view; the
-        // destination's are read again with the assets the merge gave it
-        const scopedPersonId = Alpine.store(Const.state.searchParams).personId
+        // person's stay as they are. Results of a search naming one of the two are stale, though.
+        // The source is gone, so the destination takes their place in the search, in the same view
+        // and with every other filter of a filtered search; results naming the destination are
+        // read again with the assets the merge gave it
+        const searchParams = Alpine.store(Const.state.searchParams)
 
-        if (scopedPersonId === mergeSourceId) {
-            runSearch({ params: { personId: mergeDestId } })
-        } else if (scopedPersonId === mergeDestId) {
+        if (searchParams.names("personId", mergeSourceId)) {
+            searchParams.replaceId("personId", mergeSourceId, mergeDestId)
+            runSearch()
+        } else if (searchParams.names("personId", mergeDestId)) {
             runSearch()
         }
     })
@@ -105,7 +108,8 @@ export function registerPeopleListeners(app) {
      * bucket, with the cell's number and a hidden person's ", hidden" text intact. A results title
      * showing that person is read again (`reloadPersonTitle`), the name with the links a name
      * changes, unless the rename came from its own editor, whose response is the new name
-     * (`detail.titleShowsName`).
+     * (`detail.titleShowsName`). A filtered search's title has a chip for them instead, which the
+     * search renders: the search runs again (`searchAgainForPersonChip`).
      */
     document.body.addEventListener(Const.events.personNameEdited, (event) => {
         const { personId, titleShowsName } = event.detail
@@ -115,6 +119,7 @@ export function registerPeopleListeners(app) {
         if (!titleShowsName) {
             reloadPersonTitle(app.context.getRepoId(), personId)
         }
+        searchAgainForPersonChip(personId)
     })
 
     document.body.addEventListener(Const.events.personCoverFaceSet, (event) => {

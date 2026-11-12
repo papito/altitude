@@ -1,10 +1,15 @@
 package altitude.core.unit
 
+import java.time.LocalDate
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.shouldBe
 
+import altitude.core.routes.SearchRequestParser.Scope
 import altitude.core.util.BoundingBox
+import altitude.core.util.DateRange
+import altitude.core.util.PeopleMatch
+import altitude.core.util.SearchCursor
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSort
 
@@ -44,6 +49,179 @@ import altitude.core.util.SearchSort
     new SearchQuery(text = Some("beach"), searchSort = List(SearchSort.Relevance)).isText shouldBe true
     intercept[IllegalArgumentException](new SearchQuery(searchSort = List(SearchSort.Relevance)))
     intercept[IllegalArgumentException](new SearchQuery(text = Some("- OR"), searchSort = List(SearchSort.Relevance)))
+  }
+
+  test("A date range needs an end, and its first day is not after its last") {
+
+    /**
+     * Setup:
+     *
+     * Date ranges with both ends, with one end, with one day as both ends, with no end, and with the first day after the last.
+     *
+     * Assertions:
+     *
+     * A range with both ends or with either one alone is accepted; a range with no end and a range whose first day is after its
+     * last are refused when they are constructed.
+     *
+     * Edge cases:
+     *
+     * One day as both ends is a range of that single day.
+     */
+    val first = LocalDate.parse("2024-06-01")
+    val last = LocalDate.parse("2024-06-30")
+
+    DateRange(Some(first), Some(last)).to shouldBe Some(last)
+    DateRange(Some(first), None).to shouldBe None
+    DateRange(None, Some(last)).from shouldBe None
+    DateRange(Some(first), Some(first)).from shouldBe Some(first)
+
+    intercept[IllegalArgumentException](DateRange(None, None))
+    intercept[IllegalArgumentException](DateRange(Some(last), Some(first)))
+  }
+
+  test("A date range reads as its days, each month by its three letters") {
+
+    /**
+     * Setup:
+     *
+     * A range within one year, a range across two years, a single day, a range open at its start and one open at its end, and the
+     * 8th of every month of 2024.
+     *
+     * Assertions:
+     *
+     * A range within a year names the year once, after its last day; across two years each end has its year; a single day is read
+     * once; an open end reads `from` or `until` its day. Every month is its first three letters in English, the fixed table the
+     * panel's date field reads the same range by (`MONTHS` in js/alpine/components/date-range.js).
+     *
+     * Edge cases:
+     *
+     * September is `Sep`, where British English abbreviates it `Sept`.
+     */
+    def day(iso: String) = Some(LocalDate.parse(iso))
+
+    DateRange(day("2024-06-01"), day("2024-06-30")).label shouldBe "1 Jun – 30 Jun 2024"
+    DateRange(day("2023-12-28"), day("2024-01-03")).label shouldBe "28 Dec 2023 – 3 Jan 2024"
+    DateRange(day("2024-06-08"), day("2024-06-08")).label shouldBe "8 Jun 2024"
+    DateRange(day("2024-06-08"), None).label shouldBe "from 8 Jun 2024"
+    DateRange(None, day("2024-06-21")).label shouldBe "until 21 Jun 2024"
+    DateRange(day("2024-09-08"), day("2024-09-21")).label shouldBe "8 Sep – 21 Sep 2024"
+
+    val months = List("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    for ((month, index) <- months.zipWithIndex) {
+      val eighth = Some(LocalDate.of(2024, index + 1, 8))
+      DateRange(eighth, eighth).label shouldBe s"8 $month 2024"
+    }
+  }
+
+  test("A query matches all of its people unless told any, and every copy keeps its people match and date ranges") {
+
+    /**
+     * Setup:
+     *
+     * A query with no people match given, and a query matching any of its people within a Date Taken and a Date Imported range,
+     * copied each way a query is copied: with a folder set, a metadata filter, a column filter, a text probe limit and no total.
+     *
+     * Assertions:
+     *
+     * The query with no people match given matches all, and has no date range. Every copy of the other still matches any of its
+     * people within both ranges.
+     */
+    val taken = DateRange(Some(LocalDate.parse("2024-06-01")), Some(LocalDate.parse("2024-06-30")))
+    val imported = DateRange(None, Some(LocalDate.parse("2024-07-04")))
+
+    val plain = new SearchQuery()
+    plain.peopleMatch shouldBe PeopleMatch.All
+    plain.takenRange shouldBe None
+    plain.importedRange shouldBe None
+
+    val query = new SearchQuery(peopleMatch = PeopleMatch.Any, takenRange = Some(taken), importedRange = Some(imported))
+    val copies = List(
+      query.withFolderIds(Set("f1")),
+      query.add_metadata_filter("field-1" -> "beach"),
+      query.add("is_recycled" -> false),
+      query.withTextProbeLimit(1),
+      query.withoutTotal
+    )
+
+    for (copy <- copies) withClue(copy) {
+      copy.peopleMatch shouldBe PeopleMatch.Any
+      copy.takenRange shouldBe Some(taken)
+      copy.importedRange shouldBe Some(imported)
+    }
+  }
+
+  test("A cursor's fingerprint tells apart the people match and each date range") {
+
+    /**
+     * Setup:
+     *
+     * A search of two people, and the same search matching any of them, within a Date Taken range, within another Date Taken
+     * range, within a Date Imported range of the first one's days, and within both ranges.
+     *
+     * Assertions:
+     *
+     * The six searches have six fingerprints, so a cursor of one cannot continue another, and the same search has the same
+     * fingerprint again.
+     *
+     * Edge cases:
+     *
+     * The same days as a Date Taken range and as a Date Imported range are two searches.
+     */
+    val june = DateRange(Some(LocalDate.parse("2024-06-01")), Some(LocalDate.parse("2024-06-30")))
+    val fromJune = DateRange(Some(LocalDate.parse("2024-06-01")), None)
+    def fingerprint(
+        peopleMatch: PeopleMatch = PeopleMatch.All,
+        takenRange: Option[DateRange] = None,
+        importedRange: Option[DateRange] = None): String =
+      SearchCursor.scopeFingerprint(
+        new SearchQuery(
+          personIds = Set("p1", "p2"),
+          peopleMatch = peopleMatch,
+          takenRange = takenRange,
+          importedRange = importedRange),
+        repositoryId = "repo-1",
+        dbEngine = "sqlite"
+      )
+
+    val fingerprints = List(
+      fingerprint(),
+      fingerprint(peopleMatch = PeopleMatch.Any),
+      fingerprint(takenRange = Some(june)),
+      fingerprint(takenRange = Some(fromJune)),
+      fingerprint(importedRange = Some(june)),
+      fingerprint(takenRange = Some(june), importedRange = Some(june))
+    )
+
+    fingerprints.distinct.size shouldBe fingerprints.size
+    fingerprint(takenRange = Some(june)) shouldBe fingerprints(2)
+  }
+
+  test("A scope hands its people match and date ranges to the query it builds") {
+
+    /**
+     * Setup:
+     *
+     * A parsed scope of two people matching any of them within a Date Taken and a Date Imported range, and a scope with none of
+     * the three given.
+     *
+     * Assertions:
+     *
+     * The query built from the first scope carries its people match and both ranges; the query built from the second matches all
+     * of its people and has no date range.
+     */
+    val taken = DateRange(Some(LocalDate.parse("2024-06-01")), None)
+    val imported = DateRange(None, Some(LocalDate.parse("2024-07-04")))
+    val plain = Scope(Map(), None, Set(), List("p1", "p2"), Set(), Nil, None, None)
+
+    val query = plain.copy(peopleMatch = PeopleMatch.Any, takenRange = Some(taken), importedRange = Some(imported)).query()
+    query.peopleMatch shouldBe PeopleMatch.Any
+    query.takenRange shouldBe Some(taken)
+    query.importedRange shouldBe Some(imported)
+
+    val unfiltered = plain.query()
+    unfiltered.peopleMatch shouldBe PeopleMatch.All
+    unfiltered.takenRange shouldBe None
+    unfiltered.importedRange shouldBe None
   }
 
   test("A bounding box parses south,west,north,east, checks its ranges and knows the antimeridian") {

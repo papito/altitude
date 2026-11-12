@@ -73,7 +73,8 @@ object SearchCursor:
 
   /**
    * Identifies the search a cursor may continue: the engine, repository, filters as requested (a folder filter as given, not its
-   * currently expanded descendants), grouping if any, ordering. Not a secret: it only tells apart searches.
+   * currently expanded descendants; a date range as its days, not the instants a Date Imported day begins and ends at), grouping
+   * if any, ordering. Not a secret: it only tells apart searches.
    */
   def scopeFingerprint(query: SearchQuery, repositoryId: String, dbEngine: String): String =
     def canonical(value: Any): String = value match
@@ -91,8 +92,11 @@ object SearchCursor:
       sortedPairs(query.metadataFilters),
       query.folderIds.toList.sorted.mkString(","),
       query.personIds.toList.sorted.mkString(","),
+      query.peopleMatch.apiValue,
       query.albumIds.toList.sorted.mkString(","),
       query.locationIds.toList.sorted.mkString(","),
+      query.takenRange.map(_.toString).getOrElse(""),
+      query.importedRange.map(_.toString).getOrElse(""),
       query.bbox.map(_.toString).getOrElse(""),
       query.subset.fold("")(_.apiValue),
       query.grouping.fold("")(_.by.apiValue),

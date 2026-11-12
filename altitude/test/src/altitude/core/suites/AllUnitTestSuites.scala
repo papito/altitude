@@ -28,6 +28,7 @@ import altitude.core.unit.RangeStreamingTests
 import altitude.core.unit.RowColumnTests
 import altitude.core.unit.SceneEmbedderTests
 import altitude.core.unit.SearchQueryModelTests
+import altitude.core.unit.SearchRequestParserTests
 import altitude.core.unit.SearchSqlTests
 import altitude.core.unit.SearchTextTests
 import altitude.core.unit.SearchWordsTests
@@ -60,6 +61,7 @@ abstract class AllUnitTestSuites
     new ApiValidatorTests,
     new DataScrubberTests,
     new SearchQueryModelTests,
+    new SearchRequestParserTests,
     new PersonModelTests,
     new SessionControllerTests,
     new BaseControllerTests,

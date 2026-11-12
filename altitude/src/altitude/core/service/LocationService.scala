@@ -46,6 +46,18 @@ class LocationService(val app: Altitude) extends BaseService[Location]:
       dao.getAll
     }
 
+  /**
+   * The Locations of the IDs, each with its category's name, in no order: an ID of a category, of another repository's row or of
+   * none has no entry
+   */
+  def getLocationsByIds(ids: Set[String]): List[Location] =
+    txManager.asReadOnly {
+      val locations = dao.getByIds(ids).filter(_.kind == LocationKind.Location)
+      val categoryNames =
+        dao.getByIds(locations.flatMap(_.categoryId).toSet).map(category => category.persistedId -> category.name).toMap
+      locations.map(location => location.copy(categoryName = location.categoryId.flatMap(categoryNames.get)))
+    }
+
   def rename(id: String, newName: String): Location =
     txManager.withTransaction {
       val location: Location = getById(id)

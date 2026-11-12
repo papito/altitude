@@ -5,6 +5,7 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatest.tagobjects.Slow
 
 import altitude.core.Altitude
 import altitude.core.FieldConst
@@ -242,7 +243,7 @@ import altitude.core.util.SearchQuery
               | WHERE id NOT LIKE '%-%' AND id LIKE '%0'""".stripMargin)
   }
 
-  test("The viewport statements read the geotagged assets through the asset_geo partial index alone") {
+  test("The viewport statements read the geotagged assets through the asset_geo partial index alone", Slow) {
 
     /**
      * Setup:
@@ -281,7 +282,7 @@ import altitude.core.util.SearchQuery
     withClue(gridPlan)(gridPlan should include("asset_geo"))
   }
 
-  test("The Locations of a viewport are counted from their own members, not from every match") {
+  test("The Locations of a viewport are counted from their own members, not from every match", Slow) {
 
     /**
      * Setup:

@@ -1,10 +1,13 @@
 import { Alpine } from "../../lib/alpine.esm.min.js"
 import { contextMenu } from "./context-menu.js"
 import { curation } from "./curation.js"
+import { dateRange } from "./date-range.js"
 import { faceCombobox } from "./face-combobox.js"
+import { filterCombobox } from "./filter-combobox.js"
 import { initDateGroupSelectable } from "./date-group-selectable.js"
 import { localTime } from "./local-time.js"
 import { peopleTab } from "./people-tab.js"
+import { searchPanel } from "./search-panel.js"
 import { viewSettings } from "./view-settings.js"
 
 // Referenced by name from Twirl templates
@@ -27,3 +30,10 @@ Alpine.data("curation", curation)
 
 // Referenced as `x-data="faceCombobox"` by htmx/detail_panel_people.scala.html
 Alpine.data("faceCombobox", faceCombobox)
+
+// Referenced as `x-data="searchPanel"`, `x-data="filterCombobox"` and `x-data="dateRange"` by
+// htmx/search_panel.scala.html, the advanced search panel's form and its fields, which the nav loads on every page
+// (nav-page.js registers them too)
+Alpine.data("searchPanel", searchPanel)
+Alpine.data("filterCombobox", filterCombobox)
+Alpine.data("dateRange", dateRange)

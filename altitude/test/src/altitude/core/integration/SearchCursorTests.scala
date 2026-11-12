@@ -1,6 +1,6 @@
 package altitude.core.integration
 
-import java.time.{ LocalDateTime, OffsetDateTime, ZoneOffset }
+import java.time.{ LocalDate, LocalDateTime, OffsetDateTime, ZoneOffset }
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe, shouldEqual }
 
@@ -438,8 +438,8 @@ import altitude.core.util.*
      * Assertions:
      *
      * The cursor is refused when the text, the sort field or direction, the group direction or the grouping, the folder, the
-     * Location, the bounding box or the subset differ, and decoding refuses an older version, garbage, an empty object and an
-     * empty string. The same search still continues.
+     * Location, the bounding box, the subset, the people match or either date range differ, and decoding refuses an older
+     * version, garbage, an empty object and an empty string. The same search still continues.
      *
      * Edge cases:
      *
@@ -466,7 +466,10 @@ import altitude.core.util.*
         folderIds: Set[String] = Set(),
         locationIds: Set[String] = Set(),
         bbox: Option[BoundingBox] = None,
-        subset: Option[TriageSubset] = None) =
+        subset: Option[TriageSubset] = None,
+        peopleMatch: PeopleMatch = PeopleMatch.All,
+        takenRange: Option[DateRange] = None,
+        importedRange: Option[DateRange] = None) =
       searchGrouped(
         new SearchQuery(
           params = Map(FieldConst.Asset.IS_RECYCLED -> false),
@@ -474,6 +477,9 @@ import altitude.core.util.*
           locationIds = locationIds,
           bbox = bbox,
           subset = subset,
+          peopleMatch = peopleMatch,
+          takenRange = takenRange,
+          importedRange = importedRange,
           rpp = 5,
           searchSort = List(sort),
           grouping = Some(grouping),
@@ -483,6 +489,11 @@ import altitude.core.util.*
     intercept[SearchCursorException](scoped(locationIds = Set(location.persistedId)))
     intercept[SearchCursorException](scoped(bbox = Some(BoundingBox(41.0, 12.0, 42.0, 13.0))))
     intercept[SearchCursorException](scoped(subset = Some(TriageSubset.NoLocation)))
+    intercept[SearchCursorException](scoped(peopleMatch = PeopleMatch.Any))
+    // A range that holds every asset of the fixture is still another search
+    val everyDay = Some(DateRange(Some(LocalDate.parse("2026-01-01")), None))
+    intercept[SearchCursorException](scoped(takenRange = everyDay))
+    intercept[SearchCursorException](scoped(importedRange = everyDay))
     // A cursor from a day grouping does not continue a Location grouping of the same search
     intercept[SearchCursorException](continue(cursor, SearchGrouping(GroupBy.Location), sort, rpp = 5))
 

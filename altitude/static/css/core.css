@@ -28,6 +28,7 @@
     --radius: 0.3125rem;
     --radius-small: 0.1875rem;
     --radius-large: 0.5rem;
+    --radius-xl: 0.75rem;
 
     --drop-shadow: 0 1px 6px hsl(from var(--shadow-color) h s l / 0.6);
     --text-shadow: light-dark(hsl(from var(--shadow-color) h s l / 0), hsl(from var(--shadow-color) h s l / 0.75)) 0 1px;
@@ -41,6 +42,8 @@
     --scrim-color: hsl(from var(--shadow-color) h s l / 0.45);
     --popover-background-color: hsl(from var(--theme-neutral-2) h s l / 0.84);
     --popover-backdrop-filter: blur(10px) saturate(200%);
+    --search-panel-background-color: hsl(from var(--theme-neutral-2) h s l / 0.81);
+    --search-panel-backdrop-filter: blur(15px) saturate(200%);
     --field-background-color: hsl(from var(--shadow-color) h s l / 0.23);
     --modal-content-width: 25rem;
     --popover-form-width: 20rem;
@@ -103,8 +106,15 @@
     --snackbar-exit-duration: 150ms;
     --person-avatar-size: 4rem;
     --detail-cover-size: 2.5rem;
-    /* The most height the Change combobox's listbox takes before it scrolls (htmx/detail_panel.css) */
-    --face-listbox-max-height: 16rem;
+    /* The most height a combobox's listbox takes before it scrolls: the Change combobox's (htmx/detail_panel.css) and the
+       advanced search panel's (htmx/search_panel.css) */
+    --listbox-max-height: 16rem;
+    /* The advanced search panel (htmx/search_panel.css): its width, a Person's cover Face on a chip and in the options, and
+       the days of one month of its calendar */
+    --search-panel-width: 26rem;
+    --search-panel-chip-cover-size: 1.25rem;
+    --search-panel-option-cover-size: 1.75rem;
+    --search-panel-month-width: 13.5625rem;
     /* The corners of a Face highlight's box over Asset detail's media (htmx/view_image_detail_modal.css) */
     --face-highlight-radius: 0.875rem;
     --merge-arrow-column: 5rem;
@@ -490,7 +500,7 @@ nav .menu.account .username {
     white-space: nowrap;
 }
 
-/* Log out's form, empty: its button is in the account info dialog, and the quick search's `nav form` rule would draw it */
+/* Log out's form, empty: its button is in the account info dialog, and the form takes no room in the cell */
 nav .menu.account form {
     display: none;
 }
@@ -514,13 +524,17 @@ nav .context-menu .actions a > span {
 }
 
 /* The quick search cell is as wide as every entry (the same flex and side padding) and holds the form at its own
-   width */
+   width. The rules are the cell's own form's: the advanced search panel, in the cell beside it, holds a form too
+   (htmx/search_panel.css). The form is the panel's anchor, named for its own cell alone, since the style guide holds a
+   second nav */
 nav .search {
     flex: 1 1 0;
     padding: 0 var(--space-3);
+    anchor-scope: --search-form;
 }
 
-nav form {
+nav .search > form {
+    anchor-name: --search-form;
     display: flex;
     align-items: center;
     width: var(--nav-search-width);
@@ -530,17 +544,18 @@ nav form {
 }
 
 /* The field widens while it has focus, and the glow is its one focus indicator, in place of the focus ring the
-   input would draw inside it (see Nav in views/AGENTS.md) */
-nav form:focus-within {
+   input would draw inside it (see Nav in views/AGENTS.md). Focus on the filter button, where a closing advanced search
+   panel returns it, is no focus in the field: the button draws the focus ring */
+nav .search > form:focus-within:not(:has(.filters:focus)) {
     width: var(--nav-search-focus-width);
     box-shadow: 0 0 0 1px var(--theme-accent), 0 0 14px hsl(from var(--theme-accent) h s l / 0.55);
 }
 
-nav form i {
+nav .search > form i {
     color: rgb(from var(--theme-neutral-4) r g b / 0.6);
 }
 
-nav form input {
+nav .search > form input {
     flex: 1 1 0;
     min-width: 0;
     padding: 0 var(--space-3);
@@ -552,20 +567,20 @@ nav form input {
     text-align: center;
 }
 
-nav form input:focus-visible {
+nav .search > form input:focus-visible {
     outline: none;
 }
 
-nav form input::placeholder {
+nav .search > form input::placeholder {
     color: rgb(from var(--theme-neutral-4) r g b / 0.6);
 }
 
 /* The clear control stands in for the native one */
-nav form input::-webkit-search-cancel-button {
+nav .search > form input::-webkit-search-cancel-button {
     display: none;
 }
 
-nav form .clear {
+nav .search > form .clear {
     padding: 0;
     border: 0;
     background: none;
@@ -574,7 +589,45 @@ nav form .clear {
     line-height: 1;
 }
 
-nav form:has(input:placeholder-shown) .clear {
+nav .search > form:has(input:placeholder-shown) .clear {
+    display: none;
+}
+
+/* The filter button, which opens the advanced search panel: the sliders icon in a tinted circle, with the number of
+   filters in force as a badge on its corner, a pill that shows from one up (js/search-results/search-panel.js) */
+nav .search > form .filters {
+    position: relative;
+    margin-left: var(--space-3);
+    padding: var(--space-2);
+    border: 0;
+    border-radius: 50%;
+    background: hsl(from var(--theme-accent) h s l / 0.2);
+    color: var(--theme-accent);
+    font-size: var(--font-size-base);
+    line-height: 1;
+    cursor: pointer;
+}
+
+nav .search > form .filters i {
+    color: inherit;
+}
+
+nav .search > form .filters span {
+    position: absolute;
+    top: calc(-1 * var(--space-2));
+    right: calc(-1 * var(--space-3));
+    min-width: calc(var(--font-size-xs) * var(--line-height-text));
+    padding: 0 var(--space-2);
+    border-radius: var(--chip-border-radius);
+    background: var(--theme-accent);
+    color: var(--theme-on-accent);
+    font-family: var(--font);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-text);
+}
+
+nav .search > form .filters span:empty {
     display: none;
 }
 
@@ -827,8 +880,12 @@ footer {
 /* CHIPS */
 /*       */
 
-.filter-chip {
+/* The chips' fill: the filter chip's, and the fill of a chosen filter's chip (below) */
+.filter-chip, :is(.search-panel, .results-title) .chip {
     --chip-fill: linear-gradient(in oklch 180deg, hsl(from var(--theme-primary) h s l / 0.12), var(--theme-neutral-2));
+}
+
+.filter-chip {
     padding: var(--space-4) var(--space-7);
     border: var(--border-hairline) hsl(from var(--theme-primary-text) h s l / 0.4);
     border-radius: var(--chip-border-radius);
@@ -840,6 +897,59 @@ footer {
 
 .filter-chip:hover {
     background: linear-gradient(hsl(from var(--theme-neutral-1) h s l / 0.08) 0 0), var(--chip-fill);
+}
+
+/* A chosen filter's chip: a name chosen in the advanced search panel (htmx/search_panel) and a filter of a filtered search's
+   results title (includes/search_filter_chips). A rounded rectangle on the chips' fill, the name cut with an ellipsis, then
+   its remove control. A Person's leads with the cover Face as a circle */
+:is(.search-panel, .results-title) .chip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    max-width: 100%;
+    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
+    border-radius: var(--radius);
+    background: var(--chip-fill);
+    font-size: var(--font-size-small);
+    white-space: nowrap;
+    cursor: default;
+}
+
+:is(.search-panel, .results-title) .chip.person {
+    padding-left: var(--space-1);
+}
+
+:is(.search-panel, .results-title) .chip .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+:is(.search-panel, .results-title) .chip button {
+    display: grid;
+    place-items: center;
+    padding: var(--space-1);
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-xs);
+    line-height: 1;
+    cursor: pointer;
+}
+
+:is(.search-panel, .results-title) .chip button:hover {
+    background: hsl(from var(--theme-neutral-3) h s l / 0.25);
+    color: var(--theme-neutral-4);
+}
+
+/* The Person's cover Face on a chip, or the placeholder of a Person with none */
+:is(.search-panel, .results-title) .chip .cover {
+    flex: none;
+    width: var(--search-panel-chip-cover-size);
+    height: var(--search-panel-chip-cover-size);
+    border-radius: 50%;
+    object-fit: cover;
+    font-size: var(--font-size-xs);
 }
 
 /*        */

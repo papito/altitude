@@ -1,6 +1,8 @@
 package altitude.core.controller
 
 import altitude.test.TestContext
+import java.time.{ LocalDateTime, OffsetDateTime, ZoneId, ZoneOffset }
+import java.util.UUID
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
@@ -190,6 +192,88 @@ import altitude.core.models.Person
           val response = get(endpoint, triage + ("subset" -> "everyone"))
           response.statusCode shouldBe 400
           response.headers("content-type").head should include("application/json")
+        }
+    }
+  }
+
+  test("The map follows several people, several Locations and the date ranges, and refuses their malformed values") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the people Alice and Bob, the Locations Lisbon and Sintra, and four assets, each plotted
+     * at a point of its own: one taken on June 1, 2024 with a Face of each person, in Lisbon; one taken on June 15 with Alice
+     * alone, in Sintra; one taken on July 1 with Bob alone; and one with no capture time and nobody. All four are imported at one
+     * moment.
+     *
+     * Assertions:
+     *
+     * The bounds count and the cells plot the asset with both people for `personId` naming the two, the three assets with either
+     * with `peopleMatch=any`, the two assets in either Location for `locationId` naming the two, the two assets taken in June for
+     * `takenFrom` and `takenTo`, and all four for the Date Imported range of the day they were imported, none for the day after.
+     *
+     * Edge cases:
+     *
+     * A malformed date, a range whose start is after its end, an unknown `peopleMatch`, eleven people in one parameter and a date
+     * range with the trash view are JSON 400s on both routes.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    withServer(App) {
+      host =>
+        val alice = testApp.service.person.addPerson(Person(name = Some("Alice")))
+        val bob = testApp.service.person.addPerson(Person(name = Some("Bob")))
+        val lisbon = testApp.service.location.addLocation("Lisbon", 1, 2)
+        val sintra = testApp.service.location.addLocation("Sintra", 3, 4)
+        val importedAt = OffsetDateTime.of(2026, 9, 6, 12, 0, 0, 0, ZoneOffset.UTC)
+        val importDay = importedAt.atZoneSameInstant(ZoneId.systemDefault).toLocalDate
+        def plottedAsset(latitude: Double, taken: Option[String], people: Person*): String = {
+          val asset = testContext.persistAsset()
+          testContext.setAssetCoordinates(asset.persistedId, latitude, 20)
+          testContext.setAssetDates(asset.persistedId, taken.map(LocalDateTime.parse), importedAt)
+          people.zipWithIndex.foreach(
+            (person, index) => testContext.addTestFace(person, asset, TestContext.unitVector(index + 1)))
+          asset.persistedId
+        }
+        val both = plottedAsset(10, Some("2024-06-01T10:00:00"), alice, bob)
+        val aliceOnly = plottedAsset(11, Some("2024-06-15T10:00:00"), alice)
+        val bobOnly = plottedAsset(12, Some("2024-07-01T10:00:00"), bob)
+        val nobody = plottedAsset(13, None)
+        testApp.service.location.addAssets(lisbon.persistedId, Set(both))
+        testApp.service.location.addAssets(sintra.persistedId, Set(aliceOnly))
+
+        def get(endpoint: String, params: Map[String, String]) =
+          requests.get(s"$host/api/map/r/$repoId/$endpoint", params = params, cookies = testContext.cookies, check = false)
+        val world = Map("viewport" -> "-90,-180,90,180", "zoom" -> "10")
+        // What the cells plot, checked against what the bounds count
+        def plotted(params: Map[String, String]): Set[String] = {
+          val assets = ujson.read(get("cells", world ++ params).text())("cells").arr.map(_("assetId").str).toSet
+          ujson.read(get("bounds", params).text())("count").num shouldBe assets.size
+          assets
+        }
+
+        val people = Map("personId" -> s"${alice.persistedId},${bob.persistedId}")
+        plotted(people) shouldBe Set(both)
+        plotted(people + ("peopleMatch" -> "any")) shouldBe Set(both, aliceOnly, bobOnly)
+        plotted(Map("locationId" -> s"${lisbon.persistedId},${sintra.persistedId}")) shouldBe Set(both, aliceOnly)
+        plotted(Map("takenFrom" -> "2024-06-01", "takenTo" -> "2024-06-30")) shouldBe Set(both, aliceOnly)
+        plotted(Map("importedFrom" -> importDay.toString, "importedTo" -> importDay.toString)) shouldBe
+          Set(both, aliceOnly, bobOnly, nobody)
+        plotted(Map("importedFrom" -> importDay.plusDays(1).toString)) shouldBe empty
+
+        val refused = List(
+          Map("takenFrom" -> "june"),
+          Map("importedFrom" -> "2024-06-02", "importedTo" -> "2024-06-01"),
+          Map("peopleMatch" -> "some"),
+          Map("personId" -> List.fill(11)(UUID.randomUUID.toString).mkString(",")),
+          Map("view" -> "trashbin", "takenTo" -> "2024-06-30")
+        )
+        for (params <- refused; endpoint <- List("bounds", "cells")) withClue(s"$endpoint $params: ") {
+          val response = get(endpoint, world ++ params)
+          response.statusCode shouldBe 400
+          response.headers("content-type").head should include("application/json")
+          ujson.read(response.text())("error").str should not be empty
         }
     }
   }

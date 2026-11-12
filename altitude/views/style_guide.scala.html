@@ -1,7 +1,14 @@
 @import altitude.core.Const
 @import altitude.core.RequestContext
 @import altitude.core.models.AccountType
+@import altitude.core.models.NamedPath
+@import altitude.core.models.Person
+@import altitude.core.models.SearchFilterNames
+@import altitude.core.models.SearchFilters
 @import altitude.core.models.Stats
+@import altitude.core.util.DateRange
+@import altitude.core.util.PeopleMatch
+@import java.time.LocalDate
 
 @* The style guide (dev only, StyleGuideController). `scanJson` is the source scan (StyleGuideScan): the `styleGuide`
    Alpine component (js/style-guide.js) reads it, and the templates below render the tokens, the icons and the token
@@ -202,7 +209,10 @@
              <code>--field-focus-shadow</code>, its edge in the accent.
              A rectangular box or control rounds its corners with <code>--radius</code>, a button and a toggle group's
              track with <code>--radius-large</code> (a segment inside the track with the track's radius less its
-             padding), a badge with <code>--radius-small</code>, and a chip is a pill, <code>--chip-border-radius</code>;
+             padding), a badge with <code>--radius-small</code>, and a chip is a pill, <code>--chip-border-radius</code>
+             (a chosen filter's chip, in the advanced search panel and a filtered search's results title, is a
+             rectangular box, <code>--radius</code>);
+             the advanced search panel, the largest floating surface, rounds its corners with <code>--radius-xl</code>;
              a circle or an avatar writes its percentage.</p>
           @tokenCards("border shadow")
         </section>
@@ -229,7 +239,11 @@
              A Triage subset, the assets one of the Triage summary's counts shows, is titled by its name with no subtitle: "Unknown people" under
              <code>fa-user-secret</code>, and "No Location" under the marker struck through, <code>.kind-icon.slashed</code>
              laying Font Awesome's own slash glyph over <code>fa-map-marker-alt</code>, since the free set has no slashed
-             marker.</p>
+             marker. A filtered search, which the advanced search panel combines, is titled "Search results" under the
+             panel's sliders icon, over a wrapping row of its filters (<code>includes/search_filter_chips</code>): the
+             chips of a chosen filter that the panel's fields hold, each led by its kind's icon, dimmed, or a Person's
+             cover Face, the Search text in curly quotes, "all of" or "any of" dimmed before two people or more, each
+             date range as its days, and Edit, a small action button with the sliders icon, which opens the panel.</p>
           <div class="results-title">
             <div class="text">
               <div class="title">
@@ -247,6 +261,28 @@
                 <span class="name">No Location</span>
                 <button type="button" class="clear-scope" title="Back to all results" aria-label="Back to all results">&times;</button>
               </div>
+            </div>
+          </div>
+          @* A filtered search's title over its real chips, whose remove buttons and Edit nothing binds here: the results
+             hydrator binds them (js/search-results/filtered-title.js) *@
+          <div class="results-title">
+            <div class="text">
+              <div class="title">
+                <i class="fas fa-sliders-h kind-icon" aria-hidden="true"></i>
+                <span class="name">Search results</span>
+                <button type="button" class="clear-scope" title="Back to all results" aria-label="Back to all results">&times;</button>
+              </div>
+              @includes.html.search_filter_chips(SearchFilters(
+                  text = Some("beach"),
+                  names = SearchFilterNames(
+                      folder = Some(NamedPath("styleGuideTitleFolder", List("Trips", "2024", "Lisbon"))),
+                      people = List(
+                          Person(id = Some("styleGuideTitleAnna"), name = Some("Anna Lindqvist")),
+                          Person(id = Some("styleGuideTitleDaniel"), name = Some("Daniel Okafor"))),
+                      locations = List(NamedPath("styleGuideTitleLisbon", List("Portugal", "Lisbon")))),
+                  peopleMatch = PeopleMatch.Any,
+                  takenRange = Some(DateRange(Some(LocalDate.of(2024, 6, 1)), Some(LocalDate.of(2024, 6, 30)))),
+                  importedRange = Some(DateRange(Some(LocalDate.of(2025, 1, 8)), None))))
             </div>
           </div>
           <p>A Person's cell on the People tab (<code>#people .cell</code>, <code>htmx/people_list</code>) is the cover face,
@@ -314,7 +350,7 @@
              <code>js/alpine/components/face-combobox.js</code>): a field at <code>--font-size-small</code> with
              <code>role="combobox"</code> and a quiet × beside it in <code>--theme-neutral-3</code>, and under it the listbox
              (<code>.face-listbox</code>), a popover wearing the floating surface and as wide as the field, capped at
-             <code>--face-listbox-max-height</code>; its options are the People rows' shape, the active one tinted
+             <code>--listbox-max-height</code>; its options are the People rows' shape, the active one tinted
              <code>--theme-neutral-4</code> at 0.08, and the Create row, offered for a name no Person has, is a plus in the
              cover's place with the label in <code>--theme-primary-text</code>. While nothing is typed the listbox opens with
              the Suggested group (<code>.suggested</code>): the people nearest the Face under a heading
@@ -557,7 +593,10 @@
              count is a <code>.count</code> pill inside the label, and an entry with nothing behind it is
              <code>empty</code> and not a link. The <code>.search</code> cell between Browse and Triage is as wide as an
              entry and holds the quick search form at its own width: no border, a magnifier, a clear control while
-             there is text, and an accent glow for focus. Before the last cell, the account's cell (<code>.menu.account</code>,
+             there is text, and an accent glow for focus; its last control is the filter button (<code>.filters</code>),
+             the sliders icon in a circle of the accent at 0.2, which opens the advanced search panel (Menus &amp;
+             dialogs) and carries the number of filters in force, or of those in the open panel, as a badge on its corner, a pill of the accent in
+             <code>--font-size-xs</code>, shown from one up. Before the last cell, the account's cell (<code>.menu.account</code>,
              <code>includes/account_menu</code>, the cell the nav renders) holds one target, a <code>.nav-menu-trigger</code>
              showing the <code>fa-user-circle</code> icon at <code>--font-size-large</code> in the account type's color,
              <code>--account-type-color</code>, which <code>data-account-type</code> sets: an Admin's
@@ -602,6 +641,7 @@
                 <i class="fas fa-search"></i>
                 <input type="search" aria-label="Quick search specimen" placeholder="quick search" autocomplete="off">
                 <button type="button" class="clear" aria-label="Clear search"><i class="fas fa-times"></i></button>
+                <button type="button" class="filters" title="Advanced search specimen" aria-label="Advanced search specimen: 3 filters in force"><i class="fas fa-sliders-h" aria-hidden="true"></i><span aria-hidden="true">3</span></button>
               </form>
             </div>
             <div class="menu triage"><a href="#navigation-tabs"><i class="fas fa-medkit"></i><span>.count<span class="count">37</span></span></a></div>
@@ -626,8 +666,10 @@
 
         <section id="menus-dialogs">
           <h2>Menus &amp; dialogs</h2>
-          <p>All three controls are live. A row's actions sit in a ⋯ context menu, which stays a list of actions; each action,
-             like an Add button, opens a popover dialog anchored below its control and centered on it: a translucent,
+          <p>All three controls are live. A row's actions sit in a ⋯ context menu, which stays a list of actions; a
+             folder's opens with Search here, which opens the advanced search panel (here on the search in force, with no
+             folder), set apart from the folder's own actions by a rule. Each of those, like an Add button, opens a popover
+             dialog anchored below its control and centered on it: a translucent,
              frosted surface with no scrim, which an outside click, Escape, the × or Tab out of it dismisses. A
              one-field dialog shows no label. Submit the dialog blank to see the validation state, or with a name to
              see a completed operation. A choice menu, the grid toolbar's Group and Sort, is a context menu that picks
@@ -657,6 +699,63 @@
               <span>Showing 100 of 1,204</span>
               <a class="action-button small" href="#menus-dialogs">Show in new tab</a>
             </footer>
+          </div>
+          <p>The advanced search panel (<code>.search-panel</code>, <code>htmx/search_panel</code>), which the nav's
+             filter button opens under the quick search form, centered on it and <code>--search-panel-width</code> wide,
+             is the second inline dialog in a popover panel after View settings: frosted glass of its own, clearer and
+             more blurred than the popover dialog's (<code>--search-panel-background-color</code> under
+             <code>--search-panel-backdrop-filter</code>), on the popover's hairline and <code>--float-shadow</code>, its
+             corners <code>--radius-xl</code>, <code>--space-5</code> of padding and <code>--space-7</code> between
+             fields. Each label sits above its field in <code>--font-size-small</code> and
+             <code>--theme-neutral-3</code>; a field's box wears the field style in place of the input inside it, the
+             accent edge and <code>--field-focus-shadow</code> with focus anywhere in it. A combobox
+             (<code>filterCombobox</code>) holds what is chosen as chips inside its box: rounded rectangles
+             (<code>--radius</code>) on the chips' fill, <code>--chip-fill</code>, a Person's led by the cover Face as a
+             circle of <code>--search-panel-chip-cover-size</code>, each ending with its remove control; the folder takes
+             one chip, people and Locations ten. Its options open in a listbox under the box, on the floating surface,
+             capped at <code>--listbox-max-height</code>: a Person's cover Face at
+             <code>--search-panel-option-cover-size</code>, the name, with the start of each word a typed word matches
+             in the accent, bold, the names above a folder's or a Location's own in <code>--theme-neutral-3</code>, a
+             Person's number of assets, and the active option tinted with the accent at 0.2; a field that holds as many
+             as a search takes says so in place of its options. Two people or more show the match beside the People
+             label, a <code>.switch</code> between Any and All, the word in force in the text color. A date range
+             (<code>dateRange</code>) reads <code>8 Jun – 21 Jun 2024</code> after a calendar icon, with a clear control;
+             the two ranges share a row in equal halves, a range wider than its half taking the room it needs from the
+             other, and the second going under the first when both do not fit; its calendar, Flatpickr's in the theme's tokens, shows two months, each
+             <code>--search-panel-month-width</code> of days, the range a band of the accent at 0.2 between two ends in
+             the accent itself. Clear, a secondary button, is at the left and Search, the accent button, at the right.
+             The specimen is the panel's form with sample values; its comboboxes offer this Library's names and its
+             calendars open, and its Search searches nothing. The listbox under it is a static one.</p>
+          @* The panel's real form (htmx/search_panel) over sample names, inside the panel's class, which the rules of
+             static/css/htmx/search_panel.css are scoped by. The wrapper takes the form's submit on its way down, so
+             Search searches nothing; Clear and the fields are live. Its IDs open with a prefix of its own, so the nav's
+             panel, which holds the same form while it is open, repeats none of them *@
+          <div class="sg-row">
+            <div class="search-panel" x-data x-on:submit.capture.prevent.stop>
+              @htmx.html.search_panel(
+                  text = "beach",
+                  names = SearchFilterNames(
+                      folder = Some(NamedPath("styleGuideFolder", List("Trips", "2024", "Lisbon"))),
+                      people = List(
+                          Person(id = Some("styleGuideAnna"), name = Some("Anna Lindqvist")),
+                          Person(id = Some("styleGuideDaniel"), name = Some("Daniel Okafor"))),
+                      locations = List(
+                          NamedPath("styleGuideLisbon", List("Portugal", "Lisbon")),
+                          NamedPath("styleGuideSintra", List("Sintra")))),
+                  peopleMatch = PeopleMatch.All,
+                  takenRange = Some(DateRange(Some(LocalDate.of(2024, 6, 8)), Some(LocalDate.of(2024, 6, 21)))),
+                  importedRange = None,
+                  idPrefix = "styleGuideSearchPanel")
+            </div>
+            @* A combobox's listbox as its options fill it: a match marked, the active option, a path, the line of a full field *@
+            <div class="search-panel">
+              <ul class="listbox" role="listbox" aria-label="Options specimen">
+                <li role="option" aria-selected="false"><span class="cover no-cover"><i class="fas fa-user" aria-hidden="true"></i></span><span class="name"><mark>An</mark>drew Molnar</span><span class="count">58</span></li>
+                <li role="option" aria-selected="true"><span class="cover no-cover"><i class="fas fa-user" aria-hidden="true"></i></span><span class="name"><mark>An</mark>na Lindqvist</span><span class="count">1,840</span></li>
+                <li role="option" aria-selected="false"><span class="name"><span class="ancestors">Trips › 2024 › </span><mark>An</mark>dalusia</span></li>
+                <li class="empty" role="presentation">At most 10 people in one search</li>
+              </ul>
+            </div>
           </div>
         </section>
 

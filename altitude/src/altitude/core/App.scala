@@ -32,6 +32,7 @@ import altitude.core.routes.web.partial.LocationActionController
 import altitude.core.routes.web.partial.NavController
 import altitude.core.routes.web.partial.OwnPasswordController
 import altitude.core.routes.web.partial.PeopleActionController
+import altitude.core.routes.web.partial.SearchPanelController
 import altitude.core.routes.web.partial.SearchResultsController
 import altitude.core.routes.web.partial.SettingsFormController
 import altitude.core.routes.web.partial.SetupFormController
@@ -110,6 +111,7 @@ object App extends cask.Main:
     new FolderActionController,
     new PeopleActionController,
     new SearchResultsController,
+    new SearchPanelController,
     new TrashActionController,
     new TriageController,
     new ViewSettingsActionController

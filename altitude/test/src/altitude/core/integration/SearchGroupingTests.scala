@@ -4,6 +4,7 @@ import altitude.test.IntegrationTestUtil.withJvmTimeZone
 import java.time.{ LocalDate, LocalDateTime, OffsetDateTime, ZoneOffset }
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ be, contain, empty, should, shouldBe, shouldEqual, theSameElementsAs }
+import org.scalatest.tagobjects.Slow
 
 import altitude.core.{ Altitude, Const, FieldConst, RequestContext }
 import altitude.core.dao.jdbc.BaseDao
@@ -881,7 +882,7 @@ import altitude.core.util.*
     )
   }
 
-  test("A page grouped by Sequence reads its frames and counts through the Sequence index") {
+  test("A page grouped by Sequence reads its frames and counts through the Sequence index", Slow) {
 
     /**
      * Setup:

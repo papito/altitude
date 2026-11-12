@@ -53,9 +53,12 @@ export const context = {
         return Alpine.store(Const.state.searchParams).albumId
     },
 
-    /** The Location whose assets are being browsed, or null when no Location filter is active */
+    /**
+     * The Location whose assets are being browsed, or null when no Location filter is active or an
+     * advanced search names several
+     */
     getCurrentLocationId: function () {
-        return Alpine.store(Const.state.searchParams).locationId
+        return Alpine.store(Const.state.searchParams).viewedLocationId()
     },
 
     /**

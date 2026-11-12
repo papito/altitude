@@ -7,7 +7,9 @@
  * fullscreen (and in Chrome never delivers the key), and Asset detail stays open; else the open
  * listbox of a People row's Change combobox in the Detail panel closes alone; else an open context
  * menu, with focus back on its trigger (the Detail panel's Dock side menu is the one menu that
- * opens inside a dialog, and outside a dialog no menu and dialog are open together); else, in
+ * opens inside a dialog, and outside a dialog no menu and dialog are open together); else the nav's
+ * advanced search panel, with focus back on its filter button (an open listbox or calendar inside it
+ * has consumed the key before it gets here: `filter-combobox.js`, `date-range.js`); else, in
  * Asset detail, the selected People row, which clears; else the active modal or popover dialog; else the map view's crowded-pin panel; and with none of those
  * open, Escape is broadcast for such editors to cancel. Consuming it also keeps the browser's own
  * Escape handling for the popover dialog and the menus from running a second time. An open select
@@ -29,6 +31,7 @@ import { isTextEditingTarget } from "./common/text-editing.js"
 import { toggleTheme } from "./common/theme.js"
 import { Const } from "./constants.js"
 import { closeMapPanel } from "./map/map-panel.js"
+import { closeOpenSearchPanel } from "./search-results/search-panel.js"
 
 document.addEventListener("click", (event) => {
     if (event.target.closest?.("[data-app-theme-switch]")) {
@@ -56,10 +59,12 @@ document.addEventListener("keydown", (event) => {
         }
 
         // A menu closes alone, with focus back on its trigger, so the Detail panel's Dock side menu
-        // leaves Asset detail open; so does a selected Face's row in its People section, and a
-        // closing modal or popover dialog restores focus itself
+        // leaves Asset detail open; the advanced search panel closes the same way, the browser
+        // returning focus to its filter button; so does a selected Face's row in its People section,
+        // and a closing modal or popover dialog restores focus itself
         if (
             closeOpenContextMenu({ reason: "Escape", returnFocus: true }) ||
+            closeOpenSearchPanel() ||
             (getActiveModalHost() === ModalHost.assetDetail &&
                 clearSelectedFaceRow()) ||
             closeModal() ||

@@ -26,8 +26,13 @@ class SearchQuery(
     val metadataFilters: Map[String, Any] = Map(),
     val folderIds: Set[String] = Set(),
     val personIds: Set[String] = Set(),
+    // Whether the assets hold every one of `personIds` or any of them; it tells nothing apart with fewer than two people
+    val peopleMatch: PeopleMatch = PeopleMatch.All,
     val albumIds: Set[String] = Set(),
     val locationIds: Set[String] = Set(),
+    // The capture days and the import days the assets fall in; an asset with no capture time is in no Date Taken range
+    val takenRange: Option[DateRange] = None,
+    val importedRange: Option[DateRange] = None,
     val bbox: Option[BoundingBox] = None,
     // A Triage subset, the assets one of the Triage summary's counts shows: with a Face of an Unknown person, or in no Location
     val subset: Option[TriageSubset] = None,
@@ -82,7 +87,7 @@ class SearchQuery(
   override val isSorted: Boolean = searchSort.nonEmpty
 
   override def toString: String =
-    s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, grouping=$grouping, cursor=${cursor.isDefined}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, albumIds=$albumIds, locationIds=$locationIds, subset=$subset, bbox=$bbox, rpp=$rpp)"
+    s"SearchQuery(text=$text, params: $params, searchSort=${searchSort.headOption}, grouping=$grouping, cursor=${cursor.isDefined}, metadataFilters=$metadataFilters, folderIds=$folderIds, personIds=$personIds, peopleMatch=$peopleMatch, albumIds=$albumIds, locationIds=$locationIds, takenRange=$takenRange, importedRange=$importedRange, subset=$subset, bbox=$bbox, rpp=$rpp)"
 
   def add_metadata_filter(_filters: (String, Any)*): SearchQuery =
     copyWith(metadataFilters = metadataFilters ++ _filters)
@@ -117,8 +122,11 @@ class SearchQuery(
       metadataFilters = metadataFilters,
       folderIds = folderIds,
       personIds = personIds,
+      peopleMatch = peopleMatch,
       albumIds = albumIds,
       locationIds = locationIds,
+      takenRange = takenRange,
+      importedRange = importedRange,
       bbox = bbox,
       subset = subset,
       rpp = rpp,

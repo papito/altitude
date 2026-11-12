@@ -43,4 +43,11 @@ Integration recipe: the library is loaded from a CDN, initialized in the compone
 
 ## Notes for Altitude
 
-If the search bar ever gets a date filter (assets have `originalCreatedAt` and `createdAt`), this is the lightest option: no jQuery, one CSS file.
+The advanced search panel's Date Taken and Date Imported ranges are this recipe (`static/js/alpine/components/date-range.js`,
+views/AGENTS.md **Advanced search panel**), with flatpickr 4.6.13 vendored (`altitude/static/js/lib/README.md`) rather than
+loaded from a CDN, and four differences: the component holds the range as two ISO days in hidden inputs and writes its own
+label into the field (`8 Jun – 21 Jun 2024`) after every pick, in place of flatpickr's text, the field being empty while
+flatpickr is created, since flatpickr reads the days to mark out of the input's text when it is given none; one day picked alone is kept as a
+range of that day when the calendar closes; the calendar is appended to the field (`appendTo`) and shown as a manual popover
+placed by CSS anchor positioning, with flatpickr's placement switched off; and the stylesheet is imported into a cascade
+layer, so the application's token overrides outrank it.

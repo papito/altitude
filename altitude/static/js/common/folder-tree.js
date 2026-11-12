@@ -29,7 +29,8 @@
  *
  * Each folder's context menu is built with the tree too, as a native
  * `popover="auto"` panel next to its ⋯ trigger (`common/context-menu-markup.js`, shared
- * with the album list), so opening a menu needs no request. The panel holds its
+ * with the album list), so opening a menu needs no request. The panel holds Search here,
+ * which opens the advanced search panel on the folder (`_buildMenuCtrl`), and the folder's
  * actions, each requesting a popover dialog through HTMX. The `contextMenu` Alpine
  * component (`alpine/components/context-menu.js`) places and dismisses the menu;
  * the modal owner closes it when the dialog opens.
@@ -52,6 +53,7 @@ import {
 } from "./context-menu-markup.js"
 import { showErrorSnackBar } from "./snackbar.js"
 import { applyViewedFolderScope } from "./viewed-folder-scope.js"
+import { openSearchPanel } from "../search-results/search-panel.js"
 import { bindSearchTriggers } from "../search-results/search-triggers.js"
 
 // ─── public ─────────────────────────────────────────────────────────────────
@@ -480,13 +482,57 @@ function _anchorDialogsTo(el) {
 /**
  * The folder's ⋯ menu cell (see `buildContextMenuCtrl`). The IDs are stable across rebuilds:
  * `folderMenuCtrl-<id>` is the trigger the folder dialogs return focus to, `menu-<id>` the panel.
- * Each action requests a popover dialog; the root can only gain children, so it offers Add folder alone.
- * Every action is Organize's, so an account without it gets the empty cell, and Delete of a folder holding assets also
- * Recycle's.
+ *
+ * A non-root folder's menu opens with Search here, which opens the advanced search panel with the
+ * folder chosen and every other field as the search in force has it, and searches nothing until
+ * the panel's Search; any account can search, so it is offered to every one. The root is the whole
+ * repository and no filter, so it has none.
+ *
+ * Then, after a rule, the folder's actions, each requesting a popover dialog; the root can only gain
+ * children, so it offers Add folder alone. Every one is Organize's, and Delete of a folder holding
+ * assets also Recycle's; a menu left with no action at all, the root's without Organize, is the
+ * empty cell.
  */
 function _buildMenuCtrl(folder, repoId, folderName) {
-    if (!context.holds(Const.permission.organize)) {
+    const searchHere = folder.isRoot
+        ? []
+        : [
+              {
+                  label: "Search here",
+                  run: () => openSearchPanel({ folderId: folder.id }),
+              },
+          ]
+    const folderActions = _folderActions(folder).map(
+        ({ label, dialog, vals }) => ({
+            label,
+            url: `/htmx/folder/r/${repoId}/dialogs/${dialog}`,
+            vals,
+        }),
+    )
+    const separator =
+        searchHere.length > 0 && folderActions.length > 0
+            ? [{ separator: true }]
+            : []
+    const actions = [...searchHere, ...separator, ...folderActions]
+
+    if (actions.length === 0) {
         return buildNoMenuCell()
+    }
+
+    return buildContextMenuCtrl({
+        triggerId: `folderMenuCtrl-${folder.id}`,
+        panelId: `menu-${folder.id}`,
+        ariaLabel: `Actions for folder ${folderName}`,
+        entityAttr: Const.attributes.folderId,
+        entityId: folder.id,
+        actions,
+    })
+}
+
+/** The folder's own actions the account holds the Permissions of, each naming its dialog */
+function _folderActions(folder) {
+    if (!context.holds(Const.permission.organize)) {
+        return []
     }
 
     const actions = [
@@ -517,18 +563,7 @@ function _buildMenuCtrl(folder, repoId, folderName) {
         }
     }
 
-    return buildContextMenuCtrl({
-        triggerId: `folderMenuCtrl-${folder.id}`,
-        panelId: `menu-${folder.id}`,
-        ariaLabel: `Actions for folder ${folderName}`,
-        entityAttr: Const.attributes.folderId,
-        entityId: folder.id,
-        actions: actions.map(({ label, dialog, vals }) => ({
-            label,
-            url: `/htmx/folder/r/${repoId}/dialogs/${dialog}`,
-            vals,
-        })),
-    })
+    return actions
 }
 
 function _buildChildrenDiv(folder, repoId, isRoot, depth) {

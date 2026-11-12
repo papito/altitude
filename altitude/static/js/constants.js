@@ -206,6 +206,31 @@ export const Const = {
         // htmx/detail_panel_people); not `data-asset-id`, which finds the cells of the grid
         detailPanelOpen: "data-app-detail-panel-open",
         appAssetId: "data-app-asset-id",
+        // The advanced search panel's host in the nav (includes/nav): the route its form is loaded from
+        panelUrl: "data-panel-url",
+        // A combobox field of the panel's form (htmx/search_panel): the route of its options, whether it takes several
+        // names, the most it takes and the line that says so once it holds them
+        optionsUrl: "data-options-url",
+        multiple: "data-multiple",
+        maxChosen: "data-max-chosen",
+        maxChosenMessage: "data-max-chosen-message",
+        // What an option of such a field and the chip of a chosen one carry (htmx/search_options_*, htmx/search_panel):
+        // the ID a search takes and the label a chip shows; and their parts: the element that shows the name, and a
+        // Person's cover Face, which a new chip copies (includes/search_chip, includes/search_person_cover)
+        optionId: "data-option-id",
+        optionLabel: "data-option-label",
+        optionName: "data-option-name",
+        optionCover: "data-option-cover",
+        // The remove button of a chosen filter's chip, in the panel and in a filtered search's results title
+        // (includes/search_chip)
+        chipRemove: "data-chip-remove",
+        // A chip of a filtered search's results title (includes/search_filter_chips), which carries the parameters it
+        // stands for as `data-app-filter-<param>` literals; and the title's Edit, which opens the panel
+        filter: "data-app-filter",
+        editFilters: "data-app-edit-filters",
+        // The badge of the nav's filter button (includes/nav): the number of filters in force, or of those in
+        // the open panel's form
+        filterCount: "data-app-filter-count",
     },
 
     context: {
@@ -271,10 +296,19 @@ export const Const = {
             unknownPeople: "unknownPeople",
             noLocation: "noLocation",
         },
+        // How several people of one search combine (`PeopleMatch.apiValue`), sent as the `peopleMatch` parameter: the
+        // assets with all of them, the server's rule when the parameter is left out, or with any of them
+        peopleMatch: {
+            all: "all",
+            any: "any",
+        },
         // The sort by match quality (`Const.Search.SORT_RELEVANCE`), which the server refuses without Search text
         sortRelevance: "relevance",
         // The largest page size the server serves (`Const.Search.MAX_RPP`); it refuses a larger one
         maxRpp: 500,
+        // The most people, and the most Locations, one search names (`SearchRequestParser.MAX_IDS`); the server refuses
+        // more in either parameter
+        maxIds: 10,
     },
 
     http: {

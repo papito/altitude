@@ -72,8 +72,16 @@ object Util:
 
   private val shortDateFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
 
-  /** A calendar day as a row of Curation's Sequence rail reads it, "12 Mar 2026". The camera's wall clock, so no zone is involved */
+  /**
+   * A calendar day as a row of Curation's Sequence rail and an end of a search's date range read it, "12 Mar 2026": the month by
+   * its first three letters, September as "Sep". No zone is involved: the day is the day
+   */
   def humanReadableShortDate(date: LocalDate): String = date.format(shortDateFormatter)
+
+  private val dayAndMonthFormatter = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
+
+  /** A calendar day without its year, "12 Mar", as the first day of a search's date range within one year reads */
+  def humanReadableDayAndMonth(date: LocalDate): String = date.format(dayAndMonthFormatter)
 
   private val timeFormatter = DateTimeFormatter.ofPattern("h:mm:ss a", Locale.ENGLISH)
 

@@ -7,6 +7,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatest.tagobjects.Slow
 
 import altitude.core.Altitude
 import altitude.core.Const
@@ -584,7 +585,9 @@ import altitude.core.service.FaceDetectionService
     }
   }
 
-  test("The queue, its count, a Sequence's window and its count, and a resolve's locking read go through the Sequence index") {
+  test(
+    "The queue, its count, a Sequence's window and its count, and a resolve's locking read go through the Sequence index",
+    Slow) {
 
     /**
      * Setup:

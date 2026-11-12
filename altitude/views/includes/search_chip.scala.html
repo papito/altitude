@@ -1,0 +1,14 @@
+@(kind: String, label: String, lead: Option[Html] = None, attributes: Seq[(String, String)] = Nil, removes: Option[String] = None)
+
+@* A chosen filter's chip (the chip of core.css's CHIPS section), in the advanced search panel (htmx/search_panel) and in a
+   filtered search's results title (includes/search_filter_chips): `kind` is its class (`search-text`, `folder`, `person`,
+   `location`, `dates`), `lead` what comes before its label (a kind's icon, a person's cover Face), and `attributes` what the
+   chip carries of the filter it stands for. The label is in `data-option-name`, and the remove button, `data-chip-remove`, is
+   named "Remove" and what it removes, the label unless `removes` says it otherwise: the scripts find both by those attributes.
+   With no label it is the chip a combobox's template holds, which the component fills in for a new choice. *@
+@removed = @{ removes.getOrElse(label) }
+<li class="chip @kind"@for((name, value) <- attributes) { @name="@value"}>
+    @for(html <- lead) {@html}
+    <span class="name" data-option-name>@label</span>
+    <button type="button" aria-label="Remove@if(removed.nonEmpty) { @removed}" data-chip-remove><i class="fas fa-times" aria-hidden="true"></i></button>
+</li>

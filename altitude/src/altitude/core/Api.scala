@@ -162,6 +162,13 @@ object Api:
       val PERSON_ID = "personId"
       val ALBUM_ID = "albumId"
       val LOCATION_ID = "locationId"
+      // How several people combine: `all` (the default) or `any`
+      val PEOPLE_MATCH = "peopleMatch"
+      // The Date Taken and Date Imported ranges, each end an ISO date
+      val TAKEN_FROM = "takenFrom"
+      val TAKEN_TO = "takenTo"
+      val IMPORTED_FROM = "importedFrom"
+      val IMPORTED_TO = "importedTo"
       val SUBSET = "subset"
       val BBOX = "bbox"
       val LAYOUT = "layout"

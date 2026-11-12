@@ -28,14 +28,15 @@ object StyleGuideController:
   def scanRoots(moduleDir: Path): Seq[Path] =
     Seq("css", "js").map(moduleDir.resolve("static").resolve(_)) :+ moduleDir.resolve("views")
 
-  // The vendored stylesheets (the icon font, Leaflet's), whose literals are no app's to tokenize; the guide itself, whose
-  // specimens would count as uses of what they demonstrate; the setup page's stylesheet, whose `--setup-*` palette is that
-  // page's own, not a token of the app; and the design tweaks panel's adapter (static/js/design-tweaks.js), which names
-  // tokens to configure the panel (its sections, scale and seed targets), not to use them. The panel itself is the vendored
-  // tokentweak package under static/js/lib, which the scan skips with every other library
+  // The vendored stylesheets (the icon font, Leaflet's, Flatpickr's), whose literals are no app's to tokenize; the guide
+  // itself, whose specimens would count as uses of what they demonstrate; the setup page's stylesheet, whose `--setup-*`
+  // palette is that page's own, not a token of the app; and the design tweaks panel's adapter (static/js/design-tweaks.js),
+  // which names tokens to configure the panel (its sections, scale and seed targets), not to use them. The panel itself is
+  // the vendored tokentweak package under static/js/lib, which the scan skips with every other library
   val excludedFiles: Set[String] = Set(
     "font-awesome.min.css",
     "leaflet.css",
+    "flatpickr.css",
     "style_guide.scala.html",
     "style_guide.css",
     "style-guide.js",

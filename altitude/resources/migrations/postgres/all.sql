@@ -240,15 +240,18 @@ CREATE UNIQUE INDEX asset_01 ON asset (repository_id, checksum) WHERE NOT is_rec
 -- Capture-day grouping for search results: the camera's calendar date followed by the raw timestamp, so a day range or a
 -- day-count probe seeks directly and a grouped, date-sorted page reads in index order. It carries the ID and the folder, so a
 -- pass over the library that tests text membership, a folder or a day reads the index and not the table. It carries the triage
--- flag for the repository view, which leaves triaged assets out by default.
+-- flag for the repository view, which leaves triaged assets out by default, and the import time, so a page sorted by Date Taken
+-- within a Date Imported range is read in index order with the range tested on the index and not the table.
 CREATE INDEX asset_search_date_taken ON asset (
   repository_id, is_recycled, is_pipeline_processed, (original_created_at::date), original_created_at
-) INCLUDE (id, folder_id, is_triaged);
--- The default flat sort, Date Imported, as an ordered read of the page slice that needs nothing but the index: it carries the ID
--- and the triage flag
-CREATE INDEX asset_search_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at) INCLUDE (id, is_triaged);
+) INCLUDE (id, folder_id, is_triaged, created_at);
+-- The default flat sort, Date Imported, as an ordered read of the page slice that needs nothing but the index: it carries the
+-- ID, the triage flag and the capture time, so a page within a Date Taken range tests the range on the index and not the table
+CREATE INDEX asset_search_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at)
+  INCLUDE (id, is_triaged, original_created_at);
 -- The triage view: only the triaged assets, in Date Imported order and by capture day, so a small triage set in a large library
--- is read without passing over the library. They shrink as triage is sorted.
+-- is read without passing over the library. They shrink as triage is sorted. Neither carries the other date: a search reads them
+-- in the triage view alone, where a date range tests the rows of a triage set, not of the library.
 CREATE INDEX asset_triage_created ON asset (repository_id, is_recycled, is_pipeline_processed, created_at) INCLUDE (id)
   WHERE is_triaged;
 CREATE INDEX asset_triage_date_taken ON asset (

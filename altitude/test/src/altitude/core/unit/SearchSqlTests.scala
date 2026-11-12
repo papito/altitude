@@ -1,6 +1,10 @@
 package altitude.core.unit
 
+import altitude.test.IntegrationTestUtil.withJvmTimeZone
 import altitude.test.TestFocus
+import java.time.Instant
+import java.time.LocalDate
+import java.time.OffsetDateTime
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.*
@@ -18,7 +22,9 @@ import altitude.core.dao.sql.search.SearchQueries
 import altitude.core.dao.sql.search.SqliteSearchDialect
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.util.BoundingBox
+import altitude.core.util.DateRange
 import altitude.core.util.GroupBy
+import altitude.core.util.PeopleMatch
 import altitude.core.util.Query
 import altitude.core.util.ResolvedSearchGroup
 import altitude.core.util.ResolvedSearchTerm
@@ -465,14 +471,15 @@ import altitude.core.util.SortValue
     /**
      * Setup:
      *
-     * A filter of two people rendered on SQLite, and a filter of one album rendered on PostgreSQL.
+     * A filter of any of two people rendered on SQLite, and a filter of one album rendered on PostgreSQL.
      *
      * Assertions:
      *
      * Each filter is a subquery on the asset ID with its ID set bound as one parameter: the person filter reads the face's own
      * person ID without joining people, and the album filter reads the album memberships.
      */
-    val people = matchingSql(SqliteSearchDialect, new SearchQuery(personIds = Set("p1", "p2")))
+    val people =
+      matchingSql(SqliteSearchDialect, new SearchQuery(personIds = Set("p1", "p2"), peopleMatch = PeopleMatch.Any))
     val albums = matchingSql(PostgresSearchDialect, new SearchQuery(albumIds = Set("a1")))
 
     // The face's own person ID is all the filter reads
@@ -486,6 +493,163 @@ import altitude.core.util.SortValue
     withClue(albums) {
       albums.contains("FROM album_asset album_asset1") shouldBe true
       albums.contains("album_asset1.album_id = ANY(?)") shouldBe true
+    }
+  }
+
+  test("People matched all are one semi-join per person, AND-ed; matched any, one semi-join over the set") {
+
+    /**
+     * Setup:
+     *
+     * A filter of two people, matching all of them and matching any of them, and a filter of one person each way, rendered on
+     * both engines.
+     *
+     * Assertions:
+     *
+     * Matching all, the relation has one subquery on the asset ID per person, AND-ed, each reading the face's own person ID bound
+     * as a set of that one person; matching any, it has one subquery with both people bound as one set. Neither joins people.
+     *
+     * Edge cases:
+     *
+     * With one person the two matches render the same statement.
+     */
+    for ((engine, dialect) <- engines) withClue(engine) {
+      def people(ids: Set[String], peopleMatch: PeopleMatch): SearchQuery =
+        new SearchQuery(personIds = ids, peopleMatch = peopleMatch)
+      // An ID set as each engine binds it
+      def idSet(ids: String*): Any = if (dialect == PostgresSearchDialect) ids.toSet else ujson.write(ids)
+      def faceSubqueries(sql: String): Int =
+        "asset0\\.id IN \\(SELECT face\\d+\\.asset_id AS res FROM face face\\d+ ".r.findAllIn(sql).size
+
+      val all = matchingSql(dialect, people(Set("p1", "p2"), PeopleMatch.All))
+      withClue(all) {
+        faceSubqueries(all) shouldBe 2
+        all should include(") AND (asset0.id IN (SELECT face")
+        all.contains("JOIN person") shouldBe false
+        // repository, pipeline flag and one set per person
+        placeholders(all) shouldBe 4
+      }
+      bound(dialect, people(Set("p1", "p2"), PeopleMatch.All)).takeRight(2) shouldBe List(idSet("p1"), idSet("p2"))
+
+      val any = matchingSql(dialect, people(Set("p1", "p2"), PeopleMatch.Any))
+      withClue(any) {
+        faceSubqueries(any) shouldBe 1
+        any.contains("JOIN person") shouldBe false
+        // repository, pipeline flag and the set
+        placeholders(any) shouldBe 3
+      }
+      bound(dialect, people(Set("p1", "p2"), PeopleMatch.Any)).last shouldBe idSet("p1", "p2")
+
+      // One person is the same search either way
+      matchingSql(dialect, people(Set("p1"), PeopleMatch.All)) shouldBe matchingSql(dialect, people(Set("p1"), PeopleMatch.Any))
+    }
+  }
+
+  test("A Date Taken range compares the capture-day expression of the engine's index with bound days") {
+
+    /**
+     * Setup:
+     *
+     * A Date Taken range of June 2024, one open at its start and one open at its end, rendered on both engines.
+     *
+     * Assertions:
+     *
+     * The relation compares the engine's capture-day expression, spelled as `asset_search_date_taken` is built on it (a cast on
+     * PostgreSQL, `date()` on SQLite), with the first day inclusively from below and the last inclusively from above, each day
+     * bound. Nothing lets a row without a capture time through: its day is NULL, which fails either comparison.
+     *
+     * Edge cases:
+     *
+     * A range open at one end renders the other end's comparison alone.
+     */
+    val first = LocalDate.parse("2024-06-01")
+    val last = LocalDate.parse("2024-06-30")
+
+    for ((engine, dialect) <- engines) withClue(engine) {
+      val day = if (dialect == PostgresSearchDialect) "asset0.original_created_at::date" else "date(asset0.original_created_at)"
+      def taken(from: Option[LocalDate], to: Option[LocalDate]): SearchQuery =
+        new SearchQuery(takenRange = Some(DateRange(from, to)))
+
+      val june = matchingSql(dialect, taken(Some(first), Some(last)))
+      withClue(june) {
+        june should include(s"$day >= ?")
+        june should include(s"$day <= ?")
+        june.contains("IS NULL") shouldBe false
+        // repository, pipeline flag and the two days
+        placeholders(june) shouldBe 4
+      }
+      bound(dialect, taken(Some(first), Some(last))).takeRight(2) shouldBe List(first, last)
+
+      val openStart = matchingSql(dialect, taken(None, Some(last)))
+      withClue(openStart) {
+        openStart should include(s"$day <= ?")
+        openStart.contains(">=") shouldBe false
+      }
+      bound(dialect, taken(None, Some(last))).last shouldBe last
+
+      val openEnd = matchingSql(dialect, taken(Some(first), None))
+      withClue(openEnd) {
+        openEnd should include(s"$day >= ?")
+        openEnd.contains("<=") shouldBe false
+      }
+      bound(dialect, taken(Some(first), None)).last shouldBe first
+    }
+  }
+
+  test("A Date Imported range is a half-open range of instants on the import time, its days beginning in the server's zone") {
+
+    /**
+     * Setup:
+     *
+     * A server in New York. A Date Imported range of 1 and 2 June 2024, one open at its start, one open at its end, and the range
+     * of 10 March 2024 alone, the day New York's clocks go forward, rendered on both engines.
+     *
+     * Assertions:
+     *
+     * The relation compares the import time column itself, with no day expression around it, so that `asset_search_created` can
+     * seek: at or after the instant the first day begins in New York and before the instant the day after the last begins there,
+     * both bound as instants.
+     *
+     * Edge cases:
+     *
+     * A range open at one end renders the other end's comparison alone. The day the clocks go forward is the 23 hours the
+     * server's clock gives it.
+     */
+    def imported(from: Option[String], to: Option[String]): SearchQuery =
+      new SearchQuery(importedRange = Some(DateRange(from.map(LocalDate.parse), to.map(LocalDate.parse))))
+    def instants(values: List[Any]): List[Instant] = values.collect { case instant: OffsetDateTime => instant.toInstant }
+
+    withJvmTimeZone("America/New_York") {
+      for ((engine, dialect) <- engines) withClue(engine) {
+        val twoDays = matchingSql(dialect, imported(Some("2024-06-01"), Some("2024-06-02")))
+        withClue(twoDays) {
+          twoDays should include("asset0.created_at >= ?")
+          twoDays should include("asset0.created_at < ?")
+          twoDays.contains("date(") shouldBe false
+          twoDays.contains("::date") shouldBe false
+          // repository, pipeline flag and the two instants
+          placeholders(twoDays) shouldBe 4
+        }
+        // New York is four hours behind UTC in June
+        instants(bound(dialect, imported(Some("2024-06-01"), Some("2024-06-02")))) shouldBe
+          List(Instant.parse("2024-06-01T04:00:00Z"), Instant.parse("2024-06-03T04:00:00Z"))
+
+        val openStart = matchingSql(dialect, imported(None, Some("2024-06-02")))
+        withClue(openStart) {
+          openStart should include("asset0.created_at < ?")
+          openStart.contains(">=") shouldBe false
+        }
+
+        val openEnd = matchingSql(dialect, imported(Some("2024-06-01"), None))
+        withClue(openEnd) {
+          openEnd should include("asset0.created_at >= ?")
+          openEnd.contains("<") shouldBe false
+        }
+
+        // Five hours behind UTC when the day begins, four when the next one does
+        instants(bound(dialect, imported(Some("2024-03-10"), Some("2024-03-10")))) shouldBe
+          List(Instant.parse("2024-03-10T05:00:00Z"), Instant.parse("2024-03-11T04:00:00Z"))
+      }
     }
   }
 
