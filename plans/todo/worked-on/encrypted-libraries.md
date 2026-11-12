@@ -118,7 +118,7 @@ decrypted Preview or original on its disk; the page's own image cache still reus
 | Libraries | Tink (Streaming AEAD for originals; its HKDF and AES-GCM), Bouncy Castle's Argon2id. Nothing hand-rolled beyond the slot wrap and the derivations above. |
 | Imports while locked | None: an upload needs the Library unlocked. A queued file keeps a lease until it leaves the pipeline. |
 | Browser cache | `no-store` for an Encrypted Library's content. |
-| Language | **Encrypted** (a Library), **Pass key**, **Recovery key**, **Locked**/**Unlocked**, **Unlock**, **Lock**, in `CONTEXT.md`. "Passkey" is not used: it names WebAuthn credentials. |
+| Language | **Encrypted** (a Library), **Pass key**, **Recovery key**, **Locked**/**Unlocked**, **Unlock**, **Lock**, in `../../../CONTEXT.md`. "Passkey" is not used: it names WebAuthn credentials. |
 
 ## Constraints
 
@@ -190,7 +190,7 @@ No behaviour changes for a user.
 14. **The nav.** `fa-lock` in the Library menu (options and trigger) and its `title`; the Lock control with its Admin dialogs;
     the style guide's specimens of both.
 15. **Settings screen.** `library.unlock_timeout` in its group, on PostgreSQL.
-16. **Guides.** `altitude/AGENTS.md` (the pipeline's stage order, the store and its dispatcher, the keyring and the gate,
+16. **Guides.** `../../../altitude/AGENTS.md` (the pipeline's stage order, the store and its dispatcher, the keyring and the gate,
     leases, the token's `sid`, the audit events, the Setting, the content headers), `views/AGENTS.md` (the unlock page, the
     Library menu's lock, the Lock control and dialogs, the New library dialog's Encrypt step, the 423), `CONTEXT.md` (the
     terms in **Decisions**), `docs/READINESS.md` (the Encryption at rest row: what is and is not covered, core dumps off in
@@ -201,7 +201,7 @@ No behaviour changes for a user.
 
 - The database: file names, metadata, GPS, People names, face and Scene embeddings, checksums and the audit log stay
   plaintext. Volume encryption under the database covers a stolen disk.
-- Staging: a file is plaintext in `data/staging` while it is imported, and startup empties staging.
+- Staging: a file is plaintext in `../../../data/staging` while it is imported, and startup empties staging.
 - Encrypted Libraries on SQLite servers, and on Storage other than this server's disk.
 - Encrypting an existing Library, decrypting an Encrypted one, and changing the Library secret (a rewrite of every file).
 - Published read-only albums with a Pass key of their own. The derived asset keys allow it: such an album can carry only its
