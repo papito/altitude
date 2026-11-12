@@ -813,8 +813,11 @@ class WatchFolderService(val app: Altitude):
     val now = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
     val stale = now.minus(LAST_SEEN_STEP).toInstant
     val restedBy = walkStarted.minus(REST)
-    val remembered = fileDao.ofWatchFolder(id).map(file => file.relPath -> file).toMap
+    // The files in the pipeline before the rows: a file leaves the pipeline only once its row is written ([[settled]]), so one
+    // that settles between the two reads is still taken to be in the pipeline. Read the other way round, such a file is no
+    // longer in the pipeline and not read yet by its row, and would be handed to the pipeline a second time.
     val flying = inFlight.values.asScala.filter(_.watchFolderId == id).map(_.relPath).toSet
+    val remembered = fileDao.ofWatchFolder(id).map(file => file.relPath -> file).toMap
 
     val fresh = mutable.ListBuffer[WatchFolderFile]()
     val foundAgain = mutable.ListBuffer[String]()

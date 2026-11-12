@@ -5,6 +5,8 @@ import altitude.test.TestContext
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.commons.io.FileUtils
 import org.apache.pekko.actor.Cancellable
@@ -838,6 +840,84 @@ import altitude.core.util.Sha256
     settle(watchFolder)
     recorded(watchFolder) shouldBe List(("a.png", ImportOutcome.Imported, None))
     watchFolders.cards().map(_.isScanning) shouldBe List(false)
+  }
+
+  test("A file that settles while the next scan reads the Watch folder's memory is not handed to the pipeline again") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder on a directory with one image, seen by a first scan and rested. On PostgreSQL the Watch folder also
+     * remembers a hundred thousand other files, so reading its memory takes far longer than settling one file, and the test holds
+     * the memory's table locked from the moment a second scan offers the image: the image's import completes and waits at the
+     * write of its memory, in the pipeline still, and a third scan, started then, waits at its read of the memory. The lock is
+     * released, so the read begins with the image remembered as not read yet and the image settles while the rows are read. On
+     * SQLite, whose one write connection never lets a file settle inside a scan's transaction, the scans run without the lock.
+     *
+     * Assertions:
+     *
+     * The third scan hands nothing to the pipeline: the image was in the pipeline when the scan looked. It is imported once, in
+     * one Import, and remembered as handled.
+     */
+    val isPostgres = testApp.dataSourceType == Const.DbEngineName.POSTGRES
+    val dir = directory()
+    image(dir, "only.png")
+    val watchFolder = watch(dir)
+    scanAndSettle(watchFolder) shouldBe ScanResult.Scanned(0)
+
+    val locked = new CountDownLatch(1)
+    val release = new CountDownLatch(1)
+
+    def waitingForLocks: Int = testApp.txManager.asReadOnly {
+      query("SELECT count(*) AS n FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()")
+        .head("n")
+        .toString
+        .toInt
+    }
+
+    if (isPostgres) testApp.txManager.withTransaction {
+      update(
+        "INSERT INTO watch_folder_file (id, repository_id, watch_folder_id, rel_path, size_bytes, modified_at, state, last_seen_at) " +
+          "SELECT lpad(n::text, 36, '0'), ?, ?, 'elsewhere/' || n, 1, 1, 'handled', now() FROM generate_series(1, 100000) AS n",
+        testContext.repository.persistedId,
+        watchFolder.persistedId
+      )
+    }
+
+    // Locks the memory's table as the scan offers its file, which is then in the pipeline and settles only once it is released
+    val locking = pipelineThat {
+      if (isPostgres) {
+        onAnotherThread {
+          testApp.txManager.withTransaction {
+            update("LOCK TABLE watch_folder_file IN ACCESS EXCLUSIVE MODE")
+            locked.countDown()
+            release.await(60, TimeUnit.SECONDS): Unit
+          }
+        }
+        locked.await(30, TimeUnit.SECONDS): Unit
+      }
+    }
+
+    try {
+      scan(watchFolder, locking) shouldBe ScanResult.Scanned(1)
+      // The image's import waits at its memory's write
+      if (isPostgres) eventually(waitingForLocks shouldBe 1)
+
+      val next = watchFolders.scan(watchFolder.persistedId)
+      // And the next scan at its read of the memory
+      if (isPostgres) eventually(waitingForLocks shouldBe 2)
+      release.countDown()
+
+      Await.result(next, 60.seconds) shouldBe ScanResult.Scanned(0)
+      settle(watchFolder)
+    } finally {
+      release.countDown()
+      locking.shutdown()
+    }
+
+    recorded(watchFolder) shouldBe List(("only.png", ImportOutcome.Imported, None))
+    importsOf(watchFolder) should have size 1
+    memory(watchFolder)("only.png") shouldBe (WatchFileState.Handled, 0)
   }
 
   test("A Watch folder whose directory is unavailable says why, keeps what it remembers, and scans again once it is back") {
