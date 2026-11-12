@@ -28,6 +28,7 @@ import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters._
 import scala.util.Failure
 import scala.util.Success
@@ -61,7 +62,6 @@ import altitude.core.models.ImportSource
 import altitude.core.models.NamedPath
 import altitude.core.models.Permissions
 import altitude.core.models.Repository
-import altitude.core.models.Settings
 import altitude.core.models.User
 import altitude.core.models.WatchFileState
 import altitude.core.models.WatchFolder
@@ -75,6 +75,7 @@ import altitude.core.pipeline.PipelineUtils
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.IgnoredFiles
 import altitude.core.util.RelPath
+import altitude.core.util.Util
 
 object WatchFolderService:
   /** How a scan of a Watch folder ended */
@@ -129,9 +130,9 @@ object WatchFolderService:
   private val LAST_SEEN_STEP = java.time.Duration.ofDays(1)
 
   // How long a file rests before it is read: a scan reads a file only when a scan saw it with the same size and modified time
-  // at least this long before, whoever asked for the two scans. The scan interval's least, so two scheduled scans in a row
-  // always span it, while two presses of "Scan now" do not shorten it
-  private val REST = java.time.Duration.ofSeconds(Settings.MIN_WATCH_FOLDER_SCAN_INTERVAL)
+  // at least this long before, whoever asked for the two scans. Far shorter than the scan interval, so two scheduled scans in
+  // a row always span it, while two presses of "Scan now" do not shorten it
+  private val REST = java.time.Duration.ofSeconds(Const.WatchFolder.REST_SECONDS)
 
   private val STOPPING = "the server is stopping"
   private val REMOVED = "the Watch folder was removed"
@@ -143,11 +144,11 @@ object WatchFolderService:
  *
  * A scan walks the directory, never following a symbolic link nor reading one, leaving out what imports ignore (`IgnoredFiles`)
  * and empty files, and remembers each file by its path under the directory, its size and its modified time (`watch_folder_file`).
- * A file is read once a scan finds it as a scan found it at least the rest before (the scan interval's least, so as the scan
- * before did, unless the two were asked for in quick succession): a copy is staged and offered to the import queue, under the
- * queue's backpressure, in path order, as a file of the scan's Import, which is opened with the scan's first file, expecting the
- * files the scan is about to offer, and closed once its last file settles. What becomes of a file in the pipeline is written to
- * its memory by the pipeline's last working stage ([[settled]]), which is also where the file is deleted.
+ * A file is read once a scan finds it as a scan found it at least the rest before (5 seconds, so as the scheduled scan before
+ * did, unless the two were asked for in quick succession): a copy is staged and offered to the import queue, under the queue's
+ * backpressure, in path order, as a file of the scan's Import, which is opened with the scan's first file, expecting the files
+ * the scan is about to offer, and closed once its last file settles. What becomes of a file in the pipeline is written to its
+ * memory by the pipeline's last working stage ([[settled]]), which is also where the file is deleted.
  */
 class WatchFolderService(val app: Altitude):
   import WatchFolderService.*
@@ -497,21 +498,29 @@ class WatchFolderService(val app: Altitude):
 
   /**
    * Starts the scans: every Watch folder of every Library is scanned now, the startup scan, which catches up on what arrived
-   * while the server was down, and again every `watch_folder.scan_interval` seconds (a Live Setting, read as each scan is
-   * scheduled). `App` calls it once the Imports a stop interrupted are failed and the Import history is pruned.
+   * while the server was down, and again every `watch_folder.scan_interval` minutes (a Live Setting, read as each round is
+   * scheduled, so a change takes effect from the round scheduled next). `App` calls it once the Imports a stop interrupted are
+   * failed and the Import history is pruned. `schedule` puts a round off by a delay: the actor system's scheduler, unless a
+   * caller drives the rounds itself.
    */
-  def start(): Unit =
-    logger.info("Scanning the Watch folders, now and then every watch_folder.scan_interval seconds")
-    tick()
+  def start(schedule: (FiniteDuration, () => Unit) => Cancellable = onActorSystem): Unit =
+    logger.info(
+      s"Scanning the Watch folders, now and then every ${Util.minutesText(app.settings.current.watchFolderScanInterval)} " +
+        "(watch_folder.scan_interval)")
+    tick(schedule)
 
   // One round of scans, and the next one scheduled. A round that fails is logged, and the next one still comes
-  private def tick(): Unit =
+  private def tick(schedule: (FiniteDuration, () => Unit) => Cancellable): Unit =
     if !isStopping.get then
       try scanAll()
       catch case NonFatal(e) => logger.error("Scanning the Watch folders failed", e)
 
-      val interval = app.settings.current.watchFolderScanInterval.seconds
-      nextScan.set(Some(app.actorSystem.scheduler.scheduleOnce(interval, () => tick())))
+      val interval = app.settings.current.watchFolderScanInterval.minutes
+      nextScan.set(Some(schedule(interval, () => tick(schedule))))
+
+  // A round put off on the actor system's scheduler, to run on the import dispatcher
+  private def onActorSystem(delay: FiniteDuration, round: () => Unit): Cancellable =
+    app.actorSystem.scheduler.scheduleOnce(delay, () => round())
 
   /** No scan starts from here on, and a scan that is running hands no more files to the pipeline: the server is stopping */
   def stop(): Unit =

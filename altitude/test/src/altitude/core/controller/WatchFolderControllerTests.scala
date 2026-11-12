@@ -23,6 +23,7 @@ import altitude.core.models.Folder
 import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.Repository
+import altitude.core.models.Settings
 import altitude.core.models.WatchFolder
 import altitude.core.models.WatchFolderSpec
 
@@ -248,13 +249,15 @@ import altitude.core.models.WatchFolderSpec
      *
      * Assertions:
      *
-     * The Add dialog is a form titled "Add Watch folder" with the three fieldsets, both switches off and "Save" as its submit. An
-     * add with a relative path comes back as the form, retargeted at itself, with the name and the path as submitted and the
-     * path's error under its field, and adds nothing; so does an add that keeps the folder structure with no folder chosen, with
-     * that error. An add with the directory, the structure kept under "Scans" and the deletion on answers that the Watch folder
-     * was added, and it is stored so, owned by the Admin. Its Edit dialog is titled by its name and opens over what is stored:
-     * the switches on, "Scans" as the chosen destination, the notice of what is deleted and "Save and delete imported files". An
-     * edit that renames it and turns both switches off is stored, with no destination.
+     * The Add dialog is a form titled "Add Watch folder" with the three fieldsets, both switches off and "Save" as its submit;
+     * under the path it says how often the folder is scanned, the scan interval as it is set, in minutes and hours: "every 10
+     * min" by default, "every 1 h 30 min" at 90 minutes and "every 2 h" at 120. An add with a relative path comes back as the
+     * form, retargeted at itself, with the name and the path as submitted and the path's error under its field, and adds nothing;
+     * so does an add that keeps the folder structure with no folder chosen, with that error. An add with the directory, the
+     * structure kept under "Scans" and the deletion on answers that the Watch folder was added, and it is stored so, owned by the
+     * Admin. Its Edit dialog is titled by its name and opens over what is stored: the switches on, "Scans" as the chosen
+     * destination, the notice of what is deleted and "Save and delete imported files". An edit that renames it and turns both
+     * switches off is stored, with no destination.
      *
      * Edge cases:
      *
@@ -274,6 +277,12 @@ import altitude.core.models.WatchFolderSpec
         dialog should include("""data-app-keeps-structure="false"""")
         dialog should include("""data-app-deletes-imported="false"""")
         (dialog should include).regex("""x-text="saveLabel">Save</button>""")
+        // The scan interval as it is set, in minutes and hours
+        dialog should include("Scanned with its subfolders every 10 min, and at startup")
+        App.altitude.settings.save(Map(Settings.WATCH_FOLDER_SCAN_INTERVAL -> "90"))
+        get(at("dialogs/add")).text() should include("Scanned with its subfolders every 1 h 30 min, and at startup")
+        App.altitude.settings.save(Map(Settings.WATCH_FOLDER_SCAN_INTERVAL -> "120"))
+        get(at("dialogs/add")).text() should include("Scanned with its subfolders every 2 h, and at startup")
         (dialog should not).include("notice deletion")
 
         val relative = send("POST", at("add"), form("Phone sync", "relative/path"))

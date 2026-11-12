@@ -2,6 +2,7 @@
 @import altitude.core.Const
 @import altitude.core.RequestContext
 @import altitude.core.routes.web.partial.WatchFolderController.Form
+@import altitude.core.util.Util
 
 @* The Watch folder dialog of the Import page (GET /htmx/watch-folders/r/:repoId/dialogs/add and /dialogs/edit, an Admin's),
    in the general modal host: three fieldsets. Source is the name and the path on the server. Destination is the "Keep
@@ -13,8 +14,8 @@
 
    The `watchFolderForm` component (js/alpine/components/watch-folder-form.js) holds the two switches, starting from
    what the form is rendered with, and asks for the notice when the deletion is switched on and when the path changes
-   while it is on (`data-app-notice-url`). `scanInterval` is the scan interval now, in seconds, which the path's help
-   names. A refused field comes back as this form with the values submitted and the
+   while it is on (`data-app-notice-url`). `scanInterval` is the scan interval now, in minutes, which the path's help
+   names in minutes and hours (`Util.minutesText`). A refused field comes back as this form with the values submitted and the
    error under the field; an edit's title names the Watch folder as stored. *@
 @(form: Form, fileCount: Option[Int], scanInterval: Int, errors: Map[String, String] = Map.empty)
 
@@ -38,7 +39,7 @@
 @pathAttributes = @{ Html("x-ref=\"path\" x-on:change=\"onPathChange()\"") }
 
 @pathHelp = {
-        <div class="help">Scanned with its subfolders every @scanInterval s, and at startup for anything that arrived meanwhile.</div>
+        <div class="help">Scanned with its subfolders every @Util.minutesText(scanInterval), and at startup for anything that arrived meanwhile.</div>
 }
 
 @chosenDestination = {@for(folderId <- form.destFolderId; path <- form.destination) {@includes.html.search_chip("folder", path, attributes = Seq("data-option-id" -> folderId, "data-option-label" -> path))}}

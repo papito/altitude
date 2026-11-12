@@ -33,7 +33,7 @@ import altitude.core.util.Sha256
 @DoNotDiscover class StartupTests(override val testApp: Altitude) extends IntegrationTestCore with TestFocus {
 
   override def afterEach(): Unit = {
-    testApp.settings.save(Map(Settings.IMPORT_PARALLELISM -> "0", Settings.WATCH_FOLDER_SCAN_INTERVAL -> "60"))
+    testApp.settings.save(Map(Settings.IMPORT_PARALLELISM -> "0"))
     super.afterEach()
   }
 
@@ -109,57 +109,6 @@ import altitude.core.util.Sha256
         other.importParallelism shouldBe other.settings.atStartup.importParallelism
         other.importParallelismResolution.value shouldBe 3
         other.importParallelismResolution.reason shouldBe "the Setting"
-    }
-  }
-
-  test("Scanning starts with a scan of every Watch folder, and scans again every interval") {
-
-    /**
-     * Setup:
-     *
-     * A Watch folder of an Admin's on a fresh temporary directory that holds one image, the scan interval saved as 5 seconds, its
-     * least, and a second instance against the database, on which the scans are started, as a server's start does.
-     *
-     * Assertions:
-     *
-     * The first scan runs at once, with nobody asking: the file is remembered as seen, and the Watch folder has a last scan. The
-     * scans that follow, an interval apart, read the file once it has rested, and it becomes an asset of the Library.
-     *
-     * Edge cases:
-     *
-     * The interval is the rest itself here, so the file is read by the second scan, or by the third when the second came a moment
-     * short of the rest.
-     */
-    val admin = testContext.persistUser(Some(testContext.makeAdminUser()))
-    switchContextUser(admin)
-    val dir = Files.createTempDirectory("altitude-startup-watch").toRealPath()
-    val file = Files.write(dir.resolve("a.png"), IntegrationTestUtil.generateRandomImagBytesBgr())
-    val watchFolders = testApp.service.watchFolder
-    val watchFolder = watchFolders.add(WatchFolderSpec("Startup", dir.toString))
-    testApp.settings.save(Map(Settings.WATCH_FOLDER_SCAN_INTERVAL -> "5"))
-
-    def within[T](seconds: Int)(f: => T): T =
-      Eventually.eventually(Eventually.timeout(Span(seconds, Seconds)), Eventually.interval(Span(100, Millis)))(f)
-
-    try
-      withFreshInstance {
-        other =>
-          other.service.watchFolder.start()
-
-          within(4) {
-            watchFolders.memory(watchFolder.persistedId).map(_.state) shouldBe List(WatchFileState.Seen)
-          }
-          watchFolders.getById(watchFolder.persistedId).lastScanAt should not be empty
-          testApp.service.asset.getByChecksum(Sha256.hex(file)) shouldBe None
-
-          within(30) {
-            testApp.service.asset.getByChecksum(Sha256.hex(file)) should not be empty
-            watchFolders.memory(watchFolder.persistedId).map(_.state) shouldBe List(WatchFileState.Handled)
-          }
-      }
-    finally {
-      watchFolders.remove(watchFolder.persistedId)
-      FileUtils.deleteDirectory(dir.toFile)
     }
   }
 

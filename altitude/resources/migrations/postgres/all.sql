@@ -68,7 +68,7 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('pipeline.shutdown_timeout', '30', '30'),
   ('import.parallelism', '0', '0'),
   ('import.history.days', '90', '90'),
-  ('watch_folder.scan_interval', '60', '60');
+  ('watch_folder.scan_interval', '10', '10');
 
 -- email_key and username_key are the name keys of the email address and the username (User.emailKey and User.usernameKey:
 -- NameKey.of, folded in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
@@ -486,8 +486,8 @@ CREATE TABLE watch_folder (
 CREATE INDEX watch_folder_01 ON watch_folder (repository_id);
 
 -- A Watch folder's memory of a file of its directory, by the file's path under it: what the last scan saw of it, and what
--- became of it. A file is read once a scan finds it with the size and modified time a scan saw at least 5 seconds before
--- (the scan interval's least), and not again while they stay.
+-- became of it. A file is read once a scan finds it with the size and modified time a scan saw at least 5 seconds before,
+-- and not again while they stay.
 CREATE TABLE watch_folder_file (
   id CHAR(36) COLLATE "C" PRIMARY KEY,
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,

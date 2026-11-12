@@ -131,6 +131,10 @@ object Const:
     // The days a file absent from its directory stays remembered when the Import history is kept forever
     // (`import.history.days` at 0); otherwise it stays as long as an Import does
     val FORGET_AFTER_DAYS = 30
+    // How long a file rests before it is read, in seconds: a scan reads a file only when a scan saw it with the same size and
+    // modified time at least this long before, however the two scans were asked for. A shorter rest would take a file a slow
+    // copy is still writing
+    val REST_SECONDS = 5
 
     // Why a Watch folder is paused, as its card says it beside the chip
     val DESTINATION_LOST = "destination folder is in the Trash"

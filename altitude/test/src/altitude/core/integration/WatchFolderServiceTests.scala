@@ -7,6 +7,7 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.commons.io.FileUtils
+import org.apache.pekko.actor.Cancellable
 import org.scalatest.DoNotDiscover
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers.*
@@ -17,6 +18,7 @@ import org.scalatest.time.Span
 import scala.concurrent.Await
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters.*
 
 import altitude.core.Altitude
@@ -452,8 +454,8 @@ import altitude.core.util.Sha256
      *
      * The first scan remembers the file as seen. The second, which finds it with the same size and modified time, reads nothing:
      * the file was first seen less than the rest ago. It leaves what the Watch folder remembers as it was, the moment the file
-     * was first seen included, and opens no Import. A scan once the rest has passed, the scan interval's least, reads the file,
-     * which is imported.
+     * was first seen included, and opens no Import. A scan once the rest has passed, five seconds on, reads the file, which is
+     * imported.
      *
      * Edge cases:
      *
@@ -480,7 +482,7 @@ import altitude.core.util.Sha256
     assetOf(file) shouldBe None
 
     // The rest itself, in real time: the one test that waits for it
-    Thread.sleep(Settings.MIN_WATCH_FOLDER_SCAN_INTERVAL * 1000L + 250)
+    Thread.sleep(Const.WatchFolder.REST_SECONDS * 1000L + 250)
     scan(watchFolder) shouldBe ScanResult.Scanned(1)
     settle(watchFolder)
     memory(watchFolder) shouldBe Map("a.png" -> (WatchFileState.Handled, 0))
@@ -1002,6 +1004,57 @@ import altitude.core.util.Sha256
 
     assetOf(secondFile) shouldBe None
     asAdmin(secondLibrary)(assetOf(firstFile)) shouldBe None
+  }
+
+  test("Scanning starts with a scan of every Watch folder, and each round schedules the next by the Setting's minutes") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder on a directory with one image. The scans are started, as a server's start does, with a schedule of the
+     * test's own in place of the actor system's: it keeps each round it is handed with the delay it was asked for, and runs none
+     * of them, so the test runs a round when it chooses to.
+     *
+     * Assertions:
+     *
+     * Starting scans at once, with nobody asking: the file is remembered as seen and the Watch folder has a last scan. One round
+     * is scheduled, 10 minutes on, the Setting's default, and nothing more while it waits. Once the file has rested, running that
+     * round reads the file, which becomes an asset of the Library, and schedules the round after it, 10 minutes on again.
+     *
+     * Edge cases:
+     *
+     * The Setting is read as each round is scheduled: saved as 90 while a round waits, the round keeps the delay it was scheduled
+     * with, and the one it schedules when it runs is 90 minutes on.
+     */
+    val dir = directory()
+    val file = image(dir, "a.png")
+    val watchFolder = watch(dir)
+    val rounds = scala.collection.mutable.ListBuffer[(FiniteDuration, () => Unit)]()
+    def schedule(delay: FiniteDuration, round: () => Unit): Cancellable = {
+      rounds += ((delay, round))
+      Cancellable.alreadyCancelled
+    }
+
+    watchFolders.start(schedule)
+    settle(watchFolder)
+
+    memory(watchFolder) shouldBe Map("a.png" -> (WatchFileState.Seen, 0))
+    watchFolders.getById(watchFolder.persistedId).lastScanAt should not be empty
+    assetOf(file) shouldBe None
+    rounds.map(_._1).toList shouldBe List(10.minutes)
+
+    testContext.letWatchedFilesRest()
+    rounds.head._2()
+    eventually(assetOf(file) should not be empty)
+    settle(watchFolder)
+    memory(watchFolder) shouldBe Map("a.png" -> (WatchFileState.Handled, 0))
+    rounds.map(_._1).toList shouldBe List(10.minutes, 10.minutes)
+
+    withSetting(Settings.WATCH_FOLDER_SCAN_INTERVAL, "90") {
+      rounds(1)._2()
+      settle(watchFolder)
+    }
+    rounds.map(_._1).toList shouldBe List(10.minutes, 10.minutes, 90.minutes)
   }
 
   test("A deactivated or demoted Admin's Watch folders pause, and a deleted Admin's pass to the Admin who deletes it") {
