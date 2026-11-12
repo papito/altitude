@@ -98,9 +98,15 @@ object WatchFolderService:
   // A file of a Watch folder's directory as a walk finds it: its path under the directory, and where it is
   private case class Found(relPath: String, path: Path, sizeBytes: Long, modifiedAt: FileTime)
 
-  // What a walk of a Watch folder's directory came to: its files in path order, and the directory of the app's own that the
-  // walk met, if it met one, at which it ended
-  private case class Walked(files: List[Found], own: Option[Path])
+  // What a walk of a Watch folder's directory came to: its files in path order, the directories it could not read, which it
+  // went on past, and the directory of the app's own that it met, if it met one, at which it ended
+  private case class Walked(files: List[Found], unreadable: List[Path], own: Option[Path]):
+    // What the Watch folder's card says of the directories that could not be read, if there are any
+    def problem: Option[String] =
+      unreadable match
+        case Nil => None
+        case List(directory) => Some(Const.WatchFolder.DIRECTORY_UNREADABLE.format(directory))
+        case first :: _ => Some(Const.WatchFolder.DIRECTORIES_UNREADABLE.format(unreadable.size, first))
 
   /**
    * The directories the app stores into (`paths`, each where it really is, symbolic links resolved), which no Watch folder may
@@ -373,7 +379,7 @@ class WatchFolderService(val app: Altitude):
   /**
    * What a Watch folder is doing, with the reason beside it: paused, by an Admin or for its owner; paused while its destination
    * folder is in the Trash, which nothing stores, so it resumes as the folder is restored or replaced; unavailable, as its last
-   * scan found its directory; or watching.
+   * scan found its directory, or directories of it that it could not read while it scanned the rest; or watching.
    */
   private def statusOf(watchFolder: WatchFolder, destination: Option[Folder]): (WatchFolderStatus, Option[String]) =
     if watchFolder.isPaused then (WatchFolderStatus.Paused, watchFolder.statusReason)
@@ -702,9 +708,9 @@ class WatchFolderService(val app: Altitude):
                   val walkStarted = Instant.now()
                   walk(root, own) match
                     // Nothing of such a directory is remembered or read, the files beside the app's own included
-                    case Walked(_, Some(met)) => unavailable(Const.WatchFolder.PATH_HOLDS_DATA.format(met))
-                    case Walked(found, None) =>
-                      val files = txManager.withTransaction(remember(watchFolder, found, walkStarted))
+                    case Walked(_, _, Some(met)) => unavailable(Const.WatchFolder.PATH_HOLDS_DATA.format(met))
+                    case walked @ Walked(found, _, None) =>
+                      val files = txManager.withTransaction(remember(watchFolder, found, walkStarted, walked.problem))
                       logger.debug(
                         s"Watch folder [$id] \"${watchFolder.name}\": ${found.size} files found, ${files.size} to read")
                       Right(Run(repository, watchFolder, owner, root, files, pipeline))
@@ -724,7 +730,8 @@ class WatchFolderService(val app: Altitude):
     }
     reason
 
-  // Stores why the Watch folder's directory is unavailable, or that it is available again, when that changed, logged at WARN
+  // Stores why the Watch folder's directory is unavailable, in whole or in part (the directories of it that a scan could not
+  // read and went on past), or that it is available again, when that changed, logged at WARN
   private def available(watchFolder: WatchFolder, problem: Option[String]): Unit =
     if watchFolder.statusReason != problem then
       txManager.withTransaction {
@@ -739,13 +746,16 @@ class WatchFolderService(val app: Altitude):
   /**
    * The files of the directory and of the directories below it, in path order. A symbolic link is neither followed nor read, a
    * file or a directory under a name imports ignore is left out, a directory with everything in it, and so are an empty file and
-   * anything that is no regular file. What cannot be read is left out, for a later scan.
+   * anything that is no regular file. What cannot be read is left out, for a later scan, and the walk goes on: a file, and a
+   * directory that cannot be opened or whose listing an I/O error ends midway (a stale network handle), which the walk returns,
+   * so one unreadable directory keeps none of the others from being read.
    *
    * The walk never enters one of the app's own directories (`own`), whatever path it meets it under, the watched directory
    * included: it ends there, with that directory, and whoever asked for the walk reads none of the files it found.
    */
   private def walk(root: Path, own: OwnDirectories): Walked =
     val found = List.newBuilder[Found]
+    val unreadable = List.newBuilder[Path]
     var met: Option[Path] = None
 
     // Symbolic links are not followed, which is the walk's default: a link is visited as a file that is one
@@ -765,12 +775,22 @@ class WatchFolderService(val app: Altitude):
             found += Found(relPathOf(root, file), file, attributes.size, attributes.lastModifiedTime)
           FileVisitResult.CONTINUE
 
+        // A directory that cannot be opened comes here too, rather than to the two visits of a directory
         override def visitFileFailed(file: Path, failure: IOException): FileVisitResult =
           logger.debug(s"Cannot read $file in a Watch folder: $failure")
+          if Files.isDirectory(file, LinkOption.NOFOLLOW_LINKS) then unreadable += file
+          FileVisitResult.CONTINUE
+
+        // With the failure that ended the directory's listing midway, if one did: the default throws it, which would end the
+        // walk, and the scan, at one bad directory
+        override def postVisitDirectory(directory: Path, failure: IOException): FileVisitResult =
+          if failure != null then
+            logger.debug(s"Cannot list all of $directory in a Watch folder: $failure")
+            unreadable += directory
           FileVisitResult.CONTINUE
     )
 
-    Walked(found.result().sortBy(_.relPath), met)
+    Walked(found.result().sortBy(_.relPath), unreadable.result(), met)
 
   // A file's path under the directory, as an Import file's is written: its names separated by "/"
   private def relPathOf(root: Path, file: Path): String =
@@ -785,9 +805,10 @@ class WatchFolderService(val app: Altitude):
    * are that far apart whatever the walks took. A seen file that has not rested is left for a later scan, with nothing of it
    * written. A file in the pipeline still is not read again, and a handled, final or parked one is left alone. A file is stamped
    * as found again only once its stamp is a day old, so a scan that finds nothing new writes one row. The walk found the
-   * directory available: its last scan is now, and what a scan found wrong with it before is cleared.
+   * directory available: its last scan is now, and what a scan found wrong with it before gives way to `problem`, what this walk
+   * could not read of it, if anything.
    */
-  private def remember(watchFolder: WatchFolder, found: List[Found], walkStarted: Instant): List[Found] =
+  private def remember(watchFolder: WatchFolder, found: List[Found], walkStarted: Instant, problem: Option[String]): List[Found] =
     val id = watchFolder.persistedId
     val now = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS)
     val stale = now.minus(LAST_SEEN_STEP).toInstant
@@ -822,7 +843,7 @@ class WatchFolderService(val app: Altitude):
     fileDao.addAll(fresh.toList, now)
     fileDao.seenAgain(id, foundAgain.toList, now): Unit
     dao.scanned(id, now): Unit
-    available(watchFolder, None)
+    available(watchFolder, problem)
     toRead.toList
 
   // Hands the scan's files to the pipeline one after another, each offer waiting for the queue with no thread held, then marks

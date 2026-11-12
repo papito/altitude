@@ -147,6 +147,10 @@ object Const:
     val PATH_UNWRITABLE = "the path is not writable, so imported files cannot be deleted"
     val PATH_OVERLAPS_DATA = "the path overlaps the app's data directory"
     val PATH_HOLDS_DATA = "the path holds a directory of the app's own data: %s"
+    // What a scan that went on says of the directories of the Watch folder that it could not read: the one, or how many
+    // with the first of them
+    val DIRECTORY_UNREADABLE = "a directory could not be read, the rest is scanned: %s"
+    val DIRECTORIES_UNREADABLE = "%d directories could not be read, the rest is scanned; the first: %s"
     val PATH_OVERLAPS = "the path overlaps the Watch folder \"%s\""
     // Why a file of a Watch folder that could not be read failed
     val UNREADABLE_FILE = "Cannot read the file"

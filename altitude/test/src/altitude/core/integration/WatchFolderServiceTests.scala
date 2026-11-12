@@ -896,6 +896,55 @@ import altitude.core.util.Sha256
     } finally Files.setPosixFilePermissions(dir, PosixFilePermissions.fromString("rwxr-xr-x"))
   }
 
+  test("A directory of a Watch folder that cannot be read is named on its card, and the rest of the tree is imported") {
+
+    /**
+     * Setup:
+     *
+     * A Watch folder on a directory with an image at its top, one in "locked" and one in "open/deep". The server is then denied
+     * "locked": it can neither list it nor enter it.
+     *
+     * Assertions:
+     *
+     * Two scans import the top image and the one in "open/deep": the walk goes on past "locked". The Watch folder's card says
+     * Unavailable with a reason that names "locked" by its path and says the rest is scanned, which is its stored status reason.
+     * Nothing is remembered of the image in "locked". Once the server may read "locked" again, a scan clears the reason, the card
+     * says Watching, and two scans import its image.
+     *
+     * Edge cases:
+     *
+     * The deletion notice's file count, asked while "locked" is denied, counts the two files that can be read.
+     */
+    val dir = directory()
+    image(dir, "top.png")
+    val hidden = image(dir, "locked/hidden.png")
+    image(dir, "open/deep/deep.png")
+    val locked = hidden.getParent
+    val watchFolder = watch(dir)
+    val reason = Const.WatchFolder.DIRECTORY_UNREADABLE.format(locked)
+
+    def card = watchFolders.cards().head
+
+    try {
+      Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("---------"))
+      assume(!Files.isReadable(locked))
+
+      scanTwice(watchFolder) shouldBe ScanResult.Scanned(2)
+      recorded(watchFolder).toSet shouldBe
+        Set(("top.png", ImportOutcome.Imported, None), ("open/deep/deep.png", ImportOutcome.Imported, None))
+      watchFolders.getById(watchFolder.persistedId).statusReason shouldBe Some(reason)
+      (card.status, card.reason) shouldBe (WatchFolderStatus.Unavailable, Some(reason))
+      memory(watchFolder).keySet shouldBe Set("top.png", "open/deep/deep.png")
+      watchFolders.fileCount(dir.toString, watchFolder.id) shouldBe Some(2)
+    } finally Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("rwxr-xr-x"))
+
+    scanAndSettle(watchFolder) shouldBe ScanResult.Scanned(0)
+    watchFolders.getById(watchFolder.persistedId).statusReason shouldBe None
+    (card.status, card.reason) shouldBe (WatchFolderStatus.Watching, None)
+    scanAndSettle(watchFolder) shouldBe ScanResult.Scanned(1)
+    assetOf(hidden) shouldBe defined
+  }
+
   test("A Watch folder whose destination folder is in the Trash is paused, its files untouched, until the folder is back") {
 
     /**
