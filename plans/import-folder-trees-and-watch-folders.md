@@ -16,7 +16,7 @@ sidecar files, upload size caps and the free-space check.
 
 **The one import.** The Import page (`ImportController.pipeline`, `views/pipeline.scala.html`) holds one form
 (`htmx/upload_form.scala.html`, `fragments/upload-form.js`): `<input type="file" multiple>`, every chosen file sent in one
-multipart POST to `/import/r/:repoId/upload/:uploadId`. The handler moves each of Undertow's temp files into `../../../data/staging`
+multipart POST to `/import/r/:repoId/upload/:uploadId`. The handler moves each of Undertow's temp files into `../data/staging`
 (`StagingService`), describes it (`LibraryService.stagedFileToAsset`: checksum, media type by content, `isTriaged = true`,
 `folderId = ""`) and offers it to the import queue (`ImportPipelineService.addToQueue`), waiting while the queue is full.
 Cancelling is a process-wide map of upload IDs (`ImportController.uploadCancelRequest`).
@@ -46,14 +46,14 @@ key. `LibraryService.moveAssetsToFolder` is how an asset leaves Triage: it clear
 | Words | **Import**: the stored record of one delivery, an upload or one scan of a Watch folder that found files. **Import file**: one file of it with its outcome. **Watch folder**: a server directory scanned for one Library, never a folder of the Library. "Keep folder structure" is the control's text |
 | Tree source | The browser only: a folder picker (`webkitdirectory`) and a drop of folders on the Import page. No UI reads a server path except a Watch folder's |
 | Structure | A choice per Import, off by default, so every file lands in Triage. An upload of chosen files offers "Skip Triage": a destination folder is chosen and every file is sorted into it. An upload of a folder tree, and a Watch folder, offer "Keep folder structure": a destination folder is chosen and the tree is mirrored under it. Either way the assets arrive sorted, with no Sequence, and the choice needs Organize as well as Import |
-| Mirroring | Contents only: the uploaded top folder (or the watched path) maps onto the destination itself, its subfolders onto folders under it. An existing folder of the same name key is reused, a recycled one included (it is restored, as `restoreRecycledAsset` restores an asset's folders); a missing one is created |
+| Mirroring | Contents only: the uploaded top folder (or the watched path) maps onto the destination itself, its subfolders onto folders under it. A drop of several items on Folder upload is its own top: each dropped folder maps onto a folder of its name under the destination, a dropped file onto the destination itself. An existing folder of the same name key is reused, a recycled one included (it is restored, as `restoreRecycledAsset` restores an asset's folders); a missing one is created |
 | Folder birth | A folder and its missing ancestors are created in the transaction that completes the first asset landing in or below it. Empty folders, folders of only unsupported files or only duplicates never appear. A file under a name the folder rule refuses fails with that reason |
 | Duplicates | Skipped and reported, as now: the existing asset stays where it is, and the first of two copies in one Import wins. The Import file names where the existing asset is. A file whose only copy is in the Trash is not a duplicate and imports |
 | Record | Every Import and every one of its files is stored, imported ones too. An imported Import file points at its asset until the asset is purged, and keeps its name after |
 | Retention | Setting `import.history.days` (Live, default 90, 0 = forever); a daily prune deletes older Imports with their files. A Watch folder's memory of handled files is a table of its own, so pruning never causes a re-import |
 | Upload transport | The page opens an Import, posts one file per request, three at a time, each with its relative path, then closes the Import. A file whose request fails is retried twice, then recorded failed; the rest go on. Cancel stops sending and closes the Import. Choosing the same folder again resumes: the files already in the Library are skipped as duplicates. Plain multi-file upload uses the same path |
 | Ignored files | Never sent, read or listed, by the tree upload and the scan alike: a name starting with a dot (files and directories), `Thumbs.db`, `desktop.ini`, `@eaDir`, `#recycle`, `$RECYCLE.BIN`, `*.part`, `*.tmp`, `*.crdownload`, zero-byte files, and in a Watch folder symbolic links, which are never followed. One list, served to the page by the server |
-| Live status | The ticker goes. The Import history's top rows are the Imports in progress, with a progress bar and running counts pushed over the WebSocket, to every account with Import in the Library. An Import expands to its files, filtered by outcome |
+| Live status | The ticker goes. The Imports in progress head the Import history, with a progress bar and running counts pushed over the WebSocket, to every account with Import in the Library. An Import expands to its files, filtered by outcome |
 | Restart | At startup every Import file still pending becomes failed, "interrupted by a restart", and its Import is closed. Staged files are not resumed |
 | Watch folder scope | An Admin adds, edits, pauses, scans, retries and removes; an account with Import sees the list read-only. Several per Library. No two Watch folders overlap (same path, or one inside the other, after resolving symbolic links) in any Library, and none overlaps the app's data directory |
 | Watch folder target | Scanned recursively, with the same "Keep folder structure" choice and destination as an upload |
@@ -64,17 +64,19 @@ key. `LibraryService.moveAssetsToFolder` is how an asset leaves Triage: it clear
 | Deletion | Per Watch folder, off by default. Deleted: a file once its import completes, and a file that is a duplicate of an asset of the Library. Never touched: unsupported and failed files. Subdirectories left empty are removed, the watched path never. Switching it on asks for confirmation, naming the number of files in the folder now |
 | Unavailable | A path that is missing, not a directory, unreadable, or not writable with deletion on makes the Watch folder "Unavailable: reason"; it is tried again each interval and logged at WARN on each change of state |
 | Lost destination | A Watch folder whose destination is recycled or deleted pauses with that reason and resumes when it is restored or replaced; its files wait untouched. A missing mirrored subfolder is created again. Deleting such a folder warns in its confirmation. An upload in that state fails its remaining files |
-| Page | The Import page is three tabs: Upload, Watch folders, Import history. The history tab carries a badge with the number of Imports in progress |
-| Upload tab | Two cards side by side, each with its button, one line of explanation and its own option, a switch. **Files**: "Skip Triage", off by default; on shows the destination folder picker. **Folder**: "Keep folder structure", off by default; on shows the destination folder picker and, under it, a one-line example of the mapping (source subfolder → Library path). Both cards take drops. While uploading, the tab shows its own progress (files and bytes, Cancel) and the Import is live in the history |
-| Watch folders tab | Dense single-line rows: name, path, target, status, last scan. The status is a tinted chip with its reason beside it. "Scan now" is an inline button; Pause / Resume, Retry failed, Edit and Remove are in a ⋯ context menu, as the folder tree's |
+| Page | The Import page is two columns: File upload, Folder upload and Watch folders in the left column, the Import history in a wider right column so live progress stays in view. On a narrow screen the columns stack in that order |
+| Upload sections | Two sections, each a dashed drop zone with its button inside and its option below it, a two-way segmented control. **File upload**: "Drop files here", "Choose files", and "To Triage" / "Skip Triage"; Skip Triage shows the destination folder picker. **Folder upload**: "Drop a folder here", "Choose folder", and "To Triage" / "Keep folder structure"; Keep folder structure shows the destination folder picker and, under it, a one-line example of the mapping (source subfolder → Library path). Each zone applies its own option to whatever is dropped on it: a folder dropped on File upload is sent as loose files, loose files dropped on Folder upload are the tree's top level. One upload runs at a time: the section that started it shows its progress (files and bytes, Cancel), the other waits, and the Import is live in the history |
+| Import title | A folder upload is titled by its top folder ("3 folders" for a drop of several), a scan by its Watch folder's name, an upload of files by its file count |
+| Watch folders section | Cards in a grid, one per Watch folder: name, path, target, last scan, the imported and failed counts of its Imports in the history, and whether it deletes imported files. The status is a tinted chip with its reason beside it. "Scan now" is an inline button on the card; Pause / Resume, Retry failed, Edit and Remove are in a ⋯ context menu, as the folder tree's. "Add Watch folder" sits beside the section's heading |
 | Watch folder dialog | Three fieldsets: Source (name, path), Destination ("Keep folder structure" and its destination), After import ("Delete imported files"). Switching deletion on reveals a red callout naming the number of files in the folder now, and Save reads "Save and delete imported files" |
-| History tab | A table, one row per Import, the Imports in progress pinned under "In progress" above "Earlier". The progress bar is segmented by outcome, with moving stripes while in progress. Counts are outcome-coloured chips, a zero count hidden. An expanded Import lists its Import files under outcome filter chips with counts |
+| Import history | A vertical timeline, one node per Import, glowing while the Import is in progress; the Imports in progress are pinned under "In progress" above "Earlier". Each entry carries its title, who or what delivered it, when, and where it went. The progress bar is segmented by outcome (imported, already in the Library, unsupported, failed), with moving stripes while in progress. Counts are outcome-coloured chips, a zero count hidden. An expanded Import lists its Import files under outcome filter chips with counts |
 
 ## Design
 
 **Tables** (both `all.sql` files).
 
-- `import`: `repository_id`, `source` (`upload`, `watch_folder`), `watch_folder_id` (`ON DELETE SET NULL`), `account_id`
+- `import`: `repository_id`, `source` (`upload`, `watch_folder`), `name` (the uploaded folder's or the Watch folder's name,
+  NULL for an upload of files), `watch_folder_id` (`ON DELETE SET NULL`), `account_id`
   (`ON DELETE SET NULL`), `dest_folder_id` (NULL = Triage), `closed_at`, and five counters (`pending`, `imported`,
   `duplicate`, `unsupported`, `failed`) kept by the write that sets a file's outcome. Index on `(repository_id, created_at)`.
 - `import_file`: `import_id` (cascade), `repository_id`, `rel_path`, `outcome` (`pending`, `imported`, `duplicate`,
@@ -128,16 +130,17 @@ never moved out of a Watch folder: the source is the retry.
    file, and cancelling is closing.
 5. **Sorted on arrival.** `FolderService.ensurePath` and the destination branch of `completeImport`. Rationale: the
    structure choice, with folders born only under an asset.
-6. **Upload tab.** The page's three tabs, and the Files and Folder cards: each card's picker and drop target (the Folder
-   card walks dropped directories with `webkitGetAsEntry`), "Skip Triage" and "Keep folder structure" with the destination
-   folder picker and the mapping example (shown to Organize holders), the ignore list applied before sending, three parallel
-   requests with two retries each, and progress by files and bytes. A Files upload that skips Triage sends no relative
-   paths, so every file lands in the destination itself. Rationale: the first goal's UI.
+6. **Upload sections.** The page's two columns, and the File upload and Folder upload sections: each section's drop zone
+   and picker (dropped directories are walked with `webkitGetAsEntry`), the "To Triage" / "Skip Triage" and "To Triage" /
+   "Keep folder structure" segmented controls with the destination folder picker and the mapping example (shown to
+   Organize holders), the ignore list applied before sending, three parallel requests with two retries each, and progress
+   by files and bytes. A File upload sends each file under its bare name, so with Skip Triage every file lands in the
+   destination itself. Rationale: the first goal's UI.
 
 ### C. Import history
 
-7. **History tab, live.** A partial listing a Library's Imports, newest first and paged, each expanding to its files by
-   outcome, an imported file linking to Asset detail; rendered through Twirl. `ImportStatusWsActor` pushes an Import's
+7. **Import history, live.** A partial listing a Library's Imports as the timeline, the ones in progress first, then
+   newest first and paged, each expanding to its files by outcome, an imported file linking to Asset detail; rendered through Twirl. `ImportStatusWsActor` pushes an Import's
    counters, throttled, to the Library's connected accounts instead of per-file lines, and the socket takes its account from
    the login; the ticker markup, its inline script and the per-file sink go. Rationale: the record made visible, one live
    display, and no file name formatted into HTML by hand.
@@ -156,14 +159,14 @@ never moved out of a Watch folder: the source is the retry.
     Rationale: a Watch folder that says why it is not importing.
 11. **Deletion.** `deletes_imported`, the source delete and empty-directory cleanup in `SettleImportFileFlow`, never above
     the watched path. Rationale: the third goal, after the commit that makes the file safe to lose.
-12. **Watch folders tab.** The rows with name, path, target, status and last scan; Admin dialogs for Add and
+12. **Watch folders section.** The cards with name, path, target, status, last scan and counts; Admin dialogs for Add and
     Edit, the deletion confirmation with the file count, Pause / Resume, Scan now, Retry failed, Remove; the folder delete
     confirmation's warning. Routes `@requireAdmin` for writes, Import for the list. Rationale: the Watch folder UI.
 
 ### E. Docs
 
-13. **Guides.** `../../../altitude/AGENTS.md` (Import Pipeline: origin, settling, sorted arrival; a Watch folders section),
-    `views/AGENTS.md` (the Import page's three tabs), `docs/READINESS.md` (the ticker's XSS and the socket's login
+13. **Guides.** `../altitude/AGENTS.md` (Import Pipeline: origin, settling, sorted arrival; a Watch folders section),
+    `views/AGENTS.md` (the Import page's two columns), `docs/READINESS.md` (the ticker's XSS and the socket's login
     closed, the restart loss now reported, the Watch folder's path and deletion rules under data safety),
     `docs/test-coverage.md`. `CONTEXT.md` holds Import, Import file and Watch folder. Rationale: no drift.
 
