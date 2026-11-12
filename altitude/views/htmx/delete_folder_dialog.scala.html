@@ -1,16 +1,32 @@
 @import altitude.core.RequestContext
 @import altitude.core.models.Folder
+@import altitude.core.models.WatchFolder
 @import altitude.core.Api
 
-@(folder: Folder, title: String)
+@(folder: Folder, title: String, watchFolders: List[WatchFolder] = Nil)
 
-@* Focus returns to the parent's menu control, which survives the deletion *@
+@* The Delete confirmation of a folder's ⋯ menu. `watchFolders` are the Watch folders whose destination is the folder or a
+   folder below it: deleting it pauses them until it is restored or they are given another destination, which the dialog
+   warns of, naming them. Focus returns to the parent's menu control, which survives the deletion *@
 <div id="deleteFolder"
      data-app-fragment="modal"
      data-app-modal-title="@{title}"
      data-app-dialog-return-focus="#folderMenuCtrl-@{folder.parentId}"
      data-app-success-event="FOLDER_DELETED_EVENT"
      data-app-success-detail='{"@{Api.Field.ID}":"@{folder.persistedId}"}'>
+
+    @if(watchFolders.nonEmpty) {
+    <p class="notice warning" role="alert">
+        @if(watchFolders.size == 1) {
+        The Watch folder <strong>@watchFolders.head.name</strong> sorts its files into this folder. It pauses until the folder
+        is restored, or until an Admin gives it another destination.
+        } else {
+        The Watch folders @for((watchFolder, index) <- watchFolders.zipWithIndex) {@if(index > 0) {, }<strong>@watchFolder.name</strong>}
+        sort their files into this folder. They pause until the folder is restored, or until an Admin gives them another
+        destination.
+        }
+    </p>
+    }
 
     <button type="button"
             class="action-button error"

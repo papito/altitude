@@ -130,6 +130,20 @@ abstract class IntegrationTestCore
   def amongManyUnknownIds(ids: Set[String]): Set[String] =
     ids ++ (1 to 70000).map(n => f"unknown-$n%028d")
 
+  /** Replaces the repository's `files` directory with a plain file, so storing any asset of the repository fails */
+  def breakFileStore(repository: Repository): Unit = {
+    val files =
+      java.nio.file.Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, repository.persistedId, Const.DataStore.FILES)
+    org.apache.commons.io.FileUtils.deleteDirectory(files.toFile)
+    java.nio.file.Files.createDirectories(files.getParent)
+    java.nio.file.Files.createFile(files): Unit
+  }
+
+  /** Puts the repository's `files` directory back after [[breakFileStore]] */
+  def restoreFileStore(repository: Repository): Unit =
+    java.nio.file.Files.delete(
+      java.nio.file.Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, repository.persistedId, Const.DataStore.FILES))
+
   def switchContextUser(user: User): Unit = {
     testApp.service.user.switchContextToUser(user)
   }

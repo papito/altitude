@@ -84,6 +84,39 @@ import altitude.core.models.Settings
     current.pipelineShutdownTimeout shouldBe 30
     current.importParallelism shouldBe 0
     current.importHistoryDays shouldBe 90
+    current.watchFolderScanInterval shouldBe 60
+  }
+
+  test("The Watch folder scan interval is a Live setting of the Operations section, in whole seconds from 5") {
+
+    /**
+     * Setup:
+     *
+     * The registry's entry of the Watch folder scan interval, and values validated and saved for it.
+     *
+     * Assertions:
+     *
+     * It is a Live setting of the Operations section on both engines. A whole number of seconds from 5 up is valid. A saved value
+     * reaches its accessor at once, with no restart waiting.
+     *
+     * Edge cases:
+     *
+     * An interval under 5 seconds, which would read a file a slow copy is still writing, and a fraction of a second are refused.
+     */
+    val name = Settings.WATCH_FOLDER_SCAN_INTERVAL
+    val definition = Settings.byName(name)
+    definition.group shouldBe SettingGroup.Operations
+    definition.kind shouldBe SettingKind.Live
+    definition.engine shouldBe None
+
+    testApp.settings.validate(Map(name -> "5")) shouldBe empty
+    testApp.settings.validate(Map(name -> "3600")) shouldBe empty
+    testApp.settings.validate(Map(name -> "4")) shouldBe Map(name -> "Must be at least 5")
+    testApp.settings.validate(Map(name -> "7.5")) shouldBe Map(name -> "Must be a whole number")
+
+    testApp.settings.save(Map(name -> "15"))
+    testApp.settings.current.watchFolderScanInterval shouldBe 15
+    testApp.settings.pendingRestart shouldBe empty
   }
 
   test("The Import history Setting is a Live setting of the Operations section, in whole days from 0") {

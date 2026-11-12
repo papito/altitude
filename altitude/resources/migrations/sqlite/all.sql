@@ -54,7 +54,8 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('db.postgres.read_statement_timeout', '30', '30'),
   ('pipeline.shutdown_timeout', '30', '30'),
   ('import.parallelism', '0', '0'),
-  ('import.history.days', '90', '90');
+  ('import.history.days', '90', '90'),
+  ('watch_folder.scan_interval', '60', '60');
 
 -- email_key and username_key are the name keys of the email address and the username (User.emailKey and User.usernameKey:
 -- NameKey.of, folded in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
@@ -501,6 +502,67 @@ CREATE TRIGGER search_document_after_update AFTER UPDATE ON search_document BEGI
   INSERT INTO search_document_fts (rowid, body) VALUES (new.id, new.body);
 END;
 
+-- A Watch folder: a directory on the server that the app scans for one Library, importing the files that arrive in it
+-- (WatchFolderService). Its files are only ever copied out of it, and deleted from it when it deletes imported files.
+CREATE TABLE watch_folder (
+  id CHAR(36) PRIMARY KEY,
+  repository_id CHAR(36) NOT NULL,
+  name TEXT NOT NULL,
+  -- The directory's absolute path, as it was entered. Unique in the instance: no two Watch folders overlap, in any Library,
+  -- which the code checks by real path, one inside the other included (WatchFolderService)
+  path TEXT NOT NULL UNIQUE,
+  -- The folder its files are sorted into, the directory's tree mirrored under it ("Keep folder structure"); NULL = Triage
+  dest_folder_id CHAR(36),
+  -- Whether a file is deleted from the directory once it is imported, or is a duplicate of an asset of the Library
+  deletes_imported TINYINT NOT NULL DEFAULT 0,
+  -- Paused by an Admin, or because its owner was deactivated or is no Admin any more
+  is_paused TINYINT NOT NULL DEFAULT 0,
+  -- The Admin who added it or last edited it, who owns the assets it imports. No delete action: a deleted Admin's Watch
+  -- folders pass to the deleting Admin first, as its assets do
+  account_id CHAR(36) NOT NULL REFERENCES account (id),
+  -- Why it is paused, when its owner is why; otherwise why its directory is unavailable, as its last scan found it
+  status_reason TEXT,
+  -- When its directory was last walked; NULL until the first scan that finds it available
+  last_scan_at DATETIME,
+  created_at DATETIME DEFAULT (datetime('now', 'utc')),
+  updated_at DATETIME DEFAULT NULL,
+  UNIQUE (id, repository_id),
+  FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
+  -- No delete action, as no folder is ever deleted on its own (a deleted folder is recycled)
+  FOREIGN KEY (repository_id, dest_folder_id) REFERENCES folder (repository_id, id)
+);
+
+-- A Library's Watch folders: its list, and the cascade from a deleted Library
+CREATE INDEX watch_folder_01 ON watch_folder (repository_id);
+
+-- A Watch folder's memory of a file of its directory, by the file's path under it: what the last scan saw of it, and what
+-- became of it. A file is read once its size and modified time are the same in two scans, and not again while they stay.
+CREATE TABLE watch_folder_file (
+  id CHAR(36) PRIMARY KEY,
+  repository_id CHAR(36) NOT NULL,
+  watch_folder_id CHAR(36) NOT NULL,
+  -- The file's path under the watched directory, its names separated by "/"
+  rel_path TEXT NOT NULL,
+  size_bytes BIGINT NOT NULL,
+  -- The file's modified time in milliseconds since the epoch: compared for equality, never shown
+  modified_at BIGINT NOT NULL,
+  -- seen: not read yet, or changed since; handled: imported, or a duplicate of an asset of the Library; final: unsupported or
+  -- undecodable, until the file changes; retry: failed, to be read again; parked: failed `attempts` times, left alone
+  state TEXT NOT NULL DEFAULT 'seen'
+    CHECK (state IN ('seen', 'handled', 'final', 'retry', 'parked')),
+  attempts INT NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  -- When a scan last found the file, to the day (a scan moves it once it is a day old): a file absent from the directory
+  -- is forgotten once this is past the retention period
+  last_seen_at DATETIME NOT NULL,
+  created_at DATETIME DEFAULT (datetime('now', 'utc')),
+  updated_at DATETIME DEFAULT NULL,
+  FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,
+  FOREIGN KEY (repository_id, watch_folder_id) REFERENCES watch_folder (repository_id, id) ON DELETE CASCADE
+);
+
+-- A Watch folder's memory, which a scan reads whole, and a file of it by its path; the cascade from a removed Watch folder
+CREATE UNIQUE INDEX watch_folder_file_01 ON watch_folder_file (watch_folder_id, rel_path);
+
 -- An Import: the stored record of one delivery of files to a Library, an upload from a browser or one scan of a Watch folder
 -- that found files (ImportService). The five counters are its Import files by outcome, kept by the write that sets a file's
 -- outcome, so a listing reads no file.
@@ -511,9 +573,10 @@ CREATE TABLE import (
     CHECK (source IN ('upload', 'watch_folder')),
   -- The uploaded folder's or the Watch folder's name; NULL for an upload of files
   name TEXT,
-  -- The Watch folder whose scan this is; NULL for an upload. A plain column until the watch_folder table arrives, which adds
-  -- its reference (ON DELETE SET NULL)
-  watch_folder_id CHAR(36),
+  -- The Watch folder whose scan this is; NULL for an upload, and once the Watch folder is removed: its Imports stay in the
+  -- history. A single column: a composite key's SET NULL would clear repository_id too, so the code checks that the Watch
+  -- folder is the Library's (ImportService.open).
+  watch_folder_id CHAR(36) REFERENCES watch_folder (id) ON DELETE SET NULL,
   -- The account that delivered it; NULL once that account is deleted
   account_id CHAR(36) REFERENCES account (id) ON DELETE SET NULL,
   -- The folder its files are sorted into; NULL = Triage
@@ -537,6 +600,8 @@ CREATE TABLE import (
 
 -- A Library's Import history by age: its listing, and the prune of the Imports past import.history.days
 CREATE INDEX import_01 ON import (repository_id, created_at);
+-- A Watch folder's Imports: the counts its card shows, and the key's delete action when it is removed
+CREATE INDEX import_02 ON import (watch_folder_id) WHERE watch_folder_id IS NOT NULL;
 
 -- An Import file: one file of an Import with its outcome. rel_path is the file's path as it was delivered, its name for an
 -- upload of files.

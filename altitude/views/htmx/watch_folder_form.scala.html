@@ -1,0 +1,110 @@
+@import altitude.core.Api
+@import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.routes.web.partial.WatchFolderController.Form
+
+@* The Watch folder dialog of the Import page (GET /htmx/watch-folders/r/:repoId/dialogs/add and /dialogs/edit, an Admin's),
+   in the general modal host: three fieldsets. Source is the name and the path on the server. Destination is the "Keep
+   folder structure" switch: off, the files land in Triage; on, the destination folder, the advanced search panel's Folder
+   field (includes/filter_combobox, in an element of the panel's class, which its rules are scoped by), under which the
+   directory's tree is mirrored. After import is the "Delete imported files" switch: on, the red notice
+   (includes/watch_folder_deletion_notice) names the number of files in the folder now, read from the server for the path
+   typed, and the submit reads "Save and delete imported files".
+
+   The `watchFolderForm` component (js/alpine/components/watch-folder-form.js) holds the two switches, starting from
+   what the form is rendered with, and asks for the notice when the deletion is switched on and when the path changes
+   while it is on (`data-app-notice-url`). `scanInterval` is the scan interval now, in seconds, which the path's help
+   names. A refused field comes back as this form with the values submitted and the
+   error under the field; an edit's title names the Watch folder as stored. *@
+@(form: Form, fileCount: Option[Int], scanInterval: Int, errors: Map[String, String] = Map.empty)
+
+@repoId = @{ RequestContext.getRepository.persistedId }
+@route = @{ s"/htmx/watch-folders/r/$repoId" }
+@editing = @{ form.watchFolderId.isDefined }
+@F = @{ Api.Field.WatchFolder }
+
+@field(id: String, name: String, label: String, value: String, attributes: Html = Html(""), after: Html = Html("")) = {
+    <div class="field">
+        <label for="@id">@label</label>
+        <input type="text" id="@id" name="@name" value="@value" autocomplete="off" spellcheck="false"@if(errors.contains(name)){ class="error"} @attributes>
+        @for(message <- errors.get(name)) {
+        <div class="error" role="alert">@message</div>
+        }
+        @after
+    </div>
+}
+
+@* The path's input asks for the deletion notice again when the path changes *@
+@pathAttributes = @{ Html("x-ref=\"path\" x-on:change=\"onPathChange()\"") }
+
+@pathHelp = {
+        <div class="help">Scanned with its subfolders every @scanInterval s, and at startup for anything that arrived meanwhile.</div>
+}
+
+@chosenDestination = {@for(folderId <- form.destFolderId; path <- form.destination) {@includes.html.search_chip("folder", path, attributes = Seq("data-option-id" -> folderId, "data-option-label" -> path))}}
+
+<form id="watchFolderForm"
+      action="#"
+      x-data="watchFolderForm"
+      data-app-keeps-structure="@form.keepsStructure"
+      data-app-deletes-imported="@form.deletesImported"
+      data-app-notice-url="@route/deletion-notice"
+      data-app-fragment="modal"
+      data-app-modal-title="@{ if (editing) Const.UI.EDIT_WATCH_FOLDER_DIALOG_TITLE.format(form.storedName.getOrElse(form.name)) else Const.UI.ADD_WATCH_FOLDER_DIALOG_TITLE }"
+      data-app-dialog-autofocus-selector="#field-watchFolderName"
+      data-app-dialog-return-focus="#addWatchFolderBtn"
+      data-app-success-event="WATCH_FOLDERS_CHANGED_EVENT"
+      hx-target="this"
+      hx-swap="none"
+      @if(editing) { hx-put="@route/edit" } else { hx-post="@route/add" }
+      hx-trigger="submit"
+      hx-json-enc>
+
+    @for(watchFolderId <- form.watchFolderId) {
+    <input type="hidden" name="@F.WATCH_FOLDER_ID" value="@watchFolderId" x-ref="watchFolderId">
+    }
+
+    <fieldset>
+        <legend>Source</legend>
+        @field("field-watchFolderName", F.NAME, "Name", form.name)
+        @field("field-watchFolderPath", F.PATH, "Path on the server", form.path, pathAttributes, pathHelp)
+    </fieldset>
+
+    <fieldset>
+        <legend>Destination</legend>
+        <div class="switch-row">
+            <button type="button" role="switch" class="switch" id="switch-keepsStructure"
+                    aria-checked="@form.keepsStructure" x-bind:aria-checked="keepsStructure" x-on:click="toggleKeepsStructure()"></button>
+            <label for="switch-keepsStructure">Keep folder structure</label>
+            <input type="hidden" name="@F.KEEPS_STRUCTURE" value="@form.keepsStructure" x-bind:value="keepsStructure">
+        </div>
+        <div class="search-panel destination" x-show="keepsStructure"@if(!form.keepsStructure){ style="display: none"}>
+            @includes.html.filter_combobox("watchFolderDestination", "into", F.DEST_FOLDER_ID, s"/htmx/search/r/$repoId/options/folders", "folder", "choose a folder", form.destFolderId.filter(_ => form.destination.isDefined).toList)(chosenDestination)
+            @for(message <- errors.get(F.DEST_FOLDER_ID)) {
+            <div class="error" role="alert">@message</div>
+            }
+            <div class="help">The folders under the path are mirrored under this folder.</div>
+        </div>
+        <div class="help" x-show="!keepsStructure"@if(form.keepsStructure){ style="display: none"}>Files land in Triage.</div>
+    </fieldset>
+
+    <fieldset>
+        <legend>After import</legend>
+        <div class="switch-row">
+            <button type="button" role="switch" class="switch" id="switch-deletesImported"
+                    aria-checked="@form.deletesImported" x-bind:aria-checked="deletesImported" x-on:click="toggleDeletesImported()"></button>
+            <label for="switch-deletesImported">Delete imported files</label>
+            <input type="hidden" name="@F.DELETES_IMPORTED" value="@form.deletesImported" x-bind:value="deletesImported">
+        </div>
+        <div id="watchFolderDeletionNotice" x-ref="notice" x-show="deletesImported"@if(!form.deletesImported){ style="display: none"}>
+            @if(form.deletesImported) {@includes.html.watch_folder_deletion_notice(fileCount)}
+        </div>
+    </fieldset>
+
+    <p class="help">Imports as you: the assets it imports belong to your account.</p>
+
+    <div class="actions">
+        <button type="submit" class="action-button primary" x-text="saveLabel">@{ if (form.deletesImported) "Save and delete imported files" else "Save" }</button>
+        <button type="button" class="action-button" x-on:click="$store.modal.close()">Cancel</button>
+    </div>
+</form>

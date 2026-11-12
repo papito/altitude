@@ -154,6 +154,34 @@ object ImportStatusWsActorTests {
     theirs.taken() shouldBe List(pushed(further), pushed(furthest))
   }
 
+  test("A change to a Library's Watch folders is told to every socket of the Library, at once, and to no other Library's") {
+
+    /**
+     * Setup:
+     *
+     * Two sockets on a Library, of two accounts, and one on another Library. The first Library's Watch folders change twice in a
+     * row.
+     *
+     * Assertions:
+     *
+     * Each socket of the first Library is sent the message that says to read the Watch folders again, twice, with no interval
+     * awaited between the two. The other Library's socket is sent nothing.
+     */
+    val first = socketOf(LIBRARY, "first")
+    val second = socketOf(LIBRARY, "second")
+    val elsewhere = socketOf(OTHER_LIBRARY)
+    val message = cask.Ws.Text(ImportStatusWsActor.WATCH_FOLDERS_CHANGED)
+
+    system ! ImportStatusWsActor.WatchFoldersChanged(LIBRARY)
+    system ! ImportStatusWsActor.WatchFoldersChanged(LIBRARY)
+    settle()
+
+    first.taken() shouldBe List(message, message)
+    second.taken() shouldBe List(message, message)
+    elsewhere.taken() shouldBe empty
+    ujson.read(ImportStatusWsActor.WATCH_FOLDERS_CHANGED) shouldBe ujson.Obj("watchFolders" -> true)
+  }
+
   test("A burst of changes to an Import is pushed as one message an interval, with the Import as it stands then") {
 
     /**

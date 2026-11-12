@@ -30,6 +30,7 @@ import altitude.core.controller.StaticControllerTests
 import altitude.core.controller.StyleGuideControllerTests
 import altitude.core.controller.TriageControllerTests
 import altitude.core.controller.UsersControllerTests
+import altitude.core.controller.WatchFolderControllerTests
 
 abstract class AllControllerTestSuites
   extends Suites(
@@ -60,5 +61,6 @@ abstract class AllControllerTestSuites
     new TriageControllerTests(),
     new PermissionControllerTests(),
     new UsersControllerTests(),
+    new WatchFolderControllerTests(),
     new RouteTableTests()
   )

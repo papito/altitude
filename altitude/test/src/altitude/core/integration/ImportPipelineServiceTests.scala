@@ -101,17 +101,6 @@ import altitude.core.util.Query
       testContext.makeAsset().copy(assetType = AssetType("image", "jpeg", "image/jpeg")),
       testApp.service.staging.stage("not an image".getBytes))
 
-  /** Replaces the repository's `files` directory with a plain file, so storing any asset of the repository fails */
-  private def breakFileStore(repository: Repository): Unit =
-    val files = Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, repository.persistedId, Const.DataStore.FILES)
-    FileUtils.deleteDirectory(files.toFile)
-    Files.createDirectories(files.getParent)
-    Files.createFile(files)
-
-  /** Puts the repository's `files` directory back after [[breakFileStore]] */
-  private def restoreFileStore(repository: Repository): Unit =
-    Files.delete(Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, repository.persistedId, Const.DataStore.FILES))
-
   /**
    * A queue of the test's own over a flow that fails its stream on the element "bad" (its stage stops on a failure, rather than
    * resuming as the queue's stages do) and records every other element it passes

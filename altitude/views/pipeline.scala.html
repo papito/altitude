@@ -1,9 +1,10 @@
 @import altitude.core.Const
 @import altitude.core.RequestContext
+@import altitude.core.models.AccountType
 @import altitude.core.models.ImportHistory
 @import altitude.core.models.Stats
 
-@(stats: Stats, history: ImportHistory)
+@(stats: Stats, history: ImportHistory, watchFolders: Html)
 
 <!DOCTYPE html>
 
@@ -21,10 +22,30 @@
       @includes.html.nav(stats = stats, current = Const.NavEntry.IMPORT)
     </nav>
 
-    @* Two columns, which stack in this order on a narrow screen (static/css/pages/pipeline.css): the upload sections, and
-       the Import history, which the status feed keeps live *@
+    @* Two columns, which stack in this order on a narrow screen (static/css/pages/pipeline.css): what delivers files, the
+       upload sections and under them the Watch folders, and the Import history, which the status feed keeps live *@
     <main>
-      @includes.html.upload_sections()
+      <div id="importSources">
+        @includes.html.upload_sections()
+
+        @* The Library's Watch folders (htmx/watch_folders), which the page reads again when the status feed says they
+           changed, and after an Admin's action on one (js/import/watch-folders.js). An Admin adds one here; the dialog
+           opens in the general modal host *@
+        <section id="watchFolders" aria-labelledby="watchFoldersTitle">
+          <header>
+            <h2 id="watchFoldersTitle">Watch folders</h2>
+            @if(RequestContext.getAccount.accountType == AccountType.Admin) {
+            <button type="button"
+                    id="addWatchFolderBtn"
+                    class="action-button small"
+                    hx-get="/htmx/watch-folders/r/@{RequestContext.getRepository.persistedId}/dialogs/add"
+                    hx-target="#modalContent"
+                    hx-swap="innerHTML"><i class="fas fa-plus" aria-hidden="true"></i> Add Watch folder</button>
+            }
+          </header>
+          @watchFolders
+        </section>
+      </div>
 
       <section id="importHistory" aria-labelledby="importHistoryTitle">
         <h2 id="importHistoryTitle">Import history</h2>

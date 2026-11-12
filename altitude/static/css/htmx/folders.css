@@ -115,3 +115,10 @@
 #folderActions .action-button span {
     margin-left: var(--space-3);
 }
+
+/* The Delete confirmation's warning of the Watch folders that sort their files into the folder
+   (htmx/delete_folder_dialog): as wide as a popover form, above the button */
+#deleteFolder .notice {
+    max-width: var(--popover-form-width);
+    margin-bottom: var(--space-5);
+}

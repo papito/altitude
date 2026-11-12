@@ -165,6 +165,24 @@ abstract class ImportDao(override val config: Config) extends BaseDao[Import] wi
 
     updateByBySql(sql, List(nativeBool(true), nativeUtcTimestamp(now), repositoryId))
 
+  // The Imports of the Watch folders alone, by the index on an Import's Watch folder
+  override def countsByWatchFolder(): Map[String, (Int, Int)] =
+    val imported = ImportOutcome.Imported.dbValue
+    val sql = s"""
+      SELECT ${FieldConst.Import.WATCH_FOLDER_ID}, SUM($imported) AS $imported, SUM($FAILED) AS $FAILED
+        FROM $tableName
+       WHERE ${FieldConst.REPO_ID} = ?
+         AND ${FieldConst.Import.WATCH_FOLDER_ID} IS NOT NULL
+       GROUP BY ${FieldConst.Import.WATCH_FOLDER_ID}
+    """
+
+    manyBySqlQuery(sql, List(repositoryId)).map {
+      rec =>
+        rec(FieldConst.Import.WATCH_FOLDER_ID).toString -> (
+          getLongField(rec(imported)).get.toInt,
+          getLongField(rec(FAILED)).get.toInt)
+    }.toMap
+
   // The Import files go with their Import, by the key's cascade
   override def deleteClosedBefore(cutoff: OffsetDateTime): Int =
     val sql = s"""

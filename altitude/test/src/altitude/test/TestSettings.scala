@@ -38,7 +38,8 @@ object TestSettings {
     Settings.DB_POSTGRES_READ_STATEMENT_TIMEOUT -> "30",
     Settings.PIPELINE_SHUTDOWN_TIMEOUT -> "30",
     Settings.IMPORT_PARALLELISM -> "0",
-    Settings.IMPORT_HISTORY_DAYS -> "90"
+    Settings.IMPORT_HISTORY_DAYS -> "90",
+    Settings.WATCH_FOLDER_SCAN_INTERVAL -> "60"
   )
 
   def apply(values: Map[String, String] = Map.empty): Settings = Settings(seeds ++ values, seeds)

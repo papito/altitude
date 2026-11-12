@@ -85,7 +85,9 @@ object TestContext {
     "stats",
     "search_document",
     "import",
-    "import_file"
+    "import_file",
+    "watch_folder",
+    "watch_folder_file"
   )
 }
 

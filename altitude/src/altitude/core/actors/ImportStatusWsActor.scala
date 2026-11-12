@@ -21,7 +21,8 @@ import altitude.core.service.AccountVersions
  * account, and the Imports' statuses pushed to them. `ImportService` tells of an Import after each commit that changes it
  * (`Altitude` wires `ImportService.onChange` to [[ImportStatusWsActor.ImportChanged]]); the actor keeps each Import as it last
  * heard of it and sends its status (includes/import_status, as `hx-ws` takes it) to every socket of the Import's Library, at most
- * once an interval while the Import is in progress, and once more when it closes.
+ * once an interval while the Import is in progress, and once more when it closes. A change to what a Library's Watch folders show
+ * ([[ImportStatusWsActor.WatchFoldersChanged]]) is told to the Library's sockets at once, as a message that swaps nothing.
  */
 object ImportStatusWsActor:
   sealed trait Command
@@ -37,6 +38,12 @@ object ImportStatusWsActor:
 
   /** An Import of the Library as a change committed it (`ImportService.onChange`) */
   final case class ImportChanged(repositoryId: String, anImport: Import) extends AltitudeActorSystem.Command with Command
+
+  /**
+   * What the Library's Watch folders show changed (`WatchFolderService.onChange`): every socket of the Library is told, at once,
+   * and its page reads the Watch folders again
+   */
+  final case class WatchFoldersChanged(repositoryId: String) extends AltitudeActorSystem.Command with Command
 
   /**
    * Closes every socket of the account, in every Library, and forgets them: its versions changed (`AccountVersions`), so what
@@ -63,6 +70,9 @@ object ImportStatusWsActor:
 
   /** What a socket is sent once it is added: from then on it is told of its Library's Imports */
   val CONNECTED: String = ujson.write(ujson.Obj(Api.Field.ImportStatus.CONNECTED -> true))
+
+  /** What a socket is sent when its Library's Watch folders are to be read again; it swaps nothing */
+  val WATCH_FOLDERS_CHANGED: String = ujson.write(ujson.Obj(Api.Field.ImportStatus.WATCH_FOLDERS -> true))
 
   /**
    * The message of an Import's status, as `hx-ws` takes it: the Import's status element (includes/import_status), which replaces
@@ -124,6 +134,10 @@ class ImportStatusWsActor(
 
       case ImportChanged(repositoryId, anImport) =>
         importChanged(repositoryId, anImport)
+
+      case WatchFoldersChanged(repositoryId) =>
+        val message = cask.Ws.Text(WATCH_FOLDERS_CHANGED)
+        sockets.getOrElse(repositoryId, Map.empty).values.flatten.foreach(_.send(message))
 
       case PushDue(importId) =>
         feeds.get(importId).foreach {

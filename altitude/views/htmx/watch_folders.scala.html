@@ -1,0 +1,112 @@
+@import altitude.core.Api
+@import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.models.WatchFolderCard
+@import altitude.core.util.Util
+
+@(cards: List[WatchFolderCard], isAdmin: Boolean)
+
+@* The Watch folders of the Import page (pipeline.scala.html, and GET /htmx/watch-folders/r/:repoId/list, a holder of
+   Import's): cards in a grid, one per Watch folder of the Library, by name. A card is the Watch folder's name, its path
+   on the server, where its files go (Triage, or the destination folder's path) and when it was last scanned (a `<time>`
+   the page shows in the viewer's zone, `localTime`; "scanning now" while a scan of it runs), its status as a tinted chip
+   with the reason beside it, and the imported and failed files of its Imports in the Import history, with whether it
+   deletes imported files.
+
+   An Admin's card carries its actions: "Scan now", an inline button (disabled for a paused one), and a ⋯ menu
+   (includes/menu_ctrl) of Pause or Resume, Retry failed, Edit… (the Watch folder dialog, in the general modal host) and
+   Remove… (a popover dialog below the trigger). Scan now, Pause, Resume and Retry failed are direct requests that
+   declare `WATCH_FOLDERS_CHANGED_EVENT` with what the snackbar says. Anyone else reads the cards alone.
+
+   The page reads the list again, by the root's `data-app-view-url`, after each of those and whenever the status feed
+   says the Library's Watch folders changed (js/import/watch-folders.js). *@
+
+@repoId = @{ RequestContext.getRepository.persistedId }
+@route = @{ s"/htmx/watch-folders/r/$repoId" }
+@count(n: Int) = @{ f"$n%,d" }
+@successDetail(message: String) = @{ ujson.write(ujson.Obj("message" -> message)) }
+@idOf(card: WatchFolderCard) = @{ card.watchFolder.persistedId }
+@named(card: WatchFolderCard) = @{ ujson.write(ujson.Obj(Api.Field.WatchFolder.WATCH_FOLDER_ID -> card.watchFolder.persistedId)) }
+
+@* A direct action of a card: a PUT naming the Watch folder, which says `done` through the snackbar once it succeeds *@
+@action(card: WatchFolderCard, path: String, label: String, done: String, attributes: Html = Html("")) = {
+<button type="button"
+        hx-put="@route/@path"
+        hx-vals='@named(card)'
+        hx-json-enc
+        hx-swap="none"
+        data-app-success-event="WATCH_FOLDERS_CHANGED_EVENT"
+        data-app-success-detail="@successDetail(done)"
+        @attributes>@label</button>
+}
+
+@* What a direct action in the ⋯ menu carries: it closes the menu; and what "Scan now" on the card carries: a paused
+   Watch folder is not scanned *@
+@inMenu = @{ Html("x-on:click=\"handleActionClick\"") }
+@scanButton(card: WatchFolderCard) = @{ Html("class=\"action-button small\"" + (if (card.watchFolder.isPaused) " disabled" else "")) }
+
+@destination(card: WatchFolderCard) = {@card.destination match {
+    case Some(path) => {<i class="fas fa-folder" aria-hidden="true"></i> @path}
+    case None => {Triage}
+}}
+
+@lastScan(card: WatchFolderCard) = {@card.lastScanAt match {
+    case _ if card.isScanning => {<span class="scanning">scanning now</span>}
+    case Some(at) => {scanned <time datetime="@at" x-data="localTime">@Util.utcText(at, withTime = true)</time>}
+    case None => {not scanned yet}
+}}
+
+@menu(card: WatchFolderCard) = {
+    @includes.html.menu_ctrl(Const.WatchFolder.menuButtonId(idOf(card)), Const.WatchFolder.menuId(idOf(card)), s"Actions for ${card.watchFolder.name}") {⋯} {
+        @if(card.watchFolder.isPaused) {
+        @action(card, "resume", "Resume", s"${card.watchFolder.name} resumed", inMenu)
+        } else {
+        @action(card, "pause", "Pause", s"${card.watchFolder.name} paused", inMenu)
+        }
+        @action(card, "retry", "Retry failed", s"The failed files of ${card.watchFolder.name} are read again by its next scan", inMenu)
+        <button type="button"
+                hx-get="@route/dialogs/edit"
+                hx-vals='@named(card)'
+                hx-target="#modalContent"
+                hx-swap="innerHTML">Edit…</button>
+        <button type="button"
+                hx-get="@route/dialogs/remove"
+                hx-vals='@named(card)'
+                hx-target="#popoverContent"
+                hx-swap="innerHTML"
+                data-app-dialog-anchor="@Const.WatchFolder.menuButtonId(idOf(card))">Remove…</button>
+    }
+}
+
+<div id="watchFolderList" data-app-view-url="@route/list">
+    @if(cards.isEmpty) {
+    <p class="empty">
+        <i class="fas fa-eye" aria-hidden="true"></i>
+        No Watch folders. @if(isAdmin) {Add one to import everything that arrives in a folder on the server.} else {An Admin can add one.}
+    </p>
+    } else {
+    <div class="watch-folder-grid">
+        @for(card <- cards) {
+        <article class="watch-folder-card" data-watch-folder-id="@idOf(card)">
+            <header>
+                <i class="fas fa-eye" aria-hidden="true"></i>
+                <h3>@card.watchFolder.name</h3>
+                @if(isAdmin) {
+                @action(card, "scan", "Scan now", s"Scanning ${card.watchFolder.name}", scanButton(card))
+                @menu(card)
+                }
+            </header>
+            <div class="path" title="@card.watchFolder.path">@card.watchFolder.path</div>
+            <div class="meta">into @destination(card) · @lastScan(card)</div>
+            <div class="status">
+                <span class="status-chip @card.status.cssClass">@card.status.label</span>
+                @for(reason <- card.reason) {<span class="reason">@reason</span>}
+            </div>
+            <div class="counts">
+                <span class="imported">@count(card.imported)</span> imported@if(card.failed > 0) {, <span class="failed">@count(card.failed) failed</span>}@if(card.watchFolder.deletesImported) { · <span class="deletes">deletes imported files</span>}
+            </div>
+        </article>
+        }
+    </div>
+    }
+</div>

@@ -20,6 +20,7 @@ import altitude.core.routes.decorators.isSameOriginOrNone
 import altitude.core.routes.decorators.rememberRepository
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.routes.decorators.requirePermission
+import altitude.core.routes.web.partial.WatchFolderController
 import altitude.core.util.Util
 
 class ImportController(using logger: Logger, caskLogger: cask.Logger, context: castor.Context) extends BaseController:
@@ -32,7 +33,7 @@ class ImportController(using logger: Logger, caskLogger: cask.Logger, context: c
   def pipeline(repoId: String): cask.Response[String] =
     val stats = App.altitude.service.stats.getStats
     val history = imports.history(Const.ImportHistory.IMPORTS_STEP)
-    val payload = "<!doctype html>" + html.pipeline(stats = stats, history = history)
+    val payload = "<!doctype html>" + html.pipeline(stats = stats, history = history, watchFolders = WatchFolderController.list)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
   /**

@@ -22,6 +22,7 @@ import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.Person
 import altitude.core.models.Repository
+import altitude.core.models.WatchFolder
 import altitude.core.routes.decorators.requireAccountCreator
 import altitude.core.routes.decorators.requireAdmin
 import altitude.core.routes.decorators.requireLibraryCreator
@@ -156,11 +157,25 @@ import altitude.core.routes.decorators.requirePermission
       person: String,
       face: String,
       sequence: String,
-      anImport: String) {
+      anImport: String,
+      watchFolder: String) {
 
     /** The other repository's IDs, which an answer may show only when the request sent them */
     def theirIds: List[String] =
-      List(asset, recycled, folder, album, location, category, person, face, sequence, anImport, theirs.rootFolderId) ++ frames
+      List(
+        asset,
+        recycled,
+        folder,
+        album,
+        location,
+        category,
+        person,
+        face,
+        sequence,
+        anImport,
+        watchFolder,
+        theirs.rootFolderId) ++
+        frames
 
     /** The same requests with every ID of the other repository replaced by one that does not exist */
     def unknown: Fixtures = {
@@ -176,7 +191,8 @@ import altitude.core.routes.decorators.requirePermission
         person = random,
         face = random,
         sequence = random,
-        anImport = random
+        anImport = random,
+        watchFolder = random
       )
     }
   }
@@ -200,6 +216,19 @@ import altitude.core.routes.decorators.requirePermission
   private def probed(method: String, path: String)(probes: Fixtures => List[Probe]): Row = Row(method, path, Ids.Probed(probes))
 
   private val publicRoute = Access.Public
+
+  // The probes are a User's with every Permission, whom an Admin's route refuses before it reads an ID: what such a route
+  // answers an Admin who names another Library's Watch folder, a 404 that changes nothing, is WatchFolderControllerTests'
+  private val ADMIN_ROUTE = "an Admin's route, which refuses the probes' User before it reads an ID"
+
+  /** A probe of a route that only an Admin calls, which answers the probes' User a 403 whatever IDs it is sent */
+  private def adminOnly(query: Map[String, String] = Map.empty, body: Option[ujson.Value] = None): Probe =
+    Probe(403, query = query, body = body, why = ADMIN_ROUTE)
+
+  /** The other repository's Watch folder, as a request's parameter or body field names it */
+  private def watchFolderOf(fx: Fixtures): Map[String, String] = Map(Api.Field.WatchFolder.WATCH_FOLDER_ID -> fx.watchFolder)
+
+  private def watchFolderBody(fx: Fixtures): Option[ujson.Value] = json(Api.Field.WatchFolder.WATCH_FOLDER_ID -> fx.watchFolder)
 
   private val SCRUBBED_CATEGORY = "the Location dialogs' shared scrubber trims it, and the route reads no category"
 
@@ -256,6 +285,27 @@ import altitude.core.routes.decorators.requirePermission
     none(GET, "/htmx/import/r/:repoId/history").needs(Permission.Import),
     probed(GET, "/htmx/import/r/:repoId/imports/:importId/files")(fx => List(Probe(404, path = Map("importId" -> fx.anImport))))
       .needs(Permission.Import),
+    // Watch folders: the cards are a holder of Import's, everything else an Admin's
+    none(GET, "/htmx/watch-folders/r/:repoId/list").needs(Permission.Import),
+    none(GET, "/htmx/watch-folders/r/:repoId/dialogs/add").forAdmins,
+    probed(GET, "/htmx/watch-folders/r/:repoId/dialogs/edit")(fx => List(adminOnly(query = watchFolderOf(fx)))).forAdmins,
+    probed(POST, "/htmx/watch-folders/r/:repoId/add") {
+      fx => List(adminOnly(body = json(Api.Field.WatchFolder.DEST_FOLDER_ID -> fx.folder)))
+    }.forAdmins
+      .ignoring(Api.Field.WatchFolder.WATCH_FOLDER_ID -> "read with the form the edit shares, and not acted on by an add"),
+    probed(PUT, "/htmx/watch-folders/r/:repoId/edit") {
+      fx =>
+        List(
+          adminOnly(body =
+            json(Api.Field.WatchFolder.WATCH_FOLDER_ID -> fx.watchFolder, Api.Field.WatchFolder.DEST_FOLDER_ID -> fx.folder)))
+    }.forAdmins,
+    probed(GET, "/htmx/watch-folders/r/:repoId/deletion-notice")(fx => List(adminOnly(query = watchFolderOf(fx)))).forAdmins,
+    probed(PUT, "/htmx/watch-folders/r/:repoId/pause")(fx => List(adminOnly(body = watchFolderBody(fx)))).forAdmins,
+    probed(PUT, "/htmx/watch-folders/r/:repoId/resume")(fx => List(adminOnly(body = watchFolderBody(fx)))).forAdmins,
+    probed(PUT, "/htmx/watch-folders/r/:repoId/scan")(fx => List(adminOnly(body = watchFolderBody(fx)))).forAdmins,
+    probed(PUT, "/htmx/watch-folders/r/:repoId/retry")(fx => List(adminOnly(body = watchFolderBody(fx)))).forAdmins,
+    probed(GET, "/htmx/watch-folders/r/:repoId/dialogs/remove")(fx => List(adminOnly(query = watchFolderOf(fx)))).forAdmins,
+    probed(DELETE, "/htmx/watch-folders/r/:repoId/watch-folder")(fx => List(adminOnly(query = watchFolderOf(fx)))).forAdmins,
     probed(GET, "/content/r/:repoId/:dataType/:itemId") {
       fx =>
         List(
@@ -835,7 +885,8 @@ import altitude.core.routes.decorators.requirePermission
       person = id,
       face = id,
       sequence = id,
-      anImport = id
+      anImport = id,
+      watchFolder = id
     )
   }
 
@@ -1046,8 +1097,8 @@ import altitude.core.routes.decorators.requirePermission
   /**
    * The user's repository with an asset, a folder, an album, a Location and an unnamed Person with a Face, and their other
    * repository with an imported asset (with a Preview, a point, a Face with its files, a folder, an album and a Location in a
-   * category holding it), a Person with that Face, two triaged assets in one Sequence, a recycled asset and an Import in
-   * progress. The context is the user's repository again when it returns.
+   * category holding it), a Person with that Face, two triaged assets in one Sequence, a recycled asset, an Import in progress
+   * and a Watch folder. The context is the user's repository again when it returns.
    */
   private def fixtures(mine: Repository): Fixtures = {
     val myAsset = testContext.insertAsset(testContext.makeAsset(repository = Some(mine)))
@@ -1077,6 +1128,15 @@ import altitude.core.routes.decorators.requirePermission
     val recycled = testContext.insertAsset(testContext.makeAsset(repository = Some(theirs)))
     testApp.service.library.recycleAssets(Set(recycled.persistedId))
     val anImport = testApp.service.imports.open(ImportSource.Upload, name = Some(s"$MARK upload"))
+    // Written through the DAO, on a path that is on no disk, and paused: the server's own scans leave its row as it is
+    val watchFolder = testApp.txManager.withTransaction {
+      testApp.DAO.watchFolder.add(
+        WatchFolder(
+          name = s"$MARK watch",
+          path = s"/nonexistent/$MARK-${UUID.randomUUID}",
+          isPaused = true,
+          accountId = testContext.user.persistedId))
+    }
     testApp.service.repository.switchContextToRepository(mine)
 
     Fixtures(
@@ -1100,7 +1160,8 @@ import altitude.core.routes.decorators.requirePermission
       person = person.persistedId,
       face = face.persistedId,
       sequence = sequence,
-      anImport = anImport.persistedId
+      anImport = anImport.persistedId,
+      watchFolder = watchFolder.persistedId
     )
   }
 

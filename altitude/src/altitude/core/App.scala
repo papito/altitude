@@ -41,6 +41,7 @@ import altitude.core.routes.web.partial.TrashActionController
 import altitude.core.routes.web.partial.TriageController
 import altitude.core.routes.web.partial.UserActionController
 import altitude.core.routes.web.partial.ViewSettingsActionController
+import altitude.core.routes.web.partial.WatchFolderController
 
 object App extends cask.Main:
   /**
@@ -68,6 +69,9 @@ object App extends cask.Main:
   altitude.service.library.pruneDanglingAssets()
   altitude.service.library.requeuePurgePending()
   altitude.service.library.reconcileStats()
+  // The startup scan of the Watch folders, which catches up on what arrived while the server was down, and then one every
+  // interval: after the Imports a stop interrupted are failed, so no scan's Import is taken for one of them
+  altitude.service.watchFolder.start()
 
   given logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -119,5 +123,6 @@ object App extends cask.Main:
     new TrashActionController,
     new TriageController,
     new ImportHistoryController,
+    new WatchFolderController,
     new ViewSettingsActionController
   )

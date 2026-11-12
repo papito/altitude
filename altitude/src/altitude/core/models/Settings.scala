@@ -154,7 +154,13 @@ case class Settings(private val text: Map[String, String], private val defaults:
   /** Days an Import stays in the Import history; 0 keeps every Import */
   val importHistoryDays: Int = number(IMPORT_HISTORY_DAYS).toInt
 
+  /** Seconds between two scans of the Watch folders */
+  val watchFolderScanInterval: Int = number(WATCH_FOLDER_SCAN_INTERVAL).toInt
+
 object Settings:
+  /** The least `watch_folder.scan_interval`: a shorter rest would take a file a slow copy is still writing */
+  val MIN_WATCH_FOLDER_SCAN_INTERVAL = 5
+
   val FACE_YUNET_CONFIDENCE_THRESHOLD = "face.yunet.confidence_threshold"
   val FACE_YUNET_NMS_THRESHOLD = "face.yunet.nms_threshold"
   val FACE_DETECTION_BOUNDING_BOX_SIZE = "face.detection.bounding_box_size"
@@ -187,6 +193,7 @@ object Settings:
   val PIPELINE_SHUTDOWN_TIMEOUT = "pipeline.shutdown_timeout"
   val IMPORT_PARALLELISM = "import.parallelism"
   val IMPORT_HISTORY_DAYS = "import.history.days"
+  val WATCH_FOLDER_SCAN_INTERVAL = "watch_folder.scan_interval"
 
   import SettingGroup.*
   import SettingType.*
@@ -451,6 +458,14 @@ object Settings:
       "An Import and its Import files leave the Import history once the Import is closed and older than this many days; a " +
         "daily prune deletes them. The assets they imported stay. 0 keeps the history forever.",
       Integer(0)
+    ),
+    SettingDef(
+      WATCH_FOLDER_SCAN_INTERVAL,
+      Operations,
+      "Watch folder scan interval (s)",
+      "Seconds between two scans of the Watch folders, after the scan at startup. A file is imported once two scans in a row " +
+        "find it with the same size and modified time, so this is also how long a file rests before it is read.",
+      Integer(Settings.MIN_WATCH_FOLDER_SCAN_INTERVAL)
     )
   )
 

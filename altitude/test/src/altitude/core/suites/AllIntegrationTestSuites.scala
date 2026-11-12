@@ -47,5 +47,6 @@ abstract class AllIntegrationTestSuites(val testApp: Altitude)
     new FaceCorrectionTests(testApp),
     new ImportServiceTests(testApp),
     new ImportPipelineServiceTests(testApp),
+    new WatchFolderServiceTests(testApp),
     new PurgePipelineServiceTests(testApp)
   )

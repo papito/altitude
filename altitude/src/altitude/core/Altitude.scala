@@ -50,6 +50,7 @@ import altitude.core.service.UrlService
 import altitude.core.service.UserMetadataService
 import altitude.core.service.UserService
 import altitude.core.service.VideoService
+import altitude.core.service.WatchFolderService
 import altitude.core.service.filestore.FileStoreService
 import altitude.core.service.filestore.FileSystemStoreService
 import altitude.core.transactions.SqlExplainer
@@ -298,6 +299,18 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
       case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
+    val watchFolder: dao.WatchFolderDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.WatchFolderDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.WatchFolderDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
+    val watchFolderFile: dao.WatchFolderFileDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.WatchFolderFileDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.WatchFolderFileDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
     val setting: dao.SettingDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.jdbc.SettingDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new dao.jdbc.SettingDao(app.config) with dao.sqlite.SqliteOverrides
@@ -365,8 +378,9 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
     actorSystem.scheduler.scheduleAtFixedRate(1.hour, 1.hour)(() => txManager.optimize())(actorSystem.executionContext)
   }
 
-  // The Import history is pruned daily of the Imports past the `import.history.days` Setting, and once at startup (`App`). A
-  // prune that fails is logged and not thrown: a scheduled task that throws is not run again
+  // The Import history is pruned daily of the Imports past the `import.history.days` Setting, and once at startup (`App`); the
+  // Watch folders forget the files long absent from their directories with it. A prune that fails is logged and not thrown: a
+  // scheduled task that throws is not run again
   private val importHistoryPruning: Cancellable =
     actorSystem.scheduler.scheduleAtFixedRate(1.day, 1.day)(() => service.imports.pruneOrLog())(actorSystem.executionContext)
 
@@ -401,6 +415,7 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
     val faceDetection: FaceDetectionService = FaceDetectionService(app)
     val faceRecognition: FaceRecognitionService = FaceRecognitionService(app)
     val imports: ImportService = ImportService(app)
+    val watchFolder: WatchFolderService = WatchFolderService(app)
     val importPipeline: ImportPipelineService = ImportPipelineService(app)
     val purgePipeline: PurgePipelineService = PurgePipelineService(app)
     val urlService: UrlService = UrlService()
@@ -421,8 +436,16 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
   // An account's import status sockets close when its versions change, so a deactivated, deleted or revoked account's feed ends
   service.accountVersions.onChange((accountId, change) => actorSystem ! ImportStatusWsActor.CloseAllFor(accountId, change))
 
-  // The import status sockets of a Library are told of each change to one of its Imports, once it has committed
-  service.imports.onChange((repositoryId, anImport) => actorSystem ! ImportStatusWsActor.ImportChanged(repositoryId, anImport))
+  // The import status sockets of a Library are told of each change to one of its Imports, once it has committed, and of a
+  // change to what its Watch folders show: one added, edited, paused, resumed or removed, a scan of one started or ended, and
+  // an Import of one opened or closed, which is when its counts are worth reading again
+  service.imports.onChange {
+    (repositoryId, anImport) =>
+      actorSystem ! ImportStatusWsActor.ImportChanged(repositoryId, anImport)
+      if anImport.watchFolderId.isDefined && (anImport.total == 0 || !anImport.isInProgress) then
+        actorSystem ! ImportStatusWsActor.WatchFoldersChanged(repositoryId)
+  }
+  service.watchFolder.onChange(repositoryId => actorSystem ! ImportStatusWsActor.WatchFoldersChanged(repositoryId))
 
   // A staged file outlives nothing: whatever is there was left by a run that did not finish. After `parallelism`, which the
   // services read as they are wired up.
@@ -434,6 +457,8 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
 
   def cleanup(): Unit =
     logger.debug("Cleaning up resources")
+    // Before the import queue closes: no scan of a Watch folder starts, and one that is running offers the queue nothing more
+    service.watchFolder.stop()
     // Before the transaction manager closes the pools: each queue finishes what it has accepted, up to a limit
     service.importPipeline.shutdown()
     service.purgePipeline.shutdown()

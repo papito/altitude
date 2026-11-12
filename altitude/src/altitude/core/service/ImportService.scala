@@ -71,8 +71,9 @@ class ImportService(val app: Altitude):
   /**
    * Opens an Import delivered by the context account, if there is one: in progress, with no file yet. `name` is the uploaded
    * folder's or the Watch folder's name, none for an upload of files; `destFolderId` the folder its files are sorted into, none
-   * for Triage. A destination that is no folder of the context repository is a `NotFoundException`, and one in the Trash an
-   * `IllegalOperationException`; neither opens anything.
+   * for Triage; `watchFolderId` the Watch folder whose scan it is. A destination that is no folder of the context repository, and
+   * a Watch folder that is none of its Watch folders, is a `NotFoundException`, and a destination in the Trash an
+   * `IllegalOperationException`; none opens anything.
    */
   def open(
       source: ImportSource,
@@ -85,6 +86,8 @@ class ImportService(val app: Altitude):
           if app.service.folder.getById(folderId).isRecycled then
             throw IllegalOperationException(Const.Msg.Err.DESTINATION_IN_TRASH)
       }
+      // The Import's key to its Watch folder is a single column, so the Watch folder's repository is checked here
+      watchFolderId.foreach(app.service.watchFolder.getById)
       val opened = importDao.add(
         Import(
           source = source,
@@ -324,10 +327,10 @@ class ImportService(val app: Altitude):
     else pathOf(asset.folderId)
 
   /**
-   * A folder as an Import file names it, and as the Import history names a destination under its own `separator`: its path, or
-   * the top level of the Library for the root
+   * A folder as an Import file names it, and as the Import history and a Watch folder's card name a destination under their own
+   * `separator`: its path, or the top level of the Library for the root
    */
-  private def pathOf(folderId: String, separator: String = RelPath.SEPARATOR): String =
+  def pathOf(folderId: String, separator: String = RelPath.SEPARATOR): String =
     if app.service.folder.isRootFolder(folderId) then ImportService.TOP_LEVEL
     else app.service.folder.getPath(folderId).map(_.name).mkString(separator)
 
@@ -377,10 +380,14 @@ class ImportService(val app: Altitude):
   /**
    * The prune of the Import history, in every repository: the closed Imports opened more than `import.history.days` days ago (a
    * Live Setting, read as the prune runs) are deleted with their Import files; the assets they imported stay. At 0 the history is
-   * kept forever. An Import in progress is never pruned, however old.
+   * kept forever. An Import in progress is never pruned, however old. The Watch folders forget, with it, the files absent from
+   * their directories for as long (`WatchFolderService.forgetAbsent`), or for `Const.WatchFolder.FORGET_AFTER_DAYS` when the
+   * history is kept forever: what a Watch folder remembers is a table of its own, so pruning an Import never makes a file new.
    */
   def prune(): Unit =
     val days = app.settings.current.importHistoryDays
+    app.service.watchFolder.forgetAbsent(if days == 0 then Const.WatchFolder.FORGET_AFTER_DAYS else days)
+
     if days == 0 then logger.debug("The Import history is kept forever: nothing to prune")
     else
       val cutoff = OffsetDateTime.now(ZoneOffset.UTC).minusDays(days)

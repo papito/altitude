@@ -124,6 +124,31 @@ object Const:
     def filesId(importId: String): String = s"importFiles-$importId"
     def fileListId(importId: String): String = s"importFileList-$importId"
 
+  // The Watch folders (WatchFolderService), and the elements of the Import page's section of them (htmx/watch_folders)
+  object WatchFolder:
+    // How many times a file whose import fails is read in all, before it is parked
+    val MAX_ATTEMPTS = 3
+    // The days a file absent from its directory stays remembered when the Import history is kept forever
+    // (`import.history.days` at 0); otherwise it stays as long as an Import does
+    val FORGET_AFTER_DAYS = 30
+
+    // Why a Watch folder is paused, as its card says it beside the chip
+    val DESTINATION_LOST = "destination folder is in the Trash"
+    val OWNER_DEACTIVATED = "its owner was deactivated"
+    val OWNER_DEMOTED = "its owner is no longer an Admin"
+    // Why a Watch folder's directory is unavailable, as its card says it beside the chip
+    val PATH_MISSING = "the path does not exist"
+    val PATH_NOT_DIRECTORY = "the path is not a directory"
+    val PATH_UNREADABLE = "the path is not readable"
+    val PATH_UNWRITABLE = "the path is not writable, so imported files cannot be deleted"
+    val PATH_OVERLAPS_DATA = "the path overlaps the app's data directory"
+    val PATH_OVERLAPS = "the path overlaps the Watch folder \"%s\""
+    // Why a file of a Watch folder that could not be read failed
+    val UNREADABLE_FILE = "Cannot read the file"
+
+    def menuButtonId(watchFolderId: String): String = s"watchFolderMenuBtn-$watchFolderId"
+    def menuId(watchFolderId: String): String = s"watchFolderMenu-$watchFolderId"
+
   object NavEntry:
     val BROWSE: String = Search.View.DEFAULT
     val TRIAGE: String = Search.View.TRIAGE
@@ -213,6 +238,23 @@ object Const:
       val DESTINATION_FOLDER_NAME = "A folder of the path cannot be created: %s"
       // That reason for a folder whose name another folder there holds by the time it is added
       val FOLDER_NAME_TAKEN = "its name is taken"
+      // A Watch folder's path the Watch folder dialog refuses (WatchFolderService), each under the path's field
+      val WATCH_PATH_INVALID = "This is not a path"
+      val WATCH_PATH_RELATIVE = "Enter an absolute path, one that starts at the root of the file system"
+      val WATCH_PATH_MISSING = "There is no such directory on the server"
+      val WATCH_PATH_NOT_DIRECTORY = "This is not a directory"
+      val WATCH_PATH_UNREADABLE = "The server cannot read this directory"
+      val WATCH_PATH_UNWRITABLE = "The server cannot write to this directory, so it cannot delete imported files"
+      val WATCH_PATH_OVERLAPS_DATA = "This path overlaps the app's data directory"
+      // The path against another Watch folder's: the other's name and path, then its Library when it is another one's
+      val WATCH_PATH_SAME = "This path is the Watch folder \"%s\"%s"
+      val WATCH_PATH_INSIDE = "This path is inside the Watch folder \"%s\" (%s)%s"
+      val WATCH_PATH_CONTAINS = "The Watch folder \"%s\" (%s) is inside this path%s"
+      val WATCH_PATH_OTHER_LIBRARY = " of the Library \"%s\""
+      // "Keep folder structure" with no folder chosen, in the Watch folder dialog as in the upload sections
+      val DESTINATION_REQUIRED = "Choose the folder to sort into"
+      // "Scan now" for a Watch folder that is paused
+      val WATCH_FOLDER_PAUSED = "The Watch folder is paused"
       // An Admin's own account, which it cannot deactivate, delete or take the Admin type from
       val OWN_ACCOUNT = "You cannot deactivate, delete or demote your own account"
       val INVALID_CONTENT_TYPE = "Invalid content type"
@@ -325,6 +367,11 @@ object Const:
     val DELETE_USER_DIALOG_TITLE = "Delete %s"
     val CHANGE_PASSWORD_DIALOG_TITLE = "Change password"
     val ACCOUNT_INFO_DIALOG_TITLE = "Your account"
+    // The Watch folder dialogs of the Import page (htmx/watch_folder_form, htmx/remove_watch_folder_dialog); an edit and
+    // the removal are titled by the Watch folder's name
+    val ADD_WATCH_FOLDER_DIALOG_TITLE = "Add Watch folder"
+    val EDIT_WATCH_FOLDER_DIALOG_TITLE = "Edit %s"
+    val REMOVE_WATCH_FOLDER_DIALOG_TITLE = "Remove %s"
     // The warning the folder, album and Location tabs open with for an account without Organize, which has nothing to add there:
     // "folders", "albums" or "Locations"
     val CANNOT_ORGANIZE = "You cannot create %s as you do not have the Permission to organize this Library"

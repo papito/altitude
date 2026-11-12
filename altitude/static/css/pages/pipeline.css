@@ -1,11 +1,11 @@
 /* The Import page's own layout (pipeline.scala.html). The bundle applies on every page, so its rules are scoped to its
    body's class, at zero specificity, and to the IDs only it renders */
 
-/* Two columns, the upload sections and the wider Import history, five parts to seven: each grows from a least width in
-   that ratio, and they stack, the uploads first, once the page is narrower than the two together. The page is as wide
-   as the window at the most, and centered in it, also under a nav that is wider than the window (the body's one column
-   is then as wide as the nav), so the columns stack by the window's width; the margin's 0px is a zero, which max()
-   takes only with a unit */
+/* Two columns, what delivers files (the upload sections and the Watch folders) and the wider Import history, five parts
+   to seven: each grows from a least width in that ratio, and they stack, the uploads first, once the page is narrower
+   than the two together. The page is as wide as the window at the most, and centered in it, also under a nav that is
+   wider than the window (the body's one column is then as wide as the nav), so the columns stack by the window's width;
+   the margin's 0px is a zero, which max() takes only with a unit */
 :where(body.pipeline) main {
   display: flex;
   flex-wrap: wrap;
@@ -18,8 +18,13 @@
   padding: var(--space-8) var(--space-6);
 }
 
-#importUploads {
+/* The left column: the upload sections, then the Watch folders */
+#importSources {
   flex: 5 1 var(--import-uploads-min-width);
+  display: grid;
+  align-content: start;
+  gap: var(--space-9);
+  min-width: 0;
 }
 
 #importHistory {

@@ -85,6 +85,9 @@ export const Const = {
         settingsSaved: "SETTINGS_SAVED_EVENT",
         // An account was added, changed or deleted on the Users page; `detail.message` says which. The page reloads its cards
         accountsChanged: "ACCOUNTS_CHANGED_EVENT",
+        // A Watch folder of the Import page was added, changed or removed, or the status feed says the Library's Watch
+        // folders changed; `detail.message`, when there is one, says what was done. The page reads its cards again
+        watchFoldersChanged: "WATCH_FOLDERS_CHANGED_EVENT",
         // The account changed its own password (the account info dialog's Change password); the session carries on with the new token
         passwordChanged: "PASSWORD_CHANGED_EVENT",
         // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one

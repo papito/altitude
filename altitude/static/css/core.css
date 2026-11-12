@@ -139,6 +139,10 @@
     --import-page-max-width: 75rem;
     --import-uploads-min-width: 18.75rem;
     --import-history-min-width: 26.25rem;
+    /* A Watch folder's card on the Import page (htmx/watch_folders.css), and the Watch folder dialog
+       (htmx/watch_folder_form.css) */
+    --watch-folder-card-width: 16rem;
+    --watch-folder-form-width: 32rem;
     /* The Import history (htmx/import_history.css, includes/import_status.css): the node of an Import on the timeline and
        the height of its progress bar */
     --import-node-size: 0.625rem;

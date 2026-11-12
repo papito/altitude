@@ -23,7 +23,10 @@ import { Const } from "./constants.js"
  *   that began before the click;
  * - an Import's files are read when its `<details>` opens. The `<details>` are `hx-preserve`, so
  *   reading the history again leaves an expanded Import open, with its filter and its files; the
- *   one in view also stays where it is on the screen, whatever was added above it.
+ *   one in view also stays where it is on the screen, whatever was added above it;
+ * - a message that says the Library's Watch folders changed swaps nothing: it is announced on the
+ *   page (`Const.events.watchFoldersChanged`), and `import/watch-folders.js` reads the cards
+ *   again through the same sequence of requests (`readAgain`, which this module exports for it).
  *
  * The extension reconnects a socket the server closed with a code worth trying again on (1013:
  * the account changed, `ImportStatusWsActor.CloseAllFor`), but it would go on forever after a
@@ -42,7 +45,7 @@ const attributes = Const.attributes
 // The status each message of the feed holds, for the listener that runs once it is swapped in
 const statuses = new WeakMap()
 
-// The parts of the history being read, by the ID of their root: `next` is the route asked for
+// The parts of the page being read, by the ID of their root: `next` is the route asked for
 // while a request is on its way, or null for the view shown, read again
 const reading = new Map()
 
@@ -122,7 +125,12 @@ async function readStatus(detail) {
         return
     }
 
-    // Anything but an Import's status ("connected") swaps nothing
+    if (status?.watchFolders) {
+        document.body.dispatchEvent(
+            new CustomEvent(Const.events.watchFoldersChanged),
+        )
+    }
+    // Anything but an Import's status ("connected", the Watch folders' change) swaps nothing
     if (!status?.target) {
         return
     }
@@ -152,13 +160,16 @@ function followStatus(status) {
     }
 }
 
-/** Reads the view a part of the history shows again, by the route its root names */
-function readAgain(root) {
+/**
+ * Reads the view a part of the page shows again, by the route its root names: a part of the
+ * history, or the Watch folders' cards
+ */
+export function readAgain(root) {
     request(root, null)
 }
 
 /**
- * Shows the view at `url` in a part of the history, replacing its root (`url` null: the view it
+ * Shows the view at `url` in a part of the page, replacing its root (`url` null: the view it
  * shows, read again), one request at a time for the part. Asked while one is on its way, it is
  * read once that has answered, by the route the root names then; a view asked for by a click is
  * not replaced by a read of the old one asked for after it.

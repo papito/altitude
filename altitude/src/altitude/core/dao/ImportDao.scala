@@ -30,5 +30,8 @@ trait ImportDao extends BaseDao[Import]:
   /** Closes every Import still in progress, counting its pending files as failed; how many it closed */
   def closeInterrupted(): Int
 
+  /** The imported and the failed files of each Watch folder's Imports, by the Watch folder's ID; none for one with no Import */
+  def countsByWatchFolder(): Map[String, (Int, Int)]
+
   /** Deletes the closed Imports created before `cutoff`, with their Import files; how many Imports it deleted */
   def deleteClosedBefore(cutoff: OffsetDateTime): Int
