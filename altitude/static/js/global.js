@@ -30,19 +30,25 @@
  * changes not saved (Keep editing), then leaves the Crop tool (Cancel, or the warning when its
  * session changed the Edit), ahead of the selected People row and the dialog, whose close the
  * warning may hold; while the warning is open, Asset detail's keys are left to it. The arrows and Space are
- * left to focus in the Edit panel, on its divider and in the Crop tool, as in the Detail panel.
+ * left to focus in the Edit panel, on its divider and in the Crop tool, as in the Detail panel. The warning's and the Crop
+ * tool's part is read through `common/edit-keys.js`, which the Edit panel registers on the page that holds Asset detail, so
+ * this module, on every page, imports no edit module.
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
 import {
     clearSelectedFaceRow,
     closeOpenFaceCombobox,
 } from "./alpine/components/face-combobox.js"
+import {
+    closeLeaveDialog,
+    escapeOpenCropTool,
+    isCropToolOpen,
+    isLeaveDialogOpen,
+} from "./common/edit-keys.js"
 import { closeModal, getActiveModalHost, ModalHost } from "./common/modal.js"
 import { isTextEditingTarget } from "./common/text-editing.js"
 import { toggleTheme } from "./common/theme.js"
 import { Const } from "./constants.js"
-import { escapeOpenCropTool, isCropToolOpen } from "./edit/crop-tool.js"
-import { closeLeaveDialog, isLeaveDialogOpen } from "./edit/leave-dialog.js"
 import { closeMapPanel } from "./map/map-panel.js"
 import { closeOpenSearchPanel } from "./search-results/search-panel.js"
 

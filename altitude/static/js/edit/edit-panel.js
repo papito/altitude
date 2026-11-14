@@ -28,7 +28,8 @@
  *   Crop tool session with changes. A save on its way alone is waited for a moment first. Reloading or leaving the page
  *   with a change pending has the browser ask (`beforeunload`), and a change waiting out its delay is sent as the page
  *   goes (`pagehide`).
- * - **The keys' handlers** (`listeners/edit.js`): the toggle, the Crop tool's, Undo and Redo.
+ * - **The keys' handlers** (`listeners/edit.js`): the toggle, the Crop tool's, Undo and Redo; and the warning's and the
+ *   Crop tool's part in `global.js`'s Escape chain, registered with `common/edit-keys.js` as the coordinator starts.
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
@@ -54,9 +55,19 @@ import {
     withKeepInside,
     withSlider,
 } from "./adjust.js"
-import { createCropTool } from "./crop-tool.js"
+import { registerEditKeys } from "../common/edit-keys.js"
+import {
+    createCropTool,
+    escapeOpenCropTool,
+    isCropToolOpen,
+} from "./crop-tool.js"
 import { createEditSession } from "./edit-session.js"
-import { askToLeave, LeaveChoice } from "./leave-dialog.js"
+import {
+    askToLeave,
+    closeLeaveDialog,
+    isLeaveDialogOpen,
+    LeaveChoice,
+} from "./leave-dialog.js"
 import { isIdentity, normalize, sameRecipe } from "./recipe.js"
 import { refreshAfterRender } from "./render-status.js"
 import { isRendererSupported } from "./renderer.js"
@@ -218,6 +229,13 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     /** Binds the page-wide controls once: the toolbar's toggle, the Crop tool's bar, Asset detail's closing */
     function start() {
         controller = { connect }
+        // `global.js`'s Escape chain and keys reach the warning and the Crop tool through these
+        registerEditKeys({
+            isLeaveDialogOpen,
+            closeLeaveDialog,
+            isCropToolOpen,
+            escapeOpenCropTool,
+        })
         dock.start()
         cropTool.start()
         detailPanel.onLayoutChange(() => {
