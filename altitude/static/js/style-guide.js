@@ -168,8 +168,10 @@ function styleGuide() {
         lengthLiterals: scan.lengthLiterals ?? [],
         // What is typed into the font tester
         fontInput: "",
-        // The paths of the Edit panel specimen's Histogram
+        // The paths of the Edit panel specimen's Histogram, and its Clipping blink, which the specimen's click
+        // switches so that its pressed look shows; it blinks nothing
         editHistogram: sampleHistogramPaths(),
+        clippingBlink: false,
 
         showSuccessSnackBar,
         showWarningSnackBar,
@@ -180,6 +182,11 @@ function styleGuide() {
                 Const.events.themeChanged,
                 ({ detail }) => this.followTheme(detail.theme),
             )
+        },
+
+        /** The Edit panel specimen's Histogram's click: its pressed look, on or off */
+        toggleClippingBlink() {
+            this.clippingBlink = !this.clippingBlink
         },
 
         isTheme(theme) {

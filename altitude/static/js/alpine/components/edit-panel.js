@@ -1,4 +1,4 @@
-import { channelPaths, percentLabel } from "../../common/histogram.js"
+import { channelPaths, NO_PATHS, percentLabel } from "../../common/histogram.js"
 import { Const } from "../../constants.js"
 import {
     addCurvePoint,
@@ -96,7 +96,9 @@ export function editPanel() {
         splitOn: false,
         clippingBlink: false,
         autoBusy: false,
-        histogram: null,
+        // The paths of the edited image's Histogram by channel, which its strip draws (`includes/histogram`), and the
+        // labels of its corners
+        histogram: NO_PATHS,
         crushedLabel: "",
         blownLabel: "",
         // Bumped as the curve's backdrop changes, so the curve is drawn again
@@ -166,7 +168,7 @@ export function editPanel() {
                 luminanceBins = snapshot.histogram?.luminance ?? null
                 this.histogram = snapshot.histogram
                     ? channelPaths(snapshot.histogram)
-                    : null
+                    : NO_PATHS
                 this.histogramVersion++
             }
             this.crushedLabel = percentLabel(snapshot.fractions?.crushed)
@@ -428,11 +430,7 @@ export function editPanel() {
             return STATUS_TEXT[this.status] ?? ""
         },
 
-        // The Histogram
-
-        histogramPath(channel) {
-            return this.histogram?.[channel] ?? ""
-        },
+        // The Histogram's click
 
         toggleClippingBlink() {
             panel?.toggleClippingBlink()

@@ -4,9 +4,9 @@
    `aside#editPanel` docked opposite the Detail panel, whose state is the `editPanel` Alpine component
    (js/alpine/components/edit-panel.js) over the coordinator js/edit/edit-panel.js, which keeps the Edit, its session and
    the stage. The header holds Undo, Redo (the panel's session's), Before/after and Reset all; the body the Histogram of
-   the edited image, a button switching the Clipping blink with the crushed and blown fractions in its corners, the four
-   tabs (a dot on a section with changes) and the shown section, its heading with a reset; the footers the save status
-   with Revert to original, and the keys. A slider is the `.edit-slider` of core.css, rendered from the sliders of
+   the edited image (includes/histogram), a button switching the Clipping blink with the crushed and blown fractions in its
+   corners, the four tabs (a dot on a section with changes) and the shown section, its heading with a reset; the footers
+   the save status with Revert to original, and the keys. A slider is the `.edit-slider` of core.css, rendered from the sliders of
    js/edit/recipe.js. Docked top or bottom (includes/edit_panel.css), the section flows into columns, the Histogram sits
    at the left, the status row joins the header and the keys are left out.
 
@@ -66,18 +66,7 @@
 
     <div class="edit-body">
         <p class="edit-refusal" x-show="refusal" x-text="refusal"></p>
-        <button type="button" class="edit-histogram" x-show="ready" x-on:click="toggleClippingBlink()" x-bind:aria-pressed="clippingBlink" aria-label="Clipping blink" title="Blink the blown highlights and crushed shadows">
-            <svg viewBox="0 0 64 16" preserveAspectRatio="none" aria-hidden="true">
-                <line class="grid" x1="21.33" y1="0" x2="21.33" y2="16"></line>
-                <line class="grid" x1="42.67" y1="0" x2="42.67" y2="16"></line>
-                <path class="red" x-bind:d="histogramPath('red')"></path>
-                <path class="green" x-bind:d="histogramPath('green')"></path>
-                <path class="blue" x-bind:d="histogramPath('blue')"></path>
-                <path class="luminance" x-bind:d="histogramPath('luminance')"></path>
-            </svg>
-            <span class="crushed" x-text="crushedLabel"></span>
-            <span class="blown" x-text="blownLabel"></span>
-        </button>
+        @includes.html.histogram(paths = "histogram", crushed = "crushedLabel", blown = "blownLabel", shows = "ready")
 
         <div class="edit-sections" x-show="ready">
             <div role="tablist" aria-label="Edit sections" x-on:keydown="tabKey($event)">

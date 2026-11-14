@@ -98,10 +98,10 @@
     --edit-panel-share: 28%;
     --edit-panel-min-width: 18rem;
     --edit-panel-min-height: 12rem;
-    /* The Edit panel (includes/edit_panel.css): its Histogram's height, the curve editor's widest, a column of a section
-       docked top or bottom, and the gutter the stage leaves around the frame while the Crop tool is open, where a drag
-       turns the image */
-    --edit-histogram-height: 4.25rem;
+    /* The Histogram's height, under a pane of Curation's stage and in the Edit panel (includes/histogram.css) */
+    --histogram-height: 4.25rem;
+    /* The Edit panel (includes/edit_panel.css): the curve editor's widest, a column of a section docked top or bottom,
+       and the gutter the stage leaves around the frame while the Crop tool is open, where a drag turns the image */
     --edit-curve-max-size: 16rem;
     --edit-column-width: 15rem;
     --edit-crop-gutter: var(--space-9);
@@ -147,7 +147,6 @@
     --curation-strip-max-height: 16rem;
     --curation-kept-name-max-width: 20rem;
     --curation-loupe-max-size: 20rem;
-    --curation-histogram-height: 4.25rem;
     --quick-view-width: 60rem;
     --quick-view-preview-size: 8rem;
     --quick-view-previews-max-height: 32rem;
@@ -180,11 +179,11 @@
     --warning-background-color: light-dark(hsl(from var(--warning-color) h calc(s * 0.7) 90%), hsl(from var(--warning-color) h calc(s * 0.6) 35%));
     --error-background-color: light-dark(hsl(from var(--error-color) h calc(s * 0.7) 90%), hsl(from var(--error-color) h calc(s * 0.6) 35%));
     --info-background-color: light-dark(hsl(from var(--info-color) h calc(s * 0.7) 90%), hsl(from var(--info-color) h calc(s * 0.6) 35%));
-    /* The channels of the Histogram on Curation's stage, the pure primaries: drawn as light, two that overlap read yellow, cyan
-       or magenta and the three a neutral. The strip is dark in either theme, so each pair holds one color */
-    --histogram-red: light-dark(#ff0000, #ff0000);
-    --histogram-green: light-dark(#00ff00, #00ff00);
-    --histogram-blue: light-dark(#0000ff, #0000ff);
+    /* The channels of the Histogram (includes/histogram.css), a soft red, green and blue: drawn as light, two that overlap
+       read yellow, cyan or magenta and the three a neutral. The strip is dark in either theme, so each pair holds one color */
+    --histogram-red: light-dark(#d5594b, #d5594b);
+    --histogram-green: light-dark(#6fbb63, #6fbb63);
+    --histogram-blue: light-dark(#5879f7, #5879f7);
     /* The gradient tracks of the Edit panel's sliders (.edit-slider): what each slider's ends do to the picture, drawn
        from the palette (Tint's magenta end is `--theme-magenta`, its one use), the neutral at the middle where the slider
        is 0 */

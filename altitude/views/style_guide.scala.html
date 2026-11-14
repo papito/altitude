@@ -105,7 +105,7 @@
              fill and the popover dialog's surface and edge: the only other color tokens. A new color is a new theme
              role as a hex pair, or a new veil when it must be translucent. The four semantic colors (success, warning, error, info),
              <code>--shadow-color</code> and the three channel colors of Curation's Histogram (<code>--histogram-red</code>,
-             <code>-green</code>, <code>-blue</code>, the pure primaries, one color in both themes) stand apart, with pairs of their own; a semantic fill is one HSL recipe over its
+             <code>-green</code>, <code>-blue</code>, a soft red, green and blue, one color in both themes) stand apart, with pairs of their own; a semantic fill is one HSL recipe over its
              color per scheme, shown with its From line. The setup page's palette is that page's own, in
              <code>pages/setup.css</code>, and is not scanned. A card with a recipe shows it and the tokens it comes
              from; Off palette marks a token that writes a color literal, and the literals written past the tokens are
@@ -475,12 +475,13 @@
              header and its commit row parted from the body by hairlines in <code>--panel-border-color</code>. The header's
              tools (<code>.edit-tool</code>: Undo, Redo, Before/after, Reset all) are an icon alone in
              <code>--theme-neutral-3</code>, tinted on hover, <code>--theme-accent</code> while pressed and dimmed while
-             disabled, as the toolbar's toggles are. The Histogram of the edited image (<code>.edit-histogram</code>,
-             <code>--edit-histogram-height</code> tall) is drawn as Curation's strip is, on a button over
-             <code>--asset-detail-backdrop-color</code>, dark in either theme: the red, green and blue channels as light in
-             the channel colors, the luminance a line, two faint grid lines, and the crushed and blown fractions as monospace
-             chips in its bottom corners in <code>--info-color</code> and <code>--error-color</code>; while the Clipping blink is
-             on it wears the success edge and line. The sections' tabs wear <code>tabs.css</code>'s look at
+             disabled, as the toolbar's toggles are. The Histogram of the edited image (<code>includes/histogram</code>,
+             <code>.histogram</code>, <code>--histogram-height</code> tall, its rules in <code>includes/histogram.css</code>) is
+             Curation's strip, on a button over <code>--theme-neutral-2</code> of the dark side, dark in either theme: the
+             red, green and blue channels as light in the channel colors, the luminance a line, and the crushed and blown
+             fractions in its top corners in <code>--theme-neutral-4</code> at <code>--font-size-small</code>, each with a
+             triangle that points to its end of the range; while the Clipping blink is on it wears the success edge and line,
+             and the fractions <code>--info-color</code> and <code>--error-color</code>. The sections' tabs wear <code>tabs.css</code>'s look at
              <code>--font-size-small</code>, a section with changes marked by an accent dot (<code>.edit-dot</code>); a
              section's heading carries its Reset, a link in <code>--theme-primary-text</code>, and a subhead
              (<code>.edit-subhead</code>) is small caps in <code>--theme-neutral-3</code>, <code>--font-size-xs</code>,
@@ -490,7 +491,8 @@
              <code>--theme-neutral-3</code> (<code>--error-color</code> when a save failed), with Revert to original, and the
              key legend, the Detail panel's <code>.panel-keys</code>. Docked top or bottom the status joins the header, the
              Histogram moves to the left of the tabs, the section's controls flow into columns and the keys are left out. The
-             specimen is the markup with nothing bound; its Histogram is a sample drawn by the real paths.</p>
+             specimen is the markup with nothing bound, but for its Histogram: the real include over a sample drawn by the
+             real paths, which a click presses.</p>
           <div class="sg-edit-panel">
             <aside id="editPanel" aria-label="Edit panel specimen">
               <header class="edit-header">
@@ -501,18 +503,7 @@
                 <button type="button" class="edit-tool" aria-label="Reset all" title="Reset all"><i class="fas fa-eraser" aria-hidden="true"></i></button>
               </header>
               <div class="edit-body">
-                <button type="button" class="edit-histogram" aria-pressed="false" aria-label="Clipping blink" title="Blink the blown highlights and crushed shadows">
-                  <svg viewBox="0 0 64 16" preserveAspectRatio="none" aria-hidden="true">
-                    <line class="grid" x1="21.33" y1="0" x2="21.33" y2="16"></line>
-                    <line class="grid" x1="42.67" y1="0" x2="42.67" y2="16"></line>
-                    <path class="red" :d="editHistogram.red"></path>
-                    <path class="green" :d="editHistogram.green"></path>
-                    <path class="blue" :d="editHistogram.blue"></path>
-                    <path class="luminance" :d="editHistogram.luminance"></path>
-                  </svg>
-                  <span class="crushed">0.4%</span>
-                  <span class="blown">2.1%</span>
-                </button>
+                @includes.html.histogram(paths = "editHistogram", crushed = "'0.4%'", blown = "'2.1%'")
                 <div class="edit-sections">
                   <div role="tablist" aria-label="Edit sections specimen">
                     <button type="button" role="tab" aria-selected="true" tabindex="0"><span>Crop &amp; rotate</span><span class="edit-dot" title="Changed"></span></button>
@@ -1018,9 +1009,10 @@
              (<code>.histogram</code>, a button) draws the frame's red, green and blue channels as three filled shapes in the
              channel colors at an alpha, blended as light (<code>mix-blend-mode: screen</code>), so two that overlap read yellow, cyan
              or magenta and the three a neutral, and its luminance as a line over them in a theme neutral, in the dark side too
-             (<code>color-scheme: dark</code>), with two faint grid lines and the
-             crushed and blown fractions as small monospace chips in its corners, the info and the error color; while the Clipping
-             blink is on it wears the stage's pressed rule, the success edge and a success-colored line, the channels keeping their colors. The pinned frame's caption reads the same pin and
+             (<code>color-scheme: dark</code>), with the
+             crushed and blown fractions in its top corners, each with a triangle that points to its end of the range; while the Clipping
+             blink is on it wears the success edge and a success-colored line, the channels keeping their colors, and the
+             fractions the info and the error color. It is the Edit panel's Histogram too, one include, whose specimen is under Panels &amp; layout. The pinned frame's caption reads the same pin and
              Pinned (<code>.pinned-label</code>), centered below its image, and any other frame's has the Pin button. While nothing is to be kept the footer's center
              holds the keep hint (<code>.keep-hint</code>, "Press 1 or 2 to keep a frame", dimmed) in place of Resolve. The rules of
              the tag and the hint are scoped by <code>#curationStage</code> and <code>#curationCompare</code>, so this section shows

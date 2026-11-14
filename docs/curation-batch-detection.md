@@ -424,8 +424,8 @@ Under each pane a **Histogram** strip shows the frame's red, green and blue chan
 blended as light, so two that overlap read yellow, cyan or magenta and the three a neutral, with its luminance as a line
 over them: a channel blown or crushed alone, or a color cast, shows where a gray curve hides it. The import measures the
 four over the pixels the exposure measurements read and stores them with the frame, so the strip shows with the frame,
-before its image has loaded. It has faint lines at a third and two thirds of the range and, in its corners, the stored
-fractions of the frame's pixels crushed (left, in blue) and blown (right, in red), the numbers Too dark and Too bright are
+before its image has loaded. In its top corners it has the stored fractions of the frame's pixels crushed (left) and
+blown (right), in blue and red while the Clipping blink is on, the numbers Too dark and Too bright are
 judged on, so exposure is judged on the frame and the two strips compare side by side. A click on it turns
 on the **Clipping blink**: the frame's blown highlights flash red and its crushed shadows blue over the image, at the
 levels the measurement counts them, so what Too bright and Too dark say is seen where it is; a second click turns it

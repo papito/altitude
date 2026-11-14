@@ -5,6 +5,7 @@ import { clippingMask, readClipping } from "../../common/clipping.js"
 import {
     channelPaths,
     HISTOGRAM_CHANNELS,
+    NO_PATHS,
     percentLabel,
 } from "../../common/histogram.js"
 import {
@@ -709,19 +710,19 @@ export function curation() {
         },
 
         /**
-         * The `d` of one channel of a frame's Histogram, "luminance", "red", "green" or "blue"; empty
-         * for a pane with no frame and a frame not measured. It is the frame's, so it shows while the
-         * frame's image loads
+         * The paths of a frame's Histogram by channel, `{ luminance, red, green, blue }`, which the
+         * strip draws (`includes/histogram`); empty ones for a pane with no frame and a frame not
+         * measured. They are the frame's, so they show while the frame's image loads
          */
-        histogramPath(frameId, channel) {
+        histogramOf(frameId) {
             const histogram = this.frameOf(frameId)?.histogram
             if (!histogram) {
-                return ""
+                return NO_PATHS
             }
             if (!histogramPathsOf.has(frameId)) {
                 histogramPathsOf.set(frameId, histogramPaths(histogram))
             }
-            return histogramPathsOf.get(frameId)[channel]
+            return histogramPathsOf.get(frameId)
         },
 
         /** The strip's left corner, the fraction of the frame's pixels crushed, "0.5%"; empty for a frame not measured */

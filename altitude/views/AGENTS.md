@@ -5,6 +5,7 @@
 The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For frontend work:
 
 * For UI work, prompt the developer to run "make db" and "make watch" if localhost:8080 is not accessible or if the repo is not initialized (setup form visible or no assets present).
+* A browser check on localhost:8080 needs the login out of the way: every page redirects to `/login` unless `dev.user` and `dev.password` are set in `application-dev.conf` (in the project root, gitignored), and a login through the form is lost each time the dev server restarts, which every CSS or Scala change under `make watch` causes. When the two lines are commented out, uncomment them yourself for the check, without asking, and comment them out again when the check is done. They are read once at startup and `make watch` does not watch that file, so the server has to restart before it sees them: a real change to a watched source brings a restart (a CSS or Scala edit; touching a file's timestamp does not), and the gate is gone once `/` redirects to `/r/<repoId>` instead of `/login`. Never repeat the two values anywhere: not in a doc, a log, a commit or a reply. If the file or the two lines are missing, ask the developer. See **Config & Environments** in `altitude/AGENTS.md`.
 * Use the fewest properties/tags and the least CSS/HTML standards to accomplish the task.
 * Do not assume aesthetic preferences such as color, spacing, or padding unless they are specified. The style guide (`views/style_guide.scala.html`, dev only, `/style-guide/r/:repoId`) records the design conventions: read its usage notes before choosing a color, spacing, or component, and keep it current in the same change (the list is under **Style guide** below).
 * Always prefer CSS Grid and Flexbox.
@@ -37,7 +38,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 ```
 views/
   *.scala.html          ← full pages (index, login, setup, pipeline, settings, users, style_guide)
-  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title, a filtered search's chips, an advanced search option, a person's cover on a search chip, a combobox field of chips, the Import page's upload sections, an Import's status and title in the Import history, the Watch folder dialog's deletion notice, Asset detail's Edit panel and the Edit's tools over its stage)
+  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title, a filtered search's chips, an advanced search option, a person's cover on a search chip, a combobox field of chips, the Import page's upload sections, an Import's status and title in the Import history, the Watch folder dialog's deletion notice, Asset detail's Edit panel and the Edit's tools over its stage, the Histogram of Curation's stage and the Edit panel)
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
@@ -2015,10 +2016,12 @@ data.
   the box (`CURVE_REMOVE_MARGIN`) or a double-click removes an inner one, and the release is one change. With the keys the
   arrows move the point by 0.01 (Shift, 0.05), saved once they rest; [ and ] pick the point before or after; + or Insert
   adds one halfway to the next, on the curve; Delete or Backspace removes an inner one. Its subhead has a Reset.
-- **The Histogram and the Clipping blink.** The edited image's Histogram as drawn, Curation's drawing (`common/histogram.js`,
-  `channelPaths`, over the bins `renderer.readHistogram` reads from each drawing at 256 px on its long edge): red, green and
-  blue shapes and a luminance line on a backdrop dark in either theme, `--edit-histogram-height` tall, with the crushed and
-  blown fractions in its bottom corners (`percentLabel`, `--info-color` and `--error-color`). The whole Histogram is a button,
+- **The Histogram and the Clipping blink.** The edited image's Histogram as drawn, in Curation's markup and drawing
+  (`includes/histogram` and its `static/css/includes/histogram.css`, see **Curation**'s stage; `common/histogram.js`'s
+  `channelPaths` over the bins `renderer.readHistogram` reads from each drawing at 256 px on its long edge, the component's
+  `histogram` holding the paths, `NO_PATHS` until there is a drawing): red, green and blue shapes and a luminance line on a
+  backdrop dark in either theme, `--histogram-height` tall, with the crushed and blown fractions in its top corners
+  (`crushedLabel`, `blownLabel`, `percentLabel`). The whole Histogram is a button,
   the Clipping blink's switch (`aria-pressed`, the success edge while on, off on each new fragment): a moment after the
   drawings rest (150 ms) the canvas's clipping is read (`common/clipping.js`'s `readClipping` over the canvas, at the levels
   and box of the fragment's `data-clipped-level`, `data-crushed-level` and `data-measurement-box`), the fractions always and,
@@ -2292,28 +2295,36 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   side, and `cursor: none` on the image of a pane whose lens shows (`.pane:has(> .loupe:not([hidden])) img`).
 
   The Histogram is a strip under each pane (`.histogram`, `#curationHistogramPinned` and `#curationHistogramFocused`, beside the
-  images' IDs): a button, the figure's row between the image and the caption (`grid-template-rows: minmax(0, 1fr)`, the pane's
-  row alone, the strip's and the caption's being implicit, so a hidden strip leaves no empty row or gap and the pane takes its room),
-  `--curation-histogram-height` tall, holding the frame's Histogram in an inline `<svg viewBox="0 0 64 16">`: after two static
-  `<line class="grid">` at a third and two thirds of the range, a `<path>` a channel, `.red`, `.green` and `.blue` filled and
-  `.luminance` a line over them, each `d` built by the component (`histogramPath(frameId, channel)`). The data is the frame's,
+  images' IDs). Its markup is one include, `includes/histogram`, styled by `static/css/includes/histogram.css`, which the Edit
+  panel and the style guide's specimen render too: a button, here the figure's row between the image and the caption
+  (`grid-template-rows: minmax(0, 1fr)`, the pane's row alone, the strip's and the caption's being implicit, so a hidden strip
+  leaves no empty row or gap and the pane takes its room), `--histogram-height` tall, holding the Histogram in an inline
+  `<svg viewBox="0 0 64 16">`: a `<path>` a channel, `.red`, `.green` and `.blue` filled and `.luminance` a line over them. The
+  include's parameters are Alpine expressions of the component it is rendered under: `paths`, the paths by channel (here
+  `histogramOf(frameId)`), `crushed` and `blown`, the labels of its corners, and, where there is one, `shows`, `disabled` and the
+  button's `id`; the button is the Clipping blink's switch, so the include binds the component's `clippingBlink` and
+  `toggleClippingBlink()` itself, which every component that renders it gives. The data is the frame's,
   measured at import (`ImageMeasurement`, see **Sequences and Image quality** in `altitude/AGENTS.md`): its rail item carries
   `data-histogram`, the Base64 of `Histogram.relativeBytes`, a byte per bin, 64 bins a channel in the order luminance, red, green,
   blue (`HISTOGRAM_CHANNELS`), each bin over the tallest bin of the four, so the channels share one scale and the tallest reaches
   the strip's top (`HISTOGRAM_TALLEST`). `showSet` keeps the string on the frame (`frames[].histogram`), and `histogramPaths`
   decodes it (`atob`) into the four paths the first time the frame is on the stage (`histogramPathsOf`, closure state by frame ID,
-  cleared with the set) through `common/histogram.js`, which the Edit panel's Histogram shares (`channelPaths`): `stepsOf`
-  walks a channel's bins as steps with no gap, `areaPath` closes them down to the baseline for a color and `linePath` leaves
-  them open for the luminance. The svg is `isolation: isolate` and the three colors are
+  cleared with the set) through `common/histogram.js`, which the Edit panel's Histogram shares (`channelPaths`): `pointsOf`
+  gives a channel's bins as a point a bin, joined by straight lines, the first bin on the box's left edge and the last on its
+  right, `areaPath` closes them down to the baseline for a color and `linePath` leaves them open for the luminance; `NO_PATHS`
+  is the empty paths of a pane with no frame and of a frame not measured. The svg is `isolation: isolate` and the three colors are
   `mix-blend-mode: screen` at `fill-opacity: 0.6`, filled with `--histogram-red`, `--histogram-green` and `--histogram-blue`
-  (`core.css`, the pure primaries), so where two overlap the strip reads yellow, cyan or magenta and where the three do a neutral;
+  (`core.css`, a soft red, green and blue), so where two overlap the strip reads yellow, cyan or magenta and where the three do a neutral;
   the luminance line is `fill: none` with a 1px stroke of the strip's color at full alpha (`stroke: hsl(from currentColor h s l /
-  1)`, `vector-effect: non-scaling-stroke`), the strip's color a theme neutral at an alpha over the pane's backdrop, so no color
-  is written in the script. In the strip's bottom corners two spans (`.crushed` left, `.blown` right, `crushedLabel`,
+  1)`, `vector-effect: non-scaling-stroke`), the strip's color a theme neutral at an alpha over its backdrop, `--theme-neutral-2` of
+  the dark side (`color-scheme: dark`: the strip is dark in either theme, since the channels are drawn as light), so no color
+  is written in the script. In the strip's top corners two spans (`.crushed` left, `.blown` right, `crushedLabel`,
   `blownLabel`) read the fractions of the frame's pixels crushed and blown to one decimal ("14.2%", `percentLabel`), the stored
   `crushed_shadows` and `clipped_highlights` its rail item carries as `data-crushed-shadows` and `data-clipped-highlights`,
-  monospace chips (`--font-nav`, `--font-size-xs`) on the backdrop in `--info-color` and `--error-color`, the colors the Clipping
-  blink marks each side with; an empty span shows no chip. The strip is its frame's and reads no pixel, so it shows while the
+  at `--font-size-small` in `--theme-neutral-4`, each with a triangle that points to its end of the range (a pseudo-element
+  clipped to the shape, `.crushed::before` and `.blown::after`); while the blink is on they take `--info-color` and
+  `--error-color`, the colors the Clipping blink marks each side with, and the strip the success edge and a success-colored
+  line. An empty span shows nothing. The strip is its frame's and reads no pixel, so it shows while the
   frame's image loads; a frame not measured carries none of the three attributes and its strip is empty. A failed image disables
   the button (`isImageUnreadable`, `unreadableSrcs`).
 
@@ -2453,8 +2464,8 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
 - **The styles** are `static/css/htmx/curation.css` (the host, which fills the window, the shell's columns and the Sequence rail's
   frame), `curation_set.css` (the set) and `curation_queue.css` (the Sequence rail's rows), with the sizes `--curation-rail-width`,
   `--curation-sequence-rail-width` (the Sequence rail's column), `--curation-preview-size`, `--curation-crop-size`, `--curation-strip-max-height`,
-  `--curation-loupe-max-size` (the most a lens takes, a third of the pane's width under it), `--curation-histogram-height` (the
-  Histogram strip under each pane) and `--curation-kept-name-max-width` of
+  `--curation-loupe-max-size` (the most a lens takes, a third of the pane's width under it), `--histogram-height` (the
+  Histogram strip under each pane, and the Edit panel's) and `--curation-kept-name-max-width` of
   `core.css`. The last is the most width the file name on Resolve takes: `.kept` holds it to the
   smaller of the token and `20vw`, since the footer's center column takes its full width before the keys' hint gets any, so in a
   narrow window the name's share leaves that hint room. The style guide's Badges & states section holds the notice, the chip, a Bundle's row
@@ -3270,7 +3281,7 @@ of the Edit panel's Tint track, its one use, which no other role could be. A rul
 (`color: var(--theme-neutral-4)`, `border: var(--border-hairline) var(--theme-neutral-3)`); no token aliases a theme color under
 another name or mixes one at a percentage outside `:root`. Three kinds of color stand apart, with literal pairs of their
 own: the channel colors of the Histogram, Curation's and the Edit panel's (`--histogram-red`, `--histogram-green`,
-`--histogram-blue`, the pure primaries, which each strip draws as light so that their overlaps read yellow, cyan, magenta and neutral; each strip is dark
+`--histogram-blue`, a soft red, green and blue, which each strip draws as light so that their overlaps read yellow, cyan, magenta and neutral; each strip is dark
 in either theme, so each pair holds one color); the four semantic colors (`--success-color`, `--warning-color`, `--error-color`, `--info-color`: green, amber,
 red, and a blue cooler than the primary so a notice does not read as a selection), the text, icon and edge of a
 status, each at least 4.5:1 on the page surface, which a rule writes directly too (an unnamed person's name and the
@@ -3411,8 +3422,9 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   its button, the tab row with a section's dot, a section's heading with its Reset, the aspect chips with the crop's size, the
   commit row and the key legend), hand-written to `includes/edit_panel`'s markup inside an element with the panel's ID,
   `#editPanel`, which its rules are scoped by, with no `x-data`, so nothing binds, in `.sg-edit-panel`, a box that is no grid so
-  the panel's `grid-area` names nothing, its Histogram's paths a sample the `styleGuide` component draws with the real
-  `channelPaths` (`editHistogram`), and the People tab's cells (`htmx/people.css`: a named person's and a hidden Unmatched
+  the panel's `grid-area` names nothing; its Histogram alone is the real markup, `includes/histogram`, bound to the
+  `styleGuide` component: its paths a sample the component draws with the real `channelPaths` (`editHistogram`), and its click
+  switching the component's `clippingBlink` (`toggleClippingBlink`), so the pressed look shows; and the People tab's cells (`htmx/people.css`: a named person's and a hidden Unmatched
   person's, each with its rename pencil, which hover or focus reveals), hand-written to `htmx/people_list`'s markup
   inside an element with the tab's ID, `#people`, which the rules are scoped by, with `--face-box` set on it as the tab's
   shell sets it; the cells carry no `drag-drop` or `dropzone` class and no search trigger, so nothing binds to them, and
@@ -3603,6 +3615,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read, and whether the Person is named and their number of assets, which the combobox reads; under each row, for a live asset, Change and Remove and the Change combobox's markup, with the "This face only" switch for a Person with no name, its listbox rendering the Suggested group and then the list from one option block, each option with its armed label and suffix; a correction's response, its root carrying the result message, any deleted Person and, after a merge, the merged Person and the destination) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
 | `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the Edit's canvas, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu, and for a holder of Edit images the Edit panel, its divider and the Edit's tools over the stage; the asset's Edit, whether it may be edited and why not, and the measurement's clipping levels as data attributes; its grid, the highlights', the Crop tool's and Before/after's look are `static/css/htmx/view_image_detail_modal.css` |
 | `views/includes/edit_panel.scala.html`, `static/css/includes/edit_panel.css`, `static/js/alpine/components/edit-panel.js` | The Edit panel (**Edit panel**): its header, Histogram, tabs and sections (each slider a `.edit-slider` from `recipe.js`'s specs), commit row and keys, and after it the warning of changes not saved (`dialog#editLeaveDialog`); their look, the panel docked on the side or top and bottom; and the `editPanel` component over the coordinator (the tabs, the sliders, the aspect chips, the curve editor, Undo and Redo) |
+| `views/includes/histogram.scala.html`, `static/css/includes/histogram.css` | The Histogram's one markup and look, Curation's strip under each stage pane and the Edit panel's: a button switching the Clipping blink, the channels' paths and the two corner labels given as Alpine expressions of the component it is rendered under |
 | `views/includes/edit_stage_tools.scala.html` | The Edit's tools over Asset detail's stage: Before/after's divider (`#editSplit`) and the Crop tool (`#cropLayer`: the frame, the crop with its guide and handles, the Level line, the floating bar) |
 | `static/js/edit/edit-panel.js` | `createEditPanel`: the Edit panel's coordinator (open or closed, `toggle({ fromKey })`, the dock opposite the Detail panel, the stage while it draws, each asset's session and the wait for its render, the commits, `commitSoon` and `flushCommit`, the Crop tool's session, the warning's triggers, `beforeLeave` for a step and the close guard, `beforeunload` and `pagehide`, Before/after, the Histogram and the Clipping blink of the canvas, Auto) and `connectEditPanelView` for its component |
 | `static/js/edit/edit-stage.js` | `createEditStage`: Asset detail's stage for a still image (the original, the Display image or the canvas, `showImage`, `setEditing`, `setLive`, `adoptEdit`, `settled`, `current`), Show original (the toggle, `holdOriginal`, `releaseShowOriginal`, the badge and the key legend's entry) and the size handed to the Detail panel |
