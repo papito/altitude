@@ -7,7 +7,7 @@
     "saturation: step 7 on an [r, g, b] in, giving out.",
     "geometry: per recipe and upright original size: the frame size, the edited size, the image's outline in the frame as fractions (top left, top right, bottom right, bottom left), points of the upright original turned into the frame, frame points warped (step 2 forward), and warped points sampled back: `out` is the inverse (null where 1 - a*ux - b*uy <= 0.001) and `covered` whether the image shows there, true exactly when `out` is not null and lies within the frame, edges included (0 <= x <= W, 0 <= y <= H).",
     "The edge rule of both renderers: an output pixel's color is the frame sampled bilinearly at its inverse point, the edge pixels repeated beyond the frame's last pixel centers (OpenCV BORDER_REPLICATE, a texture's CLAMP_TO_EDGE), never mixed with a transparent border; its alpha is the source's alpha where the pixel is covered (its center's frame point, through the inverse, lies within the frame) and 0 where it is not, a hard edge with no partial coverage. Pixel centers are at +0.5: output pixel (i, j) is the frame point (crop.x * W + (i + 0.5) * crop.w * W / outW, crop.y * H + (j + 0.5) * crop.h * H / outH).",
-    "effects.hash: the grain's 32-bit integer hash of docs/image-edits.md step 10, with wrapping products (Math.imul in JS, uint in GLSL), unsigned / 4294967295. effects.grain: the value noise at pixel (x, y) (integer column and row from the top left, no +0.5) over cells of `cell` px: x / cell and y / cell, the hash at the four corners of the cell bilinearly, minus 0.5; the renderer's cell is 1.75 * output long edge / 3840. effects.vignette: the weight s at pixel (x, y), integer column and row, dx = (x - width/2) / (width/2), d = sqrt((dx^2 + dy^2) / 2), smoothstep((d - 0.39375) / 0.65625) with smoothstep(t) = t^2 (3 - 2t) of t clamped to [0, 1]. effects.outputSizes: the rendered size for an edited size and a long edge (null: the edited size): the long edge brought down to it when shorter, the short side round(short * edge / long), at least 1.",
+    "effects.hash: the grain's 32-bit integer hash of docs/image-edits.md step 10, with wrapping products (Math.imul in JS, uint in GLSL), unsigned / 4294967295. effects.grain: the value noise at pixel (x, y) (integer column and row from the top left, no +0.5) over cells of `cell` px: x / cell and y / cell, the hash at the four corners of the cell bilinearly, minus 0.5; the renderer's cell is effects.grainSizes' `cell`. effects.grainSizes: for a width x height output, c = 1.75 * long edge / 3840, the grain's cell max(1, c) px and the factor its strength is multiplied by, `scale` = min(1, c), so an output whose cells would be under a pixel draws one cell per pixel at the strength a larger output's grain has once shown at its size. effects.vignette: the weight s at pixel (x, y), integer column and row, dx = (x - width/2) / (width/2), d = sqrt((dx^2 + dy^2) / 2), smoothstep((d - 0.39375) / 0.65625) with smoothstep(t) = t^2 (3 - 2t) of t clamped to [0, 1]. effects.outputSizes: the rendered size for an edited size and a long edge (null: the edited size): the long edge brought down to it when shorter, the short side round(short * edge / long), at least 1.",
     "tolerance: the absolute difference allowed per group of values."
   ],
   "version": 1,
@@ -2843,6 +2843,17 @@
       {"x": 7, "y": 3, "cell": 4.2, "noise": 0.17560867681597958},
       {"x": 100, "y": 250, "cell": 4.2, "noise": 0.12311668422636557},
       {"x": 3839, "y": 2159, "cell": 4.2, "noise": -0.04429194832575184}
+    ],
+    "grainSizes": [
+      {"width": 3840, "height": 2560, "cell": 1.75, "scale": 1},
+      {"width": 6000, "height": 4000, "cell": 2.734375, "scale": 1},
+      {"width": 2560, "height": 3840, "cell": 1.75, "scale": 1},
+      {"width": 2195, "height": 1000, "cell": 1.0003255208333333, "scale": 1},
+      {"width": 2194, "height": 1463, "cell": 1, "scale": 0.9998697916666667},
+      {"width": 1000, "height": 667, "cell": 1, "scale": 0.4557291666666667},
+      {"width": 500, "height": 13, "cell": 1, "scale": 0.22786458333333334},
+      {"width": 75, "height": 150, "cell": 1, "scale": 0.068359375},
+      {"width": 1, "height": 1, "cell": 1, "scale": 0.0004557291666666667}
     ],
     "vignette": [
       {"x": 0, "y": 0, "width": 3840, "height": 2560, "weight": 0.9834696037145017},

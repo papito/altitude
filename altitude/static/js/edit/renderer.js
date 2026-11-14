@@ -44,6 +44,7 @@ import {
     claritySigma,
     gaussianHalfKernel,
     grainCell,
+    grainScale,
     LUMA,
     sharpenSigma,
     TABLE_SIZE,
@@ -720,7 +721,10 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
             (recipe.sharpen / 100) * 2.2,
         )
         gl.uniform1f(p.at("uVignette"), recipe.vignette / 100)
-        gl.uniform1f(p.at("uGrain"), (recipe.grain / 100) * 0.22)
+        gl.uniform1f(
+            p.at("uGrain"),
+            (recipe.grain / 100) * 0.22 * grainScale(width, height),
+        )
         gl.uniform1f(p.at("uCell"), grainCell(width, height))
         gl.uniform2f(p.at("uOut"), width, height)
         gl.viewport(0, 0, width, height)

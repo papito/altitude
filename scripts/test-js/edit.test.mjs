@@ -212,6 +212,23 @@ test("the grain's value noise", () => {
     }
 })
 
+test("the grain's cell and strength by output size", () => {
+    for (const { width, height, cell, scale } of vectors.effects.grainSizes) {
+        near(
+            tone.grainCell(width, height),
+            cell,
+            tolerance.effects,
+            `cell of ${width} × ${height}`,
+        )
+        near(
+            tone.grainScale(width, height),
+            scale,
+            tolerance.effects,
+            `scale of ${width} × ${height}`,
+        )
+    }
+})
+
 test("the vignette's weight", () => {
     for (const { x, y, width, height, weight } of vectors.effects.vignette) {
         near(

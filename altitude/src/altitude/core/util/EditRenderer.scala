@@ -275,6 +275,23 @@ object EditRenderer:
     h = (h ^ (h >>> 13)) * 1274126177
     Integer.toUnsignedLong(h ^ (h >>> 16)).toDouble / 4294967295.0
 
+  /**
+   * Grain's cell, in pixels, for a `width` × `height` output: 1.75 px at the reference long edge, scaled with the output's, and
+   * never under a pixel ([[grainScale]] makes up for the floor)
+   */
+  def grainCell(width: Int, height: Int): Double = Math.max(1.0, rawGrainCell(width, height))
+
+  /**
+   * What Grain's strength is multiplied by for a `width` × `height` output: 1 while its cell is a pixel or more, and below that
+   * the cell's size in pixels, the scale of the larger output's grain once seen at this size. A Display image shown at a
+   * smaller size is averaged over about 1/c² of its cells per pixel shown (c its cell in the pixels shown), which takes the
+   * noise's spread down by c; a smaller output floored at one cell per pixel draws independent cells, so its noise is scaled
+   * by c to look as strong at that size.
+   */
+  def grainScale(width: Int, height: Int): Double = Math.min(1.0, rawGrainCell(width, height))
+
+  private def rawGrainCell(width: Int, height: Int): Double = 1.75 * Math.max(width, height) / REFERENCE_LONG_EDGE
+
   /** Step 10's value noise at the pixel (x, y) over cells of `cell` pixels: the hash bilinearly between the cell's corners, −½ */
   def grainNoise(x: Int, y: Int, cell: Double): Double =
     val (gx, gy) = (x / cell, y / cell)
@@ -567,8 +584,8 @@ object EditRenderer:
     val clarity = recipe.clarity / 100.0 * 1.4
     val sharpen = recipe.sharpen / 100.0 * 2.2
     val vignette = recipe.vignette / 100.0
-    val grain = recipe.grain / 100.0 * 0.22
-    val grainCell = 1.75 * long / REFERENCE_LONG_EDGE
+    val grain = recipe.grain / 100.0 * 0.22 * grainScale(width, height)
+    val cell = grainCell(width, height)
 
     val clarityBlur = blurred(luminance, Option.when(clarity != 0)(0.015 * Math.min(width, height)))
     try
@@ -614,7 +631,7 @@ object EditRenderer:
                   b += (1 - b) * f
 
               if grain != 0 then
-                val d = grainNoise(i, j, grainCell) * grain * (1 - 0.5 * Math.abs(2 * l - 1))
+                val d = grainNoise(i, j, cell) * grain * (1 - 0.5 * Math.abs(2 * l - 1))
                 r += d
                 g += d
                 b += d

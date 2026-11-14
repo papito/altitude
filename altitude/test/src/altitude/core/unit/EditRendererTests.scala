@@ -137,7 +137,8 @@ import altitude.core.util.ImageUtil
      * Saturation −100 turns the color into its luminance Y. Vibrance +100 scales its distance from Y by 1 + (1 − min(1, 1.6 ×
      * 0.4)). The vignette's weight is 0 at the center and smoothstep((1 − 0.39375) / 0.65625) at a corner, where d is 1. The hash
      * is the grain's 32-bit integer hash (`docs/image-edits.md`, step 10): in [0, 1], the same for the same cell, and 0 at (0,
-     * 0).
+     * 0). The grain's cell is 1.75 px at a 3840 px long edge, its strength whole; at a 1000 px long edge the cell is floored at a
+     * pixel and the strength is scaled by the 1.75 × 1000 / 3840 px the cell would have been.
      */
     val y = 0.2126 * 0.6 + 0.7152 * 0.4 + 0.0722 * 0.2
     val gray = EditRenderer.saturate(0.6, 0.4, 0.2, identity.copy(saturation = -100))
@@ -150,6 +151,10 @@ import altitude.core.util.ImageUtil
     EditRenderer.vignetteWeight(50, 50, 100, 100) shouldBe 0.0
     val t = (1 - 0.39375) / 0.65625
     EditRenderer.vignetteWeight(0, 0, 100, 100) should near(t * t * (3 - 2 * t), 1e-12)
+
+    (EditRenderer.grainCell(3840, 2560), EditRenderer.grainScale(3840, 2560)) shouldBe (1.75, 1.0)
+    EditRenderer.grainCell(1000, 667) shouldBe 1.0
+    EditRenderer.grainScale(1000, 667) should near(1.75 * 1000 / 3840, 1e-12)
 
     EditRenderer.hash(0, 0) shouldBe 0.0
     EditRenderer.hash(17, 4) shouldBe EditRenderer.hash(17, 4)
@@ -311,6 +316,12 @@ import altitude.core.util.ImageUtil
     effects("hash")(0)("h").num shouldBe 0.0
     effects("grain").arr.foreach {
       v => close("effects")(EditRenderer.grainNoise(v("x").num.toInt, v("y").num.toInt, v("cell").num), v("noise"))
+    }
+    effects("grainSizes").arr.foreach {
+      v =>
+        val (w, h) = (v("width").num.toInt, v("height").num.toInt)
+        close("effects")(EditRenderer.grainCell(w, h), v("cell"))
+        close("effects")(EditRenderer.grainScale(w, h), v("scale"))
     }
     effects("vignette").arr.foreach {
       v =>
@@ -571,23 +582,33 @@ import altitude.core.util.ImageUtil
     /**
      * Setup:
      *
-     * A 64 × 48 mid-gray image, rendered with Vignette −100, and twice with Grain 100.
+     * A 64 × 48 mid-gray image, rendered with Vignette −100; a 1024 × 768 one rendered twice with Grain 100.
      *
      * Assertions:
      *
      * The vignette leaves the center as it was and makes a corner darker. The grain changes pixels, and two renders at one size
      * are the same.
+     *
+     * Edge cases:
+     *
+     * At 1024 px the grain's cell is floored at a pixel, so each pixel is its own cell: the grain at a pixel is the hash at it, less
+     * ½, at the strength scaled by 1.75 × 1024 / 3840.
      */
     val source = new Mat(48, 64, CvType.CV_8UC3, new Scalar(128, 128, 128))
     val vignetted = rendered(source, identity.copy(vignette = -100))
     pixel(vignetted, 32, 24).head shouldBe 128 +- 1
     pixel(vignetted, 0, 0).head should be < 100
 
-    val grained = rendered(source, identity.copy(grain = 100))
-    val again = rendered(source, identity.copy(grain = 100))
+    val large = new Mat(768, 1024, CvType.CV_8UC3, new Scalar(128, 128, 128))
+    val grained = rendered(large, identity.copy(grain = 100))
+    val again = rendered(large, identity.copy(grain = 100))
     val grainPixels = for (y <- 0 until 48; x <- 0 until 64) yield pixel(grained, x, y)
     grainPixels.map(_.head).distinct.size should be > 3
     grainPixels shouldBe (for (y <- 0 until 48; x <- 0 until 64) yield pixel(again, x, y))
+    // Mid-gray as the tables leave it, so the grain's weight 1 − ½|2L − 1| is close to 1
+    val l = pixel(rendered(large, identity), 7, 3).head / 255.0
+    val expected = (l + (EditRenderer.hash(7, 3) - 0.5) * 0.22 * (1.75 * 1024 / 3840) * (1 - 0.5 * Math.abs(2 * l - 1))) * 255
+    pixel(grained, 7, 3).head.toDouble shouldBe expected +- 1.0
   }
 
   test("Auto-straighten answers the Straighten that levels lines drawn at 2.7°, and nothing where no lines agree") {

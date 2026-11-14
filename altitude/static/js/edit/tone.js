@@ -227,8 +227,26 @@ export function sharpenSigma(width, height) {
     return Math.max(0.4, (0.8 * Math.max(width, height)) / REFERENCE_LONG_EDGE)
 }
 
-/** Grain's cell, in pixels: 1.75 px at the reference long edge, scaled with the output's */
+/**
+ * Grain's cell, in pixels: 1.75 px at the reference long edge, scaled with the output's, and never
+ * under a pixel (`grainScale` makes up for the floor)
+ */
 export function grainCell(width, height) {
+    return Math.max(1, rawGrainCell(width, height))
+}
+
+/**
+ * What Grain's strength is multiplied by: 1 while its cell is a pixel or more, and below that the
+ * cell's size in pixels. A Display image shown at a smaller size, as on the stage, is averaged over
+ * about 1/c² of its cells per pixel shown (c its cell in the pixels shown), which takes the noise's
+ * spread down by c; the canvas, drawn at that size with its cell floored at a pixel, draws
+ * independent cells, so its noise is scaled by c to look as strong.
+ */
+export function grainScale(width, height) {
+    return Math.min(1, rawGrainCell(width, height))
+}
+
+function rawGrainCell(width, height) {
     return (1.75 * Math.max(width, height)) / REFERENCE_LONG_EDGE
 }
 

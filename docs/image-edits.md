@@ -163,17 +163,22 @@ reads.
    dx = (i − outW/2)/(outW/2), dy = (j − outH/2)/(outH/2), d = √((dx² + dy²)/2), s = smoothstep((d − 0.39375)/0.65625)
    (0 up to d = 0.39375, reaching 1 over 0.65625 past it), v = `vignette`/100. A negative v
    multiplies each channel by 1 + v·s; a positive one adds (1 − channel) · v · s.
-10. **Grain**, at (i, j) too: value noise over cells of 1.75 · output long edge / 3840 px (`grainCell`). The noise is
-    the hash of the four corners of the cell (i/cell, j/cell) falls in, bilinearly between them, minus ½. The hash is
-    32-bit integer arithmetic, every product wrapping (`Math.imul` in JavaScript, `uint` in GLSL, `Int` on the JVM):
-    h = x · 374761393 + y · 668265263; h = (h ^ (h >>> 13)) · 1274126177; (h ^ (h >>> 16)) read unsigned, over
-    4294967295. The delta is noise · 0.22 · (`grain`/100) · (1 − 0.5 · |2L − 1|), added to all three channels. The pattern
-    is the same for a given output size, not across sizes.
+10. **Grain**, at (i, j) too: value noise over cells of max(1, c) px, c = 1.75 · output long edge / 3840 (`grainCell`).
+    The noise is the hash of the four corners of the cell (i/cell, j/cell) falls in, bilinearly between them, minus ½. The
+    hash is 32-bit integer arithmetic, every product wrapping (`Math.imul` in JavaScript, `uint` in GLSL, `Int` on the
+    JVM): h = x · 374761393 + y · 668265263; h = (h ^ (h >>> 13)) · 1274126177; (h ^ (h >>> 16)) read unsigned, over
+    4294967295. The delta is noise · 0.22 · (`grain`/100) · min(1, c) (`grainScale`) · (1 − 0.5 · |2L − 1|), added to all
+    three channels. The pattern is the same for a given output size, not across sizes. **The floor and the scale** keep
+    Grain as strong at the size it is seen: the Display image (c = 1.75 at 3840 px) shown in a box of a smaller long edge
+    is averaged over about 1/c′² of its cells per pixel shown, c′ its cell in the pixels shown, which takes the noise's
+    spread down by c′; an output drawn at that size (the Edit panel's canvas, at the box's device pixels) would have cells
+    of c′ < 1 px, each pixel then a point of the noise at its full spread, about twice as strong at 1000 px. Floored at a
+    pixel, its pixels are independent cells, and scaled by c′ they spread as the shown Display image does.
 11. **Clamp** each channel to [0, 1] and encode to 8 bits, round(v · 255).
 
 Step 10, like step 8, reads L as step 7 left it, before Clarity and Sharpen. Clarity, Sharpen and Grain are sized relative to the
 output (`REFERENCE_LONG_EDGE`, 3840), so the Edit panel's drawing, the Display image and a full-size render look alike
-at their own scales. No color management is done: an original with an ICC profile other than sRGB is treated as sRGB by
+at their own scales; Grain's strength follows its cell below a pixel (step 10). No color management is done: an original with an ICC profile other than sRGB is treated as sRGB by
 both renderers (OpenCV ignores the profile; the client decodes with `colorSpaceConversion: "none"` and uploads with
 `UNPACK_COLORSPACE_CONVERSION_WEBGL = NONE`).
 
@@ -289,14 +294,15 @@ recipe in them is a whole Edit, as stored. Its groups, each with its `tolerance`
 - `saturation`: step 7 on given colors (10⁻⁹);
 - `geometry`: per recipe and upright size, the frame and edited sizes, the outline, points turned into the frame, points
   warped, and points sampled back with whether each is covered (10⁻⁶);
-- `effects`: the hash, the grain's noise, the vignette's weight and output sizes (10⁻⁹).
+- `effects`: the hash, the grain's noise, its cell and strength by output size, the vignette's weight and output sizes
+  (10⁻⁹).
 
 `_doc` in the file says what each group holds and the conventions above. `EditRecipeTests` also parses every recipe of
 the vectors and checks the edited size they give.
 
 **Regenerating them.** No generator is kept. The values are the Scala functions' output (`EditRenderer`'s public
 `whiteBalanceGains`, `tables`, `lookup`, `Curve`, `saturate`, `frameSize`, `turn`, `warp`, `unwarp`, `outline`, `hash`,
-`grainNoise`, `vignetteWeight` and `outputSize`, and the `editedSize` method of an `EditRecipe`), checked by hand where `EditRendererTests` checks the
+`grainNoise`, `grainCell`, `grainScale`, `vignetteWeight` and `outputSize`, and the `editedSize` method of an `EditRecipe`), checked by hand where `EditRendererTests` checks the
 spec's formulas directly (exposure doubling linear light, Straighten at 90° against a quarter turn, the tone steps, the
 curve, the effects). To change them: change both implementations, write the affected entries again from the Scala
 functions (a throwaway unit test printing the group as JSON in the file's shape will do, removed afterwards), keep `_doc`
