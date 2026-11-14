@@ -18,7 +18,9 @@
  *   The canvas is drawn at the device pixels of the box it is shown in, at most the size of what it
  *   shows (the crop, or the whole frame for the Crop tool, `wholeFrame`), from a source fitted to
  *   that size, and drawn again, refitted, when the stage's size changes; it is shown once drawn, so
- *   no earlier drawing is ever seen in the new box.
+ *   no earlier drawing is ever seen in the new box. While the Edit it draws is the identity and no
+ *   change is on its way (`changing`), outside the Crop tool and Before/after, it draws behind the
+ *   original's `<img>` (`isBehindImage`), which the browser shows color-managed.
  *
  * Whatever is shown, the box is fitted to its size (`setAssetDetailSize`) and the Detail panel is
  * handed the upright original's size with the Edit the stage shows, if it changes a pixel
@@ -401,7 +403,7 @@ export function createEditStage({ context, detailPanel }) {
             source === Source.display ? storedUpright() : result.upright
         const recipe = source === Source.original ? null : result.recipe
         const options = source === Source.canvas ? (live?.options ?? {}) : {}
-        shown = { source, recipe, upright }
+        shown = { source, recipe, upright, behind: Boolean(result.behind) }
         setAssetDetailSize(result.size)
         detailPanel.setShownSize({
             ...upright,
@@ -427,11 +429,7 @@ export function createEditStage({ context, detailPanel }) {
      */
     async function showInImg(url, current, fallback) {
         const img = imgEl()
-        const known =
-            img.getAttribute("src") === url && img.complete && img.naturalWidth
-        if (!known) {
-            await setMediaSrcAndWait({ mediaEl: img, url })
-        }
+        await setMediaSrcIfNew(img, url)
         if (!current()) {
             return null
         }
@@ -546,12 +544,62 @@ export function createEditStage({ context, detailPanel }) {
         const region = regionOf(upright, recipe, options)
         setAssetDetailSize(region)
         const output = outputFor(region)
-        imgEl().hidden = true
         if (output) {
             renderer.render(recipe, { ...output, ...options })
-            canvasEl().hidden = false
         }
-        return { size: region, recipe, upright }
+        let behind = isBehindImage(recipe, options)
+        if (behind) {
+            try {
+                await setMediaSrcIfNew(imgEl(), subject.url)
+            } catch (error) {
+                if (!current()) {
+                    return null
+                }
+                console.warn(
+                    "The original did not load; the canvas shows the Edit",
+                    error,
+                )
+                behind = false
+            }
+            if (!current()) {
+                return null
+            }
+        }
+        const canvas = canvasEl()
+        imgEl().hidden = !behind
+        canvas.toggleAttribute(Const.attributes.editCanvasBehind, behind)
+        if (output) {
+            canvas.hidden = false
+        }
+        return { size: region, recipe, upright, behind }
+    }
+
+    /**
+     * Whether the canvas draws `recipe` behind the original's `<img>`: the Edit is the identity and no change is on its
+     * way to it (`changing`, a drag or a change not saved yet), outside the Crop tool and Before/after. The browser
+     * manages the `<img>`'s colors (a Display P3 photo shows as it should), while the canvas draws the original's values
+     * as sRGB, as both renderers do; so an asset the panel has not changed looks as it does with the panel closed, and the
+     * canvas, drawn on behind it, still gives the Histogram and the Clipping blink their reads. The first change shows the
+     * canvas, and a change saved back to the identity the `<img>` again.
+     */
+    function isBehindImage(recipe, options) {
+        return (
+            isIdentity(recipe) &&
+            !options.wholeFrame &&
+            (options.split ?? null) === null &&
+            !options.changing
+        )
+    }
+
+    /** Loads `url` into `img` unless it holds it loaded already */
+    async function setMediaSrcIfNew(img, url) {
+        if (!(
+            img.getAttribute("src") === url &&
+            img.complete &&
+            img.naturalWidth
+        )) {
+            await setMediaSrcAndWait({ mediaEl: img, url })
+        }
     }
 
     /** The Edit drawn on the canvas from the decoded original, the renderer made on the first draw. Null when overtaken. */
@@ -728,6 +776,7 @@ export function createEditStage({ context, detailPanel }) {
                   drawFailed: drawFailure !== null,
                   drawRefusal: drawFailure?.refusal ?? null,
                   showsOriginal: showsOriginal(),
+                  behindImage: shown?.behind ?? false,
               }
             : null
     }
@@ -740,6 +789,7 @@ export function createEditStage({ context, detailPanel }) {
     /** Asset detail closed, or shows a Video: nothing of the asset is kept, and the canvas is hidden */
     function clear() {
         canvasEl()?.setAttribute("hidden", "")
+        canvasEl()?.removeAttribute(Const.attributes.editCanvasBehind)
         // A presentation still on its way changes nothing
         presentToken++
         latest = Promise.resolve(false)

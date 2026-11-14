@@ -183,7 +183,11 @@ Step 10, like step 8, reads L as step 7 left it, before Clarity and Sharpen. Cla
 output (`REFERENCE_LONG_EDGE`, 3840), so the Edit panel's drawing, the Display image and a full-size render look alike
 at their own scales; Grain's strength follows its cell below a pixel (step 10). No color management is done: an original with an ICC profile other than sRGB is treated as sRGB by
 both renderers (OpenCV ignores the profile; the client decodes with `colorSpaceConversion: "none"` and uploads with
-`UNPACK_COLORSPACE_CONVERSION_WEBGL = NONE`).
+`UNPACK_COLORSPACE_CONVERSION_WEBGL = NONE`), so a wide-gamut (Display P3, Adobe RGB) photo's Edit, the Display image
+and the canvas alike, is less saturated than the browser shows its original. Converting a profile to sRGB in both
+renderers is not done. What the stage does meanwhile: while the Edit panel's Edit is the identity, the canvas draws behind
+the original's color-managed `<img>` (**Edit panel** in [views/AGENTS.md](../altitude/views/AGENTS.md)), so only a change
+shows the renderers' colors.
 
 ## The two renderers
 

@@ -209,6 +209,9 @@ export const Const = {
         // Asset detail fragment while the Edit panel is open and while its Crop tool is (view_image_detail_modal.css lays
         // the grid and the stage out from them; js/edit/edit-panel.js, js/edit/crop-tool.js)
         editPanelToggle: "data-app-edit-panel-toggle",
+        // The stage's canvas while it draws the identity behind the original's color-managed <img>, for the Edit panel's
+        // reads (view_image_detail_modal.css hides it; js/edit/edit-stage.js)
+        editCanvasBehind: "data-app-edit-canvas-behind",
         editPanelOpen: "data-app-edit-panel-open",
         cropToolOpen: "data-app-crop-tool-open",
         // The Crop tool's floating bar (includes/edit_stage_tools): the guide's button and the name it shows, the crop's

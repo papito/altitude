@@ -316,6 +316,7 @@ Const.attributes.showOriginalToggle   // "data-app-show-original-toggle"  (Show 
 Const.attributes.editBadge            // "data-app-edit-badge"  (the title's badge of an edited asset: "Edited", or "Original" while the original is shown)
 Const.attributes.showOriginalKey      // "data-app-show-original-key"  (the Detail panel's key legend's `\` entry, shown on an edited asset)
 Const.attributes.editPanelToggle      // "data-app-edit-panel-toggle"  (the Edit panel's toggle in Asset detail's toolbar, for a holder of Edit images)
+Const.attributes.editCanvasBehind     // "data-app-edit-canvas-behind"  (the stage's canvas while it draws the identity behind the original's color-managed `<img>`)
 Const.attributes.editPanelOpen        // "data-app-edit-panel-open"  (the Asset detail fragment while the Edit panel is open; the stylesheet lays the grid out from it)
 Const.attributes.cropToolOpen         // "data-app-crop-tool-open"  (the Asset detail fragment while the Crop tool is open)
 Const.attributes.cropGuide            // "data-app-crop-guide"  (the Crop tool's bar: the guide's button, its name in `data-app-crop-guide-name`)
@@ -2087,7 +2088,14 @@ data.
   per asset and decoded upright (`createImageBitmap` with `imageOrientation: "from-image"` and `colorSpaceConversion:
   "none"`), for an edited asset whose render is pending or that the server could not render, and for every asset while the
   panel is open (`setEditing`, then `setLive` with the panel's Edit and the renderer's options: `wholeFrame` for the Crop
-  tool, `split` for Before/after). A canvas that cannot draw (no WebGL2, an original the browser cannot decode) falls back to
+  tool, `split` for Before/after, `changing` while the Edit shown is a change not saved yet). The canvas, like the server's
+  renderer, takes the original's values as sRGB, while the browser manages an `<img>`'s colors, so a wide-gamut (Display
+  P3) photo looks less saturated on the canvas: while the panel's Edit is the identity and no change is on its way, outside
+  the Crop tool and Before/after, the canvas draws behind the original's `<img>` (`isBehindImage`;
+  `data-app-edit-canvas-behind` on the canvas, which the stylesheet hides, keeping its box), so an asset the panel has not
+  changed looks as it does with the panel closed and Show original shows no shift the Edit never made, while the Histogram
+  and the Clipping blink still read the canvas; the first change shows the canvas, and a change saved back to the identity
+  (a release at 0, Reset all, Revert, an Undo) the `<img>` again. A canvas that cannot draw (no WebGL2, an original the browser cannot decode) falls back to
   the original, and a Display image that does not load to the canvas. So does a decoded original a quarter turn from the
   server's upright size (`uprightWidth`, `uprightHeight`: the browser applied, or skipped, an EXIF turn the server did not),
   checked before every draw and once more when the first Edit carrying that size arrives (the Edit panel's read of an asset

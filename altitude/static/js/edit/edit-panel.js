@@ -166,6 +166,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     // A change shown and waiting to be saved (`commitSoon`)
     let commitTimer = 0
     let commitWaiting = false
+    // Whether the Edit shown is a change not saved yet (a drag, a change waiting out its delay, the Crop tool's session)
+    let previewing = false
     let splitOn = false
     let splitAt = SPLIT_START
     let clippingBlink = false
@@ -524,6 +526,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         session = sessions.get(assetId) ?? createSession(assetId, edit)
         sessions.set(assetId, session)
         const snapshot = session.snapshot()
+        previewing = false
         working = snapshot.recipe
         sessionRecipe = snapshot.recipe
         upright = upright ?? uprightOf(snapshot.state)
@@ -721,17 +724,22 @@ export function createEditPanel({ context, editStage, detailPanel }) {
             if (!sameRecipe(snapshot.recipe, working)) {
                 cropTool.close()
                 working = snapshot.recipe
+                previewing = false
                 present()
             }
         }
         push()
     }
 
-    /** The options the stage draws the Edit with: the whole frame in the Crop tool, Before/after's divider */
+    /**
+     * The options the stage draws the Edit with: the whole frame in the Crop tool, Before/after's divider, and whether a
+     * change is on its way (`changing`: shown, not saved yet), so the identity mid-drag stays on the canvas
+     */
     function liveOptions() {
         return {
             wholeFrame: cropTool.isOpen(),
             split: splitOn && !cropTool.isOpen() ? splitAt : null,
+            changing: previewing,
         }
     }
 
@@ -871,6 +879,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         if (!changeable()) {
             return
         }
+        previewing = true
         working = normalize(recipe)
         cropTool.sync()
         requestDraw()
@@ -888,6 +897,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         cancelWaitingCommit()
         preview(recipe)
         if (!cropTool.isOpen()) {
+            previewing = false
             session.commit(working)
         }
     }
@@ -999,11 +1009,12 @@ export function createEditPanel({ context, editStage, detailPanel }) {
             return
         }
         cropTool.close()
-        present()
         if (session && working) {
             flushCommit()
+            previewing = false
             session.commit(working)
         }
+        present()
         push()
     }
 
@@ -1017,6 +1028,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         cancelWaitingCommit()
         cropTool.close()
         working = start
+        previewing = false
         present()
         push()
     }
@@ -1101,6 +1113,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
             session?.discard()
             working = session?.snapshot().recipe ?? working
             sessionRecipe = working
+            previewing = false
         }
         return true
     }

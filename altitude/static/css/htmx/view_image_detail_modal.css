@@ -265,6 +265,12 @@
     user-select: none;
 }
 
+/* The canvas drawing the identity behind the original's <img>, which the browser shows color-managed: it still draws, for
+   the Edit panel's Histogram and Clipping blink, and keeps its box (js/edit/edit-stage.js) */
+#editCanvas[data-app-edit-canvas-behind] {
+    visibility: hidden;
+}
+
 /* The Edit's Clipping blink over the canvas (js/edit/edit-panel.js): its bitmap is the sampled size at the canvas's aspect,
    so it lies over the picture pixel for pixel. Its two colors are read from here by the script, which holds no literal:
    `color` the blown highlights, `border-color` the crushed shadows (`border-style` stays none, so nothing paints). It
