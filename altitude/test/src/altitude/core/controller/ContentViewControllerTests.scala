@@ -6,7 +6,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import java.time.Instant
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.startWith
+import org.scalatest.matchers.must.Matchers.{ endWith, startWith }
 import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 import org.slf4j.LoggerFactory
 
@@ -723,7 +723,7 @@ import altitude.core.routes.decorators
   private def editedBytes(assetId: String, kind: String): Array[Byte] =
     java.nio.file.Files.readAllBytes(testApp.service.fileStore.editedImagePath(assetId, kind))
 
-  test("An edited Preview and a Display image are served at the asset's revision and below it, and not once it has none") {
+  test("An edited Preview and a Display image are served at the asset's revision, and not once it has none") {
 
     /**
      * Setup:
@@ -733,10 +733,9 @@ import altitude.core.routes.decorators
      *
      * Assertions:
      *
-     * `preview?v=2` and `display?v=2` serve the edited images as WebP, and so does `v=1`, an earlier revision, which a page no
-     * longer builds: it is answered the current images. The Preview without `v` is the original's. Each carries the content
-     * headers as every content answer does: cached for good, nosniff, sandboxed. Once the Edit is the identity, `preview?v=2` and
-     * `display?v=2` are plain-text 404s, never cached, while the Preview without `v` is still the original's.
+     * `preview?v=2` and `display?v=2` serve the edited images as WebP; the Preview without `v` is the original's. Each carries
+     * the content headers as every content answer does: cached for good, nosniff, sandboxed. Once the Edit is the identity,
+     * `preview?v=2` and `display?v=2` are plain-text 404s, never cached, while the Preview without `v` is still the original's.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -756,10 +755,8 @@ import altitude.core.routes.decorators
         for (
           (dataType, query, bytes) <- List(
             (Const.DataStore.PREVIEW, "?v=2", preview),
-            (Const.DataStore.PREVIEW, "?v=1", preview),
             (Const.DataStore.PREVIEW, "", original),
-            (Const.DataStore.DISPLAY, "?v=2", display),
-            (Const.DataStore.DISPLAY, "?v=1", display)
+            (Const.DataStore.DISPLAY, "?v=2", display)
           )
         )
           withClue(s"[$dataType$query]: ") {
@@ -781,6 +778,53 @@ import altitude.core.routes.decorators
           gone.headers.contains("cache-control") shouldBe false
         }
         get(Const.DataStore.PREVIEW, "").bytes shouldBe original
+    }
+  }
+
+  test("An earlier revision is redirected, never cached, to the asset's revision, a signed URL keeping its signature") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with an imported image saved twice, each save rendered, so its edited images are revision
+     * 2's; `v=1` asked for with the user's cookie and, with no cookie, by a URL signed for the item.
+     *
+     * Assertions:
+     *
+     * `preview?v=1` and `display?v=1` are a 302 to the same item at `v=2`, with `Cache-Control: no-store`, so the browser never
+     * keeps the current bytes under a revision that named others; the signed request's redirect keeps its `exp` and `sig`, and
+     * following it serves the current image with the content headers, no cookie needed.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    val assetId = editedAsset(saves = 2).persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        for (dataType <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)) withClue(s"[$dataType?v=1]: ") {
+          val stale = requests.get(
+            contentUrl(host, repoId, dataType, assetId) + "?v=1",
+            cookies = testContext.cookies,
+            maxRedirects = 0,
+            check = false)
+          stale.statusCode shouldBe 302
+          stale.headers("location") shouldBe Seq(contentPath(repoId, dataType, assetId) + "?v=2")
+          stale.headers("cache-control") shouldBe Seq("no-store")
+
+          val signed = signedUrl(host, repoId, dataType, assetId)
+          val signedStale = requests.get(signed + "&v=1", maxRedirects = 0, check = false)
+          signedStale.statusCode shouldBe 302
+          val location = signedStale.headers("location").head
+          location should startWith(contentPath(repoId, dataType, assetId) + "?v=2&exp=")
+          location should endWith(s"&sig=${signature(signed)}")
+          signedStale.headers("cache-control") shouldBe Seq("no-store")
+
+          val followed = requests.get(host + location, maxRedirects = 0, check = false)
+          followed.statusCode shouldBe 200
+          followed.bytes shouldBe editedBytes(assetId, dataType)
+          followed.headers("cache-control") shouldBe Seq("private, max-age=31536000, immutable")
+        }
     }
   }
 

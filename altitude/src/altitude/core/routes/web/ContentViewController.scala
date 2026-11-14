@@ -1,6 +1,8 @@
 package altitude.core.routes.web
 
 import cask.Request
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import cask.model.Response
 import org.slf4j.Logger
 
@@ -9,10 +11,11 @@ import altitude.core.App
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
 import altitude.core.Validators
-import altitude.core.models.MimedPreviewData
 import altitude.core.routes.RangeStreaming
 import altitude.core.routes.decorators.requireLoginOrSignature
 import altitude.core.routes.decorators.visibleOnly
+import altitude.core.service.AssetEditService
+import altitude.core.util.Util
 
 class ContentViewController(using logger: Logger) extends cask.Routes:
 
@@ -24,10 +27,12 @@ class ContentViewController(using logger: Logger) extends cask.Routes:
    * unknown one (`visibleOnly`); a Face's crop is served, since it may be the cover of a Person the Guest sees.
    *
    * `v` is the revision of an edited asset's edited images (`asset.edit_rev`), their URLs' cache key: a Preview with `v` is the
-   * edited Preview, and without it the original's; a Display image is asked for with `v` alone. A `v` from 1 to the asset's
-   * revision is answered the edited image stored now, so an earlier one, which no page builds any more, may get newer bytes; one
-   * above it, or 0, is a 404, never cached, since a later render may store other bytes under it. A `v` that is no whole number is
-   * a 400.
+   * edited Preview, and without it the original's; a Display image is asked for with `v` alone. The asset's revision is answered
+   * the edited image stored now, cached for good. An earlier one, which only a page built before the last render still holds,
+   * is an uncached 302 to the same item at the asset's revision (a signed URL's `exp` and `sig` kept, since they sign the path
+   * alone), so the current bytes are kept by the browser under their own revision and never under one that named others. One
+   * above it, or 0, is a 404, never cached, since a later render may store other bytes under it. A `v` that is no whole number
+   * is a 400.
    *
    * `exp` and `sig` are a signed URL's, which the decorator verifies; they are declared only because cask answers a query
    * parameter that an endpoint does not declare with a 400.
@@ -62,17 +67,18 @@ class ContentViewController(using logger: Logger) extends cask.Routes:
       case C.DataStore.PREVIEW =>
         // A Guest's request reads the asset, to refuse it one Browse does not show; the original's Preview needs no other read
         if RequestContext.isGuest then visibleOnly(App.altitude.service.asset.getById(itemId)): Unit
-        val preview: MimedPreviewData = revision.fold(App.altitude.service.fileStore.getPreviewById(itemId))(
-          App.altitude.service.assetEdit.editedImage(itemId, _, C.DataStore.PREVIEW))
-        image(preview.data, preview.mimeType)
+        revision match
+          case None =>
+            val preview = App.altitude.service.fileStore.getPreviewById(itemId)
+            image(preview.data, preview.mimeType)
+          case Some(rev) => editedImage(C.DataStore.PREVIEW, itemId, rev)
 
       case C.DataStore.DISPLAY =>
         revision match
           case None => plainText(C.Msg.Err.REVISION_REQUIRED, 400)
           case Some(rev) =>
             if RequestContext.isGuest then visibleOnly(App.altitude.service.asset.getById(itemId)): Unit
-            val display = App.altitude.service.assetEdit.editedImage(itemId, rev, C.DataStore.DISPLAY)
-            image(display.data, display.mimeType)
+            editedImage(C.DataStore.DISPLAY, itemId, rev)
 
       case C.DataStore.FILE =>
         // The stored original, streamed with byte ranges so a Video plays and seeks, typed as the asset was detected and named
@@ -90,6 +96,24 @@ class ContentViewController(using logger: Logger) extends cask.Routes:
         logger.debug(s"Content of an unknown data type [$dataType] requested: [$itemId]")
         notFound
     }
+
+  /**
+   * The asset's edited image of `kind` under the revision `rev`: the image, or, for an earlier revision, a 302 to the same item
+   * at the asset's revision, which `no-store` keeps out of every cache, since the revision it points at moves on with the next
+   * render. A signed request's `exp` and `sig` go with it.
+   */
+  private def editedImage(kind: String, itemId: String, rev: Int)(using request: Request): Response.Raw =
+    App.altitude.service.assetEdit.editedImage(itemId, rev, kind) match
+      case AssetEditService.EditedImage.Current(edited) => image(edited.data, edited.mimeType)
+      case AssetEditService.EditedImage.Moved(current) =>
+        val signature = for {
+          name <- List("exp", "sig")
+          value <- request.queryParams.get(name).flatMap(_.headOption)
+        } yield s"&$name=${URLEncoder.encode(value, StandardCharsets.UTF_8)}"
+        cask.Response(
+          "",
+          302,
+          Seq("Location" -> s"${Util.contentUrl(kind, itemId)}?v=$current${signature.mkString}", "Cache-Control" -> "no-store"))
 
   // An error is never cached: the item may yet exist under the same URL
   private def plainText(message: String, status: Int): Response.Raw =

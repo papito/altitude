@@ -36,6 +36,14 @@ object AssetEditService:
   // The longest auto-straighten waits for its turn on the render dispatcher and its read of the original
   private val AUTO_STRAIGHTEN_TIMEOUT = 2.minutes
 
+  /** What a request for an asset's edited image under a revision is answered ([[AssetEditService.editedImage]]) */
+  enum EditedImage:
+    /** The image stored now, under the asset's revision */
+    case Current(image: MimedPreviewData)
+
+    /** An earlier revision: the asset's edited images are under `rev` now */
+    case Moved(rev: Int)
+
   /** Why an Edit may not change the asset, None when it may: it is a still image outside the trash */
   def whyNotEditable(asset: Asset): Option[String] =
     if !asset.isStillImage then Some(C.Msg.Err.EDIT_NOT_STILL)
@@ -119,20 +127,22 @@ class AssetEditService(val app: Altitude):
 
   /**
    * The asset's edited image of `kind` (`Const.DataStore.PREVIEW` or `DISPLAY`) asked for under the revision `rev`: the one
-   * stored, when `rev` is from 1 to the asset's revision (`asset.edit_rev`). The asset has one edited image of each kind,
-   * replaced by each render under the next revision, so a revision below the current one, which no page builds any more, is
-   * answered the current image; harmless, since a page that held it showed an Edit as old or older.
+   * stored, when `rev` is the asset's revision (`asset.edit_rev`). The asset has one edited image of each kind, replaced by each
+   * render under the next revision, so a revision below the current one, which only a page built before that render still
+   * holds, is `Moved` to the current one: its bytes are not the ones it named, so they are never answered under it.
    *
    * @throws NotFoundException
    *   for a revision above the asset's, which may name other bytes later, for 0, for an asset with no edited images (its Edit is
    *   the identity, or cannot be rendered), and for an asset that is not the Library's
    */
-  def editedImage(assetId: String, rev: Int, kind: String): MimedPreviewData =
+  def editedImage(assetId: String, rev: Int, kind: String): AssetEditService.EditedImage =
     val current = txManager.asReadOnly(assetDao.getById(assetId).editRev)
     if rev < 1 || rev > current then
       throw NotFoundException(s"Asset [$assetId] has no edited $kind at revision [$rev]; its revision is [$current]")
-    if rev < current then logger.debug(s"Edited $kind of asset [$assetId] asked for at revision [$rev], served at [$current]")
-    app.service.fileStore.getEditedImage(assetId, kind)
+    if rev < current then
+      logger.debug(s"Edited $kind of asset [$assetId] asked for at revision [$rev], moved to [$current]")
+      AssetEditService.EditedImage.Moved(current)
+    else AssetEditService.EditedImage.Current(app.service.fileStore.getEditedImage(assetId, kind))
 
   /**
    * Auto-straighten: the Straighten that levels the lines of the asset's original as `recipe` turns and mirrors it, in tenths of
