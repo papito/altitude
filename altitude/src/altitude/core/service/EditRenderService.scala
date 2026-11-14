@@ -195,9 +195,10 @@ class EditRenderService(app: Altitude):
    * Renders the asset's Edit at its head, in the context repository, in three steps: the head, its Edit and the asset are read in
    * a read transaction; the renditions are rendered outside any transaction; then, with the asset and its Edit locked, they are
    * stored only if the head is still the one read (its seq and its Edit, since a seq dropped by a change after an undo is used
-   * again). An edited head takes the next revision (`last_rev + 1`), which the asset's `edit_rev` then names; the Original sets
-   * `edit_rev` to 0. Either way the head is then the rendered step, and once that has committed, the renditions of the revisions
-   * before go. A head that moved meanwhile throws the result away and queues the asset again.
+   * again). An edited head takes the next revision (`max(last_rev, the highest revision on disk) + 1`), which the asset's
+   * `edit_rev` then names; the Original sets `edit_rev` to 0. Either way the head is then the rendered step, and once that has
+   * committed, the renditions of the revisions before go. A head that moved meanwhile throws the result away and queues the asset
+   * again.
    *
    * `beforeWrite` runs between the render and the write, for a test to move the head there.
    */

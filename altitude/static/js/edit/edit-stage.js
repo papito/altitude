@@ -27,8 +27,9 @@
  * orientation while the stored size is the file header's.
  *
  * **Show original**, on an edited asset only, for every viewer: the toolbar's toggle
- * (`data-app-show-original-toggle`, `aria-pressed`), which stays on until pressed again or Asset
- * detail steps to another asset, or a change is drawn from the Edit panel (`setLive`); and `\` held
+ * (`data-app-show-original-toggle`, `aria-pressed`), which stays on until pressed again, Asset
+ * detail steps to another asset, the Edit panel opens (`releaseShowOriginal`) or a change is drawn
+ * from it (`setLive`); and `\` held
  * (`global.js`, `Const.events.showOriginalHeld`, handled in `listeners/edit.js`), for as long as it is
  * held, released too when the window loses focus. While it is on, the original is in the `<img>` at
  * the upright size, the Face highlights are unmapped, the Dimensions row has the original's size

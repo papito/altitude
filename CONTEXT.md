@@ -349,8 +349,8 @@ _Avoid_: Rendition, Proxy, Thumbnail.
 **Show original**:
 How Asset detail shows an edited asset's untouched original, to every viewer,
 Guests included: while `\` is held, or from a press of the Show original toggle
-until it is pressed again, Asset detail steps to another asset, or a change is
-made in the Edit panel. Face highlights and the size shown are then the
+until it is pressed again, Asset detail steps to another asset, or the Edit
+panel opens or makes a change. Face highlights and the size shown are then the
 original's.
 
 **View settings**:

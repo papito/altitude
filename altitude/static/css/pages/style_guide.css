@@ -304,3 +304,13 @@
   font-size: var(--font-size-large);
   color: var(--account-type-color);
 }
+
+/* The Edit panel's sliders at the width of a column of a section docked top or bottom */
+.sg-edit-sliders .edit-slider {
+  width: var(--edit-column-width);
+}
+
+/* The Edit panel's specimen at a panel's width, in a box that is no grid, so the panel's own grid area names nothing here */
+.sg-edit-panel {
+  width: var(--modal-content-width);
+}

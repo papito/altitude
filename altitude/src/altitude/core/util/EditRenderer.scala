@@ -17,10 +17,10 @@ import altitude.core.models.EditCrop
 import altitude.core.models.EditRecipe
 
 /**
- * Renders an Edit (`CONTEXT.md`) from the original with OpenCV, as the plan's spec of the geometry and of the per-pixel math
- * says; the Edit panel's WebGL renderer draws the same math (`static/js/edit/`), and both are checked against the shared vectors
- * (`test/resources/edit/vectors.json`). The geometry and the math are public functions of their own, so the tests and the vectors
- * read them one by one.
+ * Renders an Edit (`CONTEXT.md`) from the original with OpenCV, as the spec of the geometry and of the per-pixel math in
+ * `docs/image-edits.md` says; the Edit panel's WebGL renderer draws the same math (`static/js/edit/`), and both are checked
+ * against the shared vectors (`test/resources/edit/vectors.json`). The geometry and the math are public functions of their own,
+ * so the tests and the vectors read them one by one.
  *
  * Coordinates are continuous pixel coordinates, the top-left corner of the image at (0, 0) and y down, so a pixel's center is at
  * +0.5. An angle is positive clockwise.
@@ -185,9 +185,9 @@ object EditRenderer:
 
   /**
    * Step 6: the monotone cubic Hermite through the points (Fritsch–Carlson), held flat outside the first and last x and clamped
-   * to [0, 1]. The tangents are the playground's: the end ones the end secants, an inner one the mean of its two secants (0 where
-   * they differ in sign), then, segment by segment in order, both zero on a flat segment, or scaled down by 3 / √(α² + β²) when
-   * that is over 3.
+   * to [0, 1]. The tangents are Fritsch–Carlson's as `docs/image-edits.md` gives them (step 6): the end ones the end secants, an
+   * inner one the mean of its two secants (0 where they differ in sign), then, segment by segment in order, both zero on a flat
+   * segment, or scaled down by 3 / √(α² + β²) when that is over 3.
    */
   final class Curve(points: List[(Double, Double)]):
     private val xs = points.map(_._1).toArray
@@ -258,7 +258,8 @@ object EditRenderer:
 
   /**
    * Step 9's weight at the pixel (x, y), columns and rows from the top left, of a `width` × `height` output: smoothstep of the
-   * distance d from the center, the offsets being fractions of the half width and half height, past the midpoint fixed at 50
+   * distance d from the center, the offsets being fractions of the half width and half height, starting at d = 0.39375 and
+   * reaching 1 over 0.65625
    */
   def vignetteWeight(x: Int, y: Int, width: Int, height: Int): Double =
     val dx = (x - width / 2.0) / (width / 2.0)
@@ -266,8 +267,8 @@ object EditRenderer:
     smoothstep((Math.sqrt((dx * dx + dy * dy) / 2) - 0.39375) / 0.65625)
 
   /**
-   * The playground's integer hash of a grain cell, in [0, 1]: 32-bit integer arithmetic, each product wrapping as `Math.imul` and
-   * GLSL's `uint` do
+   * The grain's integer hash of a cell (`docs/image-edits.md`, step 10), in [0, 1]: 32-bit integer arithmetic, each product
+   * wrapping as `Math.imul` and GLSL's `uint` do
    */
   def hash(x: Int, y: Int): Double =
     var h = x * 374761393 + y * 668265263

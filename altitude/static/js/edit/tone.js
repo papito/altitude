@@ -1,5 +1,5 @@
 /**
- * The Edit's per-pixel math (`plans/todo/image-editing.md`, **The Edit › Per-pixel math**), as the
+ * The Edit's per-pixel math (`docs/image-edits.md`, **Per-pixel math**), as the
  * server's renderer has it (`util/EditRenderer.scala`): the tables of steps 1 to 6 (to linear, white
  * balance, exposure, back to sRGB, the tone steps and the curve), each channel's 4096 entries over
  * the input value read with linear interpolation; step 7's saturation and vibrance; and what steps 8
@@ -83,8 +83,8 @@ export function tone(value, recipe) {
 
 /**
  * Step 6: the monotone cubic Hermite through the points (Fritsch–Carlson), held flat outside the
- * first and last x and clamped to [0, 1], as a function of x. The tangents are the playground's:
- * the end ones the end secants (each secant over at least 1e-6 of x), an inner one the mean of its
+ * first and last x and clamped to [0, 1], as a function of x. The tangents are Fritsch–Carlson's as
+ * `docs/image-edits.md` gives them (step 6): the end ones the end secants (each secant over at least 1e-6 of x), an inner one the mean of its
  * two secants (0 where they differ in sign), then, segment by segment in order, both zero on a flat
  * segment, or scaled down by 3 / √(α² + β²) when α² + β² is over 9.
  */
@@ -184,7 +184,7 @@ export function tables(recipe) {
     })
 }
 
-/** The three tables interleaved as the texels of a TABLE_SIZE × 1 RGBA texture, alpha 1 */
+/** The three tables interleaved as RGBA texels, entry by entry, alpha 1: the renderer lays them out in rows of 64 */
 export function tableTexels(recipe) {
     const [red, green, blue] = tables(recipe)
     const texels = new Float32Array(TABLE_SIZE * 4)
@@ -254,7 +254,7 @@ export function gaussianHalfKernel(sigma) {
 /**
  * Step 9's weight at the pixel (x, y), integer columns and rows from the top left, of a
  * `width` × `height` output: the smoothstep of the distance d from the center, the offsets being
- * fractions of the half width and half height, past the midpoint fixed at 50
+ * fractions of the half width and half height, starting at d = 0.39375 and reaching 1 over 0.65625
  */
 export function vignetteWeight(x, y, width, height) {
     const dx = (x - width / 2) / (width / 2)
@@ -262,7 +262,7 @@ export function vignetteWeight(x, y, width, height) {
     return smoothstep((Math.sqrt((dx * dx + dy * dy) / 2) - 0.39375) / 0.65625)
 }
 
-/** The playground's integer hash of a grain cell, in [0, 1]: 32-bit integer arithmetic, each product wrapping */
+/** The grain's integer hash of a cell (`docs/image-edits.md`, step 10), in [0, 1]: 32-bit integer arithmetic, each product wrapping */
 export function hash(x, y) {
     let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0
     h = Math.imul(h ^ (h >>> 13), 1274126177)

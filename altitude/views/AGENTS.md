@@ -10,7 +10,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 * Always prefer CSS Grid and Flexbox.
 * The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`. A nested rule extends its parent by a pseudo-class or a pseudo-element only (`&:focus-visible`, `&::picker(select)`), and a descendant takes a rule of its own: the design tweaks panel's element picker matches a nested selector with `closest()`, which cannot match a descendant one (`& option`).
 * Strongly prefer CSS variables over hard-coded values, especially if duplicated.
-* Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--dashed-border-color`, `--search-panel-background-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A color scoped to the elements it marks, rather than a token of `:root`, is declared by their rule from a theme or semantic color: a view's `--view-tint` and `--view-stripe` on its panes, and an account type's `--account-type-color` on `[data-account-type]` (an Admin's `--error-color`, a User's `--success-color`, a Guest's `--info-color`). A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, the nav's quick search field's glow, and a field of the advanced search panel, whose box draws the field's edge and ring around its chips and its input. The detail is under **Themes** below.
+* Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--dashed-border-color`, `--search-panel-background-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, the stops of a gradient token (the Edit panel's slider tracks, `--edit-track-*`) are theme and semantic colors and `--shadow-color`, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A color scoped to the elements it marks, rather than a token of `:root`, is declared by their rule from a theme or semantic color: a view's `--view-tint` and `--view-stripe` on its panes, and an account type's `--account-type-color` on `[data-account-type]` (an Admin's `--error-color`, a User's `--success-color`, a Guest's `--info-color`), and an Edit panel slider's `--edit-slider-track` on `.edit-slider` (the `--theme-primary` fill to the thumb, or, set inline by the component, one of the `--edit-track-*` gradient tokens). A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, the nav's quick search field's glow, and a field of the advanced search panel, whose box draws the field's edge and ring around its chips and its input. The detail is under **Themes** below.
 * Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius` (a chosen filter's chip, in the advanced search panel and a filtered search's results title, is a rectangular box, `--radius`), the advanced search panel with `--radius-xl`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), the 1 px width and height of `.visually-hidden`, and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
 * A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide`, the brand's `--letter-spacing-medium` or the view band's `--letter-spacing-band`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the brand (the nav's and the login page's), the nav's entries and its quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the account info dialog's avatar's 2.5em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin, the close button, the snackbar's dismiss button, the nav's filter button and the remove and clear controls of the advanced search panel; the Font Awesome solid weight 900 selects the icon face.
 * Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; two popover panels hold an inline dialog: View settings, in its menu's panel, and, the second, the advanced search panel under the nav's quick search (**Advanced search panel**). A control that picks one of several values (the grid toolbar's Group and Sort, and any dropdown added later) is a **choice menu**: the same native popover panel, built by `buildChoiceMenuCtrl` from a server-rendered host of option buttons, never a `<select>`, which stays a form's field. Every menu panel wears the popover dialog's frosted surface. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
@@ -23,7 +23,8 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 - Libraries are checked into `static/js/lib/` (htmx, Alpine and its focus plugin, Split.js, interact.js, axios,
   Viselect for box selection, Leaflet for the Location pin editor and the map, supercluster for the map's on-screen
   clustering, media-chrome for the asset detail's video player, Flatpickr for the advanced search panel's date
-  ranges, tokentweak for the dev-only design tweaks panel); versions
+  ranges, tokentweak for the dev-only design tweaks panel); interact.js drives the asset, batch, folder, album,
+  Location and People drags and the Edit panel's Crop tool; versions
   and sources are listed in `static/js/lib/README.md`,
   whose **Adding a library** says how a new one is vendored, loaded and linted
 - No library blocks the first render except htmx: the pages' plain library scripts are `defer` (htmx is not, so it still
@@ -36,7 +37,7 @@ The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For front
 ```
 views/
   *.scala.html          ← full pages (index, login, setup, pipeline, settings, users, style_guide)
-  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title, a filtered search's chips, an advanced search option, a person's cover on a search chip, a combobox field of chips, the Import page's upload sections, an Import's status and title in the Import history, the Watch folder dialog's deletion notice)
+  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title, a filtered search's chips, an advanced search option, a person's cover on a search chip, a combobox field of chips, the Import page's upload sections, an Import's status and title in the Import history, the Watch folder dialog's deletion notice, Asset detail's Edit panel and the Edit's tools over its stage)
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
@@ -205,9 +206,10 @@ in either theme:
 |---|---|
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), Curation's shell opening its host (`curation.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
-| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), the Triage summary's reload (`triage.js`), the Settings form's save (`settings.js`, the success snackbar), and the account's (`account.js`: a changed own password, on every page with the nav, and the Users page's changes, which reload its cards); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring, a 204 to an open handed back to its search trigger, and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
+| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), the Triage summary's reload (`triage.js`), the Settings form's save (`settings.js`, the success snackbar), the Edit's keys in Asset detail (`edit.js`: Show original held, the Edit panel, its Crop tool, Undo and Redo), and the account's (`account.js`: a changed own password, on every page with the nav, and the Users page's changes, which reload its cards); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring, a 204 to an open handed back to its search trigger, and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
 | `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`) and the advanced search panel beside it (`search-panel.js`: the load on opening, the filter button's count, the search its form asks for); a filtered search's results title (`filtered-title.js`: a chip's × and Edit); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), a Person's results title read again after a rename or a correction (`person-title.js`), Asset detail's URL (`detail-url.js`: the address bar names the asset and the Detail panel's state, and Back closes it), Asset detail's fullscreen (`detail-fullscreen.js`: `f`, the toolbar's toggle and the player's button on the whole of Asset detail), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/import/` | an upload of the Import page, with no DOM of its own: what a section sends, from its picker or a drop walked to its last file, less the ignored files, and under which paths (`chosen-files.js`), and the sending, from the Import's opening to its closing (`upload-run.js`); and the reads of the Watch folders' cards (`watch-folders.js`); see **Import page** |
+| `js/edit/` | Image editing in Asset detail (`htmx/view_image_detail_modal`, `includes/edit_panel`, `includes/edit_stage_tools`); see **Edit panel**. DOM-free, run under Node by `scripts/test-js/`: the Edit as the client holds it, its defaults, sliders, sections and the server's normalization (`recipe.js`), its geometry and the Crop tool's rules on it (`geometry.js`), its per-pixel math (`tone.js`), the Edit panel's changes to an Edit (`adjust.js`), and the server sync of one asset's Edit (`edit-session.js`). With the DOM: the WebGL2 renderer (`renderer.js`), Asset detail's stage for a still image, its sources and Show original (`edit-stage.js`), the wait for a render and the grid's Previews after it (`render-status.js`), the Edit panel's coordinator (`edit-panel.js`), the Crop tool on interact.js (`crop-tool.js`) and the Level tool's line (`level-tool.js`) |
 | `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
 | `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
 | `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
@@ -217,10 +219,10 @@ in either theme:
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of a loaded image, blown, crushed or neither, read in the browser as the measurement reads them, and the Clipping mask painted from the classes), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's and the Detail panel's docks are made from), stored-state (a remembered object under one localStorage key that modules share: `readStoredObject` and `writeStoredFields`, which sets some fields and keeps the rest; the Detail panel's view is read and written through it by `detail-panel.js` and `dock.js`), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font), name-key (the server's name fold, `nameKey` and `partialMatchKey`: the Change combobox's and the Users page filter's), request-failure (a failed htmx request in the snackbar: a 403 or 409 refusal in plain text as its text, a 401 nowhere, anything else by its path and status), session (a 401 sends the window to the login, back to the page: `goToLogin`) |
+| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys: a text-like input, a textarea, a select or an editable element, never a slider, a checkbox, a radio, a color or file input or a button-like one, so the shortcuts keep working on the Edit panel's sliders), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of any image source, a loaded image or the Edit's canvas, blown, crushed or neither, read in the browser as the measurement reads them, with the fractions of each, a fully transparent pixel no pixel of the image, and the Clipping mask painted from the classes), histogram (a Histogram's bins as SVG paths, `channelPaths`, and a fraction's label, `percentLabel`: Curation's strip and the Edit panel's), content-urls (an asset's Preview, Display image and original URLs, a Preview by its revision, and an image repointed at a new Preview), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's, the Detail panel's and the Edit panel's docks are made from), stored-state (a remembered object under one localStorage key that modules share: `readStoredObject` and `writeStoredFields`, which sets some fields and keeps the rest; the Detail panel's view is read and written through it by `detail-panel.js` and `dock.js`), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font), name-key (the server's name fold, `nameKey` and `partialMatchKey`: the Change combobox's and the Users page filter's), request-failure (a failed htmx request in the snackbar: a 403 or 409 refusal in plain text as its text, a 401 nowhere, anything else by its path and status), session (a 401 sends the window to the login, back to the page: `goToLogin`) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell), `face-combobox.js` (the Change combobox of a People row in the Detail panel), and the advanced search panel's `search-panel.js` (its form: Search, Clear, the people match), `filter-combobox.js` (a combobox of names chosen as chips) and `date-range.js` (a date range picked on a Flatpickr calendar); `index.js` registers them, and `nav-page.js` the panel's three as well. The Users page's own, `users-page.js` (the tab and the filter), `account-form.js` (the account form's type and Permission matrix) and `password-field.js` (Generate and Show), are registered by its page module, as the Import page's `import-uploads.js` (the upload sections) and `watch-folder-form.js` (the Watch folder dialog's two switches and its deletion notice) are by its own |
+| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell), `face-combobox.js` (the Change combobox of a People row in the Detail panel), `edit-panel.js` (the Edit panel's controls, over the coordinator `js/edit/edit-panel.js`), and the advanced search panel's `search-panel.js` (its form: Search, Clear, the people match), `filter-combobox.js` (a combobox of names chosen as chips) and `date-range.js` (a date range picked on a Flatpickr calendar); `index.js` registers them, and `nav-page.js` the panel's three as well. The Users page's own, `users-page.js` (the tab and the filter), `account-form.js` (the account form's type and Permission matrix) and `password-field.js` (Generate and Show), are registered by its page module, as the Import page's `import-uploads.js` (the upload sections) and `watch-folder-form.js` (the Watch folder dialog's two switches and its deletion notice) are by its own |
 
 ## Alpine.js Stores (initialized in `js/stores/app-stores.js` and `js/stores/html-common.js`)
 
@@ -255,7 +257,9 @@ Histogram strips under `Const.localStore.curationHistogram` (`rememberedHistogra
 and whether it shows the Sequence rail under `Const.localStore.curationSequenceRail` (`rememberedSequenceRailShown`,
 `saveSequenceRailShown`), "true" or "false" too (see **Curation** below). Asset detail's view is no store either: `js/search-results/detail-panel.js`
 remembers whether the Detail panel is open, whether the Face highlights are on, and the panel's dock under
-`Const.localStore.assetDetailView` (see **Detail panel** below).
+`Const.localStore.assetDetailView` (see **Detail panel** below), and `js/edit/edit-panel.js` whether the Edit panel is
+open (`editOpen`) and its share of each axis (`editDock`) under the same key, each writing its own fields (see **Edit
+panel** below).
 
 ## DOM Addressing Convention
 
@@ -264,66 +268,75 @@ selectors. All attribute names are defined in `Const.attributes` (`constants.js`
 through `element.dataset` by their camel-cased key:
 
 ```js
-Const.attributes.folderId       // "data-folder-id"        el.dataset.folderId
-Const.attributes.albumId        // "data-album-id"
-Const.attributes.locationId     // "data-location-id" (a Location row and its drop zone)
-Const.attributes.categoryId       // "data-category-id"   (a Location row under a category)
-Const.attributes.kind           // "data-kind"        (`category` | `location` on a Location row)
-Const.attributes.assetId        // "data-asset-id"
-Const.attributes.numOfChildren  // "data-num-of-children"
-Const.attributes.expanded       // "data-expanded"
-Const.attributes.viewedScope    // "data-viewed-scope" (on the folder node whose results are displayed)
-Const.attributes.dataSrc        // "data-src"  (lazy-load image URL)
-Const.attributes.sequenceId     // "data-app-sequence-id" (a group header's Curate) el.dataset.appSequenceId
-Const.attributes.railSequenceId // "data-rail-sequence-id" (a row of Curation's Sequence rail) el.dataset.railSequenceId
-Const.attributes.minFrames      // "data-min-frames"  (the fewest frames a group header's Curate stays for)
-Const.attributes.frameId        // "data-frame-id"  (a frame of a Curation set in the rail, in the rail's order)
-Const.attributes.columnFrameId  // "data-column-frame-id"  (a frame's column of the face strip)
-Const.attributes.bundleKind     // "data-bundle-kind"  (the Bundle a frame sits under; a Contender has none)
-Const.attributes.loupeLevel     // "data-level"  (the Loupe's level on a stage pane's lens, which its stylesheet shows)
-Const.attributes.clippedLevel   // "data-clipped-level"  (the gray level a pixel counts as blown at, on a Curation set's root)
-Const.attributes.crushedLevel   // "data-crushed-level"  (the gray level a pixel counts as crushed at)
-Const.attributes.measurementBox // "data-measurement-box"  (the box the measurement fits an image into before it counts)
-Const.attributes.histogram      // "data-histogram"  (a frame's Histogram for the stage's strip: a byte per bin, in Base64)
-Const.attributes.crushedShadows // "data-crushed-shadows"  (the fraction of a frame's pixels crushed, as the import measured it)
-Const.attributes.clippedHighlights // "data-clipped-highlights"  (the fraction of a frame's pixels blown)
-Const.attributes.dockSide       // "data-app-dock-side"  (a pick of the explorer's Dock side: the options of its menu)
-Const.attributes.detailDockSide // "data-app-detail-dock-side"  (a pick of the Detail panel's, its own since both docks listen on the body)
-Const.attributes.detailPanelToggle // "data-app-detail-panel-toggle"  (the Detail panel's toggle in asset detail's toolbar)
+Const.attributes.folderId             // "data-folder-id"        el.dataset.folderId
+Const.attributes.albumId              // "data-album-id"
+Const.attributes.locationId           // "data-location-id" (a Location row and its drop zone)
+Const.attributes.categoryId           // "data-category-id"   (a Location row under a category)
+Const.attributes.kind                 // "data-kind"        (`category` | `location` on a Location row)
+Const.attributes.assetId              // "data-asset-id"
+Const.attributes.numOfChildren        // "data-num-of-children"
+Const.attributes.expanded             // "data-expanded"
+Const.attributes.viewedScope          // "data-viewed-scope" (on the folder node whose results are displayed)
+Const.attributes.dataSrc              // "data-src"  (lazy-load image URL)
+Const.attributes.sequenceId           // "data-app-sequence-id" (a group header's Curate) el.dataset.appSequenceId
+Const.attributes.railSequenceId       // "data-rail-sequence-id" (a row of Curation's Sequence rail) el.dataset.railSequenceId
+Const.attributes.minFrames            // "data-min-frames"  (the fewest frames a group header's Curate stays for)
+Const.attributes.frameId              // "data-frame-id"  (a frame of a Curation set in the rail, in the rail's order)
+Const.attributes.columnFrameId        // "data-column-frame-id"  (a frame's column of the face strip)
+Const.attributes.bundleKind           // "data-bundle-kind"  (the Bundle a frame sits under; a Contender has none)
+Const.attributes.loupeLevel           // "data-level"  (the Loupe's level on a stage pane's lens, which its stylesheet shows)
+Const.attributes.clippedLevel         // "data-clipped-level"  (the gray level a pixel counts as blown at, on a Curation set's root)
+Const.attributes.crushedLevel         // "data-crushed-level"  (the gray level a pixel counts as crushed at)
+Const.attributes.measurementBox       // "data-measurement-box"  (the box the measurement fits an image into before it counts)
+Const.attributes.histogram            // "data-histogram"  (a frame's Histogram for the stage's strip: a byte per bin, in Base64)
+Const.attributes.crushedShadows       // "data-crushed-shadows"  (the fraction of a frame's pixels crushed, as the import measured it)
+Const.attributes.clippedHighlights    // "data-clipped-highlights"  (the fraction of a frame's pixels blown)
+Const.attributes.dockSide             // "data-app-dock-side"  (a pick of the explorer's Dock side: the options of its menu)
+Const.attributes.detailDockSide       // "data-app-detail-dock-side"  (a pick of the Detail panel's, its own since both docks listen on the body)
+Const.attributes.detailPanelToggle    // "data-app-detail-panel-toggle"  (the Detail panel's toggle in asset detail's toolbar)
 Const.attributes.faceHighlightsToggle // "data-app-face-highlights-toggle"  (the Face highlights' toggle beside it)
-Const.attributes.fullscreenKey     // "data-app-fullscreen-key"  (the key legend's fullscreen entry, removed with the toggle where fullscreen is not allowed)
-Const.attributes.faceRow           // "data-app-face-row"  (the button of a People row that selects its Face)
-Const.attributes.faceChange        // "data-app-face-change"  (a selected row's Change, which opens the combobox)
-Const.attributes.faceRemove        // "data-app-face-remove"  (a selected row's Remove, with its second label in `data-app-face-remove-label-last`)
-Const.attributes.readOnly          // "data-app-read-only"  (the People section of an asset in the trash: no correction)
-Const.attributes.resultMessage     // "data-app-result-message"  (a correction's result on the section it answers with; a deleted Person's ID and line in `data-app-deleted-person-id` and `-message`)
-Const.attributes.mergedPersonId    // "data-app-merged-person-id"  (on that root after a merge of a Face's Person: the merged Person)
-Const.attributes.mergedIntoId      // "data-app-merged-into-id"  (and the Person they were merged into)
-Const.attributes.faceId            // "data-face-id"  (a People row, a Face highlight and its badge)
-Const.attributes.personName        // "data-person-name"  (a People row's Person, with `data-person-hidden` when Hidden)
-Const.attributes.personNamed       // "data-person-named"  (a People row's Person, or an option's of the assignable people fragment, when named: the Change combobox's mode)
-Const.attributes.personAssetCount  // "data-person-asset-count"  (a People row's Person's number of assets, `numOfFaces`, which the Change combobox's labels show)
-Const.attributes.suggested         // "data-suggested"  (an option of the assignable people fragment in its Suggested group)
-Const.attributes.frameTimeMs       // "data-frame-time-ms"  (a People row of a Face in a Video)
-Const.attributes.detailDimensions  // "data-app-detail-dimensions"  (the Detail panel's dimensions row, which reads the shown element's size)
-Const.attributes.detailPanelOpen   // "data-app-detail-panel-open"  (the Asset detail fragment while the Detail panel is open; the stylesheet lays the grid out from it)
-Const.attributes.appAssetId        // "data-app-asset-id"  (the asset of the Detail panel's fragment and of its People section; not `data-asset-id`, which finds the grid's cells)
-Const.attributes.panelUrl          // "data-panel-url"  (the advanced search panel's host in the nav: the route of its form)
-Const.attributes.optionsUrl        // "data-options-url"  (a combobox field of the panel: the route of its options)
-Const.attributes.multiple          // "data-multiple"  (a combobox field that takes several names)
-Const.attributes.maxChosen         // "data-max-chosen"  (the most such a field takes, with the line that says so in `data-max-chosen-message`)
-Const.attributes.optionId          // "data-option-id"  (an option of a combobox field and the chip of a chosen one: the ID a search takes)
-Const.attributes.optionLabel       // "data-option-label"  (the label its chip shows)
-Const.attributes.optionName        // "data-option-name"  (the element that shows the name, in an option and in a chip)
-Const.attributes.optionCover       // "data-option-cover"  (a Person's cover Face in an option, which a new chip copies)
-Const.attributes.chipRemove        // "data-chip-remove"  (the remove button of a chosen filter's chip, in the panel and in a filtered search's results title)
-Const.attributes.filter            // "data-app-filter"  (a chip of a filtered search's results title, its parameters in `data-app-filter-<param>` literals)
-Const.attributes.editFilters       // "data-app-edit-filters"  (that title's Edit, which opens the advanced search panel)
-Const.attributes.filterCount       // "data-app-filter-count"  (the badge of the nav's filter button: the number of filters in force, or in the open panel's form)
-Const.attributes.importId          // "data-import-id"  (an Import's entry in the Import history)
-Const.attributes.importFiles       // "data-app-import-files"  (the `<details>` of an entry's Import files)
-Const.attributes.viewUrl           // "data-app-view-url"  (a part of the Import page that is read again, the history's list, an Import's files or the Watch folders' cards: the route of the view it shows)
-Const.attributes.view              // "data-app-view"  (a control in such a part: the route of the view it asks for instead)
+Const.attributes.fullscreenKey        // "data-app-fullscreen-key"  (the key legend's fullscreen entry, removed with the toggle where fullscreen is not allowed)
+Const.attributes.faceRow              // "data-app-face-row"  (the button of a People row that selects its Face)
+Const.attributes.faceChange           // "data-app-face-change"  (a selected row's Change, which opens the combobox)
+Const.attributes.faceRemove           // "data-app-face-remove"  (a selected row's Remove, with its second label in `data-app-face-remove-label-last`)
+Const.attributes.readOnly             // "data-app-read-only"  (the People section of an asset in the trash: no correction)
+Const.attributes.resultMessage        // "data-app-result-message"  (a correction's result on the section it answers with; a deleted Person's ID and line in `data-app-deleted-person-id` and `-message`)
+Const.attributes.mergedPersonId       // "data-app-merged-person-id"  (on that root after a merge of a Face's Person: the merged Person)
+Const.attributes.mergedIntoId         // "data-app-merged-into-id"  (and the Person they were merged into)
+Const.attributes.faceId               // "data-face-id"  (a People row, a Face highlight and its badge)
+Const.attributes.personName           // "data-person-name"  (a People row's Person, with `data-person-hidden` when Hidden)
+Const.attributes.personNamed          // "data-person-named"  (a People row's Person, or an option's of the assignable people fragment, when named: the Change combobox's mode)
+Const.attributes.personAssetCount     // "data-person-asset-count"  (a People row's Person's number of assets, `numOfFaces`, which the Change combobox's labels show)
+Const.attributes.suggested            // "data-suggested"  (an option of the assignable people fragment in its Suggested group)
+Const.attributes.frameTimeMs          // "data-frame-time-ms"  (a People row of a Face in a Video)
+Const.attributes.detailDimensions     // "data-app-detail-dimensions"  (the Detail panel's dimensions row, which reads the shown element's size)
+Const.attributes.detailPanelOpen      // "data-app-detail-panel-open"  (the Asset detail fragment while the Detail panel is open; the stylesheet lays the grid out from it)
+Const.attributes.appAssetId           // "data-app-asset-id"  (the asset of the Detail panel's fragment and of its People section; not `data-asset-id`, which finds the grid's cells)
+Const.attributes.showOriginalToggle   // "data-app-show-original-toggle"  (Show original's toggle in Asset detail's toolbar, shown on an edited asset)
+Const.attributes.editBadge            // "data-app-edit-badge"  (the title's badge of an edited asset: "Edited", or "Original" while the original is shown)
+Const.attributes.showOriginalKey      // "data-app-show-original-key"  (the Detail panel's key legend's `\` entry, shown on an edited asset)
+Const.attributes.editPanelToggle      // "data-app-edit-panel-toggle"  (the Edit panel's toggle in Asset detail's toolbar, for a holder of Edit images)
+Const.attributes.editPanelOpen        // "data-app-edit-panel-open"  (the Asset detail fragment while the Edit panel is open; the stylesheet lays the grid out from it)
+Const.attributes.cropToolOpen         // "data-app-crop-tool-open"  (the Asset detail fragment while the Crop tool is open)
+Const.attributes.cropGuide            // "data-app-crop-guide"  (the Crop tool's bar: the guide's button, its name in `data-app-crop-guide-name`)
+Const.attributes.cropSize             // "data-app-crop-size"  (the bar's crop size in the original's pixels)
+Const.attributes.cropCancel           // "data-app-crop-cancel"  (the bar's Cancel, and `data-app-crop-done` its Done)
+Const.attributes.panelUrl             // "data-panel-url"  (the advanced search panel's host in the nav: the route of its form)
+Const.attributes.optionsUrl           // "data-options-url"  (a combobox field of the panel: the route of its options)
+Const.attributes.multiple             // "data-multiple"  (a combobox field that takes several names)
+Const.attributes.maxChosen            // "data-max-chosen"  (the most such a field takes, with the line that says so in `data-max-chosen-message`)
+Const.attributes.optionId             // "data-option-id"  (an option of a combobox field and the chip of a chosen one: the ID a search takes)
+Const.attributes.optionLabel          // "data-option-label"  (the label its chip shows)
+Const.attributes.optionName           // "data-option-name"  (the element that shows the name, in an option and in a chip)
+Const.attributes.optionCover          // "data-option-cover"  (a Person's cover Face in an option, which a new chip copies)
+Const.attributes.chipRemove           // "data-chip-remove"  (the remove button of a chosen filter's chip, in the panel and in a filtered search's results title)
+Const.attributes.filter               // "data-app-filter"  (a chip of a filtered search's results title, its parameters in `data-app-filter-<param>` literals)
+Const.attributes.editFilters          // "data-app-edit-filters"  (that title's Edit, which opens the advanced search panel)
+Const.attributes.filterCount          // "data-app-filter-count"  (the badge of the nav's filter button: the number of filters in force, or in the open panel's form)
+Const.attributes.importId             // "data-import-id"  (an Import's entry in the Import history)
+Const.attributes.importFiles          // "data-app-import-files"  (the `<details>` of an entry's Import files)
+Const.attributes.viewUrl              // "data-app-view-url"  (a part of the Import page that is read again, the history's list, an Import's files or the Watch folders' cards: the route of the view it shows)
+Const.attributes.view                 // "data-app-view"  (a control in such a part: the route of the view it asks for instead)
 ```
 
 A Curation set's root carries `data-opening-pinned-id` and `data-opening-focused-id`, and the
@@ -335,6 +348,12 @@ measurement's `data-clipped-level`, `data-crushed-level` and `data-measurement-b
 stage images are (`curationStagePinned`, `curationStageFocused`), and carries `data-level` (`Const.attributes.loupeLevel`), the level the Loupe writes for its label.
 Each pane's Histogram strip (`curationHistogramPinned`, `curationHistogramFocused`) and Clipping canvas (`curationClippingPinned`,
 `curationClippingFocused`) are addressed by ID as the images and lenses are.
+
+Asset detail's fragment (`#imageDetailView`) carries, read through its dataset, the asset's Edit at its head as JSON
+(`data-app-image-detail-edit`, absent for an asset never edited), whether the account may edit it
+(`data-app-image-detail-editable`) and, for a holder of Edit images, why not (`data-app-image-detail-edit-refusal`), and,
+as a Curation set's root does, the measurement's `data-clipped-level`, `data-crushed-level` and `data-measurement-box`,
+which the Edit panel's Clipping blink reads; the Edit panel's dock writes its side there as `data-edit-dock-side`.
 
 The one exception is `alt-has-no-date` on a result cell, which the controller tests assert on.
 
@@ -393,13 +412,13 @@ Two-layer event bus, both on `document.body`:
   (dialog operations) go on `document`, not `document.body`.
   `htmx:after:settle` fires on the swap target once per swap with `detail.newContent`, the list of
   inserted nodes; `js/listeners/htmx-requests.js` hydrates `data-app-fragment` roots from there.
-- A form that swaps itself with its field focused swaps with `outerHTML settle:0` (the dialogs' validation responses, the
-  Settings form, the person name editor). htmx's settle copies each old element's attributes onto the new element with the
-  same id and restores them afterwards, skipping `value` on the element that has focus, so without `settle:0` the field
-  shows the old value and the text submitted is lost.
-- Search results swap in with `innerHTML settle:0` too (`runSearch`'s default swap, `js/search-results/search.js`): the
-  restore would land after Alpine has initialized the new content and undo what it set, so an `x-show` row with the
-  server's `style="display: none"`, Triage's `#curateQueue`, would hide again after a search.
+- No swap settles: the `htmx-config` meta sets `defaultSettleDelay: 0`. htmx's settle copies each old element's attributes
+  onto the new element with the same ID and restores them afterwards, after Alpine has initialized the new content, so it
+  undoes what Alpine set (an `x-show` row with the server's `style="display: none"`, Triage's `#curateQueue`, hiding again
+  after a search; the Edit panel's tabs, whose IDs are the same from one asset's fragment to the next) and, skipping
+  `value` on the element with focus, leaves a form that swaps itself with its field focused showing the old value. The app
+  runs no CSS transition on a settle. Some swaps spell `settle:0` too (the dialogs' validation responses, the Settings
+  form, the person name editor, `runSearch`'s default `innerHTML settle:0`), which the meta already sets.
 - Attribute inheritance is explicit: every element that issues a request declares its own
   `hx-target` / `hx-swap`. Do not rely on a parent's attributes (add `:inherited` if you ever must).
 - Extensions activate by script inclusion, there is no `hx-ext`. Forms that post JSON carry the
@@ -440,7 +459,7 @@ Two-layer event bus, both on `document.body`:
   Only the import page's nav poll declares it: its next tick tries again, and a server answering 5xx while it restarts
   would otherwise raise an error every 5 s. A request that gets no response at all reaches no `htmx:after:request`
   listener (htmx fires `htmx:error`), so it is never reported there either way.
-- Global config (`defaultTimeout`, `noSwap`) is the `htmx-config` meta tag in
+- Global config (`defaultTimeout`, `noSwap`, `defaultSettleDelay`) is the `htmx-config` meta tag in
   `views/includes/header_common.scala.html`; 4xx/5xx bodies are not swapped, listeners report them.
 - An upload (`js/import/upload-run.js`, run by the `importUploads` component) is **not** an HTMX request: it opens its
   Import, sends each file and closes the Import through the shared axios client, whose `onUploadProgress` drives the
@@ -590,7 +609,9 @@ control that opened it, or the control that stands for it when the open takes it
 for a menu action, and for a control of the open popover dialog, which the new dialog replaces, the control that popover
 dialog would have returned to, so closing Quick view, opened from a Triage scope dialog, returns focus to the explorer's
 trigger), and identity: every displayed open has an `openId`
-(`isModalOpenActive(openId)` guards asynchronous work), and the latest "open request" (any HTMX
+(`isModalOpenActive(openId)` guards asynchronous work; an open over another host counts as displayed while it waits the one
+Alpine tick for that host's release, `activatingOpenId`, so a load that finishes in that tick, a cached image, is still its
+own), and the latest "open request" (any HTMX
 request targeting a host) is tracked so a slow response for an earlier open is cancelled before it
 swaps once the user dismissed or replaced it. An open answered with no content (204, which htmx does not swap) opens
 nothing: `settleModalOpenRequest` clears it as the pending open and calls its `onNoContent` with the request's context,
@@ -610,7 +631,7 @@ back on its filter button (an open listbox or calendar inside it closes alone fi
 crowded-pin panel; and with none of those it is broadcast for such an edit to cancel. An open select picker's Escape
 is left to the picker, which closes itself and not the dialog holding it. General dialogs and Curation ignore backdrop clicks, asset detail closes on them. The general
 modal is centered, 100px from the top, `--modal-content-width` wide (the Location map editor's dialog and Quick view
-declare a wider one); asset detail is fitted by CSS from the size as shown, which `setAssetDetailSize()` sets on its box, in its own host, and fills the viewport while its Detail panel is open (see **Detail panel**); Curation
+declare a wider one); asset detail is fitted by CSS from the size as shown, which `setAssetDetailSize()` sets on its box, in its own host, and fills the viewport while its Detail panel or its Edit panel is open (see **Detail panel**, **Edit panel**); Curation
 fills the window, over the nav, the explorer and the grid, with its title and Exit in its shell (see **Curation**).
 Switching hosts releases the active one in its own reactive flush before the next is activated, and hides the
 popover when it was the active one. Opening any dialog closes an open context menu first, so a
@@ -1662,7 +1683,12 @@ player never shows in the previous frame, shows the image or the player as the t
 (`hidden`, `src` cleared), waits for `load` or `loadedmetadata`, and hands the shown element's size (`naturalWidth`,
 `videoWidth`; the stored size when the element reports none) to the box, which CSS fits into the viewport below the
 toolbar and refits on resize: the stored size is the file header's, while a browser turns an image upright by its EXIF
-orientation. It names the asset shown to the Detail panel under the same request token, and the shown size too. `showMedia` starts a shown Video with `play()`,
+orientation. A still image is shown by the Edit's stage (`js/edit/edit-stage.js`, **Edit panel**), which picks the source by
+the asset's Edit (the original, the Display image, or the Edit drawn on the canvas), fits the box and hands the Detail panel
+the size; `showMedia` awaits its `showImage`. The asset's Edit, whether the account may edit it and why not come with the
+fragment on opening and with the asset's JSON (`edit`, `editable`, `editRefusal`) on a step, and the Edit panel is told of
+each asset as its load starts, before the stage, and again once a still image is shown. It names the asset shown to the
+Detail panel under the same request token, and the shown size too. `showMedia` starts a shown Video with `play()`,
 falling back to muted playback where the browser refuses sound, and interrupted plays (`AbortError`) are ignored; a clip
 shorter than ten seconds loops (`LOOP_MAX_DURATION_SECONDS`). Volume and mute are media-chrome's preferences
 (`localStorage` keys `media-chrome-pref-volume` and `media-chrome-pref-muted`), applied once per open and never written
@@ -1705,7 +1731,7 @@ held key or a modifier left to the browser), the toolbar's toggle after the Face
 `data-app-fullscreen-toggle`, its key in its title, `aria-pressed` following `document.fullscreenElement` on
 `fullscreenchange`; removed where `document.fullscreenEnabled` is false, as the player leaves its own button out) and
 the player's fullscreen button all put the host, `#imageDetailModalContainer`, in fullscreen through `requestFullscreen`,
-so the Detail panel, the Face highlights' layer and the player's control bar come along: `attach` gives each fragment's
+so the Detail panel, the Edit panel, the Face highlights' layer and the player's control bar come along: `attach` gives each fragment's
 `<media-controller>` the host as its `fullscreenElement`, once media-chrome has defined the element (a property set
 before an element is upgraded would shadow the class's accessor), so the player's button requests fullscreen on the host
 and shows the host's state, and its `hotkeys` carries `nof`, so its own `f` is off. Under `:fullscreen` (`core.css`, by
@@ -1724,12 +1750,17 @@ is a grid of three areas as the main page is: the media stage (`#imageDetailStag
 asset's ratio in container units, so the player and the image resize with the panel), the divider (`#detailPanelDivider`, a
 `.divider` with its orientation class) and the panel (`aside#detailPanel`: a header holding the Dock side menu at its end,
 `#detailPanelContent`, which scrolls, and under it the key legend, a `footer.panel-keys` of two lines that stays in view
-while the content scrolls: ← → Previous/Next, F Fullscreen, M Open/Close this panel; P Face highlights, Space Play/Pause.
+while the content scrolls: ← → Previous/Next, F Fullscreen, M Open/Close this panel; P Face highlights, Space Play/Pause,
+and on an edited asset alone \ Original (hold), `data-app-show-original-key`.
 Its fullscreen entry carries `data-app-fullscreen-key` and goes with the toolbar's toggle where `document.fullscreenEnabled`
-is false; Escape is not listed, since what it does depends on what is open). Its shape is the panel's **Dock side**, `data-detail-dock-side` on the fragment with the
+is false; Escape is not listed, since what it does depends on what is open). For a holder of Edit images the grid has two
+areas more, the Edit panel (`aside#editPanel`, area `edit`) and its divider (`#editPanelDivider`, area `egutter`), on the
+side opposite the Detail panel (**Edit panel**): `view_image_detail_modal.css` has one rule per Detail panel side for the
+Detail panel alone, one for the Edit panel alone and one for both open, the stage between them. Its shape is the panel's **Dock side**, `data-detail-dock-side` on the fragment with the
 share as `--detail-panel-share`, one rule per side bounded by `--detail-panel-min-*` and `--detail-stage-min-*` of `core.css`;
 closed (no `data-app-detail-panel-open`), the stage is the whole grid, the panel and the divider take no room and the box is
-fitted to the media as before, while open the box fills the viewport (`core.css`) and the panel takes its share: 30 % of the
+fitted to the media as before, unless the Edit panel is open; while open the box fills the viewport (`core.css`, as it
+does while the Edit panel is open) and the panel takes its share: 30 % of the
 width for a left or right dock, 35 % of the height for top or bottom, until a drag. The panel docks right by default in every
 viewport and never follows the orientation; its picks are the options of `#detailDockSideMenuHost`, a compact choice menu whose
 options carry `data-app-detail-dock-side`, the panel's own attribute, since the explorer's dock takes its picks on the same body.
@@ -1737,6 +1768,9 @@ The dock itself (the side and share written on the fragment, the divider's drag,
 upkeep, the state remembered) is `js/common/dock.js`, the factory the explorer's dock is made from too (see **Explorer dock**),
 configured by `js/search-results/detail-panel.js`, which the composition root creates (`app.detailPanel`) and `fragments/image-detail.js`
 attaches to each fragment (`attach`: the menu's control built first, so the dock finds its trigger, then the layout and the divider).
+The Edit panel, docked opposite, reads the side (`dockSide`) and hears of every side change and every open or close
+(`onLayoutChange`); each panel's bounds leave room for the other and its divider while it is
+open, and the Detail panel is laid out again (`layOut`) when the Edit panel opens or closes.
 
 The panel opens and closes with `m` (`global.js`, dispatching `Const.events.toggleDetailPanel`, wherever focus is except in a text
 field, ignoring a held key or any modifier) and with the toolbar's toggle before the × (`.toolbar-toggle`, `includes/html_common`,
@@ -1756,7 +1790,9 @@ Details a `dl.detail-rows` of the file name, the MIME type, the File Type (the e
 Date Imported, the Folder as shared `.crumbs` in the link color, the albums and the Locations (`Category › Name`) each a link to its search
 (`/r/:repoId?folderId=…`, `albumId`, `locationId`) in a new tab, so Asset detail stays open, the GPS position, the camera rows,
 and, right under the file name, the Curation row of a frame with a set to open ("set of 5", `CurationService.setSizeOf`: its Sequence's frames out of the trash, at least `Const.Curation.MIN_FRAMES`, and the frame not in the trash itself), a link to Curation on that Sequence: a plain click opens it over Asset detail, and closing it comes back (see **Curation**); a click with a modifier or a middle click opens it in a new tab. The dimensions row (`data-app-detail-dimensions`) is written from the shown element's size, which the
-coordinator hands over, so a rotated phone photo reads as shown. What is remembered per browser, under `Const.localStore.assetDetailView`
+coordinator hands over, so a rotated phone photo reads as shown; for a still image it is the upright original's size, which
+the Edit's stage hands over (`setShownSize`) with the Edit it shows, if that changes a pixel, and the row then reads
+"W × H px · edited w × h", the original's size alone while Show original is on. What is remembered per browser, under `Const.localStore.assetDetailView`
 as `{ panelOpen, highlightsOn, dock: { side?, widthShare, heightShare } }`: whether the panel is open (closed by default),
 whether the Face highlights are on (written for `p`) and the dock (its part, written by the dock itself); a selection is never remembered. Space on a control in the panel presses
 it and the arrows on the divider move it, which `global.js` leaves to them.
@@ -1766,7 +1802,11 @@ The **Face highlights** (the glossary's term) are drawn from the People rows' da
 `#faceHighlights`, a layer in the stage that shares the media's cell and box (`view_image_detail_modal.css` gives the three the same
 width, ratio and `grid-area`), so a highlight is placed by fractions of the shown element's natural size (`--face-x`, `--face-y`,
 `--face-width`, `--face-height`), the size the coordinator hands the panel: the detector decodes an image upright by its EXIF
-orientation as a browser does, and a Video's frames are turned as its player turns them, so the two spaces are one. The layer takes
+orientation as a browser does, and a Video's frames are turned as its player turns them, so the two spaces are one. While the
+stage shows an Edit, a box is pushed through the Edit's geometry (`geometry.mapBox`: its four corners through the turn, the
+warp and the crop, their bounding box cut to the edited image, as fractions of it), and a Face whose center the crop leaves
+out is not drawn; while the Crop tool draws the whole frame none is drawn (`setShownSize`'s `highlights` false), and while Show original
+is on they are unmapped. The layer takes
 no pointer events and paints above the player, so the control bar stays usable; a highlight (`.face-highlight`, built by
 `js/search-results/face-highlights.js`) is a `button` with `aria-pressed`, a `--border-hairline` outline in `--theme-neutral-1` with
 `--face-highlight-radius` corners (`core.css`) over a transparent box, `--border-heavy` while selected, and its badge
@@ -1857,7 +1897,8 @@ corrections module answers a move with `PUT /htmx/asset/r/:repoId/face/:faceId/p
 `sourcePersonId`, which the server checks since the Face may have moved since the section was rendered; all three go
 through one `send`, one request per Face, with the same refusal and stale handling. The X announces
 `Const.events.faceChangeCancelled`, and the panel clears the selection and returns focus to the row. Escape with the listbox open closes it alone: `global.js` calls
-`closeOpenFaceCombobox` before `closeModal`. The next Escape clears the selected Face (`clearSelectedFaceRow`, whatever the selection's source, focus to its row), so the row's actions and its highlight go, and only then does Escape close Asset detail. `m` and `p` in the input are the
+`closeOpenFaceCombobox` before `closeModal`. The next Escape, once the Edit panel's History popover and its Crop tool are closed
+(each of which an Escape closes or cancels first, **Edit panel**), clears the selected Face (`clearSelectedFaceRow`, whatever the selection's source, focus to its row), so the row's actions and its highlight go, and only then does Escape close Asset detail. `m` and `p` in the input are the
 field's, as in every text field.
 
 A correction answers the People section (`htmx/detail_panel_people`, 200), which `detail-panel.js` (`afterEdit`) swaps in
@@ -1897,6 +1938,170 @@ results back to the whole repository, as for a deleted viewed Person.
 The style guide's Panels & layout section holds a specimen of the actions under a selected row, of the combobox with
 its listbox, and of a nameless Person's combobox with the "This face only" switch, an armed option, a merge option and a
 "· this face" one.
+
+**Edit panel** — Asset detail's other docked panel (the glossary's Edit panel, Edit, Crop tool, Display image and Show
+original; the server's side is **Image edits** in `altitude/AGENTS.md`, and the Edit's geometry, math and two renderers
+[docs/image-edits.md](../../docs/image-edits.md)), in which a holder of Edit images changes a still
+image's Edit. `includes/edit_panel` (`aside#editPanel`, `x-data="editPanel"`, styled by `static/css/includes/edit_panel.css`)
+and its divider, `#editPanelDivider`, are in Asset detail's fragment for a holder of Edit images alone, as are the Edit's
+tools over the stage, `includes/edit_stage_tools` (`#editSplit`, Before/after, and `#cropLayer`, the Crop tool), and the
+Clipping blink's `canvas#editClipping`; the stage's `canvas#editCanvas` is there for every viewer. `js/edit/edit-panel.js` is
+the coordinator (`createEditPanel`, `app.editPanel`, which `fragments/image-detail.js` attaches to each fragment): open or
+closed, the dock, the stage while the panel draws, each asset's session, the Crop tool and the keys' handlers. The `editPanel`
+Alpine component (`js/alpine/components/edit-panel.js`) holds the controls and connects to it as it starts
+(`connectEditPanelView`): the coordinator syncs a snapshot into it on every change (`sync`), and the component asks it for
+every change, worked out from the Edit shown by `js/edit/adjust.js` (pure functions of an Edit and the upright size); the
+Edit, its History and the renderer stay in the coordinator's closure, out of the reactive object, as Curation keeps its heavy
+data.
+
+- **Open or closed.** `e` (`Const.events.toggleEditPanel`) and the toolbar's toggle open and close it
+  (`.toolbar-toggle[data-app-edit-panel-toggle]`, `fa-sliders-h`, "Edit (E)", first of the toolbar's toggles, rendered by
+  `includes/html_common` for a holder of Edit images alone). Whether it is open is remembered per browser
+  (`Const.localStore.assetDetailView`'s `editOpen`) and written on the fragment as `data-app-edit-panel-open`, from which the
+  stylesheet lays the grid out. On an asset no Edit may change (a Video, an animated image or an asset in the trash, the
+  server's `editRefusal`; an original the browser cannot decode; a browser without WebGL2) the toggle is `aria-disabled`
+  with the reason as its title, so a keyboard or a screen reader still reaches it, and its press does nothing, while `e`
+  says the reason in the snackbar; open on such an asset (remembered open, or a step to it), the panel says why
+  (`.edit-refusal`) and draws nothing. Closing it with focus inside hands focus to the toggle.
+- **The dock.** A third dock of `common/dock.js` (**Explorer dock**), with no Dock side of its own: `followSide` gives it the
+  side opposite the Detail panel's, read on every layout, and the Detail panel's `onLayoutChange` lays it out again when that
+  one moves, opens or closes; it writes `data-edit-dock-side` and `--edit-panel-share` on the fragment. It takes 28 % of the
+  width docked left or right and 42 % of the height docked top or bottom until a drag (`DEFAULT_WIDTH_SHARE`,
+  `DEFAULT_HEIGHT_SHARE`), bounded by `--edit-panel-min-width` and `--edit-panel-min-height` (registered as lengths) and by
+  what the stage, the Detail panel and its divider need, and remembers its shares as `editDock`; its divider drags and steps
+  as every dock's does.
+- **Layout.** A header (Edit, Undo, Redo, History, Before/after, Reset all), a body that scrolls (the Histogram, the four
+  tabs and the shown section), the commit row (the save status and Revert to original) and the key legend
+  (`footer.panel-keys`: E Close, C Crop, \ Original (hold), Ctrl+Z Undo, and "Double-click a slider to reset it"). Docked
+  top or bottom, the commit row joins the header, the Histogram sits at the left of the tabs (`--edit-column-width`), the
+  section's controls flow into CSS columns as tall as the panel that scroll sideways, a heading kept with what follows it,
+  and the keys are left out.
+- **Tabs and sections.** Crop & rotate, Light, Color and Effects (`recipe.js`'s `SECTIONS`), an ARIA tablist (the arrows,
+  Home and End move between the tabs), the tab shown kept for the page's life; a section that changes the picture has a dot
+  in its tab (`.edit-dot`) and a Reset beside its heading. Crop & rotate: Crop and Level, rotate left and right, flip
+  horizontally and vertically, the aspect chips with the orientation's swap, the crop's size in the original's pixels,
+  Straighten with its Auto, the two Perspective sliders and "Keep the crop inside the image". Light: Exposure, Contrast,
+  Highlights, Shadows, Whites, Blacks, Gamma and the tone curve. Color: Temperature, Tint, Vibrance and Saturation. Effects:
+  Sharpen, Clarity, Vignette and Grain.
+- **Sliders.** `.edit-slider` (**Forms**), rendered from `recipe.js`'s `SLIDERS` (each slider's range, step, label, how its
+  value is written, as the server's step labels write it, and its track): the label row with the value's
+  `input[type=number]` at its end over a native range. The track is filled from its left end to the thumb
+  (`--edit-slider-fill`, which the component writes on the element), or, for a slider whose `SLIDERS` entry names a
+  `track` (Exposure, Temperature, Tint, Vibrance, Saturation), is that slider's gradient, the component setting
+  `--edit-slider-track` on the element to its `--edit-track-*` token; a changed slider's label is bold (`.changed`). A drag is shown at
+  once and saved as one step on release; the range's keys and a click on its track are saved once they rest (`commitSoon`:
+  400 ms for keys, so a held key is one step, and 300 ms for a click, so a double-click's reset makes no step in between);
+  Enter in the number field sets it as one step, and Escape or leaving the field puts its value back; a double-click on the
+  label or the track resets it. A drag applies each value to the Edit it started from (`adjust.sliderDrag`), so a crop that
+  shrank on the way grows back as Straighten returns.
+- **The crop's rules** (`adjust.js` over `geometry.js`, written out under **The crop's rules** in
+  [docs/image-edits.md](../../docs/image-edits.md)): while the Edit keeps the crop inside, its corners stay inside the
+  image's outline and a gesture stops there; a fitted crop re-fits to the geometry and one the user set shrinks only as
+  much as it must; a quarter turn and a flip carry the crop into the new frame. The aspect chips are a `.toggle-group`
+  (`.edit-aspects`): Original, Free, 1:1, 5:4, 7:5, 3:2 and 16:9, each labelled in the lock's orientation (2:3 while it
+  is portrait), with the swap button (X) beside the subhead.
+- **The tone curve.** A canvas (`.edit-curve`, `role="application"`, square, at most `--edit-curve-max-size`) on the field's
+  sunken fill, the luminance Histogram drawn behind the curve, in the colors its rule gives it (the curve and its points
+  `color`, the grid `border-color`, the Histogram `outline-color`), so the script writes none. A click adds a point (one
+  nearer than `CURVE_ADD_DISTANCE` in x takes that point instead), a drag moves one within its neighbours, a drag well off
+  the box (`CURVE_REMOVE_MARGIN`) or a double-click removes an inner one, and the release is one step. With the keys the
+  arrows move the point by 0.01 (Shift, 0.05), saved once they rest; [ and ] pick the point before or after; + or Insert
+  adds one halfway to the next, on the curve; Delete or Backspace removes an inner one. Its subhead has a Reset.
+- **The Histogram and the Clipping blink.** The edited image's Histogram as drawn, Curation's drawing (`common/histogram.js`,
+  `channelPaths`, over the bins `renderer.readHistogram` reads from each drawing at 256 px on its long edge): red, green and
+  blue shapes and a luminance line on a backdrop dark in either theme, `--edit-histogram-height` tall, with the crushed and
+  blown fractions in its bottom corners (`percentLabel`, `--info-color` and `--error-color`). The whole Histogram is a button,
+  the Clipping blink's switch (`aria-pressed`, the success edge while on, off on each new fragment): a moment after the
+  drawings rest (150 ms) the canvas's clipping is read (`common/clipping.js`'s `readClipping` over the canvas, at the levels
+  and box of the fragment's `data-clipped-level`, `data-crushed-level` and `data-measurement-box`), the fractions always and,
+  while the blink is on, the mask on `#editClipping`, painted in the colors its rule gives it (`color` the blown highlights,
+  `border-color` the crushed shadows) and blinking at 1 Hz in steps, steady under reduced motion. Nothing is read while
+  Before/after or the Crop tool puts more than the Edit's result on the canvas, and the mask goes with the canvas.
+- **The header.** Undo and Redo, disabled with nothing to undo or redo; the History (`#editHistory`, a native
+  `popover="auto"` anchored under its button), the steps newest first, each its label, its author when the viewer did not
+  make it (`mine`) and its time in the viewer's zone and locale, the head marked (`aria-current`) and the Original last, a
+  click jumping to the step; Before/after (`fa-columns`), which shows `#editSplit` over the canvas: Before, the geometry
+  alone (`renderer.renderBefore`), left of its divider and After right, labelled in the top corners, the divider
+  (`#editSplitHandle`, a separator) dragged with the pointer or stepped 5 % with the arrows; and Reset all, one step.
+- **The session** (`edit-session.js`, one per asset, DOM-free: the requests are the coordinator's). A change is shown at once
+  and saved as one step behind the writes already queued, each write carrying as its `base` the head the one before it
+  answered; Undo, Redo and a jump move the head on the server and show the Edit it answers with, Undo and Redo picking their
+  step when their turn comes, so a change still on its way is the one undone. While a head move is queued or on its way
+  (`isMoving`) no change is taken, since it would be built on the Edit before the move. The answer of the last write is
+  adopted whole: the head, the Edit at it and the steps with the server's labels. A 409 drops the writes still queued,
+  adopts the state it carries and says "This photo was changed elsewhere; showing its latest Edit"; a failure drops them
+  too, reads the state again and says "Could not save the Edit" ("Could not read the Edit's History" for the read). The
+  commit row's status (`SaveStatus`, a `role="status"`): "Saving…", "Saved · the original is untouched", "Could not save",
+  "Changed elsewhere · showing its latest Edit". A session still saving when Asset detail steps away finishes in the
+  background, and stepping back picks it up; an idle one is forgotten, so the next visit reads the History afresh. Once a
+  session is idle after a save (`onSaved`), the stage's badge and Show original's toggle follow the new head at once, and
+  the render the server queues is waited for (`render-status.js`: the status route every second, for up to a minute, until
+  the head is rendered, giving up after three failed reads in a row), after which every grid cell of the asset points at
+  the new Preview (`swapGridPreviews`: its `data-src`, and its `src` while it shows its image) and the stage, once the panel
+  is closed, shows the Display image.
+- **The stage** (`js/edit/edit-stage.js`, `createEditStage`, `app.editStage`). A still image's media box holds in one grid
+  cell the `<img>`, `#editCanvas`, `#editClipping`, `#faceHighlights` and the Edit's tools. The source: the original in the
+  `<img>` for an asset that is not edited; the Display image (`displayUrl` of `common/content-urls.js`,
+  `/content/r/:repoId/display/:id?v=<rev>`) in the `<img>` for an edited asset whose head is rendered at a revision, its
+  natural size the edited aspect; the canvas, drawn by the WebGL2 renderer (`renderer.js`) from the original, fetched once
+  per asset and decoded upright (`createImageBitmap` with `imageOrientation: "from-image"` and `colorSpaceConversion:
+  "none"`), for an edited asset whose render is pending or that the server could not render, and for every asset while the
+  panel is open (`setEditing`, then `setLive` with the panel's Edit and the renderer's options: `wholeFrame` for the Crop
+  tool, `split` for Before/after). A canvas that cannot draw (no WebGL2, an original the browser cannot decode) falls back to
+  the original, and a Display image that does not load to the canvas. The canvas is drawn at the device pixels of the box it
+  is shown in, at most the size of what it shows, from a source fitted to that size, drawn again and refitted once the
+  stage's size settles (150 ms), and shown once drawn, so no earlier drawing shows in a new box; a lost WebGL context is
+  rebuilt on `webglcontextrestored` and the last drawing made again. Whatever is shown, the box is fitted to it
+  (`setAssetDetailSize`) and the Detail panel handed the upright size with the Edit shown (`setShownSize`, **Detail
+  panel**): the decoded original's, or, for the Display image, the server's (`uprightWidth`, `uprightHeight`), since the
+  stored size is the file header's. Every presentation has a token, so one overtaken changes nothing, and `settled` waits
+  for the latest.
+- **Show original**, on an edited asset, for every viewer, Guests included. `\` held shows the original while it is held:
+  `global.js` announces its press (its repeats swallowed) and its release, wherever focus has gone and whatever modifier is
+  held by then (`Const.events.showOriginalHeld`), and the window losing focus releases it too; the press is the key that
+  types `\` on any layout, with Shift, Option or AltGr where it needs one, never with Cmd or a plain Ctrl. The toolbar's
+  toggle (`data-app-show-original-toggle`, `fa-clone`, "Show original (hold \)", after the Edit toggle) shows it until it is
+  pressed again, Asset detail steps to another asset, the Edit panel opens or a change is drawn from it. While it is on, the
+  `<img>` holds the original at the upright size, the Face highlights are unmapped, the Dimensions row has the original's
+  size alone and the title's badge (`.edit-badge`, `data-app-edit-badge`) reads "Original" in place of "Edited". The
+  toggle, the badge and the key legend's `\` entry are shown on an edited asset alone.
+- **The Crop tool** (`js/edit/crop-tool.js`). C (`Const.events.toggleCropTool`, with the panel open) or the Crop button
+  opens it on the Edit shown, and the fragment carries `data-app-crop-tool-open`: the canvas draws the whole warped frame,
+  with a gutter around it (`--edit-crop-gutter`) where a drag turns the image, `#cropFrame` lies over it at the canvas's box
+  and `#cropRect` is the crop in it, placed by fractions of the frame, dimming the rest of the stage (`--crop-dim-shadow`),
+  with its guide (an SVG: Thirds, Grid, Golden ratio, Diagonals and None, cycled by O or the bar's button, Thirds until
+  another is picked) and eight handles (`.crop-handle` with the classes of the edges it moves). The gestures are
+  interact.js's, as vendored: `draggable` on `#cropRect` moves the crop; `resizable` on it, by its handles, resizes it, with
+  the `aspectRatio` modifier at the lock's ratio (none for Free) and `restrictSize` at the narrowest crop; `draggable` on
+  `#cropLayer`, which covers the stage, outside the crop and the bar, turns the image by the change of the pointer's angle
+  around the crop's center (Straighten), under a rotate cursor. interact.js restricts to upright rectangles alone, so each
+  listener turns the rectangle it proposes into frame fractions and, while the Edit keeps the crop inside, stops it at the
+  outline (`geometry.limitTransition`) before the Edit takes it; `styleCursor(false)` leaves the cursors to the stylesheet,
+  and the layer, the crop and the handles are `touch-action: none`. `#cropRect` is focusable, and the arrows nudge it by a
+  pixel of the frame (ten with Shift); X swaps the aspect's orientation. The **Level tool** (the Level button, which opens
+  the Crop tool if it is closed): while it is on, a drag on the layer draws a line (`#levelLine`, `level-tool.js`) and the
+  crop takes no pointer, and the release sets Straighten so the line becomes level or plumb, whichever is nearer
+  (`adjust.levelStraighten`); a line under `LEVEL_MIN_LENGTH` (12 px) is a click and sets nothing. The floating bar
+  (`#cropBar`, `role="toolbar"`, on the menus' frosted surface) holds the guide, the crop's size, Cancel (Escape) and Done
+  (Enter, or C). Every change made while the tool is open (its gestures, a slider, a button) joins its session, shown and
+  not saved, and Undo, Redo and Before/after are off; Done saves the session as one step, Cancel shows the Edit the tool
+  opened on again, and stepping to another asset, closing the panel or closing Asset detail with the tool open is Done. An
+  Edit the session adopts meanwhile (a conflict's) closes the tool.
+- **Auto.** Straighten's Auto asks the server (`GET …/auto-straighten?recipe=`, the Edit shown) and sets Straighten to its
+  angle as one step; when no lines agree on one (`angle` null) Straighten stays and the snackbar says "No straight lines to
+  level the image by".
+- **Keys.** In Asset detail and never in a text field (`isTextEditingTarget`, which counts no slider, checkbox or
+  button-like input, so the keys work on the panel's controls): `e`, `c`, Ctrl/Cmd+Z, and Ctrl/Cmd+Shift+Z or Ctrl+Y, each
+  read by `global.js`, which dispatches its `Const.events` event (`toggleEditPanel`, `toggleCropTool`, `undoEdit`,
+  `redoEdit`) that `listeners/edit.js` hands to the coordinator; Undo and Redo act while the panel is open and not in the
+  Crop tool. In the Crop tool `o`, `x` and Enter (`cycleCropGuide`, `swapCropAspect`, `cropDone`; Enter on a button or a link
+  presses that instead). Escape, in Asset detail, closes the History popover alone, then cancels the Crop tool, ahead of a
+  selected Face and of closing Asset detail. The arrows and Space are left to focus in `#editPanel`, on `#editPanelDivider`,
+  on `#editSplitHandle` and in `#cropLayer`, as in the Detail panel, so a slider steps and the crop nudges where Asset
+  detail would step.
+
+The style guide holds `.edit-slider`, plain and with a gradient, in Forms, and in Panels & layout an Edit panel strip (the
+Histogram, the tab row, the aspect chips and the key legend), the Edit and Show original toggles and the "Edited" badge.
 
 **Curation** — The modal where the user keeps the best frames of a Curation set and recycles the rest. What sorts a set and
 what its outcome writes are under **Sequences and Image quality** in `altitude/AGENTS.md`, and the terms are the glossary's. It
@@ -2037,8 +2242,9 @@ by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
   blue (`HISTOGRAM_CHANNELS`), each bin over the tallest bin of the four, so the channels share one scale and the tallest reaches
   the strip's top (`HISTOGRAM_TALLEST`). `showSet` keeps the string on the frame (`frames[].histogram`), and `histogramPaths`
   decodes it (`atob`) into the four paths the first time the frame is on the stage (`histogramPathsOf`, closure state by frame ID,
-  cleared with the set): `stepsOf` walks a channel's bins as steps with no gap, `areaPath` closes them down to the baseline for a
-  color and `linePath` leaves them open for the luminance. The svg is `isolation: isolate` and the three colors are
+  cleared with the set) through `common/histogram.js`, which the Edit panel's Histogram shares (`channelPaths`): `stepsOf`
+  walks a channel's bins as steps with no gap, `areaPath` closes them down to the baseline for a color and `linePath` leaves
+  them open for the luminance. The svg is `isolation: isolate` and the three colors are
   `mix-blend-mode: screen` at `fill-opacity: 0.6`, filled with `--histogram-red`, `--histogram-green` and `--histogram-blue`
   (`core.css`, the pure primaries), so where two overlap the strip reads yellow, cyan or magenta and where the three do a neutral;
   the luminance line is `fill: none` with a 1px stroke of the strip's color at full alpha (`stroke: hsl(from currentColor h s l /
@@ -2613,8 +2819,10 @@ bin, where `hasExplorerDock()` is false) the module owns both. The mechanics are
 (`createDock`) taking the storage key, the pick attribute, the layout attribute and share property, the container, the
 size reference, the divider, the defaults (the side and the two shares), the minimums and whether the default side follows
 the orientation; the explorer's module is its configuration (`data-dock-side` and `--explorer-share` on `<html>`, the side
-by the viewport, 25 % and 35 %, the header's min-content as the width's floor), and the Detail panel's is the other (see
-**Detail panel**). The explorer's dock: it re-docks on the orientation query's `change` while
+by the viewport, 25 % and 35 %, the header's min-content as the width's floor), the Detail panel's is another (see
+**Detail panel**), and the Edit panel's the third, which takes no pick: in place of a pick attribute it gives `followSide`,
+the side it sits on, read whenever it is laid out, so nothing of a side is remembered and no Dock side menu is kept (see
+**Edit panel**). The explorer's dock: it re-docks on the orientation query's `change` while
 nothing is picked, takes a pick from any `[data-app-dock-side]` click on the page (`setDockSide`), and dispatches
 `Const.events.dockSideChanged` on `document.body` after every side change, with the side in `detail.side`, for
 whatever lays itself out by the side: the People tab's Split view stacks its panes under a left or right dock and sets
@@ -2900,6 +3108,9 @@ builds or binds a control. Where each control follows:
   for an asset in the trash; the Change combobox (`js/alpine/components/face-combobox.js`) merges a nameless Person into a
   named one only for a holder of Organize, and otherwise moves this Face alone ("· this face"); its Curation row
   (`htmx/detail_panel`) for a Curate Permission.
+- Asset detail: the Edit toggle (`includes/html_common`), the Edit panel, its divider and the Edit's tools over the stage
+  (`htmx/view_image_detail_modal`) for Edit images; Show original's toggle and the "Edited" badge are every viewer's, a
+  Guest's included, on an edited asset.
 - Curation is a Curate Permission's, as its routes are: every way in (Triage's Curate button in `includes/search_results`,
   a Sequence header's in `htmx/results_grid_grouped`, which with Curate own alone needs two frames the account owns,
   `CurationService.curatableFrameCounts`, Curate Selected (in Browse with Recycle too), the Detail panel's row, the `?curate=` address,
@@ -2994,11 +3205,12 @@ and, at 0.84, a floating surface (the popover dialog, an open select's picker); 
 button or a quiet control, a tab at rest, a disabled entry, a muted label; 4.5:1 on the page and on the secondary
 surface); `-4` text on the app's own surfaces, the text typed into a field included. The dark side of the scale is not
 in lightness order, since `-1` stays light there, and `-1` and `-4` hold one value in the dark theme by design; the
-style guide compares both sides and flags neither. A rule writes a theme color by its token
+style guide compares both sides and flags neither. One role stands outside the groups: `--theme-magenta`, the magenta end
+of the Edit panel's Tint track, its one use, which no other role could be. A rule writes a theme color by its token
 (`color: var(--theme-neutral-4)`, `border: var(--border-hairline) var(--theme-neutral-3)`); no token aliases a theme color under
 another name or mixes one at a percentage outside `:root`. Three kinds of color stand apart, with literal pairs of their
-own: the channel colors of Curation's Histogram (`--histogram-red`, `--histogram-green`, `--histogram-blue`, the pure
-primaries, which its strip draws as light so that their overlaps read yellow, cyan, magenta and neutral; the strip is dark
+own: the channel colors of the Histogram, Curation's and the Edit panel's (`--histogram-red`, `--histogram-green`,
+`--histogram-blue`, the pure primaries, which each strip draws as light so that their overlaps read yellow, cyan, magenta and neutral; each strip is dark
 in either theme, so each pair holds one color); the four semantic colors (`--success-color`, `--warning-color`, `--error-color`, `--info-color`: green, amber,
 red, and a blue cooler than the primary so a notice does not read as a selection), the text, icon and edge of a
 status, each at least 4.5:1 on the page surface, which a rule writes directly too (an unnamed person's name and the
@@ -3037,7 +3249,8 @@ a hairline around a chip; `--panel-border-color` on a hairline around a chrome p
 a list; `--theme-primary` on the heavy focus ring. A token holding a shadow keeps its offsets with its color, which is
 a theme color or `--shadow-color` at an alpha: `--drop-shadow`, the one shadow under a modal dialog, a panel, a pin or
 the checkmark; `--float-shadow`, the ink at 0.45 at 12px/32px, the one shadow under a floating surface;
-`--field-focus-shadow`, a 2px spread of `--theme-accent` at 0.15, a focused field's ring; `--text-shadow`, whose light
+`--field-focus-shadow`, a 2px spread of `--theme-accent` at 0.15, a focused field's ring; `--crop-dim-shadow`, a 200vmax
+spread of the ink at 0.6 around the Crop tool's crop, which dims the stage outside it; `--text-shadow`, whose light
 side is the ink at alpha 0 since a dark halo has no place under dark text; and `--box-shadow`, `--theme-neutral-4` at 0.07, the light line under a panel's edge. Three more draw the buttons:
 `--sheen-shadow`, an inset 1px line of `--theme-neutral-1` at 0.08 along a button's top edge, on every button and
 over `--float-shadow` on a floating surface;
@@ -3078,8 +3291,13 @@ triage and trash views declare `--view-tint`), and `background` reads it. The fi
 `--chip-fill` (`linear-gradient(in oklch 180deg, …)`, the primary at 0.12 down to `--theme-neutral-2`), declared by one
 rule of `core.css` for the filter chip and for a chosen name's chip in the advanced search panel,
 and the filter chip's hover lays `--theme-neutral-1` at 0.08 over it as a one-color gradient (`linear-gradient(<color> 0 0)`).
-The SVG data URI of `static/css/includes/search_results.css` (the check of a selected asset) carries its fill as a
-literal, because a data URI cannot read a token.
+The Edit panel's gradient tracks are `:root` tokens of stops (`--edit-track-exposure`, `-temperature`, `-tint`,
+`-vibrance`, `-saturation`, which a slider draws when the component sets `--edit-slider-track` on its element to one): what each end of the slider does to the picture, drawn from
+the palette (the ink to `--theme-neutral-1` for Exposure, `--info-color` to `--warning-color` for Temperature,
+`--success-color` to `--theme-magenta` for Tint, the semantic colors for Vibrance and Saturation), `--theme-neutral-3` where
+the slider is 0. The SVG data URIs of `static/css/includes/search_results.css` (the check of a selected asset) and of
+`static/css/htmx/view_image_detail_modal.css` (the Crop tool's rotate cursor, its light and dark strokes) carry their colors
+as literals, because a data URI cannot read a token.
 
 **Style guide** — `views/style_guide.scala.html` is a dev-only page (`/style-guide/r/:repoId`,
 `StyleGuideController`; the nav shows its button only in dev) with a section per foundation (colors, typography, spacing, borders and shadows, panels, icons)
@@ -3104,8 +3322,8 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   the one the alpha slider declared inline) and a "From --a, --b" line naming them; any other shows the value it
   resolves to. A token's group comes from its name, and a length's also from what it references. The colors are
   **Theme colors** (`--theme-*`: the brand colors, the neutral scale and the on-colors, each a literal hex pair),
-  **Status, shadow and channels** (the four semantic colors, their fills, `--shadow-color` and the Histogram's three channel
-  colors) and **Derived**
+  **Status, shadow and channels** (the four semantic colors, their fills, `--shadow-color` and the three channel colors of the
+  Histogram, Curation's and the Edit panel's) and **Derived**
   (the veils, such as `--scrim-color`, `--asset-detail-backdrop-color`, `--popover-background-color` and
   `--field-background-color`, each a theme color or `--shadow-color` at an alpha). The lengths are
   **Scale** (`--space-*`), **Roles** (a length referencing a step, which its From line names) and **Sizes** (any other
@@ -3126,9 +3344,15 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   rows (`htmx/curation_queue.css`), a done one and a current one side by side in `.sg-curation-queue`, are in Badges & states,
   where `.sg-curation-bundle` gives the row the rail's width, and the Detail panel's sections (`htmx/detail_panel.css`: a People
   row, selected and not, Change and Remove under a selected row, the Change combobox with its listbox and its Suggested group, and a nameless Person's combobox with its "This face only" switch and an armed, a merge and a "· this face" option,
-  Details rows with the crumbs), the toolbar toggles and the Face highlights
+  Details rows with the crumbs), the toolbar toggles (the Detail panel's and the Face highlights', the Edit toggle pressed and
+  `aria-disabled`, Show original's) with the "Edited" badge (`.edit-badge`, `core.css`), and the Face highlights
   (`htmx/view_image_detail_modal.css`: a highlight and its badge over a stand-in for a photo, `.sg-face-highlights`) are in Panels &
-  layout, in `.sg-detail-panel`, as are the People tab's cells (`htmx/people.css`: a named person's and a hidden Unmatched
+  layout, in `.sg-detail-panel`, as are the Edit panel's strip (`includes/edit_panel.css`: the header's tools, the Histogram on
+  its button, the tab row with a section's dot, a section's heading with its Reset, the aspect chips with the crop's size, the
+  commit row and the key legend), hand-written to `includes/edit_panel`'s markup inside an element with the panel's ID,
+  `#editPanel`, which its rules are scoped by, with no `x-data`, so nothing binds, in `.sg-edit-panel`, a box that is no grid so
+  the panel's `grid-area` names nothing, its Histogram's paths a sample the `styleGuide` component draws with the real
+  `channelPaths` (`editHistogram`), and the People tab's cells (`htmx/people.css`: a named person's and a hidden Unmatched
   person's, each with its rename pencil, which hover or focus reveals), hand-written to `htmx/people_list`'s markup
   inside an element with the tab's ID, `#people`, which the rules are scoped by, with `--face-box` set on it as the tab's
   shell sets it; the cells carry no `drag-drop` or `dropzone` class and no search trigger, so nothing binds to them, and
@@ -3145,16 +3369,20 @@ starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/j
   its rules are scoped by, its comboboxes and calendars live over this Library's names and its Search stopped by the
   wrapper, which takes the form's submit on its way down, and beside it a static listbox with a marked match, the
   active option, a path and the line of a full field; the navigation specimen's quick search holds the filter button
-  with a badge. Specimens
+  with a badge. Forms ends with `.edit-slider` (`core.css`): a changed plain slider and one slider per gradient track,
+  each with `--edit-slider-track` set inline to its `--edit-track-*` token as the component sets it, each a column of a
+  section wide (`.sg-edit-sliders`); a gradient is no kind a token card draws a sample of (the five are listed, as
+  text, under the Token audit's Other tokens), so the specimen is where the tracks are seen. Specimens
   use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements
   under `body.style-guide`) only lay the page out, from the `:root` variables.
   Three more things keep the page current:
   - A changed size, font, or icon set updates the values the specimens state in text.
   - `core.css` comments its boxed section headings (`/* NAVIGATION */` and the like) and, in a line or two, a rule
     whose selector or values need a reason (the quick search form, the field and its focus rule, the popover dialog's
-    placement), pointing to this guide for the detail; it comments no `:root` token. A token, and what a rule draws,
-    is documented in this guide and in the style guide's prose, never beside its declaration, so the two cannot
-    drift. The guide would show a comment directly above a `:root` token as its note; `core.css` has none, by design.
+    placement), pointing to this guide for the detail. A `:root` token may carry a short note in a comment directly
+    above it, which its card in the style guide shows as its note (the Edit panel's sizes, the view band's width, the
+    gradient tracks); what a token is for in full, and what a rule draws, is documented in this guide and in the style
+    guide's prose.
   - A new section also needs its `#styleGuideToc` link and its ID in `StyleGuideControllerTests`.
 - **Live specimens:** an Add button and a ⋯ menu built with `buildModalTriggerCtrl` / `buildContextMenuCtrl`
   (`initStyleGuide()`, after the app has started: no template, so they are the explorer's own markup); the menu has a
@@ -3271,7 +3499,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/http/client.js` | shared axios client for non-HTMX requests (a 401 sends the window to the login; `getHttpErrorMessage` says a JSON refusal's reason); use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
 | `static/js/models/folder.js` | DOM wrapper around folder tree nodes (`Folder.find(id)`); owns branch expansion (`expand`, `expandAll`, `collapse` with descendant reset) |
 | `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
-| `static/js/common/modal.js` | owner of the four dialog hosts: `openModal`, `closeModal`, open identity (`isModalOpenActive`), the element that requested an open (`getModalOpenSource`), the control focus returns to (`openerOf`), an open answered 204 (`settleModalOpenRequest`'s `onNoContent`), the popover dialog's anchor and its own dismissals (`bindPopoverHost`), `setAssetDetailSize` (the size as shown, which the box is fitted from); a closing host leaves fullscreen |
+| `static/js/common/modal.js` | owner of the four dialog hosts: `openModal`, `closeModal`, open identity (`isModalOpenActive`, an open waiting for its host counted), the element that requested an open (`getModalOpenSource`), the control focus returns to (`openerOf`), an open answered 204 (`settleModalOpenRequest`'s `onNoContent`), the popover dialog's anchor and its own dismissals (`bindPopoverHost`), `setAssetDetailSize` (the size as shown, which the box is fitted from); a closing host leaves fullscreen |
 | `static/js/common/video-playback.js` | the asset-detail Video beyond its element: `unloadVideo`, and the Media Session (`describeInMediaSession`, `clearMediaSession`) |
 | `static/js/common/anchored-panel.js` | viewport placement of the popover menus and View settings (the popover dialog is placed by CSS anchor positioning) |
 | `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
@@ -3313,7 +3541,16 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/htmx/rename_person_dialog.scala.html` | The popover dialog of a People cell's rename pencil: one field holding the name, focus returned to the pencil of its pane, `PERSON_NAME_EDITED_EVENT` on success, the error row or the offer to merge on a refusal |
 | `views/includes/person_name_taken.scala.html` | The error row of a rename to a name another live person holds, with its "Merge into X…" button; rendered by the inline name editor and the rename dialog, each naming the row (`errorId`) and supplying the `x-data` scope its button needs; the dialog also passes its `pane`, which the offer sends to the Merge people modal |
 | `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read, and whether the Person is named and their number of assets, which the combobox reads; under each row, for a live asset, Change and Remove and the Change combobox's markup, with the "This face only" switch for a Person with no name, its listbox rendering the Suggested group and then the list from one option block, each option with its armed label and suffix; a correction's response, its root carrying the result message, any deleted Person and, after a merge, the merged Person and the destination) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
-| `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu; its grid and the highlights' look are `static/css/htmx/view_image_detail_modal.css` |
+| `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the Edit's canvas, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu, and for a holder of Edit images the Edit panel, its divider and the Edit's tools over the stage; the asset's Edit, whether it may be edited and why not, and the measurement's clipping levels as data attributes; its grid, the highlights', the Crop tool's and Before/after's look are `static/css/htmx/view_image_detail_modal.css` |
+| `views/includes/edit_panel.scala.html`, `static/css/includes/edit_panel.css`, `static/js/alpine/components/edit-panel.js` | The Edit panel (**Edit panel**): its header, Histogram, tabs and sections (each slider a `.edit-slider` from `recipe.js`'s specs), commit row and keys; its look, docked on the side or top and bottom; and the `editPanel` component over the coordinator (the tabs, the sliders, the aspect chips, the curve editor, the History's popover, `closeOpenEditHistory` for Escape) |
+| `views/includes/edit_stage_tools.scala.html` | The Edit's tools over Asset detail's stage: Before/after's divider (`#editSplit`) and the Crop tool (`#cropLayer`: the frame, the crop with its guide and handles, the Level line, the floating bar) |
+| `static/js/edit/edit-panel.js` | `createEditPanel`: the Edit panel's coordinator (open or closed, `toggle({ fromKey })`, the dock opposite the Detail panel, the stage while it draws, each asset's session and the wait for its render, the commits, `commitSoon` and `flushCommit`, the Crop tool's session, Before/after, the Histogram and the Clipping blink of the canvas, Auto) and `connectEditPanelView` for its component |
+| `static/js/edit/edit-stage.js` | `createEditStage`: Asset detail's stage for a still image (the original, the Display image or the canvas, `showImage`, `setEditing`, `setLive`, `adoptEdit`, `settled`, `current`), Show original (the toggle, `holdOriginal`, `releaseShowOriginal`, the badge and the key legend's entry) and the size handed to the Detail panel |
+| `static/js/edit/edit-session.js`, `render-status.js` | One asset's Edit synced with the server (the serial queue of writes on `base`, Undo and Redo, a conflict, a failure, `SaveStatus`, `onSaved`), and the wait for the render that follows (`waitForRender`, `swapGridPreviews`) |
+| `static/js/edit/crop-tool.js`, `level-tool.js`, `adjust.js` | The Crop tool on interact.js (`createCropTool`, `cancelOpenCropTool` for Escape, `isCropToolOpen` for its keys), the Level tool's line, and the Edit panel's changes to an Edit as pure functions (a slider, an aspect, a turn, a flip, a reset, the crop kept inside, a drag's Straighten, the curve's points) |
+| `static/js/edit/recipe.js`, `geometry.js`, `tone.js`, `renderer.js` | The Edit as the client holds it (defaults, sliders, sections, the server's normalization), its geometry with the crop's rules and `mapBox`, its per-pixel math, all three DOM-free and checked against the shared vectors; and the WebGL2 renderer that draws it (`createRenderer`: `render`, `renderBefore`, `readHistogram`) |
+| `static/js/listeners/edit.js` | The Edit's events in Asset detail: Show original held, the Edit panel's toggle, the Crop tool's keys, Undo and Redo |
+| `static/js/common/content-urls.js`, `histogram.js` | An asset's content URLs (`previewUrl` by revision, `displayUrl`, `originalUrl`) and an image repointed at a new Preview (`repointImage`); a Histogram's SVG paths (`channelPaths`) and a fraction's label (`percentLabel`), Curation's and the Edit panel's |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, the scope rules that decide what a change clears, and the advanced search panel's filters set together (`replaceFilters`, `filters`, `filterCount`, `viewedPersonId`, `viewedLocationId`; `applySearchFilters`, `idsOf`, `ID_LISTS`), and a searched Person's or Location's ID replaced or dropped (`names`, `replaceId`) |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch`, and routes a trigger's click by the view (`routeOf`: in Triage a folder, Person or Location trigger asks the scope route, `requestScopeDialog`, and the root folder's does nothing; in the trash a folder trigger does nothing); `runTriggerSearch`, the search a trigger declares, which a 204 from the scope route runs |
@@ -3330,8 +3567,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/htmx/import_history.scala.html`, `import_files.scala.html`, `views/includes/import_status.scala.html`, `import_title.scala.html`, their stylesheets, `static/js/import-status.js` | The Import page's Import history: the timeline of Imports, an Import's files by outcome, the status and title the status feed replaces, and the script that keeps them live |
 | `views/htmx/watch_folders.scala.html`, `watch_folder_form.scala.html`, `remove_watch_folder_dialog.scala.html`, `views/includes/watch_folder_deletion_notice.scala.html`, `static/css/htmx/watch_folders.css`, `watch_folder_form.css`, `static/js/import/watch-folders.js`, `static/js/alpine/components/watch-folder-form.js` | The Import page's Watch folders: the cards, the Watch folder dialog with its deletion notice, the Remove dialog, their styles, the reads of the cards and the `watchFolderForm` component (**Import page**) |
 | `views/includes/search_chip.scala.html`, `search_filter_icon.scala.html`, `search_person_cover.scala.html` | The parts the panel and a filtered search's results title share: a chosen filter's chip (its kind, label, lead, carried attributes and remove button), the icon of a kind of filter, and a person's cover Face or its placeholder, on a chip and, loaded lazily, in a People option |
-| `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal (the box fitted from the shown element's size, the Detail panel told of each asset and size shown), and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
-| `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown, the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing, the results title read again when the viewed Person is named, and the destination's results on closing when the viewed Person is merged away or merged into) |
+| `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal (a still image through the Edit's stage, a Video here; the box fitted from the shown element's size, the Detail panel and the Edit panel told of each asset and size shown), and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
+| `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown (with the edited size while the stage shows an Edit), the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), the layout the Edit panel follows (`dockSide`, `onLayoutChange`, `layOut`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing, the results title read again when the viewed Person is named, and the destination's results on closing when the viewed Person is merged away or merged into) |
 | `static/js/search-results/detail-url.js` | `createDetailUrl`: Asset detail's URL, its history entry and Back and Forward over it, the opening of the asset a URL names (`openAssetInLocation`), and the search URL held while it is open (see **Detail navigation**) |
 | `static/js/search-results/detail-fullscreen.js` | `createDetailFullscreen`: Asset detail in fullscreen (`toggle`, on `f` and the toolbar's toggle, which it removes where `document.fullscreenEnabled` is false), the player's `fullscreenElement` set to the host on each fragment (`attach`), the toggle's pressed state and the snackbar's stacks raised on `fullscreenchange` |
 | `static/js/search-results/filtered-title.js` | `bindFilteredTitle`: a filtered search's results title, each chip's × taking the chip off the page and searching by what the chips left name (through `searchByFilters`) and Edit opening the advanced search panel; `showsPersonChip` and `searchAgainForPersonChip`, the search run again when a Person with a chip is renamed |
@@ -3339,8 +3576,8 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/search-results/person-title.js` | `reloadPersonTitle`: a Person's results title (`#person`) read again from the title route when it shows that Person, after a rename from a People cell's pencil and after a Detail panel correction; a filtered search's chip of them is `filtered-title.js`'s |
 | `static/js/search-results/face-corrections.js` | `createFaceCorrections`: Remove's two clicks and their reset, the Change pick's request by its `action` (a move, or a name or a merge of the Face's Person), and what each answer means (the section to swap in, a message, a stale section to reload); `parsePeopleSection` |
 | `static/js/alpine/components/face-combobox.js` | the `faceCombobox` Alpine component of a People row's Change: the options loaded once per opening for the Face (`assignablePeopleUrl`, `parseAssignablePeople`), the Suggested group while nothing is typed, the rest filtered as typed, the Create row, the keys, the anchored listbox popover, the two modes by the row's Person with the "This face only" switch, the two-step merge (`armedKey`), the pick (with its `action`) and the X announced as events; `closeOpenFaceCombobox` for Escape |
-| `static/js/search-results/face-highlights.js` | `createFaceHighlights`: draws the Face highlights into `#faceHighlights` (`show`: a toggle button per Face placed by fractions of the shown size, its badge anchored to it; `clear`), and `FRAME_TIME_TOLERANCE_MS`, how far from its Frame time a Video's Face counts as current |
-| `static/js/common/dock.js` | `createDock`: a docked panel's side, share, divider (drag and keys), Dock side menu upkeep and remembered state, configured by the explorer's and the Detail panel's docks; `isVerticalAxis` |
+| `static/js/search-results/face-highlights.js` | `createFaceHighlights`: draws the Face highlights into `#faceHighlights` (`show`: a toggle button per Face placed by fractions of the shown size, mapped through an Edit by `detail-panel.js`, its badge anchored to it; `clear`), and `FRAME_TIME_TOLERANCE_MS`, how far from its Frame time a Video's Face counts as current |
+| `static/js/common/dock.js` | `createDock`: a docked panel's side, share, divider (drag and keys), Dock side menu upkeep and remembered state, configured by the explorer's and the Detail panel's docks, and by the Edit panel's, which follows another's side (`followSide`); `isVerticalAxis` |
 | `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid, and its Curate button (`removeCurateButtons`) |
 | `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
 | `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint (Search here, then the folder's actions); patches the counts in place after asset mutations |
@@ -3356,7 +3593,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/fragments/add-to-location.js` | fills the Add to location dialog's hidden selection field and keeps its success detail naming the chosen Location (ID and label) |
 | `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
 | `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
-| `views/includes/html_common.scala.html` | The snackbar's two stacks (manual popovers over the `snackbar` store) and its announcers + the four dialog hosts: the three Alpine-bound modal hosts and the popover dialog |
+| `views/includes/html_common.scala.html` | The snackbar's two stacks (manual popovers over the `snackbar` store) and its announcers + the four dialog hosts: the three Alpine-bound modal hosts and the popover dialog; Asset detail's toolbar with the title's "Edited" badge and its toggles (the Edit panel's for Edit images, Show original's, the Detail panel's, the Face highlights', fullscreen's) |
 | `views/style_guide.scala.html` | The dev-only style guide: static specimens of the shared primitives, and the Alpine templates of the tokens, the icons and the token audit; its own layout is `static/css/pages/style_guide.css` |
 | `static/js/style-guide.js` | the `styleGuide` Alpine component (the source scan resolved in the browser: tokens, icons, token audit; the theme switcher's and the font tester's state) and the style guide's live menu and dialog specimens |
 | `static/js/common/token-kinds.js` | the kinds of token (`TOKEN_KINDS`, `kindOf`) and their groups (`groupOf`, `paletteGroupOf`), the token references of a declaration (`referencedNamesOf`), for the style guide |
@@ -3386,9 +3623,9 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/listeners/curation.js` | Curation's events: opening it, the batch ops' cap, the counts after each mutation, the grid beneath when it closes |
 | `static/js/fragments/curation.js` | `hydrateCurationFragment`: opens the Curation host on its shell |
 | `static/js/stores/sequences-to-curate.js` | the `sequencesToCurate` store: the number of Sequences in Curation's queue, set only by the count endpoint |
-| `static/js/common/text-editing.js` | `isTextEditingTarget`: whether focus is in a field that takes the keys typed, so a page's keyboard shortcuts leave them to it |
+| `static/js/common/text-editing.js` | `isTextEditingTarget`: whether focus is in a field that takes the keys typed (no slider, checkbox, radio or button-like input), so a page's keyboard shortcuts leave them to it |
 | `static/js/common/loupe.js` | the Loupe: `attachLoupe({ panes, levels, readLevel, saveLevel })` over panes of `{ paneEl, imageEl, lensEl }`, answering `refresh`, `setLevel` and `detach`; the pointer-to-pixel mapping under `object-fit: contain` and the wheel through the ladder, with no knowledge of the page it is on |
-| `static/js/common/clipping.js` | `readClipping(imageEl, { fitBox, clippedLevel, crushedLevel })`, async: the class of every pixel (a `Uint8Array` at the sampled size: blown, crushed or neither) of a loaded same-origin image, resized to the box off the main thread and grayed as the import's measurement does; `clippingMask(read, { blownColor, crushedColor })`: the Clipping mask of a read, an `ImageData` at its size; with no knowledge of the page it is on |
+| `static/js/common/clipping.js` | `readClipping(source, { fitBox, clippedLevel, crushedLevel })`, async: the class of every pixel (a `Uint8Array` at the sampled size: blown, crushed or neither) and the fractions of each (`blown`, `crushed`; a fully transparent pixel is none) of a same-origin `CanvasImageSource`, a loaded image or the Edit's canvas, resized to the box off the main thread and grayed as the import's measurement does; `clippingMask(read, { blownColor, crushedColor })`: the Clipping mask of a read, an `ImageData` at its size; with no knowledge of the page it is on |
 
 ## Search parameters
 

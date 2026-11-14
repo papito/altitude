@@ -136,7 +136,8 @@ import altitude.core.util.ImageUtil
      *
      * Saturation −100 turns the color into its luminance Y. Vibrance +100 scales its distance from Y by 1 + (1 − min(1, 1.6 ×
      * 0.4)). The vignette's weight is 0 at the center and smoothstep((1 − 0.39375) / 0.65625) at a corner, where d is 1. The hash
-     * is the playground's 32-bit integer hash: in [0, 1], the same for the same cell, and 0 at (0, 0).
+     * is the grain's 32-bit integer hash (`docs/image-edits.md`, step 10): in [0, 1], the same for the same cell, and 0 at (0,
+     * 0).
      */
     val y = 0.2126 * 0.6 + 0.7152 * 0.4 + 0.0722 * 0.2
     val gray = EditRenderer.saturate(0.6, 0.4, 0.2, identity.copy(saturation = -100))

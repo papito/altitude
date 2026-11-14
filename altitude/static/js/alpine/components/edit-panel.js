@@ -276,18 +276,15 @@ export function editPanel() {
             return key === "straighten"
         },
 
+        /** A changed slider's class, which bolds its label */
         sliderClass(key) {
-            const classes = []
-            if (this.isChanged(key)) {
-                classes.push("changed")
-            }
-            if (SLIDERS[key].track) {
-                classes.push("gradient")
-            }
-            return classes.join(" ")
+            return this.isChanged(key) ? "changed" : ""
         },
 
-        /** The track's fill to the thumb, and the gradient token of a slider that has one */
+        /**
+         * The track's fill to the thumb (`--edit-slider-fill`) and, for a slider with a gradient track (its `track` in
+         * `SLIDERS`), the track itself (`--edit-slider-track`, its `--edit-track-*` token), written inline
+         */
         sliderStyle(key) {
             const { min, max, track } = SLIDERS[key]
             const fill = ((this.recipe[key] - min) / (max - min)) * 100

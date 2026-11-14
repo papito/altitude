@@ -1,5 +1,5 @@
 /**
- * The Edit's geometry (`plans/todo/image-editing.md`, **The Edit › Geometry**), as the server's
+ * The Edit's geometry (`docs/image-edits.md`, **Geometry**), as the server's
  * renderer has it (`util/EditRenderer.scala`), and the Crop tool's rules on top of it. DOM-free, so
  * the parity tests run it unchanged under Node (`scripts/test-js/edit.test.mjs`, against
  * `test/resources/edit/vectors.json`).
@@ -208,8 +208,8 @@ export function outline(width, height, recipe) {
 
 /**
  * Whether the point (fractions of the frame) lies inside the convex quadrilateral `quad`, edges
- * included: the sign of the cross product is the same along every edge. The frame's size scales
- * the fractions to pixels, so an edge it lies on (a cross product near 0) is told apart in pixels.
+ * included: the sign of the cross product is the same along every edge. `width` and `height`
+ * scale the fractions before the test (1 by default, which every caller leaves).
  */
 export function insideQuad(quad, x, y, width = 1, height = 1) {
     let sign = 0

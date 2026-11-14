@@ -1,7 +1,7 @@
 /**
  * The Edit's WebGL2 renderer: draws an Edit (`CONTEXT.md`) from the upright original into a canvas
  * with the math of the server's renderer (`util/EditRenderer.scala`, the spec in
- * `plans/todo/image-editing.md`, **The Edit**), so the Asset detail stage can show an Edit whose
+ * `docs/image-edits.md`), so the Asset detail stage can show an Edit whose
  * render is pending, and the Edit panel every change at once.
  *
  * The passes, each a full-canvas triangle over an output of `width` × `height` pixels:

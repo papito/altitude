@@ -7,7 +7,8 @@
  * against the stylesheets the browser actually loaded, sorted by the kind of value it holds (or,
  * for a typography token, by its name) and placed in a group, the icons and the token audit. It
  * is also the state of the theme switcher, of the font tester of the Typography section and of
- * the alpha slider of the `--scrim-color` card, and what the page's buttons call. The live menu and dialog specimens are no template:
+ * the alpha slider of the `--scrim-color` card, the source of the Edit panel specimen's Histogram, and
+ * what the page's buttons call. The live menu and dialog specimens are no template:
  * `initStyleGuide` builds them through the modules the explorer lists use.
  *
  * The kinds and the groups are `common/token-kinds.js`'s (the design tweaks panel's adapter,
@@ -31,6 +32,11 @@ import {
     showWarningSnackBar,
 } from "./common/snackbar.js"
 import { asFontFamily, isFontAvailable } from "./common/font-availability.js"
+import {
+    channelPaths,
+    HISTOGRAM_BOX,
+    HISTOGRAM_TALLEST,
+} from "./common/histogram.js"
 import {
     applyTheme,
     chooseTheme,
@@ -100,6 +106,40 @@ export function initStyleGuide() {
     )
 }
 
+/**
+ * The paths of a sample Histogram for the Edit panel's specimen, drawn by the module that draws the
+ * real ones (`common/histogram.js`): each channel a bump or two across the bins, scaled as the server's
+ * bytes are, the tallest bin of the four at the box's top
+ */
+function sampleHistogramPaths() {
+    const bins = HISTOGRAM_BOX.width
+    const channel = (...bumps) =>
+        Array.from({ length: bins }, (_, i) =>
+            bumps.reduce(
+                (sum, [center, width, height]) =>
+                    sum + height * Math.exp(-(((i - center) / width) ** 2)),
+                0,
+            ),
+        )
+    const raw = {
+        luminance: channel([26, 10, 0.8], [48, 6, 0.4]),
+        red: channel([30, 9, 0.7], [52, 5, 0.5]),
+        green: channel([24, 11, 0.9]),
+        blue: channel([18, 8, 0.6], [44, 7, 0.3]),
+    }
+    const tallest = Math.max(...Object.values(raw).flat())
+    return channelPaths(
+        Object.fromEntries(
+            Object.entries(raw).map(([name, values]) => [
+                name,
+                values.map((v) =>
+                    Math.round((v / tallest) * HISTOGRAM_TALLEST),
+                ),
+            ]),
+        ),
+    )
+}
+
 /** The data and the actions of the page's templates */
 function styleGuide() {
     const scan = JSON.parse(
@@ -128,6 +168,8 @@ function styleGuide() {
         lengthLiterals: scan.lengthLiterals ?? [],
         // What is typed into the font tester
         fontInput: "",
+        // The paths of the Edit panel specimen's Histogram
+        editHistogram: sampleHistogramPaths(),
 
         showSuccessSnackBar,
         showWarningSnackBar,

@@ -1055,8 +1055,8 @@ footer {
 
 /* A slider of the Edit panel (includes/edit_panel): a row of its label and the value's number field at its end (Enter
    sets it), over a thin native range track filled from its left end to the thumb (`--edit-slider-fill`, the percentage
-   the component writes), or, on a slider with a gradient (`.gradient`), that gradient alone (`--edit-slider-track`, a
-   `--edit-track-*` token). A changed slider's label is bold. The field is quiet until hovered or focused */
+   the component writes), unless the element sets the track itself (`--edit-slider-track`, inline: a slider with a
+   gradient track, its `--edit-track-*` token). A changed slider's label is bold. The field is quiet until hovered or focused */
 .edit-slider {
     display: grid;
     gap: var(--space-1);

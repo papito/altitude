@@ -367,7 +367,13 @@
              box, and their meanings in the footnote's color. The
              toolbar's toggles
              (<code>.toolbar-toggle</code>, before a modal's ×) are an icon in <code>--theme-neutral-3</code> that takes
-             <code>--theme-accent</code> while pressed, as the current nav entry does.</p>
+             <code>--theme-accent</code> while pressed, as the current nav entry does: in Asset detail the Edit panel's
+             (<code>fa-sliders-h</code>), Show original's (<code>fa-clone</code>, on an edited asset), the Detail panel's,
+             the Face highlights' and fullscreen's. On an asset no Edit may change the Edit toggle is dimmed,
+             <code>--theme-neutral-3</code> at 0.4, and <code>aria-disabled</code>, so it stays focusable with its title
+             saying why. After an edited asset's title, the badge (<code>.edit-badge</code>) reads "Edited", or "Original"
+             while the stage shows the original: <code>--font-size-small</code> on <code>--theme-secondary</code>, rounded
+             with <code>--radius-small</code>, as the snackbar's count is drawn.</p>
           <div class="sg-row">
             <div class="sg-detail-panel detail-panel">
               <section class="detail-section">
@@ -442,6 +448,13 @@
             <span>.toolbar-toggle, pressed</span>
             <button type="button" class="toolbar-toggle" aria-pressed="false" aria-label="Face highlights" title="Face highlights (P)"><i class="fas fa-user-tag" aria-hidden="true"></i></button>
             <span>.toolbar-toggle, at rest</span>
+            <button type="button" class="toolbar-toggle" aria-pressed="true" aria-label="Edit" title="Edit (E)"><i class="fas fa-sliders-h" aria-hidden="true"></i></button>
+            <button type="button" class="toolbar-toggle" aria-pressed="false" aria-label="Show original" title="Show original (hold \)"><i class="fas fa-clone" aria-hidden="true"></i></button>
+            <span>Edit, pressed, and Show original</span>
+            <button type="button" class="toolbar-toggle" aria-pressed="false" aria-disabled="true" aria-label="Edit" title="Only a still image can be edited"><i class="fas fa-sliders-h" aria-hidden="true"></i></button>
+            <span>.toolbar-toggle, aria-disabled</span>
+            <span class="edit-badge">Edited</span>
+            <span>.edit-badge</span>
           </div>
           <p>A Face highlight (<code>.face-highlight</code>, in the <code>#faceHighlights</code> layer of
              <code>htmx/view_image_detail_modal</code>) is a Face's box over Asset detail's media, placed by fractions of the
@@ -456,6 +469,89 @@
           <div class="sg-face-highlights">
             <button type="button" class="face-highlight" aria-pressed="true" aria-label="Alice" style="--face-x: 0.14; --face-y: 0.16; --face-width: 0.2; --face-height: 0.42; anchor-name: --sg-face-highlight-1"></button><span class="face-highlight-badge" style="position-anchor: --sg-face-highlight-1">Alice</span>
             <button type="button" class="face-highlight" aria-pressed="false" aria-label="Unknown 4, hidden" style="--face-x: 0.6; --face-y: 0.54; --face-width: 0.18; --face-height: 0.42; anchor-name: --sg-face-highlight-2"></button><span class="face-highlight-badge" style="position-anchor: --sg-face-highlight-2">Unknown 4 <span class="hidden-mark">Hidden</span></span>
+          </div>
+          <p>The Edit panel (<code>includes/edit_panel</code>, <code>#editPanel</code>, its rules in
+             <code>includes/edit_panel.css</code>) is Asset detail's other docked panel, on <code>--theme-neutral-2</code>, its
+             header and its commit row parted from the body by hairlines in <code>--panel-border-color</code>. The header's
+             tools (<code>.edit-tool</code>: Undo, Redo, History, Before/after, Reset all) are an icon alone in
+             <code>--theme-neutral-3</code>, tinted on hover, <code>--theme-accent</code> while pressed and dimmed while
+             disabled, as the toolbar's toggles are. The Histogram of the edited image (<code>.edit-histogram</code>,
+             <code>--edit-histogram-height</code> tall) is drawn as Curation's strip is, on a button over
+             <code>--asset-detail-backdrop-color</code>, dark in either theme: the red, green and blue channels as light in
+             the channel colors, the luminance a line, two faint grid lines, and the crushed and blown fractions as monospace
+             chips in its bottom corners in <code>--info-color</code> and <code>--error-color</code>; while the Clipping blink is
+             on it wears the success edge and line. The sections' tabs wear <code>tabs.css</code>'s look at
+             <code>--font-size-small</code>, a section with changes marked by an accent dot (<code>.edit-dot</code>); a
+             section's heading carries its Reset, a link in <code>--theme-primary-text</code>, and a subhead
+             (<code>.edit-subhead</code>) is small caps in <code>--theme-neutral-3</code>, <code>--font-size-xs</code>,
+             semibold, tracked <code>--letter-spacing-wide</code>. The aspect chips (<code>.edit-aspects</code>) are a
+             <code>.toggle-group</code> of small segments that wraps, labelled in the lock's orientation, the crop's size under
+             them in <code>--font-nav</code> at <code>--font-size-xs</code>. Under the body sit the save status, in
+             <code>--theme-neutral-3</code> (<code>--error-color</code> when a save failed), with Revert to original, and the
+             key legend, the Detail panel's <code>.panel-keys</code>. Docked top or bottom the status joins the header, the
+             Histogram moves to the left of the tabs, the section's controls flow into columns and the keys are left out. The
+             specimen is the markup with nothing bound; its Histogram is a sample drawn by the real paths.</p>
+          <div class="sg-edit-panel">
+            <aside id="editPanel" aria-label="Edit panel specimen">
+              <header class="edit-header">
+                <h2>Edit</h2>
+                <button type="button" class="edit-tool" aria-label="Undo" title="Undo (Ctrl+Z)"><i class="fas fa-undo" aria-hidden="true"></i></button>
+                <button type="button" class="edit-tool" disabled aria-label="Redo" title="Redo (Ctrl+Shift+Z)"><i class="fas fa-redo" aria-hidden="true"></i></button>
+                <button type="button" class="edit-tool" aria-label="History" title="History"><i class="fas fa-history" aria-hidden="true"></i></button>
+                <button type="button" class="edit-tool" aria-pressed="true" aria-label="Before/after" title="Before/after"><i class="fas fa-columns" aria-hidden="true"></i></button>
+                <button type="button" class="edit-tool" aria-label="Reset all" title="Reset all"><i class="fas fa-eraser" aria-hidden="true"></i></button>
+              </header>
+              <div class="edit-body">
+                <button type="button" class="edit-histogram" aria-pressed="false" aria-label="Clipping blink" title="Blink the blown highlights and crushed shadows">
+                  <svg viewBox="0 0 64 16" preserveAspectRatio="none" aria-hidden="true">
+                    <line class="grid" x1="21.33" y1="0" x2="21.33" y2="16"></line>
+                    <line class="grid" x1="42.67" y1="0" x2="42.67" y2="16"></line>
+                    <path class="red" :d="editHistogram.red"></path>
+                    <path class="green" :d="editHistogram.green"></path>
+                    <path class="blue" :d="editHistogram.blue"></path>
+                    <path class="luminance" :d="editHistogram.luminance"></path>
+                  </svg>
+                  <span class="crushed">0.4%</span>
+                  <span class="blown">2.1%</span>
+                </button>
+                <div class="edit-sections">
+                  <div role="tablist" aria-label="Edit sections specimen">
+                    <button type="button" role="tab" aria-selected="true" tabindex="0"><span>Crop &amp; rotate</span><span class="edit-dot" title="Changed"></span></button>
+                    <button type="button" role="tab" aria-selected="false" tabindex="-1"><span>Light</span><span class="edit-dot" title="Changed"></span></button>
+                    <button type="button" role="tab" aria-selected="false" tabindex="-1"><span>Color</span></button>
+                    <button type="button" role="tab" aria-selected="false" tabindex="-1"><span>Effects</span></button>
+                  </div>
+                  <div role="tabpanel" aria-label="Crop &amp; rotate specimen">
+                    <div class="edit-section-head">
+                      <h3>Crop &amp; rotate</h3>
+                      <button type="button" class="edit-reset">Reset</button>
+                    </div>
+                    <div class="edit-subhead">
+                      <span>Aspect</span>
+                      <button type="button" class="edit-tool" aria-label="Swap the orientation" title="Swap the orientation (X)"><i class="fas fa-exchange-alt" aria-hidden="true"></i></button>
+                    </div>
+                    <div class="toggle-group edit-aspects" role="group" aria-label="Aspect specimen">
+                      <button type="button" aria-pressed="false">Original</button>
+                      <button type="button" aria-pressed="false">Free</button>
+                      <button type="button" aria-pressed="false">1:1</button>
+                      <button type="button" aria-pressed="false">5:4</button>
+                      <button type="button" aria-pressed="false">7:5</button>
+                      <button type="button" aria-pressed="true">3:2</button>
+                      <button type="button" aria-pressed="false">16:9</button>
+                    </div>
+                    <p class="edit-crop-size">3840 × 2560 px</p>
+                  </div>
+                </div>
+              </div>
+              <footer class="edit-commit">
+                <span class="edit-status" data-status="saved">Saved · the original is untouched</span>
+                <button type="button" class="action-button small">Revert to original</button>
+              </footer>
+              <footer class="panel-keys" aria-label="Keys specimen">
+                <p><span><kbd>E</kbd> Close</span><span><kbd>C</kbd> Crop</span><span><kbd>\</kbd> Original (hold)</span><span><kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo</span></p>
+                <p><span>Double-click a slider to reset it</span></p>
+              </footer>
+            </aside>
           </div>
         </section>
 
@@ -580,6 +676,60 @@
                   </form>
                 </span>
               </div>
+            </div>
+          </div>
+          <p>A slider of the Edit panel is an <code>.edit-slider</code>: a row of its label, in <code>--theme-neutral-3</code>
+             at <code>--font-size-small</code>, and the value's number field at its end, quiet until hovered or focused,
+             <code>--edit-slider-field-width</code> wide in <code>--font-nav</code> at <code>--font-size-xs</code> (Enter sets
+             it), over a thin native range: a <code>--space-2</code> track filled in <code>--theme-primary</code> from its left
+             end to the thumb (<code>--edit-slider-fill</code>, which the component writes on the element), and a round thumb in
+             <code>--theme-neutral-4</code> edged in <code>--theme-neutral-2</code>. A slider whose ends change the picture
+             visibly has a gradient track instead: the component sets <code>--edit-slider-track</code> on the element to its
+             <code>--edit-track-*</code> token, one each for Exposure, Temperature, Tint, Vibrance and Saturation, all five
+             shown here after a plain slider. A changed slider's label is bold in <code>--theme-neutral-4</code>
+             (<code>.changed</code>); a double-click on the label or the track resets it.</p>
+          <div class="sg-row sg-edit-sliders">
+            <div class="edit-slider changed" style="--edit-slider-fill: 70%">
+              <div class="edit-slider-head">
+                <label for="sgEditSliderContrast" title="Double-click to reset">Contrast</label>
+                <input type="number" min="-100" max="100" step="1" value="40" aria-label="Contrast">
+              </div>
+              <input type="range" id="sgEditSliderContrast" min="-100" max="100" step="1" value="40">
+            </div>
+            <div class="edit-slider" style="--edit-slider-fill: 50%; --edit-slider-track: var(--edit-track-exposure)">
+              <div class="edit-slider-head">
+                <label for="sgEditSliderExposure" title="Double-click to reset">Exposure</label>
+                <input type="number" min="-5" max="5" step="0.05" value="0" aria-label="Exposure">
+              </div>
+              <input type="range" id="sgEditSliderExposure" min="-5" max="5" step="0.05" value="0">
+            </div>
+            <div class="edit-slider" style="--edit-slider-fill: 50%; --edit-slider-track: var(--edit-track-temperature)">
+              <div class="edit-slider-head">
+                <label for="sgEditSliderTemperature" title="Double-click to reset">Temperature</label>
+                <input type="number" min="-100" max="100" step="1" value="0" aria-label="Temperature">
+              </div>
+              <input type="range" id="sgEditSliderTemperature" min="-100" max="100" step="1" value="0">
+            </div>
+            <div class="edit-slider" style="--edit-slider-fill: 50%; --edit-slider-track: var(--edit-track-tint)">
+              <div class="edit-slider-head">
+                <label for="sgEditSliderTint" title="Double-click to reset">Tint</label>
+                <input type="number" min="-100" max="100" step="1" value="0" aria-label="Tint">
+              </div>
+              <input type="range" id="sgEditSliderTint" min="-100" max="100" step="1" value="0">
+            </div>
+            <div class="edit-slider" style="--edit-slider-fill: 50%; --edit-slider-track: var(--edit-track-vibrance)">
+              <div class="edit-slider-head">
+                <label for="sgEditSliderVibrance" title="Double-click to reset">Vibrance</label>
+                <input type="number" min="-100" max="100" step="1" value="0" aria-label="Vibrance">
+              </div>
+              <input type="range" id="sgEditSliderVibrance" min="-100" max="100" step="1" value="0">
+            </div>
+            <div class="edit-slider" style="--edit-slider-fill: 50%; --edit-slider-track: var(--edit-track-saturation)">
+              <div class="edit-slider-head">
+                <label for="sgEditSliderSaturation" title="Double-click to reset">Saturation</label>
+                <input type="number" min="-100" max="100" step="1" value="0" aria-label="Saturation">
+              </div>
+              <input type="range" id="sgEditSliderSaturation" min="-100" max="100" step="1" value="0">
             </div>
           </div>
         </section>
