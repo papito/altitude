@@ -23,15 +23,15 @@ import { curveLut } from "../../edit/tone.js"
 
 /**
  * The Edit panel's controls (`includes/edit_panel`, `x-data="editPanel"`): the tabs, the sliders, the aspect chips, the
- * curve editor, the section resets, the Histogram and its Clipping blink, and the History popover. The Edit, its
- * History and the stage live in the coordinator (`edit/edit-panel.js`), which this component connects to as it starts:
- * the coordinator syncs a snapshot into it (`sync`), and the component asks it for every change, worked out from the
- * Edit shown (`edit/adjust.js`). The component's state is what its bindings read: a copy of the Edit shown, the History's
- * steps, the save status, the Histogram's paths and the tools' states.
+ * curve editor, the section resets, Undo and Redo, and the Histogram and its Clipping blink. The Edit, its session and
+ * the stage live in the coordinator (`edit/edit-panel.js`), which this component connects to as it starts: the
+ * coordinator syncs a snapshot into it (`sync`), and the component asks it for every change, worked out from the Edit
+ * shown (`edit/adjust.js`). The component's state is what its bindings read: a copy of the Edit shown, the save status,
+ * whether there is anything to undo or redo, the Histogram's paths and the tools' states.
  *
- * A slider counts as one step on release, or on Enter in its number field (a value left unentered goes back as the
- * field loses focus or on Escape); a double-click on its label or its track resets it. A curve point counts as one step
- * on release; a click adds one, a drag moves it, a drag well off the box or a double-click removes it.
+ * A slider counts as one change on release, or on Enter in its number field (a value left unentered goes back as the
+ * field loses focus or on Escape); a double-click on its label or its track resets it. A curve point counts as one
+ * change on release; a click adds one, a drag moves it, a drag well off the box or a double-click removes it.
  */
 
 // The tab shown, kept for the page's life so each asset's panel opens on the last one
@@ -66,17 +66,6 @@ const RANGE_KEYS = [
 const CURVE_KEY_STEP = 0.01
 const CURVE_KEY_STEP_LARGE = 0.05
 
-/** Closes the History's popover, Escape's job ahead of closing Asset detail (`global.js`); answers whether it was open */
-export function closeOpenEditHistory() {
-    const popoverEl = document.querySelector("#editHistory:popover-open")
-    if (!popoverEl) {
-        return false
-    }
-    popoverEl.hidePopover()
-    document.getElementById("editHistoryButton")?.focus({ preventScroll: true })
-    return true
-}
-
 export function editPanel() {
     // The coordinator's actions, out of the reactive object
     let panel = null
@@ -86,9 +75,8 @@ export function editPanel() {
     let themeListener = null
     // Paints the curve as its canvas gets a size: Alpine shows a tab on the next frame, after the change that shows it
     let curveObserver = null
-    // The last Histogram and steps synced, so a sync that brings the same ones redraws nothing
+    // The last Histogram synced, so a sync that brings the same one redraws nothing
     let lastHistogram = null
-    let lastSteps = null
     // A slider's drag (`dragOf`: each value from the Edit it started on) and how it is being moved: "pointer" or "key"
     let slideDrag = null
     let slideVia = "pointer"
@@ -99,8 +87,6 @@ export function editPanel() {
         refusal: "",
         recipe: defaults(),
         upright: null,
-        head: 0,
-        steps: [],
         status: "idle",
         canUndo: false,
         canRedo: false,
@@ -155,7 +141,6 @@ export function editPanel() {
             for (const key of [
                 "ready",
                 "refusal",
-                "head",
                 "status",
                 "canUndo",
                 "canRedo",
@@ -174,10 +159,6 @@ export function editPanel() {
             }
             if (!same(this.upright, snapshot.upright)) {
                 this.upright = snapshot.upright
-            }
-            if (snapshot.steps !== lastSteps) {
-                lastSteps = snapshot.steps
-                this.steps = snapshot.steps ?? []
             }
             if (snapshot.histogram !== lastHistogram) {
                 lastHistogram = snapshot.histogram
@@ -436,35 +417,6 @@ export function editPanel() {
 
         redo() {
             panel?.redo()
-        },
-
-        hasHistory() {
-            return this.ready && this.steps.length > 0
-        },
-
-        isHead(step) {
-            return step.seq === this.head
-        },
-
-        /** The author of a step, shown when the viewer did not make it */
-        authorOf(step) {
-            return !step.mine && step.author ? step.author : ""
-        },
-
-        /** A step's time in the viewer's zone and locale */
-        timeOf(step) {
-            const at = new Date(step.createdAt)
-            return Number.isNaN(at.getTime())
-                ? ""
-                : new Intl.DateTimeFormat(undefined, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                  }).format(at)
-        },
-
-        jump(seq) {
-            panel?.jump(seq)
-            closeOpenEditHistory()
         },
 
         toggleSplit() {

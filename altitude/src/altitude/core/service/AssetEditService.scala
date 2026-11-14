@@ -17,7 +17,6 @@ import altitude.core.dao.AssetDao
 import altitude.core.dao.AssetEditDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetEdit
-import altitude.core.models.AssetEditStep
 import altitude.core.models.EditRecipe
 import altitude.core.models.EditState
 import altitude.core.models.MimedPreviewData
@@ -26,12 +25,11 @@ import altitude.core.transactions.TransactionManager
 import altitude.core.util.EditRenderer
 
 /**
- * An asset's Edit and its History (`CONTEXT.md`): every saved change is a step, and Undo, Redo and a jump from the History move
- * the head. Step 0 is the Original, which changes nothing and has no row; a change made after an undo drops the steps after the
- * head, and only the newest `Const.Edit.MAX_STEPS` are kept. Every write is built on the head the client saw (`base`) and is a
- * conflict carrying the current state when the head has moved since. Only a still image outside the trash is edited
- * ([[AssetEditService.whyNotEditable]]). A write that moves the head has the Edit rendered at its new head once it commits
- * (`EditRenderService`), and is logged then.
+ * An asset's Edit (`CONTEXT.md`): the one Edit the server keeps for the asset, replaced by each save. The original is never
+ * written. Every save is built on the edit version the client saw (`base`) and is a conflict carrying the current state when the
+ * edit version has moved since; it moves the edit version on by one, so a client's earlier Edit (its Undo) is saved as any other.
+ * Only a still image outside the trash is edited ([[AssetEditService.whyNotEditable]]). A save has the Edit rendered once it
+ * commits (`EditRenderService`), and is logged then.
  */
 object AssetEditService:
 
@@ -51,7 +49,7 @@ class AssetEditService(val app: Altitude):
   protected val txManager: TransactionManager = app.txManager
 
   /**
-   * The asset's Edit and its History, with the size of its upright original; the Original's for an asset never edited, and
+   * The asset's Edit, with the size of its upright original; version 0 and the identity for an asset never edited, and
    * `NotFoundException` for no such asset
    */
   def get(assetId: String): EditState =
@@ -61,119 +59,81 @@ class AssetEditService(val app: Altitude):
     }
 
   /**
-   * The asset's Edit at its head, without its History, read in one snapshot: the Original's for an asset never edited, and
-   * `NotFoundException` for no such asset. What a client polls until the head is rendered.
+   * The asset's Edit read in one snapshot, without the upright size: version 0 for an asset never edited, and `NotFoundException`
+   * for no such asset. What a client polls until the version is rendered.
    */
   def status(assetId: String): EditState =
     txManager.asReadOnly {
-      stateOf(assetDao.getById(assetId), dao.get(assetId), withSteps = false)
+      stateOf(assetDao.getById(assetId), dao.get(assetId))
     }
 
   /**
-   * The Edit of an asset read in the context repository, at its head and without its History, with the size of its upright
-   * original, or None for an asset never edited: what the asset's detail carries
+   * The Edit of an asset read in the context repository, with the size of its upright original, or None for an asset never
+   * edited: what the asset's detail carries
    */
-  def headOf(asset: Asset): Option[EditState] =
+  def editOf(asset: Asset): Option[EditState] =
     txManager.asReadOnly(dao.get(asset.persistedId)).map {
       edit =>
         val upright = uprightSizeIfKnown(asset)
-        txManager.asReadOnly(stateOf(asset, Some(edit), withSteps = false, upright = upright))
+        txManager.asReadOnly(stateOf(asset, Some(edit), upright = upright))
     }
 
   /**
-   * Saves a change of the asset's Edit as a step after `base`, the head the client built it on, and moves the head to it. A
-   * recipe equal to the head's is no change: the current state, nothing written. Otherwise the steps after the head are dropped,
-   * the step is added with the label of its change, the oldest steps past the cap are dropped, and the head moves to it, with
-   * whether it is edited and its edited size. Revert to original is such a step of the identity, so it can be undone.
+   * Saves `recipe` as the asset's Edit, built on the version `base` the client saw, and answers the new state: the version one
+   * on, whether the Edit is edited and its edited size. A recipe equal to the current Edit is no change: the current state,
+   * nothing written. Revert to original is a save of the identity, which the client's Undo takes back as another save.
    *
    * @throws IllegalOperationException
    *   for an asset that is not a still image, is in the trash, or whose original is missing
    * @throws EditConflictException
-   *   when the head is not `base`, with the current state
+   *   when the version is not `base`, with the current state
    */
-  def addStep(assetId: String, base: Int, recipe: EditRecipe, account: User): EditState =
-    // Normalized, as a client's is, so the stored Edit and the one compared with the head are the one answered
+  def save(assetId: String, base: Int, recipe: EditRecipe, account: User): EditState =
+    // Normalized, as a client's is, so the stored Edit and the one compared with the current one are the one answered
     val normalized = EditRecipe.parse(recipe.toJson)
     val upright = uprightSizeOf(assetId)
 
     txManager.withTransaction {
       val (asset, edit) = lockAt(assetId, base, upright)
-      val head = edit.fold(0)(_.headSeq)
-      val headRecipe =
-        recipeAt(assetId, head).getOrElse(throw IllegalStateException(s"Asset [$assetId] has no head step [$head]"))
 
-      if normalized == headRecipe then
-        logger.debug(s"Edit of asset [$assetId]: the step is the head [$head], nothing to save")
+      if normalized == edit.fold(EditRecipe.Identity)(_.recipe) then
+        logger.debug(s"Edit of asset [$assetId]: the save is the Edit at version [$base], nothing to save")
         stateOf(asset, edit, upright = Some(upright))
       else
-        // An asset never edited has no row to lock: inserting it holds it. When another transaction inserted it meanwhile (on
-        // PostgreSQL the insert waits for that one to end), that row is locked and its head checked again
-        val locked = if edit.isEmpty && !dao.create(assetId) then lockAt(assetId, base, upright)._1 else asset
-
-        val seq = head + 1
-        val label = EditRecipe.describeChange(headRecipe, normalized)
-        val after = dao.deleteStepsAfter(assetId, head)
-        // A rendered step among those dropped is no step of the Edit any more, and its seq is about to be used again
-        edit.foreach(e => if e.renderedSeq.exists(_ > head) then dao.setRendered(assetId, None, e.lastRev))
-        dao.insertStep(AssetEditStep(assetId, seq, normalized, label, Some(account.persistedId)))
-        val dropped = dao.deleteOldestBeyond(assetId, C.Edit.MAX_STEPS)
-        moveTo(assetId, seq, normalized, upright, account)
+        val editVersion = base + 1
+        val (width, height) = normalized.editedSize(upright._1, upright._2)
+        val isEdited = !normalized.isIdentity
+        edit match
+          case Some(_) => dao.save(assetId, editVersion, normalized, isEdited, width, height, account.persistedId)
+          // An asset never edited has no Edit row to lock; the asset's lock, which every save takes first, keeps another first
+          // save out until this one ends, and that one then finds the row at a later edit version: a conflict
+          case None =>
+            dao.insert(
+              AssetEdit(assetId, normalized, editVersion, isEdited = isEdited, width = width, height = height),
+              account.persistedId)
         txManager.afterCommit {
-          logger.info(
-            s"Edit of asset [$assetId]: step [$seq] [$label] by account [${account.persistedId}]" +
-              s"${if after > 0 then s", dropping the $after after the head" else ""}" +
-              s"${if dropped > 0 then s", dropping the oldest $dropped" else ""}")
-        }
-        stateOf(locked, dao.get(assetId), upright = Some(upright))
-    }
-
-  /**
-   * Moves the head of the asset's Edit from `base` to the step `seq`, for Undo, Redo and a jump from the History: step 0 is the
-   * Original. A move to the head itself is no change.
-   *
-   * @throws IllegalOperationException
-   *   for an asset that is not a still image, is in the trash, or whose original is missing
-   * @throws EditConflictException
-   *   when the head is not `base`, with the current state
-   * @throws NotFoundException
-   *   for a step the Edit does not have, never had or has dropped
-   */
-  def moveHead(assetId: String, base: Int, seq: Int, account: User): EditState =
-    val upright = uprightSizeOf(assetId)
-
-    txManager.withTransaction {
-      val (asset, edit) = lockAt(assetId, base, upright)
-
-      if seq == base then stateOf(asset, edit, upright = Some(upright))
-      else
-        val recipe =
-          recipeAt(assetId, seq).getOrElse(throw NotFoundException(C.Msg.Err.EDIT_STEP_NOT_FOUND.format(seq)))
-        moveTo(assetId, seq, recipe, upright, account)
-        txManager.afterCommit {
-          logger.info(s"Edit of asset [$assetId]: head moved from [$base] to [$seq] by account [${account.persistedId}]")
+          logger.info(s"Edit of asset [$assetId]: edit version [$editVersion] saved by account [${account.persistedId}]")
+          app.service.editRender.enqueue(assetId)
         }
         stateOf(asset, dao.get(assetId), upright = Some(upright))
     }
 
   /**
-   * The asset's edited rendition of `kind` (`Const.DataStore.PREVIEW` or `DISPLAY`) at the revision `rev`, read from its file
-   * with no database read. Once a later revision has replaced it, the asset's current one, or None when the asset has none (its
-   * Edit is at the Original, or cannot be rendered). A revision is never used twice for an asset, so the answer under `rev` stays
-   * good to cache.
+   * The asset's edited image of `kind` (`Const.DataStore.PREVIEW` or `DISPLAY`) asked for under the revision `rev`: the one
+   * stored, when `rev` is from 1 to the asset's revision (`asset.edit_rev`). The asset has one edited image of each kind,
+   * replaced by each render under the next revision, so a revision below the current one, which no page builds any more, is
+   * answered the current image; harmless, since a page that held it showed an Edit as old or older.
    *
    * @throws NotFoundException
-   *   for a revision the asset has not used yet, which may name other bytes later, and for an asset that is not the Library's
+   *   for a revision above the asset's, which may name other bytes later, for 0, for an asset with no edited images (its Edit is
+   *   the identity, or cannot be rendered), and for an asset that is not the Library's
    */
-  def rendition(assetId: String, rev: Int, kind: String): Option[MimedPreviewData] =
-    try Some(app.service.fileStore.getEditRendition(assetId, rev, kind))
-    catch
-      case _: NotFoundException =>
-        val (lastRev, current) = txManager.asReadOnly {
-          (dao.get(assetId).fold(0)(_.lastRev), assetDao.getById(assetId).editRev)
-        }
-        if rev > lastRev then throw NotFoundException(s"Asset [$assetId] has used no revision [$rev] yet")
-        logger.debug(s"Rendition [$kind] of asset [$assetId] at revision [$rev] is gone; the current is [$current]")
-        Option.when(current > 0)(app.service.fileStore.getEditRendition(assetId, current, kind))
+  def editedImage(assetId: String, rev: Int, kind: String): MimedPreviewData =
+    val current = txManager.asReadOnly(assetDao.getById(assetId).editRev)
+    if rev < 1 || rev > current then
+      throw NotFoundException(s"Asset [$assetId] has no edited $kind at revision [$rev]; its revision is [$current]")
+    if rev < current then logger.debug(s"Edited $kind of asset [$assetId] asked for at revision [$rev], served at [$current]")
+    app.service.fileStore.getEditedImage(assetId, kind)
 
   /**
    * Auto-straighten: the Straighten that levels the lines of the asset's original as `recipe` turns and mirrors it, in tenths of
@@ -195,9 +155,8 @@ class AssetEditService(val app: Altitude):
     angle
 
   /**
-   * The size of the asset's upright original, read before a write's transaction opens, so that reading the original's metadata
-   * holds no lock (on SQLite, the one write connection). The asset must be editable now; the write checks it again under its
-   * lock.
+   * The size of the asset's upright original, read before a save's transaction opens, so that reading the original's metadata
+   * holds no lock (on SQLite, the one write connection). The asset must be editable now; the save checks it again under its lock.
    */
   private def uprightSizeOf(assetId: String): (Int, Int) =
     val asset = app.service.asset.getById(assetId)
@@ -219,51 +178,28 @@ class AssetEditService(val app: Altitude):
 
   /**
    * The asset's Edit locked for the transaction (None for an asset never edited, which locks nothing) and the asset, read after
-   * the lock so that its rendition revision goes with the Edit's rendered step, when the asset is editable and the head is
-   * `base`; a conflict carrying the current state, with the `upright` size, when it is not. The asset is locked first, as a
-   * render's write and a delete of the asset lock the two, so no two of them wait for each other.
+   * the lock so that its revision goes with the Edit's rendered version, when the asset is editable and the Edit is at `base`; a
+   * conflict carrying the current state, with the `upright` size, when it is not. The asset is locked first, as a render's write
+   * and a delete of the asset lock the two, so no two of them wait for each other.
    */
   private def lockAt(assetId: String, base: Int, upright: (Int, Int)): (Asset, Option[AssetEdit]) =
     assetDao.lockUnpurged(assetId): Unit
     val edit = dao.getForUpdate(assetId)
     val asset = assetDao.getById(assetId)
     AssetEditService.whyNotEditable(asset).foreach(why => throw IllegalOperationException(why))
-    if edit.fold(0)(_.headSeq) != base then
-      logger.info(s"Edit of asset [$assetId]: a change built on head [$base] refused, the head has moved since")
+    if edit.fold(0)(_.editVersion) != base then
+      logger.info(s"Edit of asset [$assetId]: a save built on version [$base] refused, the Edit has moved on since")
       throw EditConflictException(stateOf(asset, edit, upright = Some(upright)))
     (asset, edit)
 
-  /** The Edit at the step `seq`: the identity at 0, None for a step the Edit does not have */
-  private def recipeAt(assetId: String, seq: Int): Option[EditRecipe] =
-    if seq == 0 then Some(EditRecipe.Identity) else dao.step(assetId, seq).map(_.recipe)
-
-  /**
-   * Moves the head to the step `seq` holding `recipe`, its edited size measured in the `upright` original, and has the Edit
-   * rendered once the transaction commits
-   */
-  private def moveTo(assetId: String, seq: Int, recipe: EditRecipe, upright: (Int, Int), account: User): Unit =
-    val (width, height) = recipe.editedSize(upright._1, upright._2)
-    dao.setHead(assetId, seq, !recipe.isIdentity, width, height, account.persistedId)
-    txManager.afterCommit(app.service.editRender.enqueue(assetId))
-
-  private def stateOf(
-      asset: Asset,
-      edit: Option[AssetEdit],
-      withSteps: Boolean = true,
-      upright: Option[(Int, Int)] = None): EditState =
-    val assetId = asset.persistedId
-    val head = edit.fold(0)(_.headSeq)
-    val headStep = Option.when(head > 0)(dao.step(assetId, head)).flatten
-    val original = EditState.Step(0, EditState.ORIGINAL, None, None, None)
+  private def stateOf(asset: Asset, edit: Option[AssetEdit], upright: Option[(Int, Int)] = None): EditState =
     EditState(
-      head = head,
-      recipe = headStep.fold(EditRecipe.Identity)(_.recipe),
-      label = headStep.fold(EditState.ORIGINAL)(_.label),
-      rendered = edit.flatMap(_.renderedSeq),
+      editVersion = edit.fold(0)(_.editVersion),
+      recipe = edit.fold(EditRecipe.Identity)(_.recipe),
+      renderedVersion = edit.flatMap(_.renderedVersion),
       rev = asset.editRev,
       edited = edit.exists(_.isEdited),
-      width = edit.flatMap(_.width),
-      height = edit.flatMap(_.height),
-      steps = if withSteps then dao.steps(assetId) :+ original else Nil,
+      width = edit.map(_.width),
+      height = edit.map(_.height),
       upright = upright
     )

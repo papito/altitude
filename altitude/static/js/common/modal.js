@@ -11,6 +11,8 @@
  * agree on is decided here instead:
  *
  * - only one host is active at a time; a new open replaces whatever is active,
+ * - a host's close may be held by its close guard (`setCloseGuard`): Asset detail's, while the
+ *   Edit panel has a change pending,
  * - only one of the general and popover hosts holds a dialog fragment: a host keeps its last one
  *   after closing, and opening the other empties it, so two dialogs never share an ID,
  * - initial focus and focus restoration on close,
@@ -256,13 +258,47 @@ export function getModalOpenSource() {
     return openSource
 }
 
+// By host, what `closeModal` asks before closing it (`setCloseGuard`), and the answer to the last
+// close a guard held (`takeHeldClose`)
+const closeGuards = new Map()
+let heldClose = null
+
 /**
- * Closes the active dialog and restores focus. Returns false when nothing was open.
+ * Registers `guard` for `host`: `closeModal` asks it before closing the host. It answers true for
+ * the close to go ahead, or holds it by answering a promise of whether the host closed after all:
+ * the guard then closes the host itself, with `closeModal` again, once it may, answering true that
+ * time. The Edit panel holds Asset detail's close this way while a change is pending
+ * (`edit/edit-panel.js`). An open of another host replaces the active one unasked.
+ */
+export function setCloseGuard(host, guard) {
+    closeGuards.set(host, guard)
+}
+
+/**
+ * The promise of whether the host closed after all, for the last `closeModal` its guard held, or
+ * null when the last one was not held; taken once. A caller that changed the page for the close (a
+ * Back that closed Asset detail) puts it back when the host stays.
+ */
+export function takeHeldClose() {
+    const held = heldClose
+    heldClose = null
+    return held
+}
+
+/**
+ * Closes the active dialog and restores focus. Returns false when nothing was open, and true when
+ * the host's close guard holds the close.
  *
  * Focus stays put when the popover host is closed while focus already sits on a control outside
  * it.
  */
 export function closeModal() {
+    const guard = closeGuards.get(getActiveModalHost())
+    const verdict = guard ? guard() : true
+    heldClose = verdict === true ? null : Promise.resolve(verdict)
+    if (heldClose) {
+        return true
+    }
     const keepFocus =
         getActiveModalHost() === ModalHost.popover &&
         isOutsidePopoverHost(document.activeElement)

@@ -2,7 +2,7 @@
    places it): its header, the body that scrolls (the Histogram, the tabs and the shown section), the save status with
    Revert to original, and the keys. Docked top or bottom (`data-edit-dock-side` on the fragment) the status row joins the
    header, the Histogram sits at the left of the tabs, the section flows into columns that scroll sideways, and the keys
-   are left out. The sliders are core.css's `.edit-slider` */
+   are left out. The sliders are core.css's `.edit-slider`. After it, the warning of changes not saved */
 #editPanel {
     grid-area: edit;
     min-width: 0;
@@ -54,69 +54,41 @@
     }
 }
 
-/* The History: a native popover under its button (CSS anchor positioning), the menus' frosted surface, newest step first
-   and the Original last; the head marked */
-#editHistoryButton {
-    anchor-name: --edit-history;
-}
-
-#editHistory {
-    position-anchor: --edit-history;
-    position-area: bottom span-left;
-    position-try-fallbacks: flip-block, flip-inline;
-    inset: auto;
-    margin: var(--space-2) 0;
-    padding: var(--space-2);
-    max-height: var(--listbox-max-height);
-    overflow-y: auto;
+/* The warning of changes not saved: a native modal dialog over Asset detail, on the popover dialog's frosted surface and
+   padding, with its title as a dialog's and its buttons at the end, under the general modal's scrim */
+#editLeaveDialog {
+    box-sizing: border-box;
+    width: calc(var(--popover-form-width) + 2 * var(--modal-content-padding));
+    max-width: calc(100vw - 2 * var(--viewport-gap));
+    padding: var(--modal-content-padding);
     color: var(--theme-neutral-4);
     background: var(--popover-background-color);
     backdrop-filter: var(--popover-backdrop-filter);
     border: var(--border-hairline) var(--popover-border-color);
     border-radius: var(--radius-large);
     box-shadow: var(--sheen-shadow), var(--float-shadow);
+
+    &::backdrop {
+        background-color: var(--scrim-color);
+    }
 }
 
-#editHistory ol {
+#editLeaveDialog h2 {
     margin: 0;
-    padding: 0;
-    list-style: none;
+    font-size: var(--font-size-medium);
+    font-weight: var(--font-weight-bold);
 }
 
-#editHistory button {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    column-gap: var(--space-5);
-    width: 100%;
-    padding: var(--space-3) var(--space-4);
-    border: none;
-    border-radius: var(--radius);
-    background: none;
-    color: inherit;
-    font-size: var(--font-size-small);
-    text-align: left;
-    cursor: pointer;
-
-    &:hover {
-        background-color: hsl(from var(--theme-neutral-4) h s l / 0.08);
-    }
-
-    &[aria-current] {
-        background-color: hsl(from var(--theme-accent) h s l / 0.2);
-        font-weight: var(--font-weight-semibold);
-    }
+#editLeaveDialog p {
+    margin: var(--space-4) 0 var(--space-5);
+    line-height: var(--line-height-text);
 }
 
-#editHistory .author {
-    grid-column: 1;
-    color: var(--theme-neutral-3);
-}
-
-#editHistory time {
-    grid-column: 2;
-    grid-row: 1;
-    color: var(--theme-neutral-3);
-    white-space: nowrap;
+#editLeaveDialog .edit-leave-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-3);
 }
 
 #editPanel .edit-body {

@@ -206,83 +206,6 @@ import altitude.core.models.EditRecipe
     EditRecipe.Identity.copy(crop = Some(EditCrop(0, 0, 0.01, 0.01))).editedSize(20, 20) shouldBe (1, 1)
   }
 
-  test("A step's label names what changed from the step before") {
-
-    /**
-     * Setup:
-     *
-     * Pairs of Edits, before and after: one slider moved, a quarter turn each way and a flip, a crop locked to an aspect in
-     * either orientation, a section reset, changes in several sections, and a revert to the original.
-     *
-     * Assertions:
-     *
-     * One slider is its name and value, signed where the slider has two sides ("Exposure +0.40", "Contrast −12", "Sharpen 40",
-     * "Straighten +2.3°"); a turn is "Rotate right" or "Rotate left", even when the crop turned with it, and a flip "Flip
-     * horizontal"; a crop is "Crop" with its aspect as the chip reads it ("Crop 3:2", "Crop 2:3" in portrait, "Crop" when free);
-     * a section whose changes all go back to their defaults is "Reset" and its name; changes in several sections name them all;
-     * and any Edit back to one that changes no pixel is "Revert to original".
-     *
-     * Edge cases:
-     *
-     * A curve's change is "Tone curve", and several changes in one section that leave it changed name the section.
-     */
-    val id = EditRecipe.Identity
-    def label(before: EditRecipe, after: EditRecipe): String = EditRecipe.describeChange(before, after)
-
-    label(id, id.copy(exposure = 0.4)) shouldBe "Exposure +0.40"
-    label(id.copy(contrast = 5), id.copy(contrast = -12)) shouldBe "Contrast −12"
-    label(id, id.copy(sharpen = 40)) shouldBe "Sharpen 40"
-    label(id, id.copy(straighten = 2.3)) shouldBe "Straighten +2.3°"
-    label(id, id.copy(curve = List((0.0, 0.0), (0.5, 0.6), (1.0, 1.0)))) shouldBe "Tone curve"
-
-    label(id, id.copy(rotate = 90)) shouldBe "Rotate right"
-    label(id.copy(rotate = 90, exposure = 1), id.copy(exposure = 1)) shouldBe "Rotate left"
-    label(
-      id.copy(crop = Some(EditCrop(0.1, 0.2, 0.5, 0.4))),
-      id.copy(rotate = 270, crop = Some(EditCrop(0.2, 0.4, 0.4, 0.5)))) shouldBe "Rotate left"
-    label(id, id.copy(flipH = true)) shouldBe "Flip horizontal"
-
-    val cropped = id.copy(crop = Some(EditCrop(0, 0.1, 1, 0.8)), aspect = "3:2")
-    label(id, cropped) shouldBe "Crop 3:2"
-    label(cropped, cropped.copy(portrait = Some(true), crop = Some(EditCrop(0.2, 0, 0.6, 1)))) shouldBe "Crop 2:3"
-    label(id, id.copy(crop = Some(EditCrop(0, 0, 0.5, 0.5)), aspect = "free", cropFitted = false)) shouldBe "Crop"
-
-    val lightAndColor = id.copy(exposure = 0.5, contrast = 10, temperature = 20)
-    label(lightAndColor, id.copy(temperature = 20)) shouldBe "Reset Light"
-    label(lightAndColor, lightAndColor.copy(exposure = 1, contrast = 20)) shouldBe "Light"
-    label(id.copy(sharpen = 10), id.copy(sharpen = 10, exposure = 0.25, saturation = -30)) shouldBe "Light and Color"
-    label(id, id.copy(rotate = 180, exposure = 1, vibrance = 5, grain = 20)) shouldBe "Crop & rotate, Light, Color and Effects"
-
-    label(lightAndColor.copy(rotate = 90, crop = Some(EditCrop(0, 0, 0.5, 0.5))), id) shouldBe "Revert to original"
-    label(id.copy(exposure = 1), id) shouldBe "Revert to original"
-  }
-
-  test("A turn's label names the way the picture turns as shown, which one flip reverses") {
-
-    /**
-     * Setup:
-     *
-     * Quarter turns of an Edit mirrored on one axis, on both, and on none.
-     *
-     * Assertions:
-     *
-     * With one flip on, the mirror is applied after the turn and reverses its sense, so the stored turn stepping back by 90 is
-     * "Rotate right" and stepping on by 90 "Rotate left"; with both flips on, which make a half turn, and with none, the stored
-     * turn reads as it is.
-     */
-    val id = EditRecipe.Identity
-    def label(before: EditRecipe, after: EditRecipe): String = EditRecipe.describeChange(before, after)
-
-    val mirrored = id.copy(flipH = true)
-    label(mirrored, mirrored.copy(rotate = 270)) shouldBe "Rotate right"
-    label(mirrored, mirrored.copy(rotate = 90)) shouldBe "Rotate left"
-    label(id.copy(flipV = true), id.copy(flipV = true, rotate = 270)) shouldBe "Rotate right"
-    val both = id.copy(flipH = true, flipV = true)
-    label(both, both.copy(rotate = 90)) shouldBe "Rotate right"
-    label(both, both.copy(rotate = 270)) shouldBe "Rotate left"
-    label(mirrored, mirrored.copy(rotate = 180)) shouldBe "Rotate 180°"
-  }
-
   test("A crop is normalized by its edges, so one that reaches the frame's edge stays within it") {
 
     /**
@@ -322,40 +245,6 @@ import altitude.core.models.EditRecipe
 
     val apart = jsonWith("curve" -> ujson.Arr(ujson.Arr(0, 0), ujson.Arr(0.5, 0.4), ujson.Arr(0.501, 0.6), ujson.Arr(1, 1)))
     EditRecipe.parse(apart).curve shouldBe List((0.0, 0.0), (0.5, 0.4), (0.501, 0.6), (1.0, 1.0))
-  }
-
-  test("A slider of Crop & rotate that re-fits a fitted crop is named for the slider, and a revert for what it reverts") {
-
-    /**
-     * Setup:
-     *
-     * A fitted crop at 3:2, then Straighten, a perspective or keeping the crop inside changed, each re-fitting the crop at the
-     * same aspect; and Edits that change no pixel but differ from the default in the Crop tool's settings.
-     *
-     * Assertions:
-     *
-     * The re-fit crop is not named: the steps are "Straighten +2.3°", "Vertical perspective +12" and "Let the crop reach
-     * outside". Going from any Edit to the default one is "Revert to original", even from one that changes no pixel.
-     *
-     * Edge cases:
-     *
-     * A crop set by hand (not fitted) that changes with Straighten names the change for the section's Crop tool session, "Crop
-     * 3:2"; picking an aspect with no crop is no revert.
-     */
-    val id = EditRecipe.Identity
-    def label(before: EditRecipe, after: EditRecipe): String = EditRecipe.describeChange(before, after)
-
-    val fitted = id.copy(crop = Some(EditCrop(0, 0.1, 1, 0.8)), aspect = "3:2")
-    val refit = Some(EditCrop(0.05, 0.12, 0.9, 0.76))
-    label(fitted, fitted.copy(straighten = 2.3, crop = refit)) shouldBe "Straighten +2.3°"
-    label(fitted, fitted.copy(perspectiveV = 12, crop = refit)) shouldBe "Vertical perspective +12"
-    label(fitted, fitted.copy(keepInside = false, crop = refit)) shouldBe "Let the crop reach outside"
-
-    val byHand = fitted.copy(cropFitted = false)
-    label(byHand, byHand.copy(straighten = 2.3, crop = refit)) shouldBe "Crop 3:2"
-
-    label(id.copy(aspect = "16:9", portrait = Some(true), keepInside = false), id) shouldBe "Revert to original"
-    label(id, id.copy(aspect = "free")) shouldBe "Crop"
   }
 
   test("Every Edit of the shared vectors parses as written, and has the edited size they give") {

@@ -22,27 +22,29 @@ trait FileStoreService:
   def getPreviewById(assetId: String): MimedPreviewData
 
   /**
-   * Stores an edited rendition of the asset (`kind` is `Const.DataStore.PREVIEW` or `DISPLAY`) under the revision `rev`, written
-   * whole or not at all: a temporary file in the same directory, then a move. A revision already stored is refused (a
-   * `StorageException`), so the bytes under a revision never change.
+   * Writes the asset's edited image of `kind` (`Const.DataStore.PREVIEW`, the edited Preview, or `DISPLAY`, the Display image) to
+   * its temporary file beside the image, flushed to the disk, for [[publishEditedImage]] to move over the image. A render stages
+   * its images before its transaction opens, so the writing holds no lock; one render of an asset runs at a time.
    */
-  def addEditRendition(assetId: String, rev: Int, kind: String, data: Array[Byte]): Unit
-
-  /** The highest revision of the asset's stored renditions, 0 for none: one a render that failed after storing it may leave */
-  def highestEditRendition(assetId: String): Int
-
-  /** The asset's edited rendition of `kind` at the revision `rev`; a `NotFoundException` when it is not stored */
-  def getEditRendition(assetId: String, rev: Int, kind: String): MimedPreviewData
-
-  /** Where the asset's edited rendition of `kind` at the revision `rev` is stored; it need not exist */
-  def editRenditionPath(assetId: String, rev: Int, kind: String): Path
+  def stageEditedImage(assetId: String, kind: String, data: Array[Byte]): Unit
 
   /**
-   * Deletes the asset's edited renditions of every revision below `below`, of both kinds. A render passes the revision it stored
-   * (or, rendering the original, one past the last used), so a later render's files, which carry a higher revision, are never
-   * deleted by an earlier one's purge, however their commits and purges interleave.
+   * Moves the asset's staged edited image of `kind` over the one stored before, in one atomic rename, so a reader sees the old
+   * image or the new one, whole. A render publishes under the asset's locks, before the commit that names the new revision.
    */
-  def purgeEditRenditions(assetId: String, below: Int): Unit
+  def publishEditedImage(assetId: String, kind: String): Unit
+
+  /** Deletes the asset's staged edited images, of both kinds, a render did not publish */
+  def discardStagedEditedImages(assetId: String): Unit
+
+  /** The asset's edited image of `kind`; a `NotFoundException` when it has none */
+  def getEditedImage(assetId: String, kind: String): MimedPreviewData
+
+  /** Where the asset's edited image of `kind` is stored; it need not exist */
+  def editedImagePath(assetId: String, kind: String): Path
+
+  /** Deletes the asset's edited images, of both kinds, and what a write of one cut off left */
+  def deleteEditedImages(assetId: String): Unit
 
   def addFace(face: Face, faceImages: FaceImages): Unit
   def getDisplayFaceById(faceId: String): MimedFaceData

@@ -355,7 +355,7 @@ import altitude.core.util.TriageSubset
     /**
      * Setup:
      *
-     * A folder holding two imported assets, one of them with a step of its Edit, rendered as revision 1.
+     * A folder holding two imported assets, one of them with a saved Edit, rendered as revision 1.
      *
      * Assertions:
      *
@@ -366,7 +366,7 @@ import altitude.core.util.TriageSubset
     val folder = testApp.service.folder.add("Edited")
     val edited = testContext.persistAsset(folder = Some(folder))
     val plain = testContext.persistAsset(folder = Some(folder))
-    testApp.service.assetEdit.addStep(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    testApp.service.assetEdit.save(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
     testApp.service.editRender.render(edited.persistedId)
 
     withServer(App) {

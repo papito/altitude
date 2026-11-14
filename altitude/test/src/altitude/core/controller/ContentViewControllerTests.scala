@@ -706,41 +706,41 @@ import altitude.core.routes.decorators
     }
   }
 
-  /** An asset of the context repository imported from `images/1.jpg`, with `steps` steps of its Edit, each rendered */
-  private def editedAsset(steps: Int, isTriaged: Boolean = false): Asset =
+  /** An asset of the context repository imported from `images/1.jpg`, its Edit saved `saves` times, each save rendered */
+  private def editedAsset(saves: Int, isTriaged: Boolean = false): Asset =
     val asset = testContext.persistAsset(isTriaged = isTriaged)
-    for (step <- 1 to steps) {
-      testApp.service.assetEdit.addStep(
+    for (version <- 1 to saves) {
+      testApp.service.assetEdit.save(
         asset.persistedId,
-        step - 1,
-        EditRecipe.Identity.copy(exposure = step * 0.25),
+        version - 1,
+        EditRecipe.Identity.copy(exposure = version * 0.25),
         testContext.user)
       testApp.service.editRender.render(asset.persistedId)
     }
     asset
 
-  /** The bytes of an asset's stored edited rendition of `kind` at the revision */
-  private def renditionBytes(assetId: String, rev: Int, kind: String): Array[Byte] =
-    java.nio.file.Files.readAllBytes(testApp.service.fileStore.editRenditionPath(assetId, rev, kind))
+  /** The bytes of an asset's stored edited image of `kind` */
+  private def editedBytes(assetId: String, kind: String): Array[Byte] =
+    java.nio.file.Files.readAllBytes(testApp.service.fileStore.editedImagePath(assetId, kind))
 
-  test("An edited Preview and a Display image are served by revision, and a revision replaced since by the current one") {
+  test("An edited Preview and a Display image are served at the asset's revision and below it, and not once it has none") {
 
     /**
      * Setup:
      *
-     * A logged-in user's repository with an imported image whose Edit has two steps, each rendered, so revision 2 is stored and
-     * revision 1 is gone; then the Edit undone to the Original and rendered, so it has no renditions.
+     * A logged-in user's repository with an imported image saved twice, each save rendered, so its edited images are revision
+     * 2's; then its Edit reverted to the identity and rendered, so it has none.
      *
      * Assertions:
      *
-     * `preview?v=2` and `display?v=2` serve revision 2's files as WebP; `v=1`, whose files are gone, serves revision 2's too. The
-     * Preview without `v` is the original's. Each carries the content headers as every content answer does: cached for good,
-     * nosniff, sandboxed. Once the Edit is back at the Original, `preview?v=2` serves the original's Preview and `display?v=2` is
-     * a plain-text 404.
+     * `preview?v=2` and `display?v=2` serve the edited images as WebP, and so does `v=1`, an earlier revision, which a page no
+     * longer builds: it is answered the current images. The Preview without `v` is the original's. Each carries the content
+     * headers as every content answer does: cached for good, nosniff, sandboxed. Once the Edit is the identity, `preview?v=2` and
+     * `display?v=2` are plain-text 404s, never cached, while the Preview without `v` is still the original's.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
-    val assetId = editedAsset(steps = 2).persistedId
+    val assetId = editedAsset(saves = 2).persistedId
     login()
 
     withServer(App) {
@@ -749,8 +749,8 @@ import altitude.core.routes.decorators
           requests.get(contentUrl(host, repoId, dataType, assetId) + query, cookies = testContext.cookies, check = false)
 
         val original = testApp.service.fileStore.getPreviewById(assetId).data
-        val preview = renditionBytes(assetId, 2, Const.DataStore.PREVIEW)
-        val display = renditionBytes(assetId, 2, Const.DataStore.DISPLAY)
+        val preview = editedBytes(assetId, Const.DataStore.PREVIEW)
+        val display = editedBytes(assetId, Const.DataStore.DISPLAY)
         preview.sameElements(original) shouldBe false
 
         for (
@@ -772,32 +772,39 @@ import altitude.core.routes.decorators
             response.headers("content-security-policy") shouldBe Seq("sandbox")
           }
 
-        testApp.service.assetEdit.moveHead(assetId, 2, 0, testContext.user)
+        testApp.service.assetEdit.save(assetId, 2, EditRecipe.Identity, testContext.user)
         testApp.service.editRender.render(assetId)
-        get(Const.DataStore.PREVIEW, "?v=2").bytes shouldBe original
-        val gone = get(Const.DataStore.DISPLAY, "?v=2")
-        gone.statusCode shouldBe 404
-        gone.contentType.head should startWith("text/plain")
+        for (dataType <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)) withClue(s"[$dataType?v=2]: ") {
+          val gone = get(dataType, "?v=2")
+          gone.statusCode shouldBe 404
+          gone.contentType.head should startWith("text/plain")
+          gone.headers.contains("cache-control") shouldBe false
+        }
+        get(Const.DataStore.PREVIEW, "").bytes shouldBe original
     }
   }
 
-  test("A Display image of an asset never edited is a 404, and a revision that is no number, or none for one, a 400") {
+  test("A revision above the asset's, or 0, is a 404, and a revision that is no number, or none for a Display image, a 400") {
 
     /**
      * Setup:
      *
-     * A logged-in user's repository with an imported image never edited, and one edited and rendered.
+     * A logged-in user's repository with an imported image never edited, and one edited and rendered as revision 1.
      *
      * Assertions:
      *
      * The unedited image's `display?v=1` and `preview?v=1` are plain-text 404s, and so are the edited image's `preview?v=2` and
      * `display?v=2`: a revision not used yet may name other bytes later, so it is never answered, nor cached. A `v` that is not
      * digits, for a Preview or a Display image, and a `display` with no `v` are plain-text 400s saying why, never cached.
+     *
+     * Edge cases:
+     *
+     * `v=0` names no edited image: a 404 for the edited image's Preview and Display image alike.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
     val unedited = testContext.persistAsset().persistedId
-    val edited = editedAsset(steps = 1).persistedId
+    val edited = editedAsset(saves = 1).persistedId
     login()
 
     withServer(App) {
@@ -813,8 +820,9 @@ import altitude.core.routes.decorators
 
         plainError(get(Const.DataStore.DISPLAY, unedited, "?v=1"), 404, "Not found")
         plainError(get(Const.DataStore.PREVIEW, unedited, "?v=1"), 404, "Not found")
-        plainError(get(Const.DataStore.PREVIEW, edited, "?v=2"), 404, "Not found")
-        plainError(get(Const.DataStore.DISPLAY, edited, "?v=2"), 404, "Not found")
+        for (dataType <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY); v <- List(2, 0)) withClue(s"[$dataType?v=$v]: ") {
+          plainError(get(dataType, edited, s"?v=$v"), 404, "Not found")
+        }
         for (bad <- List("x", "-1", "1.5", "1e3", "12345678901")) withClue(s"[v=$bad]: ") {
           plainError(get(Const.DataStore.PREVIEW, edited, s"?v=$bad"), 400, Const.Msg.Err.REVISION_NOT_A_NUMBER)
           plainError(get(Const.DataStore.DISPLAY, edited, s"?v=$bad"), 400, Const.Msg.Err.REVISION_NOT_A_NUMBER)
@@ -837,8 +845,8 @@ import altitude.core.routes.decorators
      */
     val library = testContext.persistRepository()
     val repoId = library.persistedId
-    val sorted = editedAsset(steps = 1).persistedId
-    val triaged = editedAsset(steps = 1, isTriaged = true).persistedId
+    val sorted = editedAsset(saves = 1).persistedId
+    val triaged = editedAsset(saves = 1, isTriaged = true).persistedId
     val guest = testContext.persistUser(Some(testContext.makeUser().copy(accountType = AccountType.Guest)))
     testContext.grant(guest, library, Permissions.none)
 

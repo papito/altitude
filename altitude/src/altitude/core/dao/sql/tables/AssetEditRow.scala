@@ -3,16 +3,20 @@ package altitude.core.dao.sql.tables
 import java.time.OffsetDateTime
 import scalasql.Table
 
-/** The `asset_edit` table: an asset's Edit, its head and its renditions' revisions; its steps are `asset_edit_step`'s */
+/**
+ * The `asset_edit` table: an asset's Edit, its edit version and the revisions of its edited images. `recipe` is the Edit's JSON:
+ * `jsonb` on PostgreSQL, which pgJDBC hands out as its JSON text, and `TEXT` on SQLite.
+ */
 case class AssetEditRow[T[_]](
     repositoryId: T[String],
     assetId: T[String],
-    headSeq: T[Int],
-    renderedSeq: T[Option[Int]],
+    recipe: T[String],
+    editVersion: T[Int],
+    renderedVersion: T[Option[Int]],
     lastRev: T[Int],
     isEdited: T[Boolean],
-    width: T[Option[Int]],
-    height: T[Option[Int]],
+    width: T[Int],
+    height: T[Int],
     updatedByAccountId: T[Option[String]],
     createdAt: T[Option[OffsetDateTime]],
     updatedAt: T[Option[OffsetDateTime]])

@@ -1,32 +1,19 @@
 package altitude.core.models
 
-import java.time.Instant
-
-object EditState:
-  /** The label of step 0, the Original, which has no row of its own */
-  val ORIGINAL = "Original"
-
-  /**
-   * A step as the History lists it: its seq and label, the account that made it (its ID and name, None once it is deleted) and
-   * when; none of them for the Original
-   */
-  case class Step(seq: Int, label: String, accountId: Option[String], author: Option[String], createdAt: Option[Instant])
-
 /**
- * An asset's Edit as a client sees it (`AssetEditService.get`): the head step (0 for the Original) with its Edit and label, the
- * step whose renditions are stored (None before the first render), the asset's rendition revision (`asset.edit_rev`, 0 for none),
- * whether the head changes a pixel, the head's edited size (None until the first step), the steps, newest first, with the
- * Original last, and the size of the asset's upright original, the space of the Edit's geometry (None where it is not read: the
- * render status, and an original that is missing).
+ * An asset's Edit as a client sees it (`AssetEditService.get`): its edit version, the count of its saves (0 for an asset never
+ * edited), which a save names as the one it was built on, and the Edit; the edit version whose edited images are stored (None
+ * before the first render); the asset's revision of them (`asset.edit_rev`, 0 for none), their URLs' cache key; whether the Edit
+ * changes a pixel; its edited size (None for an asset never edited); and the size of the asset's upright original, the space of
+ * the Edit's geometry (None where it is not read: the render status, and an original that is missing). The edit version is the
+ * stored Edit's, not the `version` key of the Edit's format.
  */
 case class EditState(
-    head: Int,
+    editVersion: Int,
     recipe: EditRecipe,
-    label: String,
-    rendered: Option[Int],
+    renderedVersion: Option[Int],
     rev: Int,
     edited: Boolean,
     width: Option[Int],
     height: Option[Int],
-    steps: List[EditState.Step],
     upright: Option[(Int, Int)] = None)

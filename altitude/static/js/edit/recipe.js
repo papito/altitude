@@ -1,7 +1,7 @@
 /**
  * The Edit (`CONTEXT.md`) as the client holds it: a plain object of every control's value, `version`
- * 1, the shape `asset_edit_step.recipe` stores and `models/EditRecipe.scala` parses. This module
- * names its defaults, its sliders (range, step, label and how a value is written) and the Edit
+ * 1, the shape `asset_edit.recipe` stores and `models/EditRecipe.scala` parses. This module
+ * names its defaults, its sliders (range, step, label and the decimals of its field) and the Edit
  * panel's sections, and normalizes an Edit the way the server does (`normalize`), so what the
  * client sends is what the server keeps. DOM-free.
  */
@@ -30,10 +30,10 @@ const CURVE_STEPS = 1000
 const EPSILON = 1e-9
 
 /**
- * The sliders, each with its range, its steps per unit (1 for whole numbers, 20 for Exposure's
- * 0.05), the decimals its value is written with, what follows its value, its section and, for a
- * slider whose track is a gradient, the gradient's token in `core.css` (`--edit-track-<track>`).
- * The labels and the way a value is written are the server's step labels' (`EditRecipe.SLIDERS`).
+ * The sliders, each with its label, its range (the server's, `EditRecipe.SLIDERS`), its steps per
+ * unit (1 for whole numbers, 20 for Exposure's 0.05), the decimals its field writes its value
+ * with, its section and, for a slider whose track is a gradient, the gradient's token in
+ * `core.css` (`--edit-track-<track>`).
  */
 export const SLIDERS = Object.freeze(
     Object.fromEntries(
@@ -41,7 +41,6 @@ export const SLIDERS = Object.freeze(
             slider("straighten", "Straighten", -45, 45, "cropRotate", {
                 stepsPerUnit: 10,
                 decimals: 1,
-                suffix: "°",
             }),
             slider(
                 "perspectiveV",
@@ -92,7 +91,7 @@ function slider(
     min,
     max,
     section,
-    { stepsPerUnit = 1, decimals = 0, suffix = "", track = null } = {},
+    { stepsPerUnit = 1, decimals = 0, track = null } = {},
 ) {
     return {
         key,
@@ -103,9 +102,7 @@ function slider(
         stepsPerUnit,
         step: 1 / stepsPerUnit,
         decimals,
-        suffix,
         track,
-        signed: min < 0,
     }
 }
 
@@ -351,7 +348,7 @@ export function isIdentity(recipe) {
     )
 }
 
-/** Whether two Edits are the same once normalized, as the server compares a step with its head */
+/** Whether two Edits are the same once normalized, as the server compares a save with the Edit it keeps */
 export function sameRecipe(a, b) {
     return JSON.stringify(normalize(a)) === JSON.stringify(normalize(b))
 }
@@ -367,15 +364,4 @@ export function sectionChanged(recipe, sectionId) {
     return section.keys
         .filter((key) => !CROP_TOOL_SETTINGS.includes(key))
         .some((key) => JSON.stringify(edit[key]) !== JSON.stringify(base[key]))
-}
-
-/**
- * A slider's value as a step's label writes it: "+0.40", "−12", "40", "+2.3°", the minus sign
- * U+2212, as the server writes it
- */
-export function formatSlider(key, value) {
-    const spec = SLIDERS[key]
-    const digits = Math.abs(value).toFixed(spec.decimals)
-    const sign = !spec.signed || value === 0 ? "" : value > 0 ? "+" : "−"
-    return `${sign}${digits}${spec.suffix}`
 }

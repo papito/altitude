@@ -473,7 +473,7 @@
           <p>The Edit panel (<code>includes/edit_panel</code>, <code>#editPanel</code>, its rules in
              <code>includes/edit_panel.css</code>) is Asset detail's other docked panel, on <code>--theme-neutral-2</code>, its
              header and its commit row parted from the body by hairlines in <code>--panel-border-color</code>. The header's
-             tools (<code>.edit-tool</code>: Undo, Redo, History, Before/after, Reset all) are an icon alone in
+             tools (<code>.edit-tool</code>: Undo, Redo, Before/after, Reset all) are an icon alone in
              <code>--theme-neutral-3</code>, tinted on hover, <code>--theme-accent</code> while pressed and dimmed while
              disabled, as the toolbar's toggles are. The Histogram of the edited image (<code>.edit-histogram</code>,
              <code>--edit-histogram-height</code> tall) is drawn as Curation's strip is, on a button over
@@ -497,7 +497,6 @@
                 <h2>Edit</h2>
                 <button type="button" class="edit-tool" aria-label="Undo" title="Undo (Ctrl+Z)"><i class="fas fa-undo" aria-hidden="true"></i></button>
                 <button type="button" class="edit-tool" disabled aria-label="Redo" title="Redo (Ctrl+Shift+Z)"><i class="fas fa-redo" aria-hidden="true"></i></button>
-                <button type="button" class="edit-tool" aria-label="History" title="History"><i class="fas fa-history" aria-hidden="true"></i></button>
                 <button type="button" class="edit-tool" aria-pressed="true" aria-label="Before/after" title="Before/after"><i class="fas fa-columns" aria-hidden="true"></i></button>
                 <button type="button" class="edit-tool" aria-label="Reset all" title="Reset all"><i class="fas fa-eraser" aria-hidden="true"></i></button>
               </header>
@@ -552,6 +551,23 @@
                 <p><span>Double-click a slider to reset it</span></p>
               </footer>
             </aside>
+          </div>
+          <p>The Edit panel's warning of changes not saved (<code>dialog#editLeaveDialog</code>, after the panel in
+             <code>includes/edit_panel</code>) is a native modal dialog over Asset detail, which stays the active host: the
+             popover dialog's frosted surface and padding, <code>--popover-form-width</code> wide, under the general modal's
+             <code>--scrim-color</code>, its title as a dialog's, its message, and at its end Keep editing, Discard (an
+             <code>.error</code> button) and Save (<code>.primary</code>, the initial focus, never the destructive action). The
+             specimen shows it open in place, not modal.</p>
+          <div class="sg-edit-leave">
+            <dialog id="editLeaveDialog" open aria-labelledby="sgEditLeaveTitle">
+              <h2 id="sgEditLeaveTitle">Changes not saved</h2>
+              <p>The last change to this photo is not saved yet.</p>
+              <div class="edit-leave-actions">
+                <button type="button" class="action-button">Keep editing</button>
+                <button type="button" class="action-button error">Discard</button>
+                <button type="button" class="action-button primary">Save</button>
+              </div>
+            </dialog>
           </div>
         </section>
 

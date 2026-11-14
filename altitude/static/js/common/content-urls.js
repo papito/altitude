@@ -3,10 +3,11 @@
  * one place, and the repointing of an image at a new Preview. DOM-free, so the tests run it under
  * Node (`scripts/test-js/`).
  *
- * An edited asset's renditions are named by their revision (`?v=<rev>`, `asset.edit_rev`), which is
- * never used twice for an asset, so the bytes under a URL never change: the edited Preview at a
- * revision above 0 and the original's Preview at 0 (`Util.previewUrl`), and the Display image, which
- * exists only at a revision above 0.
+ * An edited asset's edited images carry their revision (`?v=<rev>`, `asset.edit_rev`) as a cache
+ * key: each render replaces the images under a revision never used before for the asset, so a page
+ * never builds a URL whose bytes it has seen change: the edited Preview at a revision above 0 and
+ * the original's Preview at 0 (`Util.previewUrl`), and the Display image, which exists only at a
+ * revision above 0.
  */
 
 function contentUrl(repoId, dataType, assetId) {

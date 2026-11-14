@@ -138,7 +138,8 @@ async function playShownVideo({ videoEl, isCurrent }) {
  * tells the Detail panel; a Video is shown here. The asset's Edit, whether the account may edit
  * it and why not come with the fragment (`data-app-image-detail-edit`, `-editable`,
  * `-edit-refusal`) on opening and with the asset's JSON (`edit`, `editable`, `editRefusal`) on a
- * step. The Edit panel (`edit/edit-panel.js`) is told of each asset as its load starts, before the
+ * step. A step asks the Edit panel (`edit/edit-panel.js`) first, which warns of a change pending
+ * and may keep the asset shown; the panel is told of each asset as its load starts, before the
  * stage, so it ends what was open on the last one and has the stage draw this one's Edit while it
  * is open, and again once a still image is shown.
  */
@@ -184,7 +185,12 @@ export function createSearchDetailCoordinator({
      * spacer after it, if any. The page may still be arriving for a detail view that moved on.
      */
     async function step({ direction, loadBeyond = null }) {
-        if (!isAssetDetailActive()) {
+        // A change pending in the Edit panel is asked about first, and staying is no step
+        if (
+            !isAssetDetailActive() ||
+            !(await editPanel.beforeLeave()) ||
+            !isAssetDetailActive()
+        ) {
             return
         }
 

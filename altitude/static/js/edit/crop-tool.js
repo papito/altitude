@@ -16,9 +16,10 @@
  * arrows nudge it by a pixel of the frame (ten with Shift).
  *
  * The tool changes the Edit through its host (`edit-panel.js`): `preview` shows a change on the stage without saving it,
- * and the host saves the whole session as one step on Done (`done`) or puts back the Edit the tool opened on (`cancel`).
- * The floating bar holds the guide (O cycles it: Thirds, Grid, Golden ratio, Diagonals, None), the crop's size in the
- * original's pixels, Cancel (Escape, `cancelOpenCropTool`, ahead of closing Asset detail) and Done (Enter or C).
+ * and the host saves the whole session as one change on Done (`done`) or puts back the Edit the tool opened on
+ * (`cancel`). The floating bar holds the guide (O cycles it: Thirds, Grid, Golden ratio, Diagonals, None), the crop's
+ * size in the original's pixels, Cancel and Done (Enter or C). Escape (`escapeOpenCropTool`, ahead of closing Asset
+ * detail) is the host's `escape`: Cancel, or the warning when the session changed the Edit.
  */
 import { Const } from "../constants.js"
 import {
@@ -56,15 +57,15 @@ export const GUIDES = Object.freeze([
 const NUDGE = 1
 const NUDGE_LARGE = 10
 
-// The tool of the page, which Escape cancels (`global.js`)
+// The tool of the page, which Escape leaves (`global.js`)
 let activeTool = null
 
-/** Cancels the open Crop tool, Escape's job ahead of closing Asset detail; answers whether one was open */
-export function cancelOpenCropTool() {
+/** Escape on the open Crop tool, ahead of closing Asset detail: its host's `escape`; answers whether one was open */
+export function escapeOpenCropTool() {
     if (!activeTool?.isOpen()) {
         return false
     }
-    activeTool.cancel()
+    activeTool.escape()
     return true
 }
 
@@ -94,8 +95,8 @@ function guideLines(id) {
 
 /**
  * The Crop tool, driven by `host`: `recipe()` the Edit shown, `upright()` the upright original's size, `preview(recipe)`
- * a change shown and not saved, `done()` and `cancel()` the session's end, and `changed()` after the tool's own state
- * (the Level tool, the guide) changes
+ * a change shown and not saved, `done()` and `cancel()` the session's end, `escape()` Escape's, and `changed()` after the
+ * tool's own state (the Level tool, the guide) changes
  */
 export function createCropTool(host) {
     // The open session: the Edit it opened on, and the element focus returns to
@@ -506,6 +507,7 @@ export function createCropTool(host) {
         /** The Edit the open session started from, which Cancel puts back */
         startRecipe: () => session?.start ?? null,
         cancel: () => host.cancel(),
+        escape: () => host.escape(),
     }
     return api
 }

@@ -1244,7 +1244,7 @@ import altitude.core.util.Util
     /**
      * Setup:
      *
-     * Two assets, one of them with a step of its Edit, rendered as revision 1.
+     * Two assets, one of them with a saved Edit, rendered as revision 1.
      *
      * Assertions:
      *
@@ -1256,7 +1256,7 @@ import altitude.core.util.Util
     login()
     val edited = testContext.persistAsset()
     val plain = testContext.persistAsset()
-    testApp.service.assetEdit.addStep(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    testApp.service.assetEdit.save(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
     testApp.service.editRender.render(edited.persistedId)
 
     withServer(App) {

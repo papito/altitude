@@ -93,7 +93,7 @@ export const Const = {
         cycleCropGuide: "CYCLE_CROP_GUIDE_EVENT",
         swapCropAspect: "SWAP_CROP_ASPECT_EVENT",
         cropDone: "CROP_DONE_EVENT",
-        // Ctrl/Cmd+Z, and Ctrl/Cmd+Shift+Z or Ctrl+Y, with the Edit panel open: Undo and Redo of the Edit's History
+        // Ctrl/Cmd+Z, and Ctrl/Cmd+Shift+Z or Ctrl+Y, with the Edit panel open: Undo and Redo of the panel's session
         undoEdit: "UNDO_EDIT_EVENT",
         redoEdit: "REDO_EDIT_EVENT",
         settingsSaved: "SETTINGS_SAVED_EVENT",
@@ -218,6 +218,10 @@ export const Const = {
         cropSize: "data-app-crop-size",
         cropCancel: "data-app-crop-cancel",
         cropDone: "data-app-crop-done",
+        // The Edit panel's warning of changes not saved (includes/edit_panel, js/edit/leave-dialog.js): a choice's button,
+        // its value the choice (`save`, `discard`, `stay`), and the message
+        editLeave: "data-app-edit-leave",
+        editLeaveMessage: "data-app-edit-leave-message",
         // The button of a People row that selects its Face (htmx/detail_panel_people), and under a selected row its
         // corrections: Change, which opens the combobox, and Remove, whose second label (the one after the first click)
         // the button carries

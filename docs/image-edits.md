@@ -2,8 +2,8 @@
 
 What an asset's Edit is, and how its two renderers draw it: the geometry, the per-pixel math, the edge rule, the sizes,
 auto-straighten, and the rule that keeps the two renderers drawing the same picture. For the words used here (Edit,
-Edit panel, Crop tool, Level tool, Display image, Show original) see [CONTEXT.md](../CONTEXT.md). The History, the
-render queue, the renditions and the routes are **Image edits** in [altitude/AGENTS.md](../altitude/AGENTS.md), and the
+Edit panel, Crop tool, Level tool, Display image, Show original) see [CONTEXT.md](../CONTEXT.md). The stored Edit, the
+render queue, the edited images and the routes are **Image edits** in [altitude/AGENTS.md](../altitude/AGENTS.md), and the
 Edit panel and Asset detail's stage are **Edit panel** in [views/AGENTS.md](../altitude/views/AGENTS.md).
 
 Sources: the Edit, [EditRecipe.scala](../altitude/src/altitude/core/models/EditRecipe.scala) and its client twin
@@ -15,8 +15,8 @@ the shared vectors, [vectors.json](../altitude/test/resources/edit/vectors.json)
 
 ## The Edit
 
-An Edit is one JSON object, `version` 1, with every key always present: what `asset_edit_step.recipe` stores, what the
-client sends and what `EditRecipe.toJson` writes, `version` first.
+An Edit is one JSON object, `version` 1 (the format's version), with every key always present: what `asset_edit.recipe`
+stores, what the client sends and what `EditRecipe.toJson` writes, `version` first.
 
 ```json
 {
@@ -49,13 +49,13 @@ client sends and what `EditRecipe.toJson` writes, `version` first.
 | `sharpen` | 0 to 150, 1 | |
 | `grain` | 0 to 100, 1 | |
 
-The Edit panel's sections (`EditSection`, `SECTIONS` in `recipe.js`) group the keys: Crop & rotate (the turn, the flips,
+The Edit panel's sections (`SECTIONS` in `recipe.js`) group the keys: Crop & rotate (the turn, the flips,
 Straighten, the perspective, the crop and the four Crop tool settings), Light (Exposure to Gamma, and the curve), Color
 (Temperature, Tint, Vibrance, Saturation) and Effects (Sharpen, Clarity, Vignette, Grain).
 
 **The identity** is an Edit that changes no pixel: `rotate` 0, no flip, Straighten and the perspective 0, no crop, every
 slider 0 and the curve `[[0, 0], [1, 1]]`. `aspect`, `portrait`, `keepInside` and `cropFitted` do not count. An asset is
-edited when its head step is not the identity (`isIdentity`, on both sides).
+edited when its Edit is not the identity (`isIdentity`, on both sides).
 
 **Validation and rounding.** `EditRecipe.parse` is the server's one way in, and `recipe.js`'s `normalize` rounds as it
 does, so what the client sends is what the server keeps. It refuses, with a `ValidationException` saying why, an object
@@ -304,7 +304,7 @@ true, and run both suites; an entry the client then misses is a parity bug, not 
 
 ## Tests
 
-The renderer and the Edit are unit tests (`EditRendererTests`, `EditRecipeTests`), the History and the render queue
+The renderer and the Edit are unit tests (`EditRendererTests`, `EditRecipeTests`), the stored Edit and the render queue
 integration tests on both engines (`AssetEditServiceTests`, `EditRenderServiceTests`), the routes controller tests
 (`EditControllerTests`, `ContentViewControllerTests`, `RouteTableTests`), and the client's modules Node tests
 (`scripts/test-js/`: the parity, the session, the Edit panel's changes, the content URLs, the Histogram's paths). What each

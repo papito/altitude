@@ -1,10 +1,11 @@
 /**
- * After an Edit's head moves, the server renders it in the background (the `edit-render` queue,
- * 1.5 s after the last change) and stores the edited Preview and the Display image under a new
- * revision. This module waits for that render (`waitForRender`: `GET /api/edit/r/:repo/asset/:id/status`
- * every second, for up to a minute, until the step rendered is the head) and then points the
- * asset's cells in the grid at the new Preview (`swapGridPreviews`), which the Edit panel's session
- * (`edit-session.js`) runs after its last change. The status route is the holder of Edit images'.
+ * After an Edit is saved, the server renders it in the background (the `edit-render` queue, 1.5 s
+ * after the last save) and replaces the edited Preview and the Display image under a new revision.
+ * This module waits for that render (`waitForRender`: `GET /api/edit/r/:repo/asset/:id/status`
+ * every second, for up to a minute, until the edit version rendered is the one saved) and then points
+ * the asset's cells in the grid at the new Preview (`swapGridPreviews`), which the Edit panel runs
+ * once its session (`edit-session.js`) is idle after a save. The status route is the holder of Edit
+ * images'.
  */
 import { cellsOf } from "../search-results/cells.js"
 import { previewUrl, repointImage } from "../common/content-urls.js"
@@ -18,15 +19,15 @@ export const MAX_FAILED_READS = 3
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * Resolves to the render status (`{ head, rendered, rev }`) once the step rendered is `head`, or
- * to null when a minute passes first, `isCancelled()` turns true (a later change, which waits for
- * its own render), the head has moved on, or `MAX_FAILED_READS` reads in a row fail (each logged).
- * Polls every second, the first time at once.
+ * Resolves to the render status (`{ editVersion, renderedVersion, rev }`) once the edit version
+ * rendered is `editVersion`, or to null when a minute passes first, `isCancelled()` turns true (a later save, which
+ * waits for its own render), the Edit has been saved again, or `MAX_FAILED_READS` reads in a row
+ * fail (each logged). Polls every second, the first time at once.
  */
 export async function waitForRender({
     repoId,
     assetId,
-    head,
+    editVersion,
     isCancelled = () => false,
     intervalMs = POLL_INTERVAL_MS,
     timeoutMs = POLL_TIMEOUT_MS,
@@ -55,17 +56,17 @@ export async function waitForRender({
             return null
         }
         if (status) {
-            // A later head than the one waited for is another change's to wait for
-            if (status.head !== head) {
+            // A later edit version than the one waited for is another save's to wait for
+            if (status.editVersion !== editVersion) {
                 return null
             }
-            if (status.rendered === head) {
+            if (status.renderedVersion === editVersion) {
                 return status
             }
         }
         if (Date.now() + intervalMs > deadline) {
             console.debug(
-                `The render of ${assetId} at step ${head} took longer than ${timeoutMs} ms`,
+                `The render of ${assetId} at edit version ${editVersion} took longer than ${timeoutMs} ms`,
             )
             return null
         }
@@ -86,16 +87,22 @@ export function swapGridPreviews({ repoId, assetId, rev }) {
 }
 
 /**
- * Waits for the render of `head` and swaps the grid's Previews to it: the session's call after its
- * last change. Resolves to the status, or null when the render was not seen (see `waitForRender`).
+ * Waits for the render of `editVersion` and swaps the grid's Previews to it: the panel's call once its
+ * session is idle after a save. Resolves to the status, or null when the render was not seen (see
+ * `waitForRender`).
  */
 export async function refreshAfterRender({
     repoId,
     assetId,
-    head,
+    editVersion,
     isCancelled,
 }) {
-    const status = await waitForRender({ repoId, assetId, head, isCancelled })
+    const status = await waitForRender({
+        repoId,
+        assetId,
+        editVersion,
+        isCancelled,
+    })
     if (status) {
         swapGridPreviews({ repoId, assetId, rev: status.rev })
     }

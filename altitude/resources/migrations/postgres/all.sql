@@ -232,8 +232,8 @@ CREATE TABLE asset (
   -- The Sequence the image is in while in triage: the id its members share. A Sequence has no table; it exists while some
   -- asset carries its id. NULL for a sorted asset, a Video or an animated image.
   sequence_id CHAR(36) COLLATE "C",
-  -- The revision of the asset's edited renditions (its Edit rendered: the edited Preview and the Display image), which their
-  -- URLs carry; 0 when it has none, so the original's Preview and file are shown
+  -- The revision of the asset's edited images (its Edit rendered: the edited Preview and the Display image), which their URLs
+  -- carry as a cache key; 0 when it has none, so the original's Preview and file are shown
   edit_rev INT NOT NULL DEFAULT 0,
   UNIQUE (id, repository_id),
   -- No delete action, as no folder is ever deleted on its own (a deleted folder is recycled)
@@ -280,46 +280,33 @@ CREATE INDEX asset_owner ON asset (owner_user_id);
 -- account changes (AssetDao.rewriteImporterRecords)
 CREATE INDEX asset_importer ON asset ((original_owner->>'id'));
 
--- An asset's Edit (AssetEditService): its head step, the step its renditions were rendered from and the revisions they used. No
--- row until the asset's first step; the steps are asset_edit_step's.
+-- An asset's Edit (AssetEditService): the Edit itself, its edit version and the edit version its edited images were rendered
+-- from. No row until the asset's first save; the original is never written.
 CREATE TABLE asset_edit (
   repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
   asset_id CHAR(36) COLLATE "C" NOT NULL PRIMARY KEY,
-  -- The step shown; 0 is the original, which has no row of its own
-  head_seq INT NOT NULL DEFAULT 0,
-  -- The step whose renditions are stored; NULL before the first render
-  rendered_seq INT,
-  -- The highest rendition revision the asset has used, so none is ever reused
+  -- The Edit (EditRecipe's JSON), the identity once reverted to the original
+  recipe jsonb NOT NULL,
+  -- The edit version: 1 at the first save and one more at each save after it; a save names the one it was built on. Not the
+  -- recipe's own `version`, the version of its format
+  edit_version INT NOT NULL,
+  -- The edit version whose edited images are stored; NULL before the first render
+  rendered_version INT,
+  -- The highest revision of edited images the asset has used, so none is ever used twice (asset.edit_rev)
   last_rev INT NOT NULL DEFAULT 0,
-  -- The head step is not the identity: it changes a pixel
-  is_edited BOOLEAN NOT NULL DEFAULT FALSE,
-  -- The head's edited size (EditRecipe.editedSize); NULL until the first step
-  width INT,
-  height INT,
+  -- The Edit is not the identity: it changes a pixel
+  is_edited BOOLEAN NOT NULL,
+  -- The edited size (EditRecipe.editedSize)
+  width INT NOT NULL,
+  height INT NOT NULL,
   updated_by_account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE SET NULL,
   FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
 ) INHERITS (_core);
 
--- The startup requeue of the renders: the Edits whose head is not rendered
-CREATE INDEX asset_edit_01 ON asset_edit (repository_id) WHERE rendered_seq IS DISTINCT FROM head_seq;
--- The Edits an account changed last, for the key's delete action when the account is deleted
+-- The startup requeue of the renders: the Edits whose edit version is not rendered
+CREATE INDEX asset_edit_01 ON asset_edit (repository_id) WHERE rendered_version IS DISTINCT FROM edit_version;
+-- The Edits an account saved last, for the key's delete action when the account is deleted
 CREATE INDEX asset_edit_02 ON asset_edit (updated_by_account_id) WHERE updated_by_account_id IS NOT NULL;
-
--- A step of an asset's Edit: the Edit as it was after one change (EditRecipe's JSON) and the label derived from that change. The
--- newest Const.Edit.MAX_STEPS are kept.
-CREATE TABLE asset_edit_step (
-  repository_id CHAR(36) COLLATE "C" NOT NULL,
-  asset_id CHAR(36) COLLATE "C" NOT NULL,
-  seq INT NOT NULL,
-  recipe jsonb NOT NULL,
-  label VARCHAR(80) NOT NULL,
-  account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE SET NULL,
-  PRIMARY KEY (asset_id, seq),
-  FOREIGN KEY (repository_id, asset_id) REFERENCES asset (repository_id, id) ON DELETE CASCADE
-) INHERITS (_core);
-
--- The steps an account made, for the key's delete action when the account is deleted
-CREATE INDEX asset_edit_step_01 ON asset_edit_step (account_id) WHERE account_id IS NOT NULL;
 
 CREATE SEQUENCE person_label;
 

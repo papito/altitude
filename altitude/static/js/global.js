@@ -26,8 +26,10 @@
  * The Edit panel's keys (`listeners/edit.js`), in Asset detail and never in a text field: `e` opens
  * or closes the panel, `c` opens its Crop tool or, in it, is Done; in the Crop tool `o` cycles the
  * guide, `x` swaps the aspect's orientation and Enter is Done (on a control, Enter presses it);
- * Ctrl/Cmd+Z is Undo and Ctrl/Cmd+Shift+Z or Ctrl+Y Redo. Escape closes the History's popover, then
- * cancels the Crop tool, ahead of the selected People row and the dialog. The arrows and Space are
+ * Ctrl/Cmd+Z is Undo and Ctrl/Cmd+Shift+Z or Ctrl+Y Redo. Escape closes the Edit panel's warning of
+ * changes not saved (Keep editing), then leaves the Crop tool (Cancel, or the warning when its
+ * session changed the Edit), ahead of the selected People row and the dialog, whose close the
+ * warning may hold; while the warning is open, Asset detail's keys are left to it. The arrows and Space are
  * left to focus in the Edit panel, on its divider and in the Crop tool, as in the Detail panel.
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
@@ -35,12 +37,12 @@ import {
     clearSelectedFaceRow,
     closeOpenFaceCombobox,
 } from "./alpine/components/face-combobox.js"
-import { closeOpenEditHistory } from "./alpine/components/edit-panel.js"
 import { closeModal, getActiveModalHost, ModalHost } from "./common/modal.js"
 import { isTextEditingTarget } from "./common/text-editing.js"
 import { toggleTheme } from "./common/theme.js"
 import { Const } from "./constants.js"
-import { cancelOpenCropTool, isCropToolOpen } from "./edit/crop-tool.js"
+import { escapeOpenCropTool, isCropToolOpen } from "./edit/crop-tool.js"
+import { closeLeaveDialog, isLeaveDialogOpen } from "./edit/leave-dialog.js"
 import { closeMapPanel } from "./map/map-panel.js"
 import { closeOpenSearchPanel } from "./search-results/search-panel.js"
 
@@ -73,14 +75,14 @@ document.addEventListener("keydown", (event) => {
         // leaves Asset detail open; the advanced search panel closes the same way, the browser
         // returning focus to its filter button; so does a selected Face's row in its People section,
         // and a closing modal or popover dialog restores focus itself
-        // In Asset detail, the Edit panel's History popover closes alone, then the Crop tool's Cancel
-        // puts back the Edit it opened on, before the selected Face and the dialog
+        // In Asset detail, the Edit panel's warning closes alone (Keep editing), then the Crop tool is
+        // left (Cancel, or the warning), before the selected Face and the dialog
         if (
             closeOpenContextMenu({ reason: "Escape", returnFocus: true }) ||
             closeOpenSearchPanel() ||
             (getActiveModalHost() === ModalHost.assetDetail &&
-                (closeOpenEditHistory() ||
-                    cancelOpenCropTool() ||
+                (closeLeaveDialog() ||
+                    escapeOpenCropTool() ||
                     clearSelectedFaceRow())) ||
             closeModal() ||
             closeMapPanel()
@@ -97,7 +99,8 @@ document.addEventListener("keydown", (event) => {
 
     if (
         getActiveModalHost() !== ModalHost.assetDetail ||
-        isTextEditingTarget(event.target)
+        isTextEditingTarget(event.target) ||
+        isLeaveDialogOpen()
     ) {
         return
     }

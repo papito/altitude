@@ -82,9 +82,9 @@ object Util:
     s"/${Const.DataStore.CONTENT}/r/${RequestContext.getRepository.persistedId}/$dataType/$itemId"
 
   /**
-   * The URL of an asset's Preview as the grid and Quick view show it: the edited Preview, by its revision (`?v=<editRev>`), for
-   * an asset with edited renditions, and the original's otherwise. Curation keeps the original's ([[contentUrl]]): it judges
-   * captures, not edits.
+   * The URL of an asset's Preview as the grid and Quick view show it: the edited Preview, by its revision (`?v=<editRev>`, the
+   * cache key a new render changes), for an asset with edited images, and the original's otherwise. Curation keeps the original's
+   * ([[contentUrl]]): it judges captures, not edits.
    */
   def previewUrl(asset: Asset): String =
     val url = contentUrl(Const.DataStore.PREVIEW, asset.persistedId)

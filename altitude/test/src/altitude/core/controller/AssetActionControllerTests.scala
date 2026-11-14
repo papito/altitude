@@ -718,22 +718,22 @@ import altitude.core.util.ImageMeasurement
   private def htmlUnescaped(value: String): String =
     value.replace("&quot;", "\"").replace("&#x27;", "'").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
 
-  test("The asset detail carries the asset's Edit at its head and whether the account may edit it, as JSON and in the fragment") {
+  test("The asset detail carries the asset's Edit and whether the account may edit it, as JSON and in the fragment") {
 
     /**
      * Setup:
      *
-     * A Library with an imported image with one step of its Edit (Exposure +0.4), rendered, an imported image never edited, and
+     * A Library with an imported image whose Edit is saved once (Exposure +0.4) and rendered, an imported image never edited, and
      * an imported image in the trash; a User holding every Permission, and a User holding every Permission but Edit images, each
      * logged in.
      *
      * Assertions:
      *
-     * Asked for as JSON by the first User, the edited image's detail carries `edit`: the head and its label, rendered at the head
-     * as revision 1, edited, its size, the size of its upright original and its Edit, and `editable` true with no `editRefusal`;
-     * the fragment carries the same Edit as JSON and `editable` in its data attributes, with the measurement's clipping levels
-     * and box, which the Edit panel's Clipping blink reads. The image never edited has no `edit`, in the JSON or the fragment,
-     * and is editable.
+     * Asked for as JSON by the first User, the edited image's detail carries `edit`: edit version 1, rendered at that version as
+     * revision 1, edited, its size, the size of its upright original and its Edit, and `editable` true with no `editRefusal`; the
+     * fragment carries the same Edit as JSON and `editable` in its data attributes, with the measurement's clipping levels and
+     * box, which the Edit panel's Clipping blink reads. The image never edited has no `edit`, in the JSON or the fragment, and is
+     * editable.
      *
      * Edge cases:
      *
@@ -745,8 +745,8 @@ import altitude.core.util.ImageMeasurement
     login()
     val edited = testContext.persistAsset()
     val recipe = EditRecipe.Identity.copy(exposure = 0.4)
-    testApp.service.assetEdit.addStep(edited.persistedId, 0, recipe, testContext.user)
-    // Rendered now, so the render the step queued cannot change the answer while the test reads it
+    testApp.service.assetEdit.save(edited.persistedId, 0, recipe, testContext.user)
+    // Rendered now, so the render the save queued cannot change the answer while the test reads it
     testApp.service.editRender.render(edited.persistedId)
     val untouched = testContext.persistAsset()
     val recycled = testContext.persistAsset()
@@ -774,9 +774,8 @@ import altitude.core.util.ImageMeasurement
         json("editable").bool shouldBe true
         json.obj.contains("editRefusal") shouldBe false
         json("edit") shouldBe ujson.Obj(
-          "head" -> 1,
-          "label" -> "Exposure +0.40",
-          "rendered" -> 1,
+          "editVersion" -> 1,
+          "renderedVersion" -> 1,
           "rev" -> 1,
           "edited" -> true,
           "width" -> edited.width,

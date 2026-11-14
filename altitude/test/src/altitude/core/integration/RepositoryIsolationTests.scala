@@ -45,8 +45,8 @@ import altitude.core.util.QueryResult
   /**
    * A second repository with a row of every scoped table: an asset (with its Search document), a folder, an album and a Location
    * holding the asset, a Person with a Face on it, a metadata field with a value on it, an Import with a pending file, a Watch
-   * folder that remembers a file, an imported image with a step of its Edit, and a stat of its own. The context is the first
-   * repository again when it returns.
+   * folder that remembers a file, an imported image with a saved Edit, and a stat of its own. The context is the first repository
+   * again when it returns.
    */
   private def twoRepositories(): TwoRepositories = {
     val first = testContext.repository
@@ -69,8 +69,8 @@ import altitude.core.util.QueryResult
     testApp.txManager.withTransaction(testApp.DAO.stats.add(Stat(isolationDimension, 0)))
     // Imported, as an Edit reads the original's orientation
     val edited = testContext.persistAsset(repository = Some(second))
-    testApp.service.assetEdit.addStep(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
-    // Rendered now, so the render the step queued finds nothing to write while the tests compare the rows
+    testApp.service.assetEdit.save(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    // Rendered now, so the render the save queued finds nothing to write while the tests compare the rows
     testApp.service.editRender.render(edited.persistedId)
 
     switchContextRepo(first)
@@ -578,7 +578,7 @@ import altitude.core.util.QueryResult
   /**
    * In the first repository, a row of every scoped table: an asset with its Search document in a folder, an album and a Location
    * holding it, a Person with a Face on it, a metadata field with an indexed value on it, an Import with a pending file, a Watch
-   * folder that remembers a file, and a step of the asset's Edit. Its IDs by table.
+   * folder that remembers a file, and a saved Edit of the asset. Its IDs by table.
    */
   private def rowsInFirst(repos: TwoRepositories): Map[String, String] = {
     // Imported, as an Edit reads the original's orientation
@@ -596,8 +596,8 @@ import altitude.core.util.QueryResult
     val opened = testApp.service.imports.open(ImportSource.Upload)
     val importFile = testApp.service.imports.addFile(opened.persistedId, "mine.jpg", sizeBytes = 1)
     val (watchFolder, watchFolderFile) = rememberingWatchFolder("mine")
-    testApp.service.assetEdit.addStep(asset.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
-    // Rendered now, so the render the step queued finds nothing to write while the tests compare the rows
+    testApp.service.assetEdit.save(asset.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    // Rendered now, so the render the save queued finds nothing to write while the tests compare the rows
     testApp.service.editRender.render(asset.persistedId)
 
     Map(
@@ -664,7 +664,6 @@ import altitude.core.util.QueryResult
       mine("watch_folder_file"))
     foreignKey("UPDATE watch_folder SET dest_folder_id = ? WHERE id = ?", idOf(repos, "folder"), mine("watch_folder"))
     foreignKey("UPDATE asset_edit SET asset_id = ? WHERE asset_id = ?", theirAsset, mine("asset"))
-    foreignKey("UPDATE asset_edit_step SET asset_id = ? WHERE asset_id = ?", theirAsset, mine("asset"))
 
     testContext.rowsOf(repos.first) shouldEqual firstBefore
     testContext.rowsOf(repos.second) shouldEqual secondBefore
@@ -676,8 +675,8 @@ import altitude.core.util.QueryResult
      * Setup:
      *
      * A repository with a row of every scoped table: an asset with its Search document, a folder, an album and a Location holding
-     * the asset, a Person with a Face on it, a metadata field with a value on it, an Import with a pending file, a step of the
-     * asset's Edit, and its stats.
+     * the asset, a Person with a Face on it, a metadata field with a value on it, an Import with a pending file, the asset's
+     * saved Edit, and its stats.
      *
      * Assertions:
      *

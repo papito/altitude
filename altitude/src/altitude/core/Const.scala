@@ -54,13 +54,11 @@ object Const:
     val MAX_SEQUENCE_FRAMES = 100
 
   object Edit:
-    // The most steps an asset's Edit keeps, the oldest dropped first; the Original (step 0) is kept apart from them
-    val MAX_STEPS = 100
     // The Display image's longest edge, at most; a smaller edited image keeps its own size
     val DISPLAY_LONG_EDGE = 3840
     // The Display image's WebP quality, 0 to 100
     val DISPLAY_WEBP_QUALITY = 90
-    // How long after the last change of an Edit's head its render is queued, each change putting it off again
+    // How long after the last save of an Edit its render is queued, each save putting it off again
     val RENDER_DEBOUNCE_MS = 1500
 
   object AssetView:
@@ -346,15 +344,13 @@ object Const:
       val EDIT_RECYCLED = "An asset in the trash cannot be edited"
       // An asset whose stored original is gone, so its size cannot be turned upright (AssetService.uprightSize)
       val ORIGINAL_MISSING = "The original file of this asset is missing"
-      // A write of an Edit built on a head that has moved since (EditConflictException), answered with the current state
+      // A save of an Edit built on a version it has moved on from since (EditConflictException), answered with the current state
       val EDIT_CONFLICT = "This photo was changed elsewhere"
-      // A content URL's `v`, the revision of an edited rendition, that is no whole number, or a Display image asked for without
-      // one (ContentViewController)
+      // A content URL's `v`, the revision of an edited image, that is no whole number, or a Display image asked for without one
+      // (ContentViewController)
       val REVISION_NOT_A_NUMBER = "The revision must be a whole number"
       val REVISION_REQUIRED = "A Display image is asked for by its revision"
-      // A head move to a step the Edit no longer has, or never had
-      val EDIT_STEP_NOT_FOUND = "The Edit has no step %d"
-      // A write of an Edit whose head or step is not a whole number from 0, or with no Edit (EditController)
+      // A save of an Edit whose `base` is not a whole number from 0, or with no Edit (EditController)
       val EDIT_WHOLE_NUMBER = "%s must be a whole number, 0 or more"
       val EDIT_RECIPE_REQUIRED = "recipe must be the Edit"
       // A folder added under a parent folder that is no folder of the repository (FolderActionController.htmxAddFolder)

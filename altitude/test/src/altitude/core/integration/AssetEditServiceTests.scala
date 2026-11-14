@@ -17,7 +17,6 @@ import altitude.core.NotFoundException
 import altitude.core.models.Asset
 import altitude.core.models.EditCrop
 import altitude.core.models.EditRecipe
-import altitude.core.models.EditState
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.sinks.VoidAssetSink
 
@@ -34,17 +33,12 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     testApp.service.library.addAsset(
       testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.getImportAsset(relPath)))
 
-  /** The seq and label of each step, newest first, as the History lists them */
-  private def history(state: EditState): List[(Int, String)] = state.steps.map(step => step.seq -> step.label)
-
-  /** The asset's Edit rows, as stored: its `asset_edit` row (None when it has none) and its step seqs, in order */
-  private def storedRows(assetId: String): (Option[Map[String, AnyRef]], List[Int]) = testApp.txManager.asReadOnly {
-    (
-      query("SELECT * FROM asset_edit WHERE asset_id = ?", assetId).headOption,
-      query("SELECT seq FROM asset_edit_step WHERE asset_id = ? ORDER BY seq", assetId).map(_("seq").toString.toInt))
+  /** The asset's `asset_edit` row as stored, None when it has none */
+  private def storedRow(assetId: String): Option[Map[String, AnyRef]] = testApp.txManager.asReadOnly {
+    query("SELECT * FROM asset_edit WHERE asset_id = ?", assetId).headOption
   }
 
-  test("A first step stores the Edit at step 1, with its label, its edited size and whether it is edited") {
+  test("A first save stores the Edit as version 1, with its edited size and whether it is edited") {
 
     /**
      * Setup:
@@ -53,206 +47,147 @@ import altitude.core.pipeline.sinks.VoidAssetSink
      *
      * Assertions:
      *
-     * Before any step the asset has no Edit (`headOf` is None) and its state is the Original: head 0, the identity, not edited,
-     * no edited size, and a History of the Original alone. A first step cropping it to half its width answers head 1, the Edit as
-     * sent, edited, the edited size of 75 × 150, not rendered yet, and a History of step 1, "Crop", by the account that made it,
-     * over the Original. The same state is read back, and `headOf` now has it.
+     * Before any save the asset has no Edit (`editOf` is None) and its state is the original's: version 0, the identity, not
+     * edited and no edited size. A first save cropping it to half its width, built on version 0, answers version 1, the Edit as
+     * sent, edited, the edited size of 75 × 150, not rendered yet and revision 0. The same state is read back, `editOf` now has
+     * it, and the asset's one `asset_edit` row holds version 1 and the Edit.
      */
     val asset = testContext.persistAsset()
     val assetId = asset.persistedId
 
-    edits.headOf(asset) shouldBe None
+    edits.editOf(asset) shouldBe None
     val original = edits.get(assetId)
-    original.head shouldBe 0
+    original.editVersion shouldBe 0
     original.recipe shouldBe EditRecipe.Identity
     original.edited shouldBe false
     (original.width, original.height) shouldBe (None, None)
-    history(original) shouldBe List(0 -> "Original")
 
     val halfCrop = EditRecipe.Identity.copy(crop = Some(EditCrop(0, 0, 0.5, 1)), aspect = "free", cropFitted = false)
-    val state = edits.addStep(assetId, base = 0, recipe = halfCrop, account = testContext.user)
+    val state = edits.save(assetId, base = 0, recipe = halfCrop, account = testContext.user)
 
-    state.head shouldBe 1
+    state.editVersion shouldBe 1
     state.recipe shouldBe halfCrop
     state.edited shouldBe true
     (state.width, state.height) shouldBe (Some(75), Some(150))
-    state.rendered shouldBe None
+    state.renderedVersion shouldBe None
     state.rev shouldBe 0
-    history(state) shouldBe List(1 -> "Crop", 0 -> "Original")
-    state.steps.head.author shouldBe Some(testContext.user.name)
-    state.steps.head.createdAt should not be empty
 
     edits.get(assetId) shouldBe state
-    edits.headOf(asset).map(_.head) shouldBe Some(1)
-    storedRows(assetId)._2 shouldBe List(1)
+    edits.editOf(asset).map(_.editVersion) shouldBe Some(1)
+    val row = storedRow(assetId).get
+    row("edit_version").toString.toInt shouldBe 1
+    EditRecipe.parse(row("recipe").toString) shouldBe halfCrop
   }
 
-  test("Undo and Redo move the head both ways, and step 0 is the original") {
+  test("Each save replaces the Edit and moves its version on, keeping no earlier Edit") {
 
     /**
      * Setup:
      *
-     * An imported image with two steps: Exposure +0.4, then Contrast +20.
+     * An imported image saved three times, each save built on the version the one before answered: Exposure +0.4, then Contrast
+     * +20 with it, then Temperature +15 with both.
      *
      * Assertions:
      *
-     * Moving the head from 2 to 1 (Undo) shows the first step's Edit, still edited; from 1 to 0 shows the Original: the identity,
-     * not edited. Moving it from 0 to 2 (Redo, or a jump from the History) shows the second step's Edit again. The steps stay as
-     * they are throughout.
+     * The versions are 1, 2 and 3; the state read back is the third Edit at version 3, and the asset has one `asset_edit` row,
+     * holding it, written by the account that saved.
      */
     val assetId = testContext.persistAsset().persistedId
-    edits.addStep(assetId, 0, brighter, testContext.user)
-    edits.addStep(assetId, 1, contrasty, testContext.user)
 
-    val undone = edits.moveHead(assetId, base = 2, seq = 1, account = testContext.user)
-    undone.head shouldBe 1
-    undone.recipe shouldBe brighter
-    undone.edited shouldBe true
-
-    val original = edits.moveHead(assetId, base = 1, seq = 0, account = testContext.user)
-    original.head shouldBe 0
-    original.recipe shouldBe EditRecipe.Identity
-    original.edited shouldBe false
-
-    val redone = edits.moveHead(assetId, base = 0, seq = 2, account = testContext.user)
-    redone.head shouldBe 2
-    redone.recipe shouldBe contrasty
-    history(redone) shouldBe List(2 -> "Contrast +20", 1 -> "Exposure +0.40", 0 -> "Original")
-  }
-
-  test("A change after an undo drops the steps after the head") {
-
-    /**
-     * Setup:
-     *
-     * An imported image with three steps, its head moved back to step 1.
-     *
-     * Assertions:
-     *
-     * A new step from step 1 is step 2, holding the new Edit: the old steps 2 and 3 are gone from the History and from the table,
-     * and moving the head to 3 is not found.
-     */
-    val assetId = testContext.persistAsset().persistedId
-    edits.addStep(assetId, 0, brighter, testContext.user)
-    edits.addStep(assetId, 1, contrasty, testContext.user)
-    edits.addStep(assetId, 2, warmer, testContext.user)
-    edits.moveHead(assetId, 3, 1, testContext.user)
-
-    val cooler = brighter.copy(temperature = -30)
-    val state = edits.addStep(assetId, base = 1, recipe = cooler, account = testContext.user)
-
-    state.head shouldBe 2
-    state.recipe shouldBe cooler
-    history(state) shouldBe List(2 -> "Temperature −30", 1 -> "Exposure +0.40", 0 -> "Original")
-    storedRows(assetId)._2 shouldBe List(1, 2)
-    intercept[NotFoundException](edits.moveHead(assetId, base = 2, seq = 3, account = testContext.user))
-  }
-
-  test("The step past the cap drops the oldest, and the Original stays reachable") {
-
-    /**
-     * Setup:
-     *
-     * An imported image given one step more than the cap (`Const.Edit.MAX_STEPS`, 100), each a different Contrast.
-     *
-     * Assertions:
-     *
-     * The History holds the newest 100 steps, 2 to 101, over the Original; step 1 is gone, so moving the head to it is not found,
-     * while moving it to 0 shows the Original.
-     */
-    val assetId = testContext.persistAsset().persistedId
-    val steps = Const.Edit.MAX_STEPS + 1
-    val last = (1 to steps).foldLeft(0) {
-      (base, n) => edits.addStep(assetId, base, EditRecipe.Identity.copy(contrast = n - 100), testContext.user).head
+    val versions = List(brighter, contrasty, warmer).foldLeft(List(0)) {
+      (versions, recipe) => versions :+ edits.save(assetId, versions.last, recipe, testContext.user).editVersion
     }
 
-    last shouldBe steps
+    versions shouldBe List(0, 1, 2, 3)
     val state = edits.get(assetId)
-    state.steps.map(_.seq) shouldBe (steps to 2 by -1).toList :+ 0
-    storedRows(assetId)._2.size shouldBe Const.Edit.MAX_STEPS
-    intercept[NotFoundException](edits.moveHead(assetId, base = steps, seq = 1, account = testContext.user))
-    edits.moveHead(assetId, base = steps, seq = 0, account = testContext.user).recipe shouldBe EditRecipe.Identity
+    (state.editVersion, state.recipe) shouldBe (3, warmer)
+    val rows = testApp.txManager.asReadOnly(query("SELECT * FROM asset_edit WHERE asset_id = ?", assetId))
+    rows.size shouldBe 1
+    EditRecipe.parse(rows.head("recipe").toString) shouldBe warmer
+    rows.head("updated_by_account_id") shouldBe testContext.user.persistedId
   }
 
-  test("A step or a head move built on a stale head is a conflict carrying the current state, and writes nothing") {
+  test("A save built on a stale version is a conflict carrying the current state, and writes nothing") {
 
     /**
      * Setup:
      *
-     * An imported image with two steps, its head at 2.
+     * An imported image saved twice, so its Edit is at version 2.
      *
      * Assertions:
      *
-     * A step built on head 1 is refused with an `EditConflictException` whose state is the current one (head 2, its Edit and its
-     * History), and so is a head move built on head 1. Neither writes: the head, the steps and the row are as they were.
-     */
-    val assetId = testContext.persistAsset().persistedId
-    edits.addStep(assetId, 0, brighter, testContext.user)
-    val current = edits.addStep(assetId, 1, contrasty, testContext.user)
-    val before = storedRows(assetId)
-
-    val stepConflict = intercept[EditConflictException](edits.addStep(assetId, base = 1, recipe = warmer, testContext.user))
-    stepConflict.state shouldBe current
-
-    val moveConflict = intercept[EditConflictException](edits.moveHead(assetId, base = 1, seq = 0, testContext.user))
-    moveConflict.state shouldBe current
-
-    storedRows(assetId) shouldBe before
-  }
-
-  test("A step equal to the head writes nothing") {
-
-    /**
-     * Setup:
-     *
-     * An imported image with one step; and another imported image, never edited.
-     *
-     * Assertions:
-     *
-     * Sending the head's own Edit again answers the current state and writes nothing: no step is added and the Edit's row is
-     * unchanged.
+     * A save built on version 1 is refused with an `EditConflictException` whose state is the current one (version 2 and its
+     * Edit), and the stored row is as it was.
      *
      * Edge cases:
      *
-     * Sending the identity to an asset never edited creates no Edit for it, and moving its head to 0 neither.
+     * A save built on a version the Edit has not reached (3) is refused the same way.
      */
     val assetId = testContext.persistAsset().persistedId
-    val current = edits.addStep(assetId, 0, brighter, testContext.user)
-    val before = storedRows(assetId)
+    edits.save(assetId, 0, brighter, testContext.user)
+    val current = edits.save(assetId, 1, contrasty, testContext.user)
+    val before = storedRow(assetId)
 
-    edits.addStep(assetId, base = 1, recipe = brighter, account = testContext.user) shouldBe current
-    storedRows(assetId) shouldBe before
-
-    val untouched = testContext.persistAsset().persistedId
-    edits.addStep(untouched, base = 0, recipe = EditRecipe.Identity, account = testContext.user).head shouldBe 0
-    edits.moveHead(untouched, base = 0, seq = 0, account = testContext.user).head shouldBe 0
-    storedRows(untouched) shouldBe (None, Nil)
+    for (stale <- List(1, 3)) withClue(s"built on version $stale: ") {
+      intercept[EditConflictException](edits.save(assetId, base = stale, recipe = warmer, testContext.user)).state shouldBe
+        current
+    }
+    storedRow(assetId) shouldBe before
   }
 
-  test("Revert to original is a step of the identity, which can be undone") {
+  test("A save equal to the current Edit writes nothing") {
 
     /**
      * Setup:
      *
-     * An imported image with two steps.
+     * An imported image saved once; and another imported image, never edited.
      *
      * Assertions:
      *
-     * A step of the identity is step 3, "Revert to original", not edited, with the original's size. Undoing it shows the second
-     * step, edited again.
+     * Saving the current Edit again answers the current state, still at version 1, and leaves the row as it was.
+     *
+     * Edge cases:
+     *
+     * Saving the identity for an asset never edited creates no Edit for it: version 0, and no row.
+     */
+    val assetId = testContext.persistAsset().persistedId
+    val current = edits.save(assetId, 0, brighter, testContext.user)
+    val before = storedRow(assetId)
+
+    edits.save(assetId, base = 1, recipe = brighter, account = testContext.user) shouldBe current
+    storedRow(assetId) shouldBe before
+
+    val untouched = testContext.persistAsset().persistedId
+    edits.save(untouched, base = 0, recipe = EditRecipe.Identity, account = testContext.user).editVersion shouldBe 0
+    storedRow(untouched) shouldBe None
+  }
+
+  test("Revert to original saves the identity as the next version, and the Edit before it can be saved again") {
+
+    /**
+     * Setup:
+     *
+     * An imported image saved twice, the second turning it a quarter.
+     *
+     * Assertions:
+     *
+     * Saving the identity is version 3: not edited, with the original's size. Saving the second Edit again, as the browser's Undo
+     * of the revert does, is version 4, edited and turned again.
      */
     val asset = testContext.persistAsset()
     val assetId = asset.persistedId
-    edits.addStep(assetId, 0, brighter, testContext.user)
-    edits.addStep(assetId, 1, contrasty.copy(rotate = 90), testContext.user)
+    edits.save(assetId, 0, brighter, testContext.user)
+    val turned = contrasty.copy(rotate = 90)
+    edits.save(assetId, 1, turned, testContext.user)
 
-    val reverted = edits.addStep(assetId, base = 2, recipe = EditRecipe.Identity, account = testContext.user)
-    reverted.head shouldBe 3
+    val reverted = edits.save(assetId, base = 2, recipe = EditRecipe.Identity, account = testContext.user)
+    reverted.editVersion shouldBe 3
     reverted.edited shouldBe false
-    reverted.steps.head.label shouldBe "Revert to original"
+    reverted.recipe shouldBe EditRecipe.Identity
     (reverted.width, reverted.height) shouldBe (Some(asset.width), Some(asset.height))
 
-    edits.moveHead(assetId, base = 3, seq = 2, account = testContext.user).edited shouldBe true
+    val undone = edits.save(assetId, base = 3, recipe = turned, account = testContext.user)
+    (undone.editVersion, undone.edited, undone.recipe) shouldBe (4, true, turned)
   }
 
   test("An animated image, a Video and an asset in the trash cannot be edited") {
@@ -265,12 +200,11 @@ import altitude.core.pipeline.sinks.VoidAssetSink
      *
      * Assertions:
      *
-     * A step for each of the first three is refused with an `IllegalOperationException`, and so is a head move for the image in
-     * the trash; none of them gets an Edit.
+     * A save for each of the first three is refused with an `IllegalOperationException`, and none of them gets an Edit.
      *
      * Edge cases:
      *
-     * The still GIF, a format with animated relatives, takes a step.
+     * The still GIF, a format with animated relatives, is saved.
      */
     val animated = imported("images/animated.gif")
     animated.durationMs should not be empty
@@ -281,13 +215,12 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     testApp.service.library.recycleAssets(Set(recycled.persistedId))
 
     for (asset <- List(animated, video, recycled)) withClue(s"${asset.assetType.mediaType} ${asset.fileName}: ") {
-      intercept[IllegalOperationException](edits.addStep(asset.persistedId, 0, brighter, testContext.user))
-      storedRows(asset.persistedId) shouldBe (None, Nil)
+      intercept[IllegalOperationException](edits.save(asset.persistedId, 0, brighter, testContext.user))
+      storedRow(asset.persistedId) shouldBe None
     }
-    intercept[IllegalOperationException](edits.moveHead(recycled.persistedId, 0, 0, testContext.user))
 
     val still = imported("images/2.gif")
-    edits.addStep(still.persistedId, 0, brighter, testContext.user).head shouldBe 1
+    edits.save(still.persistedId, 0, brighter, testContext.user).editVersion shouldBe 1
   }
 
   test("The edited size is measured in the original turned upright by its EXIF orientation") {
@@ -299,16 +232,16 @@ import altitude.core.pipeline.sinks.VoidAssetSink
      *
      * Assertions:
      *
-     * Its upright size is 724 × 640. A step with Exposure alone has the edited size 724 × 640, and one that also turns it a
+     * Its upright size is 724 × 640. A save with Exposure alone has the edited size 724 × 640, and one that also turns it a
      * quarter has 640 × 724.
      */
     val asset = imported("images/exif/orientation-6.jpg")
     (asset.width, asset.height) shouldBe (640, 724)
     testApp.service.asset.uprightSize(asset) shouldBe (724, 640)
 
-    val state = edits.addStep(asset.persistedId, 0, brighter, testContext.user)
+    val state = edits.save(asset.persistedId, 0, brighter, testContext.user)
     (state.width, state.height) shouldBe (Some(724), Some(640))
-    val turned = edits.addStep(asset.persistedId, 1, brighter.copy(rotate = 90), testContext.user)
+    val turned = edits.save(asset.persistedId, 1, brighter.copy(rotate = 90), testContext.user)
     (turned.width, turned.height) shouldBe (Some(640), Some(724))
   }
 
@@ -317,93 +250,93 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     /**
      * Setup:
      *
-     * An imported image with a step in a second repository; the context in the first.
+     * An imported image saved once in a second repository; the context in the first.
      *
      * Assertions:
      *
-     * Reading its Edit, adding a step and moving its head are each not found, as for an unknown asset, and its Edit is unchanged.
+     * Reading its Edit, its render status and saving it are each not found, as for an unknown asset, and its Edit is unchanged.
      */
     val first = testContext.repository
     val second = testContext.persistRepository()
     switchContextRepo(second)
     val theirs = testContext.persistAsset(repository = Some(second)).persistedId
-    edits.addStep(theirs, 0, brighter, testContext.user)
-    val before = storedRows(theirs)
+    edits.save(theirs, 0, brighter, testContext.user)
+    val before = storedRow(theirs)
     switchContextRepo(first)
 
     intercept[NotFoundException](edits.get(theirs))
-    intercept[NotFoundException](edits.addStep(theirs, 1, contrasty, testContext.user))
-    intercept[NotFoundException](edits.moveHead(theirs, 1, 0, testContext.user))
-    storedRows(theirs) shouldBe before
+    intercept[NotFoundException](edits.status(theirs))
+    intercept[NotFoundException](edits.save(theirs, 1, contrasty, testContext.user))
+    storedRow(theirs) shouldBe before
   }
 
-  test("Two steps built on the same head take turns, and the second is a conflict") {
+  test("Two saves built on the same version take turns, and the second is a conflict") {
 
     /**
      * Setup:
      *
-     * Two imported images: one never edited, and one with a step. For each, two transactions that each add a step built on its
-     * head, the first holding its transaction open until the second waits for it.
+     * Two imported images: one never edited, and one saved once. For each, two transactions that each save an Edit built on its
+     * version, the first holding its transaction open until the second waits for it.
      *
      * Assertions:
      *
-     * The second waits for the first (for the Edit's row on PostgreSQL, for the one write connection on SQLite) and is then
-     * refused with a conflict carrying the first's step, which is the one stored.
+     * The second waits for the first (for the asset's row, which every save locks first, on PostgreSQL; for the one write
+     * connection on SQLite) and is then refused with a conflict carrying the first's Edit, which is the one stored, one edit
+     * version on.
      *
      * Edge cases:
      *
-     * The image never edited has no row to lock until the first creates it: the second waits for that row's insert.
+     * The image never edited has no Edit row to lock: the asset's lock alone makes the second wait for the first's insert.
      */
     val fresh = testContext.persistAsset().persistedId
-    val stepped = testContext.persistAsset().persistedId
-    edits.addStep(stepped, 0, brighter, testContext.user)
+    val saved = testContext.persistAsset().persistedId
+    edits.save(saved, 0, brighter, testContext.user)
 
-    for ((assetId, base) <- List(fresh -> 0, stepped -> 1)) withClue(s"from head $base: ") {
+    for ((assetId, base) <- List(fresh -> 0, saved -> 1)) withClue(s"from version $base: ") {
       contend(
-        first = edits.addStep(assetId, base, warmer, testContext.user): Unit,
+        first = edits.save(assetId, base, warmer, testContext.user): Unit,
         second = {
           val conflict =
-            intercept[EditConflictException](edits.addStep(assetId, base, contrasty.copy(grain = 5), testContext.user))
+            intercept[EditConflictException](edits.save(assetId, base, contrasty.copy(grain = 5), testContext.user))
           conflict.state.recipe shouldBe warmer
         }: Unit
       )
       val stored = edits.get(assetId)
-      stored.head shouldBe base + 1
+      stored.editVersion shouldBe base + 1
       stored.recipe shouldBe warmer
     }
   }
 
-  test("Purging an asset removes its Edit and its rendition files") {
+  test("Purging an asset removes its Edit and its edited images") {
 
     /**
      * Setup:
      *
-     * Two imported images, each with two steps, each step rendered; one of them recycled and run through the purge pipeline.
+     * Two imported images, each saved and rendered; one of them recycled and run through the purge pipeline, with temporary files
+     * beside its edited images, as a write cut off by a crash leaves them.
      *
      * Assertions:
      *
-     * The purged asset has no Edit row, no step and no rendition file left, of either kind, nor a temporary file of a rendition
-     * write cut off. The other keeps its rows and the renditions of its rendered revision.
+     * The purged asset has no Edit row, no edited Preview, no Display image and no temporary file left. The other keeps its row
+     * and its two edited images.
      */
     val purged = testContext.persistAsset().persistedId
     val kept = testContext.persistAsset().persistedId
     for (assetId <- List(purged, kept)) {
-      edits.addStep(assetId, 0, brighter, testContext.user)
-      testApp.service.editRender.render(assetId)
-      edits.addStep(assetId, 1, contrasty, testContext.user)
+      edits.save(assetId, 0, brighter, testContext.user)
       testApp.service.editRender.render(assetId)
     }
-    def renditionFiles(assetId: String): List[String] =
+    def editedFiles(assetId: String): List[String] =
       for {
         kind <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)
-        rev <- 1 to 3
-        if java.nio.file.Files.exists(testApp.service.fileStore.editRenditionPath(assetId, rev, kind))
-      } yield s"$kind-r$rev"
-    renditionFiles(purged) shouldBe List("preview-r2", "display-r2")
-    // A write of a rendition cut off before its move, as a crash leaves it
-    val leftover =
-      testApp.service.fileStore.editRenditionPath(purged, 3, Const.DataStore.DISPLAY).resolveSibling(s".$purged-r3-1.tmp")
-    java.nio.file.Files.write(leftover, Array[Byte](1)): Unit
+        if java.nio.file.Files.exists(testApp.service.fileStore.editedImagePath(assetId, kind))
+      } yield kind
+    editedFiles(purged) shouldBe List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)
+    val leftovers = for (kind <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)) yield {
+      val path = testApp.service.fileStore.editedImagePath(purged, kind)
+      val leftover = path.resolveSibling(s".${path.getFileName}.tmp")
+      java.nio.file.Files.write(leftover, Array[Byte](1))
+    }
     testApp.service.library.recycleAssets(Set(purged))
     val toPurge = testApp.service.asset.getById(purged)
 
@@ -412,11 +345,11 @@ import altitude.core.pipeline.sinks.VoidAssetSink
       testApp.service.purgePipeline.run(Source.single((toPurge, pipelineContext)), VoidAssetSink()),
       Duration.Inf): Unit
 
-    storedRows(purged) shouldBe (None, Nil)
-    renditionFiles(purged) shouldBe Nil
-    java.nio.file.Files.exists(leftover) shouldBe false
-    storedRows(kept)._2 shouldBe List(1, 2)
-    renditionFiles(kept) shouldBe List("preview-r2", "display-r2")
+    storedRow(purged) shouldBe None
+    editedFiles(purged) shouldBe Nil
+    leftovers.filter(java.nio.file.Files.exists(_)) shouldBe Nil
+    storedRow(kept) should not be empty
+    editedFiles(kept) shouldBe List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)
   }
 
   test("An image whose original is gone is refused, and one whose metadata cannot be read is taken as upright") {
@@ -429,19 +362,19 @@ import altitude.core.pipeline.sinks.VoidAssetSink
      *
      * Assertions:
      *
-     * A step for the first is refused with an `IllegalOperationException` saying its original is missing, and it gets no Edit. A
-     * step for the second is saved, its orientation taken as upright, so its edited size is the stored 150 × 150.
+     * A save for the first is refused with an `IllegalOperationException` saying its original is missing, and it gets no Edit. A
+     * save for the second is stored, its orientation taken as upright, so its edited size is the stored 150 × 150.
      */
     val gone = testContext.persistAsset().persistedId
     java.nio.file.Files.delete(testApp.service.fileStore.assetFile(gone))
     val unreadable = testContext.persistAsset().persistedId
     java.nio.file.Files.write(testApp.service.fileStore.assetFile(unreadable), "not an image".getBytes): Unit
 
-    intercept[IllegalOperationException](edits.addStep(gone, 0, brighter, testContext.user)).getMessage shouldBe
+    intercept[IllegalOperationException](edits.save(gone, 0, brighter, testContext.user)).getMessage shouldBe
       Const.Msg.Err.ORIGINAL_MISSING
-    storedRows(gone) shouldBe (None, Nil)
+    storedRow(gone) shouldBe None
 
-    val state = edits.addStep(unreadable, 0, brighter, testContext.user)
+    val state = edits.save(unreadable, 0, brighter, testContext.user)
     (state.width, state.height) shouldBe (Some(150), Some(150))
   }
 }

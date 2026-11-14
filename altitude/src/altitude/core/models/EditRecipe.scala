@@ -1,7 +1,5 @@
 package altitude.core.models
 
-import java.util.Locale
-
 import scala.util.Try
 
 import altitude.core.ValidationException
@@ -10,35 +8,13 @@ import altitude.core.util.JsonCodec
 /** A crop rectangle as fractions of the frame (the turned and mirrored image): its left and top edges, its width and height */
 final case class EditCrop(x: Double, y: Double, w: Double, h: Double)
 
-/** The sections of the Edit panel, in its order, each holding the keys of the Edit it sets */
-enum EditSection(val label: String, val keys: Set[String]):
-  case CropRotate
-    extends EditSection(
-      "Crop & rotate",
-      Set(
-        "rotate",
-        "flipH",
-        "flipV",
-        "straighten",
-        "perspectiveV",
-        "perspectiveH",
-        "crop",
-        "aspect",
-        "portrait",
-        "keepInside",
-        "cropFitted"))
-  case Light
-    extends EditSection("Light", Set("exposure", "contrast", "highlights", "shadows", "whites", "blacks", "gamma", "curve"))
-  case Color extends EditSection("Color", Set("temperature", "tint", "vibrance", "saturation"))
-  case Effects extends EditSection("Effects", Set("sharpen", "clarity", "vignette", "grain"))
-
 object EditRecipe:
   val VERSION = 1
 
   // Before `Identity`, whose curve it is
   val IDENTITY_CURVE: List[(Double, Double)] = List((0.0, 0.0), (1.0, 1.0))
 
-  /** The Edit that changes nothing, with the Crop tool's default settings: the Original */
+  /** The Edit that changes nothing, with the Crop tool's default settings: the original's, which Revert to original saves */
   val Identity: EditRecipe = EditRecipe()
 
   /** The Crop tool's aspect locks, as the Edit stores them; a ratio is written landscape, `portrait` turns it */
@@ -58,54 +34,34 @@ object EditRecipe:
   // What a difference of coordinates may stray below a step by in floating point
   private val EPSILON = 1e-9
 
-  /**
-   * A slider of the Edit panel: its range, how many steps it has per unit (1 for whole numbers, 20 for Exposure's 0.05), how many
-   * decimals its value is written with, whether it has two sides (a sign) and what follows its value
-   */
-  private case class Slider(
-      key: String,
-      label: String,
-      min: Double,
-      max: Double,
-      stepsPerUnit: Int = 1,
-      decimals: Int = 0,
-      suffix: String = ""):
-    val signed: Boolean = min < 0
-
-    /** The slider's value written as a step's label writes it: "+0.40", "−12", "40", "+2.3°" */
-    def format(value: Double): String =
-      val digits = s"%.${decimals}f".formatLocal(Locale.ROOT, Math.abs(value))
-      val sign = if !signed || value == 0 then "" else if value > 0 then "+" else "−"
-      s"$sign$digits$suffix"
+  /** A slider of the Edit panel: its range, and how many steps it has per unit (1 for whole numbers, 20 for Exposure's 0.05) */
+  private case class Slider(key: String, min: Double, max: Double, stepsPerUnit: Int = 1)
 
   private val SLIDERS: Map[String, Slider] = List(
-    Slider("straighten", "Straighten", -45, 45, stepsPerUnit = 10, decimals = 1, suffix = "°"),
-    Slider("perspectiveV", "Vertical perspective", -100, 100),
-    Slider("perspectiveH", "Horizontal perspective", -100, 100),
-    Slider("exposure", "Exposure", -5, 5, stepsPerUnit = 20, decimals = 2),
-    Slider("contrast", "Contrast", -100, 100),
-    Slider("highlights", "Highlights", -100, 100),
-    Slider("shadows", "Shadows", -100, 100),
-    Slider("whites", "Whites", -100, 100),
-    Slider("blacks", "Blacks", -100, 100),
-    Slider("gamma", "Gamma", -100, 100),
-    Slider("temperature", "Temperature", -100, 100),
-    Slider("tint", "Tint", -100, 100),
-    Slider("vibrance", "Vibrance", -100, 100),
-    Slider("saturation", "Saturation", -100, 100),
-    Slider("sharpen", "Sharpen", 0, 150),
-    Slider("clarity", "Clarity", -100, 100),
-    Slider("vignette", "Vignette", -100, 100),
-    Slider("grain", "Grain", 0, 100)
+    Slider("straighten", -45, 45, stepsPerUnit = 10),
+    Slider("perspectiveV", -100, 100),
+    Slider("perspectiveH", -100, 100),
+    Slider("exposure", -5, 5, stepsPerUnit = 20),
+    Slider("contrast", -100, 100),
+    Slider("highlights", -100, 100),
+    Slider("shadows", -100, 100),
+    Slider("whites", -100, 100),
+    Slider("blacks", -100, 100),
+    Slider("gamma", -100, 100),
+    Slider("temperature", -100, 100),
+    Slider("tint", -100, 100),
+    Slider("vibrance", -100, 100),
+    Slider("saturation", -100, 100),
+    Slider("sharpen", 0, 150),
+    Slider("clarity", -100, 100),
+    Slider("vignette", -100, 100),
+    Slider("grain", 0, 100)
   ).map(slider => slider.key -> slider).toMap
 
   // Every key of a stored Edit, in the order its JSON is written
   private val KEYS: List[String] = "version" :: Identity.productElementNames.toList
 
   private val CROP_KEYS = List("x", "y", "w", "h")
-
-  // The keys of the crop itself: its rectangle and the Crop tool's lock, which a crop session changes together
-  private val CROP_SETTINGS = Set("crop", "aspect", "portrait", "cropFitted")
 
   given JsonCodec.ReadWriter[EditRecipe] = JsonCodec.readwriter[ujson.Value].bimap(_.toJson, json => parse(json))
 
@@ -221,74 +177,10 @@ object EditRecipe:
     if points.exists((x, y) => x < 0 || x > 1 || y < 0 || y > 1) then invalid("curve points must lie in [0, 1]")
     points
 
-  /**
-   * The label of the step from `before` to `after`, which every client shows: the server derives it so that all say the same
-   * words. One slider changed is its name and value ("Exposure +0.40"); an Edit back to one that changes no pixel is "Revert to
-   * original"; changes in several sections name them; a section whose changes all go back to its defaults is "Reset" and its
-   * name, and other changes in one section name it, Crop & rotate's being named by what it turned, flipped or cropped.
-   */
-  def describeChange(before: EditRecipe, after: EditRecipe): String =
-    require(before != after, "A step changes the Edit")
-    val differing = before.productElementNames
-      .zip(before.productIterator.zip(after.productIterator))
-      .collect { case (key, (was, is)) if was != is => key }
-      .toList
-    // A crop the Crop tool fits re-fits, at the same aspect, to every change of Straighten, a perspective or keeping it inside:
-    // the step is that change, not the crop's
-    val refit = before.cropFitted && after.cropFitted && before.aspect == after.aspect && before.portrait == after.portrait
-    val changed = if refit && differing.size > 1 then differing.filterNot(_ == "crop") else differing
-    val sections = EditSection.values.toList.filter(section => changed.exists(section.keys.contains))
-
-    // Back to the default Edit, or to one that changes no pixel from one that did; an aspect picked with no crop is no revert
-    if after == Identity || (after.isIdentity && !before.isIdentity) then "Revert to original"
-    else if sections.size > 1 then
-      val labels = sections.map(_.label)
-      s"${labels.init.mkString(", ")} and ${labels.last}"
-    else
-      val section = sections.head
-      val atDefaults = section.keys.forall(key => after.valueOf(key) == Identity.valueOf(key))
-      section match
-        case EditSection.CropRotate if changed.size > 1 && atDefaults => s"Reset ${section.label}"
-        case EditSection.CropRotate => geometryLabel(changed.toSet, before, after)
-        case _ if changed.size == 1 => keyLabel(changed.head, after)
-        case _ if atDefaults => s"Reset ${section.label}"
-        case _ => section.label
-
-  /** One key's change, by its new value: a slider's name and value, or the tone curve */
-  private def keyLabel(key: String, after: EditRecipe): String =
-    SLIDERS.get(key) match
-      case Some(slider) => s"${slider.label} ${slider.format(after.valueOf(key).asInstanceOf[Number].doubleValue)}"
-      case None => "Tone curve"
-
-  /**
-   * A change of Crop & rotate: a turn or a flip, which carries the crop along, is named as such, a turn by the way the picture
-   * turns as shown; then the crop, with the lock's ratio as its chip reads it; then a lone slider; then the section
-   */
-  private def geometryLabel(changed: Set[String], before: EditRecipe, after: EditRecipe): String =
-    if changed.contains("rotate") then
-      // A mirror on one axis is applied after the turn and reverses its sense as shown; both mirrors make a half turn
-      val turn = (after.rotate - before.rotate + 360) % 360
-      val shown = if after.flipH != after.flipV then (360 - turn) % 360 else turn
-      shown match
-        case 90 => "Rotate right"
-        case 270 => "Rotate left"
-        case _ => "Rotate 180°"
-    else if changed.contains("flipH") && changed.contains("flipV") then "Flip"
-    else if changed.contains("flipH") then "Flip horizontal"
-    else if changed.contains("flipV") then "Flip vertical"
-    else if changed.exists(CROP_SETTINGS.contains) then
-      val ratio = after.aspect.split(':') match
-        case Array(long, short) => Some(if after.portrait.contains(true) then s"$short:$long" else s"$long:$short")
-        case _ => None
-      ratio.fold("Crop")(r => s"Crop $r")
-    else if changed == Set("keepInside") then if after.keepInside then "Keep the crop inside" else "Let the crop reach outside"
-    else if changed.size == 1 then keyLabel(changed.head, after)
-    else EditSection.CropRotate.label
-
 /**
- * An asset's Edit at one step (`CONTEXT.md`): every control's value, as `asset_edit_step.recipe` stores it (`version` 1, every
- * key present) and the client sends it. Built by [[EditRecipe.parse]], which normalizes and checks every value, or as the default
- * with changes. Its geometry is in the upright original: the original turned by its EXIF orientation.
+ * An asset's Edit (`CONTEXT.md`): every control's value, as `asset_edit.recipe` stores it (`version` 1, every key present) and
+ * the client sends it. Built by [[EditRecipe.parse]], which normalizes and checks every value, or as the default with changes.
+ * Its geometry is in the upright original: the original turned by its EXIF orientation.
  */
 final case class EditRecipe(
     rotate: Int = 0,
@@ -322,7 +214,7 @@ final case class EditRecipe(
   /**
    * Whether the Edit changes no pixel: no turn, flip, Straighten, perspective or crop, every slider at 0 and the curve the
    * diagonal. The Crop tool's settings (the aspect, its orientation, keeping the crop inside and whether it was fitted) do not
-   * count. An asset is edited when its head step is not the identity.
+   * count. An asset is edited when its Edit is not the identity.
    */
   def isIdentity: Boolean =
     copy(aspect = "original", portrait = None, keepInside = true, cropFitted = true) == EditRecipe.Identity
@@ -337,9 +229,6 @@ final case class EditRecipe(
     crop.fold((frameWidth, frameHeight)) {
       c => (Math.max(1, Math.round(c.w * frameWidth).toInt), Math.max(1, Math.round(c.h * frameHeight).toInt))
     }
-
-  /** The value of a key, as [[toJson]] names it */
-  private[models] def valueOf(key: String): Any = productElement(productElementNames.indexOf(key))
 
   /** The Edit as stored and sent: every key, `version` first */
   def toJson: ujson.Obj = ujson.Obj(

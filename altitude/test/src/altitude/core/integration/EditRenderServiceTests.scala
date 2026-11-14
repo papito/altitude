@@ -29,6 +29,7 @@ import altitude.core.service.EditRenderService.Outcome
 
   private val brighter = EditRecipe.Identity.copy(exposure = 0.4)
   private val warmer = brighter.copy(temperature = 15)
+  private val contrasty = warmer.copy(contrast = 20)
   private val halfCrop = EditRecipe.Identity.copy(crop = Some(EditCrop(0, 0, 0.5, 1)), aspect = "free", cropFitted = false)
 
   private def eventually[T](f: => T): T =
@@ -49,22 +50,28 @@ import altitude.core.service.EditRenderService.Outcome
     query("SELECT last_rev FROM asset_edit WHERE asset_id = ?", assetId).head("last_rev").toString.toInt
   }
 
-  /** The revisions of the asset's stored renditions, of each kind */
-  private def renditions(assetId: String): Map[String, Set[Int]] =
+  /** The kinds of the asset's edited images on disk: its edited Preview and its Display image */
+  private def editedImages(assetId: String): Set[String] =
+    Set(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)
+      .filter(kind => Files.isRegularFile(testApp.service.fileStore.editedImagePath(assetId, kind)))
+
+  private val BOTH = Set(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)
+
+  /** The bytes of the asset's edited image of `kind` on disk */
+  private def bytesOf(assetId: String, kind: String): Array[Byte] =
+    Files.readAllBytes(testApp.service.fileStore.editedImagePath(assetId, kind))
+
+  /** The temporary files a render writes its edited images to before it publishes them, of both kinds */
+  private def stagedFiles(assetId: String): List[java.nio.file.Path] =
     List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY).map {
       kind =>
-        kind -> (1 to 20)
-          .filter(rev => Files.isRegularFile(testApp.service.fileStore.editRenditionPath(assetId, rev, kind)))
-          .toSet
-    }.toMap
+        val path = testApp.service.fileStore.editedImagePath(assetId, kind)
+        path.resolveSibling(s".${path.getFileName}.tmp")
+    }
 
-  private def both(revs: Int*): Map[String, Set[Int]] =
-    Map(Const.DataStore.PREVIEW -> revs.toSet, Const.DataStore.DISPLAY -> revs.toSet)
-
-  /** A rendition's image, decoded as stored */
-  private def decoded(assetId: String, rev: Int, kind: String): Mat =
-    val bytes = Files.readAllBytes(testApp.service.fileStore.editRenditionPath(assetId, rev, kind))
-    Imgcodecs.imdecode(new MatOfByte(bytes*), Imgcodecs.IMREAD_UNCHANGED)
+  /** An edited image, decoded as stored */
+  private def decoded(assetId: String, kind: String): Mat =
+    Imgcodecs.imdecode(new MatOfByte(bytesOf(assetId, kind)*), Imgcodecs.IMREAD_UNCHANGED)
 
   /** An asset imported through the whole pipeline from a gray JPEG of `width` × `height` */
   private def importedJpeg(width: Int, height: Int): Asset =
@@ -74,165 +81,164 @@ import altitude.core.service.EditRenderService.Outcome
     val staged = testApp.service.staging.stage(bytes.toArray)
     testApp.service.library.addAsset(AssetWithData(testContext.makeAsset(), staged))
 
-  test("A render of an edited head stores both renditions under the next revision, and drops the previous revision's") {
+  test("A render of an edited Edit stores both edited images under the next revision, replacing the ones before") {
 
     /**
      * Setup:
      *
-     * An imported image with a step of its Edit, rendered; then a second step, rendered.
+     * An imported image saved once and rendered; then saved again and rendered.
      *
      * Assertions:
      *
-     * The first render stores the edited Preview and the Display image under revision 1, which the asset's `edit_rev` and the
-     * Edit's state (`rev`) name, with step 1 rendered. The second stores revision 2, names it, has step 2 rendered, and the files
-     * of revision 1 are gone.
+     * The first render stores the edited Preview and the Display image as revision 1, which the asset's `edit_rev` and the Edit's
+     * state (`rev`) name, with version 1 rendered. The second stores revision 2, names it, has version 2 rendered, and the asset
+     * still has one file of each kind, now holding the second render's bytes.
      *
      * Edge cases:
      *
-     * A render of a head rendered already stores nothing: the state stays as it is.
+     * A render of an Edit rendered already stores nothing: the state stays as it is.
      */
     withDebounce {
       val asset = testContext.persistAsset()
       val assetId = asset.persistedId
 
-      edits.addStep(assetId, 0, brighter, testContext.user)
+      edits.save(assetId, 0, brighter, testContext.user)
       renders.render(assetId) shouldBe Outcome.Rendered(1, 1)
       val first = edits.status(assetId)
-      (first.head, first.rendered, first.rev) shouldBe (1, Some(1), 1)
+      (first.editVersion, first.renderedVersion, first.rev) shouldBe (1, Some(1), 1)
       testApp.service.asset.getById(assetId).editRev shouldBe 1
-      renditions(assetId) shouldBe both(1)
+      editedImages(assetId) shouldBe BOTH
+      val firstPreview = bytesOf(assetId, Const.DataStore.PREVIEW)
 
-      edits.addStep(assetId, 1, warmer, testContext.user)
+      edits.save(assetId, 1, warmer, testContext.user)
       renders.render(assetId) shouldBe Outcome.Rendered(2, 2)
       val second = edits.status(assetId)
-      (second.head, second.rendered, second.rev) shouldBe (2, Some(2), 2)
-      renditions(assetId) shouldBe both(2)
+      (second.editVersion, second.renderedVersion, second.rev) shouldBe (2, Some(2), 2)
+      editedImages(assetId) shouldBe BOTH
+      bytesOf(assetId, Const.DataStore.PREVIEW).sameElements(firstPreview) shouldBe false
 
       renders.render(assetId) shouldBe Outcome.UpToDate
       edits.status(assetId).rev shouldBe 2
     }
   }
 
-  test("A render of the Original sets the revision to 0 and drops every rendition, and no revision is used twice") {
+  test("A render of the identity sets the revision to 0 and deletes the edited images, and no revision is used twice") {
 
     /**
      * Setup:
      *
-     * An imported image with a step of its Edit, rendered; then undone to the Original and rendered; then redone and rendered.
+     * An imported image saved and rendered; then reverted to the identity and rendered; then saved with its Edit again and
+     * rendered.
      *
      * Assertions:
      *
-     * The Original's render stores nothing, sets `edit_rev` to 0 with step 0 rendered, and drops revision 1's files. The redone
-     * step is rendered as revision 2, never 1 again, so a URL naming revision 1 cannot name other bytes.
+     * The identity's render stores nothing, sets `edit_rev` to 0 with version 2 rendered, and deletes both edited images, while
+     * `last_rev` keeps 1. The Edit saved again is rendered as revision 2, never 1 again, so a URL naming revision 1 is never
+     * built for the new images.
      */
     withDebounce {
       val assetId = testContext.persistAsset().persistedId
-      edits.addStep(assetId, 0, brighter, testContext.user)
+      edits.save(assetId, 0, brighter, testContext.user)
       renders.render(assetId) shouldBe Outcome.Rendered(1, 1)
 
-      edits.moveHead(assetId, 1, 0, testContext.user)
-      renders.render(assetId) shouldBe Outcome.Original(0)
+      edits.save(assetId, 1, EditRecipe.Identity, testContext.user)
+      renders.render(assetId) shouldBe Outcome.Original(2)
       val original = edits.status(assetId)
-      (original.head, original.rendered, original.rev) shouldBe (0, Some(0), 0)
+      (original.editVersion, original.renderedVersion, original.rev) shouldBe (2, Some(2), 0)
       testApp.service.asset.getById(assetId).editRev shouldBe 0
-      renditions(assetId) shouldBe both()
+      editedImages(assetId) shouldBe Set.empty
       lastRev(assetId) shouldBe 1
 
-      edits.moveHead(assetId, 0, 1, testContext.user)
-      renders.render(assetId) shouldBe Outcome.Rendered(1, 2)
-      renditions(assetId) shouldBe both(2)
+      edits.save(assetId, 2, brighter, testContext.user)
+      renders.render(assetId) shouldBe Outcome.Rendered(3, 2)
+      editedImages(assetId) shouldBe BOTH
     }
   }
 
-  test("A head moved during a render throws the render away and queues the asset again") {
+  test("The identity's render leaves the edited images a later render stored before its delete") {
 
     /**
      * Setup:
      *
-     * An imported image with a step of its Edit, whose render is given a second step between its read and its write.
+     * An imported image saved and rendered, then reverted to the identity; the identity's render, between its commit and its
+     * delete of the edited images, sees the Edit saved again and that save rendered.
      *
      * Assertions:
      *
-     * The render is discarded: nothing is stored and step 1 is never recorded rendered. The asset is queued again, and the queue
-     * renders step 2 as revision 1.
-     */
-    val assetId = testContext.persistAsset().persistedId
-    withDebounce(edits.addStep(assetId, 0, brighter, testContext.user))
-
-    renders.render(assetId, beforeWrite = () => edits.addStep(assetId, 1, warmer, testContext.user): Unit) shouldBe
-      Outcome.Discarded
-    renditions(assetId) shouldBe both()
-    edits.status(assetId).rendered shouldBe None
-
-    eventually {
-      val state = edits.status(assetId)
-      (state.head, state.rendered, state.rev) shouldBe (2, Some(2), 1)
-    }
-    renditions(assetId) shouldBe both(1)
-  }
-
-  test("A step made after an undo past the rendered step, which takes that step's seq, is not taken as rendered") {
-
-    /**
-     * Setup:
-     *
-     * An imported image with two steps of its Edit. A render of step 2 that, between its read and its write, sees the Edit undone
-     * to step 1 and given a new step, which is step 2 again with another Edit. Then a third step, rendered, undone to step 1 and
-     * given a new step again.
-     *
-     * Assertions:
-     *
-     * The late render of the old step 2 is discarded, though the head's seq is still 2, and the head stays unrendered. A new step
-     * made at step 1 after step 3 was rendered drops step 3 and takes seq 2: the head is not taken as rendered.
+     * The identity's render is `Original`, yet the later render's images stay: its delete runs under the asset's lock and only
+     * while the asset shows its original, which it no longer does. The asset shows revision 2.
      */
     withDebounce {
       val assetId = testContext.persistAsset().persistedId
-      edits.addStep(assetId, 0, brighter, testContext.user)
-      edits.addStep(assetId, 1, warmer, testContext.user)
+      edits.save(assetId, 0, brighter, testContext.user)
+      renders.render(assetId) shouldBe Outcome.Rendered(1, 1)
+      edits.save(assetId, 1, EditRecipe.Identity, testContext.user)
 
       renders.render(
         assetId,
-        beforeWrite = () => {
-          edits.moveHead(assetId, 2, 1, testContext.user)
-          edits.addStep(assetId, 1, brighter.copy(grain = 20), testContext.user): Unit
-        }) shouldBe Outcome.Discarded
+        beforeDelete = () => {
+          edits.save(assetId, 2, warmer, testContext.user)
+          renders.render(assetId) shouldBe Outcome.Rendered(3, 2): Unit
+        }) shouldBe Outcome.Original(2)
 
-      val state = edits.status(assetId)
-      (state.head, state.rendered) shouldBe (2, None)
-
-      edits.addStep(assetId, 2, warmer.copy(grain = 30), testContext.user)
-      renders.render(assetId) shouldBe Outcome.Rendered(3, 1)
-      edits.moveHead(assetId, 3, 1, testContext.user)
-      edits.addStep(assetId, 1, warmer, testContext.user).rendered shouldBe None
+      editedImages(assetId) shouldBe BOTH
+      edits.status(assetId).rev shouldBe 2
     }
   }
 
-  test("A render's write waits for a move of the head under way, and then stores nothing of the old head") {
+  test("An Edit saved during a render throws the render away and queues the asset again") {
 
     /**
      * Setup:
      *
-     * An imported image with two steps of its Edit. A transaction undoing step 2, held open until a render of the asset, whose
-     * write locks the Edit, waits for it (for the Edit's row on PostgreSQL, for the one write connection on SQLite). The undo
-     * writes the Edit's row alone, so the asset's own lock does not hold the render back.
+     * An imported image saved once, whose render sees a second save between its read and its write.
      *
      * Assertions:
      *
-     * The render never stores step 2 as rendered: on PostgreSQL, where it read step 2 before the undo committed, it is discarded
-     * once its lock is granted; on SQLite, where it waits before it reads, it renders step 1.
+     * The render is discarded: nothing is stored, no temporary file of its images is left, and edit version 1 is never recorded
+     * rendered. The asset is queued again, and the queue renders edit version 2 as revision 1.
+     */
+    val assetId = testContext.persistAsset().persistedId
+    withDebounce(edits.save(assetId, 0, brighter, testContext.user))
+
+    renders.render(assetId, beforeWrite = () => edits.save(assetId, 1, warmer, testContext.user): Unit) shouldBe
+      Outcome.Discarded
+    editedImages(assetId) shouldBe Set.empty
+    stagedFiles(assetId).filter(Files.exists(_)) shouldBe Nil
+    edits.status(assetId).renderedVersion shouldBe None
+
+    eventually {
+      val state = edits.status(assetId)
+      (state.editVersion, state.renderedVersion, state.rev) shouldBe (2, Some(2), 1)
+    }
+    editedImages(assetId) shouldBe BOTH
+  }
+
+  test("A render's write waits for a save under way, and then stores nothing of the Edit before it") {
+
+    /**
+     * Setup:
+     *
+     * An imported image saved twice. A transaction saving a third Edit, held open until a render of the asset, whose write locks
+     * the asset and the Edit, waits for it (for the asset's row on PostgreSQL, for the one write connection on SQLite).
+     *
+     * Assertions:
+     *
+     * The render never stores version 2 as rendered: on PostgreSQL, where it read version 2 before the save committed, it is
+     * discarded once its locks are granted; on SQLite, where it waits before it reads, it renders version 3.
      */
     withDebounce {
       val assetId = testContext.persistAsset().persistedId
-      edits.addStep(assetId, 0, brighter, testContext.user)
-      edits.addStep(assetId, 1, warmer, testContext.user)
+      edits.save(assetId, 0, brighter, testContext.user)
+      edits.save(assetId, 1, warmer, testContext.user)
 
       val outcome = new java.util.concurrent.atomic.AtomicReference[Outcome]()
       contend(
-        first = edits.moveHead(assetId, 2, 1, testContext.user): Unit,
+        first = edits.save(assetId, 2, contrasty, testContext.user): Unit,
         second = outcome.set(renders.render(assetId))
       )
-      outcome.get should (be(Outcome.Discarded).or(be(Outcome.Rendered(1, 1))))
-      edits.status(assetId).rendered should not be Some(2)
+      outcome.get should (be(Outcome.Discarded).or(be(Outcome.Rendered(3, 1))))
+      edits.status(assetId).renderedVersion should not be Some(2)
     }
   }
 
@@ -283,78 +289,78 @@ import altitude.core.service.EditRenderService.Outcome
     }
   }
 
-  test("A render's write and a step of the Edit take the asset's and the Edit's locks in one order, so neither deadlocks") {
+  test("A render's write and a save take the asset's and the Edit's locks in one order, so neither deadlocks") {
 
     /**
      * Setup:
      *
-     * An imported image with a step of its Edit, rendered. A transaction that takes the locks a render's write takes, in its
-     * order: the asset's first, then, once a second step of the Edit is waiting for it or done, the Edit's.
+     * An imported image saved once and rendered. A transaction that takes the locks a render's write takes, in its order: the
+     * asset's first, then, once a second save is waiting for it or done, the Edit's.
      *
      * Assertions:
      *
-     * Both commit, one after the other, and the second step is the head. On PostgreSQL a step that locked the Edit before the
-     * asset would wait for the asset (its step's foreign key) while the render's write waits for the Edit: a deadlock the
-     * database breaks by failing one of them.
+     * Both commit, one after the other, and the second save is the Edit's version 2. On PostgreSQL a save that locked the Edit
+     * before the asset would hold the Edit while waiting for the asset, which the render's write holds while waiting for the
+     * Edit: a deadlock the database breaks by failing one of them.
      */
     val assetId = testContext.persistAsset().persistedId
     withDebounce {
-      edits.addStep(assetId, 0, brighter, testContext.user)
+      edits.save(assetId, 0, brighter, testContext.user)
       renders.render(assetId)
     }
 
     interleave(
       firstLocks = testApp.DAO.asset.lockUnpurged(assetId) shouldBe true,
-      second = edits.addStep(assetId, 1, warmer, testContext.user): Unit,
-      firstThen = testApp.DAO.assetEdit.getForUpdate(assetId).map(_.headSeq) should not be empty
+      second = edits.save(assetId, 1, warmer, testContext.user): Unit,
+      firstThen = testApp.DAO.assetEdit.getForUpdate(assetId).map(_.editVersion) should not be empty
     )
-    edits.get(assetId).head shouldBe 2
+    edits.get(assetId).editVersion shouldBe 2
   }
 
-  test("Changes in quick succession are rendered once, at the head they end on") {
+  test("Saves in quick succession are rendered once, at the version they end on") {
 
     /**
      * Setup:
      *
-     * An imported image given two steps of its Edit at once, each queueing a render.
+     * An imported image saved twice at once, each save queueing a render.
      *
      * Assertions:
      *
-     * The queue renders once, after the last change: step 2 as revision 1, step 1 never rendered.
+     * The queue renders once, after the last save: version 2 as revision 1, version 1 never rendered.
      */
     val assetId = testContext.persistAsset().persistedId
-    edits.addStep(assetId, 0, brighter, testContext.user)
-    edits.addStep(assetId, 1, warmer, testContext.user)
+    edits.save(assetId, 0, brighter, testContext.user)
+    edits.save(assetId, 1, warmer, testContext.user)
 
     eventually {
       val state = edits.status(assetId)
-      (state.head, state.rendered, state.rev) shouldBe (2, Some(2), 1)
+      (state.editVersion, state.renderedVersion, state.rev) shouldBe (2, Some(2), 1)
     }
     lastRev(assetId) shouldBe 1
   }
 
-  test("The startup queues every Edit whose head is not rendered") {
+  test("The startup queues every Edit whose version is not rendered") {
 
     /**
      * Setup:
      *
-     * An imported image with a step of its Edit, rendered by the queue; then its rendered step cleared by hand, as a stop before
-     * its render leaves it; then the startup's requeue.
+     * An imported image saved once, rendered by the queue; then its rendered version cleared by hand, as a stop before its render
+     * leaves it; then the startup's requeue.
      *
      * Assertions:
      *
-     * The requeue renders the head again, as the next revision.
+     * The requeue renders the Edit again, as the next revision.
      */
     val assetId = testContext.persistAsset().persistedId
-    edits.addStep(assetId, 0, brighter, testContext.user)
+    edits.save(assetId, 0, brighter, testContext.user)
     eventually(edits.status(assetId).rev shouldBe 1)
 
-    testApp.txManager.withTransaction(update("UPDATE asset_edit SET rendered_seq = NULL WHERE asset_id = ?", assetId))
+    testApp.txManager.withTransaction(update("UPDATE asset_edit SET rendered_version = NULL WHERE asset_id = ?", assetId))
     renders.requeuePendingRenders()
 
     eventually {
       val state = edits.status(assetId)
-      (state.rendered, state.rev) shouldBe (Some(1), 2)
+      (state.renderedVersion, state.rev) shouldBe (Some(1), 2)
     }
   }
 
@@ -373,20 +379,20 @@ import altitude.core.service.EditRenderService.Outcome
      */
     withDebounce {
       val small = testContext.persistAsset().persistedId
-      edits.addStep(small, 0, halfCrop, testContext.user)
+      edits.save(small, 0, halfCrop, testContext.user)
       renders.render(small) shouldBe Outcome.Rendered(1, 1)
 
-      val display = decoded(small, 1, Const.DataStore.DISPLAY)
+      val display = decoded(small, Const.DataStore.DISPLAY)
       (display.width, display.height) shouldBe (75, 150)
-      val preview = decoded(small, 1, Const.DataStore.PREVIEW)
+      val preview = decoded(small, Const.DataStore.PREVIEW)
       (preview.width, preview.height, preview.channels) shouldBe (200, 200, 4)
       preview.get(100, 10)(3) shouldBe 0.0
       preview.get(100, 190)(3) shouldBe 0.0
 
       val large = importedJpeg(4000, 300).persistedId
-      edits.addStep(large, 0, brighter, testContext.user)
+      edits.save(large, 0, brighter, testContext.user)
       renders.render(large) shouldBe Outcome.Rendered(1, 1)
-      val wide = decoded(large, 1, Const.DataStore.DISPLAY)
+      val wide = decoded(large, Const.DataStore.DISPLAY)
       (wide.width, wide.height) shouldBe (3840, 288)
     }
   }
@@ -396,63 +402,101 @@ import altitude.core.service.EditRenderService.Outcome
     /**
      * Setup:
      *
-     * Three imported images with a step of their Edit each: one recycled and purged; one, rendered once, whose Edit is then given
-     * a second step and its stored original deleted; and one whose stored original is overwritten with bytes no decoder reads.
+     * Three imported images saved once each: one recycled and purged; one, rendered once, then saved again and its stored
+     * original deleted; and one whose stored original is overwritten with bytes no decoder reads.
      *
      * Assertions:
      *
      * The purged asset's render finds it gone and stores nothing. The others cannot be rendered: each is recorded rendered at its
-     * head with revision 0, so it shows its original, keeps no rendition, and is not queued again at the next start.
+     * version with revision 0, so it shows its original, keeps no edited image (the first render's are deleted), and is not
+     * queued again at the next start.
      */
     val purged = testContext.persistAsset().persistedId
     val gone = testContext.persistAsset().persistedId
     val corrupt = testContext.persistAsset().persistedId
     withDebounce {
-      for (assetId <- List(purged, gone, corrupt)) edits.addStep(assetId, 0, brighter, testContext.user)
+      for (assetId <- List(purged, gone, corrupt)) edits.save(assetId, 0, brighter, testContext.user)
       renders.render(gone) shouldBe Outcome.Rendered(1, 1)
 
       testApp.service.library.recycleAssets(Set(purged))
       testApp.service.library.purgeSelectedAssets(Set(purged))
       eventually(testApp.txManager.asReadOnly(query("SELECT id FROM asset WHERE id = ?", purged)) shouldBe Nil)
       renders.render(purged) shouldBe Outcome.Gone
-      renditions(purged) shouldBe both()
+      editedImages(purged) shouldBe Set.empty
 
-      edits.addStep(gone, 1, warmer, testContext.user)
+      edits.save(gone, 1, warmer, testContext.user)
       Files.delete(testApp.service.fileStore.assetFile(gone))
       Files.write(testApp.service.fileStore.assetFile(corrupt), "not an image".getBytes): Unit
       renders.render(gone) shouldBe Outcome.Unrenderable(2)
       renders.render(corrupt) shouldBe Outcome.Unrenderable(1)
-      for ((assetId, head) <- List(gone -> 2, corrupt -> 1)) {
+      for ((assetId, version) <- List(gone -> 2, corrupt -> 1)) {
         val state = edits.status(assetId)
-        (state.head, state.rendered, state.rev) shouldBe (head, Some(head), 0)
-        renditions(assetId) shouldBe both()
+        (state.editVersion, state.renderedVersion, state.rev) shouldBe (version, Some(version), 0)
+        editedImages(assetId) shouldBe Set.empty
       }
       testApp.txManager.asReadOnly(testApp.DAO.assetEdit.pendingRenders()) should contain noneOf (gone, corrupt)
     }
   }
 
-  test("A revision whose files a failed render left behind is never used again") {
+  test("Edited images a failed render left behind are replaced by the next render") {
 
     /**
      * Setup:
      *
-     * An imported image with a step of its Edit, and files of revision 1 in its rendition directories, as a render whose
-     * transaction failed after it stored them leaves them; then the step rendered.
+     * An imported image saved once, never rendered, with bytes that are no image at the paths of its edited images, as a render
+     * whose transaction failed after it stored them leaves them; then the Edit rendered.
      *
      * Assertions:
      *
-     * The render takes revision 2, past the one on disk, and the leftover files of revision 1 are deleted with the revisions
-     * below.
+     * The render takes revision 1, the next after `last_rev`, and both files now hold images it rendered.
      */
     val assetId = testContext.persistAsset().persistedId
     withDebounce {
-      edits.addStep(assetId, 0, brighter, testContext.user)
-      for (kind <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY))
-        testApp.service.fileStore.addEditRendition(assetId, 1, kind, "left behind".getBytes)
-      renders.render(assetId) shouldBe Outcome.Rendered(1, 2)
-      edits.status(assetId).rev shouldBe 2
-      renditions(assetId) shouldBe both(2)
+      edits.save(assetId, 0, brighter, testContext.user)
+      for (kind <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)) {
+        testApp.service.fileStore.stageEditedImage(assetId, kind, "left behind".getBytes)
+        testApp.service.fileStore.publishEditedImage(assetId, kind)
+      }
+      renders.render(assetId) shouldBe Outcome.Rendered(1, 1)
+      edits.status(assetId).rev shouldBe 1
+      for (kind <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)) withClue(s"$kind: ") {
+        decoded(assetId, kind).empty shouldBe false
+      }
     }
+  }
+
+  test("A render that fails is tried again after a delay, and stores its images once the cause is gone") {
+
+    /**
+     * Setup:
+     *
+     * An imported image whose Display image cannot be staged (a directory with a file in it stands where its temporary file
+     * goes), saved once with the render delay at 100 ms; the directory removed a second later.
+     *
+     * Assertions:
+     *
+     * The queue's render fails and nothing is rendered while the directory stands; once it is gone, a later try, queued again
+     * after a growing delay, renders the Edit as revision 1 with both edited images stored.
+     */
+    val assetId = testContext.persistAsset().persistedId
+    val blocking = stagedFiles(assetId).last
+    // Not empty, so the render's cleanup of what it staged cannot delete it
+    Files.createDirectories(blocking)
+    Files.write(blocking.resolve("in-the-way"), Array[Byte](1)): Unit
+    renders.debounce = scala.concurrent.duration.DurationInt(100).millis
+    try {
+      edits.save(assetId, 0, brighter, testContext.user)
+      Thread.sleep(1000)
+      edits.status(assetId).renderedVersion shouldBe None
+      Files.delete(blocking.resolve("in-the-way"))
+      Files.delete(blocking)
+
+      eventually {
+        val state = edits.status(assetId)
+        (state.renderedVersion, state.rev) shouldBe (Some(1), 1)
+      }
+      editedImages(assetId) shouldBe BOTH
+    } finally renders.debounce = EditRenderService.DEBOUNCE
   }
 
   test("A render service that has stopped queues nothing more") {
@@ -460,20 +504,20 @@ import altitude.core.service.EditRenderService.Outcome
     /**
      * Setup:
      *
-     * An imported image with a step of its Edit, not rendered, and a render service of its own with a delay of 10 ms, stopped.
+     * An imported image saved once, not rendered, and a render service of its own with a delay of 10 ms, stopped.
      *
      * Assertions:
      *
-     * Its `enqueue` neither fails nor renders: a second later the head is still not rendered, which the next start would queue.
+     * Its `enqueue` neither fails nor renders: a second later the Edit is still not rendered, which the next start would queue.
      */
     val assetId = testContext.persistAsset().persistedId
-    withDebounce(edits.addStep(assetId, 0, brighter, testContext.user))
+    withDebounce(edits.save(assetId, 0, brighter, testContext.user))
     val stopped = EditRenderService(testApp)
     stopped.debounce = scala.concurrent.duration.DurationInt(10).millis
     stopped.shutdown()
 
     stopped.enqueue(assetId)
     Thread.sleep(1000)
-    edits.status(assetId).rendered shouldBe None
+    edits.status(assetId).renderedVersion shouldBe None
   }
 }

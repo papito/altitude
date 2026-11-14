@@ -23,11 +23,11 @@ class ContentViewController(using logger: Logger) extends cask.Routes:
    * Guest, who sees Browse alone, is answered a triaged asset's Preview, Display image or original, or one in the trash, as an
    * unknown one (`visibleOnly`); a Face's crop is served, since it may be the cover of a Person the Guest sees.
    *
-   * `v` is the revision of an edited asset's renditions (`asset.edit_rev`): a Preview with `v` is the edited Preview of that
-   * revision, and without it the original's; a Display image is asked for by its revision alone. A revision whose files a later
-   * one has replaced is answered the asset's current rendition, or, for a Preview, the original's when the Edit is back at the
-   * Original; one the asset has not used yet is a 404, never cached, since it may name other bytes later. A `v` that is no whole
-   * number is a 400.
+   * `v` is the revision of an edited asset's edited images (`asset.edit_rev`), their URLs' cache key: a Preview with `v` is the
+   * edited Preview, and without it the original's; a Display image is asked for with `v` alone. A `v` from 1 to the asset's
+   * revision is answered the edited image stored now, so an earlier one, which no page builds any more, may get newer bytes; one
+   * above it, or 0, is a 404, never cached, since a later render may store other bytes under it. A `v` that is no whole number is
+   * a 400.
    *
    * `exp` and `sig` are a signed URL's, which the decorator verifies; they are declared only because cask answers a query
    * parameter that an endpoint does not declare with a 400.
@@ -60,11 +60,10 @@ class ContentViewController(using logger: Logger) extends cask.Routes:
   private def content(dataType: String, itemId: String, revision: Option[Int])(using request: Request): Response.Raw =
     dataType match {
       case C.DataStore.PREVIEW =>
-        // Only a Guest's request reads the asset, to refuse it one Browse does not show
+        // A Guest's request reads the asset, to refuse it one Browse does not show; the original's Preview needs no other read
         if RequestContext.isGuest then visibleOnly(App.altitude.service.asset.getById(itemId)): Unit
-        val preview: MimedPreviewData = revision
-          .flatMap(App.altitude.service.assetEdit.rendition(itemId, _, C.DataStore.PREVIEW))
-          .getOrElse(App.altitude.service.fileStore.getPreviewById(itemId))
+        val preview: MimedPreviewData = revision.fold(App.altitude.service.fileStore.getPreviewById(itemId))(
+          App.altitude.service.assetEdit.editedImage(itemId, _, C.DataStore.PREVIEW))
         image(preview.data, preview.mimeType)
 
       case C.DataStore.DISPLAY =>
@@ -72,9 +71,8 @@ class ContentViewController(using logger: Logger) extends cask.Routes:
           case None => plainText(C.Msg.Err.REVISION_REQUIRED, 400)
           case Some(rev) =>
             if RequestContext.isGuest then visibleOnly(App.altitude.service.asset.getById(itemId)): Unit
-            App.altitude.service.assetEdit
-              .rendition(itemId, rev, C.DataStore.DISPLAY)
-              .fold(notFound)(display => image(display.data, display.mimeType))
+            val display = App.altitude.service.assetEdit.editedImage(itemId, rev, C.DataStore.DISPLAY)
+            image(display.data, display.mimeType)
 
       case C.DataStore.FILE =>
         // The stored original, streamed with byte ranges so a Video plays and seeks, typed as the asset was detected and named
@@ -104,11 +102,11 @@ class ContentViewController(using logger: Logger) extends cask.Routes:
 
   /**
    * The headers of every response that serves content, an original's 206 and 416 included. The bytes under a content URL never
-   * change (a preview is written once per asset, an edited rendition once per revision, which is never used again for the asset,
-   * a face image once per face, and an original is unique by checksum), so the browser keeps them for as long as it keeps
-   * anything, privately, since they are a user's. An original is a user's upload served on the application's origin, with its
-   * cookie: `nosniff` and a sandbox CSP stop a browser rendering one as a document that acts as the user, whatever its bytes
-   * contain.
+   * change, or not for a page that builds it (a preview is written once per asset, an edited image is named by a revision each
+   * render takes anew, a face image is written once per face, and an original is unique by checksum), so the browser keeps them
+   * for as long as it keeps anything, privately, since they are a user's. An original is a user's upload served on the
+   * application's origin, with its cookie: `nosniff` and a sandbox CSP stop a browser rendering one as a document that acts as
+   * the user, whatever its bytes contain.
    */
   private def withContentHeaders(response: Response.Raw): Response.Raw =
     response.copy(headers = response.headers ++ Seq(

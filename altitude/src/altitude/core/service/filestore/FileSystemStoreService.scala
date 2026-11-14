@@ -1,17 +1,18 @@
 package altitude.core.service.filestore
 
 import java.io._
-import java.nio.file.FileAlreadyExistsException
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import scala.jdk.CollectionConverters._
 import scala.util.Using
 
 import altitude.core.{ Const => C }
@@ -74,62 +75,56 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService:
 
     putBinaryData(new File(destFilePath), preview.data)
 
-  override def addEditRendition(assetId: String, rev: Int, kind: String, data: Array[Byte]): Unit =
-    val destination = editRenditionPath(assetId, rev, kind)
-    logger.trace(s"Storing the edited $kind of asset [$assetId] at revision [$rev] as $destination")
+  override def stageEditedImage(assetId: String, kind: String, data: Array[Byte]): Unit =
+    val staged = temporaryPathOf(editedImagePath(assetId, kind))
+    logger.trace(s"Staging the edited $kind of asset [$assetId] as $staged")
     try
-      Files.createDirectories(destination.getParent)
-      val temporary = Files.createTempFile(destination.getParent, s".$assetId-r$rev-", ".tmp")
-      try
-        Files.write(temporary, data)
-        // A revision's bytes are never replaced: the writers of an asset's renditions take turns under its locks, so none stores
-        // the file between this look and the move
-        if Files.exists(destination) then throw FileAlreadyExistsException(destination.toString)
-        Files.move(temporary, destination, StandardCopyOption.ATOMIC_MOVE)
-      finally Files.deleteIfExists(temporary): Unit
+      Files.createDirectories(staged.getParent)
+      Using.resource(
+        FileChannel.open(staged, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+        channel =>
+          val buffer = ByteBuffer.wrap(data)
+          while buffer.hasRemaining do channel.write(buffer): Unit
+          // On the disk before the rename that publishes it, so a crash after the commit never leaves a truncated image
+          channel.force(true)
+      }
     catch
       case ex: IOException =>
-        throw StorageException(s"Error storing the edited $kind of asset [$assetId] at revision [$rev]: $ex")
+        throw StorageException(s"Error staging the edited $kind of asset [$assetId]: $ex")
 
-  override def highestEditRendition(assetId: String): Int = editRenditions(assetId).map(_._1).maxOption.getOrElse(0)
+  override def publishEditedImage(assetId: String, kind: String): Unit =
+    val destination = editedImagePath(assetId, kind)
+    try Files.move(temporaryPathOf(destination), destination, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    catch
+      case ex: IOException =>
+        throw StorageException(s"Error publishing the edited $kind of asset [$assetId]: $ex")
 
-  override def getEditRendition(assetId: String, rev: Int, kind: String): MimedPreviewData =
-    MimedPreviewData(assetId = assetId, data = getBinaryData(editRenditionPath(assetId, rev, kind).toFile).get)
+  override def discardStagedEditedImages(assetId: String): Unit =
+    for kind <- List(C.DataStore.PREVIEW, C.DataStore.DISPLAY) do
+      deleteFile(temporaryPathOf(editedImagePath(assetId, kind)), assetId)
 
-  override def editRenditionPath(assetId: String, rev: Int, kind: String): Path =
-    renditionDir(assetId, kind).resolve(s"$assetId-r$rev.${MimedPreviewData.FILE_EXTENSION}")
+  override def getEditedImage(assetId: String, kind: String): MimedPreviewData =
+    MimedPreviewData(assetId = assetId, data = getBinaryData(editedImagePath(assetId, kind).toFile).get)
 
-  override def purgeEditRenditions(assetId: String, below: Int): Unit =
-    for (rev, file) <- editRenditions(assetId) if rev < below do deleteFile(file, assetId)
+  /**
+   * The edited Preview beside the original's Preview, `<repo>/preview/<id[0:2]>/<id>-edited.webp`, and the Display image in a
+   * directory of its own, `<repo>/display/<id[0:2]>/<id>.webp`
+   */
+  override def editedImagePath(assetId: String, kind: String): Path =
+    val name = kind match
+      case C.DataStore.PREVIEW => s"$assetId-edited"
+      case C.DataStore.DISPLAY => assetId
+      case _ => throw IllegalArgumentException(s"No edited image of kind [$kind]")
+    Path.of(repositoryDataPath, kind, assetId.substring(0, 2), s"$name.${MimedPreviewData.FILE_EXTENSION}")
 
-  /** The directory of the asset's edited renditions of `kind`: beside the Previews' or the Display images', by its ID's start */
-  private def renditionDir(assetId: String, kind: String): Path =
-    require(kind == C.DataStore.PREVIEW || kind == C.DataStore.DISPLAY, s"No edited rendition of kind [$kind]")
-    Path.of(repositoryDataPath, kind, assetId.substring(0, 2))
+  override def deleteEditedImages(assetId: String): Unit =
+    for kind <- List(C.DataStore.PREVIEW, C.DataStore.DISPLAY) do
+      val path = editedImagePath(assetId, kind)
+      deleteFile(path, assetId)
+      deleteFile(temporaryPathOf(path), assetId)
 
-  /** Every stored edited rendition of the asset, of both kinds, with its revision: the files named `<id>-r<rev>.webp` */
-  private def editRenditions(assetId: String): List[(Int, Path)] =
-    val name = s"${java.util.regex.Pattern.quote(assetId)}-r(\\d+)\\.${MimedPreviewData.FILE_EXTENSION}".r
-    for
-      kind <- List(C.DataStore.PREVIEW, C.DataStore.DISPLAY)
-      dir = renditionDir(assetId, kind)
-      if Files.isDirectory(dir)
-      file <- Using.resource(Files.list(dir))(_.iterator.asScala.toList)
-      rev <- file.getFileName.toString match
-        case name(digits) => digits.toIntOption
-        case _ => None
-    yield (rev, file)
-
-  /** The temporary files of the asset's rendition writes ([[addEditRendition]]) that a crash cut off before their move */
-  private def renditionLeftovers(assetId: String): List[Path] =
-    for
-      kind <- List(C.DataStore.PREVIEW, C.DataStore.DISPLAY)
-      dir = renditionDir(assetId, kind)
-      if Files.isDirectory(dir)
-      file <- Using.resource(Files.list(dir))(_.iterator.asScala.toList)
-      name = file.getFileName.toString
-      if name.startsWith(s".$assetId-r") && name.endsWith(".tmp")
-    yield file
+  /** The temporary file an edited image is staged in before its move to `destination` ([[stageEditedImage]]): hidden, beside it */
+  private def temporaryPathOf(destination: Path): Path = destination.resolveSibling(s".${destination.getFileName}.tmp")
 
   private def deleteFile(file: Path, assetId: String): Unit =
     try Files.deleteIfExists(file): Unit
@@ -205,9 +200,8 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService:
         case ex: IOException =>
           logger.error(s"Error deleting file for asset id [$id]: $ex")
 
-    // Its edited renditions, of every revision, and what a write of one cut off left
-    editRenditions(id).foreach((_, file) => deleteFile(file, id))
-    renditionLeftovers(id).foreach(deleteFile(_, id))
+    // Its edited images, and what a write of one cut off left
+    deleteEditedImages(id)
 
   override def purgeFaceById(id: String): Unit =
     val paths = List(
@@ -230,7 +224,7 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService:
 
     try Some(FileUtils.readFileToByteArray(srcFile))
     catch
-      // Deleted since it was looked for: a purge, or a rendition replaced by a later revision
+      // Deleted since it was looked for: a purge, or an Edit reverted to the original
       case _: NoSuchFileException | _: FileNotFoundException => throw NotFoundException(s"Cannot find file $srcFile")
       case ex: IOException =>
         throw StorageException(s"Error reading file [${srcFile.getPath}: $ex]")

@@ -71,8 +71,8 @@ case class ImageException(msg: String) extends Exception(msg)
 case class QueueRefusedException(msg: String) extends Exception(msg)
 
 /**
- * A write of an asset's Edit built on a head that is no longer the head (`AssetEditService`): the state the Edit is in now, which
- * `EditController` answers with a 409 for the client to adopt
+ * A save of an asset's Edit built on an edit version the Edit has moved on from (`AssetEditService`): the state the Edit is in
+ * now, which `EditController` answers with a 409 for the client to adopt
  */
 case class EditConflictException(state: EditState)
-  extends Exception(s"The Edit's head is ${state.head}, not the one the change was built on")
+  extends Exception(s"The Edit's edit version is ${state.editVersion}, not the one the save was built on")

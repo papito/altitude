@@ -34,11 +34,11 @@ class AssetActionController(using logger: Logger) extends BaseController:
 
   /**
    * The asset's detail modal, or its JSON when JSON is asked for; an unknown asset, or another repository's, is a 404 of either,
-   * as is a triaged asset or one in the trash for a Guest, who sees Browse alone (`visibleOnly`). Both carry the asset's Edit at
-   * its head (`edit`, `EditController.headJson`), when it has one, and whether the account may edit the asset (`editable`): it
-   * holds Edit images, and an Edit may change the asset (`AssetEditService.whyNotEditable`). For a holder of Edit images, an
-   * asset no Edit may change also carries why (`editRefusal`), which the Edit toggle's title shows; the fragment carries the same
-   * as data attributes, with the measurement's clipping levels and box, which the Edit panel's Clipping blink reads.
+   * as is a triaged asset or one in the trash for a Guest, who sees Browse alone (`visibleOnly`). Both carry the asset's Edit
+   * (`edit`, `EditController.stateJson`), when it has one, and whether the account may edit the asset (`editable`): it holds Edit
+   * images, and an Edit may change the asset (`AssetEditService.whyNotEditable`). For a holder of Edit images, an asset no Edit
+   * may change also carries why (`editRefusal`), which the Edit toggle's title shows; the fragment carries the same as data
+   * attributes, with the measurement's clipping levels and box, which the Edit panel's Clipping blink reads.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/asset-detail/:assetId")
@@ -50,7 +50,7 @@ class AssetActionController(using logger: Logger) extends BaseController:
       (contentType != null && contentType.contains("application/json")) ||
         (accept != null && accept.contains("application/json"))
     def asset: Asset = visibleOnly(App.altitude.service.asset.getById(assetId))
-    def editOf(asset: Asset): Option[ujson.Obj] = App.altitude.service.assetEdit.headOf(asset).map(EditController.headJson)
+    def editOf(asset: Asset): Option[ujson.Obj] = App.altitude.service.assetEdit.editOf(asset).map(EditController.stateJson)
     // Why the account's Edit toggle is disabled on the asset: nothing without Edit images, which has no toggle
     def refusal(asset: Asset): Option[String] =
       if RequestContext.holds(Permission.EditImages) then AssetEditService.whyNotEditable(asset) else None

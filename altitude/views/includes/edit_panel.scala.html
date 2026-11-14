@@ -2,18 +2,20 @@
 
 @* The Edit panel (CONTEXT.md), in Asset detail's fragment for a holder of Edit images (htmx/view_image_detail_modal): an
    `aside#editPanel` docked opposite the Detail panel, whose state is the `editPanel` Alpine component
-   (js/alpine/components/edit-panel.js) over the coordinator js/edit/edit-panel.js, which keeps the Edit, its History and
-   the stage. The header holds Undo, Redo, the History (a native popover, newest step first and the Original last, a click
-   jumping to a step), Before/after and Reset all; the body the Histogram of the edited image, a button switching the
-   Clipping blink with the crushed and blown fractions in its corners, the four tabs (a dot on a section with changes)
-   and the shown section, its heading with a reset; the footers the save status with Revert to original, and the keys.
-   A slider is the `.edit-slider` of core.css, rendered from the sliders of js/edit/recipe.js. Docked top or bottom
-   (includes/edit_panel.css), the section flows into columns, the Histogram sits at the left, the status row joins the
-   header and the keys are left out. *@
+   (js/alpine/components/edit-panel.js) over the coordinator js/edit/edit-panel.js, which keeps the Edit, its session and
+   the stage. The header holds Undo, Redo (the panel's session's), Before/after and Reset all; the body the Histogram of
+   the edited image, a button switching the Clipping blink with the crushed and blown fractions in its corners, the four
+   tabs (a dot on a section with changes) and the shown section, its heading with a reset; the footers the save status
+   with Revert to original, and the keys. A slider is the `.edit-slider` of core.css, rendered from the sliders of
+   js/edit/recipe.js. Docked top or bottom (includes/edit_panel.css), the section flows into columns, the Histogram sits
+   at the left, the status row joins the header and the keys are left out.
+
+   After the panel, `dialog#editLeaveDialog` is the warning of changes not saved (js/edit/leave-dialog.js), a native modal
+   dialog over Asset detail: its message, and Keep editing, Discard and Save, which has the initial focus. *@
 
 @* A section's sliders, by the keys of its specs in js/edit/recipe.js (the component's `slidersOf`), each a label row (the
-   label, Straighten's Auto, the value's field, which Enter sets) over its range, which counts as one step on release; a
-   double-click on the label or the track resets it *@
+   label, Straighten's Auto, the value's field, which Enter sets) over its range, which counts as one change on release;
+   a double-click on the label or the track resets it *@
 @sliders(keys: String) = {
 <template x-for="spec in slidersOf('@keys')" x-bind:key="spec.key">
     <div class="edit-slider" x-bind:class="sliderClass(spec.key)" x-bind:style="sliderStyle(spec.key)">
@@ -58,20 +60,6 @@
         <h2>Edit</h2>
         <button type="button" class="edit-tool" x-on:click="undo()" x-bind:disabled="!canUndo" aria-label="Undo" title="Undo (Ctrl+Z)"><i class="fas fa-undo" aria-hidden="true"></i></button>
         <button type="button" class="edit-tool" x-on:click="redo()" x-bind:disabled="!canRedo" aria-label="Redo" title="Redo (Ctrl+Shift+Z)"><i class="fas fa-redo" aria-hidden="true"></i></button>
-        <button type="button" class="edit-tool" id="editHistoryButton" popovertarget="editHistory" x-bind:disabled="!hasHistory()" aria-label="History" title="History"><i class="fas fa-history" aria-hidden="true"></i></button>
-        <div id="editHistory" popover="auto" aria-label="History">
-            <ol>
-                <template x-for="step in steps" x-bind:key="step.seq">
-                    <li>
-                        <button type="button" x-on:click="jump(step.seq)" x-bind:aria-current="isHead(step)">
-                            <span class="label" x-text="step.label"></span>
-                            <span class="author" x-show="authorOf(step)" x-text="authorOf(step)"></span>
-                            <time x-show="step.createdAt" x-bind:datetime="step.createdAt" x-text="timeOf(step)"></time>
-                        </button>
-                    </li>
-                </template>
-            </ol>
-        </div>
         <button type="button" class="edit-tool" x-on:click="toggleSplit()" x-bind:aria-pressed="splitOn" x-bind:disabled="!ready || cropToolOpen" aria-label="Before/after" title="Before/after"><i class="fas fa-columns" aria-hidden="true"></i></button>
         <button type="button" class="edit-tool" x-on:click="resetAll()" x-bind:disabled="!ready || !anyChanged()" aria-label="Reset all" title="Reset all"><i class="fas fa-eraser" aria-hidden="true"></i></button>
     </header>
@@ -178,3 +166,12 @@
         <p><span>Double-click a slider to reset it</span></p>
     </footer>
 </aside>
+<dialog id="editLeaveDialog" aria-labelledby="editLeaveTitle" aria-describedby="editLeaveMessage">
+    <h2 id="editLeaveTitle">Changes not saved</h2>
+    <p id="editLeaveMessage" data-app-edit-leave-message></p>
+    <div class="edit-leave-actions">
+        <button type="button" class="action-button" data-app-edit-leave="stay">Keep editing</button>
+        <button type="button" class="action-button error" data-app-edit-leave="discard">Discard</button>
+        <button type="button" class="action-button primary" data-app-edit-leave="save" autofocus>Save</button>
+    </div>
+</dialog>

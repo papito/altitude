@@ -121,22 +121,14 @@ object FieldConst:
 
   object AssetEdit:
     val ASSET_ID = "asset_id"
-    val HEAD_SEQ = "head_seq"
-    val RENDERED_SEQ = "rendered_seq"
+    val RECIPE = "recipe"
+    val EDIT_VERSION = "edit_version"
+    val RENDERED_VERSION = "rendered_version"
     val LAST_REV = "last_rev"
     val IS_EDITED = "is_edited"
     val WIDTH = "width"
     val HEIGHT = "height"
     val UPDATED_BY_ACCOUNT_ID = "updated_by_account_id"
-
-  object AssetEditStep:
-    val ASSET_ID = "asset_id"
-    val SEQ = "seq"
-    val RECIPE = "recipe"
-    val LABEL = "label"
-    val ACCOUNT_ID = "account_id"
-    // The name of the account that made the step, read with the steps
-    val AUTHOR = "author"
 
   object PublicMetadata:
     val DEVICE_MODEL = "device_model"

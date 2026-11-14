@@ -314,3 +314,9 @@
 .sg-edit-panel {
   width: var(--modal-content-width);
 }
+
+/* The warning's specimen, open in place rather than in the top layer */
+.sg-edit-leave #editLeaveDialog {
+  position: static;
+  margin: 0;
+}

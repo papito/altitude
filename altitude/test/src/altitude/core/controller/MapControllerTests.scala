@@ -100,13 +100,13 @@ import altitude.core.models.Person
     }
   }
 
-  test("A map cell carries its asset's rendition revision, for the pin's Preview URL") {
+  test("A map cell carries the revision of its asset's edited images, for the pin's Preview URL") {
 
     /**
      * Setup:
      *
-     * A logged-in user's repository with two imported assets far apart, each with a point: one with a step of its Edit, rendered
-     * as revision 1.
+     * A logged-in user's repository with two imported assets far apart, each with a point: one with a saved Edit, rendered as
+     * revision 1.
      *
      * Assertions:
      *
@@ -119,7 +119,7 @@ import altitude.core.models.Person
     testContext.setAssetCoordinates(edited.persistedId, 10, 20)
     val plain = testContext.persistAsset()
     testContext.setAssetCoordinates(plain.persistedId, -40, -50)
-    testApp.service.assetEdit.addStep(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    testApp.service.assetEdit.save(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
     testApp.service.editRender.render(edited.persistedId)
 
     withServer(App) {

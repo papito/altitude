@@ -16,19 +16,30 @@
  *   (`renderer.readHistogram`) and, a moment after the last one, its crushed and blown fractions and, while the Clipping
  *   blink is on, its mask (`common/clipping.js` over the canvas, at the measurement's levels and box, which the fragment
  *   carries as Curation's set does).
- * - **The session** of each asset (`edit-session.js`): a change is shown at once and saved as one step; a session still
- *   saving when Asset detail steps away finishes in the background. Once a session is idle after a save, the stage and
- *   the badge take the new head, and the render the server queues is waited for (`render-status.js`), after which the
- *   grid's cells show the new Preview and the stage, once the panel is closed, the Display image.
- * - **The Crop tool** (`crop-tool.js`): a whole session is one step, on Done; Cancel puts back the Edit it opened on;
- *   stepping to another asset, closing the panel or closing Asset detail while it is open is Done.
+ * - **The session** of each asset (`edit-session.js`): a change is shown at once and saved; Undo and Redo are the
+ *   session's, forgotten as the panel closes or Asset detail steps away; a session still saving then finishes in the
+ *   background. Once a session is idle after a save, the stage and the badge take the new Edit, and the render the server
+ *   queues is waited for (`render-status.js`), after which the grid's cells show the new Preview and the stage, once the
+ *   panel is closed, the Display image.
+ * - **The Crop tool** (`crop-tool.js`): a whole session is one save, on Done; Cancel puts back the Edit it opened on.
+ * - **The warning** (`leave-dialog.js`): closing Asset detail (its close guard, `modal.js`), stepping to another asset
+ *   (`beforeLeave`, which the navigator awaits) or closing the panel while a change is pending (a Crop tool session with
+ *   changes, a change waiting out its delay, a save not answered yet) asks to save, discard or stay; so does Escape on a
+ *   Crop tool session with changes. A save on its way alone is waited for a moment first. Reloading or leaving the page
+ *   with a change pending has the browser ask (`beforeunload`), and a change waiting out its delay is sent as the page
+ *   goes (`pagehide`).
  * - **The keys' handlers** (`listeners/edit.js`): the toggle, the Crop tool's, Undo and Redo.
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import { clippingMask, readClipping } from "../common/clipping.js"
 import { createDock } from "../common/dock.js"
-import { getActiveModalHost, ModalHost } from "../common/modal.js"
+import {
+    closeModal,
+    getActiveModalHost,
+    ModalHost,
+    setCloseGuard,
+} from "../common/modal.js"
 import { showErrorSnackBar, showWarningSnackBar } from "../common/snackbar.js"
 import { readStoredObject, writeStoredFields } from "../common/stored-state.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
@@ -44,7 +55,8 @@ import {
     withSlider,
 } from "./adjust.js"
 import { createCropTool } from "./crop-tool.js"
-import { createEditSession, headOf } from "./edit-session.js"
+import { createEditSession } from "./edit-session.js"
+import { askToLeave, LeaveChoice } from "./leave-dialog.js"
 import { isIdentity, normalize, sameRecipe } from "./recipe.js"
 import { refreshAfterRender } from "./render-status.js"
 import { isRendererSupported } from "./renderer.js"
@@ -77,7 +89,12 @@ const SPLIT_KEY_STEP = 0.05
 const CONFLICT_MESSAGE =
     "This photo was changed elsewhere; showing its latest Edit"
 const SAVE_FAILED_MESSAGE = "Could not save the Edit"
-const LOAD_FAILED_MESSAGE = "Could not read the Edit's History"
+const LOAD_FAILED_MESSAGE = "Could not read the Edit"
+// The warning's words: a Crop tool session with changes, and a change not saved yet
+const CROP_PENDING_MESSAGE = "The Crop tool's changes are not applied yet."
+const SAVE_PENDING_MESSAGE = "The last change to this photo is not saved yet."
+// How long a save on its way is waited for before the warning asks about it
+const SAVE_SETTLE_MS = 1000
 const NOTHING_TO_LEVEL_MESSAGE = "No straight lines to level the image by"
 
 // How long a change made with a control's keys (a slider's arrows, a curve point's) or by a click on a slider's track waits
@@ -99,7 +116,7 @@ export function connectEditPanelView(view) {
 }
 
 /**
- * The upright original's size as the server read it, from an Edit at its head or a state (`uprightWidth`,
+ * The upright original's size as the server read it, from an Edit's state (`uprightWidth`,
  * `uprightHeight`), or null when it carries none
  */
 function uprightOf(state) {
@@ -147,10 +164,14 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     let clippingToken = 0
     let drawScheduled = false
     let autoBusy = false
-    // The Edit at the head as each asset's last saved state and render left it, by asset
-    const latestHead = new Map()
+    // The Edit as each asset's last saved state and render left it, by asset
+    const latestEdit = new Map()
     const renderTokens = new Map()
     let view = null
+    // The answer to a leave being asked about (`beforeLeave`), which a leave asked for meanwhile does not wait for, and
+    // whether Asset detail's close has been answered, so its guard lets it through
+    let leaving = null
+    let closeApproved = false
 
     const cropTool = createCropTool({
         recipe: () => working,
@@ -158,6 +179,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         preview,
         done: finishCrop,
         cancel: cancelCrop,
+        escape: escapeCrop,
         changed: push,
     })
 
@@ -212,7 +234,21 @@ export function createEditPanel({ context, editStage, detailPanel }) {
             }
         })
 
-        // Closing Asset detail ends what is open on its asset: the Crop tool's session is saved as Done
+        // Closing Asset detail with a change pending asks first; a close nothing asks about (another dialog's open
+        // replacing Asset detail) ends what is open on its asset, the Crop tool's session saved as Done
+        setCloseGuard(ModalHost.assetDetail, guardClose)
+        // Leaving the page asks too, also for a save another asset's session still has on its way
+        window.addEventListener("beforeunload", (event) => {
+            if (
+                hasPending() ||
+                [...sessions.values()].some((kept) => kept.hasUnsaved())
+            ) {
+                event.preventDefault()
+                event.returnValue = ""
+            }
+        })
+        window.addEventListener("pagehide", saveOnHide)
+        window.addEventListener("pageshow", reloadSessionsOnShow)
         let wasActive = false
         Alpine.effect(() => {
             const active = getActiveModalHost() === ModalHost.assetDetail
@@ -239,10 +275,10 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * Asset detail shows, or starts loading, an asset (`detail-navigator.js`, before its media): `edit` its Edit at the
-     * head (or null), `editable` whether the account may edit it and `refusal` why not. What was open on the last asset
-     * ends (the Crop tool's session saved as Done), and while the panel is open the stage is told to draw the coming
-     * asset's Edit and its session starts.
+     * Asset detail shows, or starts loading, an asset (`detail-navigator.js`, before its media): `edit` its Edit (or
+     * null), `editable` whether the account may edit it and `refusal` why not. What was open on the last asset ends
+     * (`leaveAsset`), and while the panel is open the stage is told to draw the coming asset's Edit and its session
+     * starts.
      */
     function showAsset({ assetId, mediaType, edit, editable, refusal }) {
         if (subject && subject.assetId !== assetId) {
@@ -300,12 +336,17 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         push()
     }
 
-    /** What was open on the asset shown ends: the Crop tool's session is saved as Done, Before/after and the blink go */
+    /**
+     * What was open on the asset shown ends: Undo and Redo forget it, Before/after and the blink go. A change still
+     * pending, which the warning did not ask about (another dialog's open replacing Asset detail), is saved: the Crop
+     * tool's session as Done
+     */
     function leaveAsset() {
         flushCommit()
         if (cropTool.isOpen()) {
             finishCrop()
         }
+        session?.clearUndo()
         splitOn = false
         syncSplit()
         clippingBlink = false
@@ -381,7 +422,11 @@ export function createEditPanel({ context, editStage, detailPanel }) {
             }
             return
         }
-        setOpen(!open)
+        if (open) {
+            beforeLeave().then((ok) => ok && open && setOpen(false))
+        } else {
+            setOpen(true)
+        }
     }
 
     function setOpen(value) {
@@ -408,10 +453,10 @@ export function createEditPanel({ context, editStage, detailPanel }) {
                 .setEditing(true)
                 .then((shown) => shown && afterShown(assetId))
         } else {
-            // The stage shows the head as the last save left it
-            const head = subject && latestHead.get(subject.assetId)
-            if (head) {
-                editStage.adoptEdit(subject.assetId, head, { present: false })
+            // The stage shows the Edit as the last save left it
+            const latest = subject && latestEdit.get(subject.assetId)
+            if (latest) {
+                editStage.adoptEdit(subject.assetId, latest, { present: false })
             }
             editStage.setEditing(false)
             stopSession()
@@ -419,7 +464,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         push()
     }
 
-    /** The session of the asset shown, picked up when one is still at work on it, else a new one reading the History */
+    /** The session of the asset shown, picked up when one is still at work on it, else a new one reading the Edit */
     function startSession() {
         const { assetId, edit } = subject
         if (session?.assetId === assetId) {
@@ -433,7 +478,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         sessionRecipe = snapshot.recipe
         upright = upright ?? uprightOf(snapshot.state)
         unsubscribe = session.subscribe(onSessionChange)
-        // An idle session kept for a render, or a new one, reads the History: it may have moved elsewhere meanwhile
+        // An idle session kept for a render, or a new one, reads the Edit: it may have been saved elsewhere meanwhile
         if (!snapshot.busy) {
             session.load()
         }
@@ -452,7 +497,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         }
     }
 
-    /** A session leaves the map once it is idle and not the one shown, so the next visit reads the History afresh */
+    /** A session leaves the map once it is idle and not the one shown, so the next visit reads the Edit afresh */
     function forgetWhenIdle(assetId) {
         const kept = sessions.get(assetId)
         if (
@@ -494,7 +539,10 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         return created
     }
 
-    /** The Edit routes of an asset (`EditController`), each answering the state; a 409's state rejects as `conflictState` */
+    /**
+     * The Edit routes of an asset (`EditController`), each answering the state; a 409's state rejects as `conflictState`.
+     * `saveOnHide` sends a save that outlives the page (`keepalive`), its answer unread.
+     */
     function apiFor(assetId) {
         const url = `/api/edit/r/${context.getRepoId()}/asset/${assetId}`
         const answer = (request) =>
@@ -513,24 +561,27 @@ export function createEditPanel({ context, editStage, detailPanel }) {
                 })
         return {
             load: () => answer(http.get(url)),
-            addStep: ({ base, recipe }) =>
-                answer(http.post(`${url}/steps`, { base, recipe })),
-            moveHead: ({ base, seq }) =>
-                answer(http.put(`${url}/head`, { base, seq })),
+            save: ({ base, recipe }) => answer(http.put(url, { base, recipe })),
+            saveOnHide: ({ base, recipe }) =>
+                fetch(url, {
+                    method: "PUT",
+                    keepalive: true,
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ base, recipe }),
+                }).catch(() => {}),
         }
     }
 
     /**
-     * A session's writes were saved: the stage's badge and toggle follow the new head at once (and the stage shows it,
+     * A session's writes were saved: the stage's badge and toggle follow the new Edit at once (and the stage shows it,
      * when the panel no longer draws this asset), and the render the server queued is waited for, after which the
      * grid's cells show the new Preview and the stage, with the panel closed, the Display image
      */
     function saved(assetId, state) {
-        const head = headOf(state)
-        latestHead.set(assetId, head)
-        editStage.adoptEdit(assetId, head, { present: !drawsAsset(assetId) })
+        latestEdit.set(assetId, state)
+        editStage.adoptEdit(assetId, state, { present: !drawsAsset(assetId) })
         if (subject?.assetId === assetId) {
-            subject.edit = head
+            subject.edit = state
         }
 
         const token = (renderTokens.get(assetId)?.token ?? 0) + 1
@@ -538,7 +589,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         refreshAfterRender({
             repoId: context.getRepoId(),
             assetId,
-            head: state.head,
+            editVersion: state.editVersion,
             isCancelled: () => renderTokens.get(assetId)?.token !== token,
         })
             .then((status) => {
@@ -546,11 +597,11 @@ export function createEditPanel({ context, editStage, detailPanel }) {
                     return
                 }
                 const rendered = {
-                    ...latestHead.get(assetId),
-                    rendered: status.rendered,
+                    ...latestEdit.get(assetId),
+                    renderedVersion: status.renderedVersion,
                     rev: status.rev,
                 }
-                latestHead.set(assetId, rendered)
+                latestEdit.set(assetId, rendered)
                 if (subject?.assetId === assetId) {
                     subject.edit = rendered
                 }
@@ -572,8 +623,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * The session changed: its own change of the Edit (an answer to Undo, Redo or a jump, a conflict's or a failure's
-     * state) is drawn, ending a Crop tool session it overtakes; the panel's own changes not saved yet stay on screen
+     * The session changed: its own change of the Edit (Undo, Redo, a conflict's or a failure's state) is drawn, ending a
+     * Crop tool session it overtakes; the panel's own changes not saved yet stay on screen
      */
     function onSessionChange(snapshot) {
         sessionSnapshot = snapshot
@@ -728,15 +779,12 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         push()
     }
 
-    /** Whether a change may be made now: the Edit is shown, and no Undo, Redo or History jump is on its way */
+    /** Whether a change may be made now: the Edit is shown */
     function changeable() {
-        return Boolean(working) && !session?.isMoving()
+        return Boolean(working)
     }
 
-    /**
-     * A change shown on the stage and not saved: a slider's drag, a curve point's, a gesture of the Crop tool. None while
-     * a head move is on its way: it would be built on the Edit before the move
-     */
+    /** A change shown on the stage and not saved: a slider's drag, a curve point's, a gesture of the Crop tool */
     function preview(recipe) {
         if (!changeable()) {
             return
@@ -748,8 +796,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * A change saved as one step, once shown: a slider's release, a button. In the Crop tool it joins the tool's
-     * session, which Done saves as one step.
+     * A change saved, once shown: a slider's release, a button. In the Crop tool it joins the tool's session, which Done
+     * saves as one change.
      */
     function commit(recipe) {
         if (!changeable() || !session) {
@@ -764,7 +812,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
 
     /**
      * A change shown at once and saved once no other comes for a moment (`via` "key": a control's keys, so a held key is
-     * one step; "click": a click on a slider's track, so a double-click's reset makes no step in between)
+     * one change; "click": a click on a slider's track, so a double-click's reset saves nothing in between)
      */
     function commitSoon(recipe, via) {
         if (!changeable() || !session) {
@@ -779,7 +827,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         )
     }
 
-    /** The change waiting (`commitSoon`) saved now: before a move of the head, a tool, or leaving the asset */
+    /** The change waiting (`commitSoon`) saved now: before Undo or Redo, a tool, or leaving the asset */
     function flushCommit() {
         clearTimeout(commitTimer)
         if (commitWaiting) {
@@ -793,7 +841,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         commitWaiting = false
     }
 
-    /** The component's changes of the Edit, made from the Edit shown (`adjust.js`), as one step */
+    /** The component's changes of the Edit, made from the Edit shown (`adjust.js`), each saved as one change */
     const changes = {
         slider: (key, value) => withSlider(working, key, value, upright),
         aspect: (aspect) => withAspect(working, aspect, upright),
@@ -835,14 +883,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         }
     }
 
-    function jump(seq) {
-        if (session && !cropTool.isOpen()) {
-            flushCommit()
-            session.jump(seq)
-        }
-    }
-
-    /** Revert to original: the Original's Edit as one step, which Undo takes back */
+    /** Revert to original: the identity saved as one change, which Undo takes back */
     function revert() {
         if (working) {
             commit(normalize(null))
@@ -870,7 +911,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         push()
     }
 
-    /** Done: the Crop tool closes and its session is saved as one step */
+    /** Done: the Crop tool closes and its session is saved as one change */
     function finishCrop() {
         if (!cropTool.isOpen()) {
             return
@@ -890,10 +931,152 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         if (!start) {
             return
         }
+        // A change of the session still waiting out its delay goes with it
+        cancelWaitingCommit()
         cropTool.close()
         working = start
         present()
         push()
+    }
+
+    /** Whether the open Crop tool's session changed the Edit it opened on */
+    function cropChanged() {
+        const start = cropTool.startRecipe()
+        return Boolean(start && working && !sameRecipe(start, working))
+    }
+
+    /** Escape in the Crop tool: Cancel, unless its session changed the Edit, which the warning asks about first */
+    function escapeCrop() {
+        if (!cropChanged()) {
+            cancelCrop()
+            return
+        }
+        if (leaving) {
+            return
+        }
+        leaving = ask(CROP_PENDING_MESSAGE)
+            .then((choice) => {
+                if (choice === LeaveChoice.save) {
+                    finishCrop()
+                } else if (choice === LeaveChoice.discard) {
+                    cancelCrop()
+                }
+                return false
+            })
+            .finally(() => (leaving = null))
+    }
+
+    /**
+     * Whether a change is pending: a Crop tool session with changes, a change waiting out its delay (`commitSoon`), or a
+     * save the server has not answered
+     */
+    function hasPending() {
+        return cropChanged() || commitWaiting || Boolean(session?.hasUnsaved())
+    }
+
+    /**
+     * Asked before Asset detail closes or steps to another asset, or the panel closes: resolves true to go on, at once
+     * with nothing pending. With a change pending, the warning asks to save it (the Crop tool's session as Done, a change
+     * waiting saved now, a save on its way left to finish), to discard it (Cancel, the change waiting dropped, the
+     * session's `discard`) or to stay (false); a save on its way alone is waited for a moment first, and asks nothing
+     * once answered. A leave asked for while one is being asked about stays.
+     */
+    function beforeLeave() {
+        if (leaving) {
+            return Promise.resolve(false)
+        }
+        if (!hasPending()) {
+            return Promise.resolve(true)
+        }
+        leaving = decideLeave().finally(() => (leaving = null))
+        return leaving
+    }
+
+    async function decideLeave() {
+        if (!cropChanged() && !commitWaiting) {
+            await Promise.race([
+                session.settled(),
+                new Promise((resolve) => setTimeout(resolve, SAVE_SETTLE_MS)),
+            ])
+            if (!hasPending()) {
+                return true
+            }
+        }
+        const choice = await ask(
+            cropChanged() ? CROP_PENDING_MESSAGE : SAVE_PENDING_MESSAGE,
+        )
+        if (choice === LeaveChoice.stay) {
+            return false
+        }
+        if (choice === LeaveChoice.save) {
+            finishCrop()
+            flushCommit()
+        } else if (cropChanged()) {
+            // The warning spoke of the Crop tool's session alone: a save on its way, which it did not mention, finishes
+            cancelCrop()
+        } else {
+            cancelWaitingCommit()
+            session?.discard()
+            working = session?.snapshot().recipe ?? working
+            sessionRecipe = working
+        }
+        return true
+    }
+
+    /**
+     * The warning, asked with `message`: a change waiting out its delay waits on while it is open, so neither the save it
+     * offers nor the discard is decided for it, and its delay starts again if the answer is to stay
+     */
+    async function ask(message) {
+        clearTimeout(commitTimer)
+        const choice = await askToLeave({ message })
+        if (choice === LeaveChoice.stay && commitWaiting) {
+            commitTimer = setTimeout(flushCommit, KEY_COMMIT_DELAY_MS)
+        }
+        return choice
+    }
+
+    /**
+     * Asset detail's close guard (`modal.js`): with a change pending the close is held for the warning's answer, and the
+     * guard answers a promise of whether Asset detail closed after all
+     */
+    function guardClose() {
+        if (closeApproved || !hasPending()) {
+            closeApproved = false
+            return true
+        }
+        return beforeLeave().then((ok) => {
+            if (ok && getActiveModalHost() === ModalHost.assetDetail) {
+                closeApproved = true
+                closeModal()
+            }
+            return ok
+        })
+    }
+
+    /**
+     * The page goes (`pagehide`): what is not saved yet is sent so that it outlives the page, where it can be (the session's
+     * `saveOnHide`): the change waiting out its delay of the asset shown, and the save waiting in any session. Not a Crop tool
+     * session, which only Done saves
+     */
+    function saveOnHide() {
+        const waiting = commitWaiting && !cropTool.isOpen() ? working : null
+        if (waiting) {
+            cancelWaitingCommit()
+        }
+        sessions.forEach((kept) =>
+            kept.saveOnHide(kept === session ? waiting : null),
+        )
+    }
+
+    /**
+     * The page is shown again from the browser's cache (`pageshow`, `persisted`): every session reads the Edit again, since
+     * what the page sent as it went (`saveOnHide`) moved the server's edit version past the session's
+     */
+    function reloadSessionsOnShow(event) {
+        if (event.persisted) {
+            sessions.forEach((kept) => kept.load())
+        }
     }
 
     /** The Level button: opens the Crop tool if it is closed, and turns the Level tool on or off */
@@ -1073,10 +1256,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
             refusal: open ? refusalOf() : "",
             recipe: working,
             upright,
-            head: state?.head ?? 0,
-            steps: state?.steps ?? [],
             status: state?.status ?? "idle",
-            moving: Boolean(state?.moving),
             canUndo: ready && !cropTool.isOpen() && Boolean(state?.canUndo),
             canRedo: ready && !cropTool.isOpen() && Boolean(state?.canRedo),
             edited: Boolean(working) && !isIdentity(working),
@@ -1112,7 +1292,6 @@ export function createEditPanel({ context, editStage, detailPanel }) {
             dragOf,
             undo,
             redo,
-            jump,
             revert,
             toggleCropTool,
             toggleLevel,
@@ -1135,6 +1314,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         cropDone: finishCrop,
         undo,
         redo,
+        beforeLeave,
         isOpen: () => open,
     }
 }

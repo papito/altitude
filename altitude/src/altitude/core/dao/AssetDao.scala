@@ -46,8 +46,8 @@ trait AssetDao extends BaseDao[Asset]:
   /**
    * Locks the asset's row for the transaction unless it is marked for purging: whether it is there and not marked. The lock is
    * `FOR NO KEY UPDATE` on PostgreSQL: marking the asset for purging and deleting it wait for it, while a row that references the
-   * asset (a step of its Edit) is written without waiting. A write of an asset's Edit takes it before the Edit's row, the order a
-   * delete of the asset takes them in.
+   * asset (its Edit's, inserted at the first save) is written without waiting. A write of an asset's Edit takes it before the
+   * Edit's row, the order a delete of the asset takes them in.
    */
   def lockUnpurged(assetId: String): Boolean
 

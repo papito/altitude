@@ -3,13 +3,13 @@
  * source fills the media box, and Show original (`CONTEXT.md`).
  *
  * The source:
- * - **The original** in the `<img>`: an asset that is not edited (its head step changes no pixel),
+ * - **The original** in the `<img>`: an asset that is not edited (its Edit changes no pixel),
  *   and an edited one while Show original is on.
  * - **The Display image** in the `<img>` (`/content/r/:repo/display/:id?v=<rev>`): an edited asset
- *   whose head is rendered, its natural size the edited aspect.
+ *   whose Edit is rendered at its edit version, its natural size the edited aspect.
  * - **The canvas** (`#editCanvas`), drawn by the WebGL renderer (`renderer.js`) from the original,
- *   fetched once per asset and decoded upright: an edited asset whose render is pending (the head is
- *   not the step rendered), one the server could not render (rendered, with no revision: the
+ *   fetched once per asset and decoded upright: an edited asset whose render is pending (the edit version
+ *   is not the one rendered), one the server could not render (rendered, with no revision: the
  *   Display image is never asked for at revision 0), and any asset while the Edit panel draws it
  *   (`setEditing`, `setLive`). A canvas that cannot be drawn (no WebGL2, an original the browser
  *   cannot decode) falls back to the original, and a Display image that does not load to the canvas.
@@ -67,8 +67,8 @@ export const Source = Object.freeze({
 })
 
 /**
- * The Edit at an asset's head as Asset detail's fragment and JSON carry it
- * (`EditController.headJson`: `head`, `rendered`, `rev`, `label`, `edited`, `width`, `height`,
+ * An asset's Edit as Asset detail's fragment and JSON carry it
+ * (`EditController.stateJson`: `editVersion`, `renderedVersion`, `rev`, `edited`, `width`, `height`,
  * `uprightWidth`, `uprightHeight`, `recipe`), from the fragment's `data-app-image-detail-edit`; null
  * for an asset never edited
  */
@@ -84,14 +84,18 @@ export function parseEdit(json) {
     }
 }
 
-/** Whether the asset's head step changes a pixel */
+/** Whether the asset's Edit changes a pixel */
 export function isEdited(edit) {
     return Boolean(edit?.edited)
 }
 
-/** Whether the head's renditions are stored: rendered, at a revision (0 when the server could not render it) */
+/** Whether the Edit's edited images are stored: rendered at its edit version, at a revision (0 when the server could not render it) */
 export function hasDisplayImage(edit) {
-    return isEdited(edit) && edit.rendered === edit.head && edit.rev > 0
+    return (
+        isEdited(edit) &&
+        edit.renderedVersion === edit.editVersion &&
+        edit.rev > 0
+    )
 }
 
 /**
@@ -105,7 +109,7 @@ function regionOf(upright, recipe, { wholeFrame = false } = {}) {
 }
 
 export function createEditStage({ context, detailPanel }) {
-    // The asset shown: its ID, its Edit at the head, whether the account may edit it, the stored
+    // The asset shown: its ID, its Edit, whether the account may edit it, the stored
     // size, the original's URL and its request's `isCurrent`
     let subject = null
     // Show original: the toolbar's toggle, and `\` held
@@ -243,7 +247,7 @@ export function createEditStage({ context, detailPanel }) {
         })
     }
 
-    /** The Edit drawn now: the Edit panel's, or the head's */
+    /** The Edit drawn now: the Edit panel's, or the asset's */
     function recipeShown() {
         return (
             live?.recipe ??
@@ -620,7 +624,7 @@ export function createEditStage({ context, detailPanel }) {
 
     /**
      * The Edit panel opened or closed: while it is open the canvas draws every asset, from the
-     * head's Edit until `setLive` gives another. Resolves as `showImage` does; with `present`
+     * asset's Edit until `setLive` gives another. Resolves as `showImage` does; with `present`
      * false nothing is drawn now, for a caller about to show another asset, which draws.
      */
     function setEditing(open, { present = true } = {}) {
@@ -632,7 +636,7 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * The Edit panel's Edit, drawn on the canvas (null: back to the head's source), with the
+     * The Edit panel's Edit, drawn on the canvas (null: back to the asset's source), with the
      * renderer's options (`wholeFrame` for the Crop tool, `split` for Before/after). A change
      * releases the Show original toggle, so the change is seen. The decoded original and the
      * fitted source are kept, so a change on the canvas is drawn within a few microtasks. Resolves
@@ -645,7 +649,7 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * The asset's Edit at its head changed (a step saved, Undo, a render done), in
+     * The asset's Edit changed (a save, a render done), in
      * `parseEdit`'s shape: the stage shows it as its source now calls for. With `present` false
      * (the Edit panel draws its own Edit meanwhile) only the toggle, the badge and the key legend
      * follow it, and the next presentation shows it.
@@ -663,7 +667,7 @@ export function createEditStage({ context, detailPanel }) {
     }
 
     /**
-     * What the stage shows: the asset, its Edit at the head, whether the account may edit it, the
+     * What the stage shows: the asset, its Edit, whether the account may edit it, the
      * source, the Edit drawn, the upright size, and whether the canvas failed to draw the asset
      * (`drawFailed`, which the Edit panel cannot edit); null before an asset or once Asset detail
      * closed

@@ -6,5 +6,5 @@ import altitude.core.FieldConst
 import altitude.core.dao.jdbc
 
 class AssetEditDao(override val config: Config) extends jdbc.AssetEditDao(config) with PostgresOverrides:
-  override protected def headNotRendered: String =
-    s"${FieldConst.AssetEdit.RENDERED_SEQ} IS DISTINCT FROM ${FieldConst.AssetEdit.HEAD_SEQ}"
+  override protected def versionNotRendered: String =
+    s"${FieldConst.AssetEdit.RENDERED_VERSION} IS DISTINCT FROM ${FieldConst.AssetEdit.EDIT_VERSION}"

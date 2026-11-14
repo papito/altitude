@@ -9,18 +9,20 @@ object AssetEdit:
   given JsonCodec.ReadWriter[AssetEdit] = JsonCodec.macroRW
 
 /**
- * An asset's Edit as `asset_edit` stores it: the step shown (`headSeq`, 0 for the Original), the step whose renditions are stored
- * (`renderedSeq`, None before the first render), the highest rendition revision the asset has used (`lastRev`), whether the head
- * changes a pixel, and the head's edited size. An asset never edited has no row. Its steps are [[AssetEditStep]]s.
+ * An asset's Edit as `asset_edit` stores it: the Edit itself (the identity once reverted to the original), its edit version (1 at
+ * the first save, one more at each), the edit version whose edited images are stored (`renderedVersion`, None before the first
+ * render), the highest revision of edited images the asset has used (`lastRev`), whether the Edit changes a pixel, and its edited
+ * size. An asset never edited has no row.
  */
 case class AssetEdit(
     assetId: String,
-    headSeq: Int = 0,
-    renderedSeq: Option[Int] = None,
+    recipe: EditRecipe,
+    editVersion: Int,
+    renderedVersion: Option[Int] = None,
     lastRev: Int = 0,
-    isEdited: Boolean = false,
-    width: Option[Int] = None,
-    height: Option[Int] = None,
+    isEdited: Boolean,
+    width: Int,
+    height: Int,
     updatedByAccountId: Option[String] = None,
     createdAt: Option[LocalDateTime] = None,
     updatedAt: Option[LocalDateTime] = None)

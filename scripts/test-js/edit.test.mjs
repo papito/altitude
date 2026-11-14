@@ -271,13 +271,6 @@ test("an Edit that sets only the Crop tool's settings is the identity", () => {
     assert.ok(!recipes.isIdentity({ ...recipes.defaults(), rotate: 90 }))
 })
 
-test("slider values are written as the server's step labels write them", () => {
-    assert.equal(recipes.formatSlider("exposure", 0.4), "+0.40")
-    assert.equal(recipes.formatSlider("contrast", -12), "−12")
-    assert.equal(recipes.formatSlider("sharpen", 40), "40")
-    assert.equal(recipes.formatSlider("straighten", 2.3), "+2.3°")
-})
-
 test("a Face's box follows the Edit's geometry and is skipped outside the crop", () => {
     const upright = [4000, 3000]
     const box = { x: 1000, y: 500, width: 400, height: 300 }
