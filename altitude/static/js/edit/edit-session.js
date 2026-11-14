@@ -14,12 +14,27 @@
  *   the state the 409 carries, clears Undo and Redo, whose Edits were this session's, and is reported (`onConflict`).
  * - **A failure** drops the save waiting too, clears Undo and Redo, reads the state again so what is shown is what the
  *   server holds, and is reported (`onFailure`).
- * - **Idle again** after a save, the session hands the state over (`onSaved`), so the caller can follow the render the
- *   server queues (`render-status.js`) and show the Edit everywhere else.
+ * - **Every state adopted** (a save's answer, a read's, a conflict's, the read after a failure) is handed over
+ *   (`onAdopted`), so the caller shows the Edit the server holds everywhere else and follows the render the server queues
+ *   (`render-status.js`).
  *
  * DOM-free: the requests are the caller's (`api`), so the tests run it under Node (`scripts/test-js/edit-session.test.mjs`).
  */
 import { normalize, sameRecipe } from "./recipe.js"
+
+/**
+ * Whether the Edit's state `a` is newer than `b` (either as `EditController.stateJson` gives it; `b` may be null, an asset
+ * never edited): a later edit version, or the same one rendered where `b` is not
+ */
+export function isNewerEditState(a, b) {
+    const version = b?.editVersion ?? 0
+    return (
+        a.editVersion > version ||
+        (a.editVersion === version &&
+            a.renderedVersion === a.editVersion &&
+            b?.renderedVersion !== version)
+    )
+}
 
 /** What the session's last writes came to, which the panel's footer says */
 export const SaveStatus = Object.freeze({
@@ -43,8 +58,8 @@ export const SaveStatus = Object.freeze({
  *   not waited for, so a session the page shows again reads the Edit again (`load`).
  * A save refused because its base is stale rejects with an error carrying the current state as `conflictState`.
  *
- * `onConflict()` and `onFailure(error, kind)` report, `kind` the failed write's (`load` or `save`); `onSaved(state)` runs
- * once the queue is empty after a save.
+ * `onConflict()` and `onFailure(error, kind)` report, `kind` the failed write's (`load` or `save`); `onAdopted(state)` runs
+ * with each state of the server's the session adopts, as it adopts it.
  */
 export function createEditSession({
     assetId,
@@ -52,7 +67,7 @@ export function createEditSession({
     api,
     onConflict = () => {},
     onFailure = () => {},
-    onSaved = () => {},
+    onAdopted = () => {},
 }) {
     // The server's state as last answered: { editVersion, recipe, ... }
     let server = {
@@ -73,8 +88,6 @@ export function createEditSession({
     let running = false
     let current = null
     let loaded = false
-    // Whether a save was answered since the queue was last empty
-    let savedSinceIdle = false
     // Those waiting for the queue to be empty (`settled`)
     let idleWaiters = []
     const listeners = new Set()
@@ -142,7 +155,6 @@ export function createEditSession({
                 const answered = await run(op)
                 current = null
                 adopt(answered, { whole: !hasUnsaved() })
-                savedSinceIdle = savedSinceIdle || op.kind === "save"
             } catch (error) {
                 current = null
                 await recover(error, op.kind)
@@ -161,10 +173,6 @@ export function createEditSession({
             status = SaveStatus.saved
         }
         becameIdle()
-        if (savedSinceIdle) {
-            savedSinceIdle = false
-            onSaved(server)
-        }
     }
 
     function becameIdle() {
@@ -182,8 +190,8 @@ export function createEditSession({
     }
 
     /**
-     * Takes the server's state; `whole` (no save waiting) also makes its Edit the one shown, while a later change still
-     * waiting keeps its own on screen
+     * Takes the server's state, and hands it over (`onAdopted`); `whole` (no save waiting) also makes its Edit the one shown,
+     * while a later change still waiting keeps its own on screen
      */
     function adopt(state, { whole }) {
         server = { ...state, recipe: normalize(state.recipe) }
@@ -192,6 +200,7 @@ export function createEditSession({
             recipe = server.recipe
         }
         notify()
+        onAdopted(server)
     }
 
     /**
@@ -200,7 +209,6 @@ export function createEditSession({
      */
     async function recover(error, kind) {
         queue.length = 0
-        savedSinceIdle = false
         clearUndo()
         if (error?.conflictState) {
             status = SaveStatus.conflict

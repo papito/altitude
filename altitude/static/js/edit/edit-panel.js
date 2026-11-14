@@ -18,9 +18,9 @@
  *   carries as Curation's set does).
  * - **The session** of each asset (`edit-session.js`): a change is shown at once and saved; Undo and Redo are the
  *   session's, forgotten as the panel closes or Asset detail steps away; a session still saving then finishes in the
- *   background. Once a session is idle after a save, the stage and the badge take the new Edit, and the render the server
- *   queues is waited for (`render-status.js`), after which the grid's cells show the new Preview and the stage, once the
- *   panel is closed, the Display image.
+ *   background. Every state the session adopts (a save's answer, a read's, a conflict's) the stage and the badge take at
+ *   once, and the render of its edit version is waited for (`render-status.js`), after which the grid's cells show the new
+ *   Preview and the stage, once the panel is closed, the Display image.
  * - **The Crop tool** (`crop-tool.js`): a whole session is one save, on Done; Cancel puts back the Edit it opened on.
  * - **The warning** (`leave-dialog.js`): closing Asset detail (its close guard, `modal.js`), stepping to another asset
  *   (`beforeLeave`, which the navigator awaits) or closing the panel while a change is pending (a Crop tool session with
@@ -61,7 +61,7 @@ import {
     escapeOpenCropTool,
     isCropToolOpen,
 } from "./crop-tool.js"
-import { createEditSession } from "./edit-session.js"
+import { createEditSession, isNewerEditState } from "./edit-session.js"
 import {
     askToLeave,
     closeLeaveDialog,
@@ -69,7 +69,7 @@ import {
     LeaveChoice,
 } from "./leave-dialog.js"
 import { isIdentity, normalize, sameRecipe } from "./recipe.js"
-import { refreshAfterRender } from "./render-status.js"
+import { refreshAfterRender, swapGridPreviews } from "./render-status.js"
 import { isRendererSupported } from "./renderer.js"
 
 export const DEFAULT_WIDTH_SHARE = 28
@@ -176,9 +176,12 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     let clippingToken = 0
     let drawScheduled = false
     let autoBusy = false
-    // The Edit as each asset's last saved state and render left it, by asset
+    // The latest of the Edit's states each asset's session adopted and its render left, by asset, dropped once Asset detail
+    // brings one as new
     const latestEdit = new Map()
+    // The render each asset waits for: { token, editVersion }, the token one of `renderFollows`, never used twice
     const renderTokens = new Map()
+    let renderFollows = 0
     let view = null
     // The answer to a leave being asked about (`beforeLeave`), which a leave asked for meanwhile does not wait for, and
     // whether Asset detail's close has been answered, so its guard lets it through
@@ -303,6 +306,11 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         if (subject && subject.assetId !== assetId) {
             leaveAsset()
         }
+        // An Edit from the server as new as the one a session left (saved elsewhere since, or read after it) replaces it
+        const known = latestEdit.get(assetId)
+        if (known && edit && !isNewerEditState(known, edit)) {
+            latestEdit.delete(assetId)
+        }
         const undrawable =
             subject?.assetId === assetId ? subject.undrawable : null
         subject = { assetId, mediaType, edit, editable, refusal, undrawable }
@@ -327,7 +335,18 @@ export function createEditPanel({ context, editStage, detailPanel }) {
      * edit, and an Edit of the session the stage did not draw (one still saving) is drawn
      */
     function afterShown(assetId) {
-        if (subject?.assetId !== assetId || !open || !canEdit()) {
+        if (subject?.assetId !== assetId) {
+            return
+        }
+        // A session answered after Asset detail read the asset: the stage shows its newer Edit
+        const known = latestEdit.get(assetId)
+        if (known && isNewerEditState(known, editStage.current()?.edit)) {
+            subject.edit = known
+            editStage.adoptEdit(assetId, known, {
+                present: !drawsAsset(assetId),
+            })
+        }
+        if (!open || !canEdit()) {
             return
         }
         const shown = editStage.current()
@@ -472,9 +491,9 @@ export function createEditPanel({ context, editStage, detailPanel }) {
                 .setEditing(true)
                 .then((shown) => shown && afterShown(assetId))
         } else {
-            // The stage shows the Edit as the last save left it
+            // The stage shows the Edit as the session last left it, when that is newer than the one it holds
             const latest = subject && latestEdit.get(subject.assetId)
-            if (latest) {
+            if (latest && isNewerEditState(latest, editStage.current()?.edit)) {
                 editStage.adoptEdit(subject.assetId, latest, { present: false })
             }
             editStage.setEditing(false)
@@ -548,7 +567,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
                     reading ? LOAD_FAILED_MESSAGE : SAVE_FAILED_MESSAGE,
                 )
             },
-            onSaved: (state) => saved(assetId, state),
+            onAdopted: (state) => adopted(assetId, state),
         })
         created.subscribe((snapshot) => {
             if (!snapshot.busy) {
@@ -592,19 +611,48 @@ export function createEditPanel({ context, editStage, detailPanel }) {
     }
 
     /**
-     * A session's writes were saved: the stage's badge and toggle follow the new Edit at once (and the stage shows it,
-     * when the panel no longer draws this asset), and the render the server queued is waited for, after which the
-     * grid's cells show the new Preview and the stage, with the panel closed, the Display image
+     * A state of the server's the session of `assetId` adopted (a save's answer, a read's, a conflict's, the read after a
+     * failure, the read of a page shown again): the asset's latest Edit, which the stage's badge and toggle follow at once
+     * (and the stage shows, when the panel does not draw this asset). A state rendered at its edit version points the grid's
+     * cells at its Preview now; one not rendered yet has its render waited for, after which the grid's cells show the new
+     * Preview and the stage, with the panel closed, the Display image.
      */
-    function saved(assetId, state) {
+    function adopted(assetId, state) {
+        if (isNewerEditState(latestEdit.get(assetId) ?? state, state)) {
+            return
+        }
         latestEdit.set(assetId, state)
-        editStage.adoptEdit(assetId, state, { present: !drawsAsset(assetId) })
         if (subject?.assetId === assetId) {
             subject.edit = state
         }
+        editStage.adoptEdit(assetId, state, { present: !drawsAsset(assetId) })
+        followRender(assetId, state)
+    }
 
-        const token = (renderTokens.get(assetId)?.token ?? 0) + 1
-        renderTokens.set(assetId, { token })
+    /** The grid's cells and the stage follow the render of `state`'s edit version, once, however many times it is adopted */
+    function followRender(assetId, state) {
+        const followed = renderTokens.get(assetId)
+        if (state.renderedVersion === state.editVersion) {
+            // A wait for an earlier edit version ends: this one is rendered already
+            if (followed) {
+                renderTokens.delete(assetId)
+                forgetWhenIdle(assetId)
+            }
+            swapGridPreviews({
+                repoId: context.getRepoId(),
+                assetId,
+                rev: state.rev,
+            })
+            return
+        }
+        if (
+            state.editVersion === 0 ||
+            followed?.editVersion === state.editVersion
+        ) {
+            return
+        }
+        const token = ++renderFollows
+        renderTokens.set(assetId, { token, editVersion: state.editVersion })
         refreshAfterRender({
             repoId: context.getRepoId(),
             assetId,

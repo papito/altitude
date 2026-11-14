@@ -3,13 +3,14 @@
  * time, each on the version the one before answered, and a save waiting behind another is replaced by a later change;
  * Undo and Redo are the browser's, each an ordinary save; a 409 adopts the state it carries, drops the stale save and
  * forgets Undo and Redo; a failure reads the state again; a discard puts the server back where it was confirmed; the
- * caller hears once the queue is empty. Run by `make test-js`.
+ * caller hears of every state adopted, a save's, a read's, a conflict's. Run by `make test-js`.
  */
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import {
     createEditSession,
+    isNewerEditState,
     SaveStatus,
 } from "../../altitude/static/js/edit/edit-session.js"
 import { defaults, normalize } from "../../altitude/static/js/edit/recipe.js"
@@ -88,11 +89,11 @@ const sentSaves = (server) =>
 
 test("Changes are shown at once and saved one at a time, each on the version the last answered", async () => {
     const server = fakeServer()
-    const saved = []
+    const adopted = []
     const session = createEditSession({
         assetId: "a",
         api: server.api,
-        onSaved: (state) => saved.push(state.editVersion),
+        onAdopted: (state) => adopted.push(state.editVersion),
     })
     session.load()
     await server.release()
@@ -119,7 +120,8 @@ test("Changes are shown at once and saved one at a time, each on the version the
     assert.equal(session.snapshot().editVersion, 2)
     assert.equal(session.snapshot().status, SaveStatus.saved)
     assert.equal(session.snapshot().unsaved, false)
-    assert.deepEqual(saved, [2])
+    // Each answer is handed over as it is adopted: the read's, then each save's
+    assert.deepEqual(adopted, [0, 1, 2])
 })
 
 test("The same Edit twice is one save", async () => {
@@ -245,6 +247,65 @@ test("A failure reads the state again, forgets Undo and Redo, and is reported", 
     session.commit(exposure(0.5))
     await server.release()
     assert.equal(session.snapshot().status, SaveStatus.saved)
+})
+
+test("A conflict's state and the state read again after a failure are handed over as adopted", async () => {
+    const server = fakeServer()
+    let fail = false
+    const api = {
+        ...server.api,
+        save: (request) =>
+            fail
+                ? Promise.reject(new Error("offline"))
+                : server.api.save(request),
+    }
+    const adopted = []
+    const session = createEditSession({
+        assetId: "a",
+        api,
+        onAdopted: (state) =>
+            adopted.push([state.editVersion, state.recipe.exposure]),
+    })
+
+    // Another tab saves: the save built on version 0 is a conflict, whose state is handed over
+    server.savedElsewhere(exposure(2))
+    session.commit(exposure(0.5))
+    await server.release()
+    assert.deepEqual(adopted, [[1, 2]])
+
+    // Another tab saves again, and this tab's next save fails: the state read again is handed over, the other tab's
+    server.savedElsewhere(exposure(3))
+    fail = true
+    session.commit(exposure(1))
+    await new Promise((resolve) => setImmediate(resolve))
+    await server.release()
+    assert.deepEqual(adopted, [
+        [1, 2],
+        [2, 3],
+    ])
+    assert.equal(session.snapshot().recipe.exposure, 3)
+
+    // A read the caller asks for (the page shown again from the browser's cache) is handed over too
+    server.savedElsewhere(exposure(4))
+    session.load()
+    await server.release()
+    assert.deepEqual(adopted.at(-1), [3, 4])
+})
+
+test("One Edit state is newer than another by its edit version, or by its render at the same one", () => {
+    const state = (editVersion, renderedVersion = null) => ({
+        editVersion,
+        renderedVersion,
+    })
+    assert.equal(isNewerEditState(state(2), state(1, 1)), true)
+    assert.equal(isNewerEditState(state(1, 1), state(2)), false)
+    assert.equal(isNewerEditState(state(2, 2), state(2)), true)
+    assert.equal(isNewerEditState(state(2), state(2, 2)), false)
+    assert.equal(isNewerEditState(state(2, 2), state(2, 2)), false)
+    assert.equal(isNewerEditState(state(2), state(2)), false)
+    // An asset never edited: no state, edit version 0
+    assert.equal(isNewerEditState(state(1), null), true)
+    assert.equal(isNewerEditState(state(0), null), false)
 })
 
 test("Clearing Undo forgets the Edits of Undo and Redo and keeps the Edit shown", async () => {

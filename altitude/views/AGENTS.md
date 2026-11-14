@@ -2039,11 +2039,17 @@ data.
   Edit" for the read). The commit row's status (`SaveStatus`, a `role="status"`): "Saving…", "Saved · the original is
   untouched", "Could not save", "Changed elsewhere · showing its latest Edit". A session still saving when Asset detail
   steps away finishes in the background, and stepping back picks it up; an idle one is forgotten, so the next visit reads
-  the Edit afresh. Once a session is idle after a save (`onSaved`), the stage's badge and Show original's toggle follow the
-  new Edit at once, and the render the server queues is waited for (`render-status.js`: the status route every second, for
-  up to a minute, until the edit version is rendered, giving up after three failed reads in a row), after which every grid cell of
-  the asset points at the new Preview (`swapGridPreviews`: its `data-src`, and its `src` while it shows its image) and the
-  stage, once the panel is closed, shows the Display image.
+  the Edit afresh. Every state of the server's a session adopts (`onAdopted`: a save's answer, a read's, a 409's, the read
+  after a failure, the reads of a page shown again) is the asset's latest Edit (`latestEdit`, unless an as new one is known),
+  which the stage takes at once (its badge and Show original's toggle, and what it shows when the panel does not draw the
+  asset), so a closed panel never leaves the stage on an Edit or a revision the server has moved on from. A state rendered at
+  its edit version points the grid's cells at its Preview now; one not rendered has its render waited for, once per edit
+  version (`render-status.js`: the status route every second, for up to a minute, until the edit version is rendered, giving
+  up after three failed reads in a row), after which every grid cell of the asset points at the new Preview
+  (`swapGridPreviews`: its `data-src`, and its `src` while it shows its image) and the stage, once the panel is closed, shows
+  the Display image. An Edit Asset detail brings for the asset (its fragment, a step's JSON) as new as the latest one
+  replaces it, and one the latest is newer than (a session answered after Asset detail read the asset) is replaced by it on
+  the stage once shown (`isNewerEditState`: a later edit version, or the same one rendered).
 - **The warning** (`js/edit/leave-dialog.js`, `dialog#editLeaveDialog` after the panel in `includes/edit_panel`). A change
   is pending while the Crop tool's session has changed the Edit it opened on, a change waits out its delay (`commitSoon`) or
   a save is waiting or on its way (`hasUnsaved`). Then closing Asset detail (the close guard the coordinator registers with
@@ -3584,7 +3590,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/includes/edit_stage_tools.scala.html` | The Edit's tools over Asset detail's stage: Before/after's divider (`#editSplit`) and the Crop tool (`#cropLayer`: the frame, the crop with its guide and handles, the Level line, the floating bar) |
 | `static/js/edit/edit-panel.js` | `createEditPanel`: the Edit panel's coordinator (open or closed, `toggle({ fromKey })`, the dock opposite the Detail panel, the stage while it draws, each asset's session and the wait for its render, the commits, `commitSoon` and `flushCommit`, the Crop tool's session, the warning's triggers, `beforeLeave` for a step and the close guard, `beforeunload` and `pagehide`, Before/after, the Histogram and the Clipping blink of the canvas, Auto) and `connectEditPanelView` for its component |
 | `static/js/edit/edit-stage.js` | `createEditStage`: Asset detail's stage for a still image (the original, the Display image or the canvas, `showImage`, `setEditing`, `setLive`, `adoptEdit`, `settled`, `current`), Show original (the toggle, `holdOriginal`, `releaseShowOriginal`, the badge and the key legend's entry) and the size handed to the Detail panel |
-| `static/js/edit/edit-session.js`, `render-status.js`, `leave-dialog.js` | One asset's Edit synced with the server (the serial queue of saves on `base`, the edit version, the save waiting replaced by a later change, Undo and Redo of the session, a conflict, a failure, `discard`, `settled`, `saveOnHide`, `SaveStatus`, `onSaved`), the wait for the render that follows (`waitForRender`, `swapGridPreviews`), and the warning of changes not saved (`askToLeave`, `closeLeaveDialog` for Escape, `isLeaveDialogOpen` for the keys, which `global.js` reaches through `common/edit-keys.js`) |
+| `static/js/edit/edit-session.js`, `render-status.js`, `leave-dialog.js` | One asset's Edit synced with the server (the serial queue of saves on `base`, the edit version, the save waiting replaced by a later change, Undo and Redo of the session, a conflict, a failure, `discard`, `settled`, `saveOnHide`, `SaveStatus`, `onAdopted`, `isNewerEditState`), the wait for the render that follows (`waitForRender`, `swapGridPreviews`), and the warning of changes not saved (`askToLeave`, `closeLeaveDialog` for Escape, `isLeaveDialogOpen` for the keys, which `global.js` reaches through `common/edit-keys.js`) |
 | `static/js/edit/crop-tool.js`, `level-tool.js`, `adjust.js` | The Crop tool on interact.js (`createCropTool`, `escapeOpenCropTool` for Escape, `isCropToolOpen` for its keys), the Level tool's line, and the Edit panel's changes to an Edit as pure functions (a slider, an aspect, a turn, a flip, a reset, the crop kept inside, a drag's Straighten, the curve's points) |
 | `static/js/edit/recipe.js`, `geometry.js`, `tone.js`, `renderer.js` | The Edit as the client holds it (defaults, sliders, sections, the server's normalization), its geometry with the crop's rules and `mapBox`, its per-pixel math, all three DOM-free and checked against the shared vectors; and the WebGL2 renderer that draws it (`createRenderer`: `render`, `renderBefore`, `readHistogram`) |
 | `static/js/listeners/edit.js` | The Edit's events in Asset detail: Show original held, the Edit panel's toggle, the Crop tool's keys, Undo and Redo |

@@ -4,8 +4,8 @@
  * This module waits for that render (`waitForRender`: `GET /api/edit/r/:repo/asset/:id/status`
  * every second, for up to a minute, until the edit version rendered is the one saved) and then points
  * the asset's cells in the grid at the new Preview (`swapGridPreviews`), which the Edit panel runs
- * once its session (`edit-session.js`) is idle after a save. The status route is the holder of Edit
- * images'.
+ * for each edit version its session (`edit-session.js`) adopts unrendered, and swaps at once for one
+ * adopted rendered. The status route is the holder of Edit images'.
  */
 import { cellsOf } from "../search-results/cells.js"
 import { previewUrl, repointImage } from "../common/content-urls.js"
@@ -87,8 +87,8 @@ export function swapGridPreviews({ repoId, assetId, rev }) {
 }
 
 /**
- * Waits for the render of `editVersion` and swaps the grid's Previews to it: the panel's call once its
- * session is idle after a save. Resolves to the status, or null when the render was not seen (see
+ * Waits for the render of `editVersion` and swaps the grid's Previews to it: the panel's call for an
+ * edit version its session adopted unrendered. Resolves to the status, or null when the render was not seen (see
  * `waitForRender`).
  */
 export async function refreshAfterRender({
