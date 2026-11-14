@@ -499,6 +499,49 @@ import altitude.core.service.EditRenderService.Outcome
     } finally renders.debounce = EditRenderService.DEBOUNCE
   }
 
+  test("A fatal error in a queued render fails that render alone, and the queue renders on") {
+
+    /**
+     * Setup:
+     *
+     * As many imported images as the queue renders at once, each saved with the render delay at 10 ms, whose queued renders throw
+     * an `OutOfMemoryError` before they start (the service's hook before a queued render), as a render reading a huge original
+     * may; once they all have, one more image saved, and one of the first saved again with nothing thrown.
+     *
+     * Assertions:
+     *
+     * The last image is rendered as revision 1, so no render that threw kept its place in the queue, and so is the image saved
+     * again, which no render of its own still holds. The others are left unrendered, for the next startup.
+     */
+    val doomed = (1 to testApp.editRenderParallelism).map(_ => testContext.persistAsset().persistedId).toSet
+    val healthy = testContext.persistAsset().persistedId
+    val thrown = java.util.concurrent.atomic.AtomicInteger()
+    renders.beforeQueuedRender = assetId =>
+      if doomed.contains(assetId) then
+        thrown.incrementAndGet(): Unit
+        throw OutOfMemoryError("A render out of memory, as a test throws it")
+    renders.debounce = scala.concurrent.duration.DurationInt(10).millis
+    try {
+      doomed.foreach(edits.save(_, 0, brighter, testContext.user))
+      eventually(thrown.get shouldBe doomed.size)
+
+      edits.save(healthy, 0, brighter, testContext.user)
+      eventually {
+        val state = edits.status(healthy)
+        (state.renderedVersion, state.rev) shouldBe (Some(1), 1)
+      }
+
+      renders.beforeQueuedRender = _ => ()
+      val again = doomed.head
+      edits.save(again, 1, warmer, testContext.user)
+      eventually(edits.status(again).renderedVersion shouldBe Some(2))
+      (doomed - again).foreach(assetId => edits.status(assetId).renderedVersion shouldBe None)
+    } finally {
+      renders.beforeQueuedRender = _ => ()
+      renders.debounce = EditRenderService.DEBOUNCE
+    }
+  }
+
   test("A render service that has stopped queues nothing more") {
 
     /**

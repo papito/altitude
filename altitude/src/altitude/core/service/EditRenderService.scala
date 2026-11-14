@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -108,6 +109,9 @@ class EditRenderService(app: Altitude):
   /** The delay of [[enqueue]]; a test that renders an Edit itself lengthens it, so the queue never races it */
   @volatile var debounce: FiniteDuration = EditRenderService.DEBOUNCE
 
+  /** Runs before each of the queue's renders, with the asset's ID; a test throws there, as a render failing in any way may */
+  @volatile private[core] var beforeQueuedRender: String => Unit = _ => ()
+
   // Set by shutdown, after which no render is queued: the next startup queues what is left
   @volatile private var stopping = false
 
@@ -127,7 +131,7 @@ class EditRenderService(app: Altitude):
     "edit-render",
     Flow[(String, PipelineContext)].mapAsyncUnordered(app.editRenderParallelism) {
       (assetId, context) =>
-        val rendering = Future(withContext(context)(renderOrLog(assetId)))(using app.editRenderDispatcher)
+        val rendering = renderedOnDispatcher(assetId, context)
         underWay.add(rendering)
         rendering.onComplete(_ => underWay.remove(rendering))(using ExecutionContext.parasitic)
         rendering
@@ -201,6 +205,28 @@ class EditRenderService(app: Altitude):
     catch case _: TimeoutException => logger.warn(s"Renders of Edits still under way after $timeout are left as they are")
 
   /**
+   * The queue's render of the asset on the render dispatcher, a future that completes whatever the render throws. `Future.apply`
+   * would rethrow a fatal error (an `OutOfMemoryError` reading a huge original) on the dispatcher's thread and leave its future
+   * pending, losing the queue's slot for good, and Pekko's handler of an uncaught fatal error stops the JVM; so the render runs
+   * in a `try` that takes any `Throwable`, logs it and completes the future: the element is done, its render failed, and its
+   * edit version is left unrendered for the next startup ([[renderOrLog]] has tried again what is not fatal).
+   */
+  private def renderedOnDispatcher(assetId: String, context: PipelineContext): Future[Unit] =
+    val rendered = Promise[Unit]()
+    app.editRenderDispatcher.execute {
+      () =>
+        try withContext(context)(renderOrLog(assetId))
+        catch
+          case fatal: Throwable =>
+            if fatal.isInstanceOf[InterruptedException] then Thread.currentThread.interrupt()
+            logger.error(
+              s"The Edit of asset [$assetId] could not be rendered: a fatal error; it is tried again at the next start",
+              fatal)
+        finally rendered.success(())
+    }
+    rendered.future
+
+  /**
    * The queue's render of the asset, unless one is under way, after which this one is queued again. A render that throws (its
    * images not staged, published or committed) is queued again after twice the delay of the try before, up to
    * [[EditRenderService.MAX_RETRIES]] times, so images published by a failed commit are not served under the old revision for
@@ -212,6 +238,7 @@ class EditRenderService(app: Altitude):
       enqueue(assetId)
       return
     try
+      beforeQueuedRender(assetId)
       render(assetId): Unit
       failures.remove(assetId): Unit
     catch
