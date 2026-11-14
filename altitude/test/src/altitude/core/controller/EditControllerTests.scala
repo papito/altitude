@@ -77,12 +77,12 @@ import altitude.core.models.Permissions
      * Assertions:
      *
      * The state of the image is the Original: head 0, labeled "Original", not rendered, revision 0, not edited, no edited size,
-     * the identity Edit with every key, and a History of the Original alone, by no one and not the User's. A step of Exposure
-     * +0.4 built on head 0 answers the new state: head 1, labeled "Exposure +0.40", edited, the image's size, the Edit as sent,
-     * and a History of that step, by the User, timed and marked as the User's, over the Original. After another account's step,
-     * the History names that account on its step and does not mark it as the User's. Moving the head back to 0 answers the
-     * Original again, and the status says head 0 and revision 0, not rendered (or rendered as the Original, should the server's
-     * render have run by then).
+     * the size of its upright original, the identity Edit with every key, and a History of the Original alone, by no one and not
+     * the User's. A step of Exposure +0.4 built on head 0 answers the new state: head 1, labeled "Exposure +0.40", edited, the
+     * image's size as its edited and its upright size, the Edit as sent, and a History of that step, by the User, timed and
+     * marked as the User's, over the Original. After another account's step, the History names that account on its step and does
+     * not mark it as the User's. Moving the head back to 0 answers the Original again, and the status says head 0 and revision 0,
+     * not rendered (or rendered as the Original, should the server's render have run by then).
      */
     val repoId = testContext.persistRepository().persistedId
     login()
@@ -102,6 +102,7 @@ import altitude.core.models.Permissions
         state("edited").bool shouldBe false
         state("width") shouldBe ujson.Null
         state("height") shouldBe ujson.Null
+        (state("uprightWidth").num.toInt, state("uprightHeight").num.toInt) shouldBe (150, 150)
         state("recipe") shouldBe EditRecipe.Identity.toJson
         state("steps") shouldBe ujson.Arr(
           ujson.Obj("seq" -> 0, "label" -> "Original", "author" -> ujson.Null, "createdAt" -> ujson.Null, "mine" -> false))
@@ -113,6 +114,7 @@ import altitude.core.models.Permissions
         afterStep("label").str shouldBe "Exposure +0.40"
         afterStep("edited").bool shouldBe true
         (afterStep("width").num.toInt, afterStep("height").num.toInt) shouldBe (150, 150)
+        (afterStep("uprightWidth").num.toInt, afterStep("uprightHeight").num.toInt) shouldBe (150, 150)
         afterStep("recipe") shouldBe brighter.toJson
         val newest = afterStep("steps").arr.head
         newest("seq").num shouldBe 1
@@ -140,6 +142,37 @@ import altitude.core.models.Permissions
         val answer = json(status)
         (answer("head"), answer("rev")) shouldBe (ujson.Num(0), ujson.Num(0))
         List(ujson.Null, ujson.Num(0)) should contain(answer("rendered"))
+    }
+  }
+
+  test("The Edit's state gives the size of the upright original, turned by its EXIF orientation") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in User holding every Permission, and an imported image stored 640 × 724 under EXIF orientation 6, so its upright
+     * original is 724 × 640.
+     *
+     * Assertions:
+     *
+     * The state of the image never edited, and the state a step turning it a quarter answers, give the upright size 724 × 640;
+     * the step's edited size is the frame's, 640 × 724.
+     */
+    val repoId = testContext.persistRepository().persistedId
+    login()
+    val asset = testApp.service.library.addAsset(
+      testApp.service.library.convImportAsset2dataAsset(IntegrationTestUtil.getImportAsset("images/exif/orientation-6.jpg")))
+    val assetId = asset.persistedId
+
+    withServer(App) {
+      host =>
+        def upright(state: ujson.Value): (Int, Int) = (state("uprightWidth").num.toInt, state("uprightHeight").num.toInt)
+
+        upright(json(get(editUrl(host, repoId, assetId)))) shouldBe (724, 640)
+
+        val turned = json(step(host, repoId, assetId, base = 0, recipe = brighter.copy(rotate = 90).toJson))
+        upright(turned) shouldBe (724, 640)
+        (turned("width").num.toInt, turned("height").num.toInt) shouldBe (640, 724)
     }
   }
 

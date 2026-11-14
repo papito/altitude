@@ -130,6 +130,9 @@ object Api:
       val EDITED = "edited"
       val WIDTH = "width"
       val HEIGHT = "height"
+      // The size of the asset's upright original, the space of the Edit's geometry and of its Faces' boxes
+      val UPRIGHT_WIDTH = "uprightWidth"
+      val UPRIGHT_HEIGHT = "uprightHeight"
       val STEPS = "steps"
       val LABEL = "label"
       val AUTHOR = "author"

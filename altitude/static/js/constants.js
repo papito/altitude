@@ -82,6 +82,9 @@ export const Const = {
         toggleFaceHighlights: "TOGGLE_FACE_HIGHLIGHTS_EVENT",
         // `f` in Asset detail: puts it in fullscreen or leaves it (js/search-results/detail-fullscreen.js)
         toggleFullscreen: "TOGGLE_FULLSCREEN_EVENT",
+        // `\` pressed (`detail.held` true) or released (false) in Asset detail: Show original for as long as it is
+        // held, on an edited asset (js/listeners/edit.js, js/edit/edit-stage.js)
+        showOriginalHeld: "SHOW_ORIGINAL_HELD_EVENT",
         settingsSaved: "SETTINGS_SAVED_EVENT",
         // An account was added, changed or deleted on the Users page; `detail.message` says which. The page reloads its cards
         accountsChanged: "ACCOUNTS_CHANGED_EVENT",
@@ -186,6 +189,11 @@ export const Const = {
         faceHighlightsToggle: "data-app-face-highlights-toggle",
         fullscreenToggle: "data-app-fullscreen-toggle",
         fullscreenKey: "data-app-fullscreen-key", // the key legend's fullscreen entry, gone where the toggle is
+        // Show original's toggle in Asset detail's toolbar, the title's badge that says whether the stage shows the Edit
+        // ("Edited") or the original, and the key legend's `\` entry, all shown on an edited asset alone (js/edit/edit-stage.js)
+        showOriginalToggle: "data-app-show-original-toggle",
+        editBadge: "data-app-edit-badge",
+        showOriginalKey: "data-app-show-original-key",
         // The button of a People row that selects its Face (htmx/detail_panel_people), and under a selected row its
         // corrections: Change, which opens the combobox, and Remove, whose second label (the one after the first click)
         // the button carries

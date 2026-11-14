@@ -24,6 +24,8 @@
  * Details' dimensions row reads the shown element's size, which the coordinator hands over once the
  * media is shown: a browser turns an image upright by its EXIF orientation, while the stored size is
  * the header's. The Face highlights are placed in that size too, from each row's `data-face-box`.
+ * While the stage shows an Edit (`edit/edit-stage.js`), the row adds the edited size and the
+ * highlights are mapped through the Edit's geometry, a Face the crop leaves out not drawn.
  *
  * The selection is one Face at most, the state the corrections act on, held here and never
  * remembered: a click on a People row's button or on a Face highlight selects that Face, a click on
@@ -70,6 +72,7 @@ import { getActiveModalHost, ModalHost } from "../common/modal.js"
 import { showErrorSnackBar, showSuccessSnackBar } from "../common/snackbar.js"
 import { readStoredObject, writeStoredFields } from "../common/stored-state.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
+import { mapBox } from "../edit/geometry.js"
 import { createFaceCorrections } from "./face-corrections.js"
 import {
     createFaceHighlights,
@@ -95,8 +98,11 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
 
     // The asset Asset detail shows or loads, with whether its request is still the current one
     let subject = null
-    // The shown media element's size, once the media is shown
+    // The shown media's upright size, once the media is shown, the Edit the stage shows of it, if any,
+    // and whether the Face highlights may be drawn on it (not on the Crop tool's whole frame)
     let shownSize = null
+    let shownEdit = null
+    let highlightsShown = true
     // The asset whose fragment is in the panel, or on its way there
     let loadedAssetId = null
     // The selected Face, or null; the one state the corrections act on, never remembered
@@ -242,6 +248,8 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
 
         subject = { assetId, isCurrent }
         shownSize = null
+        shownEdit = null
+        highlightsShown = true
         selectedFaceId = null
         corrections.selectionChanged()
         highlights.clear()
@@ -257,9 +265,17 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         }
     }
 
-    /** The shown media element's size, which the Details' dimensions and the Face highlights read */
-    function setShownSize({ width, height }) {
+    /**
+     * The shown media's size, which the Details' dimensions and the Face highlights read: the
+     * upright original's for a still image (the Edit's stage, `edit/edit-stage.js`), with `edit`, the
+     * Edit the stage shows in its place (`{ recipe, width, height }`, the edited size), or null when
+     * it shows the original or an Edit that changes no pixel; `highlights` false while the stage
+     * draws the whole frame (the Crop tool), where no Face highlight is drawn
+     */
+    function setShownSize({ width, height, edit = null, highlights = true }) {
         shownSize = { width, height }
+        shownEdit = edit
+        highlightsShown = highlights
         writeDimensions()
         drawHighlights()
     }
@@ -570,13 +586,19 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         }
     }
 
-    /** The Details' dimensions row shows the shown element's size, the header's until the media is shown */
+    /**
+     * The Details' dimensions row shows the shown media's upright size, the header's until the media
+     * is shown, and the edited size after it while the stage shows an Edit
+     */
     function writeDimensions() {
         const dimensionsEl = contentEl()?.querySelector(
             `[${Const.attributes.detailDimensions}]`,
         )
         if (dimensionsEl && shownSize) {
-            dimensionsEl.textContent = `${shownSize.width} × ${shownSize.height} px`
+            const edited = shownEdit
+                ? ` · edited ${shownEdit.width} × ${shownEdit.height}`
+                : ""
+            dimensionsEl.textContent = `${shownSize.width} × ${shownSize.height} px${edited}`
         }
     }
 
@@ -643,23 +665,48 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         )
     }
 
-    /** Draws the Face highlights the setting, the selection and a Video's time call for, once the media is shown */
+    /**
+     * Draws the Face highlights the setting, the selection and a Video's time call for, once the
+     * media is shown: each box as fractions of the shown media, through the Edit's geometry while the
+     * stage shows an Edit, where a Face whose center the crop leaves out is not drawn
+     */
     function drawHighlights() {
-        if (!shownSize) {
+        if (!shownSize || !highlightsShown) {
             highlights.clear()
             return
         }
 
         const videoEl = shownVideoEl()
         highlights.show({
-            faces: faces().filter(
-                (face) =>
-                    (state.highlightsOn || face.faceId === selectedFaceId) &&
-                    isOnShownFrame(face, videoEl),
-            ),
+            faces: faces()
+                .filter(
+                    (face) =>
+                        (state.highlightsOn ||
+                            face.faceId === selectedFaceId) &&
+                        isOnShownFrame(face, videoEl),
+                )
+                .map((face) => ({ ...face, box: shownBoxOf(face.box) }))
+                .filter((face) => face.box !== null),
             selectedFaceId,
-            size: shownSize,
         })
+    }
+
+    /** A Face's box in the upright original's pixels as fractions of the shown media, or null when the Edit's crop leaves it out */
+    function shownBoxOf(box) {
+        if (shownEdit) {
+            return mapBox(
+                box,
+                shownEdit.recipe,
+                shownSize.width,
+                shownSize.height,
+            )
+        }
+        return {
+            x: box.x / shownSize.width,
+            y: box.y / shownSize.height,
+            width: box.width / shownSize.width,
+            height: box.height / shownSize.height,
+        }
     }
 
     /** The least the panel and the stage may be squeezed to along the axis, in px: the `core.css` tokens, registered as lengths */

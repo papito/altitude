@@ -15,8 +15,9 @@ object EditState:
 /**
  * An asset's Edit as a client sees it (`AssetEditService.get`): the head step (0 for the Original) with its Edit and label, the
  * step whose renditions are stored (None before the first render), the asset's rendition revision (`asset.edit_rev`, 0 for none),
- * whether the head changes a pixel, the head's edited size (None until the first step), and the steps, newest first, with the
- * Original last.
+ * whether the head changes a pixel, the head's edited size (None until the first step), the steps, newest first, with the
+ * Original last, and the size of the asset's upright original, the space of the Edit's geometry (None where it is not read: the
+ * render status, and an original that is missing).
  */
 case class EditState(
     head: Int,
@@ -27,4 +28,5 @@ case class EditState(
     edited: Boolean,
     width: Option[Int],
     height: Option[Int],
-    steps: List[EditState.Step])
+    steps: List[EditState.Step],
+    upright: Option[(Int, Int)] = None)

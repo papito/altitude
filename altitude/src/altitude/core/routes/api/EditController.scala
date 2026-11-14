@@ -26,13 +26,18 @@ object EditController:
   def statusJson(state: EditState): ujson.Obj =
     ujson.Obj(fields.HEAD -> state.head, fields.RENDERED -> orNull(state.rendered), fields.REV -> state.rev)
 
-  /** An Edit at its head with the head's label, as the asset detail's `edit` carries it */
+  /**
+   * An Edit at its head with the head's label, as the asset detail's `edit` carries it, with the size of the upright original its
+   * geometry is in, which the client cannot tell from the stored size (a browser turns the original by its EXIF orientation)
+   */
   def headJson(state: EditState): ujson.Obj =
     val json = statusJson(state)
     json(fields.LABEL) = state.label
     json(fields.EDITED) = state.edited
     json(fields.WIDTH) = orNull(state.width)
     json(fields.HEIGHT) = orNull(state.height)
+    json(fields.UPRIGHT_WIDTH) = orNull(state.upright.map(_._1))
+    json(fields.UPRIGHT_HEIGHT) = orNull(state.upright.map(_._2))
     json(fields.RECIPE) = state.recipe.toJson
     json
 

@@ -17,6 +17,7 @@ import { createDetailUrl } from "./search-results/detail-url.js"
 import { bindSearchInput } from "./search-results/search-input.js"
 import { bindSearchPanel } from "./search-results/search-panel.js"
 import { initializeFrontendStores } from "./stores/app-stores.js"
+import { createEditStage } from "./edit/edit-stage.js"
 
 /**
  * The composition root: initializes the stores, creates the feature coordinators, registers the
@@ -40,9 +41,14 @@ export class FrontendApp {
             assetActions: this.assetActions,
             detailUrl: this.detailUrl,
         })
+        this.editStage = createEditStage({
+            context,
+            detailPanel: this.detailPanel,
+        })
         this.searchDetailCoordinator = createSearchDetailCoordinator({
             context,
             detailPanel: this.detailPanel,
+            editStage: this.editStage,
         })
         this.detailFullscreen = createDetailFullscreen()
     }
@@ -58,6 +64,7 @@ export class FrontendApp {
         this.detailUrl.start()
         this.detailPanel.start()
         this.detailFullscreen.start()
+        this.editStage.start()
         Alpine.start()
         bindAppDragDrop(this)
         bindSearchInput()

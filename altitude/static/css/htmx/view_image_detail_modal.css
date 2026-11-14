@@ -50,9 +50,11 @@
    asset's ratio (`--asset-width` and `--asset-height`, set on the box by setAssetDetailSize from the shown element). The
    caps hold for an asset without a size. A Video's player is the media-chrome controller: its slotted <video> fills it and
    letterboxes itself (the user agent's `object-fit: contain` for video), and its control bar overlays the video's bottom.
-   The Face highlights' layer takes the same box in the stage's one cell, so it lies over the shown element */
+   The Edit's canvas (js/edit/edit-stage.js, drawn at the box's device pixels) and the Face highlights' layer take the same
+   box in the stage's one cell, so they lie over the shown element */
 #imageDetailStage img,
 #imageDetailStage media-controller,
+#editCanvas,
 #faceHighlights {
     grid-area: 1 / 1;
     width: min(100cqw, 100cqh * var(--asset-width) / var(--asset-height));

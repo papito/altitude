@@ -729,8 +729,9 @@ import altitude.core.models.Person
      * Assertions:
      *
      * Asked for as JSON by the first User, the edited image's detail carries `edit`: the head and its label, rendered at the head
-     * as revision 1, edited, its size and its Edit, and `editable` true; the fragment carries the same Edit as JSON and
-     * `editable` in its data attributes. The image never edited has no `edit`, in the JSON or the fragment, and is editable.
+     * as revision 1, edited, its size, the size of its upright original and its Edit, and `editable` true; the fragment carries
+     * the same Edit as JSON and `editable` in its data attributes. The image never edited has no `edit`, in the JSON or the
+     * fragment, and is editable.
      *
      * Edge cases:
      *
@@ -776,6 +777,8 @@ import altitude.core.models.Person
           "edited" -> true,
           "width" -> edited.width,
           "height" -> edited.height,
+          "uprightWidth" -> edited.width,
+          "uprightHeight" -> edited.height,
           "recipe" -> recipe.toJson
         )
         val fragment = detail(edited, asJson = false)

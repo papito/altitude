@@ -17,7 +17,10 @@
    what `f` does: js/search-results/detail-fullscreen.js gives the controller the Asset detail container as its
    `fullscreenElement`. The root carries the asset's Edit at its head as JSON (`data-app-image-detail-edit`, absent for an
    asset never edited: AssetActionController.showAssetDetailModal, the shape of its JSON's `edit`) and whether the account may
-   edit the asset (`data-app-image-detail-editable`). *@
+   edit the asset (`data-app-image-detail-editable`). The stage's canvas (#editCanvas) shares the media's cell too: the Edit's
+   stage (js/edit/edit-stage.js) shows an edited image as its Display image in the <img>, or draws the Edit on the canvas
+   from the original while its render is pending, and shows the original for Show original; the key legend's `\` entry is
+   shown on an edited asset alone. *@
 
 @dockOption(side: String, label: String) = {
 <button type="button" data-app-detail-dock-side="@side"><svg class="glyph" width="16" height="16" aria-hidden="true"><use href="#dockGlyph-@side"/></svg><span>@label</span></button>
@@ -37,6 +40,7 @@
      data-detail-dock-side="right">
     <div id="imageDetailStage">
         <img src="" alt="@{ asset.fileName }" hidden>
+        <canvas id="editCanvas" role="img" aria-label="@{ asset.fileName }" hidden></canvas>
         <media-controller hidden hotkeys="noarrowleft noarrowright nof nom">
             <video slot="media" preload="metadata" playsinline></video>
             <media-control-bar>
@@ -68,7 +72,7 @@
            goes with the toolbar's toggle where the browser allows no fullscreen (js/search-results/detail-fullscreen.js) *@
         <footer class="panel-keys" aria-label="Keys">
             <p><span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> Previous/Next</span><span data-app-fullscreen-key><kbd>F</kbd> Fullscreen</span><span><kbd>M</kbd> Open/Close this panel</span></p>
-            <p><span><kbd>P</kbd> Face highlights</span><span><kbd>Space</kbd> Play/Pause</span></p>
+            <p><span><kbd>P</kbd> Face highlights</span><span><kbd>Space</kbd> Play/Pause</span><span data-app-show-original-key hidden><kbd>\</kbd> Original (hold)</span></p>
         </footer>
     </aside>
 </div>

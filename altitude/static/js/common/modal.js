@@ -80,6 +80,10 @@ let pendingOpen = null
 // Where focus goes when the active modal closes.
 let returnFocus = null
 
+// The open that waits for the host it replaces to be released (`openModal`, across one Alpine tick):
+// already the displayed open for the work started for it, though no host is active yet
+let activatingOpenId = null
+
 // The element that issued the request whose fragment the displayed open shows, when it was an htmx
 // request: a results cell's thumbnail for asset detail, which is where its navigation starts from
 let openSource = null
@@ -117,11 +121,16 @@ export function getModalOpenId() {
 }
 
 /**
- * Whether the open identified by `openId` is the one currently displayed. Asynchronous work that
- * started for an open must check this before touching the modal.
+ * Whether the open identified by `openId` is the one currently displayed, or about to be: an open
+ * over another host is displayed one Alpine tick after it is made, and a load that finishes in
+ * that tick (a cached image) is still its own. Asynchronous work that started for an open must
+ * check this before touching the modal.
  */
 export function isModalOpenActive(openId) {
-    return isModalActive() && getModalOpenId() === openId
+    return (
+        getModalOpenId() === openId &&
+        (isModalActive() || activatingOpenId === openId)
+    )
 }
 
 /**
@@ -188,6 +197,9 @@ export function openModal({
     console.debug(`Opening ${host} modal "${title}" (open ${openId})`)
 
     const activate = () => {
+        if (activatingOpenId === openId) {
+            activatingOpenId = null
+        }
         // Superseded while waiting for the previous host to release
         if (store.openId !== openId) {
             return
@@ -230,6 +242,7 @@ export function openModal({
         if (activeHost === ModalHost.popover) {
             hidePopoverHost()
         }
+        activatingOpenId = openId
         Alpine.nextTick(activate)
     } else {
         activate()

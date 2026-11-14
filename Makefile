@@ -45,7 +45,7 @@ test:
 test-with-slow:
 	ENV=test mill -j4 altitude.test.testOnly '*SuiteBundle'
 
-test-local:
+test-local: test-js
 	ENV=test mill -j3 altitude.test.testOnly '*UnitSuiteBundle' '*SqliteSuiteBundle' '*ControllerSuiteBundle' -- $(SKIP_SLOW)
 
 test-focused:
@@ -74,6 +74,10 @@ test-unit:
 
 test-controllers:
 	ENV=test mill altitude.test.testOnly *ControllerSuiteBundle --show-output -- $(SKIP_SLOW)
+
+# The client modules' tests under Node's built-in runner, with no dependency: the Edit's parity with the server's renderer
+test-js:
+	node --test 'scripts/test-js/*.test.mjs'
 
 db:
 	docker compose -f docker-compose.yml -f docker-compose.test.yml up

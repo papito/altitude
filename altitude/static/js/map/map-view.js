@@ -5,6 +5,7 @@ import { getHttpErrorMessage, http } from "../http/client.js"
 import { runSearch } from "../search-results/search.js"
 import { openMapPanel } from "./map-panel.js"
 import { loadMapLibraries } from "../common/vendor-loader.js"
+import { previewUrl } from "../common/content-urls.js"
 import {
     currentScopeFingerprint,
     rememberedMapView,
@@ -233,8 +234,7 @@ export async function hydrateMapViewFragment({ fragmentEl }) {
     function addAssetPin({ point, assetId, editRev, count, onClick }) {
         const iconEl = document.createElement("div")
         const imgEl = document.createElement("img")
-        const revision = editRev > 0 ? `?v=${editRev}` : ""
-        imgEl.src = `/content/r/${repoId}/preview/${assetId}${revision}`
+        imgEl.src = previewUrl(repoId, assetId, editRev)
         imgEl.alt = ""
         imgEl.draggable = false
         iconEl.append(imgEl)

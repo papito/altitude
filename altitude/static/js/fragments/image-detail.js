@@ -1,12 +1,15 @@
 import { getModalOpenSource, ModalHost, openModal } from "../common/modal.js"
+import { parseEdit } from "../edit/edit-stage.js"
 
 /**
  * Asset detail fragment (`data-app-fragment="image-detail"`): opens the asset-detail host right
  * away, with its loading indicator, attaches the Detail panel to the fragment (its dock, its
- * divider and whether it is open, `search-results/detail-panel.js`) and fullscreen to its player
- * (`search-results/detail-fullscreen.js`), and hands the media load to
- * the detail coordinator, which shows the fragment's `<img>` or its video player by the asset's
- * media type and has the panel load the asset's details while it is open. The coordinator only
+ * divider and whether it is open, `search-results/detail-panel.js`), fullscreen to its player
+ * (`search-results/detail-fullscreen.js`) and the Edit's stage to its canvas (`edit/edit-stage.js`),
+ * and hands the media load to the detail coordinator, which shows the fragment's `<img>` (or, for an
+ * edited image, the Display image or the Edit's canvas, by the Edit the fragment carries in
+ * `data-app-image-detail-edit`) or its video player by the asset's media type and has the panel
+ * load the asset's details while it is open. The coordinator only
  * applies the result if this open is still active and the load was not superseded by
  * previous/next navigation.
  *
@@ -20,6 +23,7 @@ export function hydrateImageDetailFragment({
     coordinator,
     detailPanel,
     detailFullscreen,
+    editStage,
 }) {
     if (fragmentEl.dataset.appImageDetailBound === "true") {
         return
@@ -41,6 +45,7 @@ export function hydrateImageDetailFragment({
     // Before the media: the panel loads the details alongside it
     detailPanel.attach(fragmentEl)
     detailFullscreen.attach(fragmentEl)
+    editStage.attach(fragmentEl)
 
     coordinator.showMedia({
         openId,
@@ -52,6 +57,8 @@ export function hydrateImageDetailFragment({
         width: Number(fragmentEl.dataset.appImageDetailWidth),
         height: Number(fragmentEl.dataset.appImageDetailHeight),
         assetId: fragmentEl.dataset.appImageDetailAssetId,
+        edit: parseEdit(fragmentEl.dataset.appImageDetailEdit),
+        editable: fragmentEl.dataset.appImageDetailEditable === "true",
         cellEl: getModalOpenSource()?.closest?.(".cell") ?? null,
     })
 }

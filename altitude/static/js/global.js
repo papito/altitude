@@ -19,7 +19,9 @@
  * panel's divider, which they move; Space plays or pauses a Video and does nothing on an image,
  * except on a control in the player or in the Detail panel, which it presses; `m` opens or
  * closes the Detail panel, `p` shows or hides the Face highlights and `f` puts Asset detail in
- * fullscreen or leaves it, wherever focus is, each ignoring a held key and any modifier.
+ * fullscreen or leaves it, wherever focus is, each ignoring a held key and any modifier. `\` shows
+ * an edited asset's original for as long as it is held (Show original): its press and its release
+ * are announced, the key's repeats swallowed, and a release is announced wherever focus has gone.
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
 import {
@@ -126,8 +128,37 @@ document.addEventListener("keydown", (event) => {
         document.body.dispatchEvent(
             new CustomEvent(Const.events.toggleFullscreen),
         )
+    } else if (isShowOriginalPress(event)) {
+        event.preventDefault()
+        if (!event.repeat) {
+            announceShowOriginal(true)
+        }
     }
 })
+
+// The release of `\` ends Show original wherever focus is and whatever modifier is held by then, so a
+// key held into a field, or let go after Ctrl was pressed, never sticks
+document.addEventListener("keyup", (event) => {
+    if (event.key === "\\") {
+        announceShowOriginal(false)
+    }
+})
+
+/**
+ * A press of the key that types `\`, however the layout reaches it: with Shift, Option or AltGr
+ * (which a browser on Windows reports as Ctrl and Alt) where it needs one, never with Cmd or a
+ * plain Ctrl, which are shortcuts. A held key's repeats are the caller's to swallow.
+ */
+function isShowOriginalPress(event) {
+    const altGraph = event.getModifierState?.("AltGraph") ?? false
+    return event.key === "\\" && !event.metaKey && (!event.ctrlKey || altGraph)
+}
+
+function announceShowOriginal(held) {
+    document.body.dispatchEvent(
+        new CustomEvent(Const.events.showOriginalHeld, { detail: { held } }),
+    )
+}
 
 /** `key` pressed on its own, once: a held key or any modifier (Ctrl+P, Shift+M) is left to the browser */
 function isPlainKey(event, key) {
