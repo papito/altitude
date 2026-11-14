@@ -20,7 +20,7 @@ import altitude.core.util.JsonCodec
      *
      * Assertions:
      *
-     * They are Import, Curate own, Curate all, Organize, Edit Metadata, Create Users, Create Guests, Recycle and Purge, in that
+     * They are Import, Curate own, Curate all, Organize, Edit metadata, Create Users, Create Guests, Recycle and Purge, in that
      * order, on bits 0 to 8: the bitmask is stored and carried in tokens, so a bit never moves.
      */
     Permission.values.toList.map(p => p -> p.bit) shouldBe List(

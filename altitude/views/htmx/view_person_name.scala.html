@@ -4,7 +4,7 @@
 @(person: Person)
 
 @* The person's name in the results title; a click swaps in the editor (htmx/edit_person_name). The pencil is revealed by
-   static/css/htmx/person.css while the title is hovered or the name has focus. Naming is Edit Metadata's: without it the name
+   static/css/htmx/person.css while the title is hovered or the name has focus. Naming is Edit metadata's: without it the name
    is plain text, with no editor behind it. *@
 @if(RequestContext.holds(Permission.EditMetadata)) {
 <span hx-trigger="click"

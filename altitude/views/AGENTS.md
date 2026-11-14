@@ -2891,12 +2891,12 @@ builds or binds a control. Where each control follows:
   included. A folder's Delete is offered with Recycle too, unless the folder holds no asset (its recursive
   `numOfAssets` as the tree read it), since deleting recycles what it holds; the server refuses a delete the count went stale
   for. A Person's rename pencil (`htmx/people_list`) and the results title's name, the inline editor's trigger
-  (`htmx/view_person_name`, plain text without it), for Edit Metadata; the results title's cover choice and Hide / Show /
+  (`htmx/view_person_name`, plain text without it), for Edit metadata; the results title's cover choice and Hide / Show /
   Discard (`includes/results_title_inner`), and a taken name's "Merge into …" offer (`includes/person_name_taken`), for
   Organize. The View settings dialog's "Show triaged items" for a member.
 - Drag and drop (`js/dragdrop/index.js`): every move, membership, folder and People drag for Organize; the thumbnails drag,
   and `#trash` is a drop zone, where the account may recycle what the view shows (`context.recyclesHere`) too.
-- The Detail panel: its People section (`htmx/detail_panel_people`) is read-only, Search alone, without Edit Metadata, as
+- The Detail panel: its People section (`htmx/detail_panel_people`) is read-only, Search alone, without Edit metadata, as
   for an asset in the trash; the Change combobox (`js/alpine/components/face-combobox.js`) merges a nameless Person into a
   named one only for a holder of Organize, and otherwise moves this Face alone ("· this face"); its Curation row
   (`htmx/detail_panel`) for a Curate Permission.

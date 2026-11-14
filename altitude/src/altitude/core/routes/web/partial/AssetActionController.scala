@@ -140,7 +140,7 @@ class AssetActionController(using logger: Logger) extends BaseController:
    * is not a JSON object, an ID that is not a UUID, a destination with no name or the Person themselves is a 400; a Face gone or
    * given to someone else meanwhile, or a Person or destination no longer live or of another Library, a 404; a Face of an asset
    * in the trash, or a Person who has a name by now, a 409, as the section the client shows is stale. It merges People, so it is
-   * Organize's, not Edit Metadata's as the other corrections are.
+   * Organize's, not Edit metadata's as the other corrections are.
    */
   @requireLogin()
   @requirePermission(Permission.Organize)
