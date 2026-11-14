@@ -79,6 +79,28 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     EditRecipe.parse(row("recipe").toString) shouldBe halfCrop
   }
 
+  test("The Edit an asset's detail carries reads its revision and its versions in one snapshot") {
+
+    /**
+     * Setup:
+     *
+     * An imported image read once (as Asset detail reads it before it asks for the Edit), then saved and rendered, so its
+     * edited images are revision 1.
+     *
+     * Assertions:
+     *
+     * `editOf` given the asset as read before the render answers the rendered state: edit version 1, rendered at 1, revision
+     * 1, never the revision of the asset as it was read with the versions of the Edit as it is now.
+     */
+    val asset = testContext.persistAsset()
+    val assetId = asset.persistedId
+    edits.save(assetId, 0, brighter, testContext.user)
+    testApp.service.editRender.render(assetId)
+
+    val state = edits.editOf(asset).get
+    (state.editVersion, state.renderedVersion, state.rev) shouldBe (1, Some(1), 1)
+  }
+
   test("Each save replaces the Edit and moves its version on, keeping no earlier Edit") {
 
     /**

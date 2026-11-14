@@ -69,14 +69,13 @@ class AssetEditService(val app: Altitude):
 
   /**
    * The Edit of an asset read in the context repository, with the size of its upright original, or None for an asset never
-   * edited: what the asset's detail carries
+   * edited: what the asset's detail carries. The asset's revision and the Edit's versions are read again in one snapshot, not
+   * taken from `asset`, which its caller read earlier: a render committing in between would otherwise pair the rendered edit
+   * version with the revision before it.
    */
   def editOf(asset: Asset): Option[EditState] =
-    txManager.asReadOnly(dao.get(asset.persistedId)).map {
-      edit =>
-        val upright = uprightSizeIfKnown(asset)
-        txManager.asReadOnly(stateOf(asset, Some(edit), upright = upright))
-    }
+    val (current, edit) = txManager.asReadOnly((assetDao.getById(asset.persistedId), dao.get(asset.persistedId)))
+    edit.map(edit => stateOf(current, Some(edit), upright = uprightSizeIfKnown(current)))
 
   /**
    * Saves `recipe` as the asset's Edit, built on the version `base` the client saw, and answers the new state: the version one
