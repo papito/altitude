@@ -14,8 +14,11 @@
 <link rel="stylesheet" href="/static/css/font-awesome.min.css">
 <!-- defaultTimeout: htmx 4 aborts requests after 60s by default; keep htmx 2's "no timeout" for
      long-running actions such as purging the recycle bin.
-     noSwap: keep htmx 2's behavior of not swapping 4xx/5xx bodies; JS listeners report those via snackbar. -->
-<meta name="htmx-config" content='{"defaultTimeout": 0, "noSwap": [204, 304, "4xx", "5xx"]}'>
+     noSwap: keep htmx 2's behavior of not swapping 4xx/5xx bodies; JS listeners report those via snackbar.
+     defaultSettleDelay: no settle, which would copy each old element's attributes onto the new one with its ID and back,
+     after Alpine has initialized the new content, undoing what it set (Asset detail's fragment, where the Edit panel's
+     tabs share IDs from one asset to the next); the app runs no CSS transition on a settle. -->
+<meta name="htmx-config" content='{"defaultTimeout": 0, "noSwap": [204, 304, "4xx", "5xx"], "defaultSettleDelay": 0}'>
 @* htmx alone is not deferred: run while the page is still parsing, it starts on DOMContentLoaded, after every deferred
    script (its extensions, json-enc and hx-ws) and every module has run; deferred, it would start before they had *@
 <script src="/static/js/lib/htmx.min.js"></script>

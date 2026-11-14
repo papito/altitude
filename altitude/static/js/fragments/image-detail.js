@@ -5,7 +5,8 @@ import { parseEdit } from "../edit/edit-stage.js"
  * Asset detail fragment (`data-app-fragment="image-detail"`): opens the asset-detail host right
  * away, with its loading indicator, attaches the Detail panel to the fragment (its dock, its
  * divider and whether it is open, `search-results/detail-panel.js`), fullscreen to its player
- * (`search-results/detail-fullscreen.js`) and the Edit's stage to its canvas (`edit/edit-stage.js`),
+ * (`search-results/detail-fullscreen.js`), the Edit's stage to its canvas (`edit/edit-stage.js`) and
+ * the Edit panel to its panel, its divider and its tools (`edit/edit-panel.js`),
  * and hands the media load to the detail coordinator, which shows the fragment's `<img>` (or, for an
  * edited image, the Display image or the Edit's canvas, by the Edit the fragment carries in
  * `data-app-image-detail-edit`) or its video player by the asset's media type and has the panel
@@ -24,6 +25,7 @@ export function hydrateImageDetailFragment({
     detailPanel,
     detailFullscreen,
     editStage,
+    editPanel,
 }) {
     if (fragmentEl.dataset.appImageDetailBound === "true") {
         return
@@ -46,6 +48,8 @@ export function hydrateImageDetailFragment({
     detailPanel.attach(fragmentEl)
     detailFullscreen.attach(fragmentEl)
     editStage.attach(fragmentEl)
+    // After the Detail panel, whose side the Edit panel's dock follows
+    editPanel.attach(fragmentEl)
 
     coordinator.showMedia({
         openId,
@@ -59,6 +63,7 @@ export function hydrateImageDetailFragment({
         assetId: fragmentEl.dataset.appImageDetailAssetId,
         edit: parseEdit(fragmentEl.dataset.appImageDetailEdit),
         editable: fragmentEl.dataset.appImageDetailEditable === "true",
+        editRefusal: fragmentEl.dataset.appImageDetailEditRefusal ?? null,
         cellEl: getModalOpenSource()?.closest?.(".cell") ?? null,
     })
 }

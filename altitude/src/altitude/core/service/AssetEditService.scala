@@ -177,13 +177,14 @@ class AssetEditService(val app: Altitude):
 
   /**
    * Auto-straighten: the Straighten that levels the lines of the asset's original as `recipe` turns and mirrors it, in tenths of
-   * a degree, 0 when it finds too few lines (`EditRenderer.autoStraightenAngle`). Nothing is stored. The original is decoded on
-   * the render dispatcher, which bounds how many are decoded at once, renders and auto-straightens together.
+   * a degree, or nothing when no level or plumb lines agree on one (`EditRenderer.autoStraightenAngle`). Nothing is stored. The
+   * original is decoded on the render dispatcher, which bounds how many are decoded at once, renders and auto-straightens
+   * together.
    *
    * @throws IllegalOperationException
    *   for an asset that is not a still image, is in the trash, or whose original is missing
    */
-  def autoStraighten(assetId: String, recipe: EditRecipe): Double =
+  def autoStraighten(assetId: String, recipe: EditRecipe): Option[Double] =
     val asset = app.service.asset.getById(assetId)
     AssetEditService.whyNotEditable(asset).foreach(why => throw IllegalOperationException(why))
     val original = app.service.fileStore.assetFile(assetId)

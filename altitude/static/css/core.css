@@ -15,6 +15,7 @@
     --theme-neutral-2: light-dark(#f4f5f7, #353639);
     --theme-neutral-3: light-dark(#565b66, #babdc5);
     --theme-neutral-4: light-dark(#12161f, #f7f8fa);
+    --theme-magenta: light-dark(#a3329a, #e07ad8);
     --shadow-color: light-dark(#000, #000);
 
     --border-hairline: 1px solid;
@@ -39,6 +40,7 @@
     --soft-shadow: 0 1px 2px hsl(from var(--shadow-color) h s l / 0.25), 0 2px 6px hsl(from var(--shadow-color) h s l / 0.15);
     --lift-shadow: 0 4px 12px hsl(from var(--shadow-color) h s l / 0.3);
     --float-shadow: 0 12px 32px hsl(from var(--shadow-color) h s l / 0.45);
+    --crop-dim-shadow: 0 0 0 200vmax hsl(from var(--shadow-color) h s l / 0.6);
     --field-focus-shadow: 0 0 0 2px hsl(from var(--theme-accent) h s l / 0.15);
     --asset-detail-backdrop-color: hsl(from var(--shadow-color) h s l / 0.9);
     --scrim-color: hsl(from var(--shadow-color) h s l / 0.45);
@@ -91,6 +93,19 @@
     --detail-panel-min-height: 7.5rem;
     --detail-stage-min-width: 12.5rem;
     --detail-stage-min-height: 7.5rem;
+    /* The Edit panel's share of Asset detail along its axis, docked opposite the Detail panel, and the least it may be
+       squeezed to (htmx/view_image_detail_modal.css); js/edit/edit-panel.js sets the share and reads the minimums in px */
+    --edit-panel-share: 28%;
+    --edit-panel-min-width: 18rem;
+    --edit-panel-min-height: 12rem;
+    /* The Edit panel (includes/edit_panel.css): its Histogram's height, the curve editor's widest, a column of a section
+       docked top or bottom, and the gutter the stage leaves around the frame while the Crop tool is open, where a drag
+       turns the image */
+    --edit-histogram-height: 4.25rem;
+    --edit-curve-max-size: 16rem;
+    --edit-column-width: 15rem;
+    --edit-crop-gutter: var(--space-9);
+    --edit-slider-field-width: 4.5rem;
     /* The band naming the view along the results' left edge, and the gutter the results leave for it (pages/index.css) */
     --view-band-width: var(--space-9);
     --nav-brand-width: 12.5rem;
@@ -170,6 +185,14 @@
     --histogram-red: light-dark(#ff0000, #ff0000);
     --histogram-green: light-dark(#00ff00, #00ff00);
     --histogram-blue: light-dark(#0000ff, #0000ff);
+    /* The gradient tracks of the Edit panel's sliders (.edit-slider): what each slider's ends do to the picture, drawn
+       from the palette (Tint's magenta end is `--theme-magenta`, its one use), the neutral at the middle where the slider
+       is 0 */
+    --edit-track-exposure: linear-gradient(to right, var(--shadow-color), var(--theme-neutral-3), var(--theme-neutral-1));
+    --edit-track-temperature: linear-gradient(to right, var(--info-color), var(--theme-neutral-3), var(--warning-color));
+    --edit-track-tint: linear-gradient(to right, var(--success-color), var(--theme-neutral-3), var(--theme-magenta));
+    --edit-track-vibrance: linear-gradient(to right, var(--theme-neutral-3), var(--theme-neutral-3) 50%, var(--warning-color), var(--info-color));
+    --edit-track-saturation: linear-gradient(to right, var(--theme-neutral-3), var(--theme-neutral-3) 50%, var(--error-color), var(--warning-color), var(--success-color), var(--info-color));
 
     --panel-padding: var(--space-5);
 
@@ -262,6 +285,24 @@
 }
 
 @property --detail-stage-min-height {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --edit-panel-share {
+    syntax: "<percentage>";
+    inherits: true;
+    initial-value: 28%;
+}
+
+@property --edit-panel-min-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --edit-panel-min-height {
     syntax: "<length>";
     inherits: true;
     initial-value: 0px;
@@ -1008,6 +1049,105 @@ footer {
     translate: calc(var(--switch-width) - var(--switch-height));
 }
 
+/*             */
+/* EDIT SLIDER */
+/*             */
+
+/* A slider of the Edit panel (includes/edit_panel): a row of its label and the value's number field at its end (Enter
+   sets it), over a thin native range track filled from its left end to the thumb (`--edit-slider-fill`, the percentage
+   the component writes), or, on a slider with a gradient (`.gradient`), that gradient alone (`--edit-slider-track`, a
+   `--edit-track-*` token). A changed slider's label is bold. The field is quiet until hovered or focused */
+.edit-slider {
+    display: grid;
+    gap: var(--space-1);
+    --edit-slider-fill: 50%;
+    --edit-slider-track: linear-gradient(to right, var(--theme-primary) 0 var(--edit-slider-fill), hsl(from var(--theme-neutral-3) h s l / 0.35) var(--edit-slider-fill) 100%);
+}
+
+.edit-slider-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--font-size-small);
+}
+
+.edit-slider-head label {
+    margin-right: auto;
+    color: var(--theme-neutral-3);
+    user-select: none;
+}
+
+.edit-slider.changed label {
+    color: var(--theme-neutral-4);
+    font-weight: var(--font-weight-bold);
+}
+
+.edit-slider input[type="number"] {
+    width: var(--edit-slider-field-width);
+    padding: var(--space-1) var(--space-2);
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--theme-neutral-3);
+    font-family: var(--font-nav);
+    font-size: var(--font-size-xs);
+    text-align: right;
+    appearance: textfield;
+
+    &:hover {
+        border-color: hsl(from var(--theme-neutral-3) h s l / 0.25);
+    }
+
+    &:focus-visible {
+        background-color: var(--field-background-color);
+        color: var(--theme-neutral-4);
+    }
+
+    &::-webkit-inner-spin-button {
+        appearance: none;
+    }
+}
+
+.edit-slider input[type="range"] {
+    width: 100%;
+    height: var(--space-6);
+    margin: 0;
+    background: transparent;
+    appearance: none;
+    cursor: pointer;
+
+    &::-webkit-slider-runnable-track {
+        height: var(--space-2);
+        border-radius: var(--radius-small);
+        background: var(--edit-slider-track);
+    }
+
+    &::-moz-range-track {
+        height: var(--space-2);
+        border-radius: var(--radius-small);
+        background: var(--edit-slider-track);
+    }
+
+    &::-webkit-slider-thumb {
+        width: var(--space-5);
+        height: var(--space-5);
+        margin-top: calc((var(--space-2) - var(--space-5)) / 2);
+        border: var(--border-heavy) var(--theme-neutral-2);
+        border-radius: 50%;
+        background: var(--theme-neutral-4);
+        box-shadow: var(--soft-shadow);
+        appearance: none;
+    }
+
+    &::-moz-range-thumb {
+        width: var(--space-4);
+        height: var(--space-4);
+        border: var(--border-heavy) var(--theme-neutral-2);
+        border-radius: 50%;
+        background: var(--theme-neutral-4);
+        box-shadow: var(--soft-shadow);
+    }
+}
+
 /*          */
 /* EXPLORER */
 /*          */
@@ -1530,8 +1670,8 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     cursor: pointer;
 }
 
-/* A toggle in a modal's toolbar, before its ×: the Detail panel's, the Face highlights' and fullscreen's in asset detail
-   (includes/html_common), an icon alone in the secondary text color that takes the accent while pressed, as the current
+/* A toggle in a modal's toolbar, before its ×: the Edit panel's, Show original's, the Detail panel's, the Face highlights'
+   and fullscreen's in asset detail (includes/html_common), an icon alone in the secondary text color that takes the accent while pressed, as the current
    nav entry does */
 .toolbar-toggle {
     background: none;
@@ -1543,12 +1683,18 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     cursor: pointer;
 }
 
-.toolbar-toggle:hover {
+.toolbar-toggle:hover:not(:disabled, [aria-disabled="true"]) {
     color: var(--theme-neutral-4);
 }
 
 .toolbar-toggle[aria-pressed="true"] {
     color: var(--theme-accent);
+}
+
+/* The Edit toggle on an asset no Edit may change: dimmed, its title saying why, still focusable (`aria-disabled`) */
+.toolbar-toggle:is(:disabled, [aria-disabled="true"]) {
+    color: hsl(from var(--theme-neutral-3) h s l / 0.4);
+    cursor: default;
 }
 
 .modal-title {
@@ -1596,9 +1742,9 @@ html:is([data-dock-side="top"], [data-dock-side="bottom"]) .divider:not(.vertica
     border-radius: 0;
 }
 
-/* With the Detail panel open the box fills the viewport, less the gap the fit leaves at the sides, and the panel and the
-   stage share it; in fullscreen the box is the whole screen whatever the panel does */
-#imageDetailModalContainer:not(:fullscreen) .modal-box:has(#imageDetailView[data-app-detail-panel-open]) {
+/* With the Detail panel or the Edit panel open the box fills the viewport, less the gap the fit leaves at the sides, and
+   the panels and the stage share it; in fullscreen the box is the whole screen whatever the panels do */
+#imageDetailModalContainer:not(:fullscreen) .modal-box:has(#imageDetailView:is([data-app-detail-panel-open], [data-app-edit-panel-open])) {
     width: calc(100dvw - var(--viewport-gap));
     height: 100dvh;
 }

@@ -3,6 +3,11 @@ import { reportRestore } from "../../assets/asset-actions.js"
 import { attachLoupe } from "../../common/loupe.js"
 import { clippingMask, readClipping } from "../../common/clipping.js"
 import {
+    channelPaths,
+    HISTOGRAM_CHANNELS,
+    percentLabel,
+} from "../../common/histogram.js"
+import {
     closeModal,
     getActiveModalHost,
     ModalHost,
@@ -104,13 +109,6 @@ const CLIPPING_ID_OF = {
     [PINNED_IMAGE_ID]: PINNED_CLIPPING_ID,
     [FOCUSED_IMAGE_ID]: FOCUSED_CLIPPING_ID,
 }
-
-// The Histogram's `viewBox` in the set's fragment (`0 0 64 16`), the space its shapes are drawn in
-const HISTOGRAM_BOX = { width: 64, height: 16 }
-// The channels of a frame's `data-histogram`, in the order of its bytes, a byte per bin
-const HISTOGRAM_CHANNELS = ["luminance", "red", "green", "blue"]
-// The byte of the tallest bin of a frame's four channels, which reaches the strip's top
-const HISTOGRAM_TALLEST = 255
 
 // What the next shell to load is opened on; the shell's request carries no parameters
 let requestedEntry = {}
@@ -315,69 +313,23 @@ function saveSequenceRailShown(shown) {
     }
 }
 
-/** A value of the Histogram's paths, rounded to two decimals to keep the string short */
-function rounded(value) {
-    return Math.round(value * 100) / 100
-}
-
-/** The height a bin's byte reaches in `HISTOGRAM_BOX`, as the y of its top */
-function binTop(bin) {
-    const { height } = HISTOGRAM_BOX
-    return rounded(height - (height * bin) / HISTOGRAM_TALLEST)
-}
-
-/**
- * A channel's bins as steps across `HISTOGRAM_BOX`, the path commands that follow a start at the
- * box's left edge: up or down to each bin's top, then across the bin's width, so the bins stand
- * side by side with no gap and the shape is honest to them
- */
-function stepsOf(bins) {
-    const binWidth = HISTOGRAM_BOX.width / bins.length
-    return Array.from(
-        bins,
-        (bin, index) => `V${binTop(bin)}H${rounded((index + 1) * binWidth)}`,
-    ).join("")
-}
-
-/** The `d` of a color channel's shape: its steps, closed down to the baseline, to be filled */
-function areaPath(bins) {
-    const { height } = HISTOGRAM_BOX
-    return `M0,${height}${stepsOf(bins)}V${height}Z`
-}
-
-/** The `d` of the luminance line: its steps alone, open, from the first bin's top, to be stroked */
-function linePath(bins) {
-    return `M0,${binTop(bins[0])}${stepsOf(bins)}`
-}
-
 /**
  * The paths of a frame's Histogram by channel, `{ luminance, red, green, blue }`, from its
  * `data-histogram`: the Base64 of a byte per bin, the channels in the order of
- * `HISTOGRAM_CHANNELS`, each bin over the tallest of the four, as the server scales them. The
- * luminance is a line and each color a filled shape
+ * `HISTOGRAM_CHANNELS`, each bin over the tallest of the four, as the server scales them
+ * (`common/histogram.js` draws them)
  */
 function histogramPaths(base64) {
     const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
     const binCount = bytes.length / HISTOGRAM_CHANNELS.length
-    return Object.fromEntries(
-        HISTOGRAM_CHANNELS.map((channel, index) => {
-            const bins = bytes.subarray(
-                index * binCount,
-                (index + 1) * binCount,
-            )
-            return [
+    return channelPaths(
+        Object.fromEntries(
+            HISTOGRAM_CHANNELS.map((channel, index) => [
                 channel,
-                channel === "luminance" ? linePath(bins) : areaPath(bins),
-            ]
-        }),
+                bytes.subarray(index * binCount, (index + 1) * binCount),
+            ]),
+        ),
     )
-}
-
-/** A fraction as the strip's corner label, "14.2%"; empty for a frame that carries none */
-function percentLabel(fraction) {
-    return fraction === undefined
-        ? ""
-        : `${(Number(fraction) * 100).toFixed(1)}%`
 }
 
 /**

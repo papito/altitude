@@ -274,6 +274,10 @@ import altitude.core.models.Permissions
      * Auto-straighten with the image's Edit answers `{angle}` of 2.7 ± 0.2, the clockwise Straighten that levels the lines; with
      * the image turned a half turn, the lines rise the same way and the answer is the same. A request without a `recipe`, one
      * whose `recipe` is no Edit, and one for the Video are 400s with an error.
+     *
+     * Edge cases:
+     *
+     * An imported blank image has no lines to level by: the answer is `{angle: null}`, so the client keeps its Straighten.
      */
     val repoId = testContext.persistRepository().persistedId
     login()
@@ -288,6 +292,11 @@ import altitude.core.models.Permissions
     val lines = testApp.service.library
       .addAsset(AssetWithData(testContext.makeAsset(), testApp.service.staging.stage(bytes.toArray)))
       .persistedId
+    val blankBytes = new MatOfByte()
+    Imgcodecs.imencode(".jpg", new Mat(600, 800, CvType.CV_8UC3, new Scalar(255, 255, 255)), blankBytes)
+    val blank = testApp.service.library
+      .addAsset(AssetWithData(testContext.makeAsset(), testApp.service.staging.stage(blankBytes.toArray)))
+      .persistedId
     val video = testApp.service.library.addAsset(
       testApp.service.library.convImportAsset2dataAsset(
         IntegrationTestUtil.fileToImportAsset(TestVideos.clip(Seq(TestVideos.black(1))).toFile)))
@@ -299,6 +308,9 @@ import altitude.core.models.Permissions
           response.statusCode shouldBe 200
           json(response)("angle").num shouldBe 2.7 +- 0.2
         }
+        val none = get(autoStraightenUrl(host, repoId, blank, EditRecipe.Identity.toJson))
+        none.statusCode shouldBe 200
+        json(none)("angle") shouldBe ujson.Null
 
         val refusals = List(
           get(editUrl(host, repoId, lines, "/auto-straighten")),

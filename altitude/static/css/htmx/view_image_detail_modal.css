@@ -36,14 +36,79 @@
     grid-template-areas: "stage" "gutter" "panel";
 }
 
-/* The stage is a size container, so the media fits it from the asset's ratio in container units, centered */
+/* The Edit panel (includes/edit_panel, for a holder of Edit images) docks opposite the Detail panel, its share
+   `--edit-panel-share` (js/edit/edit-panel.js), with its divider in the `egutter` area: one rule per Detail panel side for
+   the Edit panel alone, and one for both open, the stage between them. Closed, it and its divider take no room */
+#imageDetailView:not([data-app-edit-panel-open]) > :is(#editPanelDivider, #editPanel) {
+    display: none;
+}
+
+#imageDetailView[data-app-edit-panel-open][data-detail-dock-side="right"] {
+    grid-template-columns: minmax(var(--edit-panel-min-width), var(--edit-panel-share)) auto minmax(var(--detail-stage-min-width), 1fr);
+    grid-template-areas: "edit egutter stage";
+}
+
+#imageDetailView[data-app-edit-panel-open][data-detail-dock-side="left"] {
+    grid-template-columns: minmax(var(--detail-stage-min-width), 1fr) auto minmax(var(--edit-panel-min-width), var(--edit-panel-share));
+    grid-template-areas: "stage egutter edit";
+}
+
+#imageDetailView[data-app-edit-panel-open][data-detail-dock-side="bottom"] {
+    grid-template-rows: minmax(var(--edit-panel-min-height), var(--edit-panel-share)) auto minmax(var(--detail-stage-min-height), 1fr);
+    grid-template-areas: "edit" "egutter" "stage";
+}
+
+#imageDetailView[data-app-edit-panel-open][data-detail-dock-side="top"] {
+    grid-template-rows: minmax(var(--detail-stage-min-height), 1fr) auto minmax(var(--edit-panel-min-height), var(--edit-panel-share));
+    grid-template-areas: "stage" "egutter" "edit";
+}
+
+#imageDetailView[data-app-edit-panel-open][data-app-detail-panel-open][data-detail-dock-side="right"] {
+    grid-template-columns: minmax(var(--edit-panel-min-width), var(--edit-panel-share)) auto minmax(var(--detail-stage-min-width), 1fr) auto minmax(var(--detail-panel-min-width), var(--detail-panel-share));
+    grid-template-areas: "edit egutter stage gutter panel";
+}
+
+#imageDetailView[data-app-edit-panel-open][data-app-detail-panel-open][data-detail-dock-side="left"] {
+    grid-template-columns: minmax(var(--detail-panel-min-width), var(--detail-panel-share)) auto minmax(var(--detail-stage-min-width), 1fr) auto minmax(var(--edit-panel-min-width), var(--edit-panel-share));
+    grid-template-areas: "panel gutter stage egutter edit";
+}
+
+#imageDetailView[data-app-edit-panel-open][data-app-detail-panel-open][data-detail-dock-side="bottom"] {
+    grid-template-rows: minmax(var(--edit-panel-min-height), var(--edit-panel-share)) auto minmax(var(--detail-stage-min-height), 1fr) auto minmax(var(--detail-panel-min-height), var(--detail-panel-share));
+    grid-template-areas: "edit" "egutter" "stage" "gutter" "panel";
+}
+
+#imageDetailView[data-app-edit-panel-open][data-app-detail-panel-open][data-detail-dock-side="top"] {
+    grid-template-rows: minmax(var(--detail-panel-min-height), var(--detail-panel-share)) auto minmax(var(--detail-stage-min-height), 1fr) auto minmax(var(--edit-panel-min-height), var(--edit-panel-share));
+    grid-template-areas: "panel" "gutter" "stage" "egutter" "edit";
+}
+
+#editPanelDivider {
+    grid-area: egutter;
+}
+
+/* The Edit panel's hairline, on the edge facing its divider */
+#imageDetailView[data-edit-dock-side="left"] #editPanel { border-right: var(--border-hairline) var(--panel-border-color); }
+#imageDetailView[data-edit-dock-side="right"] #editPanel { border-left: var(--border-hairline) var(--panel-border-color); }
+#imageDetailView[data-edit-dock-side="top"] #editPanel { border-bottom: var(--border-hairline) var(--panel-border-color); }
+#imageDetailView[data-edit-dock-side="bottom"] #editPanel { border-top: var(--border-hairline) var(--panel-border-color); }
+
+/* The stage is a size container, so the media fits it from the asset's ratio in container units, centered, less a gutter
+   on each side (`--stage-gutter`): none, but while the Crop tool is open (js/edit/crop-tool.js), when the gutter around the
+   frame is where a drag turns the image, and the stage clips the crop's dimming */
 #imageDetailStage {
+    --stage-gutter: 0rem;
     grid-area: stage;
     container-type: size;
     min-width: 0;
     min-height: 0;
     display: grid;
     place-items: center;
+}
+
+#imageDetailView[data-app-crop-tool-open] #imageDetailStage {
+    --stage-gutter: var(--edit-crop-gutter);
+    overflow: hidden;
 }
 
 /* The media take the stage's width or, when that is too tall for the stage, the width the stage's height allows at the
@@ -55,11 +120,14 @@
 #imageDetailStage img,
 #imageDetailStage media-controller,
 #editCanvas,
-#faceHighlights {
+#editClipping,
+#editSplit,
+#faceHighlights,
+#cropFrame {
     grid-area: 1 / 1;
-    width: min(100cqw, 100cqh * var(--asset-width) / var(--asset-height));
-    max-width: 100cqw;
-    max-height: 100cqh;
+    width: min(100cqw - 2 * var(--stage-gutter), (100cqh - 2 * var(--stage-gutter)) * var(--asset-width) / var(--asset-height));
+    max-width: calc(100cqw - 2 * var(--stage-gutter));
+    max-height: calc(100cqh - 2 * var(--stage-gutter));
     aspect-ratio: var(--asset-width) / var(--asset-height);
 }
 
@@ -195,4 +263,236 @@
 /* Nothing in the box is selected by a drag of the divider */
 #imageDetailModalContainer .modal-box:has(.divider[data-dragging]) {
     user-select: none;
+}
+
+/* The Edit's Clipping blink over the canvas (js/edit/edit-panel.js): its bitmap is the sampled size at the canvas's aspect,
+   so it lies over the picture pixel for pixel. Its two colors are read from here by the script, which holds no literal:
+   `color` the blown highlights, `border-color` the crushed shadows (`border-style` stays none, so nothing paints). It
+   blinks at 1 Hz in steps, held steady under reduced motion, and goes with the canvas: Show original, the Crop tool */
+#editClipping {
+    position: relative;
+    z-index: 1;
+    pointer-events: none;
+    color: var(--error-color);
+    border-color: var(--info-color);
+    animation: edit-clipping-blink 1s steps(1) infinite;
+}
+
+#editCanvas[hidden] ~ #editClipping,
+#imageDetailView[data-app-crop-tool-open] #editClipping {
+    display: none;
+}
+
+@keyframes edit-clipping-blink {
+    50% {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #editClipping {
+        animation: none;
+    }
+}
+
+/* Before/after over the canvas: "Before" and "After" in its top corners on the scrim, and the divider at `--edit-split`
+   (js/edit/edit-panel.js), a heavy light line with a knob, dragged or stepped with the arrows; it goes with the canvas */
+#editSplit {
+    position: relative;
+    z-index: 1;
+    pointer-events: none;
+}
+
+#editSplit[hidden],
+#editCanvas[hidden] ~ #editSplit {
+    display: none;
+}
+
+.edit-split-label {
+    position: absolute;
+    top: var(--space-3);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-small);
+    background-color: var(--scrim-color);
+    color: var(--theme-neutral-1);
+    font-size: var(--font-size-small);
+}
+
+.edit-split-label.before {
+    left: var(--space-3);
+}
+
+.edit-split-label.after {
+    right: var(--space-3);
+}
+
+#editSplitHandle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--edit-split, 50%);
+    width: var(--space-6);
+    translate: -50% 0;
+    pointer-events: auto;
+    touch-action: none;
+    cursor: col-resize;
+
+    &::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        translate: -50% 0;
+        border-left: var(--border-heavy) var(--theme-neutral-1);
+        box-shadow: var(--drop-shadow);
+    }
+
+    &::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: var(--space-6);
+        height: var(--space-6);
+        translate: -50% -50%;
+        border-radius: 50%;
+        background-color: var(--theme-neutral-1);
+        box-shadow: var(--drop-shadow);
+    }
+}
+
+/* The Crop tool (includes/edit_stage_tools, js/edit/crop-tool.js): a layer over the whole stage, where a drag outside the
+   crop turns the image (a rotate cursor, an SVG data URI, which cannot read a token, so its light and dark strokes are
+   literals, the same exception as the selected cell's check in includes/search_results.css), the
+   frame at the canvas's box, and the crop in it, which dims the rest of the stage, its guide and its handles; with the
+   Level tool on, the layer draws a line and the crop takes no pointer. interact.js leaves the cursors to these rules */
+#cropLayer {
+    grid-area: 1 / 1;
+    place-self: stretch;
+    position: relative;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    touch-action: none;
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M5 10a7.5 7.5 0 0 1 14 0' fill='none' stroke='white' stroke-width='3.5'/%3E%3Cpath d='M15 6l4 4 3-5' fill='none' stroke='white' stroke-width='3.5'/%3E%3Cpath d='M5 10a7.5 7.5 0 0 1 14 0' fill='none' stroke='black' stroke-width='1.5'/%3E%3Cpath d='M15 6l4 4 3-5' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/svg%3E") 12 12, alias;
+}
+
+#cropLayer[hidden] {
+    display: none;
+}
+
+#cropLayer[data-level] {
+    cursor: crosshair;
+}
+
+#cropFrame {
+    position: relative;
+}
+
+#cropRect {
+    position: absolute;
+    outline: var(--border-hairline) var(--theme-neutral-1);
+    box-shadow: var(--crop-dim-shadow);
+    touch-action: none;
+    cursor: move;
+}
+
+#cropLayer[data-level] #cropRect {
+    pointer-events: none;
+}
+
+#cropRect .crop-guide {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+#cropRect .crop-guide line {
+    stroke: hsl(from var(--theme-neutral-1) h s l / 0.6);
+    stroke-width: 1px;
+    vector-effect: non-scaling-stroke;
+}
+
+/* A handle: a light square at a corner, a light bar along an edge, centered on the crop's outline */
+.crop-handle {
+    position: absolute;
+    width: var(--space-5);
+    height: var(--space-5);
+    translate: -50% -50%;
+    background-color: var(--theme-neutral-1);
+    box-shadow: var(--drop-shadow);
+}
+
+.crop-handle.n { top: 0; }
+.crop-handle.s { top: 100%; }
+.crop-handle.w { left: 0; }
+.crop-handle.e { left: 100%; }
+.crop-handle:is(.n, .s):not(.w, .e) { left: 50%; width: var(--space-8); height: var(--space-2); }
+.crop-handle:is(.w, .e):not(.n, .s) { top: 50%; width: var(--space-2); height: var(--space-8); }
+.crop-handle:is(.n.w, .s.e) { cursor: nwse-resize; }
+.crop-handle:is(.n.e, .s.w) { cursor: nesw-resize; }
+.crop-handle:is(.n, .s):not(.w, .e) { cursor: ns-resize; }
+.crop-handle:is(.w, .e):not(.n, .s) { cursor: ew-resize; }
+
+#levelLine {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+#levelLine[hidden] {
+    display: none;
+}
+
+#levelLine line {
+    stroke: var(--theme-accent);
+    stroke-width: 2px;
+    stroke-dasharray: 6 4;
+    vector-effect: non-scaling-stroke;
+}
+
+/* The floating bar at the bottom of the stage, on the menus' frosted surface: the guide, the crop's size, Cancel and Done */
+#cropBar {
+    position: absolute;
+    bottom: var(--space-3);
+    left: 50%;
+    translate: -50% 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2);
+    background: var(--popover-background-color);
+    backdrop-filter: var(--popover-backdrop-filter);
+    border: var(--border-hairline) var(--popover-border-color);
+    border-radius: var(--radius-large);
+    box-shadow: var(--sheen-shadow), var(--float-shadow);
+    white-space: nowrap;
+    cursor: default;
+}
+
+#cropBar .crop-size {
+    padding: 0 var(--space-3);
+    color: var(--theme-neutral-3);
+    font-family: var(--font-nav);
+    font-size: var(--font-size-xs);
+}
+
+#cropBar kbd {
+    padding: 0 var(--space-2);
+    border: var(--border-hairline) currentColor;
+    border-radius: var(--radius-small);
+    font-family: inherit;
+    font-size: var(--font-size-xs);
+}
+
+/* Done is the bar's call to action: the accent fill, which a small button's own fill would replace */
+#cropBar .action-button.primary {
+    --button-fill: var(--theme-accent);
 }

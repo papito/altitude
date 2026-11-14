@@ -135,14 +135,18 @@ async function playShownVideo({ videoEl, isCurrent }) {
  *
  * A still image is shown by the Edit's stage (`edit/edit-stage.js`), which picks its source by the
  * asset's Edit (the original, the Display image, or the Edit drawn on the canvas), fits the box and
- * tells the Detail panel; a Video is shown here. The asset's Edit and whether the account may edit
- * it come with the fragment (`data-app-image-detail-edit`, `-editable`) on opening and with the
- * asset's JSON (`edit`, `editable`) on a step.
+ * tells the Detail panel; a Video is shown here. The asset's Edit, whether the account may edit
+ * it and why not come with the fragment (`data-app-image-detail-edit`, `-editable`,
+ * `-edit-refusal`) on opening and with the asset's JSON (`edit`, `editable`, `editRefusal`) on a
+ * step. The Edit panel (`edit/edit-panel.js`) is told of each asset as its load starts, before the
+ * stage, so it ends what was open on the last one and has the stage draw this one's Edit while it
+ * is open, and again once a still image is shown.
  */
 export function createSearchDetailCoordinator({
     context,
     detailPanel,
     editStage,
+    editPanel,
 }) {
     // The cell the modal shows, or is loading: where navigation starts from
     let currentCell = null
@@ -259,6 +263,7 @@ export function createSearchDetailCoordinator({
         assetId,
         edit = null,
         editable = false,
+        editRefusal = null,
         cellEl = null,
         token = ++imageRequestToken,
     }) {
@@ -275,6 +280,13 @@ export function createSearchDetailCoordinator({
         const isCurrent = () => isCurrentImageRequest({ token, openId })
 
         detailPanel.showAsset({ assetId, isCurrent })
+        editPanel.showAsset({
+            assetId,
+            mediaType,
+            edit,
+            editable,
+            refusal: editRefusal,
+        })
 
         // The player leaves the screen until the next Video is ready, so an emptied player never
         // shows in the previous frame
@@ -329,6 +341,9 @@ export function createSearchDetailCoordinator({
                 return
             }
 
+            if (!isVideo) {
+                editPanel.afterShown(assetId)
+            }
             Alpine.store(Const.state.modal).title = title
             loading.value = false
 
@@ -425,6 +440,7 @@ export function createSearchDetailCoordinator({
             assetId,
             edit: assetData.edit ?? null,
             editable: assetData.editable === true,
+            editRefusal: assetData.editRefusal ?? null,
             cellEl,
             token,
         })

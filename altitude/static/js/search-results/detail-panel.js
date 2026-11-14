@@ -62,7 +62,9 @@
  * The side and share are written on the fragment (`data-detail-dock-side`, `--detail-panel-share`)
  * and whether the panel is open as `data-app-detail-panel-open`; `view_image_detail_modal.css`
  * lays the grid out from them. The picks are `[data-app-detail-dock-side]`, the panel's own, since
- * the explorer's dock listens for its picks on the same body.
+ * the explorer's dock listens for its picks on the same body. The Edit panel (`edit/edit-panel.js`)
+ * docks opposite and hears of every side change and every open or close (`onLayoutChange`); each
+ * panel's bounds leave room for the other while it is open.
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
@@ -116,6 +118,9 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
     // A Person with a chip in a filtered search's results title was named from the panel: the chip
     // shows the name the search found, so the results are searched again on closing
     let hasStaleChip = false
+    // Whoever lays itself out by the panel's side or by whether it is open: the Edit panel, docked
+    // opposite (`edit/edit-panel.js`)
+    const layoutListeners = new Set()
 
     const highlights = createFaceHighlights()
     const corrections = createFaceCorrections({
@@ -143,7 +148,12 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         },
         minimums: panelMinimums,
         orientsDivider: true,
+        onSideChange: announceLayout,
     })
+
+    function announceLayout() {
+        layoutListeners.forEach((listener) => listener())
+    }
 
     function viewEl() {
         return document.getElementById(VIEW_ID)
@@ -297,6 +307,7 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
             dock.layOut()
             loadIfWanted()
         }
+        announceLayout()
     }
 
     /** Shows or hides the Face highlights (`p`), remembers it, clears the selection, and loads the rows when they are not in yet */
@@ -709,10 +720,17 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         }
     }
 
-    /** The least the panel and the stage may be squeezed to along the axis, in px: the `core.css` tokens, registered as lengths */
+    /**
+     * The least the panel and the stage may be squeezed to along the axis, in px: the `core.css` tokens, registered as
+     * lengths; the Edit panel, docked opposite, and its divider take what they take besides
+     */
     function panelMinimums(vertical) {
         const styles = getComputedStyle(viewEl() ?? document.documentElement)
         const token = (name) => parseFloat(styles.getPropertyValue(name))
+        const sizeOf = (id) => {
+            const el = document.getElementById(id)
+            return el ? (vertical ? el.offsetHeight : el.offsetWidth) : 0
+        }
 
         return {
             panel: token(
@@ -720,11 +738,14 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
                     ? "--detail-panel-min-height"
                     : "--detail-panel-min-width",
             ),
-            content: token(
-                vertical
-                    ? "--detail-stage-min-height"
-                    : "--detail-stage-min-width",
-            ),
+            content:
+                token(
+                    vertical
+                        ? "--detail-stage-min-height"
+                        : "--detail-stage-min-width",
+                ) +
+                sizeOf("editPanel") +
+                sizeOf("editPanelDivider"),
         }
     }
 
@@ -753,5 +774,13 @@ export function createDetailPanel({ context, assetActions, detailUrl }) {
         setShownSize,
         toggle,
         toggleHighlights,
+        /** The side the panel sits on, picked or by default, as the fragment is laid out */
+        dockSide: () => dock.side(),
+        /** Whether the panel is open */
+        isOpen: () => state.panelOpen,
+        /** Calls `listener` after the panel's side changes and after it opens or closes */
+        onLayoutChange: (listener) => layoutListeners.add(listener),
+        /** Lays the panel out again within the bounds the fragment leaves it now (the Edit panel opened or closed) */
+        layOut: () => dock.layOut(),
     }
 }

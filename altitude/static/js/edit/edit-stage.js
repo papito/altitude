@@ -120,6 +120,9 @@ export function createEditStage({ context, detailPanel }) {
     let renderer = null
     // What the stage shows now, for a redraw on a resize: { source, recipe, upright }
     let shown = null
+    // Why the canvas could not draw the asset shown (no WebGL2, an original the browser cannot decode), or null: the
+    // Edit panel cannot edit it
+    let drawFailure = null
     // The latest presentation's token and its promise
     let presentToken = 0
     let latest = Promise.resolve(false)
@@ -198,6 +201,7 @@ export function createEditStage({ context, detailPanel }) {
             originalToggled = false
             live = null
             shown = null
+            drawFailure = null
             dropDecoded()
         }
         subject = { assetId, edit, editable, width, height, url, isCurrent }
@@ -331,6 +335,7 @@ export function createEditStage({ context, detailPanel }) {
                     "The Edit could not be drawn; the original is shown",
                     error,
                 )
+                drawFailure = error
                 source = Source.original
             }
         }
@@ -592,6 +597,15 @@ export function createEditStage({ context, detailPanel }) {
         presentAgain()
     }
 
+    /**
+     * The Show original toggle released, as the Edit panel opens, so the Edit is what the stage shows; a held `\` stays
+     * held. Nothing is presented: the opening presents.
+     */
+    function releaseShowOriginal() {
+        originalToggled = false
+        syncControls()
+    }
+
     /** `\` held or released: the original for as long as it is held */
     function holdOriginal(held) {
         if (originalHeld === held) {
@@ -605,14 +619,15 @@ export function createEditStage({ context, detailPanel }) {
 
     /**
      * The Edit panel opened or closed: while it is open the canvas draws every asset, from the
-     * head's Edit until `setLive` gives another. Resolves as `showImage` does.
+     * head's Edit until `setLive` gives another. Resolves as `showImage` does; with `present`
+     * false nothing is drawn now, for a caller about to show another asset, which draws.
      */
-    function setEditing(open) {
+    function setEditing(open, { present = true } = {}) {
         editing = open
         if (!open) {
             live = null
         }
-        return presentAgain()
+        return present ? presentAgain() : Promise.resolve(false)
     }
 
     /**
@@ -630,19 +645,27 @@ export function createEditStage({ context, detailPanel }) {
 
     /**
      * The asset's Edit at its head changed (a step saved, Undo, a render done), in
-     * `parseEdit`'s shape: the stage shows it as its source now calls for
+     * `parseEdit`'s shape: the stage shows it as its source now calls for. With `present` false
+     * (the Edit panel draws its own Edit meanwhile) only the toggle, the badge and the key legend
+     * follow it, and the next presentation shows it.
      */
-    function adoptEdit(assetId, edit) {
+    function adoptEdit(assetId, edit, { present = true } = {}) {
         if (subject?.assetId !== assetId) {
             return Promise.resolve(false)
         }
         subject = { ...subject, edit }
+        if (!present) {
+            syncControls()
+            return Promise.resolve(true)
+        }
         return presentAgain()
     }
 
     /**
      * What the stage shows: the asset, its Edit at the head, whether the account may edit it, the
-     * source, the Edit drawn and the upright size; null before an asset or once Asset detail closed
+     * source, the Edit drawn, the upright size, and whether the canvas failed to draw the asset
+     * (`drawFailed`, which the Edit panel cannot edit); null before an asset or once Asset detail
+     * closed
      */
     function current() {
         return subject
@@ -653,6 +676,8 @@ export function createEditStage({ context, detailPanel }) {
                   source: shown?.source ?? null,
                   recipe: shown?.recipe ?? null,
                   upright: shown?.upright ?? null,
+                  drawFailed: drawFailure !== null,
+                  showsOriginal: showsOriginal(),
               }
             : null
     }
@@ -671,6 +696,7 @@ export function createEditStage({ context, detailPanel }) {
         subject = null
         shown = null
         live = null
+        drawFailure = null
         originalToggled = false
         originalHeld = false
         dropDecoded()
@@ -682,6 +708,7 @@ export function createEditStage({ context, detailPanel }) {
         attach,
         showImage,
         toggleShowOriginal,
+        releaseShowOriginal,
         holdOriginal,
         setEditing,
         setLive,

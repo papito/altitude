@@ -1,0 +1,180 @@
+@()
+
+@* The Edit panel (CONTEXT.md), in Asset detail's fragment for a holder of Edit images (htmx/view_image_detail_modal): an
+   `aside#editPanel` docked opposite the Detail panel, whose state is the `editPanel` Alpine component
+   (js/alpine/components/edit-panel.js) over the coordinator js/edit/edit-panel.js, which keeps the Edit, its History and
+   the stage. The header holds Undo, Redo, the History (a native popover, newest step first and the Original last, a click
+   jumping to a step), Before/after and Reset all; the body the Histogram of the edited image, a button switching the
+   Clipping blink with the crushed and blown fractions in its corners, the four tabs (a dot on a section with changes)
+   and the shown section, its heading with a reset; the footers the save status with Revert to original, and the keys.
+   A slider is the `.edit-slider` of core.css, rendered from the sliders of js/edit/recipe.js. Docked top or bottom
+   (includes/edit_panel.css), the section flows into columns, the Histogram sits at the left, the status row joins the
+   header and the keys are left out. *@
+
+@* A section's sliders, by the keys of its specs in js/edit/recipe.js (the component's `slidersOf`), each a label row (the
+   label, Straighten's Auto, the value's field, which Enter sets) over its range, which counts as one step on release; a
+   double-click on the label or the track resets it *@
+@sliders(keys: String) = {
+<template x-for="spec in slidersOf('@keys')" x-bind:key="spec.key">
+    <div class="edit-slider" x-bind:class="sliderClass(spec.key)" x-bind:style="sliderStyle(spec.key)">
+        <div class="edit-slider-head">
+            <label x-bind:for="'editSlider-' + spec.key" x-on:dblclick="resetSlider(spec.key)" x-text="spec.label" title="Double-click to reset"></label>
+            <button type="button" class="edit-auto" x-show="hasAuto(spec.key)" x-on:click="autoStraighten()" x-bind:disabled="autoBusy" title="Level the image by its straight lines">Auto</button>
+            <input type="number"
+                   x-bind:min="spec.min"
+                   x-bind:max="spec.max"
+                   x-bind:step="spec.step"
+                   x-bind:value="fieldValue(spec.key)"
+                   x-bind:aria-label="spec.label"
+                   x-on:keydown.enter.prevent.stop="setFromField(spec.key, $event)"
+                   x-on:keydown.escape.prevent.stop="revertField(spec.key, $event)"
+                   x-on:blur="revertField(spec.key, $event)">
+        </div>
+        <input type="range"
+               x-bind:id="'editSlider-' + spec.key"
+               x-bind:min="spec.min"
+               x-bind:max="spec.max"
+               x-bind:step="spec.step"
+               x-bind:value="sliderValue(spec.key)"
+               x-on:pointerdown="slidePointer()"
+               x-on:keydown="slideKey($event)"
+               x-on:input="slide(spec.key, $event)"
+               x-on:change="endSlide()"
+               x-on:dblclick="resetSlider(spec.key)">
+    </div>
+</template>
+}
+
+@* A section's heading, with its reset while the section changes the picture *@
+@sectionHead(id: String, label: String) = {
+<div class="edit-section-head">
+    <h3>@label</h3>
+    <button type="button" class="edit-reset" x-show="sectionChanged('@id')" x-on:click="resetSection('@id')">Reset</button>
+</div>
+}
+
+<aside id="editPanel" aria-label="Edit panel" x-data="editPanel">
+    <header class="edit-header">
+        <h2>Edit</h2>
+        <button type="button" class="edit-tool" x-on:click="undo()" x-bind:disabled="!canUndo" aria-label="Undo" title="Undo (Ctrl+Z)"><i class="fas fa-undo" aria-hidden="true"></i></button>
+        <button type="button" class="edit-tool" x-on:click="redo()" x-bind:disabled="!canRedo" aria-label="Redo" title="Redo (Ctrl+Shift+Z)"><i class="fas fa-redo" aria-hidden="true"></i></button>
+        <button type="button" class="edit-tool" id="editHistoryButton" popovertarget="editHistory" x-bind:disabled="!hasHistory()" aria-label="History" title="History"><i class="fas fa-history" aria-hidden="true"></i></button>
+        <div id="editHistory" popover="auto" aria-label="History">
+            <ol>
+                <template x-for="step in steps" x-bind:key="step.seq">
+                    <li>
+                        <button type="button" x-on:click="jump(step.seq)" x-bind:aria-current="isHead(step)">
+                            <span class="label" x-text="step.label"></span>
+                            <span class="author" x-show="authorOf(step)" x-text="authorOf(step)"></span>
+                            <time x-show="step.createdAt" x-bind:datetime="step.createdAt" x-text="timeOf(step)"></time>
+                        </button>
+                    </li>
+                </template>
+            </ol>
+        </div>
+        <button type="button" class="edit-tool" x-on:click="toggleSplit()" x-bind:aria-pressed="splitOn" x-bind:disabled="!ready || cropToolOpen" aria-label="Before/after" title="Before/after"><i class="fas fa-columns" aria-hidden="true"></i></button>
+        <button type="button" class="edit-tool" x-on:click="resetAll()" x-bind:disabled="!ready || !anyChanged()" aria-label="Reset all" title="Reset all"><i class="fas fa-eraser" aria-hidden="true"></i></button>
+    </header>
+
+    <div class="edit-body">
+        <p class="edit-refusal" x-show="refusal" x-text="refusal"></p>
+        <button type="button" class="edit-histogram" x-show="ready" x-on:click="toggleClippingBlink()" x-bind:aria-pressed="clippingBlink" aria-label="Clipping blink" title="Blink the blown highlights and crushed shadows">
+            <svg viewBox="0 0 64 16" preserveAspectRatio="none" aria-hidden="true">
+                <line class="grid" x1="21.33" y1="0" x2="21.33" y2="16"></line>
+                <line class="grid" x1="42.67" y1="0" x2="42.67" y2="16"></line>
+                <path class="red" x-bind:d="histogramPath('red')"></path>
+                <path class="green" x-bind:d="histogramPath('green')"></path>
+                <path class="blue" x-bind:d="histogramPath('blue')"></path>
+                <path class="luminance" x-bind:d="histogramPath('luminance')"></path>
+            </svg>
+            <span class="crushed" x-text="crushedLabel"></span>
+            <span class="blown" x-text="blownLabel"></span>
+        </button>
+
+        <div class="edit-sections" x-show="ready">
+            <div role="tablist" aria-label="Edit sections" x-on:keydown="tabKey($event)">
+                <template x-for="section in sections" x-bind:key="section.id">
+                    <button type="button"
+                            role="tab"
+                            x-bind:id="'editTab-' + section.id"
+                            x-bind:aria-controls="'editSection-' + section.id"
+                            x-bind:aria-selected="isTab(section.id)"
+                            x-bind:tabindex="tabIndexOf(section.id)"
+                            x-on:click="selectTab(section.id)">
+                        <span x-text="section.label"></span><span class="edit-dot" x-show="sectionChanged(section.id)" title="Changed"></span>
+                    </button>
+                </template>
+            </div>
+
+            <section id="editSection-cropRotate" role="tabpanel" aria-labelledby="editTab-cropRotate" x-show="isTab('cropRotate')">
+                @sectionHead("cropRotate", "Crop & rotate")
+                <div class="edit-tools">
+                    <button type="button" class="action-button small" x-on:click="toggleCropTool()" x-bind:aria-pressed="cropToolOpen" title="Crop (C)"><i class="fas fa-crop-alt" aria-hidden="true"></i><span>Crop</span></button>
+                    <button type="button" class="action-button small" x-on:click="toggleLevel()" x-bind:aria-pressed="levelOn" title="Draw a line along something level or plumb"><i class="fas fa-ruler-horizontal" aria-hidden="true"></i><span>Level</span></button>
+                    <span class="edit-spacer"></span>
+                    <button type="button" class="edit-tool" x-on:click="rotate(-1)" aria-label="Rotate left" title="Rotate left"><i class="fas fa-undo-alt" aria-hidden="true"></i></button>
+                    <button type="button" class="edit-tool" x-on:click="rotate(1)" aria-label="Rotate right" title="Rotate right"><i class="fas fa-redo-alt" aria-hidden="true"></i></button>
+                    <button type="button" class="edit-tool" x-on:click="flip('h')" aria-label="Flip horizontally" title="Flip horizontally"><i class="fas fa-arrows-alt-h" aria-hidden="true"></i></button>
+                    <button type="button" class="edit-tool" x-on:click="flip('v')" aria-label="Flip vertically" title="Flip vertically"><i class="fas fa-arrows-alt-v" aria-hidden="true"></i></button>
+                </div>
+                <div class="edit-subhead">
+                    <span>Aspect</span>
+                    <button type="button" class="edit-tool" x-on:click="swapOrientation()" aria-label="Swap the orientation" title="Swap the orientation (X)"><i class="fas fa-exchange-alt" aria-hidden="true"></i></button>
+                </div>
+                <div class="toggle-group edit-aspects" role="group" aria-label="Aspect">
+                    <template x-for="aspect in aspects" x-bind:key="aspect">
+                        <button type="button" x-bind:aria-pressed="isAspect(aspect)" x-on:click="setAspect(aspect)" x-text="aspectLabelOf(aspect)"></button>
+                    </template>
+                </div>
+                <p class="edit-crop-size" x-text="cropSizeText()"></p>
+                @sliders("straighten")
+                <div class="edit-subhead"><span>Perspective</span></div>
+                @sliders("perspectiveV perspectiveH")
+                <label class="edit-check"><input type="checkbox" x-bind:checked="recipe.keepInside" x-on:change="setKeepInside($event.target.checked)"> Keep the crop inside the image</label>
+            </section>
+
+            <section id="editSection-light" role="tabpanel" aria-labelledby="editTab-light" x-show="isTab('light')">
+                @sectionHead("light", "Light")
+                @sliders("exposure contrast highlights shadows whites blacks gamma")
+                <div class="edit-subhead">
+                    <span>Tone curve</span>
+                    <button type="button" class="edit-reset" x-show="curveChanged()" x-on:click="resetCurve()">Reset</button>
+                </div>
+                <canvas class="edit-curve"
+                        x-ref="curve"
+                        role="application"
+                        tabindex="0"
+                        x-bind:aria-label="curveLabel()"
+                        x-effect="drawCurve()"
+                        x-on:focus="curveFocused = true"
+                        x-on:blur="curveFocused = false"
+                        x-on:keydown="curveKey($event)"
+                        x-on:pointerdown="curveDown($event)"
+                        x-on:pointermove="curveMove($event)"
+                        x-on:pointerup="curveUp()"
+                        x-on:pointercancel="curveUp()"
+                        x-on:dblclick="curveDoubleClick($event)"></canvas>
+                <p class="edit-hint">Click to add a point and drag to move it; drag it off the box or double-click it to remove it. With the keys: the arrows move a point, [ and ] pick another, + adds one, Delete removes it</p>
+            </section>
+
+            <section id="editSection-color" role="tabpanel" aria-labelledby="editTab-color" x-show="isTab('color')">
+                @sectionHead("color", "Color")
+                @sliders("temperature tint vibrance saturation")
+            </section>
+
+            <section id="editSection-effects" role="tabpanel" aria-labelledby="editTab-effects" x-show="isTab('effects')">
+                @sectionHead("effects", "Effects")
+                @sliders("sharpen clarity vignette grain")
+            </section>
+        </div>
+    </div>
+
+    <footer class="edit-commit">
+        <span class="edit-status" x-bind:data-status="status" x-text="statusText()" role="status"></span>
+        <button type="button" class="action-button small" x-on:click="revert()" x-bind:disabled="!ready || !edited()">Revert to original</button>
+    </footer>
+    <footer class="panel-keys" aria-label="Keys">
+        <p><span><kbd>E</kbd> Close</span><span><kbd>C</kbd> Crop</span><span><kbd>\</kbd> Original (hold)</span><span><kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo</span></p>
+        <p><span>Double-click a slider to reset it</span></p>
+    </footer>
+</aside>

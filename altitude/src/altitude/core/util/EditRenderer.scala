@@ -39,10 +39,19 @@ object EditRenderer:
   /** The inverse warp has no source where its denominator is this or less: beyond the horizon of the perspective's plane */
   val MIN_DENOMINATOR = 0.001
 
-  // The long edge auto-straighten reads the frame at, and the share of it a line must be as long as to count
+  // Auto-straighten: the long edge it reads the frame at, and the share of it a line must be as long as to count
   private val STRAIGHTEN_LONG_EDGE = 1280
   private val STRAIGHTEN_MIN_LINE = 0.08
-  private val STRAIGHTEN_MIN_LINES = 3
+  // How far from level or plumb a line may lean and still be read as one, and the weight of a plumb line beside a level one
+  // (verticals lean with the camera's tilt as well as its roll)
+  private val STRAIGHTEN_BAND = 10.0
+  private val STRAIGHTEN_VERTICAL_WEIGHT = 0.5
+  // The histogram of the lines' leans: its bins, and the window around its peak that must hold the consensus share of all the
+  // lines' length, which must itself reach the share of the long edge
+  private val STRAIGHTEN_BIN = 0.2
+  private val STRAIGHTEN_PEAK_WINDOW = 1.0
+  private val STRAIGHTEN_CONSENSUS = 0.35
+  private val STRAIGHTEN_MIN_TOTAL = 0.5
 
   // ---------------------------------------------------------------------------------------------------------------- Geometry
 
@@ -621,12 +630,37 @@ object EditRenderer:
   // ------------------------------------------------------------------------------------------------------------ Straighten
 
   /**
-   * The Straighten that levels the image's lines: the turned frame (step 1, before any Straighten) at a 1280 px long edge, its
-   * edges found by Canny and its segments by `HoughLinesP`; of the segments longer than 8 % of the long edge, each one's
-   * deviation from the nearer of horizontal and vertical (±45°), the length-weighted median, negated so that it turns the lines
-   * level, in tenths of a degree. 0 when fewer than 3 segments qualify.
+   * The Straighten that levels lines of these leans and weights (see [[autoStraightenAngle]]): the peak of their smoothed
+   * histogram, refined by the weighted mean within the peak's window, negated; nothing without enough length or consensus
    */
-  def autoStraightenAngle(original: Path, recipe: EditRecipe): Double =
+  private def levelOf(leans: Seq[(Double, Double)]): Option[Double] =
+    val total = leans.map(_._2).sum
+    if total < STRAIGHTEN_MIN_TOTAL * STRAIGHTEN_LONG_EDGE then None
+    else
+      val bins = Math.round(2 * STRAIGHTEN_BAND / STRAIGHTEN_BIN).toInt + 1
+      val histogram = new Array[Double](bins)
+      leans.foreach((lean, weight) => histogram(Math.round((lean + STRAIGHTEN_BAND) / STRAIGHTEN_BIN).toInt) += weight)
+      val smoothed =
+        histogram.indices.map(i => (histogram(Math.max(0, i - 1)) + 2 * histogram(i) + histogram(Math.min(bins - 1, i + 1))) / 4)
+      val peak = smoothed.indices.maxBy(smoothed) * STRAIGHTEN_BIN - STRAIGHTEN_BAND
+      val near = leans.filter((lean, _) => Math.abs(lean - peak) <= STRAIGHTEN_PEAK_WINDOW)
+      val nearWeight = near.map(_._2).sum
+      if nearWeight < STRAIGHTEN_CONSENSUS * total then None
+      else
+        val lean = near.map((l, w) => l * w).sum / nearWeight
+        // Levelled by turning the other way; never −0.0
+        Some(Math.round(-lean * 10) / 10.0 + 0.0)
+
+  /**
+   * The Straighten that levels the image's lines, or nothing when no lines agree on one. The turned frame (step 1, before any
+   * Straighten) is read at a 1280 px long edge, its edges found by Canny and its segments by `HoughLinesP`. Of the segments
+   * longer than 8 % of the long edge, those within ±10° of level or plumb count, each by its length (a plumb one by half of it).
+   * Their leans go into a histogram of 0.2° bins, lightly smoothed, whose peak is the answer, refined by the weighted mean of the
+   * leans within ±1° of it and negated so that it turns the lines level, in tenths of a degree. It answers only when the lines
+   * agree: their length reaches half the long edge, and the ±1° around the peak holds 35 % of it. A portrait or a busy scene with
+   * no horizon answers nothing rather than a guess.
+   */
+  def autoStraightenAngle(original: Path, recipe: EditRecipe): Option[Double] =
     val data = Files.readAllBytes(original)
     val orientation = orientationOf(data)
     // A JPEG is decoded as small as keeps its long edge at the size read, or above
@@ -658,23 +692,18 @@ object EditRenderer:
       val minLength = STRAIGHTEN_MIN_LINE * STRAIGHTEN_LONG_EDGE
       Imgproc.HoughLinesP(edges, lines, 1, Math.PI / 720, 60, minLength, 6)
 
-      val deviations = (0 until lines.rows).flatMap {
+      // Each segment's lean from the nearer of level and plumb, in [−45, 45), with its weight
+      val leans = (0 until lines.rows).flatMap {
         k =>
           val Array(x1, y1, x2, y2) = lines.get(k, 0)
           val length = Math.hypot(x2 - x1, y2 - y1)
           val angle = Math.toDegrees(Math.atan2(y2 - y1, x2 - x1))
-          // From the nearer of horizontal and vertical, in [−45, 45)
-          val deviation = ((angle + 45) % 90 + 90) % 90 - 45
-          Option.when(length > minLength)((deviation, length))
+          val lean = ((angle + 45) % 90 + 90) % 90 - 45
+          val plumb = Math.abs(Math.abs(((angle % 180) + 180) % 180) - 90) < 45
+          val weight = if plumb then length * STRAIGHTEN_VERTICAL_WEIGHT else length
+          Option.when(length > minLength && Math.abs(lean) <= STRAIGHTEN_BAND)((lean, weight))
       }
-      if deviations.size < STRAIGHTEN_MIN_LINES then 0.0
-      else
-        val sorted = deviations.sortBy(_._1)
-        val half = sorted.map(_._2).sum / 2
-        val median =
-          sorted.iterator.scanLeft((0.0, 0.0))((acc, line) => (line._1, acc._2 + line._2)).find(_._2 >= half).get._1
-        // Levelled by turning the other way
-        Math.round(-median * 10) / 10.0
+      levelOf(leans)
     finally
       frame.release()
       List(gray, edges, lines).foreach(_.release())

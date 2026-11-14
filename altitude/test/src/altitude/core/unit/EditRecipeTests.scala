@@ -257,6 +257,32 @@ import altitude.core.models.EditRecipe
     label(id.copy(exposure = 1), id) shouldBe "Revert to original"
   }
 
+  test("A turn's label names the way the picture turns as shown, which one flip reverses") {
+
+    /**
+     * Setup:
+     *
+     * Quarter turns of an Edit mirrored on one axis, on both, and on none.
+     *
+     * Assertions:
+     *
+     * With one flip on, the mirror is applied after the turn and reverses its sense, so the stored turn stepping back by 90 is
+     * "Rotate right" and stepping on by 90 "Rotate left"; with both flips on, which make a half turn, and with none, the stored
+     * turn reads as it is.
+     */
+    val id = EditRecipe.Identity
+    def label(before: EditRecipe, after: EditRecipe): String = EditRecipe.describeChange(before, after)
+
+    val mirrored = id.copy(flipH = true)
+    label(mirrored, mirrored.copy(rotate = 270)) shouldBe "Rotate right"
+    label(mirrored, mirrored.copy(rotate = 90)) shouldBe "Rotate left"
+    label(id.copy(flipV = true), id.copy(flipV = true, rotate = 270)) shouldBe "Rotate right"
+    val both = id.copy(flipH = true, flipV = true)
+    label(both, both.copy(rotate = 90)) shouldBe "Rotate right"
+    label(both, both.copy(rotate = 270)) shouldBe "Rotate left"
+    label(mirrored, mirrored.copy(rotate = 180)) shouldBe "Rotate 180°"
+  }
+
   test("A crop is normalized by its edges, so one that reaches the frame's edge stays within it") {
 
     /**

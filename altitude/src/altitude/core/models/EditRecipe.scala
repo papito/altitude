@@ -261,12 +261,15 @@ object EditRecipe:
       case None => "Tone curve"
 
   /**
-   * A change of Crop & rotate: a turn or a flip, which carries the crop along, is named as such; then the crop, with the lock's
-   * ratio as its chip reads it; then a lone slider; then the section
+   * A change of Crop & rotate: a turn or a flip, which carries the crop along, is named as such, a turn by the way the picture
+   * turns as shown; then the crop, with the lock's ratio as its chip reads it; then a lone slider; then the section
    */
   private def geometryLabel(changed: Set[String], before: EditRecipe, after: EditRecipe): String =
     if changed.contains("rotate") then
-      (after.rotate - before.rotate + 360) % 360 match
+      // A mirror on one axis is applied after the turn and reverses its sense as shown; both mirrors make a half turn
+      val turn = (after.rotate - before.rotate + 360) % 360
+      val shown = if after.flipH != after.flipV then (360 - turn) % 360 else turn
+      shown match
         case 90 => "Rotate right"
         case 270 => "Rotate left"
         case _ => "Rotate 180°"

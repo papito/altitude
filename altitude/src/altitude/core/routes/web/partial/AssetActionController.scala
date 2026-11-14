@@ -36,7 +36,9 @@ class AssetActionController(using logger: Logger) extends BaseController:
    * The asset's detail modal, or its JSON when JSON is asked for; an unknown asset, or another repository's, is a 404 of either,
    * as is a triaged asset or one in the trash for a Guest, who sees Browse alone (`visibleOnly`). Both carry the asset's Edit at
    * its head (`edit`, `EditController.headJson`), when it has one, and whether the account may edit the asset (`editable`): it
-   * holds Edit images, and an Edit may change the asset (`AssetEditService.whyNotEditable`).
+   * holds Edit images, and an Edit may change the asset (`AssetEditService.whyNotEditable`). For a holder of Edit images, an
+   * asset no Edit may change also carries why (`editRefusal`), which the Edit toggle's title shows; the fragment carries the same
+   * as data attributes, with the measurement's clipping levels and box, which the Edit panel's Clipping blink reads.
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/asset-detail/:assetId")
@@ -49,6 +51,9 @@ class AssetActionController(using logger: Logger) extends BaseController:
         (accept != null && accept.contains("application/json"))
     def asset: Asset = visibleOnly(App.altitude.service.asset.getById(assetId))
     def editOf(asset: Asset): Option[ujson.Obj] = App.altitude.service.assetEdit.headOf(asset).map(EditController.headJson)
+    // Why the account's Edit toggle is disabled on the asset: nothing without Edit images, which has no toggle
+    def refusal(asset: Asset): Option[String] =
+      if RequestContext.holds(Permission.EditImages) then AssetEditService.whyNotEditable(asset) else None
     def editable(asset: Asset): Boolean =
       RequestContext.holds(Permission.EditImages) && AssetEditService.whyNotEditable(asset).isEmpty
 
@@ -57,12 +62,13 @@ class AssetActionController(using logger: Logger) extends BaseController:
         val shown = asset
         val json = shown.toBrowserJson ++ ujson.Obj(Api.Field.Edit.EDITABLE -> editable(shown))
         editOf(shown).foreach(edit => json(Api.Field.Edit.EDIT) = edit)
+        refusal(shown).foreach(why => json(Api.Field.Edit.REFUSAL) = why)
         jsonResponse(json)
       }
     else
       answering {
         val shown = asset
-        htmlResponse(htmx.html.view_image_detail_modal(shown, editOf(shown).map(ujson.write(_)), editable(shown)))
+        htmlResponse(htmx.html.view_image_detail_modal(shown, editOf(shown).map(ujson.write(_)), editable(shown), refusal(shown)))
       }
 
   /**

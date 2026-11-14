@@ -22,16 +22,25 @@
  * fullscreen or leaves it, wherever focus is, each ignoring a held key and any modifier. `\` shows
  * an edited asset's original for as long as it is held (Show original): its press and its release
  * are announced, the key's repeats swallowed, and a release is announced wherever focus has gone.
+ *
+ * The Edit panel's keys (`listeners/edit.js`), in Asset detail and never in a text field: `e` opens
+ * or closes the panel, `c` opens its Crop tool or, in it, is Done; in the Crop tool `o` cycles the
+ * guide, `x` swaps the aspect's orientation and Enter is Done (on a control, Enter presses it);
+ * Ctrl/Cmd+Z is Undo and Ctrl/Cmd+Shift+Z or Ctrl+Y Redo. Escape closes the History's popover, then
+ * cancels the Crop tool, ahead of the selected People row and the dialog. The arrows and Space are
+ * left to focus in the Edit panel, on its divider and in the Crop tool, as in the Detail panel.
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
 import {
     clearSelectedFaceRow,
     closeOpenFaceCombobox,
 } from "./alpine/components/face-combobox.js"
+import { closeOpenEditHistory } from "./alpine/components/edit-panel.js"
 import { closeModal, getActiveModalHost, ModalHost } from "./common/modal.js"
 import { isTextEditingTarget } from "./common/text-editing.js"
 import { toggleTheme } from "./common/theme.js"
 import { Const } from "./constants.js"
+import { cancelOpenCropTool, isCropToolOpen } from "./edit/crop-tool.js"
 import { closeMapPanel } from "./map/map-panel.js"
 import { closeOpenSearchPanel } from "./search-results/search-panel.js"
 
@@ -64,11 +73,15 @@ document.addEventListener("keydown", (event) => {
         // leaves Asset detail open; the advanced search panel closes the same way, the browser
         // returning focus to its filter button; so does a selected Face's row in its People section,
         // and a closing modal or popover dialog restores focus itself
+        // In Asset detail, the Edit panel's History popover closes alone, then the Crop tool's Cancel
+        // puts back the Edit it opened on, before the selected Face and the dialog
         if (
             closeOpenContextMenu({ reason: "Escape", returnFocus: true }) ||
             closeOpenSearchPanel() ||
             (getActiveModalHost() === ModalHost.assetDetail &&
-                clearSelectedFaceRow()) ||
+                (closeOpenEditHistory() ||
+                    cancelOpenCropTool() ||
+                    clearSelectedFaceRow())) ||
             closeModal() ||
             closeMapPanel()
         ) {
@@ -89,10 +102,12 @@ document.addEventListener("keydown", (event) => {
         return
     }
 
-    // The player's timeline and volume slider step with the arrows themselves, and the Detail
-    // panel's divider moves with them
+    // The player's timeline and volume slider step with the arrows themselves, the Detail panel's
+    // divider moves with them, and so do the Edit panel's controls, its divider and the Crop tool
     const stepsWithArrows =
-        isPlayerSlider(event.target) || isDetailDivider(event.target)
+        isPlayerSlider(event.target) ||
+        isDetailDivider(event.target) ||
+        isInEditTools(event.target)
 
     if (event.key === "ArrowLeft" && !stepsWithArrows) {
         document.body.dispatchEvent(new CustomEvent(Const.events.showPrevious))
@@ -101,7 +116,8 @@ document.addEventListener("keydown", (event) => {
     } else if (
         event.key === " " &&
         !isInPlayer(event.target) &&
-        !isInDetailPanel(event.target)
+        !isInDetailPanel(event.target) &&
+        !isInEditTools(event.target)
     ) {
         // Plays or pauses a Video, and does nothing on an image, instead of pressing the focused
         // toolbar control (focus is trapped in the detail). Inside the player, media-chrome plays
@@ -133,8 +149,47 @@ document.addEventListener("keydown", (event) => {
         if (!event.repeat) {
             announceShowOriginal(true)
         }
+    } else if (isPlainKey(event, "e")) {
+        event.preventDefault()
+        announce(Const.events.toggleEditPanel)
+    } else if (isPlainKey(event, "c")) {
+        event.preventDefault()
+        announce(Const.events.toggleCropTool)
+    } else if (isModifiedKey(event, "z")) {
+        event.preventDefault()
+        announce(Const.events.undoEdit)
+    } else if (
+        isModifiedKey(event, "z", { shift: true }) ||
+        (isModifiedKey(event, "y") && event.ctrlKey)
+    ) {
+        event.preventDefault()
+        announce(Const.events.redoEdit)
+    } else if (isCropToolOpen()) {
+        handleCropToolKey(event)
     }
 })
+
+/** The Crop tool's own keys: `o` the guide, `x` the aspect's orientation, Enter Done unless a control takes it */
+function handleCropToolKey(event) {
+    if (isPlainKey(event, "o")) {
+        event.preventDefault()
+        announce(Const.events.cycleCropGuide)
+    } else if (isPlainKey(event, "x")) {
+        event.preventDefault()
+        announce(Const.events.swapCropAspect)
+    } else if (
+        event.key === "Enter" &&
+        !event.repeat &&
+        !event.target?.closest?.("button, a, summary, [role='button']")
+    ) {
+        event.preventDefault()
+        announce(Const.events.cropDone)
+    }
+}
+
+function announce(eventName) {
+    document.body.dispatchEvent(new CustomEvent(eventName))
+}
 
 // The release of `\` ends Show original wherever focus is and whatever modifier is held by then, so a
 // key held into a field, or let go after Ctrl was pressed, never sticks
@@ -157,6 +212,20 @@ function isShowOriginalPress(event) {
 function announceShowOriginal(held) {
     document.body.dispatchEvent(
         new CustomEvent(Const.events.showOriginalHeld, { detail: { held } }),
+    )
+}
+
+/**
+ * `key` pressed once with Ctrl or Cmd, and Shift exactly when `shift` says (Ctrl+Z, Ctrl+Shift+Z), never Alt: a held
+ * key repeats nothing
+ */
+function isModifiedKey(event, key, { shift = false } = {}) {
+    return (
+        event.key.toLowerCase() === key &&
+        !event.repeat &&
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        event.shiftKey === shift
     )
 }
 
@@ -205,4 +274,16 @@ function isInDetailPanel(target) {
 /** Focus is on the Detail panel's divider, which the arrow keys move */
 function isDetailDivider(target) {
     return Boolean(target?.closest?.("#detailPanelDivider"))
+}
+
+/**
+ * Focus is in the Edit panel (a slider, a tab), on its divider, on Before/after's divider or in the Crop tool (the
+ * crop, which the arrows nudge, and its bar), which take the arrows and Space themselves
+ */
+function isInEditTools(target) {
+    return Boolean(
+        target?.closest?.(
+            "#editPanel, #editPanelDivider, #editSplitHandle, #cropLayer",
+        ),
+    )
 }

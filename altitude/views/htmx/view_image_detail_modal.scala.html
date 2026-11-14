@@ -1,7 +1,10 @@
 @import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.util.ImageMeasurement
 @import altitude.core.util.Util
 @import altitude.core.models.Asset
-@(asset: Asset, edit: Option[String], editable: Boolean)
+@import altitude.core.models.Permission
+@(asset: Asset, edit: Option[String], editable: Boolean, editRefusal: Option[String])
 
 @* Asset detail's fragment (views/AGENTS.md **Detail navigation**): a grid of the media stage, the divider and the Detail
    panel, shaped by the panel's Dock side as the main page is by the explorer's. The stage holds both an <img> and a
@@ -20,7 +23,12 @@
    edit the asset (`data-app-image-detail-editable`). The stage's canvas (#editCanvas) shares the media's cell too: the Edit's
    stage (js/edit/edit-stage.js) shows an edited image as its Display image in the <img>, or draws the Edit on the canvas
    from the original while its render is pending, and shows the original for Show original; the key legend's `\` entry is
-   shown on an edited asset alone. *@
+   shown on an edited asset alone.
+   For a holder of Edit images the fragment also holds the Edit panel (includes/edit_panel, `aside#editPanel`, and its
+   divider), docked opposite the Detail panel (js/edit/edit-panel.js), why the asset cannot be edited when it cannot
+   (`data-app-image-detail-edit-refusal`, the Edit toggle's title), the measurement's clipping levels and box, which the
+   panel's Clipping blink reads as Curation's set does, and over the stage the Edit's tools: the Clipping blink's canvas
+   (#editClipping), Before/after's divider (#editSplit) and the Crop tool (#cropLayer, js/edit/crop-tool.js). *@
 
 @dockOption(side: String, label: String) = {
 <button type="button" data-app-detail-dock-side="@side"><svg class="glyph" width="16" height="16" aria-hidden="true"><use href="#dockGlyph-@side"/></svg><span>@label</span></button>
@@ -37,10 +45,21 @@
      data-app-image-detail-asset-id="@{ asset.persistedId }"
      @for(json <- edit) {data-app-image-detail-edit="@json"}
      data-app-image-detail-editable="@editable"
+     @for(why <- editRefusal) {data-app-image-detail-edit-refusal="@why"}
+     data-clipped-level="@{ImageMeasurement.CLIPPED_LEVEL}"
+     data-crushed-level="@{ImageMeasurement.CRUSHED_LEVEL}"
+     data-measurement-box="@{ImageMeasurement.MEASUREMENT_BOX_SIZE}"
      data-detail-dock-side="right">
+    @if(RequestContext.holds(Permission.EditImages)) {
+    @includes.html.edit_panel()
+    <div id="editPanelDivider" class="divider vertical" role="separator" aria-controls="editPanel" aria-label="Edit panel size" tabindex="0"></div>
+    }
     <div id="imageDetailStage">
         <img src="" alt="@{ asset.fileName }" hidden>
         <canvas id="editCanvas" role="img" aria-label="@{ asset.fileName }" hidden></canvas>
+        @if(RequestContext.holds(Permission.EditImages)) {
+        <canvas id="editClipping" aria-hidden="true" hidden></canvas>
+        }
         <media-controller hidden hotkeys="noarrowleft noarrowright nof nom">
             <video slot="media" preload="metadata" playsinline></video>
             <media-control-bar>
@@ -54,6 +73,9 @@
             </media-control-bar>
         </media-controller>
         <div id="faceHighlights"></div>
+        @if(RequestContext.holds(Permission.EditImages)) {
+        @includes.html.edit_stage_tools()
+        }
     </div>
 
     <div id="detailPanelDivider" class="divider vertical" role="separator" aria-controls="detailPanel" aria-label="Detail panel size" tabindex="0"></div>

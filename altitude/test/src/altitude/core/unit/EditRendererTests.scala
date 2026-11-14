@@ -589,20 +589,22 @@ import altitude.core.util.ImageUtil
     grainPixels shouldBe (for (y <- 0 until 48; x <- 0 until 64) yield pixel(again, x, y))
   }
 
-  test("Auto-straighten answers the Straighten that levels lines drawn at 2.7°") {
+  test("Auto-straighten answers the Straighten that levels lines drawn at 2.7°, and nothing where no lines agree") {
 
     /**
      * Setup:
      *
-     * A 1600 × 1200 JPEG on disk of dark lines on white, each rising 2.7° to the right, and a few short marks that are no line.
+     * A 1600 × 1200 JPEG on disk of dark lines on white, each rising 2.7° to the right, and a few short marks that are no line; a
+     * blank image; and two portraits of the import fixtures, busy pictures with no horizon, `people/affleck.jpg` and
+     * `people/bullock.jpg`.
      *
      * Assertions:
      *
-     * The answer is 2.7 ± 0.2, the clockwise Straighten that levels them.
+     * The answer for the lines is 2.7 ± 0.2, the clockwise Straighten that levels them.
      *
      * Edge cases:
      *
-     * A blank image, with fewer than 3 lines, answers 0.
+     * The blank image, with no line, answers nothing; so do the portraits, whose edges are no level or plumb lines that agree.
      */
     val drawing = new Mat(1200, 1600, CvType.CV_8UC3, new Scalar(255, 255, 255))
     val rise = Math.tan(Math.toRadians(2.7))
@@ -616,8 +618,12 @@ import altitude.core.util.ImageUtil
     try {
       Imgcodecs.imwrite(file.toString, drawing) shouldBe true
       Imgcodecs.imwrite(blank.toString, new Mat(600, 800, CvType.CV_8UC3, new Scalar(255, 255, 255))) shouldBe true
-      EditRenderer.autoStraightenAngle(file, identity) should near(2.7, 0.2)
-      EditRenderer.autoStraightenAngle(blank, identity) shouldBe 0.0
+      EditRenderer.autoStraightenAngle(file, identity).get should near(2.7, 0.2)
+      EditRenderer.autoStraightenAngle(blank, identity) shouldBe None
+      for (portrait <- List("people/affleck.jpg", "people/bullock.jpg")) withClue(portrait) {
+        val path = java.nio.file.Paths.get(getClass.getResource(s"/import/$portrait").toURI)
+        EditRenderer.autoStraightenAngle(path, identity) shouldBe None
+      }
     } finally {
       Files.deleteIfExists(file)
       Files.deleteIfExists(blank): Unit

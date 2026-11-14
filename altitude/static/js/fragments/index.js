@@ -45,6 +45,7 @@ export function hydrateAppFragments({ root, app }) {
             detailPanel: app.detailPanel,
             detailFullscreen: app.detailFullscreen,
             editStage: app.editStage,
+            editPanel: app.editPanel,
         })
     })
 

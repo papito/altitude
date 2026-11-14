@@ -110,7 +110,8 @@ class EditController(using logger: Logger) extends BaseController:
 
   /**
    * The Straighten that levels the lines of the asset's original as the Edit in `recipe` (its JSON) turns and mirrors it, which
-   * the Straighten's Auto button sets: `{angle}`. Nothing is stored.
+   * the Straighten's Auto button sets: `{angle}`, null when no lines agree on one, so the client keeps its Straighten. Nothing is
+   * stored.
    */
   @requireLogin()
   @requirePermission(Permission.EditImages)
@@ -118,7 +119,8 @@ class EditController(using logger: Logger) extends BaseController:
   def autoStraighten(repoId: String, assetId: String, recipe: Option[String] = None)(using request: Request): Response[String] =
     answeringJson {
       val edit = EditRecipe.parse(recipe.getOrElse(throw ValidationException(C.Msg.Err.EDIT_RECIPE_REQUIRED)))
-      jsonResponse(ujson.Obj(fields.ANGLE -> App.altitude.service.assetEdit.autoStraighten(assetId, edit)))
+      jsonResponse(ujson.Obj(
+        fields.ANGLE -> App.altitude.service.assetEdit.autoStraighten(assetId, edit).fold(ujson.Null: ujson.Value)(ujson.Num(_))))
     }
 
   /** A write's answer: the new state, or a 409 with the current one when the head has moved since the client saw it */
