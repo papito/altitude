@@ -4,10 +4,12 @@ import altitude.core.models.Asset
 import altitude.core.models.MapBounds
 import altitude.core.models.MapCell
 import altitude.core.models.MapLocation
+import altitude.core.models.SceneEmbedding
 import altitude.core.models.UserMetadataField
 import altitude.core.util.BoundingBox
 import altitude.core.util.GroupedSearchPage
 import altitude.core.util.ResolvedSearchText
+import altitude.core.util.SearchCursor
 import altitude.core.util.SearchName
 import altitude.core.util.SearchPage
 import altitude.core.util.SearchQuery
@@ -19,6 +21,23 @@ trait SearchDao:
 
   /** One ordered page of a grouped search: its assets with their group and count data */
   def searchGrouped(query: SearchQuery): GroupedSearchPage
+
+  /**
+   * One page of a Describe search: the context repository's assets outside the trash, and outside triage unless `triaged`, whose
+   * SigLIP 2 Scene embedding is at a cosine of at least `minCosine` to `embedding`, a description's, the nearest `limit` of them
+   * at most, nearest first and then by ID. The page is the `pageSize` rows after `cursor`, whose position is a row's cosine
+   * distance and ID, or the first ones without it, each row standing at its distance (`SearchRow.sortValue`, a `SortValue.Real`);
+   * a first page carries the count of all the ranked rows. An asset with no embedding (a Video, an animated image, a still image
+   * the model could not embed) is in no page. The caller's transaction is set up for a vector search of `limit` rows
+   * (`TransactionManager.withVectorSearch`).
+   */
+  def describe(
+      embedding: SceneEmbedding,
+      minCosine: Double,
+      limit: Int,
+      triaged: Boolean,
+      cursor: Option[SearchCursor],
+      pageSize: Int): SearchPage
 
   /** The number of assets a search matches, exact, without reading any of them */
   def count(query: SearchQuery): Int

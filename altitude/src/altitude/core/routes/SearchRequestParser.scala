@@ -43,6 +43,12 @@ import altitude.core.util.TriageSubset
  * search searches outside the trash, as text does: a date range, several people or several Locations with the trash view are
  * refused. It searches by the panel's filters alone, so what only the panel combines (a date range, several people, several
  * Locations, or more than one of the Search text, a folder, a person and a Location) is refused with an album or a subset.
+ *
+ * A Describe search (`describe`) is asked for by a description alone, the words that say what a photo shows: at most
+ * [[altitude.core.Const.Search.MAX_DESCRIPTION_LENGTH]] characters once the white space around it is dropped, and not blank. It
+ * searches the repository view, with the triaged assets when `triaged=true`, and takes no Search text, no filter, no sort, no
+ * grouping and no map layout: its results are the still images that look most like the description, most alike first, on the
+ * grid. Only the results route reads a description; the other routes that parse a scope never hand one in.
  */
 object SearchRequestParser:
 
@@ -67,9 +73,20 @@ object SearchRequestParser:
       importedTo: Option[String] = None,
       bbox: Option[String] = None,
       triaged: Option[Boolean] = None,
-      subset: Option[String] = None)
+      subset: Option[String] = None,
+      // The description of a Describe search, which stands alone
+      describe: Option[String] = None,
+      // How the request orders, groups and lays out the results, as it spells them: a route that takes a description hands them
+      // on, since a Describe search has one order and one layout and names neither
+      sort: Option[String] = None,
+      groupBy: Option[String] = None,
+      groupDirection: Option[String] = None,
+      layout: Option[String] = None)
 
-  /** A search's scope as read: the people and the Locations are in the order the request names them, each once */
+  /**
+   * A search's scope as read: the people and the Locations are in the order the request names them, each once. A Describe
+   * search's scope is its `description`, as written but for the white space around it, with the view's flags and nothing else.
+   */
   case class Scope(
       params: Map[String, Any],
       text: Option[String],
@@ -82,7 +99,8 @@ object SearchRequestParser:
       // How several people combine, all of them unless the request says any, and the Date Taken and Date Imported ranges
       peopleMatch: PeopleMatch = PeopleMatch.All,
       takenRange: Option[DateRange] = None,
-      importedRange: Option[DateRange] = None):
+      importedRange: Option[DateRange] = None,
+      description: Option[String] = None):
     def query(
         rpp: Int = 0,
         searchSort: List[SearchSort] = Nil,
@@ -121,6 +139,10 @@ object SearchRequestParser:
       case Const.Search.View.TRASHBIN => triaged.map(FieldConst.Asset.IS_TRIAGED -> _)
       case _ => Option.unless(triaged.contains(true))(FieldConst.Asset.IS_TRIAGED -> false)
     val params = viewParams ++ triageParam
+
+    request.describe match
+      case Some(written) => return describeScope(request, written, params)
+      case None =>
 
     val text = request.q.filter(SearchText.parse(_).isDefined)
     val isTrash = view == Const.Search.View.TRASHBIN
@@ -178,6 +200,50 @@ object SearchRequestParser:
         takenRange = takenRange,
         importedRange = importedRange
       ))
+
+  /**
+   * The parameters a description takes beside it: the triage filter, the layout, of which the grid alone is taken
+   * ([[describeScope]]), and how several people combine, which says nothing with no person
+   */
+  private val BESIDE_DESCRIPTION =
+    Set(Api.Field.Search.DESCRIBE, Api.Field.Search.TRIAGED, Api.Field.Search.LAYOUT, Api.Field.Search.PEOPLE_MATCH)
+
+  /**
+   * The scope of a Describe search, whose flags are `params`, or the message of a 400: a description is not blank, has at most
+   * `Const.Search.MAX_DESCRIPTION_LENGTH` characters, as a form counts them, searches the repository view alone, and stands
+   * alone. Any other parameter of a search beside it is refused, whatever its value, and named by the message: the Search text, a
+   * folder, a person, a Location, an album, a Triage subset, a date, a map area, a sort, a grouping or the map layout. What is
+   * taken beside it is listed ([[BESIDE_DESCRIPTION]]), so a parameter `Params` gains is refused until it is.
+   */
+  private def describeScope(request: Params, written: String, params: Map[String, Any]): Either[String, Scope] =
+    val description = written.strip
+    if description.isEmpty then return Left("A description cannot be blank")
+    if description.length > Const.Search.MAX_DESCRIPTION_LENGTH then
+      return Left(s"A description has at most ${Const.Search.MAX_DESCRIPTION_LENGTH} characters")
+
+    request.view match
+      case Const.Search.View.TRASHBIN => return Left("A description does not search the trash")
+      case Const.Search.View.TRIAGE => return Left(s"A description does not search the ${Const.Search.View.TRIAGE} view")
+      case _ =>
+
+    // Every parameter is a field of `Params` under the name the request spells it with; the layout is always handed in, and
+    // only the map is refused
+    val stated = request.productElementNames.zip(request.productIterator).collect { case (name, Some(_)) => name }.toList
+    val beside = stated.filterNot(BESIDE_DESCRIPTION) ++
+      request.layout.filter(_ == Const.Search.Layout.MAP).map(layout => s"${Api.Field.Search.LAYOUT}=$layout")
+    if beside.nonEmpty then return Left(s"A description stands alone, without ${beside.mkString(", ")}")
+
+    Right(
+      Scope(
+        params = params,
+        text = None,
+        folderIds = Set.empty,
+        personIds = Nil,
+        albumIds = Set.empty,
+        locationIds = Nil,
+        bbox = None,
+        subset = None,
+        description = Some(description)))
 
   /**
    * The IDs a comma-separated parameter names, each once, in the order given. An empty segment is no ID, so a parameter left out,

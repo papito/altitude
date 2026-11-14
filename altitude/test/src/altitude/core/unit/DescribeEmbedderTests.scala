@@ -87,6 +87,38 @@ import altitude.core.util.OnnxDescribeEmbedder
     widened(0x7e00).isNaN shouldBe true
   }
 
+  test("A SigLIP 2 match probability is a cosine, by the checkpoint's scale and bias") {
+
+    /**
+     * Setup:
+     *
+     * The cosines SigLIP 2's constants give for an even chance of a match, for the default Describe match threshold of 0.00009,
+     * and for two probabilities at the ends of the scale.
+     *
+     * Assertions:
+     *
+     * An even chance is the cosine 0.1486 and the default threshold 0.0660. The cosine rises with the probability, and the
+     * probability the model's formula gives back for each cosine, `sigmoid(cosine * t + b)`, is the one it came from.
+     *
+     * Edge cases:
+     *
+     * 0 and 1 are no probability, nor is anything outside them: each is refused.
+     */
+    SceneModel.siglip2Cosine(0.5) shouldBe 0.1486 +- 0.0001
+    SceneModel.siglip2Cosine(0.00009) shouldBe 0.0660 +- 0.0001
+
+    val probabilities = List(0.000000000000001, 0.00009, 0.5, 0.999999)
+    val cosines = probabilities.map(SceneModel.siglip2Cosine)
+    cosines shouldBe cosines.sorted
+    probabilities.zip(cosines).foreach {
+      case (probability, cosine) =>
+        val back = 1 / (1 + math.exp(-(cosine * SceneModel.SIGLIP2_LOGIT_SCALE + SceneModel.SIGLIP2_LOGIT_BIAS)))
+        back shouldBe probability +- probability * 1e-9
+    }
+
+    List(0.0, 1.0, -0.1, 1.5).foreach(probability => intercept[IllegalArgumentException](SceneModel.siglip2Cosine(probability)))
+  }
+
   test("Every golden description embeds as the PyTorch model embeds it") {
 
     /**

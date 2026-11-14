@@ -17,6 +17,12 @@ import altitude.core.routes.decorators.requireLogin
 object SettingsFormController:
 
   /**
+   * A JSON number as the text of a Setting: in plain notation, with no exponent and no trailing zeros (`1280`, `0.85`,
+   * `0.00002`), where the number's own text would be `2.0E-5` for a small one. A Setting is stored and shown as its text.
+   */
+  private def plainText(number: Double): String = BigDecimal(number).bigDecimal.stripTrailingZeros.toPlainString
+
+  /**
    * The Settings form over the saved values, or over `submitted` with its `errors` beside the fields under a validation
    * replacement, each Setting that has one with a note on what the server makes of it. Only the Settings of this database engine
    * are rendered.
@@ -44,14 +50,14 @@ class SettingsFormController(using logger: Logger) extends BaseController:
     val json = unscrubbedJson.get
     val typeErrors = ValidationException()
 
-    // A Setting is text. A flag or a number may arrive typed (JSON true, a JSON number); a checkbox left unchecked is not
-    // submitted at all, so a rendered flag with no value is false
+    // A Setting is text. A flag or a number may arrive typed (JSON true, a JSON number, saved in plain notation); a checkbox
+    // left unchecked is not submitted at all, so a rendered flag with no value is false
     val submitted: Map[String, String] = App.altitude.settings.applicable.flatMap {
       setting =>
         json.obj.get(setting.name) match
           case Some(ujson.Str(value)) => Some(setting.name -> value)
           case Some(ujson.Bool(value)) => Some(setting.name -> value.toString)
-          case Some(number: ujson.Num) => Some(setting.name -> number.toString)
+          case Some(ujson.Num(number)) => Some(setting.name -> SettingsFormController.plainText(number))
           case Some(_) =>
             typeErrors.errors += setting.name -> C.Msg.Err.INCORRECT_VALUE_TYPE
             None

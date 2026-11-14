@@ -28,7 +28,8 @@ import scala.meta.*
      * Assertions:
      *
      * Every DAO reference in a non-private service method sits inside a transaction wrapper (withTransaction, asReadOnly,
-     * withFaceVector or withFaceVectorReadOnly) within that method; any that does not is listed by file, line and method.
+     * withFaceVector, withFaceVectorReadOnly or withVectorSearch) within that method; any that does not is listed by file, line
+     * and method.
      *
      * Edge cases:
      *
@@ -84,7 +85,7 @@ import scala.meta.*
 }
 
 object TransactionBoundaryTests {
-  private val Wrappers = Set("withTransaction", "asReadOnly", "withFaceVector", "withFaceVectorReadOnly")
+  private val Wrappers = Set("withTransaction", "asReadOnly", "withFaceVector", "withFaceVectorReadOnly", "withVectorSearch")
   private val TransactionNames = Wrappers + "txManager"
 
   private case class SourceFile(path: String, tree: Tree)
@@ -118,7 +119,10 @@ object TransactionBoundaryTests {
   private def memberDef(tree: Tree): Option[Defn.Def] =
     ancestors(tree).takeWhile(!_.is[Template]).collect { case method: Defn.Def => method }.lastOption
 
-  /** Whether a reference is inside a transaction wrapper within the method, such as `txManager.asReadOnly[Stats] { ... }` */
+  /**
+   * Whether a reference is inside a transaction wrapper within the method, such as `txManager.asReadOnly[Stats] { ... }`, or
+   * `txManager.withVectorSearch(limit) { ... }`, a wrapper that takes an argument list of its own before its block
+   */
   private def isInWrapper(ref: Tree, method: Defn.Def): Boolean =
     ancestors(ref).takeWhile(_ ne method).exists {
       case apply: Term.Apply => isWrapper(apply.fun)
@@ -127,6 +131,7 @@ object TransactionBoundaryTests {
 
   private def isWrapper(fun: Term): Boolean = fun match {
     case applyType: Term.ApplyType => isWrapper(applyType.fun)
+    case apply: Term.Apply => isWrapper(apply.fun)
     case Term.Select(Term.Name("txManager") | Term.Select(_, Term.Name("txManager")), Term.Name(name)) =>
       Wrappers.contains(name)
     case _ => false

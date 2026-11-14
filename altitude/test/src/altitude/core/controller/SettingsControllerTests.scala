@@ -236,6 +236,63 @@ import altitude.core.models.Settings
     }
   }
 
+  test("The Search section shows the Describe match threshold as 0.00009 and saves a small probability in plain notation") {
+
+    /**
+     * Setup:
+     *
+     * An Admin's page, then three saves of the Describe match threshold, whose default of 0.00009 a JVM prints as 9.0E-5: the
+     * default as the form submits it, as text; a smaller probability as a JSON number; and a probability written with an
+     * exponent, as text.
+     *
+     * Assertions:
+     *
+     * The page has a Search section with the threshold and the result limit, the threshold's field, its Reset default and its
+     * help all showing 0.00009. Saving the default back answers the form with 0.00009 in the field and leaves the row as it was.
+     * The JSON number is stored and shown as the plain decimal 0.00002.
+     *
+     * Edge cases:
+     *
+     * The probability written with an exponent is refused beside its field and nothing is written, so neither the form nor the
+     * row ever holds an exponent.
+     */
+    val repoId = loginAs(AccountType.Admin, Permissions.all)
+    val threshold = Settings.SEARCH_DESCRIBE_MIN_PROBABILITY
+
+    withServer(App) {
+      host =>
+        val page = requests.get(pageUrl(host, repoId), cookies = testContext.cookies, check = false).text()
+        page should include("<h2>Search</h2>")
+        page should include("Describe match threshold")
+        page should include("Describe result limit")
+        (page should include).regex(field(threshold, "0\\.00009"))
+        (page should include).regex(field(Settings.SEARCH_DESCRIBE_MAX_RESULTS, "1000"))
+        page should include("""data-setting-default="0.00009"""")
+        page should include("Lower shows more, weaker matches. Default: 0.00009")
+        (page should not).include("E-5")
+
+        val unchanged = save(host, repoId, ujson.Obj(threshold -> "0.00009"))
+        unchanged.statusCode shouldBe 200
+        unchanged.headers.contains("hx-retarget") shouldBe false
+        (unchanged.text() should include).regex(field(threshold, "0\\.00009"))
+        storedValue(threshold) shouldBe "0.00009"
+
+        val typed = save(host, repoId, ujson.Obj(threshold -> 0.00002))
+        typed.statusCode shouldBe 200
+        typed.headers.contains("hx-retarget") shouldBe false
+        (typed.text() should include).regex(field(threshold, "0\\.00002"))
+        (typed.text() should not).include("E-5")
+        storedValue(threshold) shouldBe "0.00002"
+        testApp.settings.current.searchDescribeMinProbability shouldBe 0.00002
+
+        val refused = save(host, repoId, ujson.Obj(threshold -> "3e-5"))
+        refused.statusCode shouldBe 200
+        refused.headers("hx-retarget") shouldBe Seq("this")
+        refused.text() should include("Must be a number")
+        storedValue(threshold) shouldBe "0.00002"
+    }
+  }
+
   test("A Restart setting saved with another value carries a notice naming the saved and the running value") {
 
     /**

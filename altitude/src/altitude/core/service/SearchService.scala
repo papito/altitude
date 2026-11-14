@@ -8,13 +8,16 @@ import scala.collection.mutable
 
 import altitude.core.Altitude
 import altitude.core.Const
+import altitude.core.RequestContext
 import altitude.core.dao.SearchDao
 import altitude.core.models.Asset
 import altitude.core.models.ListedPerson
 import altitude.core.models.MapBounds
 import altitude.core.models.MapCells
 import altitude.core.models.NamedPath
+import altitude.core.models.SceneModel
 import altitude.core.models.SearchFilterNames
+import altitude.core.models.Settings
 import altitude.core.models.UserMetadataField
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.BoundingBox
@@ -26,13 +29,16 @@ import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchExpression
 import altitude.core.util.SearchName
+import altitude.core.util.SearchPage
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
+import altitude.core.util.SearchSort
 import altitude.core.util.SearchSource
 import altitude.core.util.SearchTerm
 import altitude.core.util.SearchText
 import altitude.core.util.SearchWords
 import altitude.core.util.SortValue
+import altitude.core.util.Util
 
 object SearchService:
 
@@ -277,6 +283,53 @@ class SearchService(val app: Altitude):
       s"Search page: ${result.records.length} assets" +
         result.total.map(total => s" of $total matching").getOrElse(", total not counted") +
         s", in ${System.currentTimeMillis - started}ms")
+    result
+
+  /**
+   * One page of a Describe search (`CONTEXT.md`): the still images of the context repository that look most like `description`,
+   * the words that say what a photo shows, most alike first, outside the trash and, unless `triaged`, outside triage. The page is
+   * the `pageSize` assets after `cursor`, or the first ones without it, and a first page carries the total.
+   *
+   * The description is embedded by SigLIP 2's text tower (`DescribeEmbedder`), before the transaction, since a pass holds no
+   * connection, and the assets are ranked by the cosine distance of their SigLIP 2 Scene embedding from it, in the database
+   * (`SearchDao.describe`). Two Settings, read from one snapshot, say where the results end: the Describe match threshold, the
+   * least probability by the model that an image matches, which is the least cosine (`SceneModel.siglip2Cosine`), and the
+   * Describe result limit, the most assets ranked. A description is all such a search is asked for, so the cursor's fingerprint
+   * is the description and `triaged` (`SearchCursor.describeFingerprint`): a cursor of any other search is refused
+   * (`SearchCursorException`). Every page ranks again, so the results are live, as any search's are.
+   *
+   * An embedder that embeds nothing, a test instance's whose suite has not turned the model on, finds nothing.
+   */
+  def describe(description: String, triaged: Boolean, cursor: Option[SearchCursor], pageSize: Int): SearchResult =
+    require(pageSize >= 1, "A page of a Describe search holds at least one asset")
+    val started = System.currentTimeMillis
+    val scope =
+      SearchCursor.describeFingerprint(description, triaged, RequestContext.getRepository.persistedId, app.dataSourceType)
+    cursor.foreach(_.requireScope(scope))
+
+    val settings = app.settings.current
+    val limit = settings.searchDescribeMaxResults
+    val minCosine = SceneModel.siglip2Cosine(settings.searchDescribeMinProbability)
+
+    val page = app.describeEmbedder.embed(description) match
+      case None => SearchPage(Nil, Option.when(cursor.isEmpty)(0), hasMore = false)
+      case Some(embedding) =>
+        txManager.withVectorSearch(limit) {
+          searchDao.describe(embedding, minCosine, limit, triaged, cursor, pageSize)
+        }
+
+    val nextCursor = Option.when(page.hasMore) {
+      val last = page.rows.last
+      SearchCursor(key = None, groupId = None, sortValue = last.sortValue, id = last.asset.persistedId, scope = scope)
+    }
+    val result = SearchResult(page.rows.map(_.asset), page.total, nextCursor, pageSize, List(SearchSort.Similarity))
+
+    // A description is typed, line breaks and all: escaped, it cannot start a log line of its own
+    logger.debug(
+      s"Describe search [${Util.printable(description, Const.Search.MAX_DESCRIPTION_LENGTH)}]: ${result.records.length} assets" +
+        result.total.map(total => s" of $total").getOrElse(", total not counted") +
+        f" at a cosine of $minCosine%.4f or more (probability ${settings.value(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY)}), " +
+        s"limit $limit, in ${System.currentTimeMillis - started}ms")
     result
 
   /**

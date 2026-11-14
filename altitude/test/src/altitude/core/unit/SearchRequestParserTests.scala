@@ -3,6 +3,7 @@ package altitude.core.unit
 import java.time.LocalDate
 import org.scalatest.DoNotDiscover
 import org.scalatest.EitherValues.*
+import org.scalatest.OptionValues.*
 import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.*
 
@@ -37,7 +38,12 @@ import altitude.core.util.PeopleMatch
         importedTo = values.get(fields.IMPORTED_TO),
         bbox = values.get(fields.BBOX),
         triaged = values.get(fields.TRIAGED).map(_.toBoolean),
-        subset = values.get(fields.SUBSET)
+        subset = values.get(fields.SUBSET),
+        describe = values.get(fields.DESCRIBE),
+        sort = values.get(fields.SORT),
+        groupBy = values.get(fields.GROUP_BY),
+        groupDirection = values.get(fields.GROUP_DIRECTION),
+        layout = values.get(fields.LAYOUT)
       ))
   }
 
@@ -336,5 +342,123 @@ import altitude.core.util.PeopleMatch
     withTriaged.locationIds should have size 2
     withTriaged.takenRange shouldBe defined
     withTriaged.importedRange shouldBe defined
+  }
+
+  test("A description is the scope of a Describe search, trimmed, in the repository view") {
+
+    /**
+     * Setup:
+     *
+     * Requests of the repository view with a description: alone, with spaces and a line feed around it, with the grid layout
+     * named, and with `triaged` true and false.
+     *
+     * Assertions:
+     *
+     * The scope holds the description as written but for the white space around it, and no Search text and no filter. It leaves
+     * the triaged assets out unless `triaged=true`, and the grid layout, the only one such a search has, is taken.
+     *
+     * Edge cases:
+     *
+     * A description of 300 characters is taken, and so is one that would parse to no Search term, since a description is not read
+     * as Search text. A request without a description has none in its scope.
+     */
+    val scope = browse(fields.DESCRIBE -> "woman in a park").value
+    scope.description shouldBe Some("woman in a park")
+    scope.text shouldBe None
+    scope.folderIds shouldBe empty
+    scope.personIds shouldBe empty
+    scope.albumIds shouldBe empty
+    scope.locationIds shouldBe empty
+    scope.bbox shouldBe None
+    scope.subset shouldBe None
+    scope.takenRange shouldBe None
+    scope.importedRange shouldBe None
+    scope.params shouldBe Map(FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false)
+
+    browse(fields.DESCRIBE -> "  woman in\na park \n").value.description shouldBe Some("woman in\na park")
+    browse(fields.DESCRIBE -> "a cactus", fields.LAYOUT -> Const.Search.Layout.GRID).value.description shouldBe Some("a cactus")
+    browse(fields.DESCRIBE -> "a cactus", fields.TRIAGED -> "true").value.params shouldBe
+      Map(FieldConst.Asset.IS_RECYCLED -> false)
+    browse(fields.DESCRIBE -> "a cactus", fields.TRIAGED -> "false").value.params shouldBe
+      Map(FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false)
+
+    (browse(fields.DESCRIBE -> "a" * 300).value.description.value should have).length(300)
+    browse(fields.DESCRIBE -> "-").value.description shouldBe Some("-")
+    browse(fields.QUERY_TEXT -> "beach").value.description shouldBe None
+  }
+
+  test("A blank description and one longer than 300 characters are refused") {
+
+    /**
+     * Setup:
+     *
+     * Requests with an empty description, with one of spaces and line feeds alone, with one of 301 characters, and with one of
+     * 300 characters between spaces.
+     *
+     * Assertions:
+     *
+     * The empty and the blank description are refused as blank, and the one of 301 characters as too long, naming the bound.
+     *
+     * Edge cases:
+     *
+     * The length is the trimmed description's: 300 characters between spaces are taken.
+     */
+    browse(fields.DESCRIBE -> "").left.value shouldBe "A description cannot be blank"
+    browse(fields.DESCRIBE -> " \n\t ").left.value shouldBe "A description cannot be blank"
+    browse(fields.DESCRIBE -> "a" * 301).left.value shouldBe "A description has at most 300 characters"
+    (browse(fields.DESCRIBE -> (" " + "a" * 300 + " ")).value.description.value should have).length(300)
+  }
+
+  test("A description stands alone: any filter, a sort, a grouping or the map layout beside it is refused") {
+
+    /**
+     * Setup:
+     *
+     * Requests of the repository view with a description beside each other parameter of a search in turn: the Search text, a
+     * folder, a person, a Location, an album, a Triage subset, each end of the two date ranges, a map area, a sort, a grouping, a
+     * group direction and the map layout; and one request with a folder and a sort beside the description.
+     *
+     * Assertions:
+     *
+     * Each is refused, and the message names the parameter that may not stand beside a description; the request with two of them
+     * names both.
+     *
+     * Edge cases:
+     *
+     * A parameter beside a description is refused whatever its value: an empty Search text, the similarity sort itself, a
+     * malformed date. A description is refused in the trash and in the Triage view, each named by the message.
+     */
+    val beside = List(
+      fields.QUERY_TEXT -> "beach",
+      fields.QUERY_TEXT -> "",
+      fields.FOLDER_ID -> "trips",
+      fields.PERSON_ID -> "alice",
+      fields.LOCATION_ID -> "lisbon",
+      fields.ALBUM_ID -> "best",
+      fields.SUBSET -> "noLocation",
+      fields.TAKEN_FROM -> "2024-06-01",
+      fields.TAKEN_TO -> "not a date",
+      fields.IMPORTED_FROM -> "2024-06-01",
+      fields.IMPORTED_TO -> "2024-06-30",
+      fields.BBOX -> "1,2,3,4",
+      fields.SORT -> "created_at1",
+      fields.SORT -> Const.Search.SORT_SIMILARITY,
+      fields.GROUP_BY -> "dateTaken",
+      fields.GROUP_DIRECTION -> "asc"
+    )
+    for (param <- beside) withClue(s"$param: ") {
+      browse(fields.DESCRIBE -> "a cactus", param).left.value shouldBe s"A description stands alone, without ${param._1}"
+    }
+
+    browse(fields.DESCRIBE -> "a cactus", fields.LAYOUT -> Const.Search.Layout.MAP).left.value shouldBe
+      "A description stands alone, without layout=map"
+    browse(fields.DESCRIBE -> "a cactus", fields.SORT -> "filename0", fields.FOLDER_ID -> "trips").left.value shouldBe
+      "A description stands alone, without folderId, sort"
+
+    parse(Const.Search.View.TRASHBIN, fields.DESCRIBE -> "a cactus").left.value shouldBe "A description does not search the trash"
+    parse(Const.Search.View.TRIAGE, fields.DESCRIBE -> "a cactus").left.value shouldBe
+      "A description does not search the triage view"
+    parse(Const.Search.View.TRIAGE, fields.DESCRIBE -> "a cactus", fields.TRIAGED -> "true").left.value shouldBe
+      "A description does not search the triage view"
   }
 }

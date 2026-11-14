@@ -60,6 +60,8 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('curation.dark_luminance', '0.15', '0.15'),
   ('curation.bright_luminance', '0.75', '0.75'),
   ('curation.luminance_gap', '0.1', '0.1'),
+  ('search.describe.min_probability', '0.00009', '0.00009'),
+  ('search.describe.max_results', '1000', '1000'),
   ('map.tile.url', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
   ('map.tile.attribution', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'),
   ('map.geocoder.enabled', 'false', 'false'),
@@ -226,7 +228,8 @@ CREATE TABLE asset (
   -- The Scene embeddings of a still image, one per Scene model, each a unit vector the Sequence rule compares by cosine
   -- similarity: DINOv2 ViT-B/14's pooled CLS token and the pooled output of SigLIP 2 ViT-B/16's image tower. NULL for a Video,
   -- an animated image, or a still image the model could not embed. Bulky, which toast_tuple_target (below) moves out of line;
-  -- selected by the Sequence candidates' statement alone and transferred by no other read.
+  -- selected by the Sequence candidates' statement alone and transferred by no other read. A Describe search reads SigLIP 2's
+  -- too, in the database: it ranks the assets by the distance of theirs from a description's embedding (asset_describe).
   dinov2_embedding vector(768),
   siglip2_embedding vector(768),
   -- The Sequence the image is in while in triage: the id its members share. A Sequence has no table; it exists while some
@@ -279,6 +282,10 @@ CREATE INDEX asset_owner ON asset (owner_user_id);
 -- The assets an account imported, in every Library, by the ID of their importer record: the rewrite of the records when the
 -- account changes (AssetDao.rewriteImporterRecords)
 CREATE INDEX asset_importer ON asset ((original_owner->>'id'));
+-- The still images nearest a description, for a Describe search: their SigLIP 2 Scene embeddings at half precision, which halves
+-- the index, and the statement that reads it (postgres.SearchDao.describe) writes the same cast. An asset with no embedding
+-- (a Video, an animated image, a still image the model could not embed) is not in it.
+CREATE INDEX asset_describe ON asset USING hnsw ((siglip2_embedding::halfvec(768)) halfvec_cosine_ops);
 
 -- An asset's Edit (AssetEditService): the Edit itself, its edit version and the edit version its edited images were rendered
 -- from. No row until the asset's first save; the original is never written.

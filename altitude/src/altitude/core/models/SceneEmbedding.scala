@@ -72,6 +72,14 @@ object SceneModel:
   val SIGLIP2_LOGIT_SCALE = 112.90117645263672
   val SIGLIP2_LOGIT_BIAS = -16.77180290222168
 
+  /**
+   * The cosine at which SigLIP 2 gives an image and a description the `probability` of matching, a number strictly between 0 and
+   * 1: the least cosine a Describe search shows an image at, for the least probability it is set to
+   */
+  def siglip2Cosine(probability: Double): Double =
+    require(probability > 0 && probability < 1, s"A probability is between 0 and 1, not $probability")
+    (math.log(probability / (1 - probability)) - SIGLIP2_LOGIT_BIAS) / SIGLIP2_LOGIT_SCALE
+
 object SceneEmbedding:
   // The wire form is the float array itself; no API answers it today, but an Asset carries it in JSON
   given JsonCodec.ReadWriter[SceneEmbedding] =

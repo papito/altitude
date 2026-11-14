@@ -76,6 +76,7 @@ object PostgresSearchDialect extends SearchDialect:
     def put(r: PreparedStatement, idx: Int, v: SortValue): Unit = v match
       case SortValue.Text(text) => r.setString(idx, text)
       case SortValue.Num(number) => r.setLong(idx, number)
+      case SortValue.Real(number) => r.setDouble(idx, number)
       case SortValue.LocalTimestamp(dateTime) => r.setObject(idx, dateTime)
       case SortValue.UtcInstant(instant) => r.setObject(idx, instant)
       case SortValue.Null => throw IllegalStateException("A null sort value is compared with IS NULL, never bound")

@@ -12,6 +12,7 @@ import altitude.core.util.PeopleMatch
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSort
+import altitude.core.util.SortValue
 
 @DoNotDiscover class SearchQueryModelTests extends funsuite.AnyFunSuite {
 
@@ -194,6 +195,66 @@ import altitude.core.util.SearchSort
 
     fingerprints.distinct.size shouldBe fingerprints.size
     fingerprint(takenRange = Some(june)) shouldBe fingerprints(2)
+  }
+
+  test("A Describe search's fingerprint is its description and its triage filter, and no other search's") {
+
+    /**
+     * Setup:
+     *
+     * The fingerprint of a description's search in a repository on an engine; of the same search with the triaged assets, with
+     * another description, in another repository and on the other engine; and of a search whose Search text is the description's
+     * words.
+     *
+     * Assertions:
+     *
+     * The six fingerprints differ, so a cursor of one cannot continue another, and the same Describe search has the same
+     * fingerprint again.
+     *
+     * Edge cases:
+     *
+     * A description is fingerprinted as written: another case, or a space more, is another search.
+     */
+    def fingerprint(
+        description: String = "a cactus",
+        triaged: Boolean = false,
+        repositoryId: String = "repo-1",
+        dbEngine: String = "sqlite"): String =
+      SearchCursor.describeFingerprint(description, triaged, repositoryId, dbEngine)
+
+    val fingerprints = List(
+      fingerprint(),
+      fingerprint(triaged = true),
+      fingerprint(description = "a man in a suit"),
+      fingerprint(repositoryId = "repo-2"),
+      fingerprint(dbEngine = "postgres"),
+      SearchCursor.scopeFingerprint(new SearchQuery(text = Some("a cactus")), repositoryId = "repo-1", dbEngine = "sqlite"),
+      fingerprint(description = "A cactus"),
+      fingerprint(description = "a  cactus")
+    )
+
+    fingerprints.distinct.size shouldBe fingerprints.size
+    fingerprint() shouldBe fingerprints.head
+  }
+
+  test("A cursor carries a Describe search's position, a distance, through its token unchanged") {
+
+    /**
+     * Setup:
+     *
+     * Cursors whose positions are cosine distances no short decimal spells: a third, the smallest double above zero, a distance
+     * past 1, and a float's value widened to a double.
+     *
+     * Assertions:
+     *
+     * Each cursor decoded from its token is the cursor that was encoded: the distance is the same double, bit for bit, so a page
+     * continues exactly after the row the cursor names.
+     */
+    List(1.0 / 3, java.lang.Double.MIN_VALUE, 1.0000001192092896, 0.9400720596313477f.toDouble).foreach {
+      distance =>
+        val cursor = SearchCursor(None, None, SortValue.Real(distance), "asset-1", scope = "fingerprint")
+        SearchCursor.decode(cursor.encode) shouldBe cursor
+    }
   }
 
   test("A scope hands its people match and date ranges to the query it builds") {

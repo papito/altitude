@@ -98,6 +98,13 @@ object Const:
     // with no direction digit.
     val SORT_RELEVANCE = "relevance"
 
+    // The order of a Describe search, nearest the description first. No request names it: it is implied, and the only one
+    // such a search has.
+    val SORT_SIMILARITY = "similarity"
+
+    // The most characters a description has
+    val MAX_DESCRIPTION_LENGTH = 300
+
     // Quick view (htmx/quick_view_modal) shows a folder's first this many assets, by newest import
     val QUICK_VIEW_SIZE = 100
 

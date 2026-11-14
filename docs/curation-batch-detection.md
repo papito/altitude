@@ -576,7 +576,8 @@ Most of the options below need no new native dependency:
 - **Faces**: YuNet detection with five landmarks and a score, ArcFace 512-float embeddings, and the embedding norm as
   `Face.quality` (see [faces.md](faces.md)). The Video path clusters detections across Sampled frames with the pure
   `cluster` and `mergeClusters` functions of `FaceRecognitionService`.
-- **Vectors**: a pgvector column on PostgreSQL and the `sqlite-vector` extension on SQLite, wrapped by `withFaceVector`.
+- **Vectors**: a pgvector column on PostgreSQL and the `sqlite-vector` extension on SQLite, wrapped by `withFaceVector`
+  for the faces and by `withVectorSearch` for the Describe search.
 - **Metadata**: metadata-extractor 2.19 feeds `ExtractedMetadata` and the `PublicMetadata` fields (device model,
   f-number, focal length, ISO, exposure time, date/time original), plus `originalCreatedAt` with its
   `CaptureDateSource`, `width`, `height`, GPS, and a SHA-256 `checksum` of the file.
@@ -614,17 +615,20 @@ Sequence. Each model sees the image its own way: DINOv2 the center square, the s
 SigLIP 2 the whole frame squashed to 256 × 256, as its checkpoint's processor does, so the edges of a wide frame stay
 in view. ArcFace and YuNet stay on OpenCV DNN.
 
+The SigLIP 2 embeddings are also searched by text: the Describe search embeds a description with the model's text
+tower, exported beside the image tower with its token-embedding table and its tokenizer (`DescribeEmbedder`,
+`Siglip2Tokenizer`), and the database ranks the assets by the cosine distance of their embedding from it, through an
+HNSW index over the vectors at half precision on PostgreSQL and sqlite-vector's exact scan on SQLite
+(`altitude/AGENTS.md`, **Describe search**). Its cutoff is measured below (**A description's match probability**).
+
 Still open:
 
 - **DINOv3** in DINOv2's place, or **MobileCLIP 2** in SigLIP 2's, as better or smaller models of the same two kinds;
   a column replaced, and a re-import of the library.
-- **Similar-image search** over the stored embeddings, which needs a vector index on the columns (pgvector HNSW as the
-  faces have; sqlite-vector's scan on SQLite) and a search entry; the rule itself compares a frame with the handful of
-  candidates of its window and needs none.
-- **Text search** over the SigLIP 2 embedding. The model's text side is built: the text tower is exported beside the
-  image tower, with its token-embedding table and its tokenizer, and a description embeds into the space of the SigLIP 2
-  Scene embeddings (`DescribeEmbedder`, `Siglip2Tokenizer`; `altitude/AGENTS.md`, **Description embedding**). The search
-  itself, with the same vector index, is not; its cutoff is measured below (**A description's match probability**).
+- **Similar-image search** over the stored embeddings ("more like this"). The SigLIP 2 column is indexed and ranked
+  for the Describe search, whose statement would take an image's embedding as it takes a description's; the search
+  entry is missing, and DINOv2's column has no index. The rule itself compares a frame with the handful of candidates
+  of its window and needs none.
 - An **aesthetic score** as a linear head on the SigLIP 2 embedding (see **Learned no-reference quality** below).
 
 ### Geometric verification for doubtful pairs (`features2d`, ships)
@@ -683,10 +687,10 @@ baseline at 0.81 / 0.78 / 0.79). DINOv2's threshold was not swept. Both remain t
 A description's embedding (`DescribeEmbedder`) and an image's SigLIP 2 Scene embedding give the probability, by the
 model, that the two match: `sigmoid(cosine · t + b)` with the checkpoint's learned `t = 112.90` and `b = -16.77`
 (`SceneModel.SIGLIP2_LOGIT_SCALE`, `SIGLIP2_LOGIT_BIAS`). A probability of 0.5 is a cosine of 0.149, and a hundredth
-of cosine is a factor of about 3 in the odds. A search by description, which is not built, is to end its results at a
-minimum of this probability, the Setting `search.describe.min_probability`; this is the measurement its default comes
-from. The rule: the probability that 90% of true image and description pairs reach, rounded down to one significant
-figure.
+of cosine is a factor of about 3 in the odds. The Describe search ends its results at a minimum of this probability,
+the Setting `search.describe.min_probability`, which it converts to a cosine (`SceneModel.siglip2Cosine`); this is the
+measurement its default comes from. The rule: the probability that 90% of true image and description pairs reach,
+rounded down to one significant figure.
 
 Measured on **COCO 2017 val** (Lin et al., ECCV 2014): 5,000 everyday photos with 25,014 captions, five an image.
 Each image is embedded as an import embeds it (`ImageUtil.matFromBytes`, `OnnxSceneEmbedder`) and each text as a
@@ -802,9 +806,9 @@ import.
 - **Eyes closed** (`plans/todo/eye-state.md`): a per-Face eye-state measurement at import and an Eyes closed Bundle,
   the most serious problem a frame could have. Today eyes are judged in the face strip by eye. The landmarker it
   needs would bring smile and pose with it.
-- **Beyond the Sequence rule's use of the Scene embeddings**: similar-image search (a vector index on the columns),
-  text search over the SigLIP 2 embedding (a description is embedded by its text tower; nothing searches by it yet), and
-  the aesthetic score as a head on it. The embeddings are stored for every still image; nothing reads them but the rule.
+- **Beyond the Sequence rule's and the Describe search's use of the Scene embeddings**: similar-image search (a search
+  entry, and an index on DINOv2's column) and the aesthetic score as a head on the SigLIP 2 embedding. The embeddings
+  are stored for every still image; the rule reads both, and the Describe search ranks by SigLIP 2's.
 - **Learned quality models** and the other measurements of §2.
 - Nothing ranks the frames and nothing suggests a Pick beyond the sole Contender; the score is never read.
 - Videos and animated images are never measured and never in a Sequence or a set.

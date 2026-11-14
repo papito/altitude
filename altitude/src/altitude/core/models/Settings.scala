@@ -13,6 +13,7 @@ enum SettingGroup(val label: String):
   case FaceRecognition extends SettingGroup("Face recognition and quality")
   case Video extends SettingGroup("Video")
   case Triage extends SettingGroup("Triage")
+  case Search extends SettingGroup("Search")
   case Maps extends SettingGroup("Map")
   case Operations extends SettingGroup("Operations")
 
@@ -22,8 +23,11 @@ enum SettingKind:
 
 /** What a Setting's text must be. `error` is why a text is not one, or nothing when it is. */
 enum SettingType:
-  /** A number between the bounds, the lower one excluded when `minExclusive` */
-  case Decimal(min: Double, max: Double = Double.MaxValue, minExclusive: Boolean = false)
+  /**
+   * A number between the bounds, the lower one excluded when `minExclusive` and the upper one when `maxExclusive`, written as a
+   * plain decimal ([[SettingType.PLAIN_DECIMAL]])
+   */
+  case Decimal(min: Double, max: Double = Double.MaxValue, minExclusive: Boolean = false, maxExclusive: Boolean = false)
 
   /** A whole number between the bounds */
   case Integer(min: Int, max: Int = Int.MaxValue)
@@ -36,17 +40,18 @@ enum SettingType:
 
   /** The text as a number, when this is a numeric type and the text is one; the one parse every reading of a number goes through */
   def number(text: String): Option[Double] = this match
-    case Decimal(_, _, _) => text.toDoubleOption.filter(_.isFinite)
+    case Decimal(_, _, _, _) => Option.when(SettingType.PLAIN_DECIMAL.matches(text))(text.toDouble)
     case Integer(_, _) => text.toIntOption.map(_.toDouble)
     case _ => None
 
   def error(text: String): Option[String] = this match
-    case Decimal(min, max, minExclusive) =>
+    case Decimal(min, max, minExclusive, maxExclusive) =>
       number(text) match
         case None => Some("Must be a number")
         case Some(value) if value < min || (minExclusive && value == min) =>
           Some(if minExclusive then s"Must be above ${SettingType.bound(min)}" else s"Must be at least ${SettingType.bound(min)}")
-        case Some(value) if value > max => Some(s"Must be at most ${SettingType.bound(max)}")
+        case Some(value) if value > max || (maxExclusive && value == max) =>
+          Some(if maxExclusive then s"Must be below ${SettingType.bound(max)}" else s"Must be at most ${SettingType.bound(max)}")
         case _ => None
     case Integer(min, max) =>
       number(text) match
@@ -66,10 +71,18 @@ enum SettingType:
 
   /** Whether two valid texts mean the same value: a number by its value, anything else by its text */
   def same(a: String, b: String): Boolean = this match
-    case Decimal(_, _, _) | Integer(_, _) => number(a) == number(b)
+    case Decimal(_, _, _, _) | Integer(_, _) => number(a) == number(b)
     case _ => a == b
 
 object SettingType:
+  /**
+   * A decimal as a Setting spells it: digits with at most one point, after an optional sign. A number with an exponent is not
+   * one, though a JVM reads it, and prints a small number as one (0.00009 as 9.0E-5): a Setting is stored and shown as the text
+   * that was saved, so only what reads as a number on the screen is saved. Nor is anything else a JVM reads as a double: a
+   * hexadecimal number, a type suffix, the words for infinity and for no number.
+   */
+  private val PLAIN_DECIMAL = """[+-]?(\d+\.?\d*|\.\d+)""".r
+
   // A whole bound reads as one: "255", not "255.0"
   private def bound(value: Double): String = if value == value.toLong then value.toLong.toString else value.toString
 
@@ -137,6 +150,12 @@ case class Settings(private val text: Map[String, String], private val defaults:
   val curationDarkLuminance: Double = number(CURATION_DARK_LUMINANCE)
   val curationBrightLuminance: Double = number(CURATION_BRIGHT_LUMINANCE)
   val curationLuminanceGap: Double = number(CURATION_LUMINANCE_GAP)
+
+  /** The least probability, by SigLIP 2, that a still image matches a description for a Describe search to show it */
+  val searchDescribeMinProbability: Double = number(SEARCH_DESCRIBE_MIN_PROBABILITY)
+
+  /** The most assets a Describe search shows */
+  val searchDescribeMaxResults: Int = number(SEARCH_DESCRIBE_MAX_RESULTS).toInt
   val mapTileUrl: String = text(MAP_TILE_URL)
   val mapTileAttribution: String = text(MAP_TILE_ATTRIBUTION)
   val mapGeocoderEnabled: Boolean = text(MAP_GEOCODER_ENABLED) == "true"
@@ -182,6 +201,8 @@ object Settings:
   val CURATION_DARK_LUMINANCE = "curation.dark_luminance"
   val CURATION_BRIGHT_LUMINANCE = "curation.bright_luminance"
   val CURATION_LUMINANCE_GAP = "curation.luminance_gap"
+  val SEARCH_DESCRIBE_MIN_PROBABILITY = "search.describe.min_probability"
+  val SEARCH_DESCRIBE_MAX_RESULTS = "search.describe.max_results"
   val MAP_TILE_URL = "map.tile.url"
   val MAP_TILE_ATTRIBUTION = "map.tile.attribution"
   val MAP_GEOCODER_ENABLED = "map.geocoder.enabled"
@@ -248,7 +269,8 @@ object Settings:
       FaceRecognition,
       "Vector index search width",
       "How many candidates a search of the vector index keeps as it goes (pgvector's hnsw.ef_search). Higher finds more of " +
-        "the true nearest Faces and reads more of the index. At least four times the match count.",
+        "the true nearest Faces and reads more of the index. At least four times the match count. A Describe search keeps " +
+        "its result limit of candidates when that is more, up to pgvector's 1000.",
       Integer(4),
       engine = postgresOnly
     ),
@@ -391,6 +413,20 @@ object Settings:
       "In a Sequence, a frame is Too dark or Too bright when its mean brightness, 0 to 1, is at least this much farther from " +
         s"the target of ${ImageMeasurement.TARGET_LUMINANCE} than the Sequence's frame nearest the target.",
       Decimal(0, 1)
+    ),
+    SettingDef(
+      SEARCH_DESCRIBE_MIN_PROBABILITY,
+      Search,
+      "Describe match threshold",
+      "How likely, by the model, a photo must be to match a description to be shown. Lower shows more, weaker matches.",
+      Decimal(0, 1, minExclusive = true, maxExclusive = true)
+    ),
+    SettingDef(
+      SEARCH_DESCRIBE_MAX_RESULTS,
+      Search,
+      "Describe result limit",
+      "The most photos a description shows, best first.",
+      Integer(1, 10000)
     ),
     SettingDef(
       MAP_TILE_URL,

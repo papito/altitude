@@ -220,12 +220,12 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
   /**
    * The columns of the hand-written reads that need no bulky metadata JSON (the library operations' locking read, a Sequence's
-   * frames and its live members): `AssetRow`'s labels, `asset.`-prefixed as `SearchQueries.assetColumns` builds them, so the
-   * typed row stays the one list of what a general read selects (the Scene embeddings are not on it), without `user_metadata` and
-   * `extracted_metadata`, which [[makeModel]] reads as empty when absent; `public_metadata` stays, since the Sequence rule
-   * compares the device model
+   * frames and its live members, a Describe search's page): `AssetRow`'s labels, `asset.`-prefixed as
+   * `SearchQueries.assetColumns` builds them, so the typed row stays the one list of what a general read selects (the Scene
+   * embeddings are not on it), without `user_metadata` and `extracted_metadata`, which [[makeModel]] reads as empty when absent;
+   * `public_metadata` stays, since the Sequence rule compares the device model
    */
-  private val assetWithoutBulkyMetadata: String =
+  protected val assetWithoutBulkyMetadata: String =
     Table
       .labels(AssetRow)
       .map(Db.config.columnNameMapper)

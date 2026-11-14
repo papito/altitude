@@ -76,6 +76,8 @@ import altitude.core.models.Settings
     current.curationDarkLuminance shouldBe 0.15
     current.curationBrightLuminance shouldBe 0.75
     current.curationLuminanceGap shouldBe 0.1
+    current.searchDescribeMinProbability shouldBe 0.00009
+    current.searchDescribeMaxResults shouldBe 1000
     current.mapTileUrl shouldBe "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
     current.mapTileAttribution shouldBe "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"
     current.mapGeocoderEnabled shouldBe false
@@ -350,6 +352,112 @@ import altitude.core.models.Settings
     current.curationBrightLuminance shouldBe 0.9
     current.curationLuminanceGap shouldBe 0.25
     testApp.settings.pendingRestart shouldBe empty
+  }
+
+  test("The Describe Settings are Live settings of the Search section: a probability between 0 and 1, and a limit to 10,000") {
+
+    /**
+     * Setup:
+     *
+     * The registry's entries of the Describe match threshold and the Describe result limit, and values validated and saved for
+     * them.
+     *
+     * Assertions:
+     *
+     * Both are Live settings of the Search section, which the screen shows after Triage, on both engines, with the labels and
+     * help of the screen and the defaults 0.00009 and 1000. The threshold is a probability strictly between 0 and 1, and the
+     * limit a whole number from 1 to 10,000, both bounds included. Saved values reach their accessors at once, with no restart
+     * waiting.
+     *
+     * Edge cases:
+     *
+     * 0 and 1 themselves are no probability, and a limit of 0, of 10,001 or with a fraction is refused, each saying why.
+     */
+    val threshold = Settings.SEARCH_DESCRIBE_MIN_PROBABILITY
+    val limit = Settings.SEARCH_DESCRIBE_MAX_RESULTS
+    List(threshold, limit).map(Settings.byName).foreach {
+      definition =>
+        definition.group shouldBe SettingGroup.Search
+        definition.kind shouldBe SettingKind.Live
+        definition.engine shouldBe None
+    }
+    SettingGroup.Search.label shouldBe "Search"
+    SettingGroup.values.toList.map(_.label) shouldBe
+      List("Face detection", "Face recognition and quality", "Video", "Triage", "Search", "Map", "Operations")
+    Settings.all.filter(_.group == SettingGroup.Search).map(_.name) shouldBe List(threshold, limit)
+    testApp.settings.applicable.map(_.name) should contain allElementsOf List(threshold, limit)
+
+    Settings.byName(threshold).label shouldBe "Describe match threshold"
+    Settings.byName(threshold).help shouldBe
+      "How likely, by the model, a photo must be to match a description to be shown. Lower shows more, weaker matches."
+    Settings.byName(limit).label shouldBe "Describe result limit"
+    Settings.byName(limit).help shouldBe "The most photos a description shows, best first."
+    testApp.settings.current.default(threshold) shouldBe "0.00009"
+    testApp.settings.current.default(limit) shouldBe "1000"
+
+    testApp.settings.validate(Map(threshold -> "0.5")) shouldBe empty
+    testApp.settings.validate(Map(threshold -> "0.999999")) shouldBe empty
+    testApp.settings.validate(Map(threshold -> "0.0000001")) shouldBe empty
+    testApp.settings.validate(Map(threshold -> "0")) shouldBe Map(threshold -> "Must be above 0")
+    testApp.settings.validate(Map(threshold -> "-0.1")) shouldBe Map(threshold -> "Must be above 0")
+    testApp.settings.validate(Map(threshold -> "1")) shouldBe Map(threshold -> "Must be below 1")
+    testApp.settings.validate(Map(threshold -> "1.5")) shouldBe Map(threshold -> "Must be below 1")
+
+    testApp.settings.validate(Map(limit -> "1")) shouldBe empty
+    testApp.settings.validate(Map(limit -> "10000")) shouldBe empty
+    testApp.settings.validate(Map(limit -> "0")) shouldBe Map(limit -> "Must be at least 1")
+    testApp.settings.validate(Map(limit -> "10001")) shouldBe Map(limit -> "Must be at most 10000")
+    testApp.settings.validate(Map(limit -> "99.5")) shouldBe Map(limit -> "Must be a whole number")
+
+    testApp.settings.save(Map(threshold -> "0.002", limit -> "250"))
+    testApp.settings.current.searchDescribeMinProbability shouldBe 0.002
+    testApp.settings.current.searchDescribeMaxResults shouldBe 250
+    testApp.settings.pendingRestart shouldBe empty
+  }
+
+  test("A decimal Setting is written in plain notation: 0.00009 is stored and read as typed, never with an exponent") {
+
+    /**
+     * Setup:
+     *
+     * The Describe match threshold, whose default of 0.00009 a JVM prints as 9.0E-5: its seeded row, and values validated and
+     * saved for it.
+     *
+     * Assertions:
+     *
+     * The seeded value and default are the text 0.00009, which the snapshot reads as that number and hands back as that text. A
+     * smaller plain decimal is saved as typed and read back as typed after a reload.
+     *
+     * Edge cases:
+     *
+     * A number written with an exponent, in either case, is refused as no number, as are a hexadecimal number, a number with a
+     * type suffix, and the words for infinity and for no number, so no row ever holds one; nothing is written for them. A leading
+     * sign and a digit left out on one side of the point are still a plain decimal.
+     */
+    val threshold = Settings.SEARCH_DESCRIBE_MIN_PROBABILITY
+    storedValues(threshold) shouldBe "0.00009"
+    testApp.settings.current.value(threshold) shouldBe "0.00009"
+    testApp.settings.current.default(threshold) shouldBe "0.00009"
+    testApp.settings.current.searchDescribeMinProbability shouldBe 0.00009
+
+    List("9e-5", "9.0E-5", "9E-5", "1e-1", "0x1p-3", "0.5d", "0.5f", "NaN", "Infinity").foreach {
+      text =>
+        withClue(text) {
+          testApp.settings.validate(Map(threshold -> text)) shouldBe Map(threshold -> "Must be a number")
+          intercept[ValidationException](testApp.settings.save(Map(threshold -> text)))
+        }
+    }
+    storedValues(threshold) shouldBe "0.00009"
+
+    List("+0.5", ".5", "0.").foreach {
+      text => withClue(text)(testApp.settings.validate(Map(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> text)) shouldBe empty)
+    }
+
+    testApp.settings.save(Map(threshold -> "0.000012"))
+    storedValues(threshold) shouldBe "0.000012"
+    testApp.settings.load()
+    testApp.settings.current.value(threshold) shouldBe "0.000012"
+    testApp.settings.current.searchDescribeMinProbability shouldBe 0.000012
   }
 
   test("The vector index keeps at least four times the match count, a rule of PostgreSQL alone") {

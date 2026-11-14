@@ -20,6 +20,8 @@ import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.EditRecipe
 import altitude.core.models.Person
+import altitude.core.models.SceneEmbedding
+import altitude.core.models.SceneEmbeddings
 import altitude.core.service.SearchService
 import altitude.core.util.TriageSubset
 import altitude.core.util.Util
@@ -640,6 +642,32 @@ import altitude.core.util.Util
     html should include(first)
     html should include(second)
     (html.indexOf(first) < html.indexOf(second)) shouldBe true
+  }
+
+  /** The assets of the page's cells, in the order of the grid */
+  private def cellIds(html: String): List[String] = "id=\"asset-([^\"]+)\"".r.findAllMatchIn(html).map(_.group(1)).toList
+
+  /** The embedding the server's instance gives a description, which the fixtures of a Describe search are placed around */
+  private def embeddingOf(description: String): SceneEmbedding = App.altitude.describeEmbedder.embed(description).get
+
+  /**
+   * An asset with no file whose SigLIP 2 Scene embedding is at `cosine` to the description's, as the server embeds it: that much
+   * of the description's vector, and the rest of a direction at a right angle to it, random by `seed`. The default Describe match
+   * threshold is a cosine of 0.066.
+   */
+  private def lookingLike(description: String, cosine: Double, seed: Int, isTriaged: Boolean = false): Asset = {
+    val along = embeddingOf(description).values.map(_.toDouble)
+    val random = new scala.util.Random(seed)
+    val noise = Array.fill(along.length)(random.nextGaussian())
+    val overlap = noise.indices.map(i => noise(i) * along(i)).sum
+    val across = noise.indices.map(i => noise(i) - overlap * along(i))
+    val length = math.sqrt(across.map(v => v * v).sum)
+    val values = across.indices.map(i => (cosine * along(i) + math.sqrt(1 - cosine * cosine) * across(i) / length).toFloat)
+
+    testContext.insertAsset(
+      testContext
+        .makeAsset(isTriaged = isTriaged)
+        .copy(sceneEmbeddings = SceneEmbeddings(siglip2 = Some(SceneEmbedding(IArray.from(values))))))
   }
 
   test("Grouped HTML pages open each day with a header and carry the cursor on the last cell") {
@@ -2217,6 +2245,286 @@ import altitude.core.util.Util
         response.statusCode shouldBe 200
         response.text() should include("""data-results-total="0"""")
         filterChipsIn(response.text()) shouldBe List(FilterChip(Map("person-id" -> alice.persistedId), "Alice"))
+    }
+  }
+
+  test("A description's first page shows the still images most like it, most alike first, with their total") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with five sorted assets whose Scene embeddings are at cosines of 0.9, 0.5, 0.3, 0.2 and 0.1
+     * to the embedding of "a cactus"; a sixth at 0.01, under the default Describe match threshold; one in triage at 0.8; one at
+     * 0.95 that is recycled; and one with no embedding. The description is searched two to a page, with spaces around it, then on
+     * one page, then with the triaged assets.
+     *
+     * Assertions:
+     *
+     * The first page is the results fragment with the two nearest assets in order and the total of 5, not capped: it names the
+     * description, trimmed, and no Search text, its last cell carries the cursor of the next page, and the replaced URL carries
+     * the description and no sort. On one page the five are in the order of their cosines and no cell carries a cursor. With the
+     * triaged assets the total is 6, the triaged one second, and the URL keeps the flag.
+     *
+     * Edge cases:
+     *
+     * The asset under the threshold, the recycled one and the one with no embedding are in no page.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val description = "a cactus"
+        val nearest = List(0.9, 0.5, 0.3, 0.2, 0.1).zipWithIndex.map((cosine, seed) => lookingLike(description, cosine, seed))
+        lookingLike(description, 0.01, seed = 10)
+        val inTriage = lookingLike(description, 0.8, seed = 11, isTriaged = true)
+        val recycled = lookingLike(description, 0.95, seed = 12)
+        testApp.service.library.recycleAssets(Set(recycled.persistedId))
+        testContext.insertAsset()
+
+        val first = htmlSearch(host, repoId, Map("describe" -> s"  $description ", "rpp" -> "2"))
+        first.statusCode shouldBe 200
+        val page = first.text()
+        page should include("""data-app-fragment="search-results"""")
+        cellIds(page) shouldBe nearest.take(2).map(_.persistedId)
+        page should include("""data-results-total="5"""")
+        page should include("""data-results-total-capped="false"""")
+        page should include(s"""data-results-describe="$description"""")
+        page should include("""data-results-q=""""")
+        cursorOf(page).size shouldBe 1
+        ordered(page, cell(nearest(1)), "data-app-search-after")
+        val url = first.headers("hx-replace-url").head
+        url should include("describe=a+cactus")
+        (url should not).include("sort=")
+
+        val whole = htmlSearch(host, repoId, Map("describe" -> description)).text()
+        cellIds(whole) shouldBe nearest.map(_.persistedId)
+        cursorOf(whole) shouldBe empty
+
+        val withTriaged = htmlSearch(host, repoId, Map("describe" -> description, "triaged" -> "true"))
+        withTriaged.text() should include("""data-results-total="6"""")
+        cellIds(withTriaged.text()) shouldBe
+          (nearest.head :: inTriage :: nearest.tail).map(_.persistedId)
+        withTriaged.headers("hx-replace-url").head should include("triaged=true")
+    }
+  }
+
+  test("A description that nothing in the repository looks like answers the results with no cell") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a sorted asset whose Scene embedding is at a cosine of 0.01 to the embedding of "a
+     * cactus", under the default Describe match threshold, and an asset with no embedding.
+     *
+     * Assertions:
+     *
+     * "a cactus" answers 200 with the results fragment, a total of 0 and no cell, and the replaced URL carries the description.
+     *
+     * Edge cases:
+     *
+     * A continuation of it, from a cursor a moment old whose rows are gone, is a 204 with nothing to add.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val description = "a cactus"
+        val near = lookingLike(description, 0.5, seed = 1)
+        lookingLike(description, 0.01, seed = 2)
+        val nearer = lookingLike(description, 0.9, seed = 3)
+        testContext.insertAsset()
+
+        val cursor = cursorOf(htmlSearch(host, repoId, Map("describe" -> description, "rpp" -> "1")).text()).head
+        testApp.service.library.recycleAssets(Set(near.persistedId, nearer.persistedId))
+
+        val nothing = htmlSearch(host, repoId, Map("describe" -> description))
+        nothing.statusCode shouldBe 200
+        nothing.text() should include("""data-app-fragment="search-results"""")
+        nothing.text() should include("""data-results-total="0"""")
+        cellIds(nothing.text()) shouldBe empty
+        nothing.headers("hx-replace-url").head should include("describe=a+cactus")
+
+        val dry =
+          htmlSearch(host, repoId, Map("describe" -> description, "after" -> cursor, "isContinuousScroll" -> "true"))
+        dry.statusCode shouldBe 204
+    }
+  }
+
+  test("A description's pages continue by cursor to the last, each the grid alone") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with five sorted assets whose Scene embeddings are at cosines of 0.9, 0.5, 0.3, 0.2 and 0.1
+     * to the embedding of "a cactus", searched two to a page and continued from each page's cursor.
+     *
+     * Assertions:
+     *
+     * The second page is cells alone, with no results fragment around them and no total: the third and fourth assets, the last
+     * cell carrying the next cursor. The third page is the fifth asset, with no cursor. The three pages hold the five once each,
+     * in the order of their cosines.
+     *
+     * Edge cases:
+     *
+     * A continuation may ask for another page size: one asset after the first page's cursor is the third. A cursor sent without
+     * the continuation flag is refused with a 400.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val description = "a cactus"
+        val nearest = List(0.9, 0.5, 0.3, 0.2, 0.1).zipWithIndex.map((cosine, seed) => lookingLike(description, cosine, seed))
+        val params = Map("describe" -> description, "rpp" -> "2")
+        def continued(cursor: String, rpp: String = "2") =
+          htmlSearch(host, repoId, params + ("rpp" -> rpp) + ("after" -> cursor) + ("isContinuousScroll" -> "true"))
+
+        val page1 = htmlSearch(host, repoId, params).text()
+        val page2 = continued(cursorOf(page1).head)
+        page2.statusCode shouldBe 200
+        (page2.text() should not).include("data-app-fragment")
+        (page2.text() should not).include("data-results-total")
+        cursorOf(page2.text()).size shouldBe 1
+        val page3 = continued(cursorOf(page2.text()).head).text()
+        cursorOf(page3) shouldBe empty
+
+        List(page1, page2.text(), page3).map(cellIds) shouldBe nearest.map(_.persistedId).grouped(2).toList
+
+        cellIds(continued(cursorOf(page1).head, rpp = "1").text()) shouldBe List(nearest(2).persistedId)
+
+        val withoutFlag = htmlSearch(host, repoId, params + ("after" -> cursorOf(page1).head))
+        withoutFlag.statusCode shouldBe 400
+    }
+  }
+
+  test("A cursor of a search by Search text is refused for a description, and a description's for any other search") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with three sorted assets near the embedding of "a cactus", two of them named for a cactus,
+     * and one in triage. The cursor of the first page of the Search text "cactus", one asset to a page, and the cursor of the
+     * first page of the description "a cactus", one asset to a page.
+     *
+     * Assertions:
+     *
+     * The Search text's cursor is refused for the description, and the description's for the Search text, each with a 400 saying
+     * the cursor does not belong to the search. Each cursor continues its own search.
+     *
+     * Edge cases:
+     *
+     * A description's cursor is refused for another description and for the same description with the triaged assets, which are
+     * other searches.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val description = "a cactus"
+        val assets = List(0.9, 0.5, 0.3).zipWithIndex.map((cosine, seed) => lookingLike(description, cosine, seed))
+        lookingLike(description, 0.8, seed = 11, isTriaged = true)
+        assets.take(2).zip(List("cactus one.jpg", "cactus two.jpg")).foreach {
+          (asset, name) => testApp.service.asset.rename(asset.persistedId, name)
+        }
+
+        val byText = Map("q" -> "cactus", "rpp" -> "1")
+        val byDescription = Map("describe" -> description, "rpp" -> "1")
+        val textCursor = cursorOf(htmlSearch(host, repoId, byText).text()).head
+        val describeCursor = cursorOf(htmlSearch(host, repoId, byDescription).text()).head
+        def continued(search: Map[String, String], cursor: String) =
+          htmlSearch(host, repoId, search + ("after" -> cursor) + ("isContinuousScroll" -> "true"))
+
+        val refusals = List(
+          continued(byDescription, textCursor),
+          continued(byText, describeCursor),
+          continued(byDescription + ("describe" -> "a man in a suit"), describeCursor),
+          continued(byDescription + ("triaged" -> "true"), describeCursor)
+        )
+        refusals.foreach {
+          refused =>
+            refused.statusCode shouldBe 400
+            refused.text() shouldBe "The cursor does not belong to this search"
+        }
+
+        continued(byText, textCursor).statusCode shouldBe 200
+        val next = continued(byDescription, describeCursor)
+        next.statusCode shouldBe 200
+        cellIds(next.text()) shouldBe List(assets(1).persistedId)
+    }
+  }
+
+  test("A description that is blank, too long or beside anything else of a search is refused with a 400 saying why") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository, and requests with a description that is empty, blank and of 301 characters; a description
+     * beside the Search text, a folder, a person, a Location, an album, a Triage subset, each date range, a map area, a sort, a
+     * grouping, a group direction and the map layout; and a description in the trash and in the Triage view.
+     *
+     * Assertions:
+     *
+     * Each is a plain-text 400 whose message says what is wrong: a blank description, one past 300 characters, the parameter that
+     * may not stand beside a description, the view a description does not search.
+     *
+     * Edge cases:
+     *
+     * A description of 300 characters, and one with the grid layout and the triage filter named, are answered. A page size out of
+     * bounds is refused for a description as for any search.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val folder = testApp.service.folder.add("Trips")
+        val alone = "A description stands alone, without"
+        val refused = List(
+          Map("describe" -> "") -> "A description cannot be blank",
+          Map("describe" -> "  \n ") -> "A description cannot be blank",
+          Map("describe" -> "a" * 301) -> "A description has at most 300 characters",
+          Map("q" -> "beach") -> s"$alone q",
+          Map("folderId" -> folder.persistedId) -> s"$alone folderId",
+          Map("personId" -> "alice") -> s"$alone personId",
+          Map("locationId" -> "lisbon") -> s"$alone locationId",
+          Map("albumId" -> "best") -> s"$alone albumId",
+          Map("subset" -> TriageSubset.NoLocation.apiValue) -> s"$alone subset",
+          Map("takenFrom" -> "2024-06-01") -> s"$alone takenFrom",
+          Map("takenTo" -> "2024-06-30") -> s"$alone takenTo",
+          Map("importedFrom" -> "2024-06-01") -> s"$alone importedFrom",
+          Map("importedTo" -> "2024-06-30") -> s"$alone importedTo",
+          Map("bbox" -> "1,2,3,4") -> s"$alone bbox",
+          Map("sort" -> "created_at1") -> s"$alone sort",
+          Map("sort" -> Const.Search.SORT_SIMILARITY) -> s"$alone sort",
+          Map("groupBy" -> "dateTaken") -> s"$alone groupBy",
+          Map("groupDirection" -> "asc") -> s"$alone groupDirection",
+          Map("layout" -> Const.Search.Layout.MAP) -> s"$alone layout=map",
+          Map("view" -> Const.Search.View.TRASHBIN) -> "A description does not search the trash",
+          Map("view" -> Const.Search.View.TRIAGE) -> "A description does not search the triage view",
+          Map("rpp" -> "0") -> s"rpp must be between 1 and ${Const.Search.MAX_RPP}"
+        )
+
+        for ((params, message) <- refused) withClue(s"$params: ") {
+          val response = htmlSearch(host, repoId, Map("describe" -> "a cactus") ++ params)
+          response.statusCode shouldBe 400
+          response.text() shouldBe message
+        }
+
+        val taken = List(
+          Map("describe" -> "a" * 300),
+          Map("describe" -> "a cactus", "layout" -> Const.Search.Layout.GRID, "triaged" -> "false"),
+          Map("describe" -> "a cactus", "view" -> Const.Search.View.DEFAULT)
+        )
+        for (params <- taken) withClue(s"$params: ")(htmlSearch(host, repoId, params).statusCode shouldBe 200)
     }
   }
 }

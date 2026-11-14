@@ -3799,6 +3799,11 @@ usable term) and puts it on the fragment as `data-results-q`. The Sort menu offe
 only then, checked when it is the effective sort, since the server
 refuses it without text.
 
+It takes a Describe search's description the same way (`description`, the words the results were ranked by;
+**Describe search** in `altitude/AGENTS.md`) and puts it on the fragment as `data-results-describe`, empty for
+any other search. The `sort` it is handed is then the similarity sort, which no option of the Sort menu
+names, so none is checked.
+
 `groupBy` (`dateTaken`) with `groupDirection` (`asc`/`desc`) groups the grid by
 day, and `location` and `sequence`, whose order is fixed, by Location and by Sequence with an empty direction; each option of the
 Group menu in `search_results.scala.html` carries both, and "No

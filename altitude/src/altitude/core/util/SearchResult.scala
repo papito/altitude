@@ -7,13 +7,15 @@ import altitude.core.models.Asset
 /**
  * One page row of a flat search, as the DAO reads it: the asset with where it stands in the order. `day` is its capture day under
  * the capture-time sort, which is ordered by day first, and absent under any other. `secondSortValue` is the capture time as
- * stored under the Relevance sort, which orders by it next, and null under any other.
+ * stored under the Relevance sort, which orders by it next, and null under any other. A Describe search's row stands at the
+ * cosine distance of its Scene embedding from the description's, a [[SortValue.Real]], with no day and no second value.
  */
 case class SearchRow(asset: Asset, day: Option[LocalDate], sortValue: SortValue, secondSortValue: SortValue)
 
 /**
  * What one flat search statement returns: the ordered page rows, whether a further match exists past the page and, on a page that
- * counts it (`SearchQuery.isTotalCounted`), the count of the matches up to the query's `totalCap`
+ * counts it (`SearchQuery.isTotalCounted`), the count of the matches up to the query's `totalCap`. A Describe search's first page
+ * counts the rows it ranked, which its result limit bounds, so its total is exact.
  */
 case class SearchPage(rows: List[SearchRow], total: Option[Int], hasMore: Boolean)
 

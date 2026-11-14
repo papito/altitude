@@ -20,8 +20,9 @@
    up to one past `totalCap`, which means more than the cap. `person`, `folderPath` (the folder's ancestors, top-level first,
    then the folder; empty for the root), `album`, `location` (with its category's name) and `subset` (a Triage subset)
    are the scope the results title names (includes/results_title); `text` is its title when none of them is set. `filters` are
-   a filtered search's, which the title names in their place, a chip each (includes/search_filter_chips). *@
-@(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None, subset: Option[TriageSubset] = None, filters: Option[SearchFilters] = None)
+   a filtered search's, which the title names in their place, a chip each (includes/search_filter_chips). `description` is
+   a Describe search's, the words its results were ranked by; `sort` is then the similarity sort, which no option names. *@
+@(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None, subset: Option[TriageSubset] = None, filters: Option[SearchFilters] = None, description: Option[String] = None)
 
 @* The effective scope of these results, as the server resolved them from the search parameters it was sent;
    the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js).
@@ -40,6 +41,7 @@
      data-results-location-id="@{locationId.getOrElse("")}"
      data-results-bbox="@{bbox.getOrElse("")}"
      data-results-q="@{text.getOrElse("")}"
+     data-results-describe="@{description.getOrElse("")}"
      data-results-layout="@{layout}"
      data-results-group-by="@{grouping.map(_.by.apiValue).getOrElse("")}"
      data-results-group-direction="@{grouping.filter(_.by.dateField.isDefined).map(_.direction.toString.toLowerCase).getOrElse("")}">

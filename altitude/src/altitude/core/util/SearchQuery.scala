@@ -20,6 +20,9 @@ object SearchSort:
   /** By how well an asset matches the Search text, best first */
   val Relevance: SearchSort = SearchSort(Const.Search.SORT_RELEVANCE, SortDirection.DESC)
 
+  /** By how much a still image looks like the description of a Describe search, most alike first */
+  val Similarity: SearchSort = SearchSort(Const.Search.SORT_SIMILARITY, SortDirection.DESC)
+
 class SearchQuery(
     val text: Option[String] = None,
     override val params: Map[String, Any] = Map(),

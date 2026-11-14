@@ -13,6 +13,7 @@ import scalasql.core.TypeMapper
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.SearchCursorException
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.search.SearchDialect
 import altitude.core.dao.sql.search.SearchQueries
@@ -27,6 +28,7 @@ import altitude.core.util.GroupedSearchPage
 import altitude.core.util.GroupedSearchRow
 import altitude.core.util.NameKey
 import altitude.core.util.ResolvedSearchText
+import altitude.core.util.SearchCursor
 import altitude.core.util.SearchGroupKey
 import altitude.core.util.SearchName
 import altitude.core.util.SearchPage
@@ -57,6 +59,10 @@ object SearchDao:
    * Both engines take the same upsert: an asset has one document, keyed by the table's unique index. An unchanged body is not
    * rewritten, which on SQLite also spares the full-text entry its update trigger.
    */
+  /** The columns a Describe search's page selects beside the asset's own: the row's cosine distance, and the ranked rows' count */
+  private val DESCRIBE_DISTANCE = "describe_distance"
+  private val DESCRIBE_TOTAL = "describe_total"
+
   private val DOCUMENT_UPSERT_SQL: String = s"""
             INSERT INTO search_document (${FieldConst.REPO_ID}, ${FieldConst.SearchToken.ASSET_ID}, body)
                  VALUES (?, ?, ?)
@@ -66,6 +72,74 @@ object SearchDao:
 abstract class SearchDao(override val config: Config) extends AssetDao(config) with altitude.core.dao.SearchDao:
   /** What this engine says differently in a search */
   protected def searchDialect: SearchDialect
+
+  /**
+   * The engine's statement of a Describe search's ranked rows, `(id, distance)`, with its bind values: the context repository's
+   * assets outside the trash, and outside triage unless `triaged`, whose SigLIP 2 Scene embedding is no further than
+   * `maxDistance`, a cosine distance, from `embedding`, the nearest `limit` of them at most, each with that distance. It is the
+   * engine's own vector search, and the only part of a Describe search's statement the engines write differently.
+   */
+  protected def describeRanked(embedding: SceneEmbedding, maxDistance: Double, limit: Int, triaged: Boolean): (String, List[Any])
+
+  /**
+   * The repository's flags of a Describe search's ranked rows, for the engines' statements: outside the trash, and outside triage
+   * unless the triaged assets are asked for. The completion flag is not among them: an asset has a Scene embedding only once its
+   * import has completed (`AssetDao.markAsCompleted` writes both in one statement).
+   */
+  protected def describeFlags(triaged: Boolean): String =
+    val outsideTriage = if triaged then "" else s" AND asset.${FieldConst.Asset.IS_TRIAGED} = FALSE"
+    s"asset.${FieldConst.Asset.IS_RECYCLED} = FALSE$outsideTriage"
+
+  /**
+   * One statement for both engines around the engine's ranked rows ([[describeRanked]]), materialized once: the page, the rows
+   * after the cursor's position in the order of the ranking, their distance and then their ID, one more than the page holds to
+   * tell whether another follows; those rows' assets, read in full but for the bulky metadata no cell of the grid shows; and, on
+   * a first page, the count of the ranked rows, which the limit bounds. Every page ranks again, so a cursor continues from its
+   * position among the rows as they are then.
+   */
+  override def describe(
+      embedding: SceneEmbedding,
+      minCosine: Double,
+      limit: Int,
+      triaged: Boolean,
+      cursor: Option[SearchCursor],
+      pageSize: Int): SearchPage =
+    val position = cursor.map {
+      after =>
+        after.sortValue match
+          case SortValue.Real(distance) => (distance, after.id)
+          case _ => throw SearchCursorException("Malformed cursor")
+    }
+    val (ranked, rankedBinds) = describeRanked(embedding, maxDistance = 1 - minCosine, limit, triaged)
+    val total = if cursor.isEmpty then s", (SELECT count(*) FROM ranked) AS ${SearchDao.DESCRIBE_TOTAL}" else ""
+
+    val sql = s"""
+      WITH ranked AS MATERIALIZED ($ranked)
+      SELECT $assetWithoutBulkyMetadata, page.distance AS ${SearchDao.DESCRIBE_DISTANCE}$total
+        FROM (SELECT id, distance
+                FROM ranked
+               ${if position.isDefined then "WHERE (distance, id) > (?, ?)" else ""}
+               ORDER BY distance, id
+               LIMIT ?) AS page
+        JOIN asset ON asset.${FieldConst.ID} = page.id
+       ORDER BY page.distance, page.id
+    """
+    val candidates =
+      manyBySqlQuery(sql, rankedBinds ++ position.toList.flatMap((distance, id) => List(distance, id)) :+ (pageSize + 1))
+
+    val page = SearchPage(
+      rows = candidates.take(pageSize).map {
+        rec =>
+          val distance = rec(SearchDao.DESCRIBE_DISTANCE).asInstanceOf[Number].doubleValue
+          SearchRow(makeModel(rec), day = None, sortValue = SortValue.Real(distance), secondSortValue = SortValue.Null)
+      },
+      // A page that counts the total carries it on every row; an empty one has no rows because nothing was ranked
+      total =
+        Option.when(cursor.isEmpty)(candidates.headOption.fold(0)(_(SearchDao.DESCRIBE_TOTAL).asInstanceOf[Number].intValue)),
+      hasMore = candidates.length > pageSize
+    )
+    logPage(page.rows.length, page.total, page.hasMore)
+    page
 
   override def search(query: SearchQuery): SearchPage =
     import dialect.*

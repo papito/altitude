@@ -73,6 +73,7 @@ object SqliteSearchDialect extends SearchDialect:
     def put(r: PreparedStatement, idx: Int, v: SortValue): Unit = v match
       case SortValue.Text(text) => r.setString(idx, text)
       case SortValue.Num(number) => r.setLong(idx, number)
+      case SortValue.Real(number) => r.setDouble(idx, number)
       // A SQLite cursor never carries a typed timestamp - the engine hands them back as text - but bind one as stored anyway
       case SortValue.LocalTimestamp(dateTime) => r.setString(idx, dateTime.format(SqliteOverrides.DATETIME_FORMATTER))
       case SortValue.UtcInstant(instant) =>

@@ -60,6 +60,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
    * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
    *
+   * A Describe search (`describe`, `SearchRequestParser`) is asked for by a description alone and answers the still images that
+   * look most like it, most alike first, as a flat grid page continued by cursor like any other; `triaged=true` adds the triaged
+   * assets. Its one order, similarity, is implied: a blank or overlong description, and any filter, sort, grouping, trash or
+   * Triage view or map layout beside one, is a 400. The fragment names the description (`data-results-describe`), and the browser
+   * URL carries it and no sort.
+   *
    * With `groupBy`, a header opens each date, Location or, in the Triage view, Sequence (`parseGrouping`). Grouped or not, a page
    * is `rpp` assets, 1 to `Const.Search.MAX_RPP`, and is continued by the `after` cursor its last cell carries
    * (`data-app-search-after`), never by page number (`parseCursor`).
@@ -93,6 +99,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       bbox: Option[String] = None,
       triaged: Option[Boolean] = None,
       subset: Option[String] = None,
+      describe: Option[String] = None,
       layout: String = Const.Search.Layout.GRID,
       isContinuousScroll: Boolean = false,
       groupBy: Option[String] = None,
@@ -130,7 +137,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       importedTo = importedTo,
       bbox = bbox,
       triaged = triaged,
-      subset = subset
+      subset = subset,
+      describe = describe,
+      sort = sort,
+      groupBy = groupBy,
+      groupDirection = groupDirection,
+      layout = Some(layout)
     )
     val scope = SearchRequestParser.parse(params) match
       case Left(message) => return textError(message, 400)
@@ -138,11 +150,13 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     if layout != Const.Search.Layout.GRID && layout != Const.Search.Layout.MAP then return textError("Unknown layout", 400)
 
-    val effectiveSort = sort.getOrElse(
+    // A Describe search has one order, which no request names: it has no sort parameter, in the browser URL either
+    def defaultSort: String =
       if scope.text.isDefined then Const.Search.SORT_RELEVANCE
-      else s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}")
+      else s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}"
+    val effectiveSort = Option.when(scope.description.isEmpty)(sort.getOrElse(defaultSort))
 
-    val searchSort = parseSort(effectiveSort) match
+    val searchSort = effectiveSort.fold(Option(SearchSort.Similarity))(parseSort) match
       case None => return textError("Unknown sort", 400)
       case Some(searchSort) => searchSort
 
@@ -269,12 +283,15 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         ("HX-Replace-Url", browserUrl)
       )
 
-    val searchQuery = scope.query(rpp = rpp, searchSort = List(searchSort), cursor = cursor)
-
-    logger.trace(s"QUERY: ${searchQuery.toString}")
-
+    // A description is its own search, ranked by the vector search; anything else is a flat search of the scope
     val results =
-      try App.altitude.service.library.search(searchQuery)
+      try
+        scope.description match
+          case Some(description) => App.altitude.service.search.describe(description, triaged.contains(true), cursor, rpp)
+          case None =>
+            val searchQuery = scope.query(rpp = rpp, searchSort = List(searchSort), cursor = cursor)
+            logger.trace(s"QUERY: ${searchQuery.toString}")
+            App.altitude.service.library.search(searchQuery)
       catch
         case ex: SearchCursorException => return textError(ex.getMessage, 400)
         case _: QueryTimeoutException => return timedOut
@@ -294,7 +311,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     htmlResponse(
       includes.html.search_results(
         total = results.total.getOrElse(0),
-        totalCap = searchQuery.totalCap,
+        // What the total is counted up to; a Describe search's is exact, bounded by its result limit, never above the cap
+        totalCap = Const.Search.TOTAL_CAP,
         sort = searchSort,
         grouping = None,
         grid = htmx.html.results_grid(isContinuousScroll = false, results = results),
@@ -309,7 +327,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         albumId = albumId,
         locationId = locationId,
         bbox = bbox,
-        text = scope.text
+        text = scope.text,
+        description = scope.description
       ),
       ("HX-Replace-Url", browserUrl)
     )
@@ -424,11 +443,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   /**
    * The bookmarkable URL for this search. Only parameters that are not at their default are included, and always in the same
    * order, so the same search always yields the same URL. `rpp` and `after` are left out on purpose - a shared link opens at the
-   * first page.
+   * first page. A Describe search has no `sort`: its URL carries the description, without the white space around it, and none.
    */
   private def browserViewUrl(
       search: SearchRequestParser.Params,
-      sort: String,
+      sort: Option[String],
       layout: String,
       groupBy: Option[String],
       groupDirection: Option[String],
@@ -449,7 +468,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       search.triaged.map(Api.Field.Search.TRIAGED -> _.toString),
       Option.when(layout != Const.Search.Layout.GRID)(Api.Field.Search.LAYOUT -> layout),
       search.q.map(Api.Field.Search.QUERY_TEXT -> _),
-      Some(Api.Field.Search.SORT -> sort),
+      search.describe.map(Api.Field.Search.DESCRIBE -> _.strip),
+      sort.map(Api.Field.Search.SORT -> _),
       groupBy.map(Api.Field.Search.GROUP_BY -> _),
       groupDirection.map(Api.Field.Search.GROUP_DIRECTION -> _)
     ).flatten

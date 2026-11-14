@@ -11,6 +11,9 @@ enum SortValue:
   case Text(value: String)
   case Num(value: Long)
 
+  /** The cosine distance a Describe search orders by: computed by the engine, no column's value */
+  case Real(value: Double)
+
   /** A wall-clock timestamp (PostgreSQL `timestamp`). SQLite timestamps stay `Text` in their stored format. */
   case LocalTimestamp(value: LocalDateTime)
 
@@ -21,6 +24,7 @@ enum SortValue:
   def bindValue: Any = this match
     case Text(value) => value
     case Num(value) => value
+    case Real(value) => value
     case LocalTimestamp(value) => value
     case UtcInstant(value) => value
     case Null => throw IllegalStateException("A null sort value is compared with IS NULL, never bound")
