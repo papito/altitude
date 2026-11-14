@@ -22,7 +22,7 @@ object TestSettings {
     Settings.VIDEO_PREVIEW_MIN_LUMINANCE -> "40",
     Settings.SEQUENCE_MAX_GAP_MS -> "60000",
     Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> "0.80",
-    Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY -> "0.92",
+    Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY -> "0.90",
     Settings.SEQUENCE_MAX_HASH_DISTANCE -> "10",
     Settings.CURATION_BLUR_RATIO -> "0.5",
     Settings.CURATION_FACE_QUALITY_GAP -> "2.0",

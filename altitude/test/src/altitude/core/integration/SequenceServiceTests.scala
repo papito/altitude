@@ -420,7 +420,7 @@ import altitude.core.util.SequenceRule
      *
      * None of the five is in a Sequence. The different picture's similarity to the frame is checked to be under each Scene
      * model's default threshold, so the test fails on its fixture rather than passing by accident (a DINOv2 similarity of about
-     * 0.25 against 0.80, a SigLIP 2 one of about 0.58 against 0.92); the half-size copy looks alike by either model, and only its
+     * 0.25 against 0.80, a SigLIP 2 one of about 0.58 against 0.90); the half-size copy looks alike by either model, and only its
      * size keeps it out.
      */
     val first = importFrame(frame(0))
@@ -807,7 +807,7 @@ object SequenceServiceTests {
   /**
    * A threshold of each Scene model no two frames of the synthesized burst clear: frames a few pixels apart measure 0.982 to
    * 0.998 by DINOv2 and 0.983 to 0.996 by SigLIP 2, so 0.999 is above every pair of either with a margin, and far above the
-   * defaults of 0.80 and 0.92, which every pair clears. A test that keeps frames apart with one asserts the observed similarity
+   * defaults of 0.80 and 0.90, which every pair clears. A test that keeps frames apart with one asserts the observed similarity
    * lies between it and the default, so the threshold, and nothing else, is what parts them.
    */
   private val STRICT_DINOV2_SIMILARITY = 0.999

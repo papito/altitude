@@ -65,9 +65,9 @@ import altitude.core.models.Settings
     current.videoPreviewMinLuminance shouldBe 40
     current.sequenceMaxGapMs shouldBe 60000
     current.sequenceDinov2MinSimilarity shouldBe 0.8
-    current.sequenceSiglip2MinSimilarity shouldBe 0.92
+    current.sequenceSiglip2MinSimilarity shouldBe 0.9
     current.sequenceMinSimilarity(SceneModel.Dinov2) shouldBe 0.8
-    current.sequenceMinSimilarity(SceneModel.Siglip2) shouldBe 0.92
+    current.sequenceMinSimilarity(SceneModel.Siglip2) shouldBe 0.9
     current.sequenceMaxHashDistance shouldBe 10
     current.curationBlurRatio shouldBe 0.5
     current.curationFaceQualityGap shouldBe 2.0

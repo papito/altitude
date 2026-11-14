@@ -51,7 +51,7 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('video.preview.min_luminance', '40', '40'),
   ('sequence.max_gap_ms', '60000', '60000'),
   ('sequence.dinov2.min_similarity', '0.80', '0.80'),
-  ('sequence.siglip2.min_similarity', '0.92', '0.92'),
+  ('sequence.siglip2.min_similarity', '0.90', '0.90'),
   ('sequence.max_hash_distance', '10', '10'),
   ('curation.blur_ratio', '0.5', '0.5'),
   ('curation.face_quality_gap', '2.0', '2.0'),

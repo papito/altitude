@@ -201,7 +201,7 @@ import altitude.core.util.SequenceRule
      *
      * The frame and a candidate shot a second later with the frame's embeddings (a similarity of 1 by either model) and the
      * frame's hash, then that candidate with one condition broken at a time: a 60,001 ms gap either way, another camera, another
-     * width or height, both similarities just under their default thresholds (0.80 for DINOv2, 0.92 for SigLIP 2), a time that is
+     * width or height, both similarities just under their default thresholds (0.80 for DINOv2, 0.90 for SigLIP 2), a time that is
      * the container's creation time.
      *
      * Assertions:
@@ -277,7 +277,7 @@ import altitude.core.util.SequenceRule
      * Setup:
      *
      * For each Scene model, a candidate a second later whose embedding of that model is 0.02 above the model's default threshold
-     * (0.80 for DINOv2, 0.92 for SigLIP 2), or 0.02 below it, while its embedding of the other model is orthogonal to the frame's
+     * (0.80 for DINOv2, 0.90 for SigLIP 2), or 0.02 below it, while its embedding of the other model is orthogonal to the frame's
      * (a similarity of 0, far under either threshold).
      *
      * Assertions:

@@ -274,7 +274,7 @@ starting points:
 |---|---|---|
 | `sequence.max_gap_ms` | 60000 | Sequence assignment: the most two frames may be apart |
 | `sequence.dinov2.min_similarity` | 0.80 | Sequence assignment: the least DINOv2 cosine similarity to look alike, -1 to 1 |
-| `sequence.siglip2.min_similarity` | 0.92 | Sequence assignment: the least SigLIP 2 cosine similarity to look alike, -1 to 1 |
+| `sequence.siglip2.min_similarity` | 0.90 | Sequence assignment: the least SigLIP 2 cosine similarity to look alike, -1 to 1 |
 | `sequence.max_hash_distance` | 10 | Sequence assignment: the most bits two hashes may differ by, 0 to 64; decides only two frames no Scene model embedded both of, dated or undated |
 | `curation.blur_ratio` | 0.5 | Blurry: fraction of the best sharpness |
 | `curation.face_quality_gap` | 2.0 | Poor faces: distance below the Person's best quality |
@@ -647,7 +647,7 @@ The first four rows are the Sequence Settings of Part 1 §6, with their defaults
 | Capture gap | `sequence.max_gap_ms` | 60 s |
 | pHash Hamming | `sequence.max_hash_distance` | 10 bits, only where an embedding is missing |
 | DINOv2 cosine | `sequence.dinov2.min_similarity` | 0.80 |
-| SigLIP 2 cosine | `sequence.siglip2.min_similarity` | 0.92 |
+| SigLIP 2 cosine | `sequence.siglip2.min_similarity` | 0.90 |
 | Homography inliers | not built | 30% and up for a burst, 15% for a session |
 
 The SigLIP 2 default is measured on **INRIA Holidays** (Jégou, Douze and Schmid, ECCV 2008): 1,491 personal holiday
@@ -663,19 +663,20 @@ threshold of 0.90:
 | `dinov2 ≥ 0.80 OR clip ≥ 0.90` (the baseline) | 0.538 | 0.744 | 0.625 |
 | `dinov2 ≥ 0.80 OR siglip2 ≥ 0.88` | 0.499 | 0.821 | 0.620 |
 | `dinov2 ≥ 0.80 OR siglip2 ≥ 0.89` | 0.549 | 0.780 | 0.644 |
-| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.90` | 0.610 | 0.752 | 0.674 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.90` (the default) | 0.610 | 0.752 | 0.674 |
 | `dinov2 ≥ 0.80 OR siglip2 ≥ 0.91` | 0.667 | 0.717 | 0.691 |
-| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.92` (the default) | 0.713 | 0.676 | 0.694 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.92` | 0.713 | 0.676 | 0.694 |
 | `dinov2 ≥ 0.80 OR siglip2 ≥ 0.93` | 0.755 | 0.638 | 0.692 |
 | `dinov2 ≥ 0.80 OR siglip2 ≥ 0.94` | 0.792 | 0.599 | 0.682 |
 
-0.92 is the threshold of the highest F1 among those no less precise than the baseline. It trades recall for precision
-against it; 0.90 is above the baseline on both. What the figures do not say: a Holidays group is one scene from any
-viewpoint, which is looser than a Sequence, so the recall is not a burst's; and the rule only ever compares frames
-shot within the gap on one camera, where the pairs here are of the whole set, so the precision is a floor (over the
-11,408 pairs of groups at most two apart in the set's numbering, the baseline measures 0.80 / 0.74 / 0.77 and the
-default 0.88 / 0.68 / 0.76, with 0.89 the best F1 at 0.81 / 0.78 / 0.79). DINOv2's threshold was not swept. Both
-remain to calibrate on real files.
+0.90 is above the baseline on precision, recall and F1, and keeps the baseline's recall. 0.92 has the highest F1 among
+the thresholds no less precise than the baseline, and trades recall for precision against it (0.676 against 0.744);
+0.89 is the lowest that is no worse than the baseline on all three. What the figures do not say: a Holidays group is
+one scene from any viewpoint, which is looser than a Sequence, so the recall is not a burst's; and the rule only ever
+compares frames shot within the gap on one camera, where the pairs here are of the whole set, so the precision is a
+floor (over the 11,408 pairs of groups at most two apart in the set's numbering, the baseline measures
+0.80 / 0.74 / 0.77 and the default 0.83 / 0.75 / 0.79, with 0.89 the best F1 among those no less precise than the
+baseline at 0.81 / 0.78 / 0.79). DINOv2's threshold was not swept. Both remain to calibrate on real files.
 
 ### A description's match probability
 
