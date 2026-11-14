@@ -115,7 +115,7 @@ object FieldConst:
     val HISTOGRAM = "histogram"
     // The Scene embeddings, one column per Scene model (`SceneModel.column`)
     val DINOV2_EMBEDDING = "dinov2_embedding"
-    val CLIP_EMBEDDING = "clip_embedding"
+    val SIGLIP2_EMBEDDING = "siglip2_embedding"
     val SEQUENCE_ID = "sequence_id"
     val EDIT_REV = "edit_rev"
 

@@ -37,8 +37,8 @@ import altitude.core.util.SequenceRule
   }
 
   /** Embeddings of both models, each at the given cosine to the frame's own */
-  private def alikeBy(dinov2: Double, clip: Double): SceneEmbeddings =
-    SceneEmbeddings(dinov2 = Some(atCosine(SceneModel.Dinov2, dinov2)), clip = Some(atCosine(SceneModel.Clip, clip)))
+  private def alikeBy(dinov2: Double, siglip2: Double): SceneEmbeddings =
+    SceneEmbeddings(dinov2 = Some(atCosine(SceneModel.Dinov2, dinov2)), siglip2 = Some(atCosine(SceneModel.Siglip2, siglip2)))
 
   /**
    * A frame as the pipeline hands it to the completion: a triaged still image with a camera time, a model, a hash and an
@@ -138,7 +138,7 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * The undated frame and an undated candidate at its size, alike by DINOv2 (0.95) and unlike by CLIP (0.5), the other way
+     * The undated frame and an undated candidate at its size, alike by DINOv2 (0.95) and unlike by SigLIP 2 (0.5), the other way
      * round, or unlike by both (0.5); both with no embedding at all, the candidate's hash at the default
      * `sequence.max_hash_distance` or one bit past it; the alike candidate at another width, another height, or the frame's size
      * turned; the alike candidate naming a camera; and the dated frame, naming its camera or none, against the alike undated
@@ -201,8 +201,8 @@ import altitude.core.util.SequenceRule
      *
      * The frame and a candidate shot a second later with the frame's embeddings (a similarity of 1 by either model) and the
      * frame's hash, then that candidate with one condition broken at a time: a 60,001 ms gap either way, another camera, another
-     * width or height, both similarities just under their default thresholds (0.80 for DINOv2, 0.90 for CLIP), a time that is the
-     * container's creation time.
+     * width or height, both similarities just under their default thresholds (0.80 for DINOv2, 0.92 for SigLIP 2), a time that is
+     * the container's creation time.
      *
      * Assertions:
      *
@@ -224,7 +224,7 @@ import altitude.core.util.SequenceRule
       candidate.copy(width = frame.height, height = frame.width),
       candidate.copy(sceneEmbeddings = alikeBy(
         settings.sequenceMinSimilarity(SceneModel.Dinov2) - 0.01,
-        settings.sequenceMinSimilarity(SceneModel.Clip) - 0.01)),
+        settings.sequenceMinSimilarity(SceneModel.Siglip2) - 0.01)),
       candidate.copy(originalCreatedAtSource = Some(CaptureDateSource.ContainerCreationTime))
     )
     broken.foreach {
@@ -277,14 +277,14 @@ import altitude.core.util.SequenceRule
      * Setup:
      *
      * For each Scene model, a candidate a second later whose embedding of that model is 0.02 above the model's default threshold
-     * (0.80 for DINOv2, 0.90 for CLIP), or 0.02 below it, while its embedding of the other model is orthogonal to the frame's (a
-     * similarity of 0, far under either threshold).
+     * (0.80 for DINOv2, 0.92 for SigLIP 2), or 0.02 below it, while its embedding of the other model is orthogonal to the frame's
+     * (a similarity of 0, far under either threshold).
      *
      * Assertions:
      *
      * Just above its threshold the candidate matches by that model alone and just below it does not, in both directions; the
      * other model's similarity of 0 neither helps nor hinders. The two thresholds differ, so a similarity of 0.85 by both models
-     * is in by DINOv2's threshold although out by CLIP's: one model's likeness is enough.
+     * is in by DINOv2's threshold although out by SigLIP 2's: one model's likeness is enough.
      */
     val candidate = frame.copy(id = Some("frame-2"), originalCreatedAt = Some(after(1000)))
     SceneModel.values.foreach {
@@ -292,7 +292,7 @@ import altitude.core.util.SequenceRule
         val threshold = settings.sequenceMinSimilarity(model)
         def at(cosine: Double): Asset = model match
           case SceneModel.Dinov2 => candidate.copy(sceneEmbeddings = alikeBy(cosine, 0.0))
-          case SceneModel.Clip => candidate.copy(sceneEmbeddings = alikeBy(0.0, cosine))
+          case SceneModel.Siglip2 => candidate.copy(sceneEmbeddings = alikeBy(0.0, cosine))
 
         withClue(model) {
           SequenceRule.matches(frame, at(threshold + 0.02), settings) shouldBe true
@@ -303,7 +303,7 @@ import altitude.core.util.SequenceRule
     }
 
     settings.sequenceMinSimilarity(SceneModel.Dinov2) should be < 0.85
-    settings.sequenceMinSimilarity(SceneModel.Clip) should be > 0.85
+    settings.sequenceMinSimilarity(SceneModel.Siglip2) should be > 0.85
     SequenceRule.matches(frame, candidate.copy(sceneEmbeddings = alikeBy(0.85, 0.85)), settings) shouldBe true
   }
 
@@ -312,9 +312,9 @@ import altitude.core.util.SequenceRule
     /**
      * Setup:
      *
-     * The frame and a candidate a second later with the frame's hash, alike by DINOv2 (0.95) and unlike by CLIP (0.5); one the
-     * other way round, alike by CLIP (0.95) and unlike by DINOv2 (0.5); and one unlike by both (0.5). The likenesses are past the
-     * default thresholds on the side they are meant to be.
+     * The frame and a candidate a second later with the frame's hash, alike by DINOv2 (0.95) and unlike by SigLIP 2 (0.5); one
+     * the other way round, alike by SigLIP 2 (0.95) and unlike by DINOv2 (0.5); and one unlike by both (0.5). The likenesses are
+     * past the default thresholds on the side they are meant to be.
      *
      * Assertions:
      *
@@ -333,15 +333,15 @@ import altitude.core.util.SequenceRule
      * Setup:
      *
      * The frame and a candidate a second later, in these shapes: with both models' embeddings, a near hash (one bit away) and
-     * both similarities at 0.5, or a far hash (thirty bits away) and a DINOv2 similarity of 1; with a CLIP embedding only, alike
-     * by it (1.0) and the hash thirty bits away, or unlike by it (0.5) and the hash one bit away; the frame with a DINOv2
-     * embedding only against that CLIP-only candidate, the hash ten or eleven bits away; and neither with any embedding.
+     * both similarities at 0.5, or a far hash (thirty bits away) and a DINOv2 similarity of 1; with a SigLIP 2 embedding only,
+     * alike by it (1.0) and the hash thirty bits away, or unlike by it (0.5) and the hash one bit away; the frame with a DINOv2
+     * embedding only against that SigLIP 2-only candidate, the hash ten or eleven bits away; and neither with any embedding.
      *
      * Assertions:
      *
      * With both embeddings the similarities decide alone: the near hash with the low similarities is no match, the far hash with
      * the high DINOv2 similarity is. A candidate the frame shares one model with is decided by that model, whatever its hash: in
-     * when alike by it, out when unlike. Where the two frames share no model (one embedded by DINOv2 alone, the other by CLIP
+     * when alike by it, out when unlike. Where the two frames share no model (one embedded by DINOv2 alone, the other by SigLIP 2
      * alone), and where neither has any embedding, the hash decides: ten bits match, eleven do not.
      */
     val candidate = frame.copy(id = Some("frame-2"), originalCreatedAt = Some(after(1000)))
@@ -350,16 +350,16 @@ import altitude.core.util.SequenceRule
     SequenceRule.matches(frame, nearButUnlike, settings) shouldBe false
     SequenceRule.matches(frame, farButAlike, settings) shouldBe true
 
-    val clipOnly = candidate.copy(sceneEmbeddings = SceneEmbeddings(clip = Some(atCosine(SceneModel.Clip, 1.0))))
-    SequenceRule.matches(frame, clipOnly.copy(perceptualHash = Some(farBy(30))), settings) shouldBe true
-    val unlikeByClipOnly = candidate.copy(sceneEmbeddings = SceneEmbeddings(clip = Some(atCosine(SceneModel.Clip, 0.5))))
-    SequenceRule.matches(frame, unlikeByClipOnly.copy(perceptualHash = Some(farBy(1))), settings) shouldBe false
+    val siglip2Only = candidate.copy(sceneEmbeddings = SceneEmbeddings(siglip2 = Some(atCosine(SceneModel.Siglip2, 1.0))))
+    SequenceRule.matches(frame, siglip2Only.copy(perceptualHash = Some(farBy(30))), settings) shouldBe true
+    val unlikeBySiglip2Only = candidate.copy(sceneEmbeddings = SceneEmbeddings(siglip2 = Some(atCosine(SceneModel.Siglip2, 0.5))))
+    SequenceRule.matches(frame, unlikeBySiglip2Only.copy(perceptualHash = Some(farBy(1))), settings) shouldBe false
 
     val dinov2Only = frame.copy(sceneEmbeddings = SceneEmbeddings(dinov2 = Some(atCosine(SceneModel.Dinov2, 1.0))))
-    SequenceRule.matches(dinov2Only, clipOnly.copy(perceptualHash = Some(farBy(10))), settings) shouldBe true
-    SequenceRule.matches(dinov2Only, clipOnly.copy(perceptualHash = Some(farBy(11))), settings) shouldBe false
-    SequenceRule.matches(clipOnly.copy(perceptualHash = Some(farBy(10))), dinov2Only, settings) shouldBe true
-    SequenceRule.matches(clipOnly.copy(perceptualHash = Some(farBy(11))), dinov2Only, settings) shouldBe false
+    SequenceRule.matches(dinov2Only, siglip2Only.copy(perceptualHash = Some(farBy(10))), settings) shouldBe true
+    SequenceRule.matches(dinov2Only, siglip2Only.copy(perceptualHash = Some(farBy(11))), settings) shouldBe false
+    SequenceRule.matches(siglip2Only.copy(perceptualHash = Some(farBy(10))), dinov2Only, settings) shouldBe true
+    SequenceRule.matches(siglip2Only.copy(perceptualHash = Some(farBy(11))), dinov2Only, settings) shouldBe false
 
     val bare = frame.copy(sceneEmbeddings = SceneEmbeddings())
     val bareCandidate = candidate.copy(sceneEmbeddings = SceneEmbeddings())
@@ -373,16 +373,16 @@ import altitude.core.util.SequenceRule
      * Setup:
      *
      * The frame and a candidate a second later; Settings with a 500 ms gap; a DINOv2 threshold of 0.5 (exactly representable in
-     * float32, so the boundary itself can be tested) against candidates at a DINOv2 similarity of 0.5 and 0.49, unlike by CLIP; a
-     * CLIP threshold of 0.95 against a candidate at a CLIP similarity of 0.92, unlike by DINOv2; and a hash distance of 0 against
-     * a candidate with no embedding at all whose hash is one bit away, or identical.
+     * float32, so the boundary itself can be tested) against candidates at a DINOv2 similarity of 0.5 and 0.49, unlike by SigLIP
+     * 2; a SigLIP 2 threshold of 0.97 against a candidate at a SigLIP 2 similarity of 0.94, unlike by DINOv2; and a hash distance
+     * of 0 against a candidate with no embedding at all whose hash is one bit away, or identical.
      *
      * Assertions:
      *
      * The candidate matches at the defaults, not under the shorter gap. A DINOv2 similarity of 0.5 is out at the default
-     * threshold and in at a threshold of 0.5 (at least, not above), where 0.49 is out. A CLIP similarity of 0.92 is in at the
-     * default CLIP threshold and out at 0.95. Under the zero distance the embedding-less candidate matches only with an identical
-     * hash.
+     * threshold and in at a threshold of 0.5 (at least, not above), where 0.49 is out. A SigLIP 2 similarity of 0.94 is in at the
+     * default SigLIP 2 threshold and out at 0.97. Under the zero distance the embedding-less candidate matches only with an
+     * identical hash.
      */
     val candidate = frame.copy(id = Some("frame-2"), originalCreatedAt = Some(after(1000)))
     SequenceRule.matches(frame, candidate, settings) shouldBe true
@@ -397,10 +397,10 @@ import altitude.core.util.SequenceRule
     SequenceRule.matches(frame, halfAlike, lenientDinov2) shouldBe true
     SequenceRule.matches(frame, candidate.copy(sceneEmbeddings = alikeBy(0.49, 0.0)), lenientDinov2) shouldBe false
 
-    val strictClip = TestSettings(Map(Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> "0.95"))
-    val mostlyAlikeByClip = candidate.copy(sceneEmbeddings = alikeBy(0.0, 0.92))
-    SequenceRule.matches(frame, mostlyAlikeByClip, settings) shouldBe true
-    SequenceRule.matches(frame, mostlyAlikeByClip, strictClip) shouldBe false
+    val strictSiglip2 = TestSettings(Map(Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY -> "0.97"))
+    val mostlyAlikeBySiglip2 = candidate.copy(sceneEmbeddings = alikeBy(0.0, 0.94))
+    SequenceRule.matches(frame, mostlyAlikeBySiglip2, settings) shouldBe true
+    SequenceRule.matches(frame, mostlyAlikeBySiglip2, strictSiglip2) shouldBe false
 
     val identicalOnly = TestSettings(Map(Settings.SEQUENCE_MAX_HASH_DISTANCE -> "0"))
     val unembedded = candidate.copy(sceneEmbeddings = SceneEmbeddings())

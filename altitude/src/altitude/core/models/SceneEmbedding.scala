@@ -5,39 +5,59 @@ import java.util.Arrays
 import altitude.core.FieldConst
 import altitude.core.util.JsonCodec
 
+/** How `OnnxSceneEmbedder` fits an image, of any size and shape, to the square a Scene model takes */
+enum SceneFit:
+  /** The short side scaled to the square's side, then the center square: the ends of the long side are left out */
+  case CenterCrop
+
+  /** The whole image scaled to the square, its aspect not kept: nothing is left out, and a wide frame is narrowed */
+  case Squash
+
 /**
  * One of the vision models the import embeds every still image with (the glossary's Scene model). Each knows its name in the logs
  * (`name`), how its embedding is stored (`column`: its `asset` column, named in `FieldConst.Asset`, `dimensions`), where its ONNX
- * export lives on the classpath, and the per-channel mean and std, in RGB order, its input is normalized with after a scale to
- * 0..1: what the checkpoint was trained with, so `OnnxSceneEmbedder` feeds it what it expects.
+ * export lives on the classpath, the side of the square it takes (`inputSize`) and how an image is fitted to it (`fit`), and the
+ * per-channel mean and std, in RGB order, its input is normalized with after a scale to 0..1: what the checkpoint was trained
+ * with, so `OnnxSceneEmbedder` feeds it what it expects.
  */
 enum SceneModel(
     val name: String,
     val dimensions: Int,
     val column: String,
     val resourcePath: String,
+    val inputSize: Int,
+    val fit: SceneFit,
     val mean: IArray[Float],
     val std: IArray[Float]):
 
-  /** DINOv2 ViT-B/14, `facebook/dinov2-base`: the pooled CLS token, ImageNet normalization */
+  /** DINOv2 ViT-B/14, `facebook/dinov2-base`: the pooled CLS token of a center square, ImageNet normalization */
   case Dinov2
     extends SceneModel(
       "dinov2",
       768,
       FieldConst.Asset.DINOV2_EMBEDDING,
       "/onnx/dinov2_vitb14.onnx",
+      224,
+      SceneFit.CenterCrop,
       IArray(0.485f, 0.456f, 0.406f),
-      IArray(0.229f, 0.224f, 0.225f))
+      IArray(0.229f, 0.224f, 0.225f)
+    )
 
-  /** The CLIP ViT-B/16 image tower, `openai/clip-vit-base-patch16`: the projected image embedding, CLIP's normalization */
-  case Clip
+  /**
+   * The SigLIP 2 ViT-B/16 image tower at 256 pixels, `google/siglip2-base-patch16-256`: the vision tower's pooled output (its
+   * attention-pooling head) over the whole frame, squashed as the checkpoint's processor squashes it so that the edges of a wide
+   * frame stay in view, normalized to -1..1
+   */
+  case Siglip2
     extends SceneModel(
-      "clip",
-      512,
-      FieldConst.Asset.CLIP_EMBEDDING,
-      "/onnx/clip_vitb16_image.onnx",
-      IArray(0.48145466f, 0.4578275f, 0.40821073f),
-      IArray(0.26862954f, 0.26130258f, 0.27577711f)
+      "siglip2",
+      768,
+      FieldConst.Asset.SIGLIP2_EMBEDDING,
+      "/onnx/siglip2_b16_256_image.onnx",
+      256,
+      SceneFit.Squash,
+      IArray(0.5f, 0.5f, 0.5f),
+      IArray(0.5f, 0.5f, 0.5f)
     )
 
 object SceneEmbedding:
@@ -51,9 +71,9 @@ object SceneEmbedding:
 /**
  * A vector a vision model computes over a whole still image, describing its content and layout (the glossary's Scene embedding):
  * L2-normalized, as `OnnxSceneEmbedder` makes it. Two embeddings of one model compare by [[similarity]], 1 for the same picture;
- * embeddings of different models never compare, and the dimensions tell them apart. The values are immutable, and two embeddings
- * are equal when their values are: a case class over an array would compare it by reference, so two reads of one row would
- * differ.
+ * embeddings of different models never compare, and since the models' dimensions can be equal (both are 768 today) it is
+ * [[SceneEmbeddings]] that keeps them apart, a field per model. The values are immutable, and two embeddings are equal when their
+ * values are: a case class over an array would compare it by reference, so two reads of one row would differ.
  */
 case class SceneEmbedding(values: IArray[Float]):
 
@@ -70,7 +90,10 @@ case class SceneEmbedding(values: IArray[Float]):
   override def toString: String =
     s"SceneEmbedding(${values.length}: ${values.take(SceneEmbedding.SHOWN_VALUES).mkString(", ")}, ...)"
 
-  /** The cosine similarity to another embedding of the same model: the dot product of two unit vectors, -1 to 1 */
+  /**
+   * The cosine similarity to another embedding of the same model: the dot product of two unit vectors, -1 to 1. Two lengths that
+   * differ are refused; two models of one length are the caller's to keep apart (`SceneEmbeddings.of`).
+   */
   def similarity(other: SceneEmbedding): Double =
     if values.length != other.values.length then
       throw IllegalArgumentException(
@@ -86,9 +109,9 @@ object SceneEmbeddings:
   given JsonCodec.ReadWriter[SceneEmbeddings] = JsonCodec.macroRW
 
 /** A frame's Scene embeddings, one per Scene model, each absent where the model did not embed it (a Video, a failed pass) */
-case class SceneEmbeddings(dinov2: Option[SceneEmbedding] = None, clip: Option[SceneEmbedding] = None):
+case class SceneEmbeddings(dinov2: Option[SceneEmbedding] = None, siglip2: Option[SceneEmbedding] = None):
 
   /** The embedding of one Scene model */
   def of(model: SceneModel): Option[SceneEmbedding] = model match
     case SceneModel.Dinov2 => dinov2
-    case SceneModel.Clip => clip
+    case SceneModel.Siglip2 => siglip2

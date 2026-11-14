@@ -38,7 +38,7 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('video.preview.min_luminance', '40', '40'),
   ('sequence.max_gap_ms', '60000', '60000'),
   ('sequence.dinov2.min_similarity', '0.80', '0.80'),
-  ('sequence.clip.min_similarity', '0.90', '0.90'),
+  ('sequence.siglip2.min_similarity', '0.92', '0.92'),
   ('sequence.max_hash_distance', '10', '10'),
   ('curation.blur_ratio', '0.5', '0.5'),
   ('curation.face_quality_gap', '2.0', '2.0'),
@@ -208,11 +208,11 @@ CREATE TABLE asset (
   -- pipeline did not measure, as the Image quality is.
   histogram BLOB,
   -- The Scene embeddings of a still image, one per Scene model, each a unit vector the Sequence rule compares by cosine
-  -- similarity, stored as its raw little-endian float32 values: DINOv2 ViT-B/14's pooled CLS token (768 of them) and CLIP
-  -- ViT-B/16's projected image embedding (512). NULL for a Video, an animated image, or a still image the model could not
-  -- embed. Selected by the Sequence candidates' statement alone and transferred by no other read.
+  -- similarity, stored as its raw little-endian float32 values: DINOv2 ViT-B/14's pooled CLS token and the pooled output of
+  -- SigLIP 2 ViT-B/16's image tower (768 of them each). NULL for a Video, an animated image, or a still image the model could
+  -- not embed. Selected by the Sequence candidates' statement alone and transferred by no other read.
   dinov2_embedding BLOB,
-  clip_embedding BLOB,
+  siglip2_embedding BLOB,
   extracted_metadata TEXT,
   UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,

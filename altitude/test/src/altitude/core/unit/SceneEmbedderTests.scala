@@ -1,6 +1,8 @@
 package altitude.core.unit
 
 import altitude.test.TestFocus
+import java.security.MessageDigest
+import java.util.HexFormat
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 import org.opencv.core.Core
@@ -8,6 +10,7 @@ import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Rect
 import org.opencv.core.Scalar
+import org.opencv.core.Size
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 import org.scalatest.BeforeAndAfterAll
@@ -32,7 +35,7 @@ import altitude.core.util.OnnxSceneEmbedder
 
   Loader.load(classOf[opencv_java])
 
-  /** One embedder for the suite, opened before the first test and closed after the last: a session per Scene model is 350 MB */
+  /** One embedder for the suite, opened before the first test and closed after the last: a session per Scene model is 550 MB */
   private var embedder: OnnxSceneEmbedder = uninitialized
 
   override def beforeAll(): Unit = embedder = OnnxSceneEmbedder()
@@ -74,6 +77,61 @@ import altitude.core.util.OnnxSceneEmbedder
     Imgproc.cvtColor(image, out, code)
     out
 
+  /**
+   * A BGR image of the size computed from its coordinates alone, so it is the same on every run: diagonal ramps of a different
+   * period per channel, between a flat blue band down its left tenth and a flat red one down its right tenth
+   */
+  private def pattern(width: Int, height: Int): Mat =
+    val bytes = new Array[Byte](width * height * 3)
+    val band = width / 10
+    for
+      y <- 0 until height
+      x <- 0 until width
+    do
+      val i = (y * width + x) * 3
+      if x < band then bytes(i) = 255.toByte
+      else if x >= width - band then bytes(i + 2) = 255.toByte
+      else
+        bytes(i) = ((x * 3 + y * 5) % 256).toByte
+        bytes(i + 1) = ((x * 7 + y * 2) % 256).toByte
+        bytes(i + 2) = ((x + y * 11) % 256).toByte
+    val image = new Mat(height, width, CvType.CV_8UC3)
+    image.put(0, 0, bytes)
+    image
+
+  /** A BGR image's pixels as packed RGB bytes, row-major: the form a Scene model's prepared input has */
+  private def rgbBytes(bgr: Mat): Array[Byte] =
+    val rgb = converted(bgr, Imgproc.COLOR_BGR2RGB)
+    try
+      val bytes = new Array[Byte](Math.toIntExact(rgb.total() * rgb.channels()))
+      rgb.get(0, 0, bytes)
+      bytes
+    finally rgb.release()
+
+  /** The image resized to the size with the interpolation, as packed RGB bytes */
+  private def resizedRgb(image: Mat, width: Int, height: Int, interpolation: Int): Array[Byte] =
+    val resized = new Mat()
+    try
+      Imgproc.resize(image, resized, new Size(width, height), 0, 0, interpolation)
+      rgbBytes(resized)
+    finally resized.release()
+
+  /** The center square of the side, of the image resized to the size with the interpolation, as packed RGB bytes */
+  private def centerSquareRgb(image: Mat, width: Int, height: Int, side: Int, interpolation: Int): Array[Byte] =
+    val resized = new Mat()
+    try
+      Imgproc.resize(image, resized, new Size(width, height), 0, 0, interpolation)
+      val square = resized.submat(new Rect((width - side) / 2, (height - side) / 2, side, side))
+      try rgbBytes(square)
+      finally square.release()
+    finally resized.release()
+
+  /** The RGB pixel at a column and a row of a prepared input of the side, as its three levels */
+  private def pixel(prepared: Array[Byte], side: Int, x: Int, y: Int): Seq[Int] =
+    (0 until 3).map(channel => prepared((y * side + x) * 3 + channel) & 0xff)
+
+  private def sha256(bytes: Array[Byte]): String = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
+
   test("Each Scene model's embedding of a photo has its dimensions and unit norm, and is the same on a second pass") {
 
     /**
@@ -98,19 +156,106 @@ import altitude.core.util.OnnxSceneEmbedder
     finally image.release()
   }
 
+  test("DINOv2's input is the center square of the image with its short side fitted, the ends of the long side left out") {
+
+    /**
+     * Setup:
+     *
+     * Three synthetic images, each with a blue band down its left edge and a red one down its right: a 1200x800 landscape and a
+     * 600x900 portrait, both shrunk to fit, and a 150x100 landscape, smaller than the input and so enlarged.
+     *
+     * Assertions:
+     *
+     * DINOv2's prepared input of each is 224x224 RGB, and is byte for byte the image resized so its short side is 224
+     * (`INTER_AREA` where it shrinks, `INTER_CUBIC` where it is enlarged) and cut to its center square. Each one's SHA-256 is the
+     * digest the preparation gave when every Scene model shared this one square, before a model had a fit of its own, so DINOv2's
+     * input, which its threshold is calibrated to, is unchanged. The landscape's bands are outside the square: its first and last
+     * columns are the pattern's, neither blue nor red.
+     */
+    val side = SceneModel.Dinov2.inputSize
+    side shouldBe 224
+    val landscape = pattern(1200, 800)
+    val portrait = pattern(600, 900)
+    val small = pattern(150, 100)
+    try
+      val ofLandscape = OnnxSceneEmbedder.prepare(landscape, SceneModel.Dinov2)
+      (ofLandscape should have).length(side * side * 3)
+      ofLandscape shouldBe centerSquareRgb(landscape, 336, 224, side, Imgproc.INTER_AREA)
+      sha256(ofLandscape) shouldBe "bc94e9a3b74b04e8c3bd9dc0d22fdf2608f398ab1a1735a25ba35b4087296d74"
+      List(0, side - 1).foreach {
+        x =>
+          pixel(ofLandscape, side, x, side / 2) should not be Seq(0, 0, 255)
+          pixel(ofLandscape, side, x, side / 2) should not be Seq(255, 0, 0)
+      }
+
+      val ofPortrait = OnnxSceneEmbedder.prepare(portrait, SceneModel.Dinov2)
+      ofPortrait shouldBe centerSquareRgb(portrait, 224, 336, side, Imgproc.INTER_AREA)
+      sha256(ofPortrait) shouldBe "728f0e39a808380a1d3b3bf3a2a8859b4fcc6bb30123c598f7ea037391e1cd73"
+
+      val ofSmall = OnnxSceneEmbedder.prepare(small, SceneModel.Dinov2)
+      ofSmall shouldBe centerSquareRgb(small, 336, 224, side, Imgproc.INTER_CUBIC)
+      sha256(ofSmall) shouldBe "31398e2a0b00a8ffc07789e8090c0bc135adfd2d1174102aa9c936c6b694f0aa"
+    finally List(landscape, portrait, small).foreach(_.release())
+  }
+
+  test("SigLIP 2's input is the whole image squashed to its square, the edges of the frame kept") {
+
+    /**
+     * Setup:
+     *
+     * The synthetic images with a blue band down the left edge and a red one down the right: a 1200x800 landscape and a 600x900
+     * portrait, both larger than the input, a 150x100 landscape smaller than it, and a 1000x200 strip, wider than the input and
+     * less tall.
+     *
+     * Assertions:
+     *
+     * SigLIP 2's prepared input of each is 256x256 RGB, and is byte for byte the whole image resized to 256x256 with its aspect
+     * not kept. The edges of the frame are in view, where DINOv2's center square leaves them out: the first column of the
+     * landscape's input is the blue band and the last the red one.
+     *
+     * Edge cases:
+     *
+     * The resize is `INTER_AREA` only where neither side is enlarged: the small image, and the strip, which is enlarged on one
+     * side while it shrinks on the other, are resized with `INTER_CUBIC`.
+     */
+    val side = SceneModel.Siglip2.inputSize
+    side shouldBe 256
+    val landscape = pattern(1200, 800)
+    val portrait = pattern(600, 900)
+    val small = pattern(150, 100)
+    val strip = pattern(1000, 200)
+    try
+      val ofLandscape = OnnxSceneEmbedder.prepare(landscape, SceneModel.Siglip2)
+      (ofLandscape should have).length(side * side * 3)
+      ofLandscape shouldBe resizedRgb(landscape, side, side, Imgproc.INTER_AREA)
+      pixel(ofLandscape, side, 0, side / 2) shouldBe Seq(0, 0, 255)
+      pixel(ofLandscape, side, side - 1, side / 2) shouldBe Seq(255, 0, 0)
+
+      OnnxSceneEmbedder.prepare(portrait, SceneModel.Siglip2) shouldBe resizedRgb(portrait, side, side, Imgproc.INTER_AREA)
+      OnnxSceneEmbedder.prepare(small, SceneModel.Siglip2) shouldBe resizedRgb(small, side, side, Imgproc.INTER_CUBIC)
+      OnnxSceneEmbedder.prepare(strip, SceneModel.Siglip2) shouldBe resizedRgb(strip, side, side, Imgproc.INTER_CUBIC)
+    finally List(landscape, portrait, small, strip).foreach(_.release())
+  }
+
   test("A shifted, brightened copy of a photo is closer to it than a flipped copy, a heavy crop, or another photo") {
 
     /**
      * Setup:
      *
      * `people/bullock.jpg`; a copy shifted by three pixels each way and brightened by 12 levels, as the next frame of a burst
-     * differs; a copy flipped upside down (not mirrored: CLIP reads a mirrored picture as the same scene and ranks it beside the
-     * burst-like copy); the middle third of the photo; and `people/affleck.jpg`, a different picture.
+     * differs; a copy flipped upside down (not mirrored: SigLIP 2 reads a mirrored picture as the same scene and ranks it beside
+     * the burst-like copy); the middle third of the photo; and `people/affleck.jpg`, a different picture.
      *
      * Assertions:
      *
      * For each Scene model, the burst-like copy is more similar to the original than the flipped copy, the crop and the other
-     * photo are, so a burst frame stands out from a reframed or a different shot; the other photo is the least similar of all.
+     * photo are, so a burst frame stands out from a reframed or a different shot; the other photo is less similar than the
+     * flipped copy.
+     *
+     * Edge cases:
+     *
+     * By DINOv2 the other photo is also less similar than the crop, the least similar of all. That order is not SigLIP 2's: it
+     * reads what a picture shows, and finds another portrait about as near as a tight crop of this one (0.69 and 0.68).
      */
     val image = fixture("people/bullock.jpg")
     val shifted = shiftedAndBrightened(image)
@@ -129,7 +274,7 @@ import altitude.core.util.OnnxSceneEmbedder
           toShifted should be > toCrop
           toShifted should be > toOther
           toOther should be < toFlipped
-          toOther should be < toCrop
+          if model == SceneModel.Dinov2 then toOther should be < toCrop
       }
     finally List(image, shifted, flipped, crop, other).foreach(_.release())
   }

@@ -66,8 +66,8 @@ A model already in place is skipped, and `--force` fetches them all again.
   downloaded from a pinned revision of [maze/faceX](https://huggingface.co/maze/faceX/blob/e010b5098c3685fd00b22dd2aec6f37320e3d850/w600k_r50.onnx)
   and checked against its SHA-256
 * `altitude/resources/onnx/dinov2_vitb14.onnx`: DINOv2 ViT-B/14 (`facebook/dinov2-base`), about 350 MB
-* `altitude/resources/onnx/clip_vitb16_image.onnx`: the CLIP ViT-B/16 image tower (`openai/clip-vit-base-patch16`),
-  about 350 MB
+* `altitude/resources/onnx/siglip2_b16_256_image.onnx`: the SigLIP 2 ViT-B/16 image tower at 256 pixels
+  (`google/siglip2-base-patch16-256`), about 370 MB
 
 The two Scene models are exported to ONNX from their checkpoints, and each export is checked against PyTorch before it
 is written. The application does not start without all three.

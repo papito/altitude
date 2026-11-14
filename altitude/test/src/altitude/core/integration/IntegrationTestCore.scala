@@ -64,7 +64,7 @@ abstract class IntegrationTestCore
 
   /**
    * Whether the suite's tests run the real Scene models. Off, a fixture import is measured and hashed but carries no Scene
-   * embedding, so its frames pair by the hash alone, which spares each import about 0.7 s of model passes; a suite whose subject
+   * embedding, so its frames pair by the hash alone, which spares each import about 0.75 s of model passes; a suite whose subject
    * is the embeddings turns them on for all its tests here, or for one test with `withSceneModels`. The real models are opened
    * when the switch is first turned on, by `beforeAll` or `withSceneModels`, so a model that fails to open aborts the suite or
    * fails the test with its own error, and they stay open until the test instance is cleaned up.

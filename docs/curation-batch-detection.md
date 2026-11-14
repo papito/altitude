@@ -21,7 +21,7 @@ MeasureImageFlow                        asset.sequence_id                       
   Image quality (5 metrics + score)       shared by the frames of one scene        selectionSet
   perceptual hash                         (no table, no row of its own)            → frames + Faces + memberships
   Face sharpness per Face                                                          → CurationRule.assess
-  Scene embeddings (DINOv2, CLIP)
+  Scene embeddings (DINOv2, SigLIP 2)
         │                               Group by Sequence (grid)                       Bundles, chips, notices,
         ▼                               "Curate all N sequences" (Triage)              Contenders
 completeImport                          Curate (group header)                    resolve / reopen
@@ -54,8 +54,8 @@ What is measured, on the image fitted to a 1280 px box and converted to gray:
 | `crushed_shadows` | Fraction of pixels at 5 or below. |
 | `image_quality` | A 0 to 100 score from sharpness (over the union of the face boxes when they are large enough, else the whole frame) and the exposure penalties. **Curation never reads it**: its sharpness region varies per image, so two scores do not compare. |
 | `perceptual_hash` | OpenCV's pHash (DCT of a 32 × 32 downscale), 64 bits, held by `PerceptualHash` and compared by Hamming distance. |
-| `dinov2_embedding` | The DINOv2 ViT-B/14 Scene embedding: the pooled CLS token, 768 floats, L2-normalized (`vector(768)` on PostgreSQL, a BLOB of float32 on SQLite). |
-| `clip_embedding` | The CLIP ViT-B/16 Scene embedding: the projected image embedding, 512 floats, L2-normalized (`vector(512)`, or a BLOB). |
+| `dinov2_embedding` | The DINOv2 ViT-B/14 Scene embedding: the pooled CLS token of the frame's center square, 768 floats, L2-normalized (`vector(768)` on PostgreSQL, a BLOB of float32 on SQLite). |
+| `siglip2_embedding` | The SigLIP 2 ViT-B/16 Scene embedding: the image tower's pooled output over the whole frame, 768 floats, L2-normalized (`vector(768)`, or a BLOB). |
 
 And on each `face`: `sharpness`, the same Laplacian variance inside the face's box, or NULL under 2500 px² at the
 fitted scale. Face sharpness falls as a face fills more of the frame, so it only compares between Faces of one Person
@@ -106,16 +106,16 @@ too. A dated frame and an undated one never match, either way round; the check i
 test for both kinds:
 
 - by some Scene model whose embedding both carry, their cosine similarity is at least that model's threshold
-  (`sequence.dinov2.min_similarity` or `sequence.clip.min_similarity`): one model's likeness is enough, so the
+  (`sequence.dinov2.min_similarity` or `sequence.siglip2.min_similarity`): one model's likeness is enough, so the
   Sequences are the union of what either model finds, and a burst one model misses is caught by the other;
 - where no model embedded both, their hashes are at most `sequence.max_hash_distance` bits apart. A pair compared by
   any model is never rescued by its hashes.
 
 The similarity replaces the hash test rather than joining it: the hash at any usable distance rejects a reframed or
 zoomed shot of the scene, which the embedding holds under. Each model has its own threshold since their cosines live
-on different scales (CLIP's are compressed toward 1). The size test stays: a portrait and a landscape frame of one
-scene can embed alike and are not one Sequence. On the synthesized burst the frames measure 0.98 and up by DINOv2 and
-0.97 and up by CLIP, and a different picture about 0.26 and 0.62.
+on different scales (SigLIP 2's are compressed toward 1). The size test stays: a portrait and a landscape frame of
+one scene can embed alike and are not one Sequence. On the synthesized burst the frames measure 0.98 and up by either
+model, and a different picture about 0.25 by DINOv2 and 0.58 by SigLIP 2.
 
 ### Assignment (`SequenceService.assign`)
 
@@ -274,7 +274,7 @@ starting points:
 |---|---|---|
 | `sequence.max_gap_ms` | 60000 | Sequence assignment: the most two frames may be apart |
 | `sequence.dinov2.min_similarity` | 0.80 | Sequence assignment: the least DINOv2 cosine similarity to look alike, -1 to 1 |
-| `sequence.clip.min_similarity` | 0.90 | Sequence assignment: the least CLIP cosine similarity to look alike, -1 to 1 |
+| `sequence.siglip2.min_similarity` | 0.92 | Sequence assignment: the least SigLIP 2 cosine similarity to look alike, -1 to 1 |
 | `sequence.max_hash_distance` | 10 | Sequence assignment: the most bits two hashes may differ by, 0 to 64; decides only two frames no Scene model embedded both of, dated or undated |
 | `curation.blur_ratio` | 0.5 | Blurry: fraction of the best sharpness |
 | `curation.face_quality_gap` | 2.0 | Poor faces: distance below the Person's best quality |
@@ -607,19 +607,23 @@ The signals it does not use:
 
 What is built (Part 1 §1 and §2): every still image is embedded at import by two Scene models through ONNX Runtime,
 **DINOv2 ViT-B/14** (768 floats, self-supervised and layout sensitive, the one for "same scene, different framing")
-and the **CLIP ViT-B/16** image tower (512 floats, semantic), both stored on the asset in a vector column per model
-(`vector` on PostgreSQL, a float32 BLOB on SQLite), and the Sequence rule compares by cosine similarity under both,
-each model with its own threshold, two frames alike by either being one Sequence. ArcFace and YuNet stay on OpenCV DNN.
+and the **SigLIP 2 ViT-B/16** image tower at 256 pixels (768 floats, semantic, trained against text), both stored on
+the asset in a vector column per model (`vector` on PostgreSQL, a float32 BLOB on SQLite), and the Sequence rule
+compares by cosine similarity under both, each model with its own threshold, two frames alike by either being one
+Sequence. Each model sees the image its own way: DINOv2 the center square, the short side fitted to 224 pixels, and
+SigLIP 2 the whole frame squashed to 256 × 256, as its checkpoint's processor does, so the edges of a wide frame stay
+in view. ArcFace and YuNet stay on OpenCV DNN.
 
 Still open:
 
-- **SigLIP 2** or **MobileCLIP 2** in CLIP's place, or **DINOv3** in DINOv2's, as better or smaller models of the same
-  two kinds; a third column, or a column replaced, and a re-import of the library.
+- **DINOv3** in DINOv2's place, or **MobileCLIP 2** in SigLIP 2's, as better or smaller models of the same two kinds;
+  a column replaced, and a re-import of the library.
 - **Similar-image search** over the stored embeddings, which needs a vector index on the columns (pgvector HNSW as the
   faces have; sqlite-vector's scan on SQLite) and a search entry; the rule itself compares a frame with the handful of
   candidates of its window and needs none.
-- **Text search** over the CLIP embedding, which needs the text tower exported beside the image tower.
-- An **aesthetic score** as a linear head on the CLIP embedding (see **Learned no-reference quality** below).
+- **Text search** over the SigLIP 2 embedding, which needs the model's text tower exported beside the image tower, its
+  tokenizer, and the same vector index.
+- An **aesthetic score** as a linear head on the SigLIP 2 embedding (see **Learned no-reference quality** below).
 
 ### Geometric verification for doubtful pairs (`features2d`, ships)
 
@@ -641,8 +645,35 @@ The first four rows are the Sequence Settings of Part 1 §6, with their defaults
 | Capture gap | `sequence.max_gap_ms` | 60 s |
 | pHash Hamming | `sequence.max_hash_distance` | 10 bits, only where an embedding is missing |
 | DINOv2 cosine | `sequence.dinov2.min_similarity` | 0.80 |
-| CLIP cosine | `sequence.clip.min_similarity` | 0.90 |
+| SigLIP 2 cosine | `sequence.siglip2.min_similarity` | 0.92 |
 | Homography inliers | not built | 30% and up for a burst, 15% for a session |
+
+The SigLIP 2 default is measured on **INRIA Holidays** (Jégou, Douze and Schmid, ECCV 2008): 1,491 personal holiday
+photos in 500 groups, a group being the photos of one scene or object. Each image is embedded as an import embeds it
+(`ImageUtil.matFromBytes`, `OnnxSceneEmbedder`), and every pair of the images is scored: 1,110,795 pairs, of which the
+2,072 pairs of one group are the positives. A rule's precision, recall and F1 are of the pairs it calls alike against
+those. The baseline is the rule with the model SigLIP 2 took the place of, the CLIP ViT-B/16 image tower at its
+threshold of 0.90:
+
+| Rule | Precision | Recall | F1 |
+|---|---|---|---|
+| `dinov2 ≥ 0.80` alone | 0.819 | 0.536 | 0.648 |
+| `dinov2 ≥ 0.80 OR clip ≥ 0.90` (the baseline) | 0.538 | 0.744 | 0.625 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.88` | 0.499 | 0.821 | 0.620 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.89` | 0.549 | 0.780 | 0.644 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.90` | 0.610 | 0.752 | 0.674 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.91` | 0.667 | 0.717 | 0.691 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.92` (the default) | 0.713 | 0.676 | 0.694 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.93` | 0.755 | 0.638 | 0.692 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.94` | 0.792 | 0.599 | 0.682 |
+
+0.92 is the threshold of the highest F1 among those no less precise than the baseline. It trades recall for precision
+against it; 0.90 is above the baseline on both. What the figures do not say: a Holidays group is one scene from any
+viewpoint, which is looser than a Sequence, so the recall is not a burst's; and the rule only ever compares frames
+shot within the gap on one camera, where the pairs here are of the whole set, so the precision is a floor (over the
+11,408 pairs of groups at most two apart in the set's numbering, the baseline measures 0.80 / 0.74 / 0.77 and the
+default 0.88 / 0.68 / 0.76, with 0.89 the best F1 at 0.81 / 0.78 / 0.79). DINOv2's threshold was not swept. Both
+remain to calibrate on real files.
 
 ### Other open-source references
 
@@ -674,7 +705,8 @@ Any of these would be computed in `MeasureImageFlow` and stored on the asset or 
 - **BRISQUE** ships in `opencv_quality`; it needs the two small model files from opencv_contrib
   (`brisque_model_live.yml`, `brisque_range_live.yml`).
 - **NIMA** (aesthetic and technical heads, MobileNet backbone, small ONNX exports) gives a 1 to 10 aesthetic score.
-- **LAION aesthetic predictor** is a linear head on a CLIP embedding, which every still image now carries.
+- **LAION aesthetic predictor** is a linear head on a CLIP embedding, which no image carries: the stored semantic
+  embedding is SigLIP 2's, so the head would be one trained on that, or the image embedded by CLIP as well.
 - **MUSIQ**, **TOPIQ**, **CLIP-IQA**, **ARNIQA** are the research-grade scorers (the `pyiqa` zoo). Heavier, and only
   worth it if the simple metrics prove insufficient.
 
@@ -709,7 +741,7 @@ import.
   the most serious problem a frame could have. Today eyes are judged in the face strip by eye. The landmarker it
   needs would bring smile and pose with it.
 - **Beyond the Sequence rule's use of the Scene embeddings**: similar-image search (a vector index on the columns),
-  text search over the CLIP embedding (its text tower), and the aesthetic score as a head on it. The embeddings are
+  text search over the SigLIP 2 embedding (its text tower), and the aesthetic score as a head on it. The embeddings are
   stored for every still image; nothing reads them but the rule.
 - **Learned quality models** and the other measurements of §2.
 - Nothing ranks the frames and nothing suggests a Pick beyond the sole Contender; the score is never read.

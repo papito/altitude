@@ -15,7 +15,7 @@ import altitude.core.util.SceneEmbedder
  * models' embeddings. A suite whose subject is the embeddings turns it on (`IntegrationTestCore.usesSceneModels`,
  * `withSceneModels`). The real models are opened when it is first turned on, on the test's thread, so a model that fails to open
  * fails the suite or the test with its own error rather than an import thread's WARN, and a test JVM that never turns it on never
- * loads them (about 1.1 GB).
+ * loads them (about 1.2 GB).
  *
  * The real models' answers are kept for the instance's life, by the image's pixels: the suites that turn the models on import the
  * same synthesized frames (`BurstFrames`) test after test, and a model pass is a pure function of the pixels, so each image is

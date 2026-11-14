@@ -15,9 +15,9 @@ import scalasql.Table
  * `originalOwner` is the importer record's JSON: `jsonb` on PostgreSQL, which pgJDBC hands out as its JSON text, and `TEXT` on
  * SQLite.
  *
- * The Scene embeddings (`dinov2_embedding`, `clip_embedding`) are never carried back out of the database by a typed read, so the
- * row class does not even select them: they are bulky, and the one reader is the hand-written Sequence candidates' statement. The
- * search statements build their asset column list from these labels, so they leave them out too.
+ * The Scene embeddings (`dinov2_embedding`, `siglip2_embedding`) are never carried back out of the database by a typed read, so
+ * the row class does not even select them: they are bulky, and the one reader is the hand-written Sequence candidates' statement.
+ * The search statements build their asset column list from these labels, so they leave them out too.
  */
 case class AssetRow[T[_]](
     id: T[String],

@@ -51,7 +51,7 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('video.preview.min_luminance', '40', '40'),
   ('sequence.max_gap_ms', '60000', '60000'),
   ('sequence.dinov2.min_similarity', '0.80', '0.80'),
-  ('sequence.clip.min_similarity', '0.90', '0.90'),
+  ('sequence.siglip2.min_similarity', '0.92', '0.92'),
   ('sequence.max_hash_distance', '10', '10'),
   ('curation.blur_ratio', '0.5', '0.5'),
   ('curation.face_quality_gap', '2.0', '2.0'),
@@ -224,11 +224,11 @@ CREATE TABLE asset (
   -- (below) moves out of line; selected by the read of a Curation set's Histograms alone and transferred by no other read.
   histogram BYTEA,
   -- The Scene embeddings of a still image, one per Scene model, each a unit vector the Sequence rule compares by cosine
-  -- similarity: DINOv2 ViT-B/14's pooled CLS token and CLIP ViT-B/16's projected image embedding. NULL for a Video, an animated
-  -- image, or a still image the model could not embed. Bulky, which toast_tuple_target (below) moves out of line; selected by
-  -- the Sequence candidates' statement alone and transferred by no other read.
+  -- similarity: DINOv2 ViT-B/14's pooled CLS token and the pooled output of SigLIP 2 ViT-B/16's image tower. NULL for a Video,
+  -- an animated image, or a still image the model could not embed. Bulky, which toast_tuple_target (below) moves out of line;
+  -- selected by the Sequence candidates' statement alone and transferred by no other read.
   dinov2_embedding vector(768),
-  clip_embedding vector(512),
+  siglip2_embedding vector(768),
   -- The Sequence the image is in while in triage: the id its members share. A Sequence has no table; it exists while some
   -- asset carries its id. NULL for a sorted asset, a Video or an animated image.
   sequence_id CHAR(36) COLLATE "C",

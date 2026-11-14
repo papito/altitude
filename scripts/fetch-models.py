@@ -22,20 +22,23 @@
 """Fetches the model files the application needs and git does not hold: the ArcFace net, downloaded, and the two Scene
 models, exported from their Hugging Face checkpoints to ONNX.
 
-    altitude/resources/opencv/w600k_r50.onnx       ArcFace, InsightFace w600k_r50 (non-commercial research licence), for
-                                                   `FaceDetectionService`: a 512-float face embedding
-    altitude/resources/onnx/dinov2_vitb14.onnx     DINOv2 ViT-B/14, facebook/dinov2-base (Apache 2.0), for
-                                                   `OnnxSceneEmbedder`: the pooled CLS token, 768 floats
-    altitude/resources/onnx/clip_vitb16_image.onnx CLIP ViT-B/16 image tower, openai/clip-vit-base-patch16 (MIT), for
-                                                   `OnnxSceneEmbedder`: the projected image embedding, 512 floats
+    altitude/resources/opencv/w600k_r50.onnx           ArcFace, InsightFace w600k_r50 (non-commercial research licence),
+                                                       for `FaceDetectionService`: a 512-float face embedding
+    altitude/resources/onnx/dinov2_vitb14.onnx         DINOv2 ViT-B/14, facebook/dinov2-base (Apache 2.0), for
+                                                       `OnnxSceneEmbedder`: the pooled CLS token, 768 floats
+    altitude/resources/onnx/siglip2_b16_256_image.onnx SigLIP 2 ViT-B/16 image tower at 256 px,
+                                                       google/siglip2-base-patch16-256 (Apache 2.0), for
+                                                       `OnnxSceneEmbedder`: the vision tower's pooled output (its
+                                                       attention-pooling head), 768 floats
 
 The ArcFace net is downloaded from a pinned revision of a Hugging Face repository and checked against its pinned SHA-256;
 a mismatch fails the run and writes nothing.
 
-The Scene models take one input named `image`, float32 of shape [1, 3, 224, 224], RGB, scaled to 0..1 and normalized per
-channel with the model's mean and std (listed in MODELS below and in `SceneModel`), and give one output named
-`embedding`. Opset 17, static batch of 1. Before a file is written, the export is run through ONNX Runtime on a sample
-image and compared with the PyTorch model to a max absolute difference of 1e-4; a larger difference fails the run and
+The Scene models take one input named `image`, float32 of shape [1, 3, side, side] with the model's own side (224 for
+DINOv2, 256 for SigLIP 2), RGB, scaled to 0..1 and normalized per channel with the model's mean and std (all listed in
+MODELS below and in `SceneModel`), and give one output named `embedding`. Opset 17, static batch of 1. Before a file is
+written, the export is run through ONNX Runtime on a sample image, fitted to the model's square as the application fits
+one, and compared with the PyTorch model to a max absolute difference of 1e-4; a larger difference fails the run and
 writes nothing.
 
 Run from the repository root:
@@ -64,14 +67,13 @@ import onnx
 import onnxruntime as ort
 import torch
 from PIL import Image
-from transformers import CLIPVisionModelWithProjection, Dinov2Model
+from transformers import Dinov2Model, SiglipVisionModel
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RESOURCES_DIR = REPO_ROOT / "altitude" / "resources"
 OUTPUT_DIR = RESOURCES_DIR / "onnx"
 DEFAULT_SAMPLE = REPO_ROOT / "altitude" / "test" / "resources" / "import" / "people" / "bullock.jpg"
 
-INPUT_SIZE = 224
 OPSET = 17
 MAX_ABS_DIFF = 1e-4
 
@@ -146,6 +148,10 @@ class SceneModelSpec:
     name: str
     checkpoint: str
     output_file: str
+    # The side of the square the model takes, and how an image is fitted to it: "crop" is the short side scaled to the
+    # input side and a center crop, "squash" the whole image scaled to the square with its aspect not kept.
+    input_size: int
+    fit: str
     mean: tuple[float, float, float]
     std: tuple[float, float, float]
     dimensions: int
@@ -155,9 +161,11 @@ class SceneModelSpec:
         # Eager attention exports as plain matmul and softmax, which every opset and ONNX Runtime build handles.
         if self.name == "dinov2":
             model = Dinov2Model.from_pretrained(self.checkpoint, attn_implementation="eager")
-            return _Wrapper(model, lambda out: out.pooler_output)
-        model = CLIPVisionModelWithProjection.from_pretrained(self.checkpoint, attn_implementation="eager")
-        return _Wrapper(model, lambda out: out.image_embeds)
+        else:
+            # The fixed-resolution SigLIP 2 checkpoints are of the SigLIP architecture; the vision tower's pooled output
+            # is its attention-pooling head's, the image embedding the text tower's is compared with.
+            model = SiglipVisionModel.from_pretrained(self.checkpoint, attn_implementation="eager")
+        return _Wrapper(model, lambda out: out.pooler_output)
 
 
 class _Wrapper(torch.nn.Module):
@@ -175,36 +183,44 @@ MODELS = [
         name="dinov2",
         checkpoint="facebook/dinov2-base",
         output_file="dinov2_vitb14.onnx",
+        input_size=224,
+        fit="crop",
         mean=(0.485, 0.456, 0.406),
         std=(0.229, 0.224, 0.225),
         dimensions=768,
     ),
     SceneModelSpec(
-        name="clip",
-        checkpoint="openai/clip-vit-base-patch16",
-        output_file="clip_vitb16_image.onnx",
-        mean=(0.48145466, 0.4578275, 0.40821073),
-        std=(0.26862954, 0.26130258, 0.27577711),
-        dimensions=512,
+        name="siglip2",
+        checkpoint="google/siglip2-base-patch16-256",
+        output_file="siglip2_b16_256_image.onnx",
+        input_size=256,
+        fit="squash",
+        mean=(0.5, 0.5, 0.5),
+        std=(0.5, 0.5, 0.5),
+        dimensions=768,
     ),
 ]
 
 
 def preprocess(sample: Path, spec: SceneModelSpec) -> np.ndarray:
-    """The sample as the model's input: short side fitted to 224, center crop, RGB, normalized, NCHW float32.
+    """The sample as the model's input: fitted to the model's square by its fit, RGB, normalized, NCHW float32.
 
     This is the preprocessing `OnnxSceneEmbedder` does, so the check runs the models on an input shaped as the application
     shapes one; the resize filter differs (Pillow here, OpenCV there), which the check tolerates since both sides of it
     see the same tensor.
     """
+    side = spec.input_size
     image = Image.open(sample).convert("RGB")
-    scale = INPUT_SIZE / min(image.size)
-    width = max(INPUT_SIZE, round(image.width * scale))
-    height = max(INPUT_SIZE, round(image.height * scale))
-    image = image.resize((width, height), Image.Resampling.BOX)
-    left = (width - INPUT_SIZE) // 2
-    top = (height - INPUT_SIZE) // 2
-    image = image.crop((left, top, left + INPUT_SIZE, top + INPUT_SIZE))
+    if spec.fit == "squash":
+        image = image.resize((side, side), Image.Resampling.BOX)
+    else:
+        scale = side / min(image.size)
+        width = max(side, round(image.width * scale))
+        height = max(side, round(image.height * scale))
+        image = image.resize((width, height), Image.Resampling.BOX)
+        left = (width - side) // 2
+        top = (height - side) // 2
+        image = image.crop((left, top, left + side, top + side))
     pixels = np.asarray(image, dtype=np.float32) / 255.0
     pixels = (pixels - np.array(spec.mean, dtype=np.float32)) / np.array(spec.std, dtype=np.float32)
     return np.ascontiguousarray(pixels.transpose(2, 0, 1))[np.newaxis, ...]
@@ -213,12 +229,12 @@ def preprocess(sample: Path, spec: SceneModelSpec) -> np.ndarray:
 def rename_colliding_intermediates(path: Path, output_name: str) -> None:
     """Renames the intermediate values the exporter named like the graph's output.
 
-    The dynamo exporter names a value after the module that produces it, and CLIP's `position_embedding` gives one called
-    `embedding`, which is also the output's name; the ONNX checker refuses a graph that assigns a name twice. The nodes are
-    in topological order, so the last producer of the name is the one the exporter attached the output to: that one output
-    keeps the name, and every other mention of it, in any node's inputs (a consumer may sit after the last producer) and in
-    the other producers' outputs, means the intermediate and is renamed. Afterwards the name is asserted to be mentioned by
-    that one output alone.
+    The dynamo exporter names a value after the module that produces it, and SigLIP 2's `position_embedding` gives one
+    called `embedding`, which is also the output's name; the ONNX checker refuses a graph that assigns a name twice. The
+    nodes are in topological order, so the last producer of the name is the one the exporter attached the output to: that
+    one output keeps the name, and every other mention of it, in any node's inputs (a consumer may sit after the last
+    producer) and in the other producers' outputs, means the intermediate and is renamed. Afterwards the name is asserted
+    to be mentioned by that one output alone.
     """
     model = onnx.load(str(path))
     producers = [node for node in model.graph.node if output_name in node.output]

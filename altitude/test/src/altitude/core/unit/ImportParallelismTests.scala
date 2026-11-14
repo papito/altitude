@@ -63,9 +63,9 @@ import altitude.core.util.ImportParallelism.Resolution
   }
 
   test("Automatic takes what half the memory affords on a small box with many cores") {
-    // (4096 MB - 384 MB - 1152 MB) / 512 MB
+    // (4096 MB - 384 MB - 1216 MB) / 512 MB, rounded down
     ImportParallelism.resolve(AUTOMATIC, 24, 8 * GB, NO_CAP) shouldBe
-      Resolution(5, "automatic, half of 24 cores or 4 GB of 8 GB")
+      Resolution(4, "automatic, half of 24 cores or 4 GB of 8 GB")
   }
 
   test("Automatic computes in bytes, past what an Int holds") {
@@ -84,7 +84,7 @@ import altitude.core.util.ImportParallelism.Resolution
     // One core
     ImportParallelism.resolve(AUTOMATIC, 1, 31 * GB, NO_CAP) shouldBe
       Resolution(2, "automatic, half of 1 core or 15 GB of 31 GB, never fewer than 2")
-    // Half the memory holds the shared models and one thread: (2048 MB - 1536 MB) / 512 MB
+    // Half the memory holds the shared models and no whole thread beside them: (2048 MB - 1600 MB) / 512 MB
     ImportParallelism.resolve(AUTOMATIC, 24, 4 * GB, NO_CAP) shouldBe
       Resolution(2, "automatic, half of 24 cores or 2 GB of 4 GB, never fewer than 2")
     // Half the memory does not even hold the shared models: a negative count

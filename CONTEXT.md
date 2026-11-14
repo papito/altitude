@@ -402,13 +402,14 @@ _Avoid_: Batch (a user's selection), Burst, Stack, Group, Series.
 A vector a vision model computes over a whole still image, describing its
 content and layout. Two Scene embeddings of one model compare by cosine
 similarity, 1 for the same picture; embeddings of different models never
-compare. A frame has one per Scene model.
+compare, even where the two models' vectors are of one length. A frame has one
+per Scene model.
 _Avoid_: Vector, Feature vector, Image embedding.
 
 **Scene model**:
-One of the vision models the import embeds every still image with, DINOv2 or
-CLIP. The Sequence rule reads both: two frames alike by either are one
-Sequence.
+One of the vision models the import embeds every still image with: DINOv2,
+which reads how a picture is laid out, or SigLIP 2, which reads what it shows.
+The Sequence rule reads both: two frames alike by either are one Sequence.
 _Avoid_: Encoder, Backbone, Vision model.
 
 **Image quality**:

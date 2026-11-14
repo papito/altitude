@@ -115,7 +115,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       // Only the Sequence candidates' statement (`candidateColumns`) selects the embeddings: any other row map leaves them absent
       sceneEmbeddings = SceneEmbeddings(
         dinov2 = rec.get(SceneModel.Dinov2.column).flatMap(getVectorField),
-        clip = rec.get(SceneModel.Clip.column).flatMap(getVectorField)),
+        siglip2 = rec.get(SceneModel.Siglip2.column).flatMap(getVectorField)),
       sequenceId = Option(rec(FieldConst.Asset.SEQUENCE_ID)).map(_.toString),
       editRev = getIntField(rec(FieldConst.Asset.EDIT_REV)),
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
@@ -263,7 +263,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
              ${FieldConst.Asset.PERCEPTUAL_HASH} = ?,
              ${FieldConst.Asset.HISTOGRAM} = ?,
              ${SceneModel.Dinov2.column} = $vectorPlaceholder,
-             ${SceneModel.Clip.column} = $vectorPlaceholder
+             ${SceneModel.Siglip2.column} = $vectorPlaceholder
        WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.ID} = ?
     """
 
@@ -278,7 +278,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       asset.perceptualHash.map(h => Long.box(h.bits)).orNull,
       asset.histogram.map(_.toBytes).orNull,
       vectorBind(asset.sceneEmbeddings.dinov2),
-      vectorBind(asset.sceneEmbeddings.clip),
+      vectorBind(asset.sceneEmbeddings.siglip2),
       RequestContext.getRepository.persistedId,
       asset.persistedId
     )

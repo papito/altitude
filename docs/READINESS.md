@@ -206,7 +206,7 @@ Accepted uploads lost on restart are under [Running and upgrading](#running-and-
   - Fix: paginate the People tab.
 - [ ] No index for the file name, size and area sorts, or for metadata filters by `(field_id, value)` ([all.sql]).
 - ✅ HTTP range requests work for seeking ([RangeStreaming], tested).
-- [ ] No committed load-test harness: the 1M benchmark was one-off, and there is no HTTP load test or import-throughput test. The memory guidance rests on a few one-off imports of 24-megapixel JPEGs and no repeatable test: budget the JVM heap plus `FIXED_COST` (`POOL_COST`, 384 MB for the one shared face recognition net, and `SCENE_MODELS_COST`, 1152 MB for the two Scene models' ONNX Runtime sessions) plus `THREAD_COST` (512 MB) per import thread ([ImportParallelism]), and cap the threads with `import.parallelism.max` in [reference.conf].
+- [ ] No committed load-test harness: the 1M benchmark was one-off, and there is no HTTP load test or import-throughput test. The memory guidance rests on a few one-off imports of 24-megapixel JPEGs and no repeatable test: budget the JVM heap plus `FIXED_COST` (`POOL_COST`, 384 MB for the one shared face recognition net, and `SCENE_MODELS_COST`, 1216 MB for the two Scene models' ONNX Runtime sessions) plus `THREAD_COST` (512 MB) per import thread ([ImportParallelism]), and cap the threads with `import.parallelism.max` in [reference.conf].
   - Fix: commit a seeding and benchmark harness.
 
 ### User management
@@ -311,7 +311,7 @@ Decoder limits and timeouts are under [Malicious files](#malicious-files).
 - [ ] No `SECURITY.md`. Effort: S.
 - [ ] No LICENSE file: [build.mill] declares MIT in `pomSettings`, but no file exists. Effort: S.
 - [ ] The face model's licence: the InsightFace `w600k_r50` model is published for non-commercial research, so semi-pro use may need a different model. (unconfirmed)
-- ✅ The Scene models' licences allow commercial use: DINOv2 ViT-B/14 (`facebook/dinov2-base`) is Apache 2.0 and the CLIP ViT-B/16 image tower (`openai/clip-vit-base-patch16`) is MIT, as [fetch-models.py] records beside each checkpoint.
+- ✅ The Scene models' licences allow commercial use: DINOv2 ViT-B/14 (`facebook/dinov2-base`) and the SigLIP 2 ViT-B/16 image tower (`google/siglip2-base-patch16-256`) are both Apache 2.0, as [fetch-models.py] records beside each checkpoint.
 - [ ] Dependencies, as known at grading and not checked against release feeds or advisories (unconfirmed):
   - `commons-fileupload:1.5` ([build.mill]) is declared, unused, and in the range of CVE-2025-48976, a DoS fixed in 1.6.0.
   - `tika-core:3.0.0` is in the range of the 2025 Tika XXE advisories. Real exposure is low without the PDF module, but scanners will flag it.

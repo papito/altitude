@@ -20,6 +20,7 @@ import altitude.core.Environment
 import altitude.core.ImageException
 import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneEmbeddings
+import altitude.core.models.SceneFit
 import altitude.core.models.SceneModel
 
 /**
@@ -35,20 +36,78 @@ trait SceneEmbedder extends AutoCloseable:
   def embed(image: Mat, name: String): SceneEmbeddings
 
 object OnnxSceneEmbedder:
-  /** The side of the square every Scene model takes */
-  val INPUT_SIZE: Int = 224
-
   private val CHANNELS = 3
-  private val PIXELS = INPUT_SIZE * INPUT_SIZE
-  private val INPUT_SHAPE: Array[Long] = Array(1L, CHANNELS, INPUT_SIZE, INPUT_SIZE)
 
   /**
-   * A model's normalization folded into one multiply and add per channel: `(byte / 255 - mean) / std` is `byte * scale + offset`,
-   * so the hot loop does no division
+   * What a model's input tensor is built with: its NCHW shape, and the model's normalization folded into one multiply and add per
+   * channel (`(byte / 255 - mean) / std` is `byte * scale + offset`), so the hot loop does no division
    */
-  private class Normalization(model: SceneModel):
+  private class ModelInput(model: SceneModel):
+    val pixels: Int = model.inputSize * model.inputSize
+    val shape: Array[Long] = Array(1L, CHANNELS, model.inputSize, model.inputSize)
     val scale: IArray[Float] = model.std.map(std => 1f / (255f * std))
     val offset: IArray[Float] = model.mean.zip(model.std).map((mean, std) => -mean / std)
+
+  /**
+   * The image fitted to the model's square (`SceneModel.fit`) as packed RGB bytes, row-major: the model's input before
+   * normalization. The image is as `ImageUtil.matFromBytes` decodes it (gray, BGR or BGRA) and is left as it is.
+   */
+  private[core] def prepare(image: Mat, model: SceneModel): Array[Byte] =
+    val side = model.inputSize
+    model.fit match
+      case SceneFit.CenterCrop =>
+        val fitted = fitShortSide(image, side)
+        try
+          // A view of the square in the middle of the fitted image
+          val square = new Mat(fitted, new Rect((fitted.width() - side) / 2, (fitted.height() - side) / 2, side, side))
+          try rgbBytes(square)
+          finally square.release()
+        finally fitted.release()
+      case SceneFit.Squash =>
+        val squashed = resized(image, side, side)
+        try rgbBytes(squashed)
+        finally squashed.release()
+
+  /**
+   * The image with its short side at the side, the long side scaled by the same factor and never below it after rounding, so a
+   * square of the side fits inside
+   */
+  private def fitShortSide(image: Mat, side: Int): Mat =
+    val scale = side.toDouble / Math.min(image.width(), image.height())
+    val width = Math.max(side, Math.round(image.width() * scale).toInt)
+    val height = Math.max(side, Math.round(image.height() * scale).toInt)
+    resized(image, width, height)
+
+  /**
+   * The image at the size, its aspect kept only if the size keeps it: `INTER_AREA` when neither side is enlarged, which averages
+   * the pixels it drops where bicubic aliases a large photo, and `INTER_CUBIC` when a side is, which `INTER_AREA` does not
+   * interpolate
+   */
+  private def resized(image: Mat, width: Int, height: Int): Mat =
+    val interpolation = if width <= image.width() && height <= image.height() then Imgproc.INTER_AREA else Imgproc.INTER_CUBIC
+    val out = new Mat()
+    try Imgproc.resize(image, out, new Size(width, height), 0, 0, interpolation)
+    catch
+      case e: Throwable =>
+        out.release()
+        throw e
+    out
+
+  /** A fitted image's pixels as packed RGB bytes, whatever `ImageUtil` decoded the image as */
+  private def rgbBytes(fitted: Mat): Array[Byte] =
+    val code = fitted.channels() match
+      case 1 => Imgproc.COLOR_GRAY2RGB
+      case 3 => Imgproc.COLOR_BGR2RGB
+      case 4 => Imgproc.COLOR_BGRA2RGB
+      case channels => throw ImageException(s"An image of $channels channels cannot be embedded")
+    // The conversion's output is continuous, where a center square is a view into its fitted image
+    val rgb = new Mat()
+    try
+      Imgproc.cvtColor(fitted, rgb, code)
+      val bytes = new Array[Byte](fitted.rows() * fitted.cols() * CHANNELS)
+      rgb.get(0, 0, bytes)
+      bytes
+    finally rgb.release()
 
 /**
  * The Scene embeddings of a still image, computed by every [[altitude.core.models.SceneModel]] through ONNX Runtime.
@@ -59,18 +118,20 @@ object OnnxSceneEmbedder:
  * inter-op thread, since the parallelism is the import threads' and twelve concurrent passes each spreading over every core would
  * thrash.
  *
- * The preprocessing is this project's own, not the checkpoints' reference transform (DINOv2's processor resizes the short side to
- * 256 bicubic and crops 224; CLIP's resizes the short side to 224 bicubic): the short side fitted to
- * [[OnnxSceneEmbedder.INPUT_SIZE]], a center crop of that square, converted to RGB, scaled to 0..1 and normalized per channel
- * with the model's mean and std, laid out NCHW; the output row is L2-normalized, so two embeddings compare by their dot product.
- * One pass prepares the one square for both models, since the resize and the crop are the costly part and the normalization is
- * each model's own; the fit is `INTER_AREA` for the downscale an import is, which averages the pixels it drops where bicubic
- * aliases a large photo, and `INTER_CUBIC` where an image smaller than the input is enlarged, which `INTER_AREA` does not
- * interpolate. The export script checks the models on the same transform, and the Settings' similarity thresholds are calibrated
- * to it: a change here means calibrating again.
+ * The preprocessing is each model's own (`SceneModel.inputSize` and `fit`), over the one decoded image. DINOv2 takes the center
+ * square: the short side fitted to 224 and a center crop, this project's transform rather than the checkpoint's (its processor
+ * resizes the short side to 256 bicubic and crops 224). SigLIP 2 takes the whole image resized to 256 x 256 with its aspect not
+ * kept, as its checkpoint's processor does, so the edges of a wide frame, which the center square leaves out, stay in view.
+ * Either is then converted to RGB, scaled to 0..1 and normalized per channel with the model's mean and std, laid out NCHW; the
+ * output row is L2-normalized, so two embeddings compare by their dot product. Each model resizes for itself, since the two fits
+ * share no intermediate, and the conversion to RGB runs on the small fitted image, never on the photo. A resize is `INTER_AREA`
+ * for the downscale an import is, which averages the pixels it drops where bicubic aliases a large photo, and `INTER_CUBIC` where
+ * an image smaller than the input on a side is enlarged, which `INTER_AREA` does not interpolate. The export script checks the
+ * models on the same fits, and the Settings' similarity thresholds are calibrated to them: a change here means calibrating again.
  *
- * The two sessions hold about 1.1 GB resident, and on one thread a pass takes about 365 ms for DINOv2 and 270 ms for CLIP, plus
- * about 50 ms to fit a 24-megapixel image; the figures and what they mean for the import are in [[ImportParallelism]].
+ * The two sessions hold about 1.2 GB resident, and on one thread a pass takes about 370 ms for DINOv2 and 375 ms for SigLIP 2,
+ * plus about 50 ms a model to fit a 24-megapixel image; the figures and what they mean for the import are in
+ * [[ImportParallelism]].
  */
 class OnnxSceneEmbedder extends SceneEmbedder:
   import OnnxSceneEmbedder.*
@@ -81,7 +142,7 @@ class OnnxSceneEmbedder extends SceneEmbedder:
 
   private val sessions: Map[SceneModel, OrtSession] = openSessions()
 
-  private val normalizations: Map[SceneModel, Normalization] = SceneModel.values.map(model => model -> Normalization(model)).toMap
+  private val inputs: Map[SceneModel, ModelInput] = SceneModel.values.map(model => model -> ModelInput(model)).toMap
 
   private val closed = AtomicBoolean(false)
 
@@ -112,85 +173,24 @@ class OnnxSceneEmbedder extends SceneEmbedder:
     finally options.close()
 
   /**
-   * The embeddings of an image as `ImageUtil.matFromBytes` decodes it (gray, BGR or BGRA), upright. A model whose pass fails
-   * gives no embedding, logged at WARN with `name` (the file's), and the other model's stands; an image that cannot be prepared
-   * at all gives neither.
+   * The embeddings of an image as `ImageUtil.matFromBytes` decodes it (gray, BGR or BGRA), upright. A model that cannot prepare
+   * the image or whose pass fails gives no embedding, logged at WARN with `name` (the file's), and the other model's stands; an
+   * image no model can prepare (a channel count no decode produces) gives neither.
    */
   override def embed(image: Mat, name: String): SceneEmbeddings =
-    val pixels =
-      try Some(prepare(image))
-      catch
-        case NonFatal(e) =>
-          logger.warn(s"Could not prepare $name for the Scene models", e)
-          None
-    pixels match
-      case None => SceneEmbeddings()
-      case Some(rgb) => SceneEmbeddings(dinov2 = embed(rgb, SceneModel.Dinov2, name), clip = embed(rgb, SceneModel.Clip, name))
+    SceneEmbeddings(dinov2 = embed(image, SceneModel.Dinov2, name), siglip2 = embed(image, SceneModel.Siglip2, name))
 
-  private def embed(rgb: Array[Byte], model: SceneModel, name: String): Option[SceneEmbedding] =
-    try Some(run(rgb, model))
+  private def embed(image: Mat, model: SceneModel, name: String): Option[SceneEmbedding] =
+    try Some(run(prepare(image, model), model))
     catch
       case NonFatal(e) =>
         logger.warn(s"Scene model ${model.name} could not embed $name", e)
         None
 
-  /** The image's center square at the input size as packed RGB bytes, row-major: the models' common input before normalization */
-  private def prepare(image: Mat): Array[Byte] =
-    val fitted = fitShortSide(image)
-    try
-      val crop = centerCrop(fitted)
-      try
-        val rgb = toRgb(crop)
-        try
-          val bytes = new Array[Byte](PIXELS * CHANNELS)
-          rgb.get(0, 0, bytes)
-          bytes
-        finally rgb.release()
-      finally crop.release()
-    finally fitted.release()
-
-  /**
-   * The image with its short side at the input size, the long side scaled by the same factor and never below it after rounding:
-   * `INTER_AREA` when shrinking, `INTER_CUBIC` when enlarging an image under the input size
-   */
-  private def fitShortSide(image: Mat): Mat =
-    val scale = INPUT_SIZE.toDouble / Math.min(image.width(), image.height())
-    val width = Math.max(INPUT_SIZE, Math.round(image.width() * scale).toInt)
-    val height = Math.max(INPUT_SIZE, Math.round(image.height() * scale).toInt)
-    val interpolation = if scale <= 1.0 then Imgproc.INTER_AREA else Imgproc.INTER_CUBIC
-    val fitted = new Mat()
-    try Imgproc.resize(image, fitted, new Size(width, height), 0, 0, interpolation)
-    catch
-      case e: Throwable =>
-        fitted.release()
-        throw e
-    fitted
-
-  /** The input-sized square in the middle of a fitted image: a view, released by the caller like any Mat */
-  private def centerCrop(fitted: Mat): Mat =
-    val x = (fitted.width() - INPUT_SIZE) / 2
-    val y = (fitted.height() - INPUT_SIZE) / 2
-    new Mat(fitted, new Rect(x, y, INPUT_SIZE, INPUT_SIZE))
-
-  /** The crop as a continuous RGB Mat, whatever `ImageUtil` decoded the image as */
-  private def toRgb(crop: Mat): Mat =
-    val code = crop.channels() match
-      case 1 => Imgproc.COLOR_GRAY2RGB
-      case 3 => Imgproc.COLOR_BGR2RGB
-      case 4 => Imgproc.COLOR_BGRA2RGB
-      case channels => throw ImageException(s"An image of $channels channels cannot be embedded")
-    val rgb = new Mat()
-    try Imgproc.cvtColor(crop, rgb, code)
-    catch
-      case e: Throwable =>
-        rgb.release()
-        throw e
-    rgb
-
   /** One pass of a model over the prepared pixels: the normalized NCHW tensor in, the L2-normalized output row out */
   private def run(rgb: Array[Byte], model: SceneModel): SceneEmbedding =
-    val input = normalize(rgb, normalizations(model))
-    val tensor = OnnxTensor.createTensor(environment, FloatBuffer.wrap(input), INPUT_SHAPE)
+    val input = inputs(model)
+    val tensor = OnnxTensor.createTensor(environment, FloatBuffer.wrap(normalize(rgb, input)), input.shape)
     try
       val result = sessions(model).run(Collections.singletonMap("image", tensor))
       try
@@ -207,19 +207,20 @@ class OnnxSceneEmbedder extends SceneEmbedder:
    * The packed RGB bytes as the model's NCHW input: one plane per channel, each pixel scaled and shifted by the channel's
    * constants
    */
-  private def normalize(rgb: Array[Byte], normalization: Normalization): Array[Float] =
-    val input = new Array[Float](CHANNELS * PIXELS)
+  private def normalize(rgb: Array[Byte], input: ModelInput): Array[Float] =
+    val pixels = input.pixels
+    val values = new Array[Float](CHANNELS * pixels)
     var channel = 0
     while channel < CHANNELS do
-      val scale = normalization.scale(channel)
-      val offset = normalization.offset(channel)
-      val plane = channel * PIXELS
+      val scale = input.scale(channel)
+      val offset = input.offset(channel)
+      val plane = channel * pixels
       var pixel = 0
-      while pixel < PIXELS do
-        input(plane + pixel) = (rgb(pixel * CHANNELS + channel) & 0xff) * scale + offset
+      while pixel < pixels do
+        values(plane + pixel) = (rgb(pixel * CHANNELS + channel) & 0xff) * scale + offset
         pixel += 1
       channel += 1
-    input
+    values
 
   /** The vector scaled to unit length, in place; a zero vector has no direction and is a failed pass */
   private def unit(values: Array[Float]): Array[Float] =

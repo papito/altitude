@@ -65,9 +65,9 @@ import altitude.core.models.Settings
     current.videoPreviewMinLuminance shouldBe 40
     current.sequenceMaxGapMs shouldBe 60000
     current.sequenceDinov2MinSimilarity shouldBe 0.8
-    current.sequenceClipMinSimilarity shouldBe 0.9
+    current.sequenceSiglip2MinSimilarity shouldBe 0.92
     current.sequenceMinSimilarity(SceneModel.Dinov2) shouldBe 0.8
-    current.sequenceMinSimilarity(SceneModel.Clip) shouldBe 0.9
+    current.sequenceMinSimilarity(SceneModel.Siglip2) shouldBe 0.92
     current.sequenceMaxHashDistance shouldBe 10
     current.curationBlurRatio shouldBe 0.5
     current.curationFaceQualityGap shouldBe 2.0
@@ -197,7 +197,7 @@ import altitude.core.models.Settings
       Settings.VIDEO_PREVIEW_MIN_LUMINANCE -> "256", // above 255
       Settings.SEQUENCE_MAX_GAP_MS -> "0", // below 1
       Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> "1.5", // above 1
-      Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> "-1.5", // below -1
+      Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY -> "-1.5", // below -1
       Settings.SEQUENCE_MAX_HASH_DISTANCE -> "65", // above 64, the bits of a hash
       Settings.CURATION_BLUR_RATIO -> "1.5", // above 1
       Settings.CURATION_FACE_QUALITY_GAP -> "-1", // below 0
@@ -248,7 +248,7 @@ import altitude.core.models.Settings
     val sequence = List(
       Settings.SEQUENCE_MAX_GAP_MS,
       Settings.SEQUENCE_DINOV2_MIN_SIMILARITY,
-      Settings.SEQUENCE_CLIP_MIN_SIMILARITY,
+      Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY,
       Settings.SEQUENCE_MAX_HASH_DISTANCE
     )
     sequence.map(Settings.byName).foreach {
@@ -262,7 +262,7 @@ import altitude.core.models.Settings
   }
 
   test("A similarity threshold is a cosine, inclusive of -1 and 1") {
-    List(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, Settings.SEQUENCE_CLIP_MIN_SIMILARITY).foreach {
+    List(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY).foreach {
       name =>
         withClue(name) {
           testApp.settings.validate(Map(name -> "-1")) shouldBe empty
@@ -279,21 +279,21 @@ import altitude.core.models.Settings
     testApp.settings.save(
       Map(
         Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> "0.7",
-        Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> "0.95",
+        Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY -> "0.95",
         Settings.SEQUENCE_MAX_GAP_MS -> "120000"
       ))
 
     val current = testApp.settings.current
     current.sequenceDinov2MinSimilarity shouldBe 0.7
-    current.sequenceClipMinSimilarity shouldBe 0.95
+    current.sequenceSiglip2MinSimilarity shouldBe 0.95
     current.sequenceMinSimilarity(SceneModel.Dinov2) shouldBe 0.7
-    current.sequenceMinSimilarity(SceneModel.Clip) shouldBe 0.95
+    current.sequenceMinSimilarity(SceneModel.Siglip2) shouldBe 0.95
     current.sequenceMaxGapMs shouldBe 120000
     testApp.settings.pendingRestart shouldBe empty
 
     // A reload reads the saved values back
     testApp.settings.load()
-    testApp.settings.current.sequenceClipMinSimilarity shouldBe 0.95
+    testApp.settings.current.sequenceSiglip2MinSimilarity shouldBe 0.95
   }
 
   test("The Curation thresholds are Live settings of the Triage section, and the fractions are inclusive of 0 and 1") {

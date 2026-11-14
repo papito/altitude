@@ -123,13 +123,13 @@ case class Settings(private val text: Map[String, String], private val defaults:
   val videoPreviewMinLuminance: Double = number(VIDEO_PREVIEW_MIN_LUMINANCE)
   val sequenceMaxGapMs: Int = number(SEQUENCE_MAX_GAP_MS).toInt
   val sequenceDinov2MinSimilarity: Double = number(SEQUENCE_DINOV2_MIN_SIMILARITY)
-  val sequenceClipMinSimilarity: Double = number(SEQUENCE_CLIP_MIN_SIMILARITY)
+  val sequenceSiglip2MinSimilarity: Double = number(SEQUENCE_SIGLIP2_MIN_SIMILARITY)
   val sequenceMaxHashDistance: Int = number(SEQUENCE_MAX_HASH_DISTANCE).toInt
 
   /** The least cosine similarity of two frames' embeddings of `model` to look alike */
   def sequenceMinSimilarity(model: SceneModel): Double = model match
     case SceneModel.Dinov2 => sequenceDinov2MinSimilarity
-    case SceneModel.Clip => sequenceClipMinSimilarity
+    case SceneModel.Siglip2 => sequenceSiglip2MinSimilarity
   val curationBlurRatio: Double = number(CURATION_BLUR_RATIO)
   val curationFaceQualityGap: Double = number(CURATION_FACE_QUALITY_GAP)
   val curationClippedFraction: Double = number(CURATION_CLIPPED_FRACTION)
@@ -173,7 +173,7 @@ object Settings:
   val VIDEO_PREVIEW_MIN_LUMINANCE = "video.preview.min_luminance"
   val SEQUENCE_MAX_GAP_MS = "sequence.max_gap_ms"
   val SEQUENCE_DINOV2_MIN_SIMILARITY = "sequence.dinov2.min_similarity"
-  val SEQUENCE_CLIP_MIN_SIMILARITY = "sequence.clip.min_similarity"
+  val SEQUENCE_SIGLIP2_MIN_SIMILARITY = "sequence.siglip2.min_similarity"
   val SEQUENCE_MAX_HASH_DISTANCE = "sequence.max_hash_distance"
   val CURATION_BLUR_RATIO = "curation.blur_ratio"
   val CURATION_FACE_QUALITY_GAP = "curation.face_quality_gap"
@@ -316,18 +316,18 @@ object Settings:
       "Sequence DINOv2 similarity",
       "The least cosine similarity, -1 to 1, of two frames' DINOv2 Scene embeddings to look alike. Higher groups more " +
         "strictly. Two frames are one Sequence when either Scene model finds them alike, so lowering one threshold groups more " +
-        "freely whatever the other says. DINOv2's similarities spread lower than CLIP's, so the two thresholds are on " +
+        "freely whatever the other says. DINOv2's similarities spread lower than SigLIP 2's, so the two thresholds are on " +
         "different scales. A starting point to calibrate on real files.",
       Decimal(-1, 1)
     ),
     SettingDef(
-      SEQUENCE_CLIP_MIN_SIMILARITY,
+      SEQUENCE_SIGLIP2_MIN_SIMILARITY,
       Triage,
-      "Sequence CLIP similarity",
-      "The least cosine similarity, -1 to 1, of two frames' CLIP Scene embeddings to look alike. Higher groups more strictly. " +
-        "Two frames are one Sequence when either Scene model finds them alike, so lowering one threshold groups more freely " +
-        "whatever the other says. CLIP's similarities sit closer to 1 than DINOv2's, so the two thresholds are on different " +
-        "scales. A starting point to calibrate on real files.",
+      "Sequence SigLIP 2 similarity",
+      "The least cosine similarity, -1 to 1, of two frames' SigLIP 2 Scene embeddings to look alike. Higher groups more " +
+        "strictly. Two frames are one Sequence when either Scene model finds them alike, so lowering one threshold groups more " +
+        "freely whatever the other says. SigLIP 2's similarities sit closer to 1 than DINOv2's, so the two thresholds are on " +
+        "different scales. A starting point to calibrate on real files.",
       Decimal(-1, 1)
     ),
     SettingDef(
