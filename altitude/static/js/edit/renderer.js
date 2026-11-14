@@ -117,7 +117,8 @@ void main() {
         vec2 q = (point - center) / uHalf;
         vec2 u = vec2(uWarp.x * q.x + uWarp.y * q.y, -uWarp.y * q.x + uWarp.x * q.y);
         float w = 1.0 - uWarp.z * u.x - uWarp.w * u.y;
-        // Past the horizon the color is the edge's, as the server's warp clamps it; the pixel is not covered
+        // Past the horizon (w <= 0.001) the pixel is not covered: its color, sampled at the projected point as OpenCV's
+        // warpPerspective samples it, never shows; w is only held away from 0, so the division stays finite
         float divisor = abs(w) < 1e-6 ? 1e-6 : w;
         source = u / divisor * uHalf + center;
         covered = w > ${0.001} && all(greaterThanEqual(source, vec2(0.0))) && all(lessThanEqual(source, uFrame));

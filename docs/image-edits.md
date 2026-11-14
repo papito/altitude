@@ -107,8 +107,10 @@ gives, turned back into the upright original. Its color is the image sampled bil
 beyond the last pixel centers (OpenCV's `BORDER_REPLICATE`, a texture's `CLAMP_TO_EDGE`), so no color is ever mixed with
 a transparent border. The pixel is **covered** when the inverse exists (w > 0.001) and its source lies within the frame,
 edges included (`Warp.covers`; every pixel when the warp moves nothing): a covered pixel keeps the image's alpha, and any
-other is fully transparent, a hard edge with no partial coverage. The client's color beyond the horizon is the edge's, as
-the server's warp clamps it, and the pixel is uncovered.
+other is fully transparent, a hard edge with no partial coverage. Beyond the horizon (w ≤ 0.001, a negative w included)
+both renderers still divide by w, OpenCV's `warpPerspective` by any w but 0 and the shader by w held at least 10⁻⁶ from
+0, and sample the projected point, on the far side of the frame's center, its edges repeated; the pixel is uncovered, so
+that color never shows.
 
 **A box through the Edit** (`mapBox`, the Face highlights): the four corners and the center of a box of the upright
 original are turned, warped and taken into the crop as fractions of the edited image; the box drawn is the corners'
