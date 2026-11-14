@@ -154,6 +154,16 @@ export const SECTIONS = Object.freeze([
     }),
 ])
 
+/**
+ * A slider's value as the Edit panel writes it, in its number field: to the slider's decimals
+ * (`SLIDERS`), the one formatter of the panel's readouts; a value that rounds to zero is written
+ * without a sign
+ */
+export function formatSlider(key, value) {
+    const text = value.toFixed(SLIDERS[key].decimals)
+    return /^-0(\.0+)?$/.test(text) ? text.slice(1) : text
+}
+
 // The Crop tool's settings, which change no pixel, so `isIdentity` leaves them out
 const CROP_TOOL_SETTINGS = ["aspect", "portrait", "keepInside", "cropFitted"]
 

@@ -14,6 +14,7 @@ import { editedSize, frameSize, isPortrait } from "../../edit/geometry.js"
 import {
     ASPECTS,
     defaults,
+    formatSlider,
     isIdentityCurve,
     SECTIONS,
     sectionChanged,
@@ -244,9 +245,9 @@ export function editPanel() {
             return this.recipe[key]
         },
 
-        /** The number field's value: the slider's, to its decimals */
+        /** The number field's value: the slider's, as `formatSlider` writes it */
         fieldValue(key) {
-            return this.recipe[key].toFixed(SLIDERS[key].decimals)
+            return formatSlider(key, this.recipe[key])
         },
 
         isChanged(key) {

@@ -1989,8 +1989,8 @@ data.
   Straighten with its Auto, the two Perspective sliders and "Keep the crop inside the image". Light: Exposure, Contrast,
   Highlights, Shadows, Whites, Blacks, Gamma and the tone curve. Color: Temperature, Tint, Vibrance and Saturation. Effects:
   Sharpen, Clarity, Vignette and Grain.
-- **Sliders.** `.edit-slider` (**Forms**), rendered from `recipe.js`'s `SLIDERS` (each slider's range, step, label, how its
-  value is written, as the server's step labels write it, and its track): the label row with the value's
+- **Sliders.** `.edit-slider` (**Forms**), rendered from `recipe.js`'s `SLIDERS` (each slider's range, step, label, the
+  decimals its value is written with, by `formatSlider`, the panel's one formatter of a slider's value, and its track): the label row with the value's
   `input[type=number]` at its end over a native range. The track is filled from its left end to the thumb
   (`--edit-slider-fill`, which the component writes on the element), or, for a slider whose `SLIDERS` entry names a
   `track` (Exposure, Temperature, Tint, Vibrance, Saturation), is that slider's gradient, the component setting

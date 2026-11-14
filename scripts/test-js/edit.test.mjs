@@ -247,6 +247,20 @@ test("output sizes", () => {
     }
 })
 
+test("the slider readouts are written to each slider's decimals, never as −0", () => {
+    assert.equal(recipes.formatSlider("exposure", 0.45), "0.45")
+    assert.equal(recipes.formatSlider("exposure", -5), "-5.00")
+    assert.equal(recipes.formatSlider("exposure", 0), "0.00")
+    assert.equal(recipes.formatSlider("straighten", -0), "0.0")
+    assert.equal(recipes.formatSlider("straighten", -0.04), "0.0")
+    assert.equal(recipes.formatSlider("straighten", 2.3), "2.3")
+    assert.equal(recipes.formatSlider("contrast", -12), "-12")
+    assert.equal(recipes.formatSlider("grain", 100), "100")
+    // What a normalized Edit holds is written as the field shows it
+    const edit = recipes.normalize({ ...recipes.defaults(), exposure: 1.049 })
+    assert.equal(recipes.formatSlider("exposure", edit.exposure), "1.05")
+})
+
 test("normalize rounds as the server does", () => {
     const edit = recipes.normalize({
         ...recipes.defaults(),
