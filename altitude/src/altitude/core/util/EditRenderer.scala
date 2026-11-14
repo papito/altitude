@@ -283,10 +283,10 @@ object EditRenderer:
 
   /**
    * What Grain's strength is multiplied by for a `width` × `height` output: 1 while its cell is a pixel or more, and below that
-   * the cell's size in pixels, the scale of the larger output's grain once seen at this size. A Display image shown at a
-   * smaller size is averaged over about 1/c² of its cells per pixel shown (c its cell in the pixels shown), which takes the
-   * noise's spread down by c; a smaller output floored at one cell per pixel draws independent cells, so its noise is scaled
-   * by c to look as strong at that size.
+   * the cell's size in pixels, the scale of the larger output's grain once seen at this size. A Display image shown at a smaller
+   * size is averaged over about 1/c² of its cells per pixel shown (c its cell in the pixels shown), which takes the noise's
+   * spread down by c; a smaller output floored at one cell per pixel draws independent cells, so its noise is scaled by c to look
+   * as strong at that size.
    */
   def grainScale(width: Int, height: Int): Double = Math.min(1.0, rawGrainCell(width, height))
 

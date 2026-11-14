@@ -1,9 +1,9 @@
 package altitude.core.routes.web
 
 import cask.Request
+import cask.model.Response
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
-import cask.model.Response
 import org.slf4j.Logger
 
 import altitude.core.{ Const => C }
@@ -28,11 +28,11 @@ class ContentViewController(using logger: Logger) extends cask.Routes:
    *
    * `v` is the revision of an edited asset's edited images (`asset.edit_rev`), their URLs' cache key: a Preview with `v` is the
    * edited Preview, and without it the original's; a Display image is asked for with `v` alone. The asset's revision is answered
-   * the edited image stored now, cached for good. An earlier one, which only a page built before the last render still holds,
-   * is an uncached 302 to the same item at the asset's revision (a signed URL's `exp` and `sig` kept, since they sign the path
+   * the edited image stored now, cached for good. An earlier one, which only a page built before the last render still holds, is
+   * an uncached 302 to the same item at the asset's revision (a signed URL's `exp` and `sig` kept, since they sign the path
    * alone), so the current bytes are kept by the browser under their own revision and never under one that named others. One
-   * above it, or 0, is a 404, never cached, since a later render may store other bytes under it. A `v` that is no whole number
-   * is a 400.
+   * above it, or 0, is a 404, never cached, since a later render may store other bytes under it. A `v` that is no whole number is
+   * a 400.
    *
    * `exp` and `sig` are a signed URL's, which the decorator verifies; they are declared only because cask answers a query
    * parameter that an endpoint does not declare with a 400.

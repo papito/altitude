@@ -104,8 +104,11 @@ class EditController(using logger: Logger) extends BaseController:
     answeringJson {
       val edit = EditRecipe.parse(recipe.getOrElse(throw ValidationException(C.Msg.Err.EDIT_RECIPE_REQUIRED)))
       try
-        jsonResponse(ujson.Obj(
-          fields.ANGLE -> App.altitude.service.assetEdit.autoStraighten(assetId, edit).fold(ujson.Null: ujson.Value)(ujson.Num(_))))
+        jsonResponse(
+          ujson.Obj(
+            fields.ANGLE -> App.altitude.service.assetEdit
+              .autoStraighten(assetId, edit)
+              .fold(ujson.Null: ujson.Value)(ujson.Num(_))))
       catch case ex: BusyException => jsonError(ex.getMessage, 503)
     }
 

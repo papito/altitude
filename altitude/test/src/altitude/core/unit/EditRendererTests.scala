@@ -591,8 +591,8 @@ import altitude.core.util.ImageUtil
      *
      * Edge cases:
      *
-     * At 1024 px the grain's cell is floored at a pixel, so each pixel is its own cell: the grain at a pixel is the hash at it, less
-     * ½, at the strength scaled by 1.75 × 1024 / 3840.
+     * At 1024 px the grain's cell is floored at a pixel, so each pixel is its own cell: the grain at a pixel is the hash at it,
+     * less ½, at the strength scaled by 1.75 × 1024 / 3840.
      */
     val source = new Mat(48, 64, CvType.CV_8UC3, new Scalar(128, 128, 128))
     val vignetted = rendered(source, identity.copy(vignette = -100))

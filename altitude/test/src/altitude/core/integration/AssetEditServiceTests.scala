@@ -84,13 +84,13 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     /**
      * Setup:
      *
-     * An imported image read once (as Asset detail reads it before it asks for the Edit), then saved and rendered, so its
-     * edited images are revision 1.
+     * An imported image read once (as Asset detail reads it before it asks for the Edit), then saved and rendered, so its edited
+     * images are revision 1.
      *
      * Assertions:
      *
-     * `editOf` given the asset as read before the render answers the rendered state: edit version 1, rendered at 1, revision
-     * 1, never the revision of the asset as it was read with the versions of the Edit as it is now.
+     * `editOf` given the asset as read before the render answers the rendered state: edit version 1, rendered at 1, revision 1,
+     * never the revision of the asset as it was read with the versions of the Edit as it is now.
      */
     val asset = testContext.persistAsset()
     val assetId = asset.persistedId

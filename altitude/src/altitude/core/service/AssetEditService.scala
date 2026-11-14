@@ -131,8 +131,8 @@ class AssetEditService(val app: Altitude):
   /**
    * The asset's edited image of `kind` (`Const.DataStore.PREVIEW` or `DISPLAY`) asked for under the revision `rev`: the one
    * stored, when `rev` is the asset's revision (`asset.edit_rev`). The asset has one edited image of each kind, replaced by each
-   * render under the next revision, so a revision below the current one, which only a page built before that render still
-   * holds, is `Moved` to the current one: its bytes are not the ones it named, so they are never answered under it.
+   * render under the next revision, so a revision below the current one, which only a page built before that render still holds,
+   * is `Moved` to the current one: its bytes are not the ones it named, so they are never answered under it.
    *
    * @throws NotFoundException
    *   for a revision above the asset's, which may name other bytes later, for 0, for an asset with no edited images (its Edit is

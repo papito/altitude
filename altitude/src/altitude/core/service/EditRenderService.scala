@@ -208,8 +208,8 @@ class EditRenderService(app: Altitude):
    * The queue's render of the asset on the render dispatcher, a future that completes whatever the render throws. `Future.apply`
    * would rethrow a fatal error (an `OutOfMemoryError` reading a huge original) on the dispatcher's thread and leave its future
    * pending, losing the queue's slot for good, and Pekko's handler of an uncaught fatal error stops the JVM; so the render runs
-   * in a `try` that takes any `Throwable`, logs it and completes the future: the element is done, its render failed, and its
-   * edit version is left unrendered for the next startup ([[renderOrLog]] has tried again what is not fatal).
+   * in a `try` that takes any `Throwable`, logs it and completes the future: the element is done, its render failed, and its edit
+   * version is left unrendered for the next startup ([[renderOrLog]] has tried again what is not fatal).
    */
   private def renderedOnDispatcher(assetId: String, context: PipelineContext): Future[Unit] =
     val rendered = Promise[Unit]()
