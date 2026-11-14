@@ -82,6 +82,20 @@ export const Const = {
         toggleFaceHighlights: "TOGGLE_FACE_HIGHLIGHTS_EVENT",
         // `f` in Asset detail: puts it in fullscreen or leaves it (js/search-results/detail-fullscreen.js)
         toggleFullscreen: "TOGGLE_FULLSCREEN_EVENT",
+        // `\` pressed (`detail.held` true) or released (false) in Asset detail: Show original for as long as it is
+        // held, on an edited asset (js/listeners/edit.js, js/edit/edit-stage.js)
+        showOriginalHeld: "SHOW_ORIGINAL_HELD_EVENT",
+        // `e` in Asset detail: opens or closes the Edit panel (js/edit/edit-panel.js)
+        toggleEditPanel: "TOGGLE_EDIT_PANEL_EVENT",
+        // `c` with the Edit panel open: opens the Crop tool, or in it, Done (js/edit/edit-panel.js)
+        toggleCropTool: "TOGGLE_CROP_TOOL_EVENT",
+        // In the Crop tool: `o` cycles the guide, `x` swaps the aspect's orientation, Enter is Done
+        cycleCropGuide: "CYCLE_CROP_GUIDE_EVENT",
+        swapCropAspect: "SWAP_CROP_ASPECT_EVENT",
+        cropDone: "CROP_DONE_EVENT",
+        // Ctrl/Cmd+Z, and Ctrl/Cmd+Shift+Z or Ctrl+Y, with the Edit panel open: Undo and Redo of the panel's session
+        undoEdit: "UNDO_EDIT_EVENT",
+        redoEdit: "REDO_EDIT_EVENT",
         settingsSaved: "SETTINGS_SAVED_EVENT",
         // An account was added, changed or deleted on the Users page; `detail.message` says which. The page reloads its cards
         accountsChanged: "ACCOUNTS_CHANGED_EVENT",
@@ -186,6 +200,31 @@ export const Const = {
         faceHighlightsToggle: "data-app-face-highlights-toggle",
         fullscreenToggle: "data-app-fullscreen-toggle",
         fullscreenKey: "data-app-fullscreen-key", // the key legend's fullscreen entry, gone where the toggle is
+        // Show original's toggle in Asset detail's toolbar, the title's badge that says whether the stage shows the Edit
+        // ("Edited") or the original, and the key legend's `\` entry, all shown on an edited asset alone (js/edit/edit-stage.js)
+        showOriginalToggle: "data-app-show-original-toggle",
+        editBadge: "data-app-edit-badge",
+        showOriginalKey: "data-app-show-original-key",
+        // The Edit panel's toggle in Asset detail's toolbar (includes/html_common, for a holder of Edit images), and the
+        // Asset detail fragment while the Edit panel is open and while its Crop tool is (view_image_detail_modal.css lays
+        // the grid and the stage out from them; js/edit/edit-panel.js, js/edit/crop-tool.js)
+        editPanelToggle: "data-app-edit-panel-toggle",
+        // The stage's canvas while it draws the identity behind the original's color-managed <img>, for the Edit panel's
+        // reads (view_image_detail_modal.css hides it; js/edit/edit-stage.js)
+        editCanvasBehind: "data-app-edit-canvas-behind",
+        editPanelOpen: "data-app-edit-panel-open",
+        cropToolOpen: "data-app-crop-tool-open",
+        // The Crop tool's floating bar (includes/edit_stage_tools): the guide's button and the name it shows, the crop's
+        // size, Cancel and Done
+        cropGuide: "data-app-crop-guide",
+        cropGuideName: "data-app-crop-guide-name",
+        cropSize: "data-app-crop-size",
+        cropCancel: "data-app-crop-cancel",
+        cropDone: "data-app-crop-done",
+        // The Edit panel's warning of changes not saved (includes/edit_panel, js/edit/leave-dialog.js): a choice's button,
+        // its value the choice (`save`, `discard`, `stay`), and the message
+        editLeave: "data-app-edit-leave",
+        editLeaveMessage: "data-app-edit-leave-message",
         // The button of a People row that selects its Face (htmx/detail_panel_people), and under a selected row its
         // corrections: Change, which opens the combobox, and Remove, whose second label (the one after the first click)
         // the button carries
@@ -286,7 +325,8 @@ export const Const = {
         // Whether Curation shows the Sequence rail on the queue, "true" or "false" (js/alpine/components/curation.js)
         curationSequenceRail: "curationSequenceRail",
         // Asset detail's remembered view (js/search-results/detail-panel.js): whether the Detail panel is open, whether
-        // the Face highlights are on and the panel's dock (its side once picked and its share of each axis)
+        // the Face highlights are on and the panel's dock (its side once picked and its share of each axis); and the Edit
+        // panel's (js/edit/edit-panel.js): whether it is open (`editOpen`) and its share of each axis (`editDock`)
         assetDetailView: "assetDetailView",
     },
 

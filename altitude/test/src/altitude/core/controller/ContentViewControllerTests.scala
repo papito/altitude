@@ -6,7 +6,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import java.time.Instant
 import org.scalatest.DoNotDiscover
-import org.scalatest.matchers.must.Matchers.startWith
+import org.scalatest.matchers.must.Matchers.{ endWith, startWith }
 import org.scalatest.matchers.should.Matchers.{ should, shouldBe }
 import org.slf4j.LoggerFactory
 
@@ -14,7 +14,7 @@ import scala.jdk.CollectionConverters.*
 
 import altitude.core.{ App, Const }
 import altitude.core.dao.jdbc.BaseDao
-import altitude.core.models.{ Asset, Face, ImportAsset, UserMetadata }
+import altitude.core.models.{ AccountType, Asset, EditRecipe, Face, ImportAsset, Permissions, UserMetadata }
 import altitude.core.routes.decorators
 
 @DoNotDiscover class ContentViewControllerTests extends ControllerTestCore {
@@ -703,6 +703,209 @@ import altitude.core.routes.decorators
         val lastTooMany = range("bytes=-99999999999999999999")
         lastTooMany.statusCode shouldBe 206
         lastTooMany.bytes shouldBe importAsset.bytes
+    }
+  }
+
+  /** An asset of the context repository imported from `images/1.jpg`, its Edit saved `saves` times, each save rendered */
+  private def editedAsset(saves: Int, isTriaged: Boolean = false): Asset =
+    val asset = testContext.persistAsset(isTriaged = isTriaged)
+    for (version <- 1 to saves) {
+      testApp.service.assetEdit.save(
+        asset.persistedId,
+        version - 1,
+        EditRecipe.Identity.copy(exposure = version * 0.25),
+        testContext.user)
+      testApp.service.editRender.render(asset.persistedId)
+    }
+    asset
+
+  /** The bytes of an asset's stored edited image of `kind` */
+  private def editedBytes(assetId: String, kind: String): Array[Byte] =
+    java.nio.file.Files.readAllBytes(testApp.service.fileStore.editedImagePath(assetId, kind))
+
+  test("An edited Preview and a Display image are served at the asset's revision, and not once it has none") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with an imported image saved twice, each save rendered, so its edited images are revision
+     * 2's; then its Edit reverted to the identity and rendered, so it has none.
+     *
+     * Assertions:
+     *
+     * `preview?v=2` and `display?v=2` serve the edited images as WebP; the Preview without `v` is the original's. Each carries
+     * the content headers as every content answer does: cached for good, nosniff, sandboxed. Once the Edit is the identity,
+     * `preview?v=2` and `display?v=2` are plain-text 404s, never cached, while the Preview without `v` is still the original's.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    val assetId = editedAsset(saves = 2).persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        def get(dataType: String, query: String): requests.Response =
+          requests.get(contentUrl(host, repoId, dataType, assetId) + query, cookies = testContext.cookies, check = false)
+
+        val original = testApp.service.fileStore.getPreviewById(assetId).data
+        val preview = editedBytes(assetId, Const.DataStore.PREVIEW)
+        val display = editedBytes(assetId, Const.DataStore.DISPLAY)
+        preview.sameElements(original) shouldBe false
+
+        for (
+          (dataType, query, bytes) <- List(
+            (Const.DataStore.PREVIEW, "?v=2", preview),
+            (Const.DataStore.PREVIEW, "", original),
+            (Const.DataStore.DISPLAY, "?v=2", display)
+          )
+        )
+          withClue(s"[$dataType$query]: ") {
+            val response = get(dataType, query)
+            response.statusCode shouldBe 200
+            response.contentType.head shouldBe "image/webp"
+            response.bytes shouldBe bytes
+            response.headers("cache-control") shouldBe Seq("private, max-age=31536000, immutable")
+            response.headers("x-content-type-options") shouldBe Seq("nosniff")
+            response.headers("content-security-policy") shouldBe Seq("sandbox")
+          }
+
+        testApp.service.assetEdit.save(assetId, 2, EditRecipe.Identity, testContext.user)
+        testApp.service.editRender.render(assetId)
+        for (dataType <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)) withClue(s"[$dataType?v=2]: ") {
+          val gone = get(dataType, "?v=2")
+          gone.statusCode shouldBe 404
+          gone.contentType.head should startWith("text/plain")
+          gone.headers.contains("cache-control") shouldBe false
+        }
+        get(Const.DataStore.PREVIEW, "").bytes shouldBe original
+    }
+  }
+
+  test("An earlier revision is redirected, never cached, to the asset's revision, a signed URL keeping its signature") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with an imported image saved twice, each save rendered, so its edited images are revision
+     * 2's; `v=1` asked for with the user's cookie and, with no cookie, by a URL signed for the item.
+     *
+     * Assertions:
+     *
+     * `preview?v=1` and `display?v=1` are a 302 to the same item at `v=2`, with `Cache-Control: no-store`, so the browser never
+     * keeps the current bytes under a revision that named others; the signed request's redirect keeps its `exp` and `sig`, and
+     * following it serves the current image with the content headers, no cookie needed.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    val assetId = editedAsset(saves = 2).persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        for (dataType <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)) withClue(s"[$dataType?v=1]: ") {
+          val stale = requests.get(
+            contentUrl(host, repoId, dataType, assetId) + "?v=1",
+            cookies = testContext.cookies,
+            maxRedirects = 0,
+            check = false)
+          stale.statusCode shouldBe 302
+          stale.headers("location") shouldBe Seq(contentPath(repoId, dataType, assetId) + "?v=2")
+          stale.headers("cache-control") shouldBe Seq("no-store")
+
+          val signed = signedUrl(host, repoId, dataType, assetId)
+          val signedStale = requests.get(signed + "&v=1", maxRedirects = 0, check = false)
+          signedStale.statusCode shouldBe 302
+          val location = signedStale.headers("location").head
+          location should startWith(contentPath(repoId, dataType, assetId) + "?v=2&exp=")
+          location should endWith(s"&sig=${signature(signed)}")
+          signedStale.headers("cache-control") shouldBe Seq("no-store")
+
+          val followed = requests.get(host + location, maxRedirects = 0, check = false)
+          followed.statusCode shouldBe 200
+          followed.bytes shouldBe editedBytes(assetId, dataType)
+          followed.headers("cache-control") shouldBe Seq("private, max-age=31536000, immutable")
+        }
+    }
+  }
+
+  test("A revision above the asset's, or 0, is a 404, and a revision that is no number, or none for a Display image, a 400") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with an imported image never edited, and one edited and rendered as revision 1.
+     *
+     * Assertions:
+     *
+     * The unedited image's `display?v=1` and `preview?v=1` are plain-text 404s, and so are the edited image's `preview?v=2` and
+     * `display?v=2`: a revision not used yet may name other bytes later, so it is never answered, nor cached. A `v` that is not
+     * digits, for a Preview or a Display image, and a `display` with no `v` are plain-text 400s saying why, never cached.
+     *
+     * Edge cases:
+     *
+     * `v=0` names no edited image: a 404 for the edited image's Preview and Display image alike.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    val unedited = testContext.persistAsset().persistedId
+    val edited = editedAsset(saves = 1).persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        def get(dataType: String, assetId: String, query: String): requests.Response =
+          requests.get(contentUrl(host, repoId, dataType, assetId) + query, cookies = testContext.cookies, check = false)
+
+        def plainError(response: requests.Response, status: Int, message: String): Unit =
+          response.statusCode shouldBe status
+          response.contentType.head should startWith("text/plain")
+          response.headers.contains("cache-control") shouldBe false
+          response.text() shouldBe message
+
+        plainError(get(Const.DataStore.DISPLAY, unedited, "?v=1"), 404, "Not found")
+        plainError(get(Const.DataStore.PREVIEW, unedited, "?v=1"), 404, "Not found")
+        for (dataType <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY); v <- List(2, 0)) withClue(s"[$dataType?v=$v]: ") {
+          plainError(get(dataType, edited, s"?v=$v"), 404, "Not found")
+        }
+        for (bad <- List("x", "-1", "1.5", "1e3", "12345678901")) withClue(s"[v=$bad]: ") {
+          plainError(get(Const.DataStore.PREVIEW, edited, s"?v=$bad"), 400, Const.Msg.Err.REVISION_NOT_A_NUMBER)
+          plainError(get(Const.DataStore.DISPLAY, edited, s"?v=$bad"), 400, Const.Msg.Err.REVISION_NOT_A_NUMBER)
+        }
+        plainError(get(Const.DataStore.DISPLAY, edited, ""), 400, Const.Msg.Err.REVISION_REQUIRED)
+    }
+  }
+
+  test("A Guest is served an edited Preview and a Display image only of an asset Browse shows it") {
+
+    /**
+     * Setup:
+     *
+     * A Library holding two imported images, each edited and rendered: one sorted, one triaged; and a Guest with access to it.
+     *
+     * Assertions:
+     *
+     * The Guest gets the sorted asset's `preview?v=1` and `display?v=1`, and a 404 for the triaged one's, as for its original's
+     * Preview.
+     */
+    val library = testContext.persistRepository()
+    val repoId = library.persistedId
+    val sorted = editedAsset(saves = 1).persistedId
+    val triaged = editedAsset(saves = 1, isTriaged = true).persistedId
+    val guest = testContext.persistUser(Some(testContext.makeUser().copy(accountType = AccountType.Guest)))
+    testContext.grant(guest, library, Permissions.none)
+
+    withServer(App) {
+      host =>
+        val cookies = cookiesOf(host, guest)
+        for (
+          (assetId, status) <- List(sorted -> 200, triaged -> 404);
+          dataType <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)
+        )
+          withClue(s"[$dataType of ${if (status == 200) "sorted" else "triaged"}]: ") {
+            requests
+              .get(contentUrl(host, repoId, dataType, assetId) + "?v=1", cookies = cookies, check = false)
+              .statusCode shouldBe status
+          }
     }
   }
 

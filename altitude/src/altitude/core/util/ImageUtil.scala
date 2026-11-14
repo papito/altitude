@@ -1,12 +1,14 @@
 package altitude.core.util
 
 import com.drew.imaging.ImageMetadataReader
+import com.drew.metadata.Metadata
 import com.drew.metadata.exif.ExifDirectoryBase
 import com.drew.metadata.exif.ExifIFD0Directory
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferByte
 import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.nio.file.Path
 import javax.imageio.ImageIO
 import javax.imageio.ImageReader
 import javax.imageio.metadata.IIOMetadataNode
@@ -89,9 +91,13 @@ object ImageUtil:
     Math.min(scaleX, scaleY)
 
   /** The EXIF orientation of an image's bytes; an image without the tag, or without EXIF at all, is upright (1) */
-  private def exifOrientation(data: Array[Byte]): Int =
-    val exifDirectory =
-      ImageMetadataReader.readMetadata(new ByteArrayInputStream(data)).getFirstDirectoryOfType(classOf[ExifIFD0Directory])
+  def exifOrientation(data: Array[Byte]): Int = orientationOf(ImageMetadataReader.readMetadata(new ByteArrayInputStream(data)))
+
+  /** The EXIF orientation of an image file, read from its metadata alone, as [[exifOrientation]] reads one from its bytes */
+  def exifOrientation(file: Path): Int = orientationOf(ImageMetadataReader.readMetadata(file.toFile))
+
+  private def orientationOf(metadata: Metadata): Int =
+    val exifDirectory = metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory])
     try exifDirectory.getInt(ExifDirectoryBase.TAG_ORIENTATION)
     catch case _: Exception => 1
 
@@ -102,9 +108,53 @@ object ImageUtil:
    * https://sirv.com/help/articles/rotate-photos-to-be-upright/
    */
   def makeImageThumbnail(data: Array[Byte], previewBoxSize: Int): Array[Byte] =
-    val image = decode(data, Imgcodecs.IMREAD_UNCHANGED | Imgcodecs.IMREAD_IGNORE_ORIENTATION, keepAlpha = true)
+    val image = decodeUnchanged(data)
     try makeImageThumbnail(image, exifOrientation(data), previewBoxSize)
     finally image.release()
+
+  /**
+   * A JPEG's stored size, read from its header with no decode; None for an image that is no JPEG (by its start of image marker)
+   * or whose header cannot be read
+   */
+  def jpegSize(data: Array[Byte]): Option[(Int, Int)] =
+    if data.length < 3 || (data(0) & 0xff) != 0xff || (data(1) & 0xff) != 0xd8 || (data(2) & 0xff) != 0xff then return None
+    val input = ImageIO.createImageInputStream(new ByteArrayInputStream(data))
+    try
+      val readers = ImageIO.getImageReaders(input)
+      Option.when(readers.hasNext)(readers.next()).flatMap {
+        reader =>
+          try
+            reader.setInput(input)
+            Some((reader.getWidth(0), reader.getHeight(0)))
+          catch case _: IOException => None
+          finally reader.dispose()
+      }
+    finally input.close()
+
+  /**
+   * A JPEG's bytes decoded at a half, a quarter or an eighth of its size (`reduction` 2, 4 or 8) by the decoder itself, in 8-bit
+   * BGR, its EXIF orientation ignored, as [[decodeUnchanged]] decodes; each side is the stored one divided and rounded up. The
+   * caller releases it.
+   */
+  def decodeReduced(data: Array[Byte], reduction: Int): Mat =
+    val flag = reduction match
+      case 2 => Imgcodecs.IMREAD_REDUCED_COLOR_2
+      case 4 => Imgcodecs.IMREAD_REDUCED_COLOR_4
+      case 8 => Imgcodecs.IMREAD_REDUCED_COLOR_8
+      case _ => throw IllegalArgumentException(s"No reduced decode by [$reduction]")
+    val bytes = new MatOfByte(data*)
+    try
+      val image = Imgcodecs.imdecode(bytes, flag | Imgcodecs.IMREAD_IGNORE_ORIENTATION)
+      if image.empty() then throw ImageException("OpenCV cannot decode the JPEG")
+      image
+    finally bytes.release()
+
+  /**
+   * An image's bytes decoded as stored, for [[orient]] to turn upright: its depth (8 or 16 bits) and its alpha channel kept, its
+   * EXIF orientation ignored. The caller releases it.
+   */
+  def decodeUnchanged(data: Array[Byte]): Mat =
+    decode(data, Imgcodecs.IMREAD_UNCHANGED | Imgcodecs.IMREAD_IGNORE_ORIENTATION, keepAlpha = true)
 
   /**
    * The Preview of a decoded image, which stays the caller's to release: scaled to fit the box with `INTER_AREA`, turned upright
@@ -185,12 +235,18 @@ object ImageUtil:
    * A Preview's bytes: `box`, an 8-bit BGRA image, as a lossy WebP at [[Const.AssetView.PREVIEW_WEBP_QUALITY]], its alpha plane
    * kept exact.
    */
-  def encodePreview(box: Mat): Array[Byte] =
+  def encodePreview(box: Mat): Array[Byte] = encodeWebp(box, Const.AssetView.PREVIEW_WEBP_QUALITY)
+
+  /**
+   * An 8-bit BGR or BGRA image as a lossy WebP at `quality` (0 to 100), which governs the color planes only: libwebp keeps the
+   * alpha plane exact, and drops it when every pixel is opaque
+   */
+  def encodeWebp(image: Mat, quality: Int): Array[Byte] =
     val buffer = new MatOfByte()
-    val quality = new MatOfInt(Imgcodecs.IMWRITE_WEBP_QUALITY, Const.AssetView.PREVIEW_WEBP_QUALITY)
+    val params = new MatOfInt(Imgcodecs.IMWRITE_WEBP_QUALITY, quality)
     try
-      if !Imgcodecs.imencode(".webp", box, buffer, quality) then throw ImageException("The preview cannot be encoded as WebP")
+      if !Imgcodecs.imencode(".webp", image, buffer, params) then throw ImageException("The image cannot be encoded as WebP")
       buffer.toArray
     finally
       buffer.release()
-      quality.release()
+      params.release()

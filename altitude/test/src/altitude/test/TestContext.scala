@@ -93,7 +93,8 @@ object TestContext {
     "import",
     "import_file",
     "watch_folder",
-    "watch_folder_file"
+    "watch_folder_file",
+    "asset_edit"
   )
 }
 

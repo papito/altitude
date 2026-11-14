@@ -13,6 +13,8 @@
 @import "includes/cannot_organize.css";
 @import "includes/upload_sections.css";
 @import "includes/import_status.css";
+@import "includes/edit_panel.css";
+@import "includes/histogram.css";
 @import "htmx/folders.css";
 @import "htmx/albums.css";
 @import "htmx/locations.css";

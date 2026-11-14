@@ -1,0 +1,323 @@
+/* The Edit panel (includes/edit_panel), in Asset detail's grid opposite the Detail panel (htmx/view_image_detail_modal.css
+   places it): its header, the body that scrolls (the Histogram, the tabs and the shown section), the save status with
+   Revert to original, and the keys. Docked top or bottom (`data-edit-dock-side` on the fragment) the status row joins the
+   header, the Histogram sits at the left of the tabs, the section flows into columns that scroll sideways, and the keys
+   are left out. The sliders are core.css's `.edit-slider`. After it, the warning of changes not saved */
+#editPanel {
+    grid-area: edit;
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "header" "body" "commit" "keys";
+    background-color: var(--theme-neutral-2);
+    color: var(--theme-neutral-4);
+}
+
+#editPanel .edit-header {
+    grid-area: header;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--panel-padding);
+    border-bottom: var(--border-hairline) var(--panel-border-color);
+}
+
+#editPanel h2 {
+    margin: 0 auto 0 0;
+    font-size: var(--font-size-medium);
+}
+
+/* An icon alone, quiet until hovered, the accent while pressed, as the toolbar's toggles are */
+#editPanel .edit-tool {
+    padding: var(--space-3) var(--space-4);
+    border: none;
+    border-radius: var(--radius);
+    background: none;
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-base);
+    line-height: 1;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+        color: var(--theme-neutral-4);
+        background-color: hsl(from currentColor h s l / 0.08);
+    }
+
+    &:disabled {
+        color: hsl(from var(--theme-neutral-3) h s l / 0.4);
+        cursor: default;
+    }
+
+    &[aria-pressed="true"] {
+        color: var(--theme-accent);
+    }
+}
+
+/* The warning of changes not saved: a native modal dialog over Asset detail, on the popover dialog's frosted surface and
+   padding, with its title as a dialog's and its buttons at the end, under the general modal's scrim */
+#editLeaveDialog {
+    box-sizing: border-box;
+    width: calc(var(--popover-form-width) + 2 * var(--modal-content-padding));
+    max-width: calc(100vw - 2 * var(--viewport-gap));
+    padding: var(--modal-content-padding);
+    color: var(--theme-neutral-4);
+    background: var(--popover-background-color);
+    backdrop-filter: var(--popover-backdrop-filter);
+    border: var(--border-hairline) var(--popover-border-color);
+    border-radius: var(--radius-large);
+    box-shadow: var(--sheen-shadow), var(--float-shadow);
+
+    &::backdrop {
+        background-color: var(--scrim-color);
+    }
+}
+
+#editLeaveDialog h2 {
+    margin: 0;
+    font-size: var(--font-size-medium);
+    font-weight: var(--font-weight-bold);
+}
+
+#editLeaveDialog p {
+    margin: var(--space-4) 0 var(--space-5);
+    line-height: var(--line-height-text);
+}
+
+#editLeaveDialog .edit-leave-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-3);
+}
+
+#editPanel .edit-body {
+    grid-area: body;
+    min-height: 0;
+    overflow-y: auto;
+    display: grid;
+    align-content: start;
+    gap: var(--space-5);
+    padding: var(--panel-padding);
+}
+
+#editPanel .edit-refusal {
+    margin: 0;
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-small);
+}
+
+#editPanel .edit-sections {
+    display: grid;
+    gap: var(--space-5);
+}
+
+/* The tabs are buttons wearing tabs.css's look; the dot marks a section with changes */
+#editPanel [role="tablist"] {
+    padding: 0;
+}
+
+#editPanel [role="tab"] {
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    background: none;
+    font: inherit;
+    font-size: var(--font-size-small);
+    letter-spacing: normal;
+    text-transform: none;
+    padding: var(--space-3) var(--space-4);
+}
+
+#editPanel .edit-dot {
+    width: var(--space-3);
+    height: var(--space-3);
+    border-radius: 50%;
+    background-color: var(--theme-accent);
+}
+
+#editPanel [role="tabpanel"] {
+    display: grid;
+    align-content: start;
+    gap: var(--space-5);
+    padding: 0;
+}
+
+#editPanel .edit-section-head,
+#editPanel .edit-subhead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+#editPanel h3 {
+    margin: 0;
+    font-size: var(--font-size-base);
+}
+
+#editPanel .edit-subhead {
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-wide);
+}
+
+/* A section's or the curve's reset, and Straighten's Auto: links in the primary text color */
+#editPanel :is(.edit-reset, .edit-auto) {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--theme-primary-text);
+    font-size: var(--font-size-small);
+    text-transform: none;
+    letter-spacing: normal;
+    cursor: pointer;
+
+    &:disabled {
+        color: var(--theme-neutral-3);
+        cursor: default;
+    }
+}
+
+#editPanel .edit-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+#editPanel .edit-tools .action-button[aria-pressed="true"] {
+    --button-fill: hsl(from var(--theme-accent) h s l / 0.2);
+    border-color: var(--theme-accent);
+}
+
+#editPanel .edit-spacer {
+    flex: 1;
+}
+
+#editPanel .edit-aspects {
+    flex-wrap: wrap;
+}
+
+#editPanel .edit-aspects button {
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-small);
+}
+
+#editPanel .edit-crop-size {
+    margin: 0;
+    color: var(--theme-neutral-3);
+    font-family: var(--font-nav);
+    font-size: var(--font-size-xs);
+}
+
+#editPanel .edit-check {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--font-size-small);
+    cursor: pointer;
+}
+
+/* The curve editor: a square canvas over the field's sunken fill, drawn in the colors read from its style (the curve and
+   its points `color`, the grid `border-color`, the luminance Histogram behind `outline-color`); no outline or border is
+   painted */
+#editPanel .edit-curve {
+    justify-self: center;
+    width: 100%;
+    max-width: var(--edit-curve-max-size);
+    aspect-ratio: 1;
+    border-radius: var(--radius-small);
+    background-color: var(--field-background-color);
+    color: var(--theme-neutral-4);
+    border-color: hsl(from var(--theme-neutral-3) h s l / 0.35);
+    outline-color: hsl(from var(--theme-neutral-3) h s l / 0.25);
+    touch-action: none;
+    cursor: crosshair;
+}
+
+#editPanel .edit-hint {
+    margin: 0;
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-xs);
+    text-align: center;
+}
+
+#editPanel .edit-commit {
+    grid-area: commit;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--panel-padding);
+    border-top: var(--border-hairline) var(--panel-border-color);
+}
+
+#editPanel .edit-status {
+    margin-right: auto;
+    color: var(--theme-neutral-3);
+    font-size: var(--font-size-small);
+
+    &[data-status="failed"] {
+        color: var(--error-color);
+    }
+}
+
+#editPanel .panel-keys {
+    grid-area: keys;
+}
+
+/* Docked top or bottom: the header and the status row share the first row, the body the second, the keys left out */
+#imageDetailView:is([data-edit-dock-side="top"], [data-edit-dock-side="bottom"]) #editPanel {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: "header commit" "body body";
+}
+
+#imageDetailView:is([data-edit-dock-side="top"], [data-edit-dock-side="bottom"]) #editPanel .edit-commit {
+    border-top: none;
+    border-bottom: var(--border-hairline) var(--panel-border-color);
+}
+
+#imageDetailView:is([data-edit-dock-side="top"], [data-edit-dock-side="bottom"]) #editPanel .panel-keys {
+    display: none;
+}
+
+/* The Histogram at the left, the tabs and the section beside it; the section's controls flow into columns as tall as
+   the panel, which scroll sideways */
+#imageDetailView:is([data-edit-dock-side="top"], [data-edit-dock-side="bottom"]) #editPanel .edit-body {
+    grid-template-columns: var(--edit-column-width) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    align-items: start;
+    overflow: hidden;
+}
+
+#imageDetailView:is([data-edit-dock-side="top"], [data-edit-dock-side="bottom"]) #editPanel .edit-sections {
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+}
+
+#imageDetailView:is([data-edit-dock-side="top"], [data-edit-dock-side="bottom"]) #editPanel [role="tabpanel"] {
+    display: block;
+    height: 100%;
+    columns: var(--edit-column-width);
+    column-gap: var(--space-8);
+    column-fill: auto;
+    overflow-x: auto;
+}
+
+#imageDetailView:is([data-edit-dock-side="top"], [data-edit-dock-side="bottom"]) #editPanel [role="tabpanel"] > * {
+    break-inside: avoid;
+    margin-bottom: var(--space-5);
+}
+
+#imageDetailView:is([data-edit-dock-side="top"], [data-edit-dock-side="bottom"]) #editPanel .edit-refusal {
+    grid-column: 1 / -1;
+}
+
+/* A heading stays with what follows it in its column */
+#imageDetailView:is([data-edit-dock-side="top"], [data-edit-dock-side="bottom"]) #editPanel :is(.edit-subhead, .edit-section-head) {
+    break-after: avoid;
+}

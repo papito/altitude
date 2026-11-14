@@ -117,6 +117,18 @@ object FieldConst:
     val DINOV2_EMBEDDING = "dinov2_embedding"
     val CLIP_EMBEDDING = "clip_embedding"
     val SEQUENCE_ID = "sequence_id"
+    val EDIT_REV = "edit_rev"
+
+  object AssetEdit:
+    val ASSET_ID = "asset_id"
+    val RECIPE = "recipe"
+    val EDIT_VERSION = "edit_version"
+    val RENDERED_VERSION = "rendered_version"
+    val LAST_REV = "last_rev"
+    val IS_EDITED = "is_edited"
+    val WIDTH = "width"
+    val HEIGHT = "height"
+    val UPDATED_BY_ACCOUNT_ID = "updated_by_account_id"
 
   object PublicMetadata:
     val DEVICE_MODEL = "device_model"

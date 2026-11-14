@@ -11,11 +11,13 @@ enum Permission(val bit: Int, val label: String):
   case CurateOwn extends Permission(1, "Curate own")
   case CurateAll extends Permission(2, "Curate all")
   case Organize extends Permission(3, "Organize")
-  case EditMetadata extends Permission(4, "Edit Metadata")
+  case EditMetadata extends Permission(4, "Edit metadata")
   case CreateUsers extends Permission(5, "Create Users")
   case CreateGuests extends Permission(6, "Create Guests")
   case Recycle extends Permission(7, "Recycle")
   case Purge extends Permission(8, "Purge")
+  // An asset's Edit: its saves, Revert to original and auto-straighten (`EditController`)
+  case EditImages extends Permission(9, "Edit images")
 
   /** This Permission's bit in a [[Permissions]] mask */
   def mask: Int = 1 << bit

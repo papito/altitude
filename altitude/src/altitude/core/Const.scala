@@ -53,6 +53,14 @@ object Const:
     // a static 1 s time-lapse is one Sequence of however many frames it has
     val MAX_SEQUENCE_FRAMES = 100
 
+  object Edit:
+    // The Display image's longest edge, at most; a smaller edited image keeps its own size
+    val DISPLAY_LONG_EDGE = 3840
+    // The Display image's WebP quality, 0 to 100
+    val DISPLAY_WEBP_QUALITY = 90
+    // How long after the last save of an Edit its render is queued, each save putting it off again
+    val RENDER_DEBOUNCE_MS = 1500
+
   object AssetView:
     val PREVIEW_BOX_PIXELS = 200
     // The WebP quality of a Preview, 0 to 100, which governs its color planes only: lib webp keeps the alpha plane exact (its
@@ -173,6 +181,8 @@ object Const:
   object DataStore:
     val CONTENT = "content"
     val PREVIEW = "preview"
+    // The Display image of an edited asset, beside its Preview: a content type and a directory of the file store
+    val DISPLAY = "display"
     val FILE = "file"
     val FILES = "files"
     val FACE = "face"
@@ -329,6 +339,23 @@ object Const:
       // Faces are about to go
       val COVER_FACE_NOT_THEIRS = "The face is not this person's"
       val COVER_FACE_PURGING = "The face is on an asset being purged"
+      // An Edit (AssetEditService) of an asset that is not a still image, or that is in the trash
+      val EDIT_NOT_STILL = "Only a still image can be edited"
+      val EDIT_RECYCLED = "An asset in the trash cannot be edited"
+      // An asset whose stored original is gone, so its size cannot be turned upright (AssetService.uprightSize)
+      val ORIGINAL_MISSING = "The original file of this asset is missing"
+      // A save of an Edit built on a version it has moved on from since (EditConflictException), answered with the current state
+      val EDIT_CONFLICT = "This photo was changed elsewhere"
+      // A content URL's `v`, the revision of an edited image, that is no whole number, or a Display image asked for without one
+      // (ContentViewController)
+      val REVISION_NOT_A_NUMBER = "The revision must be a whole number"
+      val REVISION_REQUIRED = "A Display image is asked for by its revision"
+      // A save of an Edit whose `base` is not a whole number from 0, or with no Edit (EditController)
+      val EDIT_WHOLE_NUMBER = "%s must be a whole number, 0 or more"
+      val EDIT_RECIPE_REQUIRED = "recipe must be the Edit"
+      // Auto-straighten (AssetEditService.autoStraighten) with every slot taken, and of an original no image reader decodes
+      val AUTO_STRAIGHTEN_BUSY = "Auto-straighten is busy with other photos; try again in a moment"
+      val ORIGINAL_UNREADABLE = "The original file of this photo cannot be read"
       // A folder added under a parent folder that is no folder of the repository (FolderActionController.htmxAddFolder)
       val PARENT_FOLDER_NOT_FOUND = "The parent folder does not exist"
 

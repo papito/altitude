@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 import altitude.core.routes.api.AlbumController
 import altitude.core.routes.api.AssetController
 import altitude.core.routes.api.CurationController
+import altitude.core.routes.api.EditController
 import altitude.core.routes.api.FolderController
 import altitude.core.routes.api.HealthController
 import altitude.core.routes.api.LocationController
@@ -68,6 +69,7 @@ object App extends cask.Main:
   altitude.service.imports.startup()
   altitude.service.library.pruneDanglingAssets()
   altitude.service.library.requeuePurgePending()
+  altitude.service.editRender.requeuePendingRenders()
   altitude.service.library.reconcileStats()
   // The startup scan of the Watch folders, which catches up on what arrived while the server was down, and then one every
   // interval: after the Imports a stop interrupted are failed, so no scan's Import is taken for one of them
@@ -94,6 +96,7 @@ object App extends cask.Main:
     new MapController,
     new AssetController,
     new CurationController,
+    new EditController,
     new FolderController,
     new IndexController,
     new StaticController,

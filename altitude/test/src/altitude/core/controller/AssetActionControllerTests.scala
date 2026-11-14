@@ -10,10 +10,14 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.models.Asset
+import altitude.core.models.EditRecipe
 import altitude.core.models.ExtractedMetadata
 import altitude.core.models.Face
 import altitude.core.models.ImageQuality
+import altitude.core.models.Permission
+import altitude.core.models.Permissions
 import altitude.core.models.Person
+import altitude.core.util.ImageMeasurement
 
 /** The Face corrections of Asset detail over HTTP: the People section they answer with, and their status codes */
 @DoNotDiscover class AssetActionControllerTests extends ControllerTestCore {
@@ -707,6 +711,106 @@ import altitude.core.models.Person
         for (detail <- List(importer.email, importer.username, importer.persistedId)) {
           (response.text() should not).include(detail)
         }
+    }
+  }
+
+  /** An attribute's value as Twirl escapes it, read back */
+  private def htmlUnescaped(value: String): String =
+    value.replace("&quot;", "\"").replace("&#x27;", "'").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+
+  test("The asset detail carries the asset's Edit and whether the account may edit it, as JSON and in the fragment") {
+
+    /**
+     * Setup:
+     *
+     * A Library with an imported image whose Edit is saved once (Exposure +0.4) and rendered, an imported image never edited, and
+     * an imported image in the trash; a User holding every Permission, and a User holding every Permission but Edit images, each
+     * logged in.
+     *
+     * Assertions:
+     *
+     * Asked for as JSON by the first User, the edited image's detail carries `edit`: edit version 1, rendered at that version as
+     * revision 1, edited, its size, the size of its upright original and its Edit, and `editable` true with no `editRefusal`; the
+     * fragment carries the same Edit as JSON and `editable` in its data attributes, with the measurement's clipping levels and
+     * box, which the Edit panel's Clipping blink reads. The image never edited has no `edit`, in the JSON or the fragment, and is
+     * editable.
+     *
+     * Edge cases:
+     *
+     * The image in the trash is not editable, and says why (`editRefusal`, in the JSON and the fragment), which the Edit toggle's
+     * title shows; no image is editable for the User without Edit images, and none says why, as that User has no Edit toggle.
+     */
+    val repo = testContext.persistRepository()
+    val repoId = repo.persistedId
+    login()
+    val edited = testContext.persistAsset()
+    val recipe = EditRecipe.Identity.copy(exposure = 0.4)
+    testApp.service.assetEdit.save(edited.persistedId, 0, recipe, testContext.user)
+    // Rendered now, so the render the save queued cannot change the answer while the test reads it
+    testApp.service.editRender.render(edited.persistedId)
+    val untouched = testContext.persistAsset()
+    val recycled = testContext.persistAsset()
+    testApp.service.library.recycleAssets(Set(recycled.persistedId))
+
+    val withoutEditImages = testContext.persistUser()
+    testContext.grant(withoutEditImages, repo, Permissions(Permissions.all.mask & ~Permission.EditImages.mask))
+
+    withServer(App) {
+      host =>
+        def detail(asset: Asset, asJson: Boolean, cookies: Map[String, java.net.HttpCookie] = testContext.cookies) = {
+          val response = requests.get(
+            s"$host/htmx/asset/r/$repoId/modals/asset-detail/${asset.persistedId}",
+            headers = if (asJson) Map("Accept" -> "application/json") else Map.empty,
+            cookies = cookies,
+            check = false
+          )
+          response.statusCode shouldBe 200
+          response.text()
+        }
+        def attribute(html: String, name: String): Option[String] =
+          s"""data-app-image-detail-$name="([^"]*)"""".r.findFirstMatchIn(html).map(m => htmlUnescaped(m.group(1)))
+
+        val json = ujson.read(detail(edited, asJson = true))
+        json("editable").bool shouldBe true
+        json.obj.contains("editRefusal") shouldBe false
+        json("edit") shouldBe ujson.Obj(
+          "editVersion" -> 1,
+          "renderedVersion" -> 1,
+          "rev" -> 1,
+          "edited" -> true,
+          "width" -> edited.width,
+          "height" -> edited.height,
+          "uprightWidth" -> edited.width,
+          "uprightHeight" -> edited.height,
+          "recipe" -> recipe.toJson
+        )
+        val fragment = detail(edited, asJson = false)
+        attribute(fragment, "editable") shouldBe Some("true")
+        attribute(fragment, "edit").map(ujson.read(_)) shouldBe Some(json("edit"))
+        attribute(fragment, "edit-refusal") shouldBe None
+        fragment should include(s"""data-clipped-level="${ImageMeasurement.CLIPPED_LEVEL}"""")
+        fragment should include(s"""data-crushed-level="${ImageMeasurement.CRUSHED_LEVEL}"""")
+        fragment should include(s"""data-measurement-box="${ImageMeasurement.MEASUREMENT_BOX_SIZE}"""")
+
+        val untouchedJson = ujson.read(detail(untouched, asJson = true)).obj
+        untouchedJson.contains("edit") shouldBe false
+        untouchedJson("editable").bool shouldBe true
+        attribute(detail(untouched, asJson = false), "edit") shouldBe None
+
+        val recycledJson = ujson.read(detail(recycled, asJson = true))
+        recycledJson("editable").bool shouldBe false
+        recycledJson("editRefusal").str shouldBe Const.Msg.Err.EDIT_RECYCLED
+        val recycledFragment = detail(recycled, asJson = false)
+        attribute(recycledFragment, "editable") shouldBe Some("false")
+        attribute(recycledFragment, "edit-refusal") shouldBe Some(Const.Msg.Err.EDIT_RECYCLED)
+
+        val cookies = cookiesOf(host, withoutEditImages)
+        val withoutJson = ujson.read(detail(recycled, asJson = true, cookies)).obj
+        withoutJson("editable").bool shouldBe false
+        withoutJson.contains("editRefusal") shouldBe false
+        ujson.read(detail(edited, asJson = true, cookies))("editable").bool shouldBe false
+        attribute(detail(edited, asJson = false, cookies), "editable") shouldBe Some("false")
+        attribute(detail(recycled, asJson = false, cookies), "edit-refusal") shouldBe None
     }
   }
 

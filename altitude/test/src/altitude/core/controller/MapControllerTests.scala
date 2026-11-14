@@ -7,6 +7,7 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.App
+import altitude.core.models.EditRecipe
 import altitude.core.models.Person
 
 @DoNotDiscover class MapControllerTests extends ControllerTestCore {
@@ -96,6 +97,39 @@ import altitude.core.models.Person
           "north" -> -40,
           "east" -> -50,
           "count" -> 1)
+    }
+  }
+
+  test("A map cell carries the revision of its asset's edited images, for the pin's Preview URL") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with two imported assets far apart, each with a point: one with a saved Edit, rendered as
+     * revision 1.
+     *
+     * Assertions:
+     *
+     * The edited asset's cell carries `editRev` 1, the other's 0.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    val edited = testContext.persistAsset()
+    testContext.setAssetCoordinates(edited.persistedId, 10, 20)
+    val plain = testContext.persistAsset()
+    testContext.setAssetCoordinates(plain.persistedId, -40, -50)
+    testApp.service.assetEdit.save(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    testApp.service.editRender.render(edited.persistedId)
+
+    withServer(App) {
+      host =>
+        val response = requests.get(
+          s"$host/api/map/r/$repoId/cells",
+          params = Map("viewport" -> "-90,-180,90,180", "zoom" -> "10"),
+          cookies = testContext.cookies)
+        ujson.read(response.text())("cells").arr.map(cell => cell("assetId").str -> cell("editRev").num.toInt).toMap shouldBe
+          Map(edited.persistedId -> 1, plain.persistedId -> 0)
     }
   }
 

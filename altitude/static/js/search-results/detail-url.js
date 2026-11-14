@@ -20,7 +20,12 @@
  * restore is cancelled.
  */
 import { Alpine } from "../lib/alpine.esm.min.js"
-import { closeModal, getActiveModalHost, ModalHost } from "../common/modal.js"
+import {
+    closeModal,
+    getActiveModalHost,
+    ModalHost,
+    takeHeldClose,
+} from "../common/modal.js"
 
 const ASSET_PATH = /^\/r\/([^/]+)\/asset\/([^/]+)\/?$/
 const PANEL_PARAM = "panel"
@@ -48,6 +53,8 @@ export function createDetailUrl({ context }) {
     let wasActive = false
     // The replacement waiting for the asset to stay; never outlives the entry it was meant for
     let replaceTimer = null
+    // The URL of the asset shown, as the entry this page added names it
+    let shownUrl = null
 
     function start() {
         // Before any response can arrive: the page's first search must not rewrite this URL
@@ -107,6 +114,7 @@ export function createDetailUrl({ context }) {
         const query = panelOpen ? `?${PANEL_PARAM}=${PANEL_OPEN}` : ""
         const url = `/r/${context.getRepoId()}/asset/${assetId}${query}`
 
+        shownUrl = url
         if (following) {
             clearTimeout(replaceTimer)
             replaceTimer = setTimeout(() => replaceUrl(url), URL_DEBOUNCE_MS)
@@ -154,7 +162,8 @@ export function createDetailUrl({ context }) {
      * previous or next since the cell it was opened from is not known. Back onto the results closes
      * Asset detail, unless this page was loaded on the asset's URL, a reload of an entry an earlier
      * page added: the results behind it are then another search than the one on screen, so
-     * they are loaded for real.
+     * they are loaded for real. A close the Edit panel holds for its warning of changes not saved,
+     * answered by staying, puts the asset's entry back and follows it again.
      */
     function handleTraversal() {
         clearTimeout(replaceTimer)
@@ -178,6 +187,14 @@ export function createDetailUrl({ context }) {
             }
 
             closeModal()
+            // The Edit panel may hold the close for its warning: Asset detail staying, the asset's entry comes back
+            takeHeldClose()?.then((closed) => {
+                if (!closed && isAssetDetailActive() && shownUrl) {
+                    following = true
+                    ownsEntry = true
+                    history.pushState(null, "", shownUrl)
+                }
+            })
         }
 
         if (heldSearchUrl) {

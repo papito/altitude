@@ -1,0 +1,31 @@
+@(paths: String, crushed: String, blown: String, shows: String = "", id: String = "", disabled: String = "")
+
+@* The Histogram (CONTEXT.md), the one markup of it: Curation's strip under each stage pane (htmx/curation_set), the Edit
+   panel's (includes/edit_panel) and the style guide's specimen, styled by includes/histogram.css. It is a button, the
+   Clipping blink's switch, so the Alpine component it is rendered under gives `clippingBlink` and
+   `toggleClippingBlink()`; as it holds no text of its own, its `aria-label` names it and its title says what it does.
+
+   The parameters are Alpine expressions of that component: `paths` the Histogram's paths by channel, an object of
+   `luminance`, `red`, `green` and `blue` (js/common/histogram.js: `channelPaths`, or `NO_PATHS` for none), drawn in the
+   `viewBox` that module draws in (`HISTOGRAM_BOX`), the three colors as filled shapes that blend where they overlap and
+   the luminance as a line over them; `crushed` and `blown` the labels of its top corners, the fractions of the pixels
+   crushed (left) and blown (right), an empty one showing nothing; and, where there is one, `shows` whether it is shown
+   and `disabled` whether there is nothing to press for. `id` is the button's ID, for a script that finds it. *@
+<button type="button"
+        @if(id.nonEmpty) {id="@id"}
+        class="histogram"
+        @if(shows.nonEmpty) {x-show="@shows"}
+        @if(disabled.nonEmpty) {x-bind:disabled="@disabled"}
+        x-bind:aria-pressed="clippingBlink"
+        x-on:click="toggleClippingBlink()"
+        aria-label="Clipping blink"
+        title="Blink the blown highlights and crushed shadows">
+  <svg viewBox="0 0 64 16" preserveAspectRatio="none" aria-hidden="true">
+    <path class="red" x-bind:d="@{paths}.red"></path>
+    <path class="green" x-bind:d="@{paths}.green"></path>
+    <path class="blue" x-bind:d="@{paths}.blue"></path>
+    <path class="luminance" x-bind:d="@{paths}.luminance"></path>
+  </svg>
+  <span class="crushed" x-text="@crushed"></span>
+  <span class="blown" x-text="@blown"></span>
+</button>

@@ -115,7 +115,8 @@ _Avoid_: Movie, Clip, Film.
 
 **Preview**:
 The small still image standing for an asset in the grid and on the map. For a
-Video it is one of its Sampled frames.
+Video it is one of its Sampled frames. An edited asset's Preview shows its Edit,
+except in Curation, which shows the original's.
 _Avoid_: Thumbnail, Poster.
 
 **Sampled frame**:
@@ -261,9 +262,9 @@ _Avoid_: Client, Viewer, Read-only user.
 
 **Permission**:
 One thing a User may do in one Library, granted per account and per Library:
-Import, Curate own, Curate all, Organize, Edit Metadata, Create Users, Create
-Guests, Recycle, Purge. Looking needs none. Creating Libraries is allowed per
-account, not per Library.
+Import, Curate own, Curate all, Organize, Edit metadata, Create Users, Create
+Guests, Recycle, Purge, Edit images. Looking needs none. Creating Libraries is
+allowed per account, not per Library.
 _Avoid_: Role, Right, Privilege, Policy.
 
 **Organize**:
@@ -290,7 +291,8 @@ _Avoid_: Static setting, Boot setting.
 **Dock side**:
 Where a docked panel sits: left, right, top or bottom. The explorer is docked
 to a side of the results, and the Detail panel to a side of Asset detail's
-media; each has its own Dock side.
+media; each has its own Dock side. The Edit panel has none of its own: it
+takes the side opposite the Detail panel's.
 _Avoid_: Layout (the results' Grid or Map), Position, Arrangement, Orientation.
 
 **Asset detail**:
@@ -301,12 +303,59 @@ with no previous or next.
 _Avoid_: Lightbox, Image detail, Viewer.
 
 **Detail panel**:
-The docked panel of Asset detail, holding the asset's People and its Details.
+One of Asset detail's two docked panels, with the Edit panel, holding the
+asset's People and its Details.
 _Avoid_: Metadata panel, Info panel, Sidebar.
 
 **Face highlight**:
 A Face's box drawn on the media, with its Person's name in a badge under it.
 _Avoid_: Bounding box, Face box, Tag in user-facing text.
+
+**Edit panel**:
+One of Asset detail's two docked panels, in which a user with Edit images
+changes a still image's Edit: its sections Crop & rotate, Light, Color and
+Effects, with Undo and Redo. It sits on the side opposite the Detail panel.
+Closing it, closing Asset detail or stepping to another asset while a change
+is not saved yet asks whether to save it, discard it or keep editing.
+
+**Edit**:
+A still image's adjustments, made in the Edit panel. The server keeps one Edit
+per asset, the one last saved; each change saves it. Undo and Redo go through
+the Edits made while the Edit panel is open on the asset, and are forgotten
+when the panel closes, Asset detail closes or steps to another asset, or a save
+finds the Edit changed elsewhere or fails. Revert to original
+saves an Edit that changes nothing, which Undo takes back while the panel
+stays open. The original file is never written. An asset is edited when its
+Edit changes a pixel. It is not the Edit button beside a Filtered search's
+chips, which opens the Advanced search.
+_Avoid_: Recipe, Develop settings, Adjustment layer in user-facing text.
+
+**Effects**:
+The Edit panel's section of Sharpen, Clarity, Vignette and Grain.
+
+**Crop tool**:
+The Edit panel's tool that shows the whole image on Asset detail's stage under
+a crop rectangle to move and resize; a drag outside the rectangle rotates the
+image. Done saves all it changed as one change of the Edit, and Cancel drops
+it.
+
+**Level tool**:
+A tool of the Crop tool: a line drawn along something level or plumb sets
+Straighten so that the line becomes horizontal or vertical, whichever is
+nearer.
+
+**Display image**:
+The image Asset detail shows of an edited asset in place of its original: its
+Edit rendered by the server, at most 3840 px on the long edge. Anyone who may
+see the asset sees it, and Show original shows the original instead.
+_Avoid_: Rendition, Proxy, Thumbnail.
+
+**Show original**:
+How Asset detail shows an edited asset's untouched original, to every viewer,
+Guests included: while `\` is held, or from a press of the Show original toggle
+until it is pressed again, Asset detail steps to another asset, or the Edit
+panel opens or makes a change. Face highlights and the size shown are then the
+original's.
 
 **View settings**:
 Which details the grid shows under each asset, chosen per browser tab in the
@@ -422,14 +471,17 @@ _Avoid_: Magnifier, Magnifying glass, Zoom (the stage's zoom to a Person's
 face).
 
 **Histogram**:
-The red, green and blue shapes and the luminance line under a frame on
-Curation's stage, measured at import from the pixels the exposure measurements
-read, with the fractions of its pixels crushed and blown in its corners.
-Shown or hidden by one switch for the stage, kept for the next open.
+The red, green and blue shapes and the luminance line of an image, with the
+fractions of its pixels crushed and blown in its corners. Under a frame on
+Curation's stage it is measured at import from the pixels the exposure
+measurements read, and shown or hidden by one switch for the stage, kept for
+the next open. In the Edit panel it reads the edited image as it is drawn.
 _Avoid_: Levels, Tone curve.
 
 **Clipping blink**:
-The flashing marks over a frame on the stage of its blown highlights and
-crushed shadows, at the levels the measurement counts them. One switch for the
-stage, the Histogram, off when Curation opens and while the Histogram is hidden.
+The flashing marks over an image on a stage of its blown highlights and crushed
+shadows, at the levels the measurement counts them. The Histogram is its
+switch, one for the stage; on Curation's stage it is off when Curation opens
+and while the Histogram is hidden. In the Edit panel it reads the edited image
+as it is drawn.
 _Avoid_: Blinkies, Zebra, Clipping warning, Overexposure mask.

@@ -17,6 +17,7 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.models.AccountType
+import altitude.core.models.EditRecipe
 import altitude.core.models.ImportSource
 import altitude.core.models.Permission
 import altitude.core.models.Permissions
@@ -348,6 +349,27 @@ import altitude.core.routes.decorators.requirePermission
       fx => List(Probe(404, path = Map("assetId" -> fx.asset)), Probe(404, path = Map("assetId" -> fx.asset), json = true))
     },
     probed(GET, "/htmx/asset/r/:repoId/detail-panel/:assetId")(fx => List(Probe(404, path = Map("assetId" -> fx.asset)))),
+    // The Edit
+    probed(GET, "/api/edit/r/:repoId/asset/:assetId")(fx => List(Probe(404, path = Map("assetId" -> fx.asset))))
+      .needs(Permission.EditImages),
+    probed(PUT, "/api/edit/r/:repoId/asset/:assetId") {
+      fx =>
+        List(
+          Probe(
+            404,
+            path = Map("assetId" -> fx.asset),
+            body = json(Api.Field.Edit.BASE -> 1, Api.Field.Edit.RECIPE -> EditRecipe.Identity.copy(contrast = 10).toJson)))
+    }.needs(Permission.EditImages),
+    probed(GET, "/api/edit/r/:repoId/asset/:assetId/status")(fx => List(Probe(404, path = Map("assetId" -> fx.asset))))
+      .needs(Permission.EditImages),
+    probed(GET, "/api/edit/r/:repoId/asset/:assetId/auto-straighten") {
+      fx =>
+        List(
+          Probe(
+            404,
+            path = Map("assetId" -> fx.asset),
+            query = Map(Api.Field.Edit.RECIPE -> ujson.write(EditRecipe.Identity.toJson))))
+    }.needs(Permission.EditImages),
     probed(PUT, "/htmx/asset/r/:repoId/face/:faceId/person") {
       fx =>
         List(
@@ -1096,9 +1118,9 @@ import altitude.core.routes.decorators.requirePermission
 
   /**
    * The user's repository with an asset, a folder, an album, a Location and an unnamed Person with a Face, and their other
-   * repository with an imported asset (with a Preview, a point, a Face with its files, a folder, an album and a Location in a
-   * category holding it), a Person with that Face, two triaged assets in one Sequence, a recycled asset, an Import in progress
-   * and a Watch folder. The context is the user's repository again when it returns.
+   * repository with an imported asset (with a Preview, a point, a Face with its files, a saved Edit, rendered, a folder, an album
+   * and a Location in a category holding it), a Person with that Face, two triaged assets in one Sequence, a recycled asset, an
+   * Import in progress and a Watch folder. The context is the user's repository again when it returns.
    */
   private def fixtures(mine: Repository): Fixtures = {
     val myAsset = testContext.insertAsset(testContext.makeAsset(repository = Some(mine)))
@@ -1122,6 +1144,9 @@ import altitude.core.routes.decorators.requirePermission
     testApp.service.location.addAssets(location.persistedId, Set(asset.persistedId))
     val person = testApp.service.person.addPerson(Person(name = Some(s"$MARK Eve")))
     val face = testContext.addTestFace(person, asset, TestContext.unitVector(2), withFiles = true)
+    testApp.service.assetEdit.save(asset.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    // Rendered now, so the render the save queued finds nothing to write while the probes compare the rows
+    testApp.service.editRender.render(asset.persistedId)
     val frames = List.fill(2)(testContext.insertAsset(testContext.makeAsset(repository = Some(theirs), isTriaged = true)))
     val sequence = UUID.randomUUID.toString
     testContext.setAssetSequence(frames, sequence)
@@ -1172,8 +1197,8 @@ import altitude.core.routes.decorators.requirePermission
      *
      * A logged-in User's repository with an asset, a folder, an album, a Location and a Person with a Face, and a second
      * repository of theirs (the User holds every Permission in both) holding a row of every kind a route takes an ID of, each
-     * named with a mark: an asset with a Preview, a point, a Face with its files, a folder, an album and a Location in a
-     * category, a Person with that Face, two triaged assets in a Sequence, a recycled asset and an Import in progress.
+     * named with a mark: an asset with a Preview, a point, a Face with its files and an Edit, a folder, an album and a Location
+     * in a category, a Person with that Face, two triaged assets in a Sequence, a recycled asset and an Import in progress.
      *
      * Assertions:
      *

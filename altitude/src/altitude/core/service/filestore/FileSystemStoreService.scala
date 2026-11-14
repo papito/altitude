@@ -1,13 +1,19 @@
 package altitude.core.service.filestore
 
 import java.io._
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.FileUtils
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import scala.util.Using
 
 import altitude.core.{ Const => C }
 import altitude.core.Altitude
@@ -68,6 +74,63 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService:
     logger.trace(s"Storing the preview of asset [${preview.assetId}] as $destFilePath")
 
     putBinaryData(new File(destFilePath), preview.data)
+
+  override def stageEditedImage(assetId: String, kind: String, data: Array[Byte]): Unit =
+    val staged = temporaryPathOf(editedImagePath(assetId, kind))
+    logger.trace(s"Staging the edited $kind of asset [$assetId] as $staged")
+    try
+      Files.createDirectories(staged.getParent)
+      Using.resource(
+        FileChannel.open(staged, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+        channel =>
+          val buffer = ByteBuffer.wrap(data)
+          while buffer.hasRemaining do channel.write(buffer): Unit
+          // On the disk before the rename that publishes it, so a crash after the commit never leaves a truncated image
+          channel.force(true)
+      }
+    catch
+      case ex: IOException =>
+        throw StorageException(s"Error staging the edited $kind of asset [$assetId]: $ex")
+
+  override def publishEditedImage(assetId: String, kind: String): Unit =
+    val destination = editedImagePath(assetId, kind)
+    try Files.move(temporaryPathOf(destination), destination, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    catch
+      case ex: IOException =>
+        throw StorageException(s"Error publishing the edited $kind of asset [$assetId]: $ex")
+
+  override def discardStagedEditedImages(assetId: String): Unit =
+    for kind <- List(C.DataStore.PREVIEW, C.DataStore.DISPLAY) do
+      deleteFile(temporaryPathOf(editedImagePath(assetId, kind)), assetId)
+
+  override def getEditedImage(assetId: String, kind: String): MimedPreviewData =
+    MimedPreviewData(assetId = assetId, data = getBinaryData(editedImagePath(assetId, kind).toFile).get)
+
+  /**
+   * The edited Preview beside the original's Preview, `<repo>/preview/<id[0:2]>/<id>-edited.webp`, and the Display image in a
+   * directory of its own, `<repo>/display/<id[0:2]>/<id>.webp`
+   */
+  override def editedImagePath(assetId: String, kind: String): Path =
+    val name = kind match
+      case C.DataStore.PREVIEW => s"$assetId-edited"
+      case C.DataStore.DISPLAY => assetId
+      case _ => throw IllegalArgumentException(s"No edited image of kind [$kind]")
+    Path.of(repositoryDataPath, kind, assetId.substring(0, 2), s"$name.${MimedPreviewData.FILE_EXTENSION}")
+
+  override def deleteEditedImages(assetId: String): Unit =
+    for kind <- List(C.DataStore.PREVIEW, C.DataStore.DISPLAY) do
+      val path = editedImagePath(assetId, kind)
+      deleteFile(path, assetId)
+      deleteFile(temporaryPathOf(path), assetId)
+
+  /** The temporary file an edited image is staged in before its move to `destination` ([[stageEditedImage]]): hidden, beside it */
+  private def temporaryPathOf(destination: Path): Path = destination.resolveSibling(s".${destination.getFileName}.tmp")
+
+  private def deleteFile(file: Path, assetId: String): Unit =
+    try Files.deleteIfExists(file): Unit
+    catch
+      case ex: IOException =>
+        logger.error(s"Error deleting file $file of asset [$assetId]: $ex")
 
   private def previewFilePath(assetId: String): String =
     val dirName = assetId.substring(0, 2)
@@ -137,6 +200,9 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService:
         case ex: IOException =>
           logger.error(s"Error deleting file for asset id [$id]: $ex")
 
+    // Its edited images, and what a write of one cut off left
+    deleteEditedImages(id)
+
   override def purgeFaceById(id: String): Unit =
     val paths = List(
       detectedFacePath(id),
@@ -158,6 +224,8 @@ class FileSystemStoreService(app: Altitude) extends FileStoreService:
 
     try Some(FileUtils.readFileToByteArray(srcFile))
     catch
+      // Deleted since it was looked for: a purge, or an Edit reverted to the original
+      case _: NoSuchFileException | _: FileNotFoundException => throw NotFoundException(s"Cannot find file $srcFile")
       case ex: IOException =>
         throw StorageException(s"Error reading file [${srcFile.getPath}: $ex]")
 

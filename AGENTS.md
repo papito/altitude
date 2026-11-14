@@ -7,6 +7,7 @@ This file only routes. The rules and the architecture live in the guides below, 
 | Anything | [altitude/AGENTS.md](altitude/AGENTS.md): the rules for every change, architecture, the schema rule, build and test commands |
 | Frontend: Twirl templates, `altitude/static/js/`, CSS, design | also [altitude/views/AGENTS.md](altitude/views/AGENTS.md): frontend rules, template, event and component conventions, the style guide |
 | Face detection and recognition | also [docs/faces.md](docs/faces.md) |
+| Image edits: the Edit, its geometry and per-pixel math, the two renderers and their parity | also [docs/image-edits.md](docs/image-edits.md) |
 | Security, data safety, operational readiness | also [docs/READINESS.md](docs/READINESS.md): what live use needs and where the code stands on each item |
 | Naming a domain concept in code, UI text or docs | [CONTEXT.md](CONTEXT.md): the glossary |
 

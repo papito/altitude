@@ -45,7 +45,11 @@ markup.
 
 The plain scripts the pages link are `defer`, except `htmx.min.js`: run while the page is still parsing, htmx
 starts on DOMContentLoaded, after its deferred extensions and the modules, where a deferred htmx would start
-before them. Leaflet is a plain script (`window.L`, like interact.js) for the Location pin editor
+before them. interact.js (`window.interact`), linked by the main page and the style guide, drives the drags of
+`js/dragdrop/` and the Edit panel's Crop tool (`js/edit/crop-tool.js`: `draggable` and `resizable` on the crop, with
+its `aspectRatio` and `restrictSize` modifiers, and `draggable` on the layer around it, which turns the image), used as
+vendored, with no patch: it restricts to upright rectangles alone, so keeping the crop inside a straightened image is
+the tool's own work, in its move listeners. Leaflet is a plain script (`window.L`, like interact.js) for the Location pin editor
 (`js/fragments/location-editor.js`) and the map view, and supercluster (`window.Supercluster`) for the map
 view's on-screen clustering (`js/map/map-view.js`); `js/common/vendor-loader.js` loads them, with
 `static/css/leaflet.css`, when the first editor or map asks. media-chrome, a plain script defining the
@@ -79,8 +83,8 @@ whose inputs are in shadow DOM, and focus is pulled back to the control before t
    - by some views only: `await import("../lib/<file>.js")` where the view first needs it, so no page
      waits for it and the browser fetches and runs it once.
 3. A plain script (one that defines a global) is loaded by where it is needed:
-   - at startup: a `defer` `<script>` in the templates of the pages that use it, or in
-     `views/includes/header_common.scala.html` for every page (axios, interact.js);
+   - at startup: a `defer` `<script>` in the templates of the pages that use it (interact.js), or in
+     `views/includes/header_common.scala.html` for every page (axios);
    - by some views only: a `load…()` export in `js/common/vendor-loader.js` (Leaflet, supercluster,
      media-chrome, Flatpickr), awaited by the view.
 

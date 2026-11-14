@@ -3,6 +3,7 @@ package altitude.core
 import scala.collection.mutable
 
 import altitude.core.models.Asset
+import altitude.core.models.EditState
 
 case class ValidationException(message: String = "") extends Exception:
   final def isEmpty: Boolean = message.isEmpty && errors.isEmpty
@@ -66,5 +67,15 @@ case class VideoException(msg: String) extends Exception(msg)
 /** An image no image reader can decode */
 case class ImageException(msg: String) extends Exception(msg)
 
+/** Work bounded to a few at once has no slot free now (auto-straighten): the request is answered 503, to be asked again */
+case class BusyException(msg: String) extends Exception(msg)
+
 /** A queue did not take an element: it was full, closed, or its stream had stopped */
 case class QueueRefusedException(msg: String) extends Exception(msg)
+
+/**
+ * A save of an asset's Edit built on an edit version the Edit has moved on from (`AssetEditService`): the state the Edit is in
+ * now, which `EditController` answers with a 409 for the client to adopt
+ */
+case class EditConflictException(state: EditState)
+  extends Exception(s"The Edit's edit version is ${state.editVersion}, not the one the save was built on")

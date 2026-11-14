@@ -1,0 +1,117 @@
+/* The Histogram (includes/histogram), Curation's strip under each stage pane and the Edit panel's: an image's Histogram on
+   a button as wide as its container, which switches the Clipping blink. Its backdrop is the panel neutral of the dark side,
+   which the strip takes in either theme (`color-scheme: dark`), since the channels are drawn as light; its color, a theme
+   neutral at an alpha, is the luminance line's. The hairline is there for the pressed rule to color: while the blink is on,
+   the strip shows a success edge and a success-colored line; the channels keep their colors. Positioned for the corner
+   labels */
+.histogram {
+    position: relative;
+    width: 100%;
+    height: var(--histogram-height);
+    padding: 0;
+    overflow: hidden;
+    cursor: pointer;
+    color: hsl(from var(--theme-neutral-4) h s l / 0.6);
+    font: inherit;
+    background-color: var(--theme-neutral-2);
+    border: var(--border-hairline) transparent;
+    border-radius: var(--radius);
+    color-scheme: dark;
+
+    &[aria-pressed="true"] {
+        border-color: var(--success-color);
+        color: var(--success-color);
+    }
+
+    /* A failed image leaves the strip empty, and there is nothing to press for */
+    &:disabled {
+        cursor: default;
+    }
+}
+
+/* Isolated, so the channels blend among themselves alone and their sum then lies over the strip's backdrop */
+.histogram svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    isolation: isolate;
+}
+
+/* A channel's shape in its own color at an alpha, added to the others as light (`screen`): where two overlap the strip reads
+   yellow, cyan or magenta, and where the three do, a neutral */
+.histogram :is(.red, .green, .blue) {
+    fill-opacity: 0.6;
+    mix-blend-mode: screen;
+}
+
+.histogram .red {
+    fill: var(--histogram-red);
+}
+
+.histogram .green {
+    fill: var(--histogram-green);
+}
+
+.histogram .blue {
+    fill: var(--histogram-blue);
+}
+
+/* The luminance line over the channels takes the strip's color at full alpha, so no color is written here and the pressed rule
+   colors it. It keeps its width whatever the strip stretches the viewBox to */
+.histogram .luminance {
+    fill: none;
+    stroke: hsl(from currentColor h s l / 1);
+    stroke-width: 1px;
+    vector-effect: non-scaling-stroke;
+}
+
+/* The fractions of the image's pixels crushed (left, the shadows' side) and blown (right, the highlights' side) in the strip's
+   top corners, each with a triangle that points to its end of the range. An empty label, while there is nothing to read,
+   shows nothing */
+.histogram :is(.crushed, .blown) {
+    position: absolute;
+    top: var(--space-2);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--theme-neutral-4);
+    font-size: var(--font-size-small);
+    pointer-events: none;
+
+    &:empty {
+        display: none;
+    }
+}
+
+.histogram .crushed {
+    left: var(--space-3);
+}
+
+.histogram .blown {
+    right: var(--space-3);
+}
+
+.histogram .crushed::before,
+.histogram .blown::after {
+    content: "";
+    width: var(--space-3);
+    height: var(--space-5);
+    background-color: currentColor;
+}
+
+.histogram .crushed::before {
+    clip-path: polygon(100% 0, 0 50%, 100% 100%);
+}
+
+.histogram .blown::after {
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+/* While the blink is on, each label takes the color the blink marks its side with */
+.histogram[aria-pressed="true"] .crushed {
+    color: var(--info-color);
+}
+
+.histogram[aria-pressed="true"] .blown {
+    color: var(--error-color);
+}

@@ -1,3 +1,5 @@
+@import altitude.core.RequestContext
+@import altitude.core.models.Permission
 @()
 
 @* The snackbar, rendered from the Alpine `snackbar` store of static/js/common/snackbar.js: errors
@@ -108,10 +110,31 @@
     <div class="modal-box"
          x-trap.inert.noscroll.noreturn.noautofocus="$store.modal.isActive('assetDetail')">
         <div class="modal-toolbar">
-            <div class="modal-title" id="imageDetailModalTitle" x-text="$store.modal.title"></div>
-            @* The Detail panel's toggle, `m`, and the Face highlights', `p`; js/search-results/detail-panel.js keeps their
-               pressed state and takes their clicks. Then fullscreen's, `f`, which js/search-results/detail-fullscreen.js
-               takes and removes where the browser allows no fullscreen *@
+            @* The title, and the badge of an edited asset, which reads "Edited" while the stage shows the Edit and "Original"
+               while it shows the original (js/edit/edit-stage.js) *@
+            <div class="modal-title" id="imageDetailModalTitle"><span x-text="$store.modal.title"></span><span class="edit-badge" data-app-edit-badge hidden>Edited</span></div>
+            @* The Edit panel's toggle, `e`, for a holder of Edit images alone: js/edit/edit-panel.js keeps its pressed state,
+               disables it with a title saying why on an asset no Edit may change, and takes its clicks. Then Show original's
+               toggle, on an edited asset alone, for every viewer (`\` held does the same while held);
+               js/edit/edit-stage.js shows it, keeps its pressed state and takes its clicks. Then the Detail panel's toggle,
+               `m`, and the Face highlights', `p`; js/search-results/detail-panel.js keeps their pressed state and takes their
+               clicks. Then fullscreen's, `f`, which js/search-results/detail-fullscreen.js takes and removes where the browser
+               allows no fullscreen *@
+            @if(RequestContext.holds(Permission.EditImages)) {
+            <button type="button"
+                    class="toolbar-toggle"
+                    aria-pressed="false"
+                    aria-label="Edit"
+                    title="Edit (E)"
+                    data-app-edit-panel-toggle><i class="fas fa-sliders-h" aria-hidden="true"></i></button>
+            }
+            <button type="button"
+                    class="toolbar-toggle"
+                    aria-pressed="false"
+                    aria-label="Show original"
+                    title="Show original (hold \)"
+                    data-app-show-original-toggle
+                    hidden><i class="fas fa-clone" aria-hidden="true"></i></button>
             <button type="button"
                     class="toolbar-toggle"
                     aria-pressed="false"

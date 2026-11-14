@@ -34,11 +34,11 @@ import scala.util.control.NonFatal
 import altitude.core.QueueRefusedException
 
 /**
- * A pipeline's flow run for the life of the app behind a queue that elements are offered to: the import and the purge queues. The
- * queue buffers `bufferSize` elements, and an offer made while it is full waits, however many are made at once: the offers take
- * turns, in the order they were made ([[offer]]). The stream runs until [[shutdown]] completes the queue. A stream that fails
- * stays down, unless `restartOnFailure` (development only, `dev.restart_pipeline`) starts it again after a backoff, with a new
- * queue. `describe` names an element in the log.
+ * A pipeline's flow run for the life of the app behind a queue that elements are offered to: the import, purge and edit-render
+ * queues. The queue buffers `bufferSize` elements, and an offer made while it is full waits, however many are made at once: the
+ * offers take turns, in the order they were made ([[offer]]). The stream runs until [[shutdown]] completes the queue, finishing
+ * what it holds, or [[stop]] ends it, dropping that. A stream that fails stays down, unless `restartOnFailure` (development only,
+ * `dev.restart_pipeline`) starts it again after a backoff, with a new queue. `describe` names an element in the log.
  */
 class QueuedPipeline[In](
     name: String,
@@ -146,6 +146,18 @@ class QueuedPipeline[In](
     // A stream that failed is already over, and its failure was logged
     try Await.ready(done, timeout)
     catch case _: TimeoutException => logger.warn(s"The $name queue did not finish within $timeout; it is left as it is")
+
+  /**
+   * Takes no more elements and ends the stream at once through its kill switch, dropping what it has buffered: for a queue whose
+   * elements the next startup finds again by itself. The work a stage has started is not waited for here; its owner waits for it.
+   */
+  def stop(): Unit =
+    val timeout = shutdownTimeout()
+    logger.info(s"Stopping the $name queue, leaving what it holds for the next start")
+    stopping.set(true)
+    killSwitch.shutdown()
+    try Await.ready(done, timeout)
+    catch case _: TimeoutException => logger.warn(s"The $name queue did not stop within $timeout")
 
 object QueuedPipeline:
 

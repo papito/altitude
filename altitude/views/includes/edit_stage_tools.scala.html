@@ -1,0 +1,37 @@
+@()
+
+@* The Edit's tools over Asset detail's stage (htmx/view_image_detail_modal, for a holder of Edit images), driven by
+   js/edit/edit-panel.js and js/edit/crop-tool.js rather than by the panel's Alpine component, since they sit outside it.
+   #editSplit is Before/after: it lies over the media box as the canvas does, with "Before" and "After" in its top corners
+   and its divider, a separator dragged with the pointer or stepped with the arrows. #cropLayer is the Crop tool: it covers
+   the stage, so a drag outside the crop turns the image (Straighten); #cropFrame is the whole warped frame the canvas draws
+   while the tool is open, #cropRect the crop in it (focusable: the arrows nudge it), with its guide and eight handles, the
+   Level tool's line, and the floating bar with the guide, the crop's size, Cancel and Done. *@
+
+<div id="editSplit" hidden>
+    <span class="edit-split-label before">Before</span>
+    <span class="edit-split-label after">After</span>
+    <div id="editSplitHandle" role="separator" aria-orientation="vertical" aria-label="Before and after" aria-valuemin="0" aria-valuemax="100" tabindex="0"></div>
+</div>
+<div id="cropLayer" hidden>
+    <div id="cropFrame">
+        <div id="cropRect" tabindex="0" role="group" aria-label="Crop">
+            <svg class="crop-guide" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <span class="crop-handle n w"></span>
+            <span class="crop-handle n"></span>
+            <span class="crop-handle n e"></span>
+            <span class="crop-handle e"></span>
+            <span class="crop-handle s e"></span>
+            <span class="crop-handle s"></span>
+            <span class="crop-handle s w"></span>
+            <span class="crop-handle w"></span>
+        </div>
+    </div>
+    <svg id="levelLine" aria-hidden="true" hidden><line></line></svg>
+    <div id="cropBar" role="toolbar" aria-label="Crop tool">
+        <button type="button" class="action-button small" data-app-crop-guide title="Cycle the guide (O)">Guide: <span data-app-crop-guide-name>Thirds</span></button>
+        <span class="crop-size" data-app-crop-size></span>
+        <button type="button" class="action-button small" data-app-crop-cancel>Cancel <kbd>Esc</kbd></button>
+        <button type="button" class="action-button small primary" data-app-crop-done>Done <kbd>Enter</kbd></button>
+    </div>
+</div>

@@ -2,9 +2,10 @@
  * A docked panel: where it sits against what it is docked to (its Dock side: left, right, top or
  * bottom), how much of the width or the height it takes (its share), the divider that drags and
  * steps that share, the Dock side menu that picks the side, and the state remembered per browser.
- * Two docks are made from it, the explorer's against the results (`common/explorer-dock.js`) and
- * the Detail panel's against Asset detail's media (`search-results/detail-panel.js`); each gives
- * the factory what differs:
+ * Three docks are made from it, the explorer's against the results (`common/explorer-dock.js`),
+ * the Detail panel's against Asset detail's media (`search-results/detail-panel.js`) and the Edit
+ * panel's, which has no Dock side of its own and sits opposite the Detail panel
+ * (`edit/edit-panel.js`); each gives the factory what differs:
  *
  * - `storage`: `{ key, field }`, the localStorage key holding `{ side?, widthShare, heightShare }`,
  *   the object itself or, with `field`, that field of it, the rest of the object being someone
@@ -15,6 +16,9 @@
  *   compact choice menu (`common/context-menu-markup.js`) carry it, and the factory keeps that
  *   menu true to the side: the current option is checked and the trigger shows its glyph and
  *   names the side.
+ * - `followSide`: `() => string`, in place of `pickAttribute` for a dock with no Dock side of its
+ *   own: the side it sits on, read whenever it is laid out, which its owner does again (`layOut`)
+ *   when the side it follows changes. Nothing is picked, so nothing of a side is remembered.
  * - `layout`: `{ sideAttribute, shareProperty }`, written on the container: the side as an
  *   attribute and the share as a percentage custom property, which the stylesheet lays the grid
  *   out from.
@@ -63,7 +67,8 @@ export function isVerticalAxis(side) {
 
 export function createDock({
     storage,
-    pickAttribute,
+    pickAttribute = null,
+    followSide = null,
     layout,
     container,
     sizeEl,
@@ -104,12 +109,14 @@ export function createDock({
         // laid-out share is bounded again, the remembered one left alone
         window.addEventListener("resize", () => applyShare())
 
-        document.body.addEventListener("click", (event) => {
-            const pickEl = event.target.closest?.(`[${pickAttribute}]`)
-            if (pickEl) {
-                setSide(pickEl.getAttribute(pickAttribute))
-            }
-        })
+        if (pickAttribute) {
+            document.body.addEventListener("click", (event) => {
+                const pickEl = event.target.closest?.(`[${pickAttribute}]`)
+                if (pickEl) {
+                    setSide(pickEl.getAttribute(pickAttribute))
+                }
+            })
+        }
     }
 
     /** Lays the container out with the effective side and its axis's share, and shows the side on the menu */
@@ -120,6 +127,7 @@ export function createDock({
     /** Docks the panel on `side` from now on: remembered, laid out and announced; the side already picked is nothing */
     function setSide(newSide) {
         if (
+            followSide ||
             !Object.values(Const.dockSides).includes(newSide) ||
             newSide === state.side
         ) {
@@ -182,7 +190,7 @@ export function createDock({
             return
         }
 
-        const effective = state.side ?? defaults.side()
+        const effective = followSide?.() ?? state.side ?? defaults.side()
         el.setAttribute(layout.sideAttribute, effective)
 
         if (orientsDivider) {
@@ -193,7 +201,9 @@ export function createDock({
         }
 
         applyShare()
-        syncDockControl(effective)
+        if (pickAttribute) {
+            syncDockControl(effective)
+        }
     }
 
     /**

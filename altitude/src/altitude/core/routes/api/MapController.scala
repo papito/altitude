@@ -95,7 +95,8 @@ class MapController(using logger: Logger) extends BaseController:
                 "count" -> cell.count,
                 "latitude" -> cell.latitude,
                 "longitude" -> cell.longitude,
-                "assetId" -> cell.assetId))),
+                "assetId" -> cell.assetId,
+                "editRev" -> cell.editRev))),
         "locations" -> ujson.Arr.from(
           result.locations.map(
             location =>

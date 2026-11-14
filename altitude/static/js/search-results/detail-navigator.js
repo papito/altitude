@@ -18,6 +18,7 @@ import { loadNextPage } from "./infinite-scroll.js"
 import { isSpacer, reloadSpacer } from "./page-window.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
 import { loadMediaChrome } from "../common/vendor-loader.js"
+import { originalUrl, previewUrl } from "../common/content-urls.js"
 
 // A Video shorter than this loops, like a Live Photo; a longer one stops at the end
 const LOOP_MAX_DURATION_SECONDS = 10
@@ -28,7 +29,8 @@ const pendingMediaLoads = new WeakMap()
 /**
  * Sets the element's `src` and resolves once it can be shown: an image once loaded, a video once
  * its metadata (its size and duration) is in, so playback needs nothing more than the ranges the
- * player asks for.
+ * player asks for. A later call on the same element supersedes the wait, which rejects with an
+ * `AbortError`.
  */
 export function setMediaSrcAndWait({ mediaEl, url }) {
     pendingMediaLoads.get(mediaEl)?.()
@@ -50,7 +52,10 @@ export function setMediaSrcAndWait({ mediaEl, url }) {
             mediaEl.removeEventListener("error", onError)
         }
 
-        pendingMediaLoads.set(mediaEl, cleanup)
+        pendingMediaLoads.set(mediaEl, () => {
+            cleanup()
+            reject(new DOMException("A later load took over", "AbortError"))
+        })
         mediaEl.addEventListener(loadedEvent, onLoad, { once: true })
         mediaEl.addEventListener("error", onError, { once: true })
 
@@ -127,8 +132,23 @@ async function playShownVideo({ videoEl, isCurrent }) {
  * orientation. The Detail panel (`detail-panel.js`) is told of each asset as its load starts, under
  * the same request token, so it empties, loads the asset's details while they are wanted and drops a
  * superseded answer, and of the shown size, which its dimensions row and the Face highlights read.
+ *
+ * A still image is shown by the Edit's stage (`edit/edit-stage.js`), which picks its source by the
+ * asset's Edit (the original, the Display image, or the Edit drawn on the canvas), fits the box and
+ * tells the Detail panel; a Video is shown here. The asset's Edit, whether the account may edit
+ * it and why not come with the fragment (`data-app-image-detail-edit`, `-editable`,
+ * `-edit-refusal`) on opening and with the asset's JSON (`edit`, `editable`, `editRefusal`) on a
+ * step. A step asks the Edit panel (`edit/edit-panel.js`) first, which warns of a change pending
+ * and may keep the asset shown; the panel is told of each asset as its load starts, before the
+ * stage, so it ends what was open on the last one and has the stage draw this one's Edit while it
+ * is open, and again once a still image is shown.
  */
-export function createSearchDetailCoordinator({ context, detailPanel }) {
+export function createSearchDetailCoordinator({
+    context,
+    detailPanel,
+    editStage,
+    editPanel,
+}) {
     // The cell the modal shows, or is loading: where navigation starts from
     let currentCell = null
     let imageRequestToken = 0
@@ -165,7 +185,12 @@ export function createSearchDetailCoordinator({ context, detailPanel }) {
      * spacer after it, if any. The page may still be arriving for a detail view that moved on.
      */
     async function step({ direction, loadBeyond = null }) {
-        if (!isAssetDetailActive()) {
+        // A change pending in the Edit panel is asked about first, and staying is no step
+        if (
+            !isAssetDetailActive() ||
+            !(await editPanel.beforeLeave()) ||
+            !isAssetDetailActive()
+        ) {
             return
         }
 
@@ -229,7 +254,8 @@ export function createSearchDetailCoordinator({ context, detailPanel }) {
      * navigation origin immediately, then loads the media into the element its type calls for,
      * unloading the other. If the request is still current when the media is ready, applies the
      * asset's size and title, and starts a Video: looping when it is a short clip, muted when the
-     * browser refuses sound, and described to the OS media controls.
+     * browser refuses sound, and described to the OS media controls. A still image goes to the
+     * Edit's stage with its `edit` and `editable`, which sizes the box itself.
      */
     async function showMedia({
         openId,
@@ -241,6 +267,9 @@ export function createSearchDetailCoordinator({ context, detailPanel }) {
         width,
         height,
         assetId,
+        edit = null,
+        editable = false,
+        editRefusal = null,
         cellEl = null,
         token = ++imageRequestToken,
     }) {
@@ -257,6 +286,13 @@ export function createSearchDetailCoordinator({ context, detailPanel }) {
         const isCurrent = () => isCurrentImageRequest({ token, openId })
 
         detailPanel.showAsset({ assetId, isCurrent })
+        editPanel.showAsset({
+            assetId,
+            mediaType,
+            edit,
+            editable,
+            refusal: editRefusal,
+        })
 
         // The player leaves the screen until the next Video is ready, so an emptied player never
         // shows in the previous frame
@@ -266,42 +302,67 @@ export function createSearchDetailCoordinator({ context, detailPanel }) {
         if (isVideo) {
             imgEl.removeAttribute("src")
             imgEl.hidden = true
+            // Nothing of an Edit stays on the stage: its canvas, its toggle and its badge
+            editStage.clear()
         }
 
         try {
-            // The player's controls are defined by media-chrome, loaded by the first Video alongside it
-            await Promise.all([
-                setMediaSrcAndWait({ mediaEl, url }),
-                isVideo && loadMediaChrome(),
-            ])
+            if (isVideo) {
+                // The player's controls are defined by media-chrome, loaded by the first Video alongside it
+                await Promise.all([
+                    setMediaSrcAndWait({ mediaEl, url }),
+                    loadMediaChrome(),
+                ])
+
+                if (!isCurrent()) {
+                    return
+                }
+
+                shownEl.hidden = false
+                // The size as shown, upright; the stored one stands in for a player that reports none
+                const size =
+                    videoEl.videoWidth && videoEl.videoHeight
+                        ? {
+                              width: videoEl.videoWidth,
+                              height: videoEl.videoHeight,
+                          }
+                        : { width, height }
+                setAssetDetailSize(size)
+                detailPanel.setShownSize(size)
+            } else if (
+                !(await editStage.showImage({
+                    assetId,
+                    edit,
+                    editable,
+                    width,
+                    height,
+                    url,
+                    isCurrent,
+                }))
+            ) {
+                return
+            }
 
             if (!isCurrent()) {
                 return
             }
 
-            shownEl.hidden = false
-            // The size as shown, upright; the stored one stands in for a media element that reports none
-            const shownSize = isVideo
-                ? { width: videoEl.videoWidth, height: videoEl.videoHeight }
-                : { width: imgEl.naturalWidth, height: imgEl.naturalHeight }
-            const size =
-                shownSize.width && shownSize.height
-                    ? shownSize
-                    : { width, height }
-            setAssetDetailSize(size)
-            detailPanel.setShownSize(size)
+            if (!isVideo) {
+                editPanel.afterShown(assetId)
+            }
             Alpine.store(Const.state.modal).title = title
             loading.value = false
 
             if (isVideo) {
-                // The element is reused across navigation; an unknown duration (NaN) does not loop
+                // The element is reused across navigation; an unknown duration (NaN) does not loop.
+                // A Video is never edited, so its artwork is the original's Preview
                 videoEl.loop = videoEl.duration < LOOP_MAX_DURATION_SECONDS
                 // Not awaited: the media is shown, whenever playback starts
                 playShownVideo({ videoEl, isCurrent })
                 describeInMediaSession({
                     videoEl,
                     title,
-                    artworkUrl: `/content/r/${context.getRepoId()}/preview/${assetId}`,
+                    artworkUrl: previewUrl(context.getRepoId(), assetId),
                     play: () => playShownVideo({ videoEl, isCurrent }),
                     previous: currentCell && handleShowPrevious,
                     next: currentCell && handleShowNext,
@@ -378,11 +439,14 @@ export function createSearchDetailCoordinator({ context, detailPanel }) {
             imgEl,
             videoEl,
             mediaType: assetData.asset_type?.media_type,
-            url: `/content/r/${repoId}/file/${assetId}`,
+            url: originalUrl(repoId, assetId),
             title: assetData.file_name,
             width: assetData.width,
             height: assetData.height,
             assetId,
+            edit: assetData.edit ?? null,
+            editable: assetData.editable === true,
+            editRefusal: assetData.editRefusal ?? null,
             cellEl,
             token,
         })

@@ -1,6 +1,8 @@
 package altitude.core.service
 
+import com.drew.imaging.ImageProcessingException
 import java.io.IOException
+import java.nio.file.Files
 import javax.imageio.ImageIO
 
 import scala.util.control.NonFatal
@@ -193,6 +195,23 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
         logger.trace(
           s"No preview for asset [${dataAsset.asset.persistedId}] of media type [${dataAsset.asset.assetType.mediaType}]")
         None
+
+  /**
+   * The size of the asset's upright original, its original turned by its EXIF orientation, as browsers show it and the Preview is
+   * made: its stored size, which is the file's as written, with the width and height swapped for the orientations 5 to 8, which
+   * turn it a quarter. The orientation is read from the original's metadata: metadata that cannot be read is taken as upright
+   * (logged at WARN), and an original that is missing is an [[IllegalOperationException]]. An Edit's geometry is in this frame.
+   */
+  def uprightSize(asset: Asset): (Int, Int) =
+    val file = app.service.fileStore.assetFile(asset.persistedId)
+    if !Files.isRegularFile(file) then throw IllegalOperationException(C.Msg.Err.ORIGINAL_MISSING)
+    val orientation =
+      try ImageUtil.exifOrientation(file)
+      catch
+        case ex @ (_: ImageProcessingException | _: IOException) =>
+          logger.warn(s"Cannot read the metadata of the original of $asset, taking it as upright: ${ex.getMessage}")
+          1
+    if orientation >= 5 && orientation <= 8 then (asset.height, asset.width) else (asset.width, asset.height)
 
   def getPreview(assetId: String): MimedPreviewData =
     app.service.fileStore.getPreviewById(assetId)

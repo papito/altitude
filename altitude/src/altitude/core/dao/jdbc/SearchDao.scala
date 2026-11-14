@@ -165,7 +165,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
 
     if matchesNothing(query) then return Nil
     val statement = SearchQueries.mapCells(searchDialect, query, RequestContext.getRepository.persistedId, bbox, cellDegrees)
-    val cells = Db.read(dialect)(_.runSql[(Int, Double, Double, String)](statement)).map(MapCell.apply).toList
+    val cells = Db.read(dialect)(_.runSql[(Int, Double, Double, String, Int)](statement)).map(MapCell.apply).toList
     logger.trace(s"Map cells of $cellDegrees degrees in $bbox: ${cells.length} cells over ${cells.map(_.count).sum} points")
     cells
 

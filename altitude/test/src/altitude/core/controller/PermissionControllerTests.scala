@@ -156,7 +156,7 @@ import altitude.core.models.Permissions
      *
      * A Library with an asset bearing a Face of a Person, another Person named "Taken", and with access to it a User holding
      * every Permission, a User holding none, a Guest, a User holding none but with the Create Libraries flag, Users holding
-     * Recycle, Curate own or Edit Metadata alone, and an Admin.
+     * Recycle, Curate own or Edit metadata alone, and an Admin.
      *
      * Assertions:
      *

@@ -115,15 +115,13 @@
    The Loupe, last in the pane so it paints above all of them, is a lens that rides with the pointer over the pane showing the spot
    under it at the original's pixels, on that pane alone; js/common/loupe.js places and draws it through the component,
    writing its inline styles, its level in `data-level` and `hidden`, and the pointer is hidden (`cursor: none`) while it shows.
-   The Histogram strip is the figure's row between the image and its caption: a button holding the frame's Histogram as the import
-   measured it, its red, green and blue channels as three filled shapes that blend where they overlap and its luminance as a line
-   over them (`histogramPath`, a path a channel), two grid lines at a third and two thirds of the range, and in its bottom corners
-   the fractions of the frame's pixels crushed (left) and blown (right) (`crushedLabel`, `blownLabel`); it is the Clipping blink's
-   switch for the whole stage, `aria-pressed` while the blink is on and disabled on a failed image (`isImageUnreadable`); as it holds
-   no text of its own, its `aria-label` names it and its title says what it does. The shapes and the labels are the frame's, so they
-   show while its image loads, and are empty for a frame not measured. A click bubbles to the shell's root, which hands focus back
-   to it (`refocusAfterPointer`), as every button's does. The H key shows or hides both panes' strips (`showsHistogram`), and a
-   hidden strip leaves its row to the pane.
+   The Histogram strip is the figure's row between the image and its caption: the Histogram's markup (includes/histogram), a button
+   holding the frame's Histogram as the import measured it (`histogramOf`, its paths by channel) and in its top corners the
+   fractions of the frame's pixels crushed (left) and blown (right) (`crushedLabel`, `blownLabel`); it is the Clipping blink's
+   switch for the whole stage, `aria-pressed` while the blink is on and disabled on a failed image (`isImageUnreadable`). The shapes
+   and the labels are the frame's, so they show while its image loads, and are empty for a frame not measured. A click bubbles to
+   the shell's root, which hands focus back to it (`refocusAfterPointer`), as every button's does. The H key shows or hides both
+   panes' strips (`showsHistogram`), and a hidden strip leaves its row to the pane.
    The component words the Keep button by where the frame stands on the stage. The pinned frame's caption says so, centered below its image.
    Any other frame's has the Pin button, and that other frame is always the focused one. Recycle sends the pane's frame to the
    trash at once (`recycleFrame`), its key the Keep button's with Shift held (`recycleKey`) *@
@@ -141,26 +139,13 @@
       </div>
       <div id="@loupeId" class="loupe" hidden aria-hidden="true"></div>
     </div>
-    <button type="button"
-            id="@histogramId"
-            class="histogram"
-            x-show="showsHistogram"
-            title="Blink the blown highlights and crushed shadows"
-            aria-label="Clipping blink"
-            :aria-pressed="clippingBlink"
-            :disabled="isImageUnreadable('@imageId', @frame)"
-            x-on:click="toggleClippingBlink()">
-      <svg viewBox="0 0 64 16" preserveAspectRatio="none" aria-hidden="true">
-        <line class="grid" x1="21.333" x2="21.333" y1="0" y2="16"></line>
-        <line class="grid" x1="42.667" x2="42.667" y1="0" y2="16"></line>
-        <path class="red" :d="histogramPath(@frame, 'red')"></path>
-        <path class="green" :d="histogramPath(@frame, 'green')"></path>
-        <path class="blue" :d="histogramPath(@frame, 'blue')"></path>
-        <path class="luminance" :d="histogramPath(@frame, 'luminance')"></path>
-      </svg>
-      <span class="crushed" x-text="crushedLabel(@frame)"></span>
-      <span class="blown" x-text="blownLabel(@frame)"></span>
-    </button>
+    @includes.html.histogram(
+      paths = s"histogramOf($frame)",
+      crushed = s"crushedLabel($frame)",
+      blown = s"blownLabel($frame)",
+      shows = "showsHistogram",
+      id = histogramId,
+      disabled = s"isImageUnreadable('$imageId', $frame)")
     <figcaption>
       <span class="file-name" x-text="fileNameOf(@frame)"></span>
       <span class="pinned-label" x-show="@frame === pinnedId"><i class="fas fa-thumbtack" aria-hidden="true"></i> Pinned</span>

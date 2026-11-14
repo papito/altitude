@@ -107,6 +107,8 @@ trait SqliteOverrides:
 
   override val forKeyShare: String = ""
 
+  override val forNoKeyUpdate: String = ""
+
   override protected def advisoryLock(key: String): Unit = () // The one write connection serializes the writers
 
   override protected val inIdSet: String = "IN (SELECT value FROM json_each(?))"

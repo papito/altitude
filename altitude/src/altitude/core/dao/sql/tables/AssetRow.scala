@@ -53,6 +53,7 @@ case class AssetRow[T[_]](
     imageQuality: T[Option[Int]],
     perceptualHash: T[Option[Long]],
     sequenceId: T[Option[String]],
+    editRev: T[Int],
     createdAt: T[Option[OffsetDateTime]],
     updatedAt: T[Option[OffsetDateTime]])
 

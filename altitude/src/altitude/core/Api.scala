@@ -119,6 +119,33 @@ object Api:
       val SEQUENCE_OF = "sequenceOf"
       val COUNT = "count"
 
+    // The Edit's JSON API (EditController): a save's body, and the state it answers (also the asset detail's `edit`)
+    object Edit:
+      // The edit version a save was built on
+      val BASE = "base"
+      val RECIPE = "recipe"
+      // The Edit's edit version (the count of its saves, not its format's `version`), and the edit version whose edited images
+      // are stored
+      val EDIT_VERSION = "editVersion"
+      val RENDERED_VERSION = "renderedVersion"
+      // The revision of the edited images, their URLs' cache key
+      val REV = "rev"
+      val EDITED = "edited"
+      val WIDTH = "width"
+      val HEIGHT = "height"
+      // The size of the asset's upright original, the space of the Edit's geometry and of its Faces' boxes
+      val UPRIGHT_WIDTH = "uprightWidth"
+      val UPRIGHT_HEIGHT = "uprightHeight"
+      // A 409's current state, beside its error
+      val STATE = "state"
+      // Auto-straighten's answer: the Straighten that levels the image's lines
+      val ANGLE = "angle"
+      // The asset detail's Edit, when it has one, whether the account may edit the asset, and, for a holder of Edit
+      // images, why the asset cannot be edited, which the Edit toggle's title shows
+      val EDIT = "edit"
+      val EDITABLE = "editable"
+      val REFUSAL = "editRefusal"
+
     object Folder:
       val FOLDER = "folder"
       val FOLDERS = "folders"

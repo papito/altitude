@@ -45,7 +45,8 @@ import altitude.core.util.QueryResult
   /**
    * A second repository with a row of every scoped table: an asset (with its Search document), a folder, an album and a Location
    * holding the asset, a Person with a Face on it, a metadata field with a value on it, an Import with a pending file, a Watch
-   * folder that remembers a file, and a stat of its own. The context is the first repository again when it returns.
+   * folder that remembers a file, an imported image with a saved Edit, and a stat of its own. The context is the first repository
+   * again when it returns.
    */
   private def twoRepositories(): TwoRepositories = {
     val first = testContext.repository
@@ -66,6 +67,11 @@ import altitude.core.util.QueryResult
     val importFile = testApp.service.imports.addFile(opened.persistedId, "theirs.jpg", sizeBytes = 1)
     val (watchFolder, watchFolderFile) = rememberingWatchFolder("theirs")
     testApp.txManager.withTransaction(testApp.DAO.stats.add(Stat(isolationDimension, 0)))
+    // Imported, as an Edit reads the original's orientation
+    val edited = testContext.persistAsset(repository = Some(second))
+    testApp.service.assetEdit.save(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    // Rendered now, so the render the save queued finds nothing to write while the tests compare the rows
+    testApp.service.editRender.render(edited.persistedId)
 
     switchContextRepo(first)
 
@@ -121,7 +127,12 @@ import altitude.core.util.QueryResult
         FieldConst.WatchFolderFile.REL_PATH -> "changed",
         Some(FieldConst.WatchFolderFile.ATTEMPTS)
       ),
-      ScopedRow("stats", testApp.DAO.stats, FieldConst.Stat.DIMENSION -> isolationDimension, FieldConst.Stat.DIM_VAL -> 7L)
+      ScopedRow("stats", testApp.DAO.stats, FieldConst.Stat.DIMENSION -> isolationDimension, FieldConst.Stat.DIM_VAL -> 7L),
+      ScopedRow(
+        "asset_edit",
+        testApp.DAO.assetEdit,
+        FieldConst.AssetEdit.ASSET_ID -> edited.persistedId,
+        FieldConst.AssetEdit.LAST_REV -> 5)
     )
 
     TwoRepositories(first, second, rows)
@@ -164,14 +175,14 @@ import altitude.core.util.QueryResult
      * Setup:
      *
      * Two repositories, the second holding a row of every scoped table that a DAO reads: an asset, a folder, an album, a
-     * Location, a Person, a Face, a metadata field, an Import, an Import file, a Watch folder, a file it remembers and a stat of
-     * a dimension only it has.
+     * Location, a Person, a Face, a metadata field, an Import, an Import file, a Watch folder, a file it remembers, an Edit and a
+     * stat of a dimension only it has.
      *
      * Assertions:
      *
      * From the first repository, each DAO's `getById`, `getByIds`, `getOneByQuery` and `query`, given the second repository's ID
-     * (or the stat's dimension), find nothing: the reads by one row are `NotFoundException`, the reads of many are empty. From
-     * the second repository the same reads find each row.
+     * (or the stat's dimension, or the Edit's asset), find nothing: the reads by one row are `NotFoundException`, the reads of
+     * many are empty. From the second repository the same reads find each row.
      */
     val repos = twoRepositories()
 
@@ -214,14 +225,14 @@ import altitude.core.util.QueryResult
      *
      * Two repositories, the second holding a row of every scoped table: an asset with its Search document, a folder, an album and
      * a Location each holding the asset, a Person with a Face on it, a metadata field with a value on it, an Import with a
-     * pending file, and its stats.
+     * pending file, an edited image, and its stats.
      *
      * Assertions:
      *
      * From the first repository, each DAO's `updateById`, `updateByQuery`, `increment` (where the table has a counter),
-     * `deleteById` and `deleteByQuery`, given the second repository's ID (or the stat's dimension), change no row and report 0.
-     * Read again, every row of every scoped table of the second repository is as it was: the same values, counters and
-     * memberships.
+     * `deleteById` and `deleteByQuery`, given the second repository's ID (or the stat's dimension, or the Edit's asset), change
+     * no row and report 0. Read again, every row of every scoped table of the second repository is as it was: the same values,
+     * counters and memberships.
      */
     val repos = twoRepositories()
     val before = testContext.rowsOf(repos.second)
@@ -566,11 +577,12 @@ import altitude.core.util.QueryResult
 
   /**
    * In the first repository, a row of every scoped table: an asset with its Search document in a folder, an album and a Location
-   * holding it, a Person with a Face on it, a metadata field with an indexed value on it, an Import with a pending file, and a
-   * Watch folder that remembers a file. Its IDs by table.
+   * holding it, a Person with a Face on it, a metadata field with an indexed value on it, an Import with a pending file, a Watch
+   * folder that remembers a file, and a saved Edit of the asset. Its IDs by table.
    */
   private def rowsInFirst(repos: TwoRepositories): Map[String, String] = {
-    val asset = testContext.insertAsset(testContext.makeAsset(repository = Some(repos.first)))
+    // Imported, as an Edit reads the original's orientation
+    val asset = testContext.persistAsset(repository = Some(repos.first))
     val folder = testApp.service.folder.add("mine")
     val album = testApp.service.album.add("mine")
     testApp.service.album.addAssets(album.persistedId, Set(asset.persistedId))
@@ -584,6 +596,9 @@ import altitude.core.util.QueryResult
     val opened = testApp.service.imports.open(ImportSource.Upload)
     val importFile = testApp.service.imports.addFile(opened.persistedId, "mine.jpg", sizeBytes = 1)
     val (watchFolder, watchFolderFile) = rememberingWatchFolder("mine")
+    testApp.service.assetEdit.save(asset.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    // Rendered now, so the render the save queued finds nothing to write while the tests compare the rows
+    testApp.service.editRender.render(asset.persistedId)
 
     Map(
       "asset" -> asset.persistedId,
@@ -606,8 +621,8 @@ import altitude.core.util.QueryResult
      * Setup:
      *
      * Two repositories, each with an asset (with its Search document) in a folder, an album and a Location holding it, a Person
-     * with a Face on it, a metadata field with a value on it and an Import with a pending file; the second also has a Location
-     * category.
+     * with a Face on it, a metadata field with a value on it and an Import with a pending file; the first's asset also has an
+     * Edit, and the second has a Location category.
      *
      * Assertions:
      *
@@ -615,7 +630,8 @@ import altitude.core.util.QueryResult
      * refused by a foreign key violation, one per reference: a Face's asset and Person, an album membership's album and asset, a
      * Location membership's Location and asset, a metadata value's asset and field, a Search document's asset, a Location's
      * category, a folder's parent, an asset's folder, an Import file's Import, an Import's destination folder, a remembered
-     * file's Watch folder and a Watch folder's destination folder. Every row of both repositories is as it was.
+     * file's Watch folder, a Watch folder's destination folder, and an Edit's and its step's asset. Every row of both
+     * repositories is as it was.
      */
     val repos = twoRepositories()
     val mine = rowsInFirst(repos)
@@ -647,6 +663,7 @@ import altitude.core.util.QueryResult
       idOf(repos, "watch_folder"),
       mine("watch_folder_file"))
     foreignKey("UPDATE watch_folder SET dest_folder_id = ? WHERE id = ?", idOf(repos, "folder"), mine("watch_folder"))
+    foreignKey("UPDATE asset_edit SET asset_id = ? WHERE asset_id = ?", theirAsset, mine("asset"))
 
     testContext.rowsOf(repos.first) shouldEqual firstBefore
     testContext.rowsOf(repos.second) shouldEqual secondBefore
@@ -658,7 +675,8 @@ import altitude.core.util.QueryResult
      * Setup:
      *
      * A repository with a row of every scoped table: an asset with its Search document, a folder, an album and a Location holding
-     * the asset, a Person with a Face on it, a metadata field with a value on it, an Import with a pending file, and its stats.
+     * the asset, a Person with a Face on it, a metadata field with a value on it, an Import with a pending file, the asset's
+     * saved Edit, and its stats.
      *
      * Assertions:
      *

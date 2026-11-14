@@ -736,7 +736,8 @@ object SearchQueries:
    * One statement for the map's cells in a viewport: the plotted points in the box, each assigned to a square cell of
    * `cellDegrees` a side by flooring its coordinates, then one window pass per cell for the count, the centroid and the rank of
    * each point by newest capture time (nulls last, whatever the engine's native placement) and then ID; the rank-one row of each
-   * cell is the cell, and its asset represents it. `floor` is built into both engines.
+   * cell is the cell, and its asset represents it, read with the revision of its edited images. `floor` is built into both
+   * engines.
    */
   def mapCells(engine: SearchDialect, query: SearchQuery, repositoryId: String, bbox: BoundingBox, cellDegrees: Double): SqlStr =
     import engine.dialect.*
@@ -758,7 +759,10 @@ object SearchQueries:
         WINDOW w AS (PARTITION BY cell_x, cell_y)
       )"""
       ),
-      sql"SELECT n, latitude, longitude, asset_id FROM cells WHERE rn = 1 ORDER BY cell_y, cell_x"
+      sql"""SELECT cells.n, cells.latitude, cells.longitude, cells.asset_id, asset.edit_rev
+              FROM cells JOIN asset ON asset.id = cells.asset_id AND asset.repository_id = $repositoryId
+             WHERE cells.rn = 1
+          ORDER BY cells.cell_y, cells.cell_x"""
     )
 
   /**

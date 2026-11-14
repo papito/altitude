@@ -11,6 +11,8 @@
  * agree on is decided here instead:
  *
  * - only one host is active at a time; a new open replaces whatever is active,
+ * - a host's close may be held by its close guard (`setCloseGuard`): Asset detail's, while the
+ *   Edit panel has a change pending,
  * - only one of the general and popover hosts holds a dialog fragment: a host keeps its last one
  *   after closing, and opening the other empties it, so two dialogs never share an ID,
  * - initial focus and focus restoration on close,
@@ -80,6 +82,10 @@ let pendingOpen = null
 // Where focus goes when the active modal closes.
 let returnFocus = null
 
+// The open that waits for the host it replaces to be released (`openModal`, across one Alpine tick):
+// already the displayed open for the work started for it, though no host is active yet
+let activatingOpenId = null
+
 // The element that issued the request whose fragment the displayed open shows, when it was an htmx
 // request: a results cell's thumbnail for asset detail, which is where its navigation starts from
 let openSource = null
@@ -117,11 +123,16 @@ export function getModalOpenId() {
 }
 
 /**
- * Whether the open identified by `openId` is the one currently displayed. Asynchronous work that
- * started for an open must check this before touching the modal.
+ * Whether the open identified by `openId` is the one currently displayed, or about to be: an open
+ * over another host is displayed one Alpine tick after it is made, and a load that finishes in
+ * that tick (a cached image) is still its own. Asynchronous work that started for an open must
+ * check this before touching the modal.
  */
 export function isModalOpenActive(openId) {
-    return isModalActive() && getModalOpenId() === openId
+    return (
+        getModalOpenId() === openId &&
+        (isModalActive() || activatingOpenId === openId)
+    )
 }
 
 /**
@@ -188,6 +199,9 @@ export function openModal({
     console.debug(`Opening ${host} modal "${title}" (open ${openId})`)
 
     const activate = () => {
+        if (activatingOpenId === openId) {
+            activatingOpenId = null
+        }
         // Superseded while waiting for the previous host to release
         if (store.openId !== openId) {
             return
@@ -230,6 +244,7 @@ export function openModal({
         if (activeHost === ModalHost.popover) {
             hidePopoverHost()
         }
+        activatingOpenId = openId
         Alpine.nextTick(activate)
     } else {
         activate()
@@ -243,13 +258,47 @@ export function getModalOpenSource() {
     return openSource
 }
 
+// By host, what `closeModal` asks before closing it (`setCloseGuard`), and the answer to the last
+// close a guard held (`takeHeldClose`)
+const closeGuards = new Map()
+let heldClose = null
+
 /**
- * Closes the active dialog and restores focus. Returns false when nothing was open.
+ * Registers `guard` for `host`: `closeModal` asks it before closing the host. It answers true for
+ * the close to go ahead, or holds it by answering a promise of whether the host closed after all:
+ * the guard then closes the host itself, with `closeModal` again, once it may, answering true that
+ * time. The Edit panel holds Asset detail's close this way while a change is pending
+ * (`edit/edit-panel.js`). An open of another host replaces the active one unasked.
+ */
+export function setCloseGuard(host, guard) {
+    closeGuards.set(host, guard)
+}
+
+/**
+ * The promise of whether the host closed after all, for the last `closeModal` its guard held, or
+ * null when the last one was not held; taken once. A caller that changed the page for the close (a
+ * Back that closed Asset detail) puts it back when the host stays.
+ */
+export function takeHeldClose() {
+    const held = heldClose
+    heldClose = null
+    return held
+}
+
+/**
+ * Closes the active dialog and restores focus. Returns false when nothing was open, and true when
+ * the host's close guard holds the close.
  *
  * Focus stays put when the popover host is closed while focus already sits on a control outside
  * it.
  */
 export function closeModal() {
+    const guard = closeGuards.get(getActiveModalHost())
+    const verdict = guard ? guard() : true
+    heldClose = verdict === true ? null : Promise.resolve(verdict)
+    if (heldClose) {
+        return true
+    }
     const keepFocus =
         getActiveModalHost() === ModalHost.popover &&
         isOutsidePopoverHost(document.activeElement)
