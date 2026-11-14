@@ -240,6 +240,49 @@ test("the vignette's weight", () => {
     }
 })
 
+test("the effects are sized from the whole output, or from the crop when the whole frame is drawn", () => {
+    const cropped = recipes.normalize({
+        ...recipes.defaults(),
+        aspect: "free",
+        cropFitted: false,
+        crop: { x: 0.25, y: 0.1, w: 0.5, h: 0.8 },
+    })
+    const output = { width: 1000, height: 600 }
+    // The crop drawn alone fills the output
+    assert.deepEqual(geometry.effectRegion(cropped, output), {
+        x: 0,
+        y: 0,
+        width: 1000,
+        height: 600,
+    })
+    // The Crop tool draws the whole frame: the crop's pixels in it
+    assert.deepEqual(
+        geometry.effectRegion(cropped, { ...output, wholeFrame: true }),
+        { x: 250, y: 60, width: 500, height: 480 },
+    )
+    // No crop: the whole frame is the crop
+    assert.deepEqual(
+        geometry.effectRegion(recipes.defaults(), {
+            ...output,
+            wholeFrame: true,
+        }),
+        { x: 0, y: 0, width: 1000, height: 600 },
+    )
+    // A crop narrower than a pixel of a small output keeps one, within the output
+    const sliver = recipes.normalize({
+        ...cropped,
+        crop: { x: 0.99, y: 0, w: 0.01, h: 1 },
+    })
+    assert.deepEqual(
+        geometry.effectRegion(sliver, {
+            width: 50,
+            height: 40,
+            wholeFrame: true,
+        }),
+        { x: 50 - 1, y: 0, width: 1, height: 40 },
+    )
+})
+
 test("output sizes", () => {
     for (const { edited, longEdge, output } of vectors.effects.outputSizes) {
         const size = geometry.outputSize(...edited, longEdge)

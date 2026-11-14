@@ -16,7 +16,9 @@
  *    a vertical pass computing both at once, with OpenCV's kernels (`tone.gaussianHalfKernel`) and
  *    its default border (BORDER_REFLECT_101). Skipped when both are 0.
  * 3. **Finish:** Clarity's and Sharpen's deltas, the vignette and the grain on integer columns and
- *    rows from the top left, the clamp, into an 8-bit output texture.
+ *    rows from the top left, the clamp, into an 8-bit output texture. Drawing the whole frame (the
+ *    Crop tool), the effects are sized from the crop in it and laid over it (`effectRegion`), so
+ *    they do not jump on Done.
  * 4. **Present:** the output texture onto the canvas, its rows turned bottom up.
  *
  * The intermediate textures hold rows top down (row j at `gl_FragCoord.y` = j), so pixel (i, j) is
@@ -31,11 +33,13 @@
  *
  * `render` draws the Edit; `renderBefore` draws its geometry alone (the split view's Before), and
  * `render` with `split` draws Before left of that fraction of the width and After right of it.
- * `readHistogram` reads the last render, as drawn, at 256 px on its long edge.
+ * `readHistogram` reads the last render, as drawn, at 256 px on its long edge: its crop alone when
+ * the whole frame was drawn.
  */
 import {
     cropOf,
     createWarp,
+    effectRegion,
     frameSize,
     frameToUpright,
     WHOLE_FRAME,
@@ -184,7 +188,8 @@ uniform vec2 uDetail;
 uniform float uVignette;
 uniform float uGrain;
 uniform float uCell;
-uniform vec2 uOut;
+// The region the vignette and the grain are laid over: its top left and its size, in output pixels
+uniform vec4 uEffect;
 
 float hash(int x, int y) {
     uint h = uint(x) * 374761393u + uint(y) * 668265263u;
@@ -215,9 +220,9 @@ void main() {
         rgb += (l - blurred.x) * uDetail.x * (1.0 - 0.7 * m * m) + (l - blurred.y) * uDetail.y;
     }
 
-    vec2 xy = vec2(p);
+    vec2 xy = vec2(p) - uEffect.xy;
     if (uVignette != 0.0) {
-        vec2 d = (xy - uOut * 0.5) / (uOut * 0.5);
+        vec2 d = (xy - uEffect.zw * 0.5) / (uEffect.zw * 0.5);
         float f = uVignette * smoothstep(0.0, 1.0, (sqrt(dot(d, d) / 2.0) - 0.39375) / 0.65625);
         rgb = uVignette < 0.0 ? rgb * (1.0 + f) : rgb + (1.0 - rgb) * f;
     }
@@ -232,6 +237,7 @@ void main() {
 // A texture sampled at the nearest texel onto a target: the output onto the canvas (rows turned), or onto the histogram's
 const COPY = `${HEADER}
 uniform sampler2D uImage;
+uniform vec2 uOffset;
 uniform vec2 uScale;
 uniform bool uFlip;
 uniform float uHeight;
@@ -241,7 +247,7 @@ void main() {
     if (uFlip) {
         q.y = uHeight - 1.0 - q.y;
     }
-    outColor = texelFetch(uImage, ivec2((q + 0.5) * uScale), 0);
+    outColor = texelFetch(uImage, ivec2(uOffset + (q + 0.5) * uScale), 0);
 }`
 
 // Whether the browser can run the renderer, once asked
@@ -672,8 +678,12 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         return [(clarity?.length ?? 0) - 1, (sharpen?.length ?? 0) - 1]
     }
 
-    /** Draws the Edit into the output texture: develop, the blurs when asked, finish */
+    /**
+     * Draws the Edit into the output texture: develop, the blurs when asked, finish, the effects sized from and laid over
+     * `effectRegion`
+     */
     function developed(recipe, { width, height, wholeFrame }) {
+        const region = effectRegion(recipe, { width, height, wholeFrame })
         uploadTables(recipe)
         const color = target("color", width, height)
         gl.bindFramebuffer(gl.FRAMEBUFFER, color.fbo)
@@ -682,7 +692,7 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         const blurs = recipe.clarity !== 0 || recipe.sharpen !== 0
         let blurred = null
         if (blurs) {
-            const radius = uploadKernels(recipe, width, height)
+            const radius = uploadKernels(recipe, region.width, region.height)
             const across = target("blur", width, height)
             const passes = [
                 { from: color.tex, into: across, horizontal: true },
@@ -724,21 +734,39 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         gl.uniform1f(p.at("uVignette"), recipe.vignette / 100)
         gl.uniform1f(
             p.at("uGrain"),
-            (recipe.grain / 100) * 0.22 * grainScale(width, height),
+            (recipe.grain / 100) *
+                0.22 *
+                grainScale(region.width, region.height),
         )
-        gl.uniform1f(p.at("uCell"), grainCell(width, height))
-        gl.uniform2f(p.at("uOut"), width, height)
+        gl.uniform1f(p.at("uCell"), grainCell(region.width, region.height))
+        gl.uniform4f(
+            p.at("uEffect"),
+            region.x,
+            region.y,
+            region.width,
+            region.height,
+        )
         gl.viewport(0, 0, width, height)
         gl.drawArrays(gl.TRIANGLES, 0, 3)
         return output
     }
 
-    /** Copies `from` onto the bound target of `width` × `height`, sampled at the nearest texel, rows turned for the canvas */
-    function copy(from, { width, height, flip }) {
+    /**
+     * Copies `from`, or its `region` (`{ x, y, width, height }` in its texels), onto the bound target of `width` ×
+     * `height`, sampled at the nearest texel, rows turned for the canvas
+     */
+    function copy(from, { width, height, flip, region = null }) {
+        const area = region ?? {
+            x: 0,
+            y: 0,
+            width: from.width,
+            height: from.height,
+        }
         const p = useProgram(resources.copy)
         bindTexture(0, from.tex)
         gl.uniform1i(p.at("uImage"), 0)
-        gl.uniform2f(p.at("uScale"), from.width / width, from.height / height)
+        gl.uniform2f(p.at("uOffset"), area.x, area.y)
+        gl.uniform2f(p.at("uScale"), area.width / width, area.height / height)
         gl.uniform1i(p.at("uFlip"), flip ? 1 : 0)
         gl.uniform1f(p.at("uHeight"), height)
         gl.viewport(0, 0, width, height)
@@ -855,15 +883,21 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         const source = last.before
             ? beforeOutput()
             : resources.targets.get("output")
+        // The crop alone, when the whole frame is drawn (the Crop tool)
+        const region = effectRegion(last.recipe, {
+            width: source.width,
+            height: source.height,
+            wholeFrame: last.wholeFrame,
+        })
         const scale = Math.min(
             1,
-            HISTOGRAM_LONG_EDGE / Math.max(source.width, source.height),
+            HISTOGRAM_LONG_EDGE / Math.max(region.width, region.height),
         )
-        const width = Math.max(1, Math.round(source.width * scale))
-        const height = Math.max(1, Math.round(source.height * scale))
+        const width = Math.max(1, Math.round(region.width * scale))
+        const height = Math.max(1, Math.round(region.height * scale))
         const small = target("histogram", width, height)
         gl.bindFramebuffer(gl.FRAMEBUFFER, small.fbo)
-        copy(source, { width, height, flip: false })
+        copy(source, { width, height, flip: false, region })
         const pixels = new Uint8Array(width * height * 4)
         gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
         gl.bindFramebuffer(gl.FRAMEBUFFER, null)

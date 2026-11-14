@@ -39,6 +39,26 @@ export function cropOf(recipe) {
     return recipe.crop ?? WHOLE_FRAME
 }
 
+/**
+ * The region of a `width` × `height` output that the Edit's effects are sized from and laid over (Clarity's and Sharpen's
+ * blurs, the vignette, the grain), and that `readHistogram` reads, in output pixels: the whole output, or, drawing the whole
+ * frame (the Crop tool), the crop in it, so the effects inside the crop are those Done draws, scaled with the output
+ */
+export function effectRegion(recipe, { width, height, wholeFrame = false }) {
+    if (!wholeFrame) {
+        return { x: 0, y: 0, width, height }
+    }
+    const crop = cropOf(recipe)
+    const x = Math.min(width - 1, Math.round(crop.x * width))
+    const y = Math.min(height - 1, Math.round(crop.y * height))
+    return {
+        x,
+        y,
+        width: Math.max(1, Math.min(width - x, Math.round(crop.w * width))),
+        height: Math.max(1, Math.min(height - y, Math.round(crop.h * height))),
+    }
+}
+
 /** The frame's size, W × H: the upright original's, swapped for a quarter turn */
 export function frameSize(uprightWidth, uprightHeight, recipe) {
     return recipe.rotate === 90 || recipe.rotate === 270

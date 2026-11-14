@@ -226,11 +226,16 @@ The Display image is the result as a WebP at quality 90 (`ImageUtil.encodeWebp`)
    Before/after's Before).
 2. **Blur:** Clarity's and Sharpen's blurs of L, separable, a horizontal and a vertical pass computing both at once,
    with OpenCV's kernels and border; skipped when both are 0.
-3. **Finish:** steps 8 to 11 on integer columns and rows from the top left, into an 8-bit texture.
+3. **Finish:** steps 8 to 11 on integer columns and rows from the top left, into an 8-bit texture. Drawing the whole
+   frame (the Crop tool, which the server never renders), the steps' sizes and positions are the crop's in the output
+   (`geometry.effectRegion`, the crop's edges rounded to output pixels): Clarity's and Sharpen's σ and Grain's cell and
+   strength from its size, the vignette's center and extent and the grain's origin from its place, so what the crop shows
+   in the tool is what Done draws, at the tool's scale; only the blurs still mirror at the output's edges, not the crop's.
 4. **Present:** onto the canvas, its rows turned bottom up (the intermediate textures hold rows top down, so pixel (i, j)
    is the spec's everywhere but on the canvas), straight alpha, the drawing buffer kept.
 
-`readHistogram` reads the last render as drawn at 256 px on its long edge, over the covered pixels: 64 bins of 4 levels
+`readHistogram` reads the last render as drawn at 256 px on its long edge (the crop alone, when the whole frame was drawn),
+over the covered pixels: 64 bins of 4 levels
 per channel, the luminance the Rec. 601 gray the import's measurement reads, as bytes over the tallest bin of the four.
 A lost context is rebuilt on `webglcontextrestored` and the last render drawn again.
 

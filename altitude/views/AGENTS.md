@@ -2119,7 +2119,9 @@ data.
   size alone and the title's badge (`.edit-badge`, `data-app-edit-badge`) reads "Original" in place of "Edited". The
   toggle, the badge and the key legend's `\` entry are shown on an edited asset alone.
 - **The Crop tool** (`js/edit/crop-tool.js`). C (`Const.events.toggleCropTool`, with the panel open) or the Crop button
-  opens it on the Edit shown, and the fragment carries `data-app-crop-tool-open`: the canvas draws the whole warped frame,
+  opens it on the Edit shown, and the fragment carries `data-app-crop-tool-open`: the canvas draws the whole warped frame
+  (its effects, the vignette, Clarity, Sharpen and Grain, sized from and laid over the crop in it, and the Histogram read
+  over the crop, `geometry.effectRegion`, so nothing jumps on Done),
   with a gutter around it (`--edit-crop-gutter`) where a drag turns the image, `#cropFrame` lies over it at the canvas's box
   and `#cropRect` is the crop in it, placed by fractions of the frame, dimming the rest of the stage (`--crop-dim-shadow`),
   with its guide (an SVG: Thirds, Grid, Golden ratio, Diagonals and None, cycled by O or the bar's button, Thirds until
