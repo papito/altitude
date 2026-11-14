@@ -53,6 +53,10 @@ object Const:
     // a static 1 s time-lapse is one Sequence of however many frames it has
     val MAX_SEQUENCE_FRAMES = 100
 
+  object Edit:
+    // The most steps an asset's Edit keeps, the oldest dropped first; the Original (step 0) is kept apart from them
+    val MAX_STEPS = 100
+
   object AssetView:
     val PREVIEW_BOX_PIXELS = 200
     // The WebP quality of a Preview, 0 to 100, which governs its color planes only: lib webp keeps the alpha plane exact (its
@@ -329,6 +333,18 @@ object Const:
       // Faces are about to go
       val COVER_FACE_NOT_THEIRS = "The face is not this person's"
       val COVER_FACE_PURGING = "The face is on an asset being purged"
+      // An Edit (AssetEditService) of an asset that is not a still image, or that is in the trash
+      val EDIT_NOT_STILL = "Only a still image can be edited"
+      val EDIT_RECYCLED = "An asset in the trash cannot be edited"
+      // An asset whose stored original is gone, so its size cannot be turned upright (AssetService.uprightSize)
+      val ORIGINAL_MISSING = "The original file of this asset is missing"
+      // A write of an Edit built on a head that has moved since (EditConflictException), answered with the current state
+      val EDIT_CONFLICT = "This photo was changed elsewhere"
+      // A head move to a step the Edit no longer has, or never had
+      val EDIT_STEP_NOT_FOUND = "The Edit has no step %d"
+      // A write of an Edit whose head or step is not a whole number from 0, or with no Edit (EditController)
+      val EDIT_WHOLE_NUMBER = "%s must be a whole number, 0 or more"
+      val EDIT_RECIPE_REQUIRED = "recipe must be the Edit"
       // A folder added under a parent folder that is no folder of the repository (FolderActionController.htmxAddFolder)
       val PARENT_FOLDER_NOT_FOUND = "The parent folder does not exist"
 

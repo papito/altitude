@@ -23,10 +23,12 @@ import altitude.core.dao.jdbc.SystemMetadataDao
 import altitude.core.models.Repository
 import altitude.core.service.AccountVersions
 import altitude.core.service.AlbumService
+import altitude.core.service.AssetEditService
 import altitude.core.service.AssetService
 import altitude.core.service.AuditService
 import altitude.core.service.ContentSigner
 import altitude.core.service.CurationService
+import altitude.core.service.EditRenderService
 import altitude.core.service.FaceDetectionService
 import altitude.core.service.FaceRecognitionService
 import altitude.core.service.FolderService
@@ -246,6 +248,12 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
       case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
+    val assetEdit: dao.AssetEditDao = dataSourceType match {
+      case Const.DbEngineName.POSTGRES => new dao.jdbc.AssetEditDao(app.config) with dao.postgres.PostgresOverrides
+      case Const.DbEngineName.SQLITE => new dao.jdbc.AssetEditDao(app.config) with dao.sqlite.SqliteOverrides
+      case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
+    }
+
     val folder: dao.FolderDao = dataSourceType match {
       case Const.DbEngineName.POSTGRES => new dao.jdbc.FolderDao(app.config) with dao.postgres.PostgresOverrides
       case Const.DbEngineName.SQLITE => new dao.jdbc.FolderDao(app.config) with dao.sqlite.SqliteOverrides
@@ -412,6 +420,8 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
     val library: LibraryService = LibraryService(app)
     val search: SearchService = SearchService(app)
     val asset: AssetService = AssetService(app)
+    val assetEdit: AssetEditService = AssetEditService(app)
+    val editRender: EditRenderService = EditRenderService(app)
     val folder: FolderService = FolderService(app)
     val album: AlbumService = AlbumService(app)
     val location: LocationService = LocationService(app)

@@ -9,6 +9,7 @@ import altitude.core.controller.AssetControllerTests
 import altitude.core.controller.ContentViewControllerTests
 import altitude.core.controller.CurationActionControllerTests
 import altitude.core.controller.CurationControllerTests
+import altitude.core.controller.EditControllerTests
 import altitude.core.controller.FolderActionControllerTests
 import altitude.core.controller.FolderControllerTests
 import altitude.core.controller.HealthControllerTests
@@ -39,6 +40,7 @@ abstract class AllControllerTestSuites
     new LibraryActionControllerTests(),
     new AssetControllerTests(),
     new AssetActionControllerTests(),
+    new EditControllerTests(),
     new LoginControllerTests(),
     new ImportControllerTests(),
     new ContentViewControllerTests(),

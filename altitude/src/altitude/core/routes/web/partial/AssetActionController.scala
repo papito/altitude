@@ -9,16 +9,20 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.DataScrubber
 import altitude.core.DuplicateException
+import altitude.core.RequestContext
 import altitude.core.ValidationException
 import altitude.core.Validators.ApiRequestValidator
 import altitude.core.models.Asset
 import altitude.core.models.Permission
 import altitude.core.models.Person
 import altitude.core.routes.BaseController
+import altitude.core.routes.api.EditController
 import altitude.core.routes.decorators.requireLogin
 import altitude.core.routes.decorators.requirePermission
 import altitude.core.routes.decorators.visibleOnly
+import altitude.core.service.AssetEditService
 import altitude.core.service.PersonService.FaceTarget
+import altitude.core.util.JsonCodec.++
 
 class AssetActionController(using logger: Logger) extends BaseController:
   private val prefix = "htmx/asset"
@@ -30,7 +34,9 @@ class AssetActionController(using logger: Logger) extends BaseController:
 
   /**
    * The asset's detail modal, or its JSON when JSON is asked for; an unknown asset, or another repository's, is a 404 of either,
-   * as is a triaged asset or one in the trash for a Guest, who sees Browse alone (`visibleOnly`)
+   * as is a triaged asset or one in the trash for a Guest, who sees Browse alone (`visibleOnly`). Both carry the asset's Edit at
+   * its head (`edit`, `EditController.headJson`), when it has one, and whether the account may edit the asset (`editable`): it
+   * holds Edit images, and an Edit may change the asset (`AssetEditService.whyNotEditable`).
    */
   @requireLogin()
   @cask.get(f"/$prefix/r/:repoId/modals/asset-detail/:assetId")
@@ -42,8 +48,22 @@ class AssetActionController(using logger: Logger) extends BaseController:
       (contentType != null && contentType.contains("application/json")) ||
         (accept != null && accept.contains("application/json"))
     def asset: Asset = visibleOnly(App.altitude.service.asset.getById(assetId))
-    if isJsonFormat then answeringJson(jsonResponse(asset.toBrowserJson))
-    else answering(htmlResponse(htmx.html.view_image_detail_modal(asset)))
+    def editOf(asset: Asset): Option[ujson.Obj] = App.altitude.service.assetEdit.headOf(asset).map(EditController.headJson)
+    def editable(asset: Asset): Boolean =
+      RequestContext.holds(Permission.EditImages) && AssetEditService.whyNotEditable(asset).isEmpty
+
+    if isJsonFormat then
+      answeringJson {
+        val shown = asset
+        val json = shown.toBrowserJson ++ ujson.Obj(Api.Field.Edit.EDITABLE -> editable(shown))
+        editOf(shown).foreach(edit => json(Api.Field.Edit.EDIT) = edit)
+        jsonResponse(json)
+      }
+    else
+      answering {
+        val shown = asset
+        htmlResponse(htmx.html.view_image_detail_modal(shown, editOf(shown).map(ujson.write(_)), editable(shown)))
+      }
 
   /**
    * The Detail panel's two sections, People and Details, for the asset, read in one snapshot (`AssetService.detailOf`): its Faces

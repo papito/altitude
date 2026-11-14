@@ -33,6 +33,7 @@ import altitude.core.dao.sql.tables._
       AlbumRow -> DbApi.renderSql(AlbumRow.select, Db.config, dialect),
       AlbumAssetRow -> DbApi.renderSql(AlbumAssetRow.select, Db.config, dialect),
       AssetRow -> DbApi.renderSql(AssetRow.select, Db.config, dialect),
+      AssetEditRow -> DbApi.renderSql(AssetEditRow.select, Db.config, dialect),
       AuditEventRow -> DbApi.renderSql(AuditEventRow.select, Db.config, dialect),
       FaceRow -> DbApi.renderSql(FaceRow.select, Db.config, dialect),
       FolderRow -> DbApi.renderSql(FolderRow.select, Db.config, dialect),
@@ -60,7 +61,7 @@ import altitude.core.dao.sql.tables._
     /**
      * Setup:
      *
-     * The rendered `SELECT` of each of the 21 row classes on both engines, and the `CREATE TABLE` columns parsed from each
+     * The rendered `SELECT` of each of the 22 row classes on both engines, and the `CREATE TABLE` columns parsed from each
      * engine's `all.sql`, with PostgreSQL's inherited `_core` columns folded in.
      *
      * Assertions:
@@ -153,6 +154,7 @@ import altitude.core.dao.sql.tables._
       "image_quality",
       "perceptual_hash",
       "sequence_id",
+      "edit_rev",
       "created_at",
       "updated_at"
     )

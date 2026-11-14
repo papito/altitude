@@ -3,6 +3,7 @@ package altitude.core
 import scala.collection.mutable
 
 import altitude.core.models.Asset
+import altitude.core.models.EditState
 
 case class ValidationException(message: String = "") extends Exception:
   final def isEmpty: Boolean = message.isEmpty && errors.isEmpty
@@ -68,3 +69,10 @@ case class ImageException(msg: String) extends Exception(msg)
 
 /** A queue did not take an element: it was full, closed, or its stream had stopped */
 case class QueueRefusedException(msg: String) extends Exception(msg)
+
+/**
+ * A write of an asset's Edit built on a head that is no longer the head (`AssetEditService`): the state the Edit is in now, which
+ * `EditController` answers with a 409 for the client to adopt
+ */
+case class EditConflictException(state: EditState)
+  extends Exception(s"The Edit's head is ${state.head}, not the one the change was built on")

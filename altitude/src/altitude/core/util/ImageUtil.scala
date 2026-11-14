@@ -1,12 +1,14 @@
 package altitude.core.util
 
 import com.drew.imaging.ImageMetadataReader
+import com.drew.metadata.Metadata
 import com.drew.metadata.exif.ExifDirectoryBase
 import com.drew.metadata.exif.ExifIFD0Directory
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferByte
 import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.nio.file.Path
 import javax.imageio.ImageIO
 import javax.imageio.ImageReader
 import javax.imageio.metadata.IIOMetadataNode
@@ -89,9 +91,13 @@ object ImageUtil:
     Math.min(scaleX, scaleY)
 
   /** The EXIF orientation of an image's bytes; an image without the tag, or without EXIF at all, is upright (1) */
-  private def exifOrientation(data: Array[Byte]): Int =
-    val exifDirectory =
-      ImageMetadataReader.readMetadata(new ByteArrayInputStream(data)).getFirstDirectoryOfType(classOf[ExifIFD0Directory])
+  def exifOrientation(data: Array[Byte]): Int = orientationOf(ImageMetadataReader.readMetadata(new ByteArrayInputStream(data)))
+
+  /** The EXIF orientation of an image file, read from its metadata alone, as [[exifOrientation]] reads one from its bytes */
+  def exifOrientation(file: Path): Int = orientationOf(ImageMetadataReader.readMetadata(file.toFile))
+
+  private def orientationOf(metadata: Metadata): Int =
+    val exifDirectory = metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory])
     try exifDirectory.getInt(ExifDirectoryBase.TAG_ORIENTATION)
     catch case _: Exception => 1
 

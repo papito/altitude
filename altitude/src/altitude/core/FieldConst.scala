@@ -117,6 +117,26 @@ object FieldConst:
     val DINOV2_EMBEDDING = "dinov2_embedding"
     val CLIP_EMBEDDING = "clip_embedding"
     val SEQUENCE_ID = "sequence_id"
+    val EDIT_REV = "edit_rev"
+
+  object AssetEdit:
+    val ASSET_ID = "asset_id"
+    val HEAD_SEQ = "head_seq"
+    val RENDERED_SEQ = "rendered_seq"
+    val LAST_REV = "last_rev"
+    val IS_EDITED = "is_edited"
+    val WIDTH = "width"
+    val HEIGHT = "height"
+    val UPDATED_BY_ACCOUNT_ID = "updated_by_account_id"
+
+  object AssetEditStep:
+    val ASSET_ID = "asset_id"
+    val SEQ = "seq"
+    val RECIPE = "recipe"
+    val LABEL = "label"
+    val ACCOUNT_ID = "account_id"
+    // The name of the account that made the step, read with the steps
+    val AUTHOR = "author"
 
   object PublicMetadata:
     val DEVICE_MODEL = "device_model"

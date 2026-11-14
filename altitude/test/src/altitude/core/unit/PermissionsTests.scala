@@ -16,12 +16,12 @@ import altitude.core.util.JsonCodec
     /**
      * Setup:
      *
-     * The nine Permissions.
+     * The ten Permissions.
      *
      * Assertions:
      *
-     * They are Import, Curate own, Curate all, Organize, Edit metadata, Create Users, Create Guests, Recycle and Purge, in that
-     * order, on bits 0 to 8: the bitmask is stored and carried in tokens, so a bit never moves.
+     * They are Import, Curate own, Curate all, Organize, Edit metadata, Create Users, Create Guests, Recycle, Purge and Edit
+     * images, in that order, on bits 0 to 9: the bitmask is stored and carried in tokens, so a bit never moves.
      */
     Permission.values.toList.map(p => p -> p.bit) shouldBe List(
       Permission.Import -> 0,
@@ -32,7 +32,8 @@ import altitude.core.util.JsonCodec
       Permission.CreateUsers -> 5,
       Permission.CreateGuests -> 6,
       Permission.Recycle -> 7,
-      Permission.Purge -> 8
+      Permission.Purge -> 8,
+      Permission.EditImages -> 9
     )
   }
 
@@ -45,12 +46,12 @@ import altitude.core.util.JsonCodec
      *
      * Assertions:
      *
-     * Import and Purge are the mask 257, hold exactly those two and list them in order. Every Permission is the mask 511 and none
-     * is 0, which is empty. The JSON of a set is its bare mask, and reads back as the same set.
+     * Import and Purge are the mask 257, hold exactly those two and list them in order. Every Permission is the mask 1023 and
+     * none is 0, which is empty. The JSON of a set is its bare mask, and reads back as the same set.
      *
      * Edge cases:
      *
-     * A mask with bit 9 set, and a negative one, are refused.
+     * A mask with bit 10 set, and a negative one, are refused.
      */
     val importAndPurge = Permissions.of(Permission.Import, Permission.Purge)
 
@@ -59,14 +60,14 @@ import altitude.core.util.JsonCodec
     importAndPurge.has(Permission.Recycle) shouldBe false
     importAndPurge.toList shouldBe List(Permission.Import, Permission.Purge)
 
-    Permissions.all.mask shouldBe 511
+    Permissions.all.mask shouldBe 1023
     Permissions.none.mask shouldBe 0
     Permissions.none.isEmpty shouldBe true
 
     JsonCodec.write(importAndPurge) shouldBe "257"
     JsonCodec.read[Permissions]("257") shouldBe importAndPurge
 
-    an[IllegalArgumentException] should be thrownBy Permissions(512)
+    an[IllegalArgumentException] should be thrownBy Permissions(1024)
     an[IllegalArgumentException] should be thrownBy Permissions(-1)
   }
 }

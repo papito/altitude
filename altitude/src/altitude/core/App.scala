@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 import altitude.core.routes.api.AlbumController
 import altitude.core.routes.api.AssetController
 import altitude.core.routes.api.CurationController
+import altitude.core.routes.api.EditController
 import altitude.core.routes.api.FolderController
 import altitude.core.routes.api.HealthController
 import altitude.core.routes.api.LocationController
@@ -94,6 +95,7 @@ object App extends cask.Main:
     new MapController,
     new AssetController,
     new CurationController,
+    new EditController,
     new FolderController,
     new IndexController,
     new StaticController,

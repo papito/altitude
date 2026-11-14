@@ -71,6 +71,9 @@ case class Asset(
     histogram: Option[Histogram] = None,
     // The Sequence the image is in while in triage: the id its members share; None otherwise
     sequenceId: Option[String] = None,
+    // The revision of the asset's edited renditions (its Edit rendered: the edited Preview and the Display image), which their
+    // URLs carry; 0 when it has none, so the original's Preview and file are shown
+    editRev: Int = 0,
     createdAt: Option[LocalDateTime] = None,
     updatedAt: Option[LocalDateTime] = None)
   extends BaseModel:

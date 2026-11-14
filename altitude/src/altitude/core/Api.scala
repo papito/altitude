@@ -119,6 +119,29 @@ object Api:
       val SEQUENCE_OF = "sequenceOf"
       val COUNT = "count"
 
+    // The Edit's JSON API (EditController): a write's body, and the state it answers (also the asset detail's `edit`)
+    object Edit:
+      val BASE = "base"
+      val RECIPE = "recipe"
+      val SEQ = "seq"
+      val HEAD = "head"
+      val RENDERED = "rendered"
+      val REV = "rev"
+      val EDITED = "edited"
+      val WIDTH = "width"
+      val HEIGHT = "height"
+      val STEPS = "steps"
+      val LABEL = "label"
+      val AUTHOR = "author"
+      val CREATED_AT = "createdAt"
+      // Whether the requesting account made the step
+      val MINE = "mine"
+      // A 409's current state, beside its error
+      val STATE = "state"
+      // The asset detail's Edit at its head, when it has one, and whether the account may edit the asset
+      val EDIT = "edit"
+      val EDITABLE = "editable"
+
     object Folder:
       val FOLDER = "folder"
       val FOLDERS = "folders"

@@ -240,7 +240,7 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The form answers 200 in the general modal titled "Add User", with Name, Username, Email, Password and its confirmation, the
-     * three type cards, a row for each Library, a column for each of the nine Permissions, the Create Libraries switch and the
+     * three type cards, a row for each Library, a column for each of the ten Permissions, the Create Libraries switch and the
      * new-Library grant's switch and chips.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
@@ -573,10 +573,10 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The User's dialog, a popover dialog in its type's color, names the account (name, username and email address), its type
-     * with the type's description, the three Permissions it holds in this Library, its two Libraries and twelve Permissions with
-     * each Library's Permissions and this one marked, no Create Libraries, and as instants for the browser to show in its zone
-     * the account's addition, its last login and when this session's token expires; then Change password, requesting its dialog,
-     * and Log out, submitting the nav's logout form.
+     * with the type's description, the three Permissions it holds in this Library, its two Libraries and thirteen Permissions
+     * with each Library's Permissions and this one marked, no Create Libraries, and as instants for the browser to show in its
+     * zone the account's addition, its last login and when this session's token expires; then Change password, requesting its
+     * dialog, and Log out, submitting the nav's logout form.
      *
      * Edge cases:
      *
@@ -606,7 +606,7 @@ import altitude.core.util.Util
         }
         (herePermissions should not).include(Permission.Purge.label)
 
-        dialog should include("2 Libraries · 12 Permissions")
+        dialog should include("2 Libraries · 13 Permissions")
         dialog should include(here.name)
         dialog should include(second.name)
         dialog should include(Permission.values.map(_.label).mkString(", "))

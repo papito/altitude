@@ -10,6 +10,7 @@ import altitude.core.unit.CoreModelTests
 import altitude.core.unit.CurationRuleTests
 import altitude.core.unit.DataScrubberTests
 import altitude.core.unit.DynamicFilterTests
+import altitude.core.unit.EditRecipeTests
 import altitude.core.unit.EnvironmentTests
 import altitude.core.unit.FaceClusteringTests
 import altitude.core.unit.FolderModelTests
@@ -90,5 +91,6 @@ abstract class AllUnitTestSuites
     new TransactionBoundaryTests,
     new SqlExplainerTests,
     new SqliteOverridesTests,
-    new StyleGuideScanTests
+    new StyleGuideScanTests,
+    new EditRecipeTests
   )

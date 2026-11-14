@@ -16,6 +16,8 @@ enum Permission(val bit: Int, val label: String):
   case CreateGuests extends Permission(6, "Create Guests")
   case Recycle extends Permission(7, "Recycle")
   case Purge extends Permission(8, "Purge")
+  // An asset's Edit and its History: its steps, Undo and Redo (`EditController`)
+  case EditImages extends Permission(9, "Edit images")
 
   /** This Permission's bit in a [[Permissions]] mask */
   def mask: Int = 1 << bit

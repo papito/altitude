@@ -67,6 +67,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
         ImageQuality.fromColumns(row.sharpness, row.luminance, row.clippedHighlights, row.crushedShadows, row.imageQuality),
       perceptualHash = row.perceptualHash.map(PerceptualHash(_)),
       sequenceId = row.sequenceId,
+      editRev = row.editRev,
       createdAt = row.createdAt.map(toLocalDateTime),
       updatedAt = row.updatedAt.map(toLocalDateTime)
     )
@@ -116,6 +117,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
         dinov2 = rec.get(SceneModel.Dinov2.column).flatMap(getVectorField),
         clip = rec.get(SceneModel.Clip.column).flatMap(getVectorField)),
       sequenceId = Option(rec(FieldConst.Asset.SEQUENCE_ID)).map(_.toString),
+      editRev = getIntField(rec(FieldConst.Asset.EDIT_REV)),
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
       updatedAt = getDateTimeField(rec.get(FieldConst.UPDATED_AT))
     )

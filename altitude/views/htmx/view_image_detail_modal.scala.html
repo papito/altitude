@@ -1,7 +1,7 @@
 @import altitude.core.Const
 @import altitude.core.util.Util
 @import altitude.core.models.Asset
-@(asset: Asset)
+@(asset: Asset, edit: Option[String], editable: Boolean)
 
 @* Asset detail's fragment (views/AGENTS.md **Detail navigation**): a grid of the media stage, the divider and the Detail
    panel, shaped by the panel's Dock side as the main page is by the explorer's. The stage holds both an <img> and a
@@ -15,7 +15,9 @@
    `hotkeys` turns off the player's ←/→ seeking, its `f` fullscreen and its `m` mute: the arrows switch assets, `f` puts
    the whole of Asset detail in fullscreen and `m` toggles the panel (js/global.js). The player's fullscreen button does
    what `f` does: js/search-results/detail-fullscreen.js gives the controller the Asset detail container as its
-   `fullscreenElement`. *@
+   `fullscreenElement`. The root carries the asset's Edit at its head as JSON (`data-app-image-detail-edit`, absent for an
+   asset never edited: AssetActionController.showAssetDetailModal, the shape of its JSON's `edit`) and whether the account may
+   edit the asset (`data-app-image-detail-editable`). *@
 
 @dockOption(side: String, label: String) = {
 <button type="button" data-app-detail-dock-side="@side"><svg class="glyph" width="16" height="16" aria-hidden="true"><use href="#dockGlyph-@side"/></svg><span>@label</span></button>
@@ -30,6 +32,8 @@
      data-app-image-detail-height="@{ asset.height }"
      data-app-image-detail-media-type="@{ asset.assetType.mediaType }"
      data-app-image-detail-asset-id="@{ asset.persistedId }"
+     @for(json <- edit) {data-app-image-detail-edit="@json"}
+     data-app-image-detail-editable="@editable"
      data-detail-dock-side="right">
     <div id="imageDetailStage">
         <img src="" alt="@{ asset.fileName }" hidden>
