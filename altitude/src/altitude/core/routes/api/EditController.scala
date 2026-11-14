@@ -7,6 +7,7 @@ import org.slf4j.Logger
 import altitude.core.{ Const => C }
 import altitude.core.Api
 import altitude.core.App
+import altitude.core.BusyException
 import altitude.core.EditConflictException
 import altitude.core.RequestContext
 import altitude.core.ValidationException
@@ -93,7 +94,8 @@ class EditController(using logger: Logger) extends BaseController:
   /**
    * The Straighten that levels the lines of the asset's original as the Edit in `recipe` (its JSON) turns and mirrors it, which
    * the Straighten's Auto button sets: `{angle}`, null when no lines agree on one, so the client keeps its Straighten. Nothing is
-   * stored.
+   * stored. An original no image reader decodes is a 400, and a request while every auto-straighten slot is taken a 503 saying
+   * so, which the client shows.
    */
   @requireLogin()
   @requirePermission(Permission.EditImages)
@@ -101,8 +103,10 @@ class EditController(using logger: Logger) extends BaseController:
   def autoStraighten(repoId: String, assetId: String, recipe: Option[String] = None)(using request: Request): Response[String] =
     answeringJson {
       val edit = EditRecipe.parse(recipe.getOrElse(throw ValidationException(C.Msg.Err.EDIT_RECIPE_REQUIRED)))
-      jsonResponse(ujson.Obj(
-        fields.ANGLE -> App.altitude.service.assetEdit.autoStraighten(assetId, edit).fold(ujson.Null: ujson.Value)(ujson.Num(_))))
+      try
+        jsonResponse(ujson.Obj(
+          fields.ANGLE -> App.altitude.service.assetEdit.autoStraighten(assetId, edit).fold(ujson.Null: ujson.Value)(ujson.Num(_))))
+      catch case ex: BusyException => jsonError(ex.getMessage, 503)
     }
 
   /** A field of the body that must be a whole number from 0: the version a save was built on */

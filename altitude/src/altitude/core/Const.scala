@@ -353,6 +353,9 @@ object Const:
       // A save of an Edit whose `base` is not a whole number from 0, or with no Edit (EditController)
       val EDIT_WHOLE_NUMBER = "%s must be a whole number, 0 or more"
       val EDIT_RECIPE_REQUIRED = "recipe must be the Edit"
+      // Auto-straighten (AssetEditService.autoStraighten) with every slot taken, and of an original no image reader decodes
+      val AUTO_STRAIGHTEN_BUSY = "Auto-straighten is busy with other photos; try again in a moment"
+      val ORIGINAL_UNREADABLE = "The original file of this photo cannot be read"
       // A folder added under a parent folder that is no folder of the repository (FolderActionController.htmxAddFolder)
       val PARENT_FOLDER_NOT_FOUND = "The parent folder does not exist"
 

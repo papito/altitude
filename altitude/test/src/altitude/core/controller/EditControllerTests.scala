@@ -17,6 +17,7 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.App
+import altitude.core.Const
 import altitude.core.models.AccountType
 import altitude.core.models.AssetWithData
 import altitude.core.models.EditRecipe
@@ -301,6 +302,42 @@ import altitude.core.models.Permissions
           response.statusCode shouldBe 400
           json(response)("error").str should not be empty
         }
+    }
+  }
+
+  test("Auto-straighten is a 503 while its every slot is taken, and a 400 for an original no reader decodes") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in User holding every Permission and two imported images: one as imported, and one whose stored original is then
+     * overwritten with bytes no image reader takes. The server's auto-straighten slots are all taken for the first request, and
+     * given back before the second.
+     *
+     * Assertions:
+     *
+     * With every slot taken, auto-straighten of the first image is a 503 at once, whose error says it is busy, rather than a
+     * request waiting its turn. With the slots back, the image whose original no reader decodes is a 400 saying so, not a 500.
+     */
+    val repoId = testContext.persistRepository().persistedId
+    login()
+    val busy = testContext.persistAsset().persistedId
+    val unreadable = testContext.persistAsset().persistedId
+    java.nio.file.Files.write(testApp.service.fileStore.assetFile(unreadable), "not an image".getBytes): Unit
+
+    withServer(App) {
+      host =>
+        val slots = App.altitude.service.assetEdit.autoStraightenSlots
+        val taken = slots.drainPermits()
+        val refused =
+          try get(autoStraightenUrl(host, repoId, busy, brighter.toJson))
+          finally slots.release(taken)
+        refused.statusCode shouldBe 503
+        json(refused)("error").str shouldBe Const.Msg.Err.AUTO_STRAIGHTEN_BUSY
+
+        val undecodable = get(autoStraightenUrl(host, repoId, unreadable, brighter.toJson))
+        undecodable.statusCode shouldBe 400
+        json(undecodable)("error").str shouldBe Const.Msg.Err.ORIGINAL_UNREADABLE
     }
   }
 

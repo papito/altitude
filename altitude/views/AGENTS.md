@@ -2123,7 +2123,8 @@ data.
   adopts meanwhile (Undo's, a conflict's) closes the tool.
 - **Auto.** Straighten's Auto asks the server (`GET …/auto-straighten?recipe=`, the Edit shown) and sets Straighten to its
   angle as one change; when no lines agree on one (`angle` null) Straighten stays and the snackbar says "No straight lines to
-  level the image by".
+  level the image by"; a refusal the server explains (a 503 while every auto-straighten slot is taken, a 400 for an original
+  it cannot read) shows its error, and any other failure "Could not level the image".
 - **Keys.** In Asset detail and never in a text field (`isTextEditingTarget`, which counts no slider, checkbox or
   button-like input, so the keys work on the panel's controls): `e`, `c`, Ctrl/Cmd+Z, and Ctrl/Cmd+Shift+Z or Ctrl+Y, each
   read by `global.js`, which dispatches its `Const.events` event (`toggleEditPanel`, `toggleCropTool`, `undoEdit`,

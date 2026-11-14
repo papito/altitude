@@ -67,6 +67,9 @@ case class VideoException(msg: String) extends Exception(msg)
 /** An image no image reader can decode */
 case class ImageException(msg: String) extends Exception(msg)
 
+/** Work bounded to a few at once has no slot free now (auto-straighten): the request is answered 503, to be asked again */
+case class BusyException(msg: String) extends Exception(msg)
+
 /** A queue did not take an element: it was full, closed, or its stream had stopped */
 case class QueueRefusedException(msg: String) extends Exception(msg)
 

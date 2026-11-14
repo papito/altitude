@@ -1,17 +1,16 @@
 package altitude.core.service
 
 import java.nio.file.Files
+import java.util.concurrent.Semaphore
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.Await
-import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
-
 import altitude.core.{ Const => C }
 import altitude.core.Altitude
+import altitude.core.BusyException
 import altitude.core.EditConflictException
 import altitude.core.IllegalOperationException
+import altitude.core.ImageException
 import altitude.core.NotFoundException
 import altitude.core.dao.AssetDao
 import altitude.core.dao.AssetEditDao
@@ -33,9 +32,6 @@ import altitude.core.util.EditRenderer
  */
 object AssetEditService:
 
-  // The longest auto-straighten waits for its turn on the render dispatcher and its read of the original
-  private val AUTO_STRAIGHTEN_TIMEOUT = 2.minutes
-
   /** What a request for an asset's edited image under a revision is answered ([[AssetEditService.editedImage]]) */
   enum EditedImage:
     /** The image stored now, under the asset's revision */
@@ -55,6 +51,13 @@ class AssetEditService(val app: Altitude):
   protected val dao: AssetEditDao = app.DAO.assetEdit
   private val assetDao: AssetDao = app.DAO.asset
   protected val txManager: TransactionManager = app.txManager
+
+  /**
+   * The auto-straightens that may run at once, each on its request's thread: as many as renders run at once, bounded apart from
+   * them, so a request for one never waits behind the render queue, and one asked for while every slot is taken is refused at
+   * once ([[autoStraighten]]). A test takes them all to see the refusal.
+   */
+  private[core] val autoStraightenSlots = Semaphore(app.editRenderParallelism)
 
   /**
    * The asset's Edit, with the size of its upright original; version 0 and the identity for an asset never edited, and
@@ -147,21 +150,31 @@ class AssetEditService(val app: Altitude):
   /**
    * Auto-straighten: the Straighten that levels the lines of the asset's original as `recipe` turns and mirrors it, in tenths of
    * a degree, or nothing when no level or plumb lines agree on one (`EditRenderer.autoStraightenAngle`). Nothing is stored. The
-   * original is decoded on the render dispatcher, which bounds how many are decoded at once, renders and auto-straightens
-   * together.
+   * original is read on the caller's thread, in one of [[autoStraightenSlots]], which bounds how many are decoded at once apart
+   * from the renders; with none free the request is refused at once rather than queued, and a read never outlives its request.
    *
    * @throws IllegalOperationException
-   *   for an asset that is not a still image, is in the trash, or whose original is missing
+   *   for an asset that is not a still image, is in the trash, or whose original is missing or no image reader decodes
+   * @throws BusyException
+   *   when every slot is taken
    */
   def autoStraighten(assetId: String, recipe: EditRecipe): Option[Double] =
     val asset = app.service.asset.getById(assetId)
     AssetEditService.whyNotEditable(asset).foreach(why => throw IllegalOperationException(why))
     val original = app.service.fileStore.assetFile(assetId)
     if !Files.isRegularFile(original) then throw IllegalOperationException(C.Msg.Err.ORIGINAL_MISSING)
-    val reading = Future(EditRenderer.autoStraightenAngle(original, recipe))(using app.editRenderDispatcher)
-    val angle = Await.result(reading, AssetEditService.AUTO_STRAIGHTEN_TIMEOUT)
-    logger.debug(s"Edit of asset [$assetId]: auto-straighten answers [$angle]")
-    angle
+    if !autoStraightenSlots.tryAcquire() then
+      logger.info(s"Auto-straighten of asset [$assetId] refused: every slot is taken")
+      throw BusyException(C.Msg.Err.AUTO_STRAIGHTEN_BUSY)
+    try
+      val angle = EditRenderer.autoStraightenAngle(original, recipe)
+      logger.debug(s"Edit of asset [$assetId]: auto-straighten answers [$angle]")
+      angle
+    catch
+      case ex: ImageException =>
+        logger.warn(s"Auto-straighten of asset [$assetId]: its original cannot be decoded: ${ex.getMessage}")
+        throw IllegalOperationException(C.Msg.Err.ORIGINAL_UNREADABLE)
+    finally autoStraightenSlots.release()
 
   /**
    * The size of the asset's upright original, read before a save's transaction opens, so that reading the original's metadata

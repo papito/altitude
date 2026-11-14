@@ -96,6 +96,7 @@ const SAVE_PENDING_MESSAGE = "The last change to this photo is not saved yet."
 // How long a save on its way is waited for before the warning asks about it
 const SAVE_SETTLE_MS = 1000
 const NOTHING_TO_LEVEL_MESSAGE = "No straight lines to level the image by"
+const AUTO_FAILED_MESSAGE = "Could not level the image"
 
 // How long a change made with a control's keys (a slider's arrows, a curve point's) or by a click on a slider's track waits
 // before it is saved, so a held key is one step and a double-click resets without a step in between
@@ -1105,7 +1106,8 @@ export function createEditPanel({ context, editStage, detailPanel }) {
 
     /**
      * Straighten's Auto: the server levels the image's lines (`auto-straighten`) as the Edit shown turns and mirrors it; when
-     * no lines agree on a level (`angle` null) Straighten stays and the snackbar says so
+     * no lines agree on a level (`angle` null) Straighten stays and the snackbar says so. A refusal the server explains (a 503
+     * while every auto-straighten slot is taken, a 400 for an original it cannot read) is shown in its words
      */
     async function autoStraighten() {
         if (!drawsAsset(subject?.assetId) || autoBusy || !changeable()) {
@@ -1139,7 +1141,15 @@ export function createEditPanel({ context, editStage, detailPanel }) {
             console.error(
                 `Could not level ${assetId}: ${getHttpErrorMessage(error)}`,
             )
-            showErrorSnackBar("Could not level the image")
+            const status = error?.response?.status
+            const reason = error?.response?.data?.error
+            if (status === 503 && reason) {
+                showWarningSnackBar(reason)
+            } else {
+                showErrorSnackBar(
+                    status === 400 && reason ? reason : AUTO_FAILED_MESSAGE,
+                )
+            }
         } finally {
             autoBusy = false
             push()
