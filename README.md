@@ -53,7 +53,7 @@ You will need:
 
 ### Models
 
-Three model files are too large for git. Fetch them once, from the repository root:
+The model files are too large for git. Fetch them once, from the repository root:
 
 ```sh
 uv run scripts/fetch-models.py
@@ -68,9 +68,14 @@ A model already in place is skipped, and `--force` fetches them all again.
 * `altitude/resources/onnx/dinov2_vitb14.onnx`: DINOv2 ViT-B/14 (`facebook/dinov2-base`), about 350 MB
 * `altitude/resources/onnx/siglip2_b16_256_image.onnx`: the SigLIP 2 ViT-B/16 image tower at 256 pixels
   (`google/siglip2-base-patch16-256`), about 370 MB
+* The same checkpoint's text side, which embeds a description, in three files exported together:
+  `altitude/resources/onnx/siglip2_b16_256_text.onnx`, the text tower without its token embeddings, about 345 MB;
+  `altitude/resources/onnx/siglip2_token_embeddings.f16`, the token-embedding table as float16, 393 MB; and
+  `altitude/resources/onnx/siglip2_tokenizer.tsv`, the tokenizer's pieces, 6 MB
 
-The two Scene models are exported to ONNX from their checkpoints, and each export is checked against PyTorch before it
-is written. The application does not start without all three.
+The two Scene models and the text tower are exported to ONNX from their checkpoints, and each export is checked against
+PyTorch before it is written. The application does not start without the first three; the text side is loaded by the
+first description, which fails without its files.
 
 ### Developer settings
 

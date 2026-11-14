@@ -21,7 +21,7 @@ import altitude.core.util.SceneEmbedder
  * same synthesized frames (`BurstFrames`) test after test, and a model pass is a pure function of the pixels, so each image is
  * embedded once. Two threads embedding the same new image at once both run the models and store the same answer.
  */
-class SwitchableSceneEmbedder extends SceneEmbedder {
+class SwitchableSceneEmbedder extends SceneEmbedder with ModelSwitch {
 
   // Read on the import dispatcher's threads, set on the test's
   @volatile private var switchedOn = false
@@ -33,16 +33,16 @@ class SwitchableSceneEmbedder extends SceneEmbedder {
   private val embedded = new ConcurrentHashMap[String, SceneEmbeddings]()
 
   /** Whether `embed` runs the real models */
-  def on: Boolean = switchedOn
+  override def on: Boolean = switchedOn
 
   /** Opens the real models if they are not open yet, then switches them on; a model that fails to open throws here */
-  def turnOn(): Unit = synchronized {
+  override def turnOn(): Unit = synchronized {
     if (onnx.isEmpty) onnx = Some(OnnxSceneEmbedder())
     switchedOn = true
   }
 
   /** Switches the real models off, leaving them open until `close` */
-  def turnOff(): Unit = switchedOn = false
+  override def turnOff(): Unit = switchedOn = false
 
   override def embed(image: Mat, name: String): SceneEmbeddings = onnx match {
     case Some(models) if switchedOn =>

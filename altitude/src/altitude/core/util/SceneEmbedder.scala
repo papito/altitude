@@ -35,8 +35,57 @@ trait SceneEmbedder extends AutoCloseable:
    */
   def embed(image: Mat, name: String): SceneEmbeddings
 
+/** What the ONNX Runtime embedders share: how a model's session is opened, and how a pass's output becomes an embedding */
+private[util] object OnnxSessions:
+
+  /**
+   * A session over the model file at the path, with one intra-op and one inter-op thread: the parallelism is the callers', the
+   * import's threads or a search's, and concurrent passes each spreading over every core would thrash. A session is thread-safe,
+   * so its callers share it.
+   */
+  def open(environment: OrtEnvironment, path: String): OrtSession =
+    val options = new OrtSession.SessionOptions()
+    try
+      options.setIntraOpNumThreads(1)
+      options.setInterOpNumThreads(1)
+      environment.createSession(path, options)
+    finally options.close()
+
+  /**
+   * One pass of a model's session over its one input, the tensor under the input's name: the output row, L2-normalized, as the
+   * model's embedding. The tensor stays the caller's to close.
+   */
+  def embed(session: OrtSession, input: String, tensor: OnnxTensor, model: SceneModel): SceneEmbedding =
+    val result = session.run(Collections.singletonMap(input, tensor))
+    try
+      val output = result.get(0).asInstanceOf[OnnxTensor].getFloatBuffer
+      if output.remaining() != model.dimensions then
+        throw IllegalStateException(s"Scene model ${model.name} gave ${output.remaining()} values, not ${model.dimensions}")
+      val values = new Array[Float](model.dimensions)
+      output.get(values)
+      SceneEmbedding(IArray.unsafeFromArray(unit(values)))
+    finally result.close()
+
+  /** The vector scaled to unit length, in place; a zero vector has no direction and is a failed pass */
+  private def unit(values: Array[Float]): Array[Float] =
+    var sum = 0.0
+    var i = 0
+    while i < values.length do
+      sum += values(i).toDouble * values(i)
+      i += 1
+    if sum == 0.0 then throw IllegalStateException("The model gave a zero vector")
+    val norm = Math.sqrt(sum).toFloat
+    i = 0
+    while i < values.length do
+      values(i) /= norm
+      i += 1
+    values
+
 object OnnxSceneEmbedder:
   private val CHANNELS = 3
+
+  /** The name of the Scene models' one input in their exports */
+  private val INPUT = "image"
 
   /**
    * What a model's input tensor is built with: its NCHW shape, and the model's normalization folded into one multiply and add per
@@ -115,8 +164,8 @@ object OnnxSceneEmbedder:
  * The process has one `OrtEnvironment` and this class opens one `OrtSession` per Scene model when it is built, so a missing model
  * file fails the start and never an import (a library imported without embeddings would fall back to the hash silently). An
  * `OrtSession` is thread-safe, so every import thread runs the same two; each session is opened with one intra-op and one
- * inter-op thread, since the parallelism is the import threads' and twelve concurrent passes each spreading over every core would
- * thrash.
+ * inter-op thread (`OnnxSessions.open`), since the parallelism is the import threads' and twelve concurrent passes each spreading
+ * over every core would thrash.
  *
  * The preprocessing is each model's own (`SceneModel.inputSize` and `fit`), over the one decoded image. DINOv2 takes the center
  * square: the short side fitted to 224 and a center crop, this project's transform rather than the checkpoint's (its processor
@@ -163,14 +212,9 @@ class OnnxSceneEmbedder extends SceneEmbedder:
 
   private def openSession(model: SceneModel): OrtSession =
     val path = Environment.resolveResourcePath(model.resourcePath)
-    val options = new OrtSession.SessionOptions()
-    try
-      options.setIntraOpNumThreads(1)
-      options.setInterOpNumThreads(1)
-      val session = environment.createSession(path, options)
-      logger.info(s"Opened the ONNX session of Scene model ${model.name} from $path")
-      session
-    finally options.close()
+    val session = OnnxSessions.open(environment, path)
+    logger.info(s"Opened the ONNX session of Scene model ${model.name} from $path")
+    session
 
   /**
    * The embeddings of an image as `ImageUtil.matFromBytes` decodes it (gray, BGR or BGRA), upright. A model that cannot prepare
@@ -191,16 +235,7 @@ class OnnxSceneEmbedder extends SceneEmbedder:
   private def run(rgb: Array[Byte], model: SceneModel): SceneEmbedding =
     val input = inputs(model)
     val tensor = OnnxTensor.createTensor(environment, FloatBuffer.wrap(normalize(rgb, input)), input.shape)
-    try
-      val result = sessions(model).run(Collections.singletonMap("image", tensor))
-      try
-        val output = result.get(0).asInstanceOf[OnnxTensor].getFloatBuffer
-        if output.remaining() != model.dimensions then
-          throw IllegalStateException(s"Scene model ${model.name} gave ${output.remaining()} values, not ${model.dimensions}")
-        val values = new Array[Float](model.dimensions)
-        output.get(values)
-        SceneEmbedding(IArray.unsafeFromArray(unit(values)))
-      finally result.close()
+    try OnnxSessions.embed(sessions(model), INPUT, tensor, model)
     finally tensor.close()
 
   /**
@@ -220,21 +255,6 @@ class OnnxSceneEmbedder extends SceneEmbedder:
         values(plane + pixel) = (rgb(pixel * CHANNELS + channel) & 0xff) * scale + offset
         pixel += 1
       channel += 1
-    values
-
-  /** The vector scaled to unit length, in place; a zero vector has no direction and is a failed pass */
-  private def unit(values: Array[Float]): Array[Float] =
-    var sum = 0.0
-    var i = 0
-    while i < values.length do
-      sum += values(i).toDouble * values(i)
-      i += 1
-    if sum == 0.0 then throw IllegalStateException("The model gave a zero vector")
-    val norm = Math.sqrt(sum).toFloat
-    i = 0
-    while i < values.length do
-      values(i) /= norm
-      i += 1
     values
 
   /** Closes the sessions, once (ONNX Runtime warns on a second close of a session); the environment is the process's and stays */

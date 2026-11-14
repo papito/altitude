@@ -60,6 +60,18 @@ enum SceneModel(
       IArray(0.5f, 0.5f, 0.5f)
     )
 
+object SceneModel:
+
+  /**
+   * What SigLIP 2's checkpoint learned beside its two towers: the scale `t = exp(logit_scale)` and the bias `b = logit_bias` of
+   * the probability that an image and a description match, `sigmoid(cosine * t + b)` over the cosine of the image's Scene
+   * embedding and the description's embedding (`DescribeEmbedder`). They are the checkpoint's, as the mean and std above are, and
+   * `scripts/fetch-models.py` refuses to export a text tower whose checkpoint holds others. A probability `p` is the cosine
+   * `(ln(p / (1 - p)) - b) / t`: 0.5 is the cosine 0.1486, and a hundredth of cosine is a factor of about 3 in the odds.
+   */
+  val SIGLIP2_LOGIT_SCALE = 112.90117645263672
+  val SIGLIP2_LOGIT_BIAS = -16.77180290222168
+
 object SceneEmbedding:
   // The wire form is the float array itself; no API answers it today, but an Asset carries it in JSON
   given JsonCodec.ReadWriter[SceneEmbedding] =
@@ -74,6 +86,9 @@ object SceneEmbedding:
  * embeddings of different models never compare, and since the models' dimensions can be equal (both are 768 today) it is
  * [[SceneEmbeddings]] that keeps them apart, a field per model. The values are immutable, and two embeddings are equal when their
  * values are: a case class over an array would compare it by reference, so two reads of one row would differ.
+ *
+ * A description's embedding by SigLIP 2's text tower (`DescribeEmbedder`) is one of these too: a vector in the space of that
+ * model's Scene embeddings, which compares with an image's by the same [[similarity]].
  */
 case class SceneEmbedding(values: IArray[Float]):
 

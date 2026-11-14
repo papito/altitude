@@ -58,7 +58,9 @@ import altitude.core.service.filestore.FileStoreService
 import altitude.core.service.filestore.FileSystemStoreService
 import altitude.core.transactions.SqlExplainer
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.DescribeEmbedder
 import altitude.core.util.ImportParallelism
+import altitude.core.util.OnnxDescribeEmbedder
 import altitude.core.util.OnnxSceneEmbedder
 import altitude.core.util.SceneEmbedder
 
@@ -66,8 +68,13 @@ import altitude.core.util.SceneEmbedder
  * @param newSceneEmbedder
  *   builds the instance's Scene embedder: the ONNX Runtime one, which production and the dev server use; the test instances build
  *   one they can switch off
+ * @param newDescribeEmbedder
+ *   builds the instance's Describe embedder, likewise: the ONNX Runtime one, or the test instances' switchable one
  */
-class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: () => SceneEmbedder = () => OnnxSceneEmbedder()):
+class Altitude(
+    val dbEngineOverride: Option[String] = None,
+    newSceneEmbedder: () => SceneEmbedder = () => OnnxSceneEmbedder(),
+    newDescribeEmbedder: () => DescribeEmbedder = () => OnnxDescribeEmbedder()):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
   logger.debug(s"Environment is: ${Environment.CURRENT}")
 
@@ -421,6 +428,12 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
    */
   final val sceneEmbedder: SceneEmbedder = newSceneEmbedder()
 
+  /**
+   * What embeds a description in the space of SigLIP 2's Scene embeddings. Building it loads nothing: the text tower is opened by
+   * the first description and stays open until `cleanup` closes it, so an import, which embeds images alone, never loads it.
+   */
+  final val describeEmbedder: DescribeEmbedder = newDescribeEmbedder()
+
   object service {
     val system: SystemService = SystemService(app)
     val contentSigner: ContentSigner = ContentSigner(system.loadOrCreateSigningKey())
@@ -498,6 +511,8 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
     service.editRender.shutdown()
     // After the import has stopped: its threads run the Scene models
     sceneEmbedder.close()
+    // Waits for a description being embedded; one that arrives later is refused
+    describeEmbedder.close()
 
     sqliteOptimizing.foreach(_.cancel())
     importHistoryPruning.cancel(): Unit

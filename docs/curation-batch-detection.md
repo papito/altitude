@@ -621,8 +621,10 @@ Still open:
 - **Similar-image search** over the stored embeddings, which needs a vector index on the columns (pgvector HNSW as the
   faces have; sqlite-vector's scan on SQLite) and a search entry; the rule itself compares a frame with the handful of
   candidates of its window and needs none.
-- **Text search** over the SigLIP 2 embedding, which needs the model's text tower exported beside the image tower, its
-  tokenizer, and the same vector index.
+- **Text search** over the SigLIP 2 embedding. The model's text side is built: the text tower is exported beside the
+  image tower, with its token-embedding table and its tokenizer, and a description embeds into the space of the SigLIP 2
+  Scene embeddings (`DescribeEmbedder`, `Siglip2Tokenizer`; `altitude/AGENTS.md`, **Description embedding**). The search
+  itself, with the same vector index, is not; its cutoff is measured below (**A description's match probability**).
 - An **aesthetic score** as a linear head on the SigLIP 2 embedding (see **Learned no-reference quality** below).
 
 ### Geometric verification for doubtful pairs (`features2d`, ships)
@@ -674,6 +676,65 @@ shot within the gap on one camera, where the pairs here are of the whole set, so
 11,408 pairs of groups at most two apart in the set's numbering, the baseline measures 0.80 / 0.74 / 0.77 and the
 default 0.88 / 0.68 / 0.76, with 0.89 the best F1 at 0.81 / 0.78 / 0.79). DINOv2's threshold was not swept. Both
 remain to calibrate on real files.
+
+### A description's match probability
+
+A description's embedding (`DescribeEmbedder`) and an image's SigLIP 2 Scene embedding give the probability, by the
+model, that the two match: `sigmoid(cosine · t + b)` with the checkpoint's learned `t = 112.90` and `b = -16.77`
+(`SceneModel.SIGLIP2_LOGIT_SCALE`, `SIGLIP2_LOGIT_BIAS`). A probability of 0.5 is a cosine of 0.149, and a hundredth
+of cosine is a factor of about 3 in the odds. A search by description, which is not built, is to end its results at a
+minimum of this probability, the Setting `search.describe.min_probability`; this is the measurement its default comes
+from. The rule: the probability that 90% of true image and description pairs reach, rounded down to one significant
+figure.
+
+Measured on **COCO 2017 val** (Lin et al., ECCV 2014): 5,000 everyday photos with 25,014 captions, five an image.
+Each image is embedded as an import embeds it (`ImageUtil.matFromBytes`, `OnnxSceneEmbedder`) and each text as a
+description is (`OnnxDescribeEmbedder`). A caption is a sentence ("A woman is sitting on a bench in a park."), where a
+description is short ("woman in a park"), so each caption is cut to its noun phrase with spaCy's `en_core_web_sm`
+parse: its head noun (the root when the caption is itself a noun phrase, else the subject of its verb) with its
+determiners, numbers, adjectives, compounds, coordinated nouns and the prepositional phrases attached to it, and
+without verbal clauses ("a man in a red shirt riding a wave" gives "a man in a red shirt"). That leaves 21,838
+different pairs of an image and a phrase, 13,507 different phrases with a median of 4 words; the cut is automatic, and
+a few phrases are a parser's mistake. A true pair is an image and a phrase of one of its captions; a mismatched pair is
+a phrase and any image it was not cut from, 67.5 million of them.
+
+90% of the true pairs reach a probability of 0.0000928 (a cosine of 0.066), so the rule gives **0.00009**:
+
+| Probability | Cosine | True pairs kept | Mismatched pairs admitted | Photos found of 5,000, median (90th percentile) |
+|---|---|---|---|---|
+| 0.5 | 0.149 | 17.5% | 0.02% | 0 (3) |
+| 0.1 | 0.129 | 35.9% | 0.10% | 2 (16) |
+| 0.01 | 0.108 | 58.0% | 0.38% | 10 (53) |
+| 0.001 | 0.087 | 75.5% | 1.01% | 36 (117) |
+| 0.0003 | 0.077 | 83.4% | 1.67% | 62 (173) |
+| 0.0001 | 0.067 | 89.6% | 2.67% | 92 (270) |
+| 0.00009 (the rule's) | 0.066 | 90.2% | 2.80% | 95 (281) |
+| 0.00001 | 0.047 | 97.7% | 7.12% | 195 (802) |
+| 0.000001 | 0.026 | 99.6% | 17.09% | 436 (2,257) |
+
+The same rule over other texts for the same images, since what a user writes lies between them:
+
+| Texts | Different pairs | True pairs: median probability | 90% reach | Rounded down | Mismatched admitted there |
+|---|---|---|---|---|---|
+| The captions as written (median 10 words) | 25,007 | 0.53 | 0.0146 | 0.01 | 0.42% |
+| Their noun phrases (median 4 words) | 21,838 | 0.024 | 0.0000928 | 0.00009 | 2.80% |
+| The head noun's bare chunk, without the prepositional phrases (median 2 words: "a man") | 19,649 | 0.0042 | 0.0000327 | 0.00003 | 7.74% |
+
+What the figures say. The probability is no likelihood a user can read at face value: the model's sigmoid was trained
+against whole captions, and the shorter the text the lower a true pair scores, so a threshold that keeps nine in ten
+true pairs of short phrases is four decimal places down. At 0.00009 a phrase finds a median of 95 of the 5,000 photos,
+about one in fifty, so with a result limit of 1,000 it is the limit, not the probability, that ends most searches of
+a library past some fifty thousand photos; the ranking is by cosine either way, and the best matches come first. The share
+of mismatched pairs admitted is a ceiling on the false matches, not their count: a photo that no caption described as
+"a man" can still show one. And COCO's photos are of everyday scenes with a few objects each, so a library of other
+subjects can sit elsewhere on the scale.
+
+As a check of the whole path, the nearest image of the 5,000 to a caption as written is its own for 53.1% of the
+captions, and on the first 1,000 images the application's embeddings and the reference's (the checkpoint's processor
+and PyTorch model) retrieve alike, 72.9% against 72.8%: the text embeddings are the same, and the image embeddings
+are at a median cosine of 0.993 to the reference's, the difference being the resize. Lowercasing the text, which the
+application does, is worth three points there: the reference with the captions as written retrieves 69.6%. The
+scripts are not kept.
 
 ### Other open-source references
 
@@ -741,8 +802,8 @@ import.
   the most serious problem a frame could have. Today eyes are judged in the face strip by eye. The landmarker it
   needs would bring smile and pose with it.
 - **Beyond the Sequence rule's use of the Scene embeddings**: similar-image search (a vector index on the columns),
-  text search over the SigLIP 2 embedding (its text tower), and the aesthetic score as a head on it. The embeddings are
-  stored for every still image; nothing reads them but the rule.
+  text search over the SigLIP 2 embedding (a description is embedded by its text tower; nothing searches by it yet), and
+  the aesthetic score as a head on it. The embeddings are stored for every still image; nothing reads them but the rule.
 - **Learned quality models** and the other measurements of §2.
 - Nothing ranks the frames and nothing suggests a Pick beyond the sole Contender; the score is never read.
 - Videos and animated images are never measured and never in a Sequence or a set.

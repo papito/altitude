@@ -178,7 +178,7 @@ Accepted uploads lost on restart are under [Running and upgrading](#running-and-
 
 ### Running and upgrading
 
-- [ ] No install path. There is no Docker image: [docker-compose.yml] is a dev PostgreSQL with `POSTGRES_PASSWORD=dba`. The [README] is dev-only, says a Docker runner will come later, and names `application-dev.conf.postgres`, which does not exist. `make publish` builds a fat JAR with the build machine's natives only ([build.mill]), and the 174 MB face model and the two 350 MB Scene models are fetched separately, by hand ([fetch-models.py]), so the JAR runs only on the platform that built it. Nothing documents running behind TLS or a reverse proxy. [HIGH]
+- [ ] No install path. There is no Docker image: [docker-compose.yml] is a dev PostgreSQL with `POSTGRES_PASSWORD=dba`. The [README] is dev-only, says a Docker runner will come later, and names `application-dev.conf.postgres`, which does not exist. `make publish` builds a fat JAR with the build machine's natives only ([build.mill]), and the 174 MB face model, the two 350 MB Scene models and SigLIP 2's text side (a 345 MB text tower, its 393 MB token-embedding table and its tokenizer file) are fetched separately, by hand ([fetch-models.py]), so the JAR runs only on the platform that built it. Nothing documents running behind TLS or a reverse proxy. [HIGH]
   - Fix: a multi-arch image (`linux/amd64`, `arm64`) with natives per platform, a jlink-trimmed JRE on distroless or Chainguard (Jib, or Mill's Docker module), the model fetched with a checksum, compose with volumes and a backup recipe, and a `HEALTHCHECK`; install docs that cover HTTPS through a reverse proxy. GraalVM native-image is not practical with javacpp.
 - [ ] Config is hard to set. cask's `host="localhost"` and `port=8080` are not overridden, so the server cannot bind `0.0.0.0` in a container or move port. Environment overrides (`systemEnvironmentOverrides()`) apply only to tests ([Altitude] `preConfig`) and the config is never `.resolve()`d, so only `-D` properties work. Prod reads `application.conf` from the working directory while the data directory is relative to the JAR ([Environment] `ROOT_PATH`), and a missing config file is silently ignored. [MEDIUM]
   - Fix: configurable host and port; environment config (`systemEnvironmentOverrides`, `.resolve()`); `application.conf` next to the JAR; fail fast on a missing prod config.
@@ -206,7 +206,7 @@ Accepted uploads lost on restart are under [Running and upgrading](#running-and-
   - Fix: paginate the People tab.
 - [ ] No index for the file name, size and area sorts, or for metadata filters by `(field_id, value)` ([all.sql]).
 - ✅ HTTP range requests work for seeking ([RangeStreaming], tested).
-- [ ] No committed load-test harness: the 1M benchmark was one-off, and there is no HTTP load test or import-throughput test. The memory guidance rests on a few one-off imports of 24-megapixel JPEGs and no repeatable test: budget the JVM heap plus `FIXED_COST` (`POOL_COST`, 384 MB for the one shared face recognition net, and `SCENE_MODELS_COST`, 1216 MB for the two Scene models' ONNX Runtime sessions) plus `THREAD_COST` (512 MB) per import thread ([ImportParallelism]), and cap the threads with `import.parallelism.max` in [reference.conf].
+- [ ] No committed load-test harness: the 1M benchmark was one-off, and there is no HTTP load test or import-throughput test. The memory guidance rests on a few one-off imports of 24-megapixel JPEGs and no repeatable test: budget the JVM heap plus `FIXED_COST` (`POOL_COST`, 384 MB for the one shared face recognition net, and `SCENE_MODELS_COST`, 1216 MB for the two Scene models' ONNX Runtime sessions) plus `THREAD_COST` (512 MB) per import thread ([ImportParallelism]), and cap the threads with `import.parallelism.max` in [reference.conf]. SigLIP 2's text tower is outside that budget: from the first description embedded the process holds about 570 MB more ([DescribeEmbedder]), measured once in a scratch JVM.
   - Fix: commit a seeding and benchmark harness.
 
 ### User management
@@ -311,7 +311,7 @@ Decoder limits and timeouts are under [Malicious files](#malicious-files).
 - [ ] No `SECURITY.md`. Effort: S.
 - [ ] No LICENSE file: [build.mill] declares MIT in `pomSettings`, but no file exists. Effort: S.
 - [ ] The face model's licence: the InsightFace `w600k_r50` model is published for non-commercial research, so semi-pro use may need a different model. (unconfirmed)
-- ✅ The Scene models' licences allow commercial use: DINOv2 ViT-B/14 (`facebook/dinov2-base`) and the SigLIP 2 ViT-B/16 image tower (`google/siglip2-base-patch16-256`) are both Apache 2.0, as [fetch-models.py] records beside each checkpoint.
+- ✅ The Scene models' licences allow commercial use: DINOv2 ViT-B/14 (`facebook/dinov2-base`) and SigLIP 2 ViT-B/16 (`google/siglip2-base-patch16-256`: the image tower, and the text tower with its tokenizer) are both Apache 2.0, as [fetch-models.py] records beside each checkpoint.
 - [ ] Dependencies, as known at grading and not checked against release feeds or advisories (unconfirmed):
   - `commons-fileupload:1.5` ([build.mill]) is declared, unused, and in the range of CVE-2025-48976, a DoS fixed in 1.6.0.
   - `tika-core:3.0.0` is in the range of the 2025 Tika XXE advisories. Real exposure is low without the PDF module, but scanners will flag it.
@@ -481,6 +481,7 @@ Entries leave this list when their items close.
 [TransactionManager]: ../altitude/src/altitude/core/transactions/TransactionManager.scala
 [CaptureDateResolver]: ../altitude/src/altitude/core/util/CaptureDateResolver.scala
 [ImageUtil]: ../altitude/src/altitude/core/util/ImageUtil.scala
+[DescribeEmbedder]: ../altitude/src/altitude/core/util/DescribeEmbedder.scala
 [ImportParallelism]: ../altitude/src/altitude/core/util/ImportParallelism.scala
 [fetch-models.py]: ../scripts/fetch-models.py
 [Sha256]: ../altitude/src/altitude/core/util/Sha256.scala

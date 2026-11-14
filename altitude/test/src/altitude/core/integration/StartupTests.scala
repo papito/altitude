@@ -1,6 +1,7 @@
 package altitude.core.integration
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.SwitchableDescribeEmbedder
 import altitude.test.TestAltitudeApp
 import altitude.test.TestFocus
 import java.nio.file.Files
@@ -8,6 +9,7 @@ import java.sql.SQLException
 import java.time.Instant
 import org.apache.commons.io.FileUtils
 import org.scalatest.DoNotDiscover
+import org.scalatest.OptionValues.*
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.time.Millis
@@ -19,6 +21,7 @@ import scala.concurrent.duration.DurationInt
 
 import altitude.core.Altitude
 import altitude.core.Const
+import altitude.core.models.SceneModel
 import altitude.core.models.Settings
 import altitude.core.models.WatchFileState
 import altitude.core.models.WatchFolderSpec
@@ -46,6 +49,57 @@ import altitude.core.util.Sha256
       other.actorSystem.terminate()
       Await.ready(other.actorSystem.whenTerminated, 10.seconds)
     }
+  }
+
+  test("A test instance embeds no description until a test turns the Describe model on") {
+
+    /**
+     * Setup:
+     *
+     * The suite's test instance, whose suite leaves the Describe model off.
+     *
+     * Assertions:
+     *
+     * A description has no embedding. Inside `withDescribeModel` the same description has one, of SigLIP 2's dimensions, and
+     * after it the model is off again.
+     */
+    testApp.describeEmbedder.embed("a cactus") shouldBe None
+
+    withDescribeModel {
+      testApp.describeEmbedder.embed("a cactus").value.values.length shouldBe SceneModel.Siglip2.dimensions
+    }
+
+    testApp.describeEmbedder.embed("a cactus") shouldBe None
+  }
+
+  test("An instance's cleanup closes its Describe embedder") {
+
+    /**
+     * Setup:
+     *
+     * A second instance against the test database with its Describe model turned on, which has embedded a description and so
+     * holds the text tower open.
+     *
+     * Assertions:
+     *
+     * Once the instance is cleaned up its embedder refuses a description, a new one and the one it embedded: the text tower is
+     * closed with the instance.
+     */
+    val other = TestAltitudeApp.build(testApp.dataSourceType)
+    try {
+      other.describeEmbedder match {
+        case switchable: SwitchableDescribeEmbedder => switchable.turnOn()
+        case embedder => fail(s"The test instance's Describe embedder is a ${embedder.getClass.getName}")
+      }
+      other.describeEmbedder.embed("a cactus").value
+    } finally {
+      other.cleanup()
+      other.actorSystem.terminate()
+      Await.ready(other.actorSystem.whenTerminated, 10.seconds)
+    }
+
+    an[IllegalStateException] should be thrownBy other.describeEmbedder.embed("a man in a suit")
+    an[IllegalStateException] should be thrownBy other.describeEmbedder.embed("a cactus")
   }
 
   test("A new instance against a migrated database keeps the schema version and starts with the Settings loaded") {
