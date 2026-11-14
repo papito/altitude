@@ -3,12 +3,22 @@ package altitude.core.controller
 import altitude.test.IntegrationTestUtil
 import altitude.test.TestVideos
 import java.net.HttpCookie
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.util.UUID
+import org.opencv.core.CvType
+import org.opencv.core.Mat
+import org.opencv.core.MatOfByte
+import org.opencv.core.Point
+import org.opencv.core.Scalar
+import org.opencv.imgcodecs.Imgcodecs
+import org.opencv.imgproc.Imgproc
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.*
 
 import altitude.core.App
 import altitude.core.models.AccountType
+import altitude.core.models.AssetWithData
 import altitude.core.models.EditRecipe
 import altitude.core.models.Permission
 import altitude.core.models.Permissions
@@ -49,6 +59,9 @@ import altitude.core.models.Permissions
   private def moveHead(host: String, repoId: String, assetId: String, base: Int, seq: Int): requests.Response =
     send("PUT", editUrl(host, repoId, assetId, "/head"), ujson.Obj("base" -> base, "seq" -> seq))
 
+  private def autoStraightenUrl(host: String, repoId: String, assetId: String, recipe: ujson.Value): String =
+    editUrl(host, repoId, assetId, "/auto-straighten?recipe=") + URLEncoder.encode(ujson.write(recipe), StandardCharsets.UTF_8)
+
   private def json(response: requests.Response): ujson.Value = {
     response.headers("content-type").head should include("application/json")
     ujson.read(response.text())
@@ -68,7 +81,8 @@ import altitude.core.models.Permissions
      * +0.4 built on head 0 answers the new state: head 1, labeled "Exposure +0.40", edited, the image's size, the Edit as sent,
      * and a History of that step, by the User, timed and marked as the User's, over the Original. After another account's step,
      * the History names that account on its step and does not mark it as the User's. Moving the head back to 0 answers the
-     * Original again, and the status says head 0, not rendered, revision 0.
+     * Original again, and the status says head 0 and revision 0, not rendered (or rendered as the Original, should the server's
+     * render have run by then).
      */
     val repoId = testContext.persistRepository().persistedId
     login()
@@ -122,7 +136,10 @@ import altitude.core.models.Permissions
 
         val status = get(editUrl(host, repoId, assetId, "/status"))
         status.statusCode shouldBe 200
-        json(status) shouldBe ujson.Obj("head" -> 0, "rendered" -> ujson.Null, "rev" -> 0)
+        // The server renders the Original 1.5 s after the move, which a slow run may reach
+        val answer = json(status)
+        (answer("head"), answer("rev")) shouldBe (ujson.Num(0), ujson.Num(0))
+        List(ujson.Null, ujson.Num(0)) should contain(answer("rendered"))
     }
   }
 
@@ -211,6 +228,58 @@ import altitude.core.models.Permissions
     }
   }
 
+  test("Auto-straighten answers the Straighten that levels the image's lines, and refuses what cannot be edited") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in User holding every Permission, an imported 1600 × 1200 image of dark lines on white, each rising 2.7° to the
+     * right, and an imported Video.
+     *
+     * Assertions:
+     *
+     * Auto-straighten with the image's Edit answers `{angle}` of 2.7 ± 0.2, the clockwise Straighten that levels the lines; with
+     * the image turned a half turn, the lines rise the same way and the answer is the same. A request without a `recipe`, one
+     * whose `recipe` is no Edit, and one for the Video are 400s with an error.
+     */
+    val repoId = testContext.persistRepository().persistedId
+    login()
+    val drawing = new Mat(1200, 1600, CvType.CV_8UC3, new Scalar(255, 255, 255))
+    val rise = Math.tan(Math.toRadians(2.7))
+    for (i <- 0 until 8) {
+      val y = 200.0 + i * 110
+      Imgproc.line(drawing, new Point(150, y), new Point(1450, y - 1300 * rise), new Scalar(30, 30, 30), 4, Imgproc.LINE_AA)
+    }
+    val bytes = new MatOfByte()
+    Imgcodecs.imencode(".jpg", drawing, bytes)
+    val lines = testApp.service.library
+      .addAsset(AssetWithData(testContext.makeAsset(), testApp.service.staging.stage(bytes.toArray)))
+      .persistedId
+    val video = testApp.service.library.addAsset(
+      testApp.service.library.convImportAsset2dataAsset(
+        IntegrationTestUtil.fileToImportAsset(TestVideos.clip(Seq(TestVideos.black(1))).toFile)))
+
+    withServer(App) {
+      host =>
+        for (recipe <- List(EditRecipe.Identity, EditRecipe.Identity.copy(rotate = 180, straighten = -10))) {
+          val response = get(autoStraightenUrl(host, repoId, lines, recipe.toJson))
+          response.statusCode shouldBe 200
+          json(response)("angle").num shouldBe 2.7 +- 0.2
+        }
+
+        val refusals = List(
+          get(editUrl(host, repoId, lines, "/auto-straighten")),
+          get(autoStraightenUrl(host, repoId, lines, brighterWith("dehaze" -> 5))),
+          get(editUrl(host, repoId, lines, "/auto-straighten?recipe=%7Bbase")),
+          get(autoStraightenUrl(host, repoId, video.persistedId, brighter.toJson))
+        )
+        for (response <- refusals) withClue(response.text()) {
+          response.statusCode shouldBe 400
+          json(response)("error").str should not be empty
+        }
+    }
+  }
+
   test("The Edit's routes are a 403 without Edit images and a 404 for another Library's asset") {
 
     /**
@@ -236,6 +305,8 @@ import altitude.core.models.Permissions
     testApp.service.repository.switchContextToRepository(theirs)
     val theirAsset = testContext.persistAsset(repository = Some(theirs), user = Some(owner)).persistedId
     testApp.service.assetEdit.addStep(theirAsset, 0, brighter, owner)
+    // Rendered now, so the render the step queued does not change the Edit while the test compares it
+    testApp.service.editRender.render(theirAsset)
     val before = testApp.service.assetEdit.get(theirAsset)
 
     withServer(App) {
@@ -244,14 +315,15 @@ import altitude.core.models.Permissions
           get(editUrl(host, repoId, assetId), cookies),
           get(editUrl(host, repoId, assetId, "/status"), cookies),
           send("POST", editUrl(host, repoId, assetId, "/steps"), ujson.Obj("base" -> 1, "recipe" -> brighter.toJson), cookies),
-          send("PUT", editUrl(host, repoId, assetId, "/head"), ujson.Obj("base" -> 1, "seq" -> 0), cookies)
+          send("PUT", editUrl(host, repoId, assetId, "/head"), ujson.Obj("base" -> 1, "seq" -> 0), cookies),
+          get(autoStraightenUrl(host, repoId, assetId, brighter.toJson), cookies)
         )
 
-        requestsFor(assetId, withoutEditImages).map(_.statusCode) shouldBe List(403, 403, 403, 403)
+        requestsFor(assetId, withoutEditImages).map(_.statusCode) shouldBe List(403, 403, 403, 403, 403)
 
         val ownerCookies = cookiesOf(host, owner)
-        requestsFor(theirAsset, ownerCookies).map(_.statusCode) shouldBe List(404, 404, 404, 404)
-        requestsFor(UUID.randomUUID.toString, ownerCookies).map(_.statusCode) shouldBe List(404, 404, 404, 404)
+        requestsFor(theirAsset, ownerCookies).map(_.statusCode) shouldBe List(404, 404, 404, 404, 404)
+        requestsFor(UUID.randomUUID.toString, ownerCookies).map(_.statusCode) shouldBe List(404, 404, 404, 404, 404)
     }
 
     testApp.service.assetEdit.get(theirAsset) shouldBe before

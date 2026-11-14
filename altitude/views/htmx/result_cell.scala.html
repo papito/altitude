@@ -1,4 +1,3 @@
-@import altitude.core.Const
 @import altitude.core.util.Util
 @import altitude.core.RequestContext
 @import altitude.core.models.Asset
@@ -10,12 +9,12 @@
    holds the asset more than once (a Location grouping passes `asset-<id>-in-<locationId>`); `data-asset-id` on the
    thumbnail box is how the client finds every cell of an asset. `data-media-type` says what the asset is; the cell of an
    asset that plays, a Video or an animated GIF, wears a play badge over its Preview and shows its duration among the
-   metadata. The thumbnail names its preview URL in `data-src` for js/search-results/lazy-images.js, which loads and
-   releases it by its distance from the viewport; a first page's cell (`isContinuousScroll` false) also names it in `src`,
-   so the first viewport paints before any script runs. *@
+   metadata. The thumbnail names its preview URL (`Util.previewUrl`: an edited asset's edited Preview, by its revision) in
+   `data-src` for js/search-results/lazy-images.js, which loads and releases it by its distance from the viewport; a first
+   page's cell (`isContinuousScroll` false) also names it in `src`, so the first viewport paints before any script runs. *@
 @(asset: Asset, isContinuousScroll: Boolean, nextCursor: Option[String] = None, showNoDate: Boolean = false, cellId: String = null)
 
-@defining(Util.contentUrl(Const.DataStore.PREVIEW, asset.persistedId)) { imgUrl =>
+@defining(Util.previewUrl(asset)) { imgUrl =>
 <div id="@{Option(cellId).getOrElse(s"asset-${asset.persistedId}")}"
      class="@if(nextCursor.isDefined) {cell last-cell} else {cell}"
      data-folder-id="@{asset.folderId}"

@@ -18,6 +18,7 @@ import altitude.core.Const
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
+import altitude.core.models.EditRecipe
 import altitude.core.models.Person
 import altitude.core.service.SearchService
 import altitude.core.util.TriageSubset
@@ -1235,6 +1236,37 @@ import altitude.core.util.Util
           repoId,
           params + (Api.Field.Search.AFTER -> cursorOf(page1).head) + (Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")).text()
         thumbnailSources(page2, a2) shouldBe Map("data-src" -> previewUrl(a2))
+    }
+  }
+
+  test("An edited asset's thumbnail names its edited Preview by revision, and an unedited one's names none") {
+
+    /**
+     * Setup:
+     *
+     * Two assets, one of them with a step of its Edit, rendered as revision 1.
+     *
+     * Assertions:
+     *
+     * The edited asset's thumbnail names its Preview URL with `?v=1` in src and data-src; the other's names the plain Preview
+     * URL.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+    val edited = testContext.persistAsset()
+    val plain = testContext.persistAsset()
+    testApp.service.assetEdit.addStep(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    testApp.service.editRender.render(edited.persistedId)
+
+    withServer(App) {
+      host =>
+        val page = htmlSearch(host, repoId, Map.empty).text()
+        val editedUrl = s"/content/r/$repoId/preview/${edited.persistedId}?v=1"
+        thumbnailSources(page, testApp.service.asset.getById(edited.persistedId)) shouldBe
+          Map("src" -> editedUrl, "data-src" -> editedUrl)
+        val plainUrl = s"/content/r/$repoId/preview/${plain.persistedId}"
+        thumbnailSources(page, plain) shouldBe Map("src" -> plainUrl, "data-src" -> plainUrl)
     }
   }
 

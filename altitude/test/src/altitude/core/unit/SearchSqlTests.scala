@@ -1213,8 +1213,8 @@ import altitude.core.util.SortValue
      *
      * The plotted points are the union of an asset's own point in the box and, for an asset without one, the pin of each Location
      * it is in that is in the box, both branches carrying the search's filters. The points are gridded into cells, and one window
-     * pass counts and averages each cell and picks its newest asset, undated last, with no null ordering spelled out and every
-     * placeholder bound.
+     * pass counts and averages each cell and picks its newest asset, undated last, read with its rendition revision, with no null
+     * ordering spelled out and every placeholder bound.
      */
     for ((engine, dialect) <- engines) withClue(engine) {
       val query = new SearchQuery(params = Map("is_recycled" -> false), locationIds = Set("l1"))
@@ -1239,7 +1239,9 @@ import altitude.core.util.SortValue
         text.contains(
           "ROW_NUMBER() OVER (PARTITION BY cell_x, cell_y ORDER BY CASE WHEN taken IS NULL THEN 1 ELSE 0 END, taken DESC, asset_id ASC) AS rn") shouldBe true
         text.contains("WINDOW w AS (PARTITION BY cell_x, cell_y)") shouldBe true
-        text.contains("WHERE rn = 1") shouldBe true
+        // The cell's asset read with its rendition revision, in the repository
+        text.contains(
+          "SELECT cells.n, cells.latitude, cells.longitude, cells.asset_id, asset.edit_rev FROM cells JOIN asset ON asset.id = cells.asset_id AND asset.repository_id = ? WHERE cells.rn = 1") shouldBe true
         text.contains("NULLS FIRST") shouldBe false
         text.contains("NULLS LAST") shouldBe false
         text.count(_ == '?') shouldBe binds(statement)

@@ -373,23 +373,37 @@ import altitude.core.pipeline.sinks.VoidAssetSink
     }
   }
 
-  test("Purging an asset removes its Edit") {
+  test("Purging an asset removes its Edit and its rendition files") {
 
     /**
      * Setup:
      *
-     * Two imported images, each with two steps; one of them recycled and run through the purge pipeline.
+     * Two imported images, each with two steps, each step rendered; one of them recycled and run through the purge pipeline.
      *
      * Assertions:
      *
-     * The purged asset has no Edit row and no step left. The other keeps both.
+     * The purged asset has no Edit row, no step and no rendition file left, of either kind, nor a temporary file of a rendition
+     * write cut off. The other keeps its rows and the renditions of its rendered revision.
      */
     val purged = testContext.persistAsset().persistedId
     val kept = testContext.persistAsset().persistedId
     for (assetId <- List(purged, kept)) {
       edits.addStep(assetId, 0, brighter, testContext.user)
+      testApp.service.editRender.render(assetId)
       edits.addStep(assetId, 1, contrasty, testContext.user)
+      testApp.service.editRender.render(assetId)
     }
+    def renditionFiles(assetId: String): List[String] =
+      for {
+        kind <- List(Const.DataStore.PREVIEW, Const.DataStore.DISPLAY)
+        rev <- 1 to 3
+        if java.nio.file.Files.exists(testApp.service.fileStore.editRenditionPath(assetId, rev, kind))
+      } yield s"$kind-r$rev"
+    renditionFiles(purged) shouldBe List("preview-r2", "display-r2")
+    // A write of a rendition cut off before its move, as a crash leaves it
+    val leftover =
+      testApp.service.fileStore.editRenditionPath(purged, 3, Const.DataStore.DISPLAY).resolveSibling(s".$purged-r3-1.tmp")
+    java.nio.file.Files.write(leftover, Array[Byte](1)): Unit
     testApp.service.library.recycleAssets(Set(purged))
     val toPurge = testApp.service.asset.getById(purged)
 
@@ -399,7 +413,10 @@ import altitude.core.pipeline.sinks.VoidAssetSink
       Duration.Inf): Unit
 
     storedRows(purged) shouldBe (None, Nil)
+    renditionFiles(purged) shouldBe Nil
+    java.nio.file.Files.exists(leftover) shouldBe false
     storedRows(kept)._2 shouldBe List(1, 2)
+    renditionFiles(kept) shouldBe List("preview-r2", "display-r2")
   }
 
   test("An image whose original is gone is refused, and one whose metadata cannot be read is taken as upright") {

@@ -365,6 +365,14 @@ import altitude.core.routes.decorators.requirePermission
     }.needs(Permission.EditImages),
     probed(GET, "/api/edit/r/:repoId/asset/:assetId/status")(fx => List(Probe(404, path = Map("assetId" -> fx.asset))))
       .needs(Permission.EditImages),
+    probed(GET, "/api/edit/r/:repoId/asset/:assetId/auto-straighten") {
+      fx =>
+        List(
+          Probe(
+            404,
+            path = Map("assetId" -> fx.asset),
+            query = Map(Api.Field.Edit.RECIPE -> ujson.write(EditRecipe.Identity.toJson))))
+    }.needs(Permission.EditImages),
     probed(PUT, "/htmx/asset/r/:repoId/face/:faceId/person") {
       fx =>
         List(
@@ -1113,9 +1121,9 @@ import altitude.core.routes.decorators.requirePermission
 
   /**
    * The user's repository with an asset, a folder, an album, a Location and an unnamed Person with a Face, and their other
-   * repository with an imported asset (with a Preview, a point, a Face with its files, a step of its Edit, a folder, an album and
-   * a Location in a category holding it), a Person with that Face, two triaged assets in one Sequence, a recycled asset, an
-   * Import in progress and a Watch folder. The context is the user's repository again when it returns.
+   * repository with an imported asset (with a Preview, a point, a Face with its files, a step of its Edit, rendered, a folder, an
+   * album and a Location in a category holding it), a Person with that Face, two triaged assets in one Sequence, a recycled
+   * asset, an Import in progress and a Watch folder. The context is the user's repository again when it returns.
    */
   private def fixtures(mine: Repository): Fixtures = {
     val myAsset = testContext.insertAsset(testContext.makeAsset(repository = Some(mine)))
@@ -1140,6 +1148,8 @@ import altitude.core.routes.decorators.requirePermission
     val person = testApp.service.person.addPerson(Person(name = Some(s"$MARK Eve")))
     val face = testContext.addTestFace(person, asset, TestContext.unitVector(2), withFiles = true)
     testApp.service.assetEdit.addStep(asset.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    // Rendered now, so the render the step queued finds nothing to write while the probes compare the rows
+    testApp.service.editRender.render(asset.persistedId)
     val frames = List.fill(2)(testContext.insertAsset(testContext.makeAsset(repository = Some(theirs), isTriaged = true)))
     val sequence = UUID.randomUUID.toString
     testContext.setAssetSequence(frames, sequence)

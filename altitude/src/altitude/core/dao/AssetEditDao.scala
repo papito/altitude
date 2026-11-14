@@ -38,3 +38,12 @@ trait AssetEditDao extends BaseDao[AssetEdit]:
 
   /** Moves the head to `seq`, with whether it is edited and its edited size, as changed by the account now */
   def setHead(assetId: String, seq: Int, isEdited: Boolean, width: Int, height: Int, accountId: String): Unit
+
+  /**
+   * Records the step whose renditions are stored (None: no step's, the renditions stored being of none of the steps there are)
+   * and the highest rendition revision the asset has used
+   */
+  def setRendered(assetId: String, seq: Option[Int], lastRev: Int): Unit
+
+  /** The assets whose Edit's head is not rendered, in the context repository: what the startup queues to render */
+  def pendingRenders(): List[String]

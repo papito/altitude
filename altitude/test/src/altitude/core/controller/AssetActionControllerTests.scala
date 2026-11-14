@@ -722,14 +722,15 @@ import altitude.core.models.Person
     /**
      * Setup:
      *
-     * A Library with an imported image with one step of its Edit (Exposure +0.4), an imported image never edited, and an imported
-     * image in the trash; a User holding every Permission, and a User holding every Permission but Edit images, each logged in.
+     * A Library with an imported image with one step of its Edit (Exposure +0.4), rendered, an imported image never edited, and
+     * an imported image in the trash; a User holding every Permission, and a User holding every Permission but Edit images, each
+     * logged in.
      *
      * Assertions:
      *
-     * Asked for as JSON by the first User, the edited image's detail carries `edit`: the head and its label, not rendered,
-     * revision 0, edited, its size and its Edit, and `editable` true; the fragment carries the same Edit as JSON and `editable`
-     * in its data attributes. The image never edited has no `edit`, in the JSON or the fragment, and is editable.
+     * Asked for as JSON by the first User, the edited image's detail carries `edit`: the head and its label, rendered at the head
+     * as revision 1, edited, its size and its Edit, and `editable` true; the fragment carries the same Edit as JSON and
+     * `editable` in its data attributes. The image never edited has no `edit`, in the JSON or the fragment, and is editable.
      *
      * Edge cases:
      *
@@ -741,6 +742,8 @@ import altitude.core.models.Person
     val edited = testContext.persistAsset()
     val recipe = EditRecipe.Identity.copy(exposure = 0.4)
     testApp.service.assetEdit.addStep(edited.persistedId, 0, recipe, testContext.user)
+    // Rendered now, so the render the step queued cannot change the answer while the test reads it
+    testApp.service.editRender.render(edited.persistedId)
     val untouched = testContext.persistAsset()
     val recycled = testContext.persistAsset()
     testApp.service.library.recycleAssets(Set(recycled.persistedId))
@@ -768,8 +771,8 @@ import altitude.core.models.Person
         json("edit") shouldBe ujson.Obj(
           "head" -> 1,
           "label" -> "Exposure +0.40",
-          "rendered" -> ujson.Null,
-          "rev" -> 0,
+          "rendered" -> 1,
+          "rev" -> 1,
           "edited" -> true,
           "width" -> edited.width,
           "height" -> edited.height,

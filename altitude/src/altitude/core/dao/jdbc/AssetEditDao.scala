@@ -74,6 +74,12 @@ abstract class AssetEditDao(override val config: Config) extends BaseDao[AssetEd
 
   private val byAsset = s"${FieldConst.REPO_ID} = ? AND ${F.ASSET_ID} = ?"
 
+  /**
+   * The condition of an Edit whose head is not rendered, `rendered_seq` NULL counting as unlike any head: spelled as the partial
+   * index `asset_edit_01` is on the engine, so the planner takes the index
+   */
+  protected def headNotRendered: String
+
   override def get(assetId: String): Option[AssetEdit] =
     manyBySqlQuery(s"SELECT * FROM $tableName WHERE $byAsset", List(repositoryId, assetId)).headOption.map(makeModel)
 
@@ -143,3 +149,12 @@ abstract class AssetEditDao(override val config: Config) extends BaseDao[AssetEd
       """
     val updated = updateByBySql(sql, List(seq, nativeBool(isEdited), width, height, accountId, now, repositoryId, assetId))
     require(updated == 1, s"The Edit of asset [$assetId] has $updated rows, not one")
+
+  override def setRendered(assetId: String, seq: Option[Int], lastRev: Int): Unit =
+    val sql = s"UPDATE $tableName SET ${F.RENDERED_SEQ} = ?, ${F.LAST_REV} = ? WHERE $byAsset"
+    val updated = updateByBySql(sql, List(seq.map(Int.box).orNull, lastRev, repositoryId, assetId))
+    require(updated == 1, s"The Edit of asset [$assetId] has $updated rows, not one")
+
+  override def pendingRenders(): List[String] =
+    val sql = s"SELECT ${F.ASSET_ID} FROM $tableName WHERE ${FieldConst.REPO_ID} = ? AND $headNotRendered"
+    manyBySqlQuery(sql, List(repositoryId)).map(_(F.ASSET_ID).toString)

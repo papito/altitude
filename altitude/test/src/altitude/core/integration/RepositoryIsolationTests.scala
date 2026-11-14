@@ -70,6 +70,8 @@ import altitude.core.util.QueryResult
     // Imported, as an Edit reads the original's orientation
     val edited = testContext.persistAsset(repository = Some(second))
     testApp.service.assetEdit.addStep(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    // Rendered now, so the render the step queued finds nothing to write while the tests compare the rows
+    testApp.service.editRender.render(edited.persistedId)
 
     switchContextRepo(first)
 
@@ -595,6 +597,8 @@ import altitude.core.util.QueryResult
     val importFile = testApp.service.imports.addFile(opened.persistedId, "mine.jpg", sizeBytes = 1)
     val (watchFolder, watchFolderFile) = rememberingWatchFolder("mine")
     testApp.service.assetEdit.addStep(asset.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    // Rendered now, so the render the step queued finds nothing to write while the tests compare the rows
+    testApp.service.editRender.render(asset.persistedId)
 
     Map(
       "asset" -> asset.persistedId,

@@ -135,12 +135,14 @@ export async function hydrateMapViewFragment({ fragmentEl }) {
             map: (props) => ({
                 count: props.count,
                 assetId: props.assetId,
+                editRev: props.editRev,
                 representedCount: props.count,
             }),
             reduce: (accumulated, props) => {
                 accumulated.count += props.count
                 if (props.representedCount > accumulated.representedCount) {
                     accumulated.assetId = props.assetId
+                    accumulated.editRev = props.editRev
                     accumulated.representedCount = props.representedCount
                 }
             },
@@ -160,19 +162,21 @@ export async function hydrateMapViewFragment({ fragmentEl }) {
                 const {
                     count,
                     assetId,
+                    editRev,
                     cluster,
                     cluster_id: clusterId,
                 } = feature.properties
                 const point = [lat, nearestCopyOf(lng, centerLng)]
 
                 if (count === 1) {
-                    addAssetPin({ point, assetId, count })
+                    addAssetPin({ point, assetId, editRev, count })
                     return
                 }
 
                 addAssetPin({
                     point,
                     assetId,
+                    editRev,
                     count,
                     onClick: () => {
                         if (cluster) {
@@ -222,11 +226,15 @@ export async function hydrateMapViewFragment({ fragmentEl }) {
         })
     }
 
-    /** A thumbnail pin; without `onClick` it is a single asset, whose click opens its detail */
-    function addAssetPin({ point, assetId, count, onClick }) {
+    /**
+     * A thumbnail pin; without `onClick` it is a single asset, whose click opens its detail. An
+     * edited asset (`editRev` above 0) shows its edited Preview by its revision, as the grid does.
+     */
+    function addAssetPin({ point, assetId, editRev, count, onClick }) {
         const iconEl = document.createElement("div")
         const imgEl = document.createElement("img")
-        imgEl.src = `/content/r/${repoId}/preview/${assetId}`
+        const revision = editRev > 0 ? `?v=${editRev}` : ""
+        imgEl.src = `/content/r/${repoId}/preview/${assetId}${revision}`
         imgEl.alt = ""
         imgEl.draggable = false
         iconEl.append(imgEl)
@@ -371,7 +379,11 @@ function cellFeature(cell) {
             type: "Point",
             coordinates: [cell.longitude, cell.latitude],
         },
-        properties: { count: cell.count, assetId: cell.assetId },
+        properties: {
+            count: cell.count,
+            assetId: cell.assetId,
+            editRev: cell.editRev,
+        },
     }
 }
 

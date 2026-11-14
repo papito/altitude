@@ -1,7 +1,12 @@
 package altitude.core.service
 
+import java.nio.file.Files
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
 
 import altitude.core.{ Const => C }
 import altitude.core.Altitude
@@ -15,8 +20,10 @@ import altitude.core.models.AssetEdit
 import altitude.core.models.AssetEditStep
 import altitude.core.models.EditRecipe
 import altitude.core.models.EditState
+import altitude.core.models.MimedPreviewData
 import altitude.core.models.User
 import altitude.core.transactions.TransactionManager
+import altitude.core.util.EditRenderer
 
 /**
  * An asset's Edit and its History (`CONTEXT.md`): every saved change is a step, and Undo, Redo and a jump from the History move
@@ -27,6 +34,9 @@ import altitude.core.transactions.TransactionManager
  * (`EditRenderService`), and is logged then.
  */
 object AssetEditService:
+
+  // The longest auto-straighten waits for its turn on the render dispatcher and its read of the original
+  private val AUTO_STRAIGHTEN_TIMEOUT = 2.minutes
 
   /** Why an Edit may not change the asset, None when it may: it is a still image outside the trash */
   def whyNotEditable(asset: Asset): Option[String] =
@@ -97,6 +107,8 @@ class AssetEditService(val app: Altitude):
         val seq = head + 1
         val label = EditRecipe.describeChange(headRecipe, normalized)
         val after = dao.deleteStepsAfter(assetId, head)
+        // A rendered step among those dropped is no step of the Edit any more, and its seq is about to be used again
+        edit.foreach(e => if e.renderedSeq.exists(_ > head) then dao.setRendered(assetId, None, e.lastRev))
         dao.insertStep(AssetEditStep(assetId, seq, normalized, label, Some(account.persistedId)))
         val dropped = dao.deleteOldestBeyond(assetId, C.Edit.MAX_STEPS)
         moveTo(assetId, seq, normalized, upright, account)
@@ -138,6 +150,44 @@ class AssetEditService(val app: Altitude):
     }
 
   /**
+   * The asset's edited rendition of `kind` (`Const.DataStore.PREVIEW` or `DISPLAY`) at the revision `rev`, read from its file
+   * with no database read. Once a later revision has replaced it, the asset's current one, or None when the asset has none (its
+   * Edit is at the Original, or cannot be rendered). A revision is never used twice for an asset, so the answer under `rev` stays
+   * good to cache.
+   *
+   * @throws NotFoundException
+   *   for a revision the asset has not used yet, which may name other bytes later, and for an asset that is not the Library's
+   */
+  def rendition(assetId: String, rev: Int, kind: String): Option[MimedPreviewData] =
+    try Some(app.service.fileStore.getEditRendition(assetId, rev, kind))
+    catch
+      case _: NotFoundException =>
+        val (lastRev, current) = txManager.asReadOnly {
+          (dao.get(assetId).fold(0)(_.lastRev), assetDao.getById(assetId).editRev)
+        }
+        if rev > lastRev then throw NotFoundException(s"Asset [$assetId] has used no revision [$rev] yet")
+        logger.debug(s"Rendition [$kind] of asset [$assetId] at revision [$rev] is gone; the current is [$current]")
+        Option.when(current > 0)(app.service.fileStore.getEditRendition(assetId, current, kind))
+
+  /**
+   * Auto-straighten: the Straighten that levels the lines of the asset's original as `recipe` turns and mirrors it, in tenths of
+   * a degree, 0 when it finds too few lines (`EditRenderer.autoStraightenAngle`). Nothing is stored. The original is decoded on
+   * the render dispatcher, which bounds how many are decoded at once, renders and auto-straightens together.
+   *
+   * @throws IllegalOperationException
+   *   for an asset that is not a still image, is in the trash, or whose original is missing
+   */
+  def autoStraighten(assetId: String, recipe: EditRecipe): Double =
+    val asset = app.service.asset.getById(assetId)
+    AssetEditService.whyNotEditable(asset).foreach(why => throw IllegalOperationException(why))
+    val original = app.service.fileStore.assetFile(assetId)
+    if !Files.isRegularFile(original) then throw IllegalOperationException(C.Msg.Err.ORIGINAL_MISSING)
+    val reading = Future(EditRenderer.autoStraightenAngle(original, recipe))(using app.editRenderDispatcher)
+    val angle = Await.result(reading, AssetEditService.AUTO_STRAIGHTEN_TIMEOUT)
+    logger.debug(s"Edit of asset [$assetId]: auto-straighten answers [$angle]")
+    angle
+
+  /**
    * The size of the asset's upright original, read before a write's transaction opens, so that reading the original's metadata
    * holds no lock (on SQLite, the one write connection). The asset must be editable now; the write checks it again under its
    * lock.
@@ -150,9 +200,11 @@ class AssetEditService(val app: Altitude):
   /**
    * The asset's Edit locked for the transaction (None for an asset never edited, which locks nothing) and the asset, read after
    * the lock so that its rendition revision goes with the Edit's rendered step, when the asset is editable and the head is
-   * `base`; a conflict carrying the current state when it is not
+   * `base`; a conflict carrying the current state when it is not. The asset is locked first, as a render's write and a delete of
+   * the asset lock the two, so no two of them wait for each other.
    */
   private def lockAt(assetId: String, base: Int): (Asset, Option[AssetEdit]) =
+    assetDao.lockUnpurged(assetId): Unit
     val edit = dao.getForUpdate(assetId)
     val asset = assetDao.getById(assetId)
     AssetEditService.whyNotEditable(asset).foreach(why => throw IllegalOperationException(why))

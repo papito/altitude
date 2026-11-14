@@ -9,6 +9,7 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.models.Asset
+import altitude.core.models.EditRecipe
 import altitude.core.models.Folder
 import altitude.core.models.Person
 import altitude.core.util.TriageSubset
@@ -346,6 +347,32 @@ import altitude.core.util.TriageSubset
           host,
           Api.Field.Search.FOLDER_ID -> trips.persistedId,
           Api.Field.Search.LOCATION_ID -> testApp.service.location.addLocation("Lake", 5, 6).persistedId).statusCode shouldBe 400
+    }
+  }
+
+  test("Quick view shows an edited asset's edited Preview by revision") {
+
+    /**
+     * Setup:
+     *
+     * A folder holding two imported assets, one of them with a step of its Edit, rendered as revision 1.
+     *
+     * Assertions:
+     *
+     * Quick view of the folder shows the edited asset's Preview by its URL with `?v=1`, and the other's by the plain URL.
+     */
+    testContext.persistRepository()
+    login()
+    val folder = testApp.service.folder.add("Edited")
+    val edited = testContext.persistAsset(folder = Some(folder))
+    val plain = testContext.persistAsset(folder = Some(folder))
+    testApp.service.assetEdit.addStep(edited.persistedId, 0, EditRecipe.Identity.copy(exposure = 1), testContext.user)
+    testApp.service.editRender.render(edited.persistedId)
+
+    withServer(App) {
+      host =>
+        previewsOf(quickView(host, folder.persistedId).text()).toSet shouldBe
+          Set(s"${edited.persistedId}?v=1", plain.persistedId)
     }
   }
 

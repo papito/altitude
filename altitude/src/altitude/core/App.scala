@@ -69,6 +69,7 @@ object App extends cask.Main:
   altitude.service.imports.startup()
   altitude.service.library.pruneDanglingAssets()
   altitude.service.library.requeuePurgePending()
+  altitude.service.editRender.requeuePendingRenders()
   altitude.service.library.reconcileStats()
   // The startup scan of the Watch folders, which catches up on what arrived while the server was down, and then one every
   // interval: after the Imports a stop interrupted are failed, so no scan's Import is taken for one of them

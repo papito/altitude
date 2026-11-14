@@ -15,6 +15,7 @@ abstract class AllIntegrationTestSuites(val testApp: Altitude)
     new AssetQueryTests(testApp),
     new AssetServiceTests(testApp),
     new AssetEditServiceTests(testApp),
+    new EditRenderServiceTests(testApp),
     new AssetDateStorageTests(testApp),
     new BaseDaoTests(testApp),
     new RepositoryIsolationTests(testApp),

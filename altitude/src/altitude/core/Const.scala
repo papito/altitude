@@ -56,6 +56,12 @@ object Const:
   object Edit:
     // The most steps an asset's Edit keeps, the oldest dropped first; the Original (step 0) is kept apart from them
     val MAX_STEPS = 100
+    // The Display image's longest edge, at most; a smaller edited image keeps its own size
+    val DISPLAY_LONG_EDGE = 3840
+    // The Display image's WebP quality, 0 to 100
+    val DISPLAY_WEBP_QUALITY = 90
+    // How long after the last change of an Edit's head its render is queued, each change putting it off again
+    val RENDER_DEBOUNCE_MS = 1500
 
   object AssetView:
     val PREVIEW_BOX_PIXELS = 200
@@ -177,6 +183,8 @@ object Const:
   object DataStore:
     val CONTENT = "content"
     val PREVIEW = "preview"
+    // The Display image of an edited asset, beside its Preview: a content type and a directory of the file store
+    val DISPLAY = "display"
     val FILE = "file"
     val FILES = "files"
     val FACE = "face"
@@ -340,6 +348,10 @@ object Const:
       val ORIGINAL_MISSING = "The original file of this asset is missing"
       // A write of an Edit built on a head that has moved since (EditConflictException), answered with the current state
       val EDIT_CONFLICT = "This photo was changed elsewhere"
+      // A content URL's `v`, the revision of an edited rendition, that is no whole number, or a Display image asked for without
+      // one (ContentViewController)
+      val REVISION_NOT_A_NUMBER = "The revision must be a whole number"
+      val REVISION_REQUIRED = "A Display image is asked for by its revision"
       // A head move to a step the Edit no longer has, or never had
       val EDIT_STEP_NOT_FOUND = "The Edit has no step %d"
       // A write of an Edit whose head or step is not a whole number from 0, or with no Edit (EditController)

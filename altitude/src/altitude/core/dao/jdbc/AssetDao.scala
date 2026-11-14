@@ -311,6 +311,15 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
   override def getAssetsToPurge(assetIds: Option[Set[String]]): List[Asset] =
     lockAssets(assetIds, isRecycled = Some(true))
 
+  override def lockUnpurged(assetId: String): Boolean =
+    val sql = s"""
+      SELECT id
+        FROM asset
+       WHERE ${FieldConst.REPO_ID} = ? AND id = ? AND ${FieldConst.Asset.IS_PURGED} = FALSE
+      $forNoKeyUpdate
+      """
+    manyBySqlQuery(sql, List(RequestContext.getRepository.persistedId, assetId)).nonEmpty
+
   override def lockTriaged(assetIds: Set[String]): List[Asset] =
     lockAssets(Some(assetIds), isRecycled = None, triagedOnly = true)
 

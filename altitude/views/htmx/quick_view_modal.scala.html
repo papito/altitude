@@ -1,5 +1,4 @@
 @import altitude.core.Api
-@import altitude.core.Const
 @import altitude.core.RequestContext
 @import altitude.core.models.Asset
 @import altitude.core.models.Folder
@@ -24,7 +23,7 @@
     } else {
     <ul class="previews">
         @for(asset <- assets) {
-        <li><img src="@{Util.contentUrl(Const.DataStore.PREVIEW, asset.persistedId)}" alt="@{asset.fileName}" loading="lazy" draggable="false"></li>
+        <li><img src="@{Util.previewUrl(asset)}" alt="@{asset.fileName}" loading="lazy" draggable="false"></li>
         }
     </ul>
     }

@@ -57,9 +57,9 @@ object EditController:
 
 /**
  * The Edit's JSON API (`AssetEditService`): an asset's Edit and its History, a step, a head move (Undo, Redo and a jump from the
- * History) and the render status, all the holder of Edit images'. An unknown asset, or another Library's, is a 404; a refused
- * Edit or body, and an asset that cannot be edited (no still image, or in the trash), a 400; a write built on a head that has
- * moved since a 409 carrying the current state, which the client adopts.
+ * History), the render status and auto-straighten, all the holder of Edit images'. An unknown asset, or another Library's, is a
+ * 404; a refused Edit or body, and an asset that cannot be edited (no still image, or in the trash), a 400; a write built on a
+ * head that has moved since a 409 carrying the current state, which the client adopts.
  */
 class EditController(using logger: Logger) extends BaseController:
   private val prefix = "api/edit"
@@ -102,6 +102,19 @@ class EditController(using logger: Logger) extends BaseController:
   @cask.get(f"/$prefix/r/:repoId/asset/:assetId/status")
   def status(repoId: String, assetId: String)(using request: Request): Response[String] =
     answeringJson(jsonResponse(EditController.statusJson(App.altitude.service.assetEdit.status(assetId))))
+
+  /**
+   * The Straighten that levels the lines of the asset's original as the Edit in `recipe` (its JSON) turns and mirrors it, which
+   * the Straighten's Auto button sets: `{angle}`. Nothing is stored.
+   */
+  @requireLogin()
+  @requirePermission(Permission.EditImages)
+  @cask.get(f"/$prefix/r/:repoId/asset/:assetId/auto-straighten")
+  def autoStraighten(repoId: String, assetId: String, recipe: Option[String] = None)(using request: Request): Response[String] =
+    answeringJson {
+      val edit = EditRecipe.parse(recipe.getOrElse(throw ValidationException(C.Msg.Err.EDIT_RECIPE_REQUIRED)))
+      jsonResponse(ujson.Obj(fields.ANGLE -> App.altitude.service.assetEdit.autoStraighten(assetId, edit)))
+    }
 
   /** A write's answer: the new state, or a 409 with the current one when the head has moved since the client saw it */
   private def answeringEdit(write: => EditState): Response[String] =

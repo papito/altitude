@@ -138,6 +138,8 @@ object Api:
       val MINE = "mine"
       // A 409's current state, beside its error
       val STATE = "state"
+      // Auto-straighten's answer: the Straighten that levels the image's lines
+      val ANGLE = "angle"
       // The asset detail's Edit at its head, when it has one, and whether the account may edit the asset
       val EDIT = "edit"
       val EDITABLE = "editable"

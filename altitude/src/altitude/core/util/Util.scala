@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory
 import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.RequestContext
+import altitude.core.models.Asset
 
 object Util:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -79,6 +80,15 @@ object Util:
    */
   def contentUrl(dataType: String, itemId: String): String =
     s"/${Const.DataStore.CONTENT}/r/${RequestContext.getRepository.persistedId}/$dataType/$itemId"
+
+  /**
+   * The URL of an asset's Preview as the grid and Quick view show it: the edited Preview, by its revision (`?v=<editRev>`), for
+   * an asset with edited renditions, and the original's otherwise. Curation keeps the original's ([[contentUrl]]): it judges
+   * captures, not edits.
+   */
+  def previewUrl(asset: Asset): String =
+    val url = contentUrl(Const.DataStore.PREVIEW, asset.persistedId)
+    if asset.editRev > 0 then s"$url?v=${asset.editRev}" else url
 
   private val shortDateFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
 

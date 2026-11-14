@@ -249,8 +249,8 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
     }
 
     val assetEdit: dao.AssetEditDao = dataSourceType match {
-      case Const.DbEngineName.POSTGRES => new dao.jdbc.AssetEditDao(app.config) with dao.postgres.PostgresOverrides
-      case Const.DbEngineName.SQLITE => new dao.jdbc.AssetEditDao(app.config) with dao.sqlite.SqliteOverrides
+      case Const.DbEngineName.POSTGRES => new dao.postgres.AssetEditDao(app.config)
+      case Const.DbEngineName.SQLITE => new dao.sqlite.AssetEditDao(app.config)
       case _ => throw IllegalArgumentException(s"Unknown datasource [$dataSourceType]")
     }
 
@@ -367,13 +367,24 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
       s"Undated Sequence candidates: $candidates (${Const.Sequence.UNDATED_CANDIDATES_PER_CORE} per core, $cores cores)")
     candidates
 
-  // The app's config, with the dispatcher the import's work runs on
+  /**
+   * How many Edits are rendered at once (`EditRenderService`): a quarter of the cores, at least one. A render decodes a whole
+   * original and works on floats, so it is bounded apart from the import's threads.
+   */
+  final val editRenderParallelism: Int = Math.max(1, Runtime.getRuntime.availableProcessors / 4)
+
+  // The app's config, with the dispatchers the import's work and the Edits' renders run on
   val actorSystem: ActorSystem[AltitudeActorSystem.Command] =
     val importDispatcherConfig = ConfigFactory.parseString(s"""
       altitude.import-dispatcher {
         type = Dispatcher
         executor = "thread-pool-executor"
         thread-pool-executor.fixed-pool-size = $importParallelism
+      }
+      altitude.edit-render-dispatcher {
+        type = Dispatcher
+        executor = "thread-pool-executor"
+        thread-pool-executor.fixed-pool-size = $editRenderParallelism
       }
     """)
     ActorSystem[AltitudeActorSystem.Command](
@@ -387,6 +398,10 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
    */
   final val importDispatcher: ExecutionContextExecutor =
     actorSystem.dispatchers.lookup(DispatcherSelector.fromConfig("altitude.import-dispatcher"))
+
+  /** Where the Edits are rendered (`EditRenderService`), `editRenderParallelism` at once */
+  final val editRenderDispatcher: ExecutionContextExecutor =
+    actorSystem.dispatchers.lookup(DispatcherSelector.fromConfig("altitude.edit-render-dispatcher"))
 
   // SQLite refreshes its planner statistics hourly, on the write connection between transactions, and once more at cleanup
   private val sqliteOptimizing: Option[Cancellable] = Option.when(dataSourceType == Const.DbEngineName.SQLITE) {
@@ -479,6 +494,8 @@ class Altitude(val dbEngineOverride: Option[String] = None, newSceneEmbedder: ()
     // Before the transaction manager closes the pools: each queue finishes what it has accepted, up to a limit
     service.importPipeline.shutdown()
     service.purgePipeline.shutdown()
+    // A render cut off, or not yet queued, is queued again at the next startup
+    service.editRender.shutdown()
     // After the import has stopped: its threads run the Scene models
     sceneEmbedder.close()
 

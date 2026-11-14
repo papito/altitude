@@ -331,4 +331,29 @@ import altitude.core.models.EditRecipe
     label(id.copy(aspect = "16:9", portrait = Some(true), keepInside = false), id) shouldBe "Revert to original"
     label(id, id.copy(aspect = "free")) shouldBe "Crop"
   }
+
+  test("Every Edit of the shared vectors parses as written, and has the edited size they give") {
+
+    /**
+     * Setup:
+     *
+     * The recipes of `test/resources/edit/vectors.json`, which the Edit panel's modules read too: those of its tone and
+     * saturation groups, and those of its geometry group with the upright size of each.
+     *
+     * Assertions:
+     *
+     * Each parses to an Edit whose JSON is the recipe as written, so it is normalized already. Each geometry recipe's edited size
+     * is the one the vectors give for its upright size.
+     */
+    val vectors = ujson.read(getClass.getResourceAsStream("/edit/vectors.json").readAllBytes())
+    val recipes = List("tone", "saturation", "geometry").flatMap(group => vectors(group).arr.map(_("recipe")))
+    recipes.size should be > 30
+    recipes.foreach(json => EditRecipe.parse(json).toJson shouldBe json)
+    vectors("geometry").arr.foreach {
+      vector =>
+        val Seq(width, height) = vector("upright").arr.map(_.num.toInt).toSeq: @unchecked
+        val (editedWidth, editedHeight) = EditRecipe.parse(vector("recipe")).editedSize(width, height)
+        ujson.Arr(editedWidth, editedHeight) shouldBe vector("edited")
+    }
+  }
 }
