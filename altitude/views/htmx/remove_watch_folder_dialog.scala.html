@@ -1,0 +1,31 @@
+@import altitude.core.Api
+@import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.models.WatchFolder
+
+@* The Remove dialog of a Watch folder card's ⋯ menu on the Import page (GET /htmx/watch-folders/r/:repoId/dialogs/remove,
+   an Admin's), a popover dialog below the card's trigger. Removing a Watch folder deletes nothing on the server and
+   nothing of the Library, which it says. As every confirmation of a removal, it leaves initial focus on the close
+   control, so opening it cannot press its button. *@
+@(watchFolder: WatchFolder)
+
+<div id="removeWatchFolder"
+     x-data
+     data-app-fragment="modal"
+     data-app-modal-title="@{ Const.UI.REMOVE_WATCH_FOLDER_DIALOG_TITLE.format(watchFolder.name) }"
+     data-app-dialog-return-focus="#addWatchFolderBtn"
+     data-app-success-event="WATCH_FOLDERS_CHANGED_EVENT">
+    <p>
+        <span class="path">@watchFolder.path</span> is no longer scanned. Its files stay on the server, and what it imported
+        stays in the Library and in the Import history.
+    </p>
+    <div class="actions">
+        <button type="button"
+                class="action-button error"
+                hx-delete="/htmx/watch-folders/r/@{ RequestContext.getRepository.persistedId }/watch-folder"
+                hx-vals='{"@{Api.Field.WatchFolder.WATCH_FOLDER_ID}": "@watchFolder.persistedId"}'
+                hx-swap="none"
+                hx-trigger="click">Remove</button>
+        <button type="button" class="action-button" x-on:click="$store.modal.close()">Cancel</button>
+    </div>
+</div>

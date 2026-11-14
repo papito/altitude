@@ -31,13 +31,19 @@ import altitude.core.models.FaceImages
 import altitude.core.models.Folder
 import altitude.core.models.Histogram
 import altitude.core.models.ImageQuality
+import altitude.core.models.Import
+import altitude.core.models.ImportFile
+import altitude.core.models.ImportOutcome
 import altitude.core.models.Permissions
 import altitude.core.models.Person
 import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.models.UserMetadata
+import altitude.core.models.WatchFileState
+import altitude.core.models.WatchFolderFile
 import altitude.core.service.FaceDetectionService
 import altitude.core.service.FaceRecognitionService
+import altitude.core.service.WatchFolderService
 import altitude.core.util.Util
 
 object TestContext {
@@ -83,7 +89,12 @@ object TestContext {
     "metadata_field",
     "metadata_parameter",
     "stats",
-    "search_document")
+    "search_document",
+    "import",
+    "import_file",
+    "watch_folder",
+    "watch_folder_file"
+  )
 }
 
 class TestContext(val testApp: Altitude) {
@@ -286,6 +297,68 @@ class TestContext(val testApp: Altitude) {
         taken.map(_ => "exif_original").orNull,
         assetId
       )
+    }
+  }
+
+  /** The context repository's Imports as the Import history lists them: the ones in progress first, then the newest first */
+  def imports: List[Import] = testApp.service.imports.history(shown = Int.MaxValue).entries.map(_.anImport)
+
+  /**
+   * The files of an Import of the context repository in path order, those of one outcome when `outcome` is given; an Import that
+   * is not the repository's is not found
+   */
+  def importFiles(importId: String, outcome: Option[ImportOutcome] = None): List[ImportFile] =
+    testApp.service.imports.filesShown(importId, outcome, shown = Int.MaxValue).files
+
+  /** What a Watch folder of the context repository remembers of the files of its directory */
+  def watchFolderMemory(watchFolderId: String): List[WatchFolderFile] =
+    testApp.txManager.asReadOnly(testApp.DAO.watchFolderFile.ofWatchFolder(watchFolderId))
+
+  /**
+   * Whether a scan of the Watch folder is running in the instance of `service`, or a file one handed to the import pipeline is in
+   * it still: the pipeline's last stage has not told the Watch folder what became of it. The service keeps both in memory, for
+   * itself, with nothing stored to read the second from, and its cards show the first for the context repository's Watch folders
+   * alone, so both are read off its fields, whatever Library the Watch folder is in.
+   */
+  def isWatchFolderWorking(watchFolderId: String, service: WatchFolderService = testApp.service.watchFolder): Boolean = {
+    // A field of the service by its name in the source; the compiler prefixes the name of one a closure reads
+    def state(name: String): AnyRef = {
+      val field =
+        classOf[WatchFolderService].getDeclaredFields.find(f => f.getName == name || f.getName.endsWith("$$" + name)).get
+      field.setAccessible(true)
+      field.get(service)
+    }
+
+    val scanning = state("scanning").asInstanceOf[java.util.Set[String]]
+    val inFlight = state("inFlight").asInstanceOf[java.util.Map[String, AnyRef]].values.asScala.map {
+      file =>
+        val watchFolder = file.getClass.getDeclaredMethod("watchFolderId")
+        watchFolder.setAccessible(true)
+        watchFolder.invoke(file)
+    }
+
+    scanning.contains(watchFolderId) || inFlight.exists(_ == watchFolderId)
+  }
+
+  /**
+   * Lets the rest of the Watch folders' files pass without waiting for it: every file not read yet, of every Watch folder, is
+   * remembered as first seen a minute ago, so the next scan may read it. What a scan does within the rest is
+   * `WatchFolderServiceTests`' to wait for.
+   */
+  def letWatchedFilesRest(): Unit = {
+    val aMinuteAgo = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1)
+    val firstSeen: Any = testApp.dataSourceType match {
+      case C.DbEngineName.SQLITE => aMinuteAgo.toLocalDateTime.format(SqliteOverrides.DATETIME_FORMATTER)
+      case C.DbEngineName.POSTGRES => aMinuteAgo
+      case _ => throw new IllegalArgumentException("Unsupported data source type")
+    }
+
+    testApp.txManager.withTransaction {
+      new QueryRunner().update(
+        RequestContext.getConn,
+        "UPDATE watch_folder_file SET last_seen_at = ? WHERE state = ?",
+        firstSeen.asInstanceOf[Object],
+        WatchFileState.Seen.dbValue): Unit
     }
   }
 

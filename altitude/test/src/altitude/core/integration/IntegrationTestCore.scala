@@ -130,6 +130,20 @@ abstract class IntegrationTestCore
   def amongManyUnknownIds(ids: Set[String]): Set[String] =
     ids ++ (1 to 70000).map(n => f"unknown-$n%028d")
 
+  /** Replaces the repository's `files` directory with a plain file, so storing any asset of the repository fails */
+  def breakFileStore(repository: Repository): Unit = {
+    val files =
+      java.nio.file.Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, repository.persistedId, Const.DataStore.FILES)
+    org.apache.commons.io.FileUtils.deleteDirectory(files.toFile)
+    java.nio.file.Files.createDirectories(files.getParent)
+    java.nio.file.Files.createFile(files): Unit
+  }
+
+  /** Puts the repository's `files` directory back after [[breakFileStore]] */
+  def restoreFileStore(repository: Repository): Unit =
+    java.nio.file.Files.delete(
+      java.nio.file.Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, repository.persistedId, Const.DataStore.FILES))
+
   def switchContextUser(user: User): Unit = {
     testApp.service.user.switchContextToUser(user)
   }
@@ -207,6 +221,30 @@ abstract class IntegrationTestCore
       firstThread.join()
     }
     firstFailure.get.foreach(throw _)
+  }
+
+  /** Has the database refuse `event` (`DELETE`, `UPDATE OF <column>`) on the row of `table` with the ID until the cleanup runs */
+  protected def refuse(event: String, table: String, rowId: String): () => Unit = {
+    val (create, drop) = testApp.dataSourceType match {
+      case Const.DbEngineName.POSTGRES =>
+        (
+          List(
+            "CREATE FUNCTION refused_by_test() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'Refused by the test'; END $$ " +
+              "LANGUAGE plpgsql",
+            s"CREATE TRIGGER refused_by_test BEFORE $event ON $table FOR EACH ROW WHEN (OLD.id = '$rowId') " +
+              "EXECUTE FUNCTION refused_by_test()"
+          ),
+          List(s"DROP TRIGGER refused_by_test ON $table", "DROP FUNCTION refused_by_test()"))
+      case _ =>
+        (
+          List(
+            s"CREATE TRIGGER refused_by_test BEFORE $event ON $table WHEN OLD.id = '$rowId' " +
+              "BEGIN SELECT RAISE(ABORT, 'Refused by the test'); END"),
+          List("DROP TRIGGER refused_by_test"))
+    }
+
+    testApp.txManager.withTransaction(create.foreach(update(_)))
+    () => testApp.txManager.withTransaction(drop.foreach(update(_)))
   }
 
   /** Runs `f` with the Setting saved as `value`, and saves its default back afterwards, so the other suites see the seed */

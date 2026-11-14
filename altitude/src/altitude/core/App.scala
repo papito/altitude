@@ -27,6 +27,7 @@ import altitude.core.routes.web.partial.AlbumActionController
 import altitude.core.routes.web.partial.AssetActionController
 import altitude.core.routes.web.partial.CurationActionController
 import altitude.core.routes.web.partial.FolderActionController
+import altitude.core.routes.web.partial.ImportHistoryController
 import altitude.core.routes.web.partial.LibraryActionController
 import altitude.core.routes.web.partial.LocationActionController
 import altitude.core.routes.web.partial.NavController
@@ -40,6 +41,7 @@ import altitude.core.routes.web.partial.TrashActionController
 import altitude.core.routes.web.partial.TriageController
 import altitude.core.routes.web.partial.UserActionController
 import altitude.core.routes.web.partial.ViewSettingsActionController
+import altitude.core.routes.web.partial.WatchFolderController
 
 object App extends cask.Main:
   /**
@@ -61,9 +63,15 @@ object App extends cask.Main:
   // Check if the instance is in setup mode, and cache the value of isInitialized in memory for quick access.
   altitude.setIsInitializedState()
 
+  // Before anything is offered to the import queue: what is pending now was cut off when the server last stopped. The Import
+  // history is pruned here too, for a server that restarts more often than the daily prune runs
+  altitude.service.imports.startup()
   altitude.service.library.pruneDanglingAssets()
   altitude.service.library.requeuePurgePending()
   altitude.service.library.reconcileStats()
+  // The startup scan of the Watch folders, which catches up on what arrived while the server was down, and then one every
+  // interval: after the Imports a stop interrupted are failed, so no scan's Import is taken for one of them
+  altitude.service.watchFolder.start()
 
   given logger: Logger = LoggerFactory.getLogger(getClass)
 
@@ -114,5 +122,7 @@ object App extends cask.Main:
     new SearchPanelController,
     new TrashActionController,
     new TriageController,
+    new ImportHistoryController,
+    new WatchFolderController,
     new ViewSettingsActionController
   )

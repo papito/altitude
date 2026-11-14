@@ -5,9 +5,9 @@
 @* An option of the advanced search panel's Folder or Locations combobox (htmx/search_options_folders,
    htmx/search_options_locations): a folder or a Location by its path. The option carries what its chip needs once it is
    chosen, its ID and its label, the path as one line; the names above its own are in `.ancestors`, so the stylesheet
-   can set them back. *@
+   can set them back. It has no element ID of its own: the combobox whose listbox takes it gives it one, since one page
+   can hold several comboboxes offering the same folder. *@
 <li role="option"
-    id="searchOption-@{option.id}"
     data-option-id="@{option.id}"
     data-option-label="@{option.label}">
     <span class="name" data-option-name>@if(option.ancestors.nonEmpty) {<span class="ancestors">@{option.ancestors.mkString(NamedPath.SEPARATOR)}@{NamedPath.SEPARATOR}</span>}@{option.name}</span>

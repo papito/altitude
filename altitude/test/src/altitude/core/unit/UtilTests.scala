@@ -26,6 +26,28 @@ import altitude.core.util.Util
     Util.humanReadableDate(LocalDate.parse("2024-12-25")) shouldEqual "Wednesday, December 25, 2024"
   }
 
+  test("A number of minutes reads as minutes under an hour, and as hours with the minutes left from an hour on") {
+
+    /**
+     * Setup:
+     *
+     * Numbers of minutes from 2 up to 6 hours, as the Watch folder scan interval takes them.
+     *
+     * Assertions:
+     *
+     * Under an hour it reads as its minutes, "10 min". A whole number of hours reads as its hours alone, "2 h", and anything else
+     * from an hour on as its hours and the minutes left, "1 h 30 min".
+     */
+    Util.minutesText(2) shouldEqual "2 min"
+    Util.minutesText(10) shouldEqual "10 min"
+    Util.minutesText(59) shouldEqual "59 min"
+    Util.minutesText(60) shouldEqual "1 h"
+    Util.minutesText(90) shouldEqual "1 h 30 min"
+    Util.minutesText(120) shouldEqual "2 h"
+    Util.minutesText(125) shouldEqual "2 h 5 min"
+    Util.minutesText(360) shouldEqual "6 h"
+  }
+
   test("A duration reads as minutes and seconds, with hours only from an hour on") {
 
     /**

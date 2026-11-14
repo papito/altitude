@@ -1,11 +1,18 @@
 package altitude.core.integration
 
+import altitude.test.IntegrationTestUtil
 import altitude.test.TestAltitudeApp
 import altitude.test.TestFocus
+import java.nio.file.Files
 import java.sql.SQLException
 import java.time.Instant
+import org.apache.commons.io.FileUtils
 import org.scalatest.DoNotDiscover
+import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatest.time.Millis
+import org.scalatest.time.Seconds
+import org.scalatest.time.Span
 
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
@@ -13,8 +20,11 @@ import scala.concurrent.duration.DurationInt
 import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.models.Settings
+import altitude.core.models.WatchFileState
+import altitude.core.models.WatchFolderSpec
 import altitude.core.service.ContentSigner
 import altitude.core.suites.TestDatabase
+import altitude.core.util.Sha256
 
 /**
  * What a server starting against this test database does: creates the schema of a fresh database, migrates only when behind,

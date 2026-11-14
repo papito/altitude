@@ -83,6 +83,83 @@ import altitude.core.models.Settings
     current.dbPostgresReadStatementTimeout shouldBe 30
     current.pipelineShutdownTimeout shouldBe 30
     current.importParallelism shouldBe 0
+    current.importHistoryDays shouldBe 90
+    current.watchFolderScanInterval shouldBe 10
+  }
+
+  test("The Watch folder scan interval is a Live setting of the Operations section, in whole minutes from 2 to 360") {
+
+    /**
+     * Setup:
+     *
+     * The registry's entry of the Watch folder scan interval, and values validated and saved for it.
+     *
+     * Assertions:
+     *
+     * It is a Live setting of the Operations section on both engines, labelled in minutes, with a default of 10. A whole number
+     * of minutes from 2 to 360, six hours, is valid, both bounds included. A saved value reaches its accessor at once, with no
+     * restart waiting.
+     *
+     * Edge cases:
+     *
+     * One minute, 361 minutes and a fraction of a minute are refused, each saying why. The help says what the minutes are, and
+     * that a file is read once it has been seen unchanged for at least 5 seconds, not that the interval is its rest.
+     */
+    val name = Settings.WATCH_FOLDER_SCAN_INTERVAL
+    val definition = Settings.byName(name)
+    definition.group shouldBe SettingGroup.Operations
+    definition.kind shouldBe SettingKind.Live
+    definition.engine shouldBe None
+    definition.label shouldBe "Watch folder scan interval (min)"
+    testApp.settings.current.default(name) shouldBe "10"
+    testApp.settings.current.watchFolderScanInterval shouldBe 10
+
+    testApp.settings.validate(Map(name -> "2")) shouldBe empty
+    testApp.settings.validate(Map(name -> "360")) shouldBe empty
+    testApp.settings.validate(Map(name -> "1")) shouldBe Map(name -> "Must be at least 2")
+    testApp.settings.validate(Map(name -> "361")) shouldBe Map(name -> "Must be at most 360")
+    testApp.settings.validate(Map(name -> "7.5")) shouldBe Map(name -> "Must be a whole number")
+
+    definition.help should startWith("Minutes between two scans of the Watch folders, after the scan at startup.")
+    definition.help should include("seen unchanged for at least 5 seconds")
+    definition.help should include("second scan after it appears")
+    (definition.help should not).include("rests")
+
+    testApp.settings.save(Map(name -> "15"))
+    testApp.settings.current.watchFolderScanInterval shouldBe 15
+    testApp.settings.pendingRestart shouldBe empty
+  }
+
+  test("The Import history Setting is a Live setting of the Operations section, in whole days from 0") {
+
+    /**
+     * Setup:
+     *
+     * The registry's entry of the Import history Setting, and values validated and saved for it.
+     *
+     * Assertions:
+     *
+     * It is a Live setting of the Operations section on both engines. A whole number of days from 0 up is valid, 0 among them,
+     * which keeps the history forever. A saved value reaches its accessor at once, with no restart waiting.
+     *
+     * Edge cases:
+     *
+     * A negative number and a fraction of a day are refused.
+     */
+    val name = Settings.IMPORT_HISTORY_DAYS
+    val definition = Settings.byName(name)
+    definition.group shouldBe SettingGroup.Operations
+    definition.kind shouldBe SettingKind.Live
+    definition.engine shouldBe None
+
+    testApp.settings.validate(Map(name -> "0")) shouldBe empty
+    testApp.settings.validate(Map(name -> "3650")) shouldBe empty
+    testApp.settings.validate(Map(name -> "-1")) shouldBe Map(name -> "Must be at least 0")
+    testApp.settings.validate(Map(name -> "1.5")) shouldBe Map(name -> "Must be a whole number")
+
+    testApp.settings.save(Map(name -> "30"))
+    testApp.settings.current.importHistoryDays shouldBe 30
+    testApp.settings.pendingRestart shouldBe empty
   }
 
   test("A save replaces the snapshot and the rows, and a value not submitted keeps its current value") {

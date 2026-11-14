@@ -58,6 +58,16 @@ object Util:
   def utcText(instant: Instant, withTime: Boolean): String =
     (if withTime then utcDateTimeFormatter else utcDateFormatter).format(instant)
 
+  /**
+   * A number of minutes as a person reads it: "10 min" under an hour, "2 h" for whole hours, "1 h 30 min" otherwise. The Watch
+   * folder scan interval is shown so.
+   */
+  def minutesText(minutes: Int): String =
+    val (hours, rest) = (minutes / 60, minutes % 60)
+    if hours == 0 then s"$rest min"
+    else if rest == 0 then s"$hours h"
+    else s"$hours h $rest min"
+
   private val dateFormatter = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.ENGLISH)
 
   /** A calendar day as a date group header reads it, "Sunday, September 6, 2026". No zone is involved: the day is the day */

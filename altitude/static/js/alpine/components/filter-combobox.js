@@ -16,7 +16,9 @@
  * The server matches and renders the options, and the component only places them: typing asks the
  * route for the options of the text (once typing pauses, and only the latest answer is shown), the
  * fragment's `role="option"` elements go into the listbox as they come, less the ones already
- * chosen, and the start of each word a typed word matches is marked in an option's name
+ * chosen, each given an element ID of the listbox's own (`<listbox ID>-<option ID>`, what
+ * `aria-activedescendant` names: the fragment carries none, since several comboboxes of a page can
+ * offer one name), and the start of each word a typed word matches is marked in an option's name
  * (`data-option-name`; `markMatches`, the server's rule: a typed word matches the start of a word of
  * the name). Down and Up open the listbox and move the active option, wrapping; Enter picks it, and
  * so does a click; Escape closes the listbox alone. While the options of what was just typed are on
@@ -327,6 +329,8 @@ export function filterCombobox() {
                     return
                 }
 
+                // Named for this listbox: another combobox of the page may offer the same name
+                optionEl.id = `${listboxEl.id}-${carriedBy(optionEl).id}`
                 optionEl.setAttribute("aria-selected", "false")
                 markMatches(
                     optionEl.querySelector(`[${Const.attributes.optionName}]`),

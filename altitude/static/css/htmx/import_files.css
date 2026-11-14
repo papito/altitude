@@ -1,0 +1,85 @@
+/* The Import files of an expanded Import (htmx/import_files), scoped by the Import history's section; an outcome's colors
+   are pages/pipeline.css's and the count line's rule htmx/import_history.css's */
+
+/* The panel under an Import: the filter, the files, the count line */
+#importHistory .files {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius);
+  background-color: hsl(from var(--theme-neutral-3) h s l / 0.08);
+}
+
+/* The host before the page has loaded the list into it (htmx/import_history) */
+#importHistory [data-app-view-url]:empty {
+  display: none;
+}
+
+/* The outcome filter: a chip for every file, in the text's color, and one per outcome in its own; the one shown is
+   filled */
+#importHistory .filters {
+  --outcome-color: var(--theme-neutral-4);
+  --outcome-fill: hsl(from var(--theme-neutral-4) h s l / 0.16);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+#importHistory .filters button {
+  padding: var(--chip-padding);
+  border: var(--border-hairline) var(--outcome-color);
+  border-radius: var(--chip-border-radius);
+  background: none;
+  color: var(--outcome-color);
+  font-family: inherit;
+  font-size: var(--font-size-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#importHistory .filters button[aria-pressed="true"] {
+  background-color: var(--outcome-fill);
+}
+
+#importHistory .files ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A file: its path and, at the right, its outcome; its reason on a line of its own under them */
+#importHistory .files li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-5);
+  row-gap: var(--space-1);
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-hairline) hsl(from var(--theme-neutral-3) h s l / 0.2);
+}
+
+#importHistory .files .path {
+  overflow-wrap: anywhere;
+}
+
+#importHistory .files .outcome {
+  color: var(--outcome-color);
+  white-space: nowrap;
+}
+
+#importHistory .files .outcome a {
+  color: inherit;
+}
+
+#importHistory .files small {
+  grid-column: 1 / -1;
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+  overflow-wrap: anywhere;
+}
+
+#importHistory .files .none {
+  margin: 0;
+  color: var(--theme-neutral-3);
+}

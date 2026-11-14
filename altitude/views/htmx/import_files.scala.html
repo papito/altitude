@@ -1,0 +1,63 @@
+@import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.models.ImportFiles
+@import altitude.core.models.ImportOutcome
+
+@(listed: ImportFiles, shown: Int)
+
+@* The Import files of an expanded Import of the Import history (GET /htmx/import/r/:repoId/imports/:importId/files, a holder
+   of Import's; htmx/import_history holds its empty host): the outcome filter, a chip for every file and one per outcome
+   that has files, each with its number, the one shown pressed; then the first `shown` files of the filter in path order,
+   each with its path, its outcome and, on a second line, its reason when it has one (a duplicate's is where the Library
+   has it); then how many of the filter's files are shown and a control for a step more, up to the most the list shows
+   (Const.ImportHistory). An imported file links to its asset's page, in a new tab since leaving the page ends an upload,
+   while its asset exists.
+
+   The root carries the route of the view it shows (`data-app-view-url`), and a filter chip and "Show more" the route of
+   the view they ask for (`data-app-view`): the page's script reads the view again as the Import changes, and shows
+   another on a click (js/import-status.js). *@
+
+@repoId = @{ RequestContext.getRepository.persistedId }
+@importId = @{ listed.anImport.persistedId }
+@sizes = @{ Const.ImportHistory }
+@count(n: Int) = @{ f"$n%,d" }
+
+@* The route of the Import's first `number` files, those of one outcome when one is given *@
+@view(outcome: Option[ImportOutcome], number: Int) = @{
+    s"/htmx/import/r/$repoId/imports/$importId/files?${outcome.fold("")(of => s"outcome=${of.dbValue}&")}shown=$number"
+}
+
+<div id="@sizes.fileListId(importId)" class="files" data-app-view-url="@view(listed.outcome, shown)">
+    <div class="filters" role="group" aria-label="Files by outcome">
+        <button type="button" aria-pressed="@listed.outcome.isEmpty" data-app-view="@view(None, sizes.FILES_STEP)">All @count(listed.anImport.total)</button>
+        @for(outcome <- ImportOutcome.settled :+ ImportOutcome.Pending if listed.anImport.count(outcome) > 0 || listed.outcome.contains(outcome)) {
+        <button type="button" class="@outcome.dbValue" aria-pressed="@listed.outcome.contains(outcome)" data-app-view="@view(Some(outcome), sizes.FILES_STEP)">@outcome.label @count(listed.anImport.count(outcome))</button>
+        }
+    </div>
+    @if(listed.files.isEmpty) {
+    <p class="none">No files</p>
+    } else {
+    <ul>
+        @for(file <- listed.files) {
+        <li class="@file.outcome.dbValue">
+            <span class="path">@file.relPath</span>
+            <span class="outcome">@((file.outcome, file.assetId)) match {
+                case (ImportOutcome.Imported, Some(assetId)) => {<a href="/r/@repoId/asset/@assetId" target="_blank" rel="noopener">@file.outcome.label <i class="fas fa-external-link-alt" aria-hidden="true"></i><span class="visually-hidden"> (opens in a new tab)</span></a>}
+                case _ => {@file.outcome.label}
+            }</span>
+            @file.reason.map { reason =>
+            <small>@if(file.outcome == ImportOutcome.Duplicate) {Already in the Library: }@reason</small>
+            }
+        </li>
+        }
+    </ul>
+    }
+    @if(listed.total > listed.files.size) {
+    <p class="shown">
+        Showing @count(listed.files.size) of @count(listed.total) files
+        @if(shown < sizes.MAX_FILES) {
+        <button type="button" class="action-button small" data-app-view="@view(listed.outcome, (shown + sizes.FILES_STEP).min(sizes.MAX_FILES))">Show more</button>
+        }
+    </p>
+    }
+</div>

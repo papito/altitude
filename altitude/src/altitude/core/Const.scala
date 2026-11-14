@@ -110,6 +110,54 @@ object Const:
    * The entries of the shared nav (`includes/nav`), by the key a page marks its own entry with (`current`): the main page's three
    * views, then a page each.
    */
+  // The Import history of the Import page (htmx/import_history) and the files of an expanded Import (htmx/import_files): how
+  // many each shows at first and adds with each "Show earlier Imports" or "Show more", the most each shows, and the IDs of an
+  // Import's elements there, which the status feed's messages (ImportStatusWsActor) and the page's script address
+  object ImportHistory:
+    val IMPORTS_STEP = 20
+    val MAX_IMPORTS = 500
+    val FILES_STEP = 50
+    val MAX_FILES = 500
+
+    def statusId(importId: String): String = s"importStatus-$importId"
+    def titleId(importId: String): String = s"importTitle-$importId"
+    def filesId(importId: String): String = s"importFiles-$importId"
+    def fileListId(importId: String): String = s"importFileList-$importId"
+
+  // The Watch folders (WatchFolderService), and the elements of the Import page's section of them (htmx/watch_folders)
+  object WatchFolder:
+    // How many times a file whose import fails is read in all, before it is parked
+    val MAX_ATTEMPTS = 3
+    // The days a file absent from its directory stays remembered when the Import history is kept forever
+    // (`import.history.days` at 0); otherwise it stays as long as an Import does
+    val FORGET_AFTER_DAYS = 30
+    // How long a file rests before it is read, in seconds: a scan reads a file only when a scan saw it with the same size and
+    // modified time at least this long before, however the two scans were asked for. A shorter rest would take a file a slow
+    // copy is still writing
+    val REST_SECONDS = 5
+
+    // Why a Watch folder is paused, as its card says it beside the chip
+    val DESTINATION_LOST = "destination folder is in the Trash"
+    val OWNER_DEACTIVATED = "its owner was deactivated"
+    val OWNER_DEMOTED = "its owner is no longer an Admin"
+    // Why a Watch folder's directory is unavailable, as its card says it beside the chip
+    val PATH_MISSING = "the path does not exist"
+    val PATH_NOT_DIRECTORY = "the path is not a directory"
+    val PATH_UNREADABLE = "the path is not readable"
+    val PATH_UNWRITABLE = "the path is not writable, so imported files cannot be deleted"
+    val PATH_OVERLAPS_DATA = "the path overlaps the app's data directory"
+    val PATH_HOLDS_DATA = "the path holds a directory of the app's own data: %s"
+    // What a scan that went on says of the directories of the Watch folder that it could not read: the one, or how many
+    // with the first of them
+    val DIRECTORY_UNREADABLE = "a directory could not be read, the rest is scanned: %s"
+    val DIRECTORIES_UNREADABLE = "%d directories could not be read, the rest is scanned; the first: %s"
+    val PATH_OVERLAPS = "the path overlaps the Watch folder \"%s\""
+    // Why a file of a Watch folder that could not be read failed
+    val UNREADABLE_FILE = "Cannot read the file"
+
+    def menuButtonId(watchFolderId: String): String = s"watchFolderMenuBtn-$watchFolderId"
+    def menuId(watchFolderId: String): String = s"watchFolderMenu-$watchFolderId"
+
   object NavEntry:
     val BROWSE: String = Search.View.DEFAULT
     val TRIAGE: String = Search.View.TRIAGE
@@ -184,6 +232,43 @@ object Const:
       // A file whose importing account is gone or deactivated when the import inserts it (LibraryService.persistAndIndex)
       val IMPORTER_GONE = "The account that imported this file no longer exists"
       val IMPORTER_DEACTIVATED = "The account that imported this file is deactivated"
+      // An uploaded file's relative path the upload routes refuse (RelPath.segments)
+      val PATH_EMPTY_NAME = "The path has an empty name"
+      val PATH_PARENT = "The path holds \"..\""
+      val PATH_IGNORED = "\"%s\" is a name imports ignore"
+      // An uploaded file with no content, which imports ignore
+      val EMPTY_FILE = "Empty files are not imported"
+      // A file sent to, or a close of, an upload's Import by another account than the one that opened it, or of an Import
+      // that is no upload (ImportService.ownUpload)
+      val FORBIDDEN_UPLOAD = "an upload takes files from the account that opened it"
+      // The number of files an Import is opened to expect that is no whole number from 0 (ImportController.openImport)
+      val EXPECTED_FILES_INVALID = "expectedFiles must be a whole number of files, 0 or more"
+      // A file dropped as a duplicate of a copy that is not an asset of the Library when the file is settled: the copy's own
+      // import failed, or the asset was recycled meanwhile (ImportService.settleDropped)
+      val COPY_NOT_IN_LIBRARY = "The copy it matched is not in the Library"
+      // A destination folder an Import cannot sort its files into (ImportService.open, FolderService.ensurePath)
+      val DESTINATION_IN_TRASH = "The destination folder is in the Trash"
+      // A file of an Import below a folder name the folder rule refuses, with the rule's own words
+      val DESTINATION_FOLDER_NAME = "A folder of the path cannot be created: %s"
+      // That reason for a folder whose name another folder there holds by the time it is added
+      val FOLDER_NAME_TAKEN = "its name is taken"
+      // A Watch folder's path the Watch folder dialog refuses (WatchFolderService), each under the path's field
+      val WATCH_PATH_INVALID = "This is not a path"
+      val WATCH_PATH_RELATIVE = "Enter an absolute path, one that starts at the root of the file system"
+      val WATCH_PATH_MISSING = "There is no such directory on the server"
+      val WATCH_PATH_NOT_DIRECTORY = "This is not a directory"
+      val WATCH_PATH_UNREADABLE = "The server cannot read this directory"
+      val WATCH_PATH_UNWRITABLE = "The server cannot write to this directory, so it cannot delete imported files"
+      val WATCH_PATH_OVERLAPS_DATA = "This path overlaps the app's data directory"
+      // The path against another Watch folder's: the other's name and path, then its Library when it is another one's
+      val WATCH_PATH_SAME = "This path is the Watch folder \"%s\"%s"
+      val WATCH_PATH_INSIDE = "This path is inside the Watch folder \"%s\" (%s)%s"
+      val WATCH_PATH_CONTAINS = "The Watch folder \"%s\" (%s) is inside this path%s"
+      val WATCH_PATH_OTHER_LIBRARY = " of the Library \"%s\""
+      // "Keep folder structure" with no folder chosen, in the Watch folder dialog as in the upload sections
+      val DESTINATION_REQUIRED = "Choose the folder to sort into"
+      // "Scan now" for a Watch folder that is paused
+      val WATCH_FOLDER_PAUSED = "The Watch folder is paused"
       // An Admin's own account, which it cannot deactivate, delete or take the Admin type from
       val OWN_ACCOUNT = "You cannot deactivate, delete or demote your own account"
       val INVALID_CONTENT_TYPE = "Invalid content type"
@@ -296,6 +381,11 @@ object Const:
     val DELETE_USER_DIALOG_TITLE = "Delete %s"
     val CHANGE_PASSWORD_DIALOG_TITLE = "Change password"
     val ACCOUNT_INFO_DIALOG_TITLE = "Your account"
+    // The Watch folder dialogs of the Import page (htmx/watch_folder_form, htmx/remove_watch_folder_dialog); an edit and
+    // the removal are titled by the Watch folder's name
+    val ADD_WATCH_FOLDER_DIALOG_TITLE = "Add Watch folder"
+    val EDIT_WATCH_FOLDER_DIALOG_TITLE = "Edit %s"
+    val REMOVE_WATCH_FOLDER_DIALOG_TITLE = "Remove %s"
     // The warning the folder, album and Location tabs open with for an account without Organize, which has nothing to add there:
     // "folders", "albums" or "Locations"
     val CANNOT_ORGANIZE = "You cannot create %s as you do not have the Permission to organize this Library"

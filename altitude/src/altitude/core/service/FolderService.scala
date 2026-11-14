@@ -19,16 +19,61 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
 
   /**
    * Adds the folder under `parentId`, or under the repository root when none is given. A parent that is no folder of the context
-   * repository, unknown or another repository's, is a `NotFoundException` that adds nothing.
+   * repository, unknown or another repository's, is a `NotFoundException` that adds nothing. It takes its turn among the creators
+   * of a folder of that name there (`FolderDao.lockName`), so it waits for an import that is creating the folder ([[ensurePath]])
+   * and is then refused as a duplicate, rather than failing that import's file. [[rename]] and [[move]] take the same turn for
+   * the name they bring a folder under, each one lock, while [[ensurePath]] takes its locks from the parent down, so no two of
+   * them wait on each other.
    */
   def add(name: String, parentId: Option[String] = None): Folder =
     txManager.withTransaction {
       val _parentId = parentId.map(getById(_).persistedId).getOrElse(RequestContext.getRepository.rootFolderId)
-      val folder = Folder(name = validName(name.trim), parentId = _parentId)
+      val folder = named(name, _parentId)
+      dao.lockName(_parentId, folder.nameKey)
       app.service.folder.add(folder)
     }
 
-  /** A folder name as stored, once it passes the name rule (`Validators.validName`) */
+  /**
+   * The folder at the end of `names` under `parentId`, each name a folder under the one before it; with no names, the parent
+   * itself. A folder is found by its name key among its parent's folders, as `folder_02` keeps it unique there: a live one is
+   * reused, a recycled one is restored, alone, as restoring an asset restores the folders above it, and a missing one is added.
+   * The creators of one folder take turns (`FolderDao.lockName`), so of two imports that both miss a folder, the second finds the
+   * one the first created. A name the folder rule refuses is a `ValidationException`, and a parent that is no folder of the
+   * context repository a `NotFoundException`; either leaves the folders as they were, in a transaction that is rolled back.
+   */
+  def ensurePath(parentId: String, names: Seq[String]): Folder =
+    txManager.withTransaction {
+      names.foldLeft(getById(parentId))(ensureChild)
+    }
+
+  /**
+   * The caller's turn, until its transaction ends, among the transactions that sort an import's file into the folder tree and
+   * those that delete a folder (`FolderDao.lockTree`). The completion of a file with a destination takes it before it reads the
+   * destination, and a delete before it reads what it deletes, so whichever goes second sees what the first committed: a
+   * completion finds its destination in the Trash, or a delete recycles the asset and the folders the completion put there.
+   */
+  def lockTree(): Unit =
+    txManager.withTransaction {
+      dao.lockTree()
+    }
+
+  /** The folder of the name under `parent`: the one there, restored if it was recycled, or a new one */
+  private def ensureChild(parent: Folder, name: String): Folder =
+    val wanted = named(name, parent.persistedId)
+
+    // Before the read: a creator that waits here reads the folder the one before it committed
+    dao.lockName(parent.persistedId, wanted.nameKey)
+    dao.getChild(parent.persistedId, wanted.nameKey) match
+      case Some(existing) =>
+        if existing.isRecycled then
+          logger.info(s"Restoring recycled folder [${existing.persistedId}] \"${existing.name}\", which an import sorts into")
+          setRecycledProp(existing, isRecycled = false)
+        existing.copy(isRecycled = false)
+      case None => add(wanted)
+
+  /** A folder to add under `parentId`: the name trimmed, and stored once it passes the name rule (`Validators.validName`) */
+  private def named(name: String, parentId: String): Folder = Folder(name = validName(name.trim), parentId = parentId)
+
   private def validName(name: String): String =
     Validators.validName(name, Api.Field.Folder.NAME, Api.Constraints.MAX_FOLDER_NAME_LENGTH)
 
@@ -136,6 +181,9 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
 
       val folderBeingMoved: Folder = getById(folderBeingMovedId)
 
+      // Its turn among the creators of a folder of its name in the destination, as for an add
+      dao.lockName(destFolderId, folderBeingMoved.nameKey)
+
       val data = Map(
         FieldConst.Folder.PARENT_ID -> destFolderId,
         FieldConst.Folder.NAME -> folderBeingMoved.name
@@ -153,6 +201,9 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
       logger.debug(s"Renaming folder [${folder.name}] to [$newName]")
 
       val folderForUpdate: Folder = folder.copy(name = validName(newName))
+
+      // Its turn among the creators of a folder of the new name beside it, as for an add
+      dao.lockName(folder.parentId, folderForUpdate.nameKey)
 
       val data = Map(FieldConst.Folder.NAME -> folderForUpdate.name, FieldConst.Folder.NAME_KEY -> folderForUpdate.nameKey)
 

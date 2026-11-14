@@ -29,6 +29,10 @@ object Api:
 
     val MAX_METADATA_FIELD_NAME_LENGTH = 250
 
+    // An Import's name is an uploaded folder's, which no file system lets pass 255
+    val MAX_IMPORT_NAME_LENGTH = 255
+    val MAX_WATCH_FOLDER_NAME_LENGTH = 80
+
   object Field:
     val USER_ID = "userId"
     val ASSET_ID = "assetId"
@@ -202,5 +206,37 @@ object Api:
     object Sort:
       val DIRECTION = "direction"
 
-    object Upload:
-      val UPLOAD_ID = "uploadId"
+    // The upload routes of the Import page (ImportController): an Import's name and destination folder as it is opened, a
+    // file's relative path and size, and what an answer says of the Import file
+    object Import:
+      val NAME = "name"
+      val DEST_FOLDER_ID = "destFolderId"
+      // How many files an upload is about to send to the Import it opens
+      val EXPECTED_FILES = "expectedFiles"
+      val REL_PATH = "relPath"
+      val SIZE_BYTES = "sizeBytes"
+      val OUTCOME = "outcome"
+      val REASON = "reason"
+
+    // The Watch folder dialog's fields (htmx/watch_folder_form), and the Watch folder an action of its card names
+    object WatchFolder:
+      val WATCH_FOLDER_ID = "watchFolderId"
+      val NAME = "name"
+      val PATH = "path"
+      // "Keep folder structure": on, the files are sorted under the destination folder; off, they land in Triage
+      val KEEPS_STRUCTURE = "keepsStructure"
+      val DEST_FOLDER_ID = "destFolderId"
+      val DELETES_IMPORTED = "deletesImported"
+
+    // A message of the import status feed (ImportStatusWsActor), as `hx-ws` reads one: the markup to swap in, the element it
+    // replaces and how, and for the page's script the Import it is the status of and whether that Import is closed; or, alone,
+    // that the socket is connected
+    object ImportStatus:
+      val TARGET = "target"
+      val SWAP = "swap"
+      val CONTENT = "content"
+      val IMPORT_ID = "importId"
+      val IS_CLOSED = "closed"
+      val CONNECTED = "connected"
+      // Alone in a message: the Library's Watch folders changed, and the page reads them again
+      val WATCH_FOLDERS = "watchFolders"

@@ -1,0 +1,117 @@
+/* The Import page's upload sections (includes/upload_sections), File upload and Folder upload, scoped by the ID of
+   their root */
+
+/* One section under the other */
+#importUploads {
+  display: grid;
+  align-content: start;
+  gap: var(--space-9);
+  min-width: 0;
+}
+
+/* A section's panel: the drop zone, the option under it, then the progress of its upload or what the last one came to */
+#importUploads form {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-6);
+  padding: var(--space-7);
+  border: var(--border-hairline) var(--panel-border-color);
+  border-radius: var(--radius-large);
+  background-color: var(--theme-neutral-2);
+}
+
+/* The dashed zone, its prompt and its button centered in it */
+#importUploads .drop-zone {
+  display: grid;
+  justify-items: center;
+  justify-self: stretch;
+  gap: var(--space-5);
+  padding: var(--space-9) var(--space-6);
+  border: var(--border-dashed) var(--dashed-border-color);
+  border-radius: var(--radius-large);
+  text-align: center;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out;
+}
+
+#importUploads .drop-zone > i {
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-display);
+}
+
+/* Something is dragged over the zone and a drop would upload it */
+#importUploads .drop-zone.over {
+  border-color: var(--theme-accent);
+  background-color: hsl(from var(--theme-accent) h s l / 0.12);
+}
+
+/* The other section's upload is running, or this one's: the zone takes nothing until it ends */
+#importUploads .drop-zone.waiting {
+  opacity: 0.5;
+}
+
+#importUploads .toggle-group button:disabled {
+  cursor: default;
+}
+
+/* The destination folder is the advanced search panel's Folder field, whose rules are scoped by the panel's class
+   (htmx/search_panel.css): its host wears the class for them and draws no box, so none of the panel's surface shows and
+   the field, its error and the mapping example lie in the section's own column */
+#importUploads .destination {
+  display: contents;
+}
+
+/* "into" before the field's box, on its row */
+#importUploads .field {
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  justify-self: stretch;
+  column-gap: var(--space-4);
+}
+
+#importUploads label {
+  font-size: var(--font-size-base);
+}
+
+#importUploads form div.error {
+  margin-top: 0;
+}
+
+/* The example of the mapping, a path of the tree and where it lands, set back on the accent's edge */
+#importUploads .mapping {
+  margin: 0;
+  padding-left: var(--space-5);
+  border-left: var(--border-heavy) var(--theme-accent);
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-text);
+  overflow-wrap: anywhere;
+}
+
+/* The upload's progress: the bar, then the files and bytes sent with Cancel at the right, then the reminder */
+#importUploads .progress {
+  display: grid;
+  justify-self: stretch;
+  gap: var(--space-3);
+}
+
+#importUploads progress {
+  width: 100%;
+  accent-color: var(--theme-accent);
+}
+
+#importUploads .progress > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  font-variant-numeric: tabular-nums;
+}
+
+#importUploads .progress small {
+  color: var(--theme-neutral-3);
+  font-size: var(--font-size-small);
+}
+
+#importUploads .notice {
+  justify-self: stretch;
+}

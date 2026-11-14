@@ -85,6 +85,9 @@ export const Const = {
         settingsSaved: "SETTINGS_SAVED_EVENT",
         // An account was added, changed or deleted on the Users page; `detail.message` says which. The page reloads its cards
         accountsChanged: "ACCOUNTS_CHANGED_EVENT",
+        // A Watch folder of the Import page was added, changed or removed, or the status feed says the Library's Watch
+        // folders changed; `detail.message`, when there is one, says what was done. The page reads its cards again
+        watchFoldersChanged: "WATCH_FOLDERS_CHANGED_EVENT",
         // The account changed its own password (the account info dialog's Change password); the session carries on with the new token
         passwordChanged: "PASSWORD_CHANGED_EVENT",
         // The Dock side changed, by a pick or by the viewport's orientation; `detail.side` is the new one
@@ -231,6 +234,13 @@ export const Const = {
         // The badge of the nav's filter button (includes/nav): the number of filters in force, or of those in
         // the open panel's form
         filterCount: "data-app-filter-count",
+        // The Import history (htmx/import_history, htmx/import_files): an Import's entry, the `<details>` of its
+        // Import files, the route of the view a part of the history shows (the history itself, an Import's files),
+        // by which the page reads it again, and on a control the route of the view it asks for instead
+        importId: "data-import-id",
+        importFiles: "data-app-import-files",
+        viewUrl: "data-app-view-url",
+        view: "data-app-view",
     },
 
     context: {

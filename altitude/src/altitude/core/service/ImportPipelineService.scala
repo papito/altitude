@@ -30,9 +30,9 @@ import altitude.core.pipeline.flows.IndexFlow
 import altitude.core.pipeline.flows.MarkAsCompleteFlow
 import altitude.core.pipeline.flows.MeasureImageFlow
 import altitude.core.pipeline.flows.RecognizeFacesFlow
+import altitude.core.pipeline.flows.SettleImportFileFlow
 import altitude.core.pipeline.flows.StripBinaryDataFlow
 import altitude.core.pipeline.sinks.AssetErrorLoggingSink
-import altitude.core.pipeline.sinks.WsAssetProcessedNotificationSink
 
 class ImportPipelineService(app: Altitude):
   val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -49,10 +49,10 @@ class ImportPipelineService(app: Altitude):
   private val fileStoreFlow = FileStoreFlow(app)
   private val addPreviewFlow = AddPreviewFlow(app)
   private val checkDuplicateFlow = CheckDuplicateFlow(app)
-  private val stripBinaryDataFlow = StripBinaryDataFlow()
   private val markAsCompleteFlow = MarkAsCompleteFlow(app)
   private val discardDroppedFlow = DiscardDroppedFlow(app)
-  private val wsNotificationSink = WsAssetProcessedNotificationSink(app)
+  private val settleImportFileFlow = SettleImportFileFlow(app)
+  private val stripBinaryDataFlow = StripBinaryDataFlow()
   private val errorLoggingSink = AssetErrorLoggingSink()
 
   /**
@@ -62,7 +62,9 @@ class ImportPipelineService(app: Altitude):
    * detection, image measurement, the preview) work on up to `importParallelism` assets of a repository at once; every other
    * stage, and every one that writes to the database, on one, and all of them hand the assets on in upload order, so faces are
    * matched one asset at a time, in the order uploaded. Each stage's writes are a short transaction of its own, which SQLite's
-   * single write connection runs one after another, and each stage commits before the next one reads the asset.
+   * single write connection runs one after another, and each stage commits before the next one reads the asset. An asset that is
+   * a file of an Import carries its Import file to the end (`AssetWithData.origin`): the completion settles an imported one in
+   * its own transaction, and the last working stage a dropped one, after the discard.
    */
   private val combinedFlow: Flow[TDataAssetWithContext, TAssetOrInvalidWithContext, NotUsed] = Flow[TDataAssetWithContext]
     // Each repo has its own substream. We group by repo id and run the pipeline for each repo in parallel
@@ -77,11 +79,11 @@ class ImportPipelineService(app: Altitude):
     .via(recognizeFacesFlow)
     .via(fileStoreFlow)
     .via(addPreviewFlow)
-    .via(stripBinaryDataFlow)
     .via(markAsCompleteFlow)
     .via(discardDroppedFlow)
+    .via(settleImportFileFlow)
+    .via(stripBinaryDataFlow)
     .mergeSubstreams
-    .alsoTo(wsNotificationSink)
     .alsoTo(errorLoggingSink)
 
   private val queue = QueuedPipeline[TDataAssetWithContext](
@@ -89,7 +91,6 @@ class ImportPipelineService(app: Altitude):
     combinedFlow,
     describe = _._1.asset.fileName,
     bufferSize = app.parallelism * 2,
-    maxConcurrentOffers = app.parallelism,
     shutdownTimeout = () => app.settings.current.pipelineShutdownTimeout.seconds,
     restartOnFailure = app.isPipelineRestartEnabled
   )

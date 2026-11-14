@@ -10,20 +10,20 @@ import scala.concurrent.Future
 import scala.util.control.NonFatal
 
 import altitude.core.Altitude
-import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
+import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
 import altitude.core.pipeline.PipelineUtils.debugInfo
 import altitude.core.pipeline.PipelineUtils.withContext
 
 /**
- * The last stage: a dropped asset leaves nothing behind. Its staged file is deleted and whatever its import wrote is undone
+ * A dropped asset leaves nothing behind. Its staged file is deleted and whatever its import wrote is undone
  * (`LibraryService.discardImport`), so the same file can be uploaded again at once.
  */
 object DiscardDroppedFlow:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  def apply(app: Altitude): Flow[TAssetOrInvalidWithContext, TAssetOrInvalidWithContext, NotUsed] =
+  def apply(app: Altitude): Flow[TDataAssetOrInvalidWithContext, TDataAssetOrInvalidWithContext, NotUsed] =
     given ExecutionContext = app.importDispatcher
-    Flow[TAssetOrInvalidWithContext].mapAsync(1) {
+    Flow[TDataAssetOrInvalidWithContext].mapAsync(1) {
       // Not under the guard, which would report the discard's failure in place of the drop's cause
       case dropped @ (Right(invalid), ctx) =>
         Future {

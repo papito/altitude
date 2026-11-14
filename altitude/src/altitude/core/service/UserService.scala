@@ -346,6 +346,9 @@ class UserService(val app: Altitude) extends BaseService[User]:
         throw fieldError(FieldConst.User.ACCOUNT_TYPE, Const.Msg.Err.OWN_ACCOUNT)
 
       whileKeysFree(dao.update(account))
+      // An account that is no Admin any more owns no Watch folder's assets: its Watch folders pause until an Admin takes them
+      if typeChanged && stored.accountType == AccountType.Admin then
+        app.service.watchFolder.pauseOwnedBy(stored.persistedId, Const.WatchFolder.OWNER_DEMOTED)
       // Bumps the account's version once committed, so the update needs no bump of its own
       app.service.repository.replaceGrants(stored.persistedId, accountGrants)
 
@@ -422,6 +425,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
 
       if target.isActive != active then
         dao.setActive(accountId, active)
+        if !active then app.service.watchFolder.pauseOwnedBy(accountId, Const.WatchFolder.OWNER_DEACTIVATED)
         app.service.audit.record(
           if active then AuditEventType.AccountReactivated else AuditEventType.AccountDeactivated,
           actor = Some(actor),
@@ -447,6 +451,7 @@ class UserService(val app: Altitude) extends BaseService[User]:
       refuseRemoval(actor, target)
 
       val moved = app.DAO.asset.reassignOwner(accountId, actorId)
+      app.service.watchFolder.passOn(accountId, actorId)
       dao.deleteById(accountId)
       app.service.audit.record(
         AuditEventType.AccountDeleted,

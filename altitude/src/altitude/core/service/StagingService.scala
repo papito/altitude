@@ -1,5 +1,6 @@
 package altitude.core.service
 
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -7,6 +8,8 @@ import java.util.UUID
 import org.apache.commons.io.FileUtils
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
+import scala.util.control.NonFatal
 
 import altitude.core.Altitude
 import altitude.core.Const
@@ -31,6 +34,17 @@ class StagingService(app: Altitude):
 
   def stage(bytes: Array[Byte]): Path =
     logStaged(s"${bytes.length} bytes", Files.write(freshPath(), bytes))
+
+  /** Writes a stream into staging, to its end; a stream that fails leaves nothing staged */
+  def stage(in: InputStream): Path =
+    val staged = freshPath()
+    try
+      Files.copy(in, staged): Unit
+      logStaged("a stream", staged)
+    catch
+      case NonFatal(failure) =>
+        Files.deleteIfExists(staged)
+        throw failure
 
   /** Deletes a staged file; a path outside staging, such as a file already renamed into the store, is left alone */
   def discard(path: Path): Unit =

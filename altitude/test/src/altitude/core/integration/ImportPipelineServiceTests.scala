@@ -27,6 +27,7 @@ import org.apache.pekko.stream.scaladsl.Flow
 import org.apache.pekko.stream.scaladsl.Sink
 import org.apache.pekko.stream.scaladsl.Source
 import org.scalatest.DoNotDiscover
+import org.scalatest.LoneElement.*
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.tagobjects.Slow
@@ -36,6 +37,7 @@ import org.scalatest.time.Span
 
 import scala.concurrent.Await
 import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.DurationLong
@@ -43,10 +45,12 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Try
 
 import altitude.core.Altitude
+import altitude.core.Api
 import altitude.core.Const
 import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.ImageException
+import altitude.core.ImportDestinationException
 import altitude.core.NotFoundException
 import altitude.core.QueueRefusedException
 import altitude.core.RequestContext
@@ -56,8 +60,16 @@ import altitude.core.VideoException
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
 import altitude.core.models.AssetWithData
+import altitude.core.models.ExtractedMetadata
+import altitude.core.models.Folder
+import altitude.core.models.Import
+import altitude.core.models.ImportFile
+import altitude.core.models.ImportOrigin
+import altitude.core.models.ImportOutcome
+import altitude.core.models.ImportSource
 import altitude.core.models.Person
 import altitude.core.models.Repository
+import altitude.core.models.Stats
 import altitude.core.pipeline.PipelineTypes.InvalidAsset
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TAssetOrInvalidWithContext
@@ -92,17 +104,6 @@ import altitude.core.util.Query
       testContext.makeAsset().copy(assetType = AssetType("image", "jpeg", "image/jpeg")),
       testApp.service.staging.stage("not an image".getBytes))
 
-  /** Replaces the repository's `files` directory with a plain file, so storing any asset of the repository fails */
-  private def breakFileStore(repository: Repository): Unit =
-    val files = Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, repository.persistedId, Const.DataStore.FILES)
-    FileUtils.deleteDirectory(files.toFile)
-    Files.createDirectories(files.getParent)
-    Files.createFile(files)
-
-  /** Puts the repository's `files` directory back after [[breakFileStore]] */
-  private def restoreFileStore(repository: Repository): Unit =
-    Files.delete(Paths.get(testApp.dataPath, Const.DataStore.REPOSITORIES, repository.persistedId, Const.DataStore.FILES))
-
   /**
    * A queue of the test's own over a flow that fails its stream on the element "bad" (its stage stops on a failure, rather than
    * resuming as the queue's stages do) and records every other element it passes
@@ -122,7 +123,6 @@ import altitude.core.util.Query
       flow,
       describe = identity,
       bufferSize = 2,
-      maxConcurrentOffers = 2,
       shutdownTimeout = () => 30.seconds,
       restartOnFailure = restartOnFailure)(using testApp.actorSystem)
 
@@ -357,6 +357,60 @@ import altitude.core.util.Query
     val started = System.nanoTime()
     pipeline.shutdown()
     (System.nanoTime() - started).nanos should be < 5.seconds
+  }
+
+  test("More offers at once than a queue holds wait their turn, and every one is processed") {
+
+    /**
+     * Setup:
+     *
+     * A queue of the test's own with a buffer of two, over a flow that holds every element until the test opens a gate. A hundred
+     * elements offered at once, far more than the buffer and the stream's stages hold, every offer made before the gate opens.
+     *
+     * Assertions:
+     *
+     * While the gate is shut no offer has failed, and the offers the queue has no room for are still waiting. Once it opens,
+     * every offer succeeds and every element comes out of the flow, in the order offered.
+     *
+     * Edge cases:
+     *
+     * The queue shut down afterwards refuses the next offer with `QueueRefusedException`: waiting a turn does not hide a queue
+     * that takes nothing more.
+     */
+    val gate = Promise[Unit]()
+    val passed = ConcurrentLinkedQueue[String]()
+    val flow = Flow[String].mapAsync(1) {
+      element =>
+        gate.future.map {
+          _ =>
+            passed.add(element)
+            element
+        }(scala.concurrent.ExecutionContext.global)
+    }
+    val pipeline = QueuedPipeline[String](
+      "test",
+      flow,
+      describe = identity,
+      bufferSize = 2,
+      shutdownTimeout = () => 30.seconds,
+      restartOnFailure = false)(using testApp.actorSystem)
+
+    val elements = (1 to 100).map(n => s"element $n")
+    val offers = elements.map(pipeline.offer)
+
+    // Long enough for the queue to have refused the offers it has no room for, if it refuses any
+    Thread.sleep(500)
+    offers.flatMap(_.value).filter(_.isFailure) shouldBe empty
+    offers.count(!_.isCompleted) should be > 0
+
+    gate.success(())
+    Await.result(Future.sequence(offers)(implicitly, scala.concurrent.ExecutionContext.global), 30.seconds)
+    eventually {
+      passed.asScala.toList shouldBe elements.toList
+    }
+
+    pipeline.shutdown()
+    intercept[QueueRefusedException](Await.result(pipeline.offer("late"), 10.seconds))
   }
 
   test("A stage does its work on the import dispatcher, in the context of the asset's repository") {
@@ -921,6 +975,512 @@ import altitude.core.util.Query
     left(1) shouldBe 0.0 +- 8
     left(2) shouldBe 255.0 +- 8
     preview.get(100, 150)(3) shouldBe 0.0
+  }
+
+  /** The element as a file of the Import: a pending Import file by its file name, which the element carries as its origin */
+  private def asFileOf(anImport: Import, dataAsset: AssetWithData): (AssetWithData, ImportFile) =
+    val file = testApp.service.imports.addFile(anImport.persistedId, dataAsset.asset.fileName, dataAsset.asset.sizeBytes)
+    (dataAsset.copy(origin = Some(ImportOrigin(file.persistedId))), file)
+
+  /** The Import file as stored now */
+  private def storedFile(file: ImportFile): ImportFile =
+    testContext.importFiles(file.importId).find(_.id == file.id).get
+
+  /** A staged random image under an asset with the checksum of `existing`, as a second copy of its file would arrive */
+  private def copyOf(existing: Asset): AssetWithData =
+    testContext.makeAssetWithData(Some(testContext.makeAsset().copy(checksum = existing.checksum)))
+
+  test("The files of an Import are settled by what the pipeline made of them, and the Import's counters agree with the Library") {
+
+    /**
+     * Setup:
+     *
+     * An asset already in the Library, in Triage. An upload's Import of four files, marked complete as its last file is sent, run
+     * through the import pipeline in one stream, each carrying its Import file as its origin: a new image, a second copy of the
+     * asset already there, a file of a made-up media type, and bytes no image reader takes under a JPEG name.
+     *
+     * Assertions:
+     *
+     * The pipeline imports the first and drops the other three, and each Import file is settled accordingly: the first imported,
+     * pointing at the asset it became, which is complete in the Library; the second a duplicate, pointing at the asset already
+     * there; the third unsupported and the fourth failed, each with its reason. The Import counts one file of each outcome and
+     * none pending, and is closed. The Library holds two completed assets: the one it had and the one imported.
+     */
+    val existing = testContext.persistAsset(isTriaged = true)
+    val context = PipelineContext(testContext.repository, Some(testContext.user))
+    val imports = testApp.service.imports
+    val opened = imports.open(ImportSource.Upload)
+
+    val (photo, photoFile) = asFileOf(opened, testContext.makeAssetWithData())
+    val (copy, copyFile) = asFileOf(opened, copyOf(existing))
+    val (document, documentFile) =
+      asFileOf(
+        opened,
+        testContext.makeAssetWithData(Some(testContext.makeAsset().copy(assetType = AssetType("bad", "type", "mime")))))
+    val (broken, brokenFile) = asFileOf(opened, notAnImage())
+    imports.close(opened.persistedId)
+    imports.getById(opened.persistedId).closedAt shouldBe None
+
+    val results = runPipeline(List(photo, copy, document, broken).map((_, context))*)
+
+    val importedAsset = resultFor(results, photo.asset.fileName)._1.left.getOrElse(fail("Expected the new image to import"))
+    results.count(_._1.isRight) shouldBe 3
+
+    def settled(file: ImportFile) =
+      val read = storedFile(file)
+      (read.outcome, read.reason, read.assetId)
+
+    settled(photoFile) shouldBe (ImportOutcome.Imported, None, importedAsset.id)
+    testApp.service.asset.getById(importedAsset.persistedId).isPipelineProcessed shouldBe true
+    settled(copyFile) shouldBe (ImportOutcome.Duplicate, Some("Triage"), existing.id)
+    settled(documentFile) shouldBe (ImportOutcome.Unsupported, Some("Unsupported media type"), None)
+    settled(brokenFile) shouldBe (ImportOutcome.Failed, Some("Cannot decode image"), None)
+
+    val closed = imports.getById(opened.persistedId)
+    (closed.pending, closed.imported, closed.duplicate, closed.unsupported, closed.failed) shouldBe (0, 1, 1, 1, 1)
+    closed.closedAt should not be empty
+    importedCount() shouldBe 2
+  }
+
+  test("A duplicate's Import file names where the asset already in the Library is") {
+
+    /**
+     * Setup:
+     *
+     * Three assets already in the Library: one in Triage, one in the folder 2024 under the folder Travel, and one in the root
+     * folder. An Import of a second copy of each, run through the import pipeline.
+     *
+     * Assertions:
+     *
+     * Every copy is dropped as a duplicate, and its Import file is a duplicate pointing at the asset already there, with where
+     * that asset is as its reason: "Triage", the folder path "Travel/2024", and "Top level" for the root folder. The Import
+     * counts three duplicates.
+     */
+    val travel = testApp.service.folder.add("Travel")
+    val year = testApp.service.folder.add("2024", travel.id)
+    val inTriage = testContext.persistAsset(isTriaged = true)
+    val inFolder = testContext.persistAsset(folder = Some(year))
+    val inRoot = testContext.persistAsset()
+
+    val context = PipelineContext(testContext.repository, Some(testContext.user))
+    val opened = testApp.service.imports.open(ImportSource.Upload)
+    val copies = List(inTriage, inFolder, inRoot).map(existing => asFileOf(opened, copyOf(existing)))
+
+    val results = runPipeline(copies.map((copy, _) => (copy, context))*)
+
+    results.map(_._1.fold(_ => None, _.cause.map(_.getClass))) shouldBe List.fill(3)(Some(classOf[DuplicateException]))
+    copies.map((_, file) => storedFile(file)).map(file => (file.outcome, file.reason, file.assetId)) shouldBe List(
+      (ImportOutcome.Duplicate, Some("Triage"), inTriage.id),
+      (ImportOutcome.Duplicate, Some("Travel/2024"), inFolder.id),
+      (ImportOutcome.Duplicate, Some("Top level"), inRoot.id)
+    )
+    testApp.service.imports.getById(opened.persistedId).duplicate shouldBe 3
+  }
+
+  test("A file that fails in a stage after its asset is persisted is settled failed, and leaves no asset") {
+
+    /**
+     * Setup:
+     *
+     * A repository whose file store cannot store a file, and an Import of one image run through the import pipeline there.
+     *
+     * Assertions:
+     *
+     * The file is dropped at the file store with a storage error, its Import file is failed with that as its reason and points at
+     * no asset, and the Import counts it failed. Nothing of the asset is left in the repository.
+     */
+    val repository = testContext.repository
+    val opened = testApp.service.imports.open(ImportSource.Upload)
+    val (photo, file) = asFileOf(opened, testContext.makeAssetWithData())
+    breakFileStore(repository)
+
+    val result =
+      try dropped(runPipeline((photo, PipelineContext(repository, Some(testContext.user)))))
+      finally restoreFileStore(repository)
+
+    result.cause.get shouldBe a[StorageException]
+    val settled = storedFile(file)
+    (settled.outcome, settled.reason, settled.assetId) shouldBe (ImportOutcome.Failed, Some("Storage error"), None)
+    testApp.service.imports.getById(opened.persistedId).failed shouldBe 1
+    rowCount("asset") shouldBe 0
+  }
+
+  test("A file whose Import file cannot be settled is not imported") {
+
+    /**
+     * Setup:
+     *
+     * An image run through the import pipeline with an origin that names no Import file.
+     *
+     * Assertions:
+     *
+     * The completion, which settles the Import file in the transaction that completes the asset, fails as a whole: the file is
+     * dropped with the Import file not found, and no asset, complete or not, is left in the repository.
+     */
+    val orphan = testContext.makeAssetWithData().copy(origin = Some(ImportOrigin("no-such-import-file")))
+
+    val result = dropped(runPipeline((orphan, PipelineContext(testContext.repository, Some(testContext.user)))))
+
+    result.cause.get shouldBe a[NotFoundException]
+    rowCount("asset") shouldBe 0
+  }
+
+  /**
+   * A staged random image as an upload stages it (triaged, in no folder), a file of the Import under `relPath`: its origin
+   * carries the folder names of the path
+   */
+  private def asFileAt(anImport: Import, relPath: String, checksum: Option[String] = None): (AssetWithData, ImportFile) = {
+    val names = relPath.split("/").toList
+    val asset = testContext.makeAsset(filename = names.last, isTriaged = true)
+    val dataAsset = testContext.makeAssetWithData(Some(checksum.fold(asset)(sum => asset.copy(checksum = sum))))
+    val file = testApp.service.imports.addFile(anImport.persistedId, relPath, dataAsset.asset.sizeBytes)
+    (dataAsset.copy(origin = Some(ImportOrigin(file.persistedId, names.init))), file)
+  }
+
+  /** The asset an Import file points at, as stored now */
+  private def assetOf(file: ImportFile): Asset = testApp.service.asset.getById(storedFile(file).assetId.get)
+
+  /** Where an asset is: the names of its folder's path, the top-level folder first */
+  private def placeOf(asset: Asset): List[String] = testApp.service.folder.getPath(asset.folderId).map(_.name)
+
+  /** The names of the repository's folders, live or recycled, the root left out */
+  private def folderNames: Set[String] =
+    testApp.service.folder.getAll.filterNot(folder => folder.persistedId == folder.parentId).map(_.name).toSet
+
+  private def stat(dimension: String): Long = testApp.service.stats.getStats.getStatValue(dimension)
+
+  test(
+    "A kept tree lands under the destination, in the folders that exist, live or recycled, and new ones where an asset lands") {
+
+    /**
+     * Setup:
+     *
+     * A folder Clients holding the live folder Ceremony, with an asset in it, and the folder Party, recycled by a delete. An
+     * upload's Import with Clients as its destination, of seven files run through the import pipeline, each carrying the folders
+     * of its path: an image at the top, one in Ceremony, one in Party, one in Portraits/Group, a second copy of the image in
+     * Ceremony under Copies, a second copy of the asset already in Ceremony under Old, and a file of a made-up media type under
+     * Docs.
+     *
+     * Assertions:
+     *
+     * The four images are imported, sorted (not triaged, in no Sequence) and each in the folder its path names under Clients: the
+     * top one in Clients itself, one in the Ceremony that was there, one in Party, restored, and one in Portraits/Group, both
+     * created. The Library counts them as sorted and none in Triage.
+     *
+     * Edge cases:
+     *
+     * The two copies are duplicates and the made-up type unsupported, and no folder is created for any of them: Copies, Old and
+     * Docs do not exist. Each duplicate names where the asset it matches is: the copy of this Import's own first file the folder
+     * that file landed in, the copy of the asset already there its folder.
+     */
+    val folders = testApp.service.folder
+    val clients = folders.add("Clients")
+    val ceremony = folders.add("Ceremony", clients.id)
+    val party = folders.add("Party", clients.id)
+    val existing = testContext.persistAsset(folder = Some(ceremony))
+    testApp.service.library.deleteFolderById(party.persistedId)
+
+    val opened = testApp.service.imports.open(ImportSource.Upload, name = Some("Wedding"), destFolderId = clients.id)
+    val (top, topFile) = asFileAt(opened, "top.jpg")
+    val (vows, vowsFile) = asFileAt(opened, "Ceremony/vows.jpg")
+    val (dance, danceFile) = asFileAt(opened, "Party/dance.jpg")
+    val (group, groupFile) = asFileAt(opened, "Portraits/Group/group.jpg")
+    val (vowsCopy, vowsCopyFile) = asFileAt(opened, "Copies/vows-copy.jpg", checksum = Some(vows.asset.checksum))
+    val (old, oldFile) = asFileAt(opened, "Old/existing.jpg", checksum = Some(existing.checksum))
+    val (document, documentFile) = {
+      val (staged, file) = asFileAt(opened, "Docs/readme.pdf")
+      (staged.copy(asset = staged.asset.copy(assetType = AssetType("bad", "type", "mime"))), file)
+    }
+    testApp.service.imports.close(opened.persistedId)
+    val sortedBefore = stat(Stats.SORTED_ASSETS)
+
+    val context = PipelineContext(testContext.repository, Some(testContext.user))
+    runPipeline(List(top, vows, dance, group, vowsCopy, old, document).map((_, context))*)
+
+    val landed = List(topFile, vowsFile, danceFile, groupFile).map(assetOf)
+    landed.map(placeOf) shouldBe List(
+      List("Clients"),
+      List("Clients", "Ceremony"),
+      List("Clients", "Party"),
+      List("Clients", "Portraits", "Group"))
+    landed.map(asset => (asset.isTriaged, asset.sequenceId, asset.isPipelineProcessed)) shouldBe List.fill(4)((false, None, true))
+    assetOf(vowsFile).folderId shouldBe ceremony.persistedId
+    assetOf(danceFile).folderId shouldBe party.persistedId
+    folders.getById(party.persistedId).isRecycled shouldBe false
+    stat(Stats.SORTED_ASSETS) shouldBe sortedBefore + 4
+    stat(Stats.TRIAGE_ASSETS) shouldBe 0
+
+    folderNames shouldBe Set("Clients", "Ceremony", "Party", "Portraits", "Group")
+    List(vowsCopyFile, oldFile, documentFile)
+      .map(storedFile)
+      .map(file => (file.outcome, file.reason, file.assetId)) shouldBe List(
+      (ImportOutcome.Duplicate, Some("Clients/Ceremony"), assetOf(vowsFile).id),
+      (ImportOutcome.Duplicate, Some("Clients/Ceremony"), existing.id),
+      (ImportOutcome.Unsupported, Some("Unsupported media type"), None)
+    )
+    val closed = testApp.service.imports.getById(opened.persistedId)
+    (closed.pending, closed.imported, closed.duplicate, closed.unsupported, closed.failed) shouldBe (0, 4, 2, 1, 0)
+    closed.closedAt should not be empty
+  }
+
+  /**
+   * Burst frame `n` staged as an upload stages it, with the camera's model and clock seeded as `BurstFrames.importFrame` seeds
+   * them
+   */
+  private def stagedFrame(n: Int): AssetWithData = {
+    val staged = testApp.service.library.stagedFileToAsset(s"burst-$n.jpg", testApp.service.staging.stage(BurstFrames.frame(n)))
+    val metadata = ExtractedMetadata()
+    metadata.addValue("Exif IFD0", "Model", BurstFrames.MODEL)
+    metadata.addValue("Exif SubIFD", "Date/Time Original", BurstFrames.takenAt(n))
+    staged.copy(asset = staged.asset.copy(extractedMetadata = metadata))
+  }
+
+  test("The files of an upload that skips Triage land in its destination itself, sorted, with no Sequence") {
+
+    /**
+     * Setup:
+     *
+     * A folder Sorted. An upload's Import with Sorted as its destination, of two frames of one burst under their bare names, run
+     * through the import pipeline; then an Import with no destination of the next two frames of the same burst.
+     *
+     * Assertions:
+     *
+     * The first two frames are imported into Sorted itself, not triaged and in no Sequence, and the Library counts two sorted
+     * assets with their bytes and none in Triage. No folder is created.
+     *
+     * Edge cases:
+     *
+     * The next two frames, uploaded to Triage, are triaged, in no folder, and share a Sequence, which the first two, being
+     * sorted, do not join: the frames are a burst, and it is the destination that kept the first two out of a Sequence. The
+     * Library then counts two sorted and two in Triage.
+     */
+    val sorted = testApp.service.folder.add("Sorted")
+    val context = PipelineContext(testContext.repository, Some(testContext.user))
+
+    val skipping = testApp.service.imports.open(ImportSource.Upload, destFolderId = sorted.id)
+    val skipped = List(0, 1).map(n => asFileOf(skipping, stagedFrame(n)))
+    runPipeline(skipped.map((frame, _) => (frame, context))*)
+
+    val inSorted = skipped.map((_, file) => assetOf(file))
+    inSorted.map(asset => (asset.folderId, asset.isTriaged, asset.sequenceId)) shouldBe List.fill(2)(
+      (sorted.persistedId, false, None))
+    stat(Stats.SORTED_ASSETS) shouldBe 2
+    stat(Stats.SORTED_BYTES) shouldBe inSorted.map(_.sizeBytes).sum
+    stat(Stats.TRIAGE_ASSETS) shouldBe 0
+    folderNames shouldBe Set("Sorted")
+
+    val triaging = testApp.service.imports.open(ImportSource.Upload)
+    val triaged = List(2, 3).map(n => asFileOf(triaging, stagedFrame(n)))
+    runPipeline(triaged.map((frame, _) => (frame, context))*)
+
+    val inTriage = triaged.map((_, file) => assetOf(file))
+    inTriage.map(asset => (asset.folderId, asset.isTriaged)) shouldBe List.fill(2)(("", true))
+    inTriage.head.sequenceId should not be None
+    inTriage.map(_.sequenceId).distinct.size shouldBe 1
+    skipped.map((_, file) => assetOf(file).sequenceId) shouldBe List(None, None)
+    (stat(Stats.SORTED_ASSETS), stat(Stats.TRIAGE_ASSETS)) shouldBe (2, 2)
+    testApp.service.imports.getById(skipping.persistedId).imported shouldBe 2
+  }
+
+  test("An upload whose destination is recycled meanwhile fails its remaining files") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import with the folder Clients as its destination. Its first file, in the folder Ceremony of the tree, is run
+     * through the import pipeline; then Clients is deleted, which recycles it with what it holds; then its second file, in the
+     * folder Party, is run through.
+     *
+     * Assertions:
+     *
+     * The first file is imported into Clients/Ceremony. The second is dropped at its completion, and its Import file is failed,
+     * saying that the destination folder is in the Trash, pointing at no asset. The Import counts one imported and one failed.
+     *
+     * Edge cases:
+     *
+     * Nothing of the second file is left: no asset, and no folder Party; Clients stays recycled.
+     */
+    val folders = testApp.service.folder
+    val clients = folders.add("Clients")
+    val context = PipelineContext(testContext.repository, Some(testContext.user))
+    val opened = testApp.service.imports.open(ImportSource.Upload, destFolderId = clients.id)
+    val (first, firstFile) = asFileAt(opened, "Ceremony/vows.jpg")
+    val (second, secondFile) = asFileAt(opened, "Party/dance.jpg")
+
+    runPipeline((first, context))
+    placeOf(assetOf(firstFile)) shouldBe List("Clients", "Ceremony")
+
+    testApp.service.library.deleteFolderById(clients.persistedId)
+    val result = dropped(runPipeline((second, context)))
+
+    result.cause.get shouldBe an[ImportDestinationException]
+    val failed = storedFile(secondFile)
+    (failed.outcome, failed.reason, failed.assetId) shouldBe (
+      ImportOutcome.Failed,
+      Some(Const.Msg.Err.DESTINATION_IN_TRASH),
+      None)
+    val counted = testApp.service.imports.getById(opened.persistedId)
+    (counted.imported, counted.failed) shouldBe (1, 1)
+
+    rowCount("asset") shouldBe 1
+    folderNames shouldBe Set("Clients", "Ceremony")
+    folders.getById(clients.persistedId).isRecycled shouldBe true
+  }
+
+  test("A file below a folder name the folder rule refuses fails with that reason, and no folder of its path is created") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import with the folder Clients as its destination, of one image whose path is a folder Good and, under it, a
+     * folder whose name is longer than a folder's name may be, run through the import pipeline.
+     *
+     * Assertions:
+     *
+     * The file is dropped at its completion and its Import file is failed, saying that a folder of the path cannot be created,
+     * with the folder rule's own reason. No asset is left, and neither folder of the path exists, not even Good, whose name is
+     * fine: the completion's transaction creates the folders and the asset together or not at all.
+     */
+    val clients = testApp.service.folder.add("Clients")
+    val opened = testApp.service.imports.open(ImportSource.Upload, destFolderId = clients.id)
+    val tooLong = "x" * (Api.Constraints.MAX_FOLDER_NAME_LENGTH + 1)
+    val (photo, file) = asFileAt(opened, s"Good/$tooLong/a.jpg")
+
+    val result = dropped(runPipeline((photo, PipelineContext(testContext.repository, Some(testContext.user)))))
+
+    result.cause.get shouldBe an[ImportDestinationException]
+    val failed = storedFile(file)
+    failed.outcome shouldBe ImportOutcome.Failed
+    failed.reason shouldBe Some(
+      Const.Msg.Err.DESTINATION_FOLDER_NAME.format(Const.Msg.Err.VALUE_TOO_LONG.format(Api.Constraints.MAX_FOLDER_NAME_LENGTH)))
+    rowCount("asset") shouldBe 0
+    folderNames shouldBe Set("Clients")
+  }
+
+  test("A file below a folder that cannot be created because its name is taken fails with that reason, and is no duplicate") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import whose destination is the repository's root folder, of one image under a folder named as the root itself
+     * is. No folder of that name is under the root to reuse (the root is its own parent, and is never its own child), and none
+     * can be added there: the root holds the name among the folders whose parent it is.
+     *
+     * Assertions:
+     *
+     * The file is dropped at its completion with the folder as the cause, and its Import file is failed, saying that a folder of
+     * the path cannot be created because its name is taken. It is not settled as a duplicate, which only a file whose content the
+     * Library already has is: the Import counts one failed and no duplicate. No asset is left.
+     */
+    val opened =
+      testApp.service.imports.open(ImportSource.Upload, destFolderId = Some(testContext.repository.rootFolderId))
+    val (photo, file) = asFileAt(opened, s"${FieldConst.Folder.Name.ROOT}/a.jpg")
+
+    val result = dropped(runPipeline((photo, PipelineContext(testContext.repository, Some(testContext.user)))))
+
+    result.cause.get shouldBe an[ImportDestinationException]
+    val failed = storedFile(file)
+    (failed.outcome, failed.reason, failed.assetId) shouldBe (
+      ImportOutcome.Failed,
+      Some(Const.Msg.Err.DESTINATION_FOLDER_NAME.format(Const.Msg.Err.FOLDER_NAME_TAKEN)),
+      None)
+    val counted = testApp.service.imports.getById(opened.persistedId)
+    (counted.failed, counted.duplicate) shouldBe (1, 0)
+    rowCount("asset") shouldBe 0
+  }
+
+  test("A file sorted into a folder and a delete of the folder take turns, so nothing live is left under a deleted folder") {
+
+    /**
+     * Setup:
+     *
+     * Two folders, Clients and Archive, each the destination of an upload's Import with one file, at the path Wedding, whose
+     * asset its import has persisted and not completed. The completion of the file into Clients runs in a transaction held open
+     * until a delete of Clients waits for it: for the folder tree's advisory lock on PostgreSQL, for the write connection on
+     * SQLite. Then the other way round: a delete of Archive is held open until the completion of the file into it waits.
+     *
+     * Assertions:
+     *
+     * The delete of Clients, which went second, saw what the completion committed: Clients and the folder Wedding the completion
+     * created under it are in the Trash, and so is the asset, in Wedding. The completion into Archive, which went second, found
+     * its destination in the Trash and failed saying so: its asset is still unfinished and in no folder, and no folder was
+     * created under Archive. Without the turn-taking, on PostgreSQL neither waits for the other, which read before the other
+     * committed, and the asset and Wedding are left live under a folder in the Trash.
+     */
+    val folders = testApp.service.folder
+    val library = testApp.service.library
+
+    def unfinishedFileInto(destination: Folder): (Asset, ImportOrigin) = {
+      val opened = testApp.service.imports.open(ImportSource.Upload, destFolderId = destination.id)
+      val file = testApp.service.imports.addFile(opened.persistedId, "Wedding/photo.jpg", sizeBytes = 10)
+      (library.persistAndIndex(testContext.makeAsset(isTriaged = true)), ImportOrigin(file.persistedId, Seq("Wedding")))
+    }
+
+    val clients = folders.add("Clients")
+    val (sorted, sortedOrigin) = unfinishedFileInto(clients)
+    contend(
+      first = library.completeImport(sorted, Some(sortedOrigin)): Unit,
+      second = library.deleteFolderById(clients.persistedId))
+
+    // Every folder under the folder, those in the Trash too
+    def under(parent: Folder): List[Folder] = folders.getAll.filter(_.parentId == parent.persistedId)
+
+    val wedding = under(clients).loneElement
+    (wedding.name, wedding.isRecycled, folders.getById(clients.persistedId).isRecycled) shouldBe ("Wedding", true, true)
+    val recycled = testApp.service.asset.getById(sorted.persistedId)
+    (recycled.isPipelineProcessed, recycled.isRecycled, recycled.folderId) shouldBe (true, true, wedding.persistedId)
+
+    val archive = folders.add("Archive")
+    val (late, lateOrigin) = unfinishedFileInto(archive)
+    val lost = intercept[ImportDestinationException] {
+      contend(
+        first = library.deleteFolderById(archive.persistedId),
+        second = library.completeImport(late, Some(lateOrigin)): Unit)
+    }
+
+    lost.getMessage shouldBe Const.Msg.Err.DESTINATION_IN_TRASH
+    val unsorted = testApp.service.asset.getById(late.persistedId)
+    (unsorted.isPipelineProcessed, unsorted.isRecycled, unsorted.folderId) shouldBe (false, false, "")
+    under(archive) shouldBe empty
+  }
+
+  test("A second copy of a file whose import fails is failed too, saying its copy is not in the Library, and is no duplicate") {
+
+    /**
+     * Setup:
+     *
+     * An upload's Import with the folder Clients as its destination, of two files with the same content run through the import
+     * pipeline one after the other: the first under a folder whose name is longer than a folder's name may be, the second under
+     * the folder Good.
+     *
+     * Assertions:
+     *
+     * The first fails at its completion, a folder of its path cannot be created, and the second is dropped as a duplicate of it.
+     * Neither is imported, so the second's Import file is failed, saying that the copy it matched is not in the Library, and
+     * points at no asset: nothing in the record says the content is in the Library. The Import counts two failed files and no
+     * duplicate, no asset is left, and no folder of either path exists.
+     */
+    val clients = testApp.service.folder.add("Clients")
+    val opened = testApp.service.imports.open(ImportSource.Upload, destFolderId = clients.id)
+    val tooLong = "x" * (Api.Constraints.MAX_FOLDER_NAME_LENGTH + 1)
+    val (first, firstFile) = asFileAt(opened, s"$tooLong/photo.jpg")
+    val (second, secondFile) = asFileAt(opened, "Good/photo.jpg", checksum = Some(first.asset.checksum))
+    val context = PipelineContext(testContext.repository, Some(testContext.user))
+
+    val results = runPipeline((first, context), (second, context))
+
+    results.flatMap(_._1.toOption).map(_.cause.get.getClass.getSimpleName) shouldBe
+      List("ImportDestinationException", "DuplicateException")
+    storedFile(firstFile).outcome shouldBe ImportOutcome.Failed
+    val settled = storedFile(secondFile)
+    (settled.outcome, settled.reason, settled.assetId) shouldBe (
+      ImportOutcome.Failed,
+      Some(Const.Msg.Err.COPY_NOT_IN_LIBRARY),
+      None)
+    val counted = testApp.service.imports.getById(opened.persistedId)
+    (counted.failed, counted.duplicate) shouldBe (2, 0)
+    rowCount("asset") shouldBe 0
+    folderNames shouldBe Set("Clients")
   }
 
   /** `people/affleck.jpg` scaled to 640 by 893 on a white canvas `extraWidth` pixels wider, so frames of one face differ */

@@ -1,0 +1,17 @@
+@(fileCount: Option[Int])
+
+@* What the Watch folder dialog (htmx/watch_folder_form) says while "Delete imported files" is on, before anything is
+   saved: the number of files in the directory now, as a scan would find them (GET
+   /htmx/watch-folders/r/:repoId/deletion-notice, an Admin's), and what is deleted. None is a path that cannot be a
+   Watch folder's as it stands, whose error the save says under the path. *@
+@count(n: Int) = @{ f"$n%,d" }
+
+<p class="notice deletion" role="alert">
+    @fileCount match {
+    case Some(0) => {<strong>No files are in this folder now.</strong> A file that arrives is deleted from the server once it is imported,}
+    case Some(1) => {<strong>1 file is in this folder now.</strong> It is deleted from the server once it is imported,}
+    case Some(n) => {<strong>@count(n) files are in this folder now.</strong> Each is deleted from the server once it is imported,}
+    case None => {<strong>The files in this folder are deleted.</strong> Each is deleted from the server once it is imported,}
+    }
+    and so is one whose content the Library already has. Unsupported and failed files stay.
+</p>

@@ -153,6 +153,44 @@ object FieldConst:
     val ALBUM_ID = "album_id"
     val ASSET_ID = "asset_id"
 
+  // An Import's five counters are columns named by the outcome they count (`ImportOutcome.dbValue`)
+  object Import:
+    val SOURCE = "source"
+    val NAME = "name"
+    val WATCH_FOLDER_ID = "watch_folder_id"
+    val ACCOUNT_ID = "account_id"
+    val DEST_FOLDER_ID = "dest_folder_id"
+    val EXPECTED_FILES = "expected_files"
+    val IS_COMPLETE = "is_complete"
+    val CLOSED_AT = "closed_at"
+
+  object ImportFile:
+    val IMPORT_ID = "import_id"
+    val REL_PATH = "rel_path"
+    val OUTCOME = "outcome"
+    val REASON = "reason"
+    val ASSET_ID = "asset_id"
+    val SIZE_BYTES = "size_bytes"
+
+  object WatchFolder:
+    val NAME = "name"
+    val PATH = "path"
+    val DEST_FOLDER_ID = "dest_folder_id"
+    val DELETES_IMPORTED = "deletes_imported"
+    val IS_PAUSED = "is_paused"
+    val ACCOUNT_ID = "account_id"
+    val STATUS_REASON = "status_reason"
+    val LAST_SCAN_AT = "last_scan_at"
+
+  object WatchFolderFile:
+    val WATCH_FOLDER_ID = "watch_folder_id"
+    val REL_PATH = "rel_path"
+    val SIZE_BYTES = "size_bytes"
+    val MODIFIED_AT = "modified_at"
+    val STATE = "state"
+    val ATTEMPTS = "attempts"
+    val LAST_SEEN_AT = "last_seen_at"
+
   object Location:
     val CATEGORY_ID = "category_id"
     val KIND = "kind"

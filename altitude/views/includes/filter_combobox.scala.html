@@ -1,0 +1,67 @@
+@import altitude.core.routes.SearchRequestParser
+
+@(id: String, label: String, param: String, optionsUrl: String, kind: String, placeholder: String, ids: List[String], fullMessage: Option[String] = None, afterLabel: Option[Html] = None)(chips: Html)
+
+@* A combobox field that chooses names as chips: the fields of the advanced search panel (htmx/search_panel: a folder,
+   people, Locations) and the destination folder of the Import page's upload sections (includes/upload_sections). It is
+   the `filterCombobox` component (js/alpine/components/filter-combobox.js), on the ARIA combobox pattern: its `.box`
+   holds the hidden input of the IDs, the chips of what is chosen and the input typed into (`role="combobox"`, which has
+   no name, so it is not submitted), and after the box the template a new chip is cloned from and the `role="listbox"`
+   its options are loaded into from `data-options-url`. Its rules are scoped by the panel's class
+   (static/css/htmx/search_panel.css), which whatever holds the field wears.
+
+   `id` is the input's, and opens the listbox's; `param` is the name of the hidden input, which holds the chosen IDs
+   separated by commas; `optionsUrl` is the options route with its query string; `kind` is the kind of its chips
+   (includes/search_chip), whose icon leads the box when it has one (a person has none); `chips` are the chips of what
+   is chosen already, `ids` their IDs. `fullMessage` is what a field of several says once it holds as many as a search
+   takes: it marks the field as one that takes several (`data-multiple`), with that most (`data-max-chosen`); a field of
+   one has none. `afterLabel` is what shares the label's row (`.label-row`), when anything does. *@
+<div class="field"
+     x-data="filterCombobox"
+     x-on:focusout="onFocusOut($event)"
+     x-on:search-panel-clear="clear()"
+     data-options-url="@optionsUrl"
+     @for(message <- fullMessage) { data-multiple data-max-chosen="@{SearchRequestParser.MAX_IDS}" data-max-chosen-message="@message" }>
+    @afterLabel match {
+    case Some(control) => {
+    <div class="label-row">
+        <label for="@id">@label</label>
+        @control
+    </div>
+    }
+    case None => {<label for="@id">@label</label>}
+    }
+    <div class="box" x-on:click="onBoxClick($event)">
+        @if(kind != "person") {@includes.html.search_filter_icon(kind)}
+        <input type="hidden" name="@param" value="@{ids.mkString(",")}" x-ref="ids">
+        <ul class="chips" aria-label="@label chosen" x-ref="chips" x-on:click="onChipClick($event)">
+            @chips
+        </ul>
+        <input type="text"
+               id="@id"
+               role="combobox"
+               autocomplete="off"
+               spellcheck="false"
+               placeholder="@placeholder"
+               aria-autocomplete="list"
+               aria-haspopup="listbox"
+               aria-controls="@{id}Options"
+               x-ref="input"
+               :placeholder="placeholder"
+               :aria-expanded="expanded"
+               :aria-activedescendant="activeOptionId"
+               x-on:input="onInput()"
+               x-on:keydown="onKeydown($event)">
+    </div>
+    <template x-ref="chipTemplate">@includes.html.search_chip(kind, "")</template>
+    <ul id="@{id}Options"
+        class="listbox"
+        role="listbox"
+        popover="manual"
+        aria-label="@label"
+        x-ref="listbox"
+        x-on:mousedown.prevent
+        x-on:click="onOptionClick($event)"
+        x-on:mouseover="onOptionHover($event)"></ul>
+    <span class="visually-hidden" role="status" x-text="status"></span>
+</div>

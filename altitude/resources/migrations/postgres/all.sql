@@ -9,8 +9,8 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- A row of a repository's table holds its repository (repository_id NOT NULL), and a reference from one such row to another is
 -- a foreign key over (repository_id, <ref>_id), so the database refuses a reference into another repository. Each table such a
 -- key names has UNIQUE (id, repository_id) for it, led by the ID so that it never competes with the indexes that lead with the
--- repository. A NULL reference is not checked. A person's cover is the one reference that is not such a key: a single column,
--- at the person table.
+-- repository. A NULL reference is not checked. A person's cover, an Import file's asset and an Import's Watch folder are the
+-- references that are not such keys: a single column each, at the person, import_file and import tables.
 
 CREATE TABLE _core (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
@@ -66,7 +66,9 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('map.geocoder.url', 'https://nominatim.openstreetmap.org/search', 'https://nominatim.openstreetmap.org/search'),
   ('db.postgres.read_statement_timeout', '30', '30'),
   ('pipeline.shutdown_timeout', '30', '30'),
-  ('import.parallelism', '0', '0');
+  ('import.parallelism', '0', '0'),
+  ('import.history.days', '90', '90'),
+  ('watch_folder.scan_interval', '10', '10');
 
 -- email_key and username_key are the name keys of the email address and the username (User.emailKey and User.usernameKey:
 -- NameKey.of, folded in Scala, so both engines fold alike, where SQLite's lower() folds ASCII only)
@@ -452,3 +454,128 @@ CREATE TABLE search_document (
 -- upsert's ON CONFLICT (repository_id, asset_id) still finds it, since a conflict target names a set of columns.
 CREATE UNIQUE INDEX search_document_01 ON search_document (asset_id, repository_id);
 CREATE INDEX search_document_02 ON search_document USING gin (tsv);
+
+-- A Watch folder: a directory on the server that the app scans for one Library, importing the files that arrive in it
+-- (WatchFolderService). Its files are only ever copied out of it, and deleted from it when it deletes imported files.
+CREATE TABLE watch_folder (
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  -- The directory's absolute path, as it was entered. Unique in the instance: no two Watch folders overlap, in any Library,
+  -- which the code checks by real path, one inside the other included (WatchFolderService)
+  path TEXT NOT NULL UNIQUE,
+  -- The folder its files are sorted into, the directory's tree mirrored under it ("Keep folder structure"); NULL = Triage
+  dest_folder_id CHAR(36) COLLATE "C",
+  -- Whether a file is deleted from the directory once it is imported, or is a duplicate of an asset of the Library
+  deletes_imported BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Paused by an Admin, or because its owner was deactivated or is no Admin any more
+  is_paused BOOLEAN NOT NULL DEFAULT FALSE,
+  -- The Admin who added it or last edited it, who owns the assets it imports. No delete action: a deleted Admin's Watch
+  -- folders pass to the deleting Admin first, as its assets do
+  account_id CHAR(36) COLLATE "C" NOT NULL REFERENCES account (id),
+  -- Why it is paused, when its owner is why; otherwise why its directory is unavailable, as its last scan found it
+  status_reason TEXT,
+  -- When its directory was last walked; NULL until the first scan that finds it available
+  last_scan_at TIMESTAMP WITH TIME ZONE,
+  UNIQUE (id, repository_id),
+  -- No delete action, as no folder is ever deleted on its own (a deleted folder is recycled)
+  FOREIGN KEY (repository_id, dest_folder_id) REFERENCES folder (repository_id, id)
+) INHERITS (_core);
+
+-- A Library's Watch folders: its list, and the cascade from a deleted Library
+CREATE INDEX watch_folder_01 ON watch_folder (repository_id);
+
+-- A Watch folder's memory of a file of its directory, by the file's path under it: what the last scan saw of it, and what
+-- became of it. A file is read once a scan finds it with the size and modified time a scan saw at least 5 seconds before,
+-- and not again while they stay.
+CREATE TABLE watch_folder_file (
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  watch_folder_id CHAR(36) COLLATE "C" NOT NULL,
+  -- The file's path under the watched directory, its names separated by "/"
+  rel_path TEXT NOT NULL,
+  size_bytes BIGINT NOT NULL,
+  -- The file's modified time in milliseconds since the epoch: compared for equality, never shown
+  modified_at BIGINT NOT NULL,
+  -- seen: not read yet, or changed since; handled: imported, or a duplicate of an asset of the Library; final: unsupported or
+  -- undecodable, until the file changes; retry: failed, to be read again; parked: failed `attempts` times, left alone
+  state TEXT NOT NULL DEFAULT 'seen'
+    CHECK (state IN ('seen', 'handled', 'final', 'retry', 'parked')),
+  attempts INT NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  -- When a scan last found the file, to the day (a scan moves it once it is a day old): a file absent from the directory
+  -- is forgotten once this is past the retention period. For a file not read yet it is the moment it was first seen with
+  -- its size and modified time, which its rest before it is read is counted from
+  last_seen_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  FOREIGN KEY (repository_id, watch_folder_id) REFERENCES watch_folder (repository_id, id) ON DELETE CASCADE
+) INHERITS (_core);
+
+-- A Watch folder's memory, which a scan reads whole, and a file of it by its path; the cascade from a removed Watch folder
+CREATE UNIQUE INDEX watch_folder_file_01 ON watch_folder_file (watch_folder_id, rel_path);
+
+-- An Import: the stored record of one delivery of files to a Library, an upload from a browser or one scan of a Watch folder
+-- that found files (ImportService). The five counters are its Import files by outcome, kept by the write that sets a file's
+-- outcome, so a listing reads no file.
+CREATE TABLE import (
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  source TEXT NOT NULL
+    CHECK (source IN ('upload', 'watch_folder')),
+  -- The uploaded folder's or the Watch folder's name; NULL for an upload of files
+  name TEXT,
+  -- The Watch folder whose scan this is; NULL for an upload, and once the Watch folder is removed: its Imports stay in the
+  -- history. A single column: a composite key's SET NULL would clear repository_id too, so the code checks that the Watch
+  -- folder is the Library's (ImportService.open).
+  watch_folder_id CHAR(36) COLLATE "C" REFERENCES watch_folder (id) ON DELETE SET NULL,
+  -- The account that delivered it; NULL once that account is deleted
+  account_id CHAR(36) COLLATE "C" REFERENCES account (id) ON DELETE SET NULL,
+  -- The folder its files are sorted into; NULL = Triage
+  dest_folder_id CHAR(36) COLLATE "C",
+  -- How many files it was opened to hold: what an upload is about to send, what a scan is about to offer; NULL when it was
+  -- not told. Read only while it still takes files, to show the files yet to come as remaining
+  expected_files INT CHECK (expected_files >= 0),
+  -- No more files will be added: the upload closed it, or the scan offered its last file
+  is_complete BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Set once the Import is complete and none of its files is pending; NULL while it is in progress
+  closed_at TIMESTAMP WITH TIME ZONE,
+  pending INT NOT NULL DEFAULT 0 CHECK (pending >= 0),
+  imported INT NOT NULL DEFAULT 0 CHECK (imported >= 0),
+  duplicate INT NOT NULL DEFAULT 0 CHECK (duplicate >= 0),
+  unsupported INT NOT NULL DEFAULT 0 CHECK (unsupported >= 0),
+  failed INT NOT NULL DEFAULT 0 CHECK (failed >= 0),
+  UNIQUE (id, repository_id),
+  -- No delete action, as no folder is ever deleted on its own (a deleted folder is recycled)
+  FOREIGN KEY (repository_id, dest_folder_id) REFERENCES folder (repository_id, id)
+) INHERITS (_core);
+
+-- A Library's Import history by age: the closed Imports of its listing, its count, and the prune of the Imports past
+-- import.history.days
+CREATE INDEX import_01 ON import (repository_id, created_at);
+-- A Watch folder's Imports: the counts its card shows, and the key's delete action when it is removed
+CREATE INDEX import_02 ON import (watch_folder_id) WHERE watch_folder_id IS NOT NULL;
+-- A Library's Imports in progress, which are few and head the history's listing, and which a start closes
+-- (ImportDao.closeInterrupted): read without the closed ones, which are the history
+CREATE INDEX import_03 ON import (repository_id, created_at) WHERE closed_at IS NULL;
+
+-- An Import file: one file of an Import with its outcome. rel_path is the file's path as it was delivered, its name for an
+-- upload of files.
+CREATE TABLE import_file (
+  id CHAR(36) COLLATE "C" PRIMARY KEY,
+  repository_id CHAR(36) COLLATE "C" NOT NULL REFERENCES repository (id) ON DELETE CASCADE,
+  import_id CHAR(36) COLLATE "C" NOT NULL,
+  rel_path TEXT NOT NULL,
+  outcome TEXT NOT NULL DEFAULT 'pending'
+    CHECK (outcome IN ('pending', 'imported', 'duplicate', 'unsupported', 'failed')),
+  -- Why the file has its outcome, where there is something to say: where the asset a duplicate matches is, why a file failed
+  reason TEXT,
+  -- The asset an imported file became, or the asset of the Library a duplicate matches, until that asset is purged; the row
+  -- keeps its path after. A single column: a composite key's SET NULL would clear repository_id too, so the code checks that
+  -- the asset is the Library's (ImportService.settle).
+  asset_id CHAR(36) COLLATE "C" REFERENCES asset (id) ON DELETE SET NULL,
+  size_bytes BIGINT NOT NULL,
+  FOREIGN KEY (repository_id, import_id) REFERENCES import (repository_id, id) ON DELETE CASCADE
+) INHERITS (_core);
+
+-- An Import's files by outcome, the pending ones a restart fails among them, and the cascade from a pruned Import
+CREATE INDEX import_file_01 ON import_file (import_id, outcome);
+-- The files that point at an asset, for the key's delete action when the asset is purged
+CREATE INDEX import_file_02 ON import_file (asset_id) WHERE asset_id IS NOT NULL;

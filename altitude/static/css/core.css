@@ -22,8 +22,10 @@
     --border-heavy: var(--border-heavy-width) solid;
     --border-double: 2px double;
     --border-band: 3px solid;
+    --border-dashed: var(--border-heavy-width) dashed;
     --panel-border-color: hsl(from var(--shadow-color) h s l / 0.18);
     --popover-border-color: hsl(from var(--theme-neutral-3) h s l / 0.3);
+    --dashed-border-color: hsl(from var(--theme-neutral-3) h s l / 0.45);
 
     --radius: 0.3125rem;
     --radius-small: 0.1875rem;
@@ -135,6 +137,17 @@
     --quick-view-preview-size: 8rem;
     --quick-view-previews-max-height: 32rem;
     --users-page-max-width: 75rem;
+    --import-page-max-width: 75rem;
+    --import-uploads-min-width: 18.75rem;
+    --import-history-min-width: 26.25rem;
+    /* A Watch folder's card on the Import page (htmx/watch_folders.css), and the Watch folder dialog
+       (htmx/watch_folder_form.css) */
+    --watch-folder-card-width: 16rem;
+    --watch-folder-form-width: 32rem;
+    /* The Import history (htmx/import_history.css, includes/import_status.css): the node of an Import on the timeline and
+       the height of its progress bar */
+    --import-node-size: 0.625rem;
+    --import-bar-height: 0.625rem;
     --account-card-width: 17rem;
     --account-avatar-size: 2.5rem;
     --account-username-max-width: 11rem;

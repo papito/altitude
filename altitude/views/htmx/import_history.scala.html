@@ -1,0 +1,79 @@
+@import altitude.core.Const
+@import altitude.core.RequestContext
+@import altitude.core.models.ImportEntry
+@import altitude.core.models.ImportHistory
+@import altitude.core.models.ImportSource
+@import altitude.core.util.Util
+
+@(history: ImportHistory, shown: Int)
+
+@* The Import history of the Import page (pipeline.scala.html, and GET /htmx/import/r/:repoId/history, a holder of Import's):
+   a vertical timeline, one node per Import, the Imports in progress pinned under "In progress" above "Earlier", the newest
+   first in each. It shows the Library's first `shown` Imports and offers the earlier ones a step at a time, up to the most
+   it shows (Const.ImportHistory); a Library with no Import says so.
+
+   An entry is the Import's kind as an icon (a folder upload, an upload of files, a Watch folder's scan), its title
+   (includes/import_title), who or what delivered it, when (a `<time>` the page shows in the viewer's zone, `localTime`),
+   where it went and, when a restart failed files of it, that it was interrupted; then its status (includes/import_status),
+   which the status feed replaces as the Import changes; then its Import files, a `<details>` whose list
+   (htmx/import_files) the page loads when it is opened.
+
+   The page reads the history again, by the root's `data-app-view-url`, when an Import opens or closes and when the feed
+   reconnects (js/import-status.js). Each `<details>` is `hx-preserve`, so an Import expanded on the page stays as it is
+   across that: open, with its filter and the files it shows. *@
+
+@repoId = @{ RequestContext.getRepository.persistedId }
+@route = @{ s"/htmx/import/r/$repoId" }
+@sizes = @{ Const.ImportHistory }
+@count(n: Int) = @{ f"$n%,d" }
+
+@* What kind of delivery the Import is: the icon, and its name for a screen reader *@
+@kind(listed: ImportEntry) = {@((listed.anImport.source, listed.anImport.name)) match {
+    case (ImportSource.WatchFolder, _) => {<i class="fas fa-eye" aria-hidden="true"></i><span class="visually-hidden">Watch folder scan</span>}
+    case (ImportSource.Upload, Some(_)) => {<i class="fas fa-folder" aria-hidden="true"></i><span class="visually-hidden">Folder upload</span>}
+    case (ImportSource.Upload, None) => {<i class="fas fa-file" aria-hidden="true"></i><span class="visually-hidden">File upload</span>}
+}}
+
+@* Who or what delivered the Import: a Watch folder, or the account, which may be deleted since *@
+@deliveredBy(listed: ImportEntry) = {@if(listed.anImport.source == ImportSource.WatchFolder) {Watch folder} else {@listed.deliveredBy.getOrElse("Deleted account")}}
+
+@entry(listed: ImportEntry) = {
+<li class="import@if(listed.anImport.isInProgress) { in-progress}" data-import-id="@listed.anImport.persistedId">
+    <header>
+        @kind(listed)
+        @includes.html.import_title(listed.anImport)
+        <span class="meta">@deliveredBy(listed)@listed.openedAt.map { at => · <time datetime="@at" x-data="localTime">@Util.utcText(at, withTime = true)</time>} · into @listed.destination.getOrElse("Triage")@if(listed.isInterrupted) { · <span class="interrupted">interrupted by a restart</span>}</span>
+    </header>
+    @includes.html.import_status(listed.anImport)
+    <details id="@sizes.filesId(listed.anImport.persistedId)" hx-preserve data-app-import-files>
+        <summary>Files</summary>
+        <div id="@sizes.fileListId(listed.anImport.persistedId)" data-app-view-url="@route/imports/@listed.anImport.persistedId/files"></div>
+    </details>
+</li>
+}
+
+<div id="importHistoryList" data-app-view-url="@route/history?shown=@shown">
+    @if(history.entries.isEmpty) {
+    <p class="empty">Nothing imported yet. Every upload and every Watch folder scan that finds files appears here.</p>
+    }
+    @if(history.inProgress.nonEmpty) {
+    <h3>In progress</h3>
+    <ol class="timeline">
+        @for(listed <- history.inProgress) {@entry(listed)}
+    </ol>
+    }
+    @if(history.earlier.nonEmpty) {
+    <h3>Earlier</h3>
+    <ol class="timeline">
+        @for(listed <- history.earlier) {@entry(listed)}
+    </ol>
+    }
+    @if(history.total > history.entries.size) {
+    <p class="shown">
+        Showing @count(history.entries.size) of @count(history.total) Imports
+        @if(shown < sizes.MAX_IMPORTS) {
+        <button type="button" class="action-button small" data-app-view="@route/history?shown=@{(shown + sizes.IMPORTS_STEP).min(sizes.MAX_IMPORTS)}">Show earlier Imports</button>
+        }
+    </p>
+    }
+</div>

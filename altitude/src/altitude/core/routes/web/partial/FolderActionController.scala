@@ -44,7 +44,10 @@ class FolderActionController(using logger: Logger) extends BaseController:
         ))
     }
 
-  /** An unknown folder, or another repository's, is a 404 */
+  /**
+   * The Delete confirmation, which warns of the Watch folders that sort their files into the folder or a folder below it. An
+   * unknown folder, or another repository's, is a 404
+   */
   @requireLogin()
   @requirePermission(Permission.Organize)
   @cask.get(f"/$prefix/r/:repoId/dialogs/delete-folder")
@@ -52,7 +55,11 @@ class FolderActionController(using logger: Logger) extends BaseController:
       request: Request): Response[String] =
     answering {
       val folder: Folder = App.altitude.service.folder.getById(id)
-      htmlResponse(htmx.html.delete_folder_dialog(title = C.UI.DELETE_FOLDER_DIALOG_TITLE, folder = folder))
+      htmlResponse(
+        htmx.html.delete_folder_dialog(
+          title = C.UI.DELETE_FOLDER_DIALOG_TITLE,
+          folder = folder,
+          watchFolders = App.altitude.service.watchFolder.targeting(folder.persistedId)))
     }
 
   @requireLogin()

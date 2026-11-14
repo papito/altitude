@@ -45,13 +45,14 @@ record.
 
 **Import file**:
 One file of an Import with its outcome: imported, already in the Library,
-unsupported, or failed.
+unsupported, or failed. Until it has one it is pending.
 _Avoid_: Entry, Item, Line.
 
 **Watch folder**:
 A directory on the server that the app scans for new files and imports into one
 Library, including files that arrived while the app was not running. It is not
-a folder of the Library, and it may delete the files it has imported.
+a folder of the Library, and it may delete the files it has imported and those
+the Library already has. An Admin sets it up, and owns the assets it imports.
 _Avoid_: Hot folder, Inbox, Drop folder, Monitored folder.
 
 **Location**:
@@ -248,7 +249,8 @@ _Avoid_: Rank, Score, Weight in user-facing text.
 
 **Admin**:
 The account type that may do everything in every Library. It alone changes
-Settings, creates another Admin, and edits, deactivates or deletes an account.
+Settings, sets up Watch folders, creates another Admin, and edits, deactivates
+or deletes an account.
 There can be several; the last active one cannot be removed.
 _Avoid_: Owner, Superuser, Root.
 
@@ -267,7 +269,7 @@ _Avoid_: Role, Right, Privilege, Policy.
 **Organize**:
 The Permission to arrange a Library: sort assets out of Triage into folders,
 move sorted assets, manage folders, albums, Locations and Categories, and merge
-or hide People.
+or hide People. An upload that skips Triage needs it as well as Import.
 _Avoid_: Add to Catalog, Add to Library, Manage.
 
 **Setting**:

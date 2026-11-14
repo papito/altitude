@@ -1,0 +1,39 @@
+@import altitude.core.Const
+@import altitude.core.models.Import
+@import altitude.core.models.ImportOutcome
+
+@(anImport: Import, isPushed: Boolean = false)
+
+@* An Import's status in the Import history (htmx/import_history): a progress bar segmented by outcome, each segment as
+   wide as its share of the Import's files (`--files`, its number of them) with the rest for the files remaining, and the
+   counts as chips in the outcomes' colors, a zero count left out, with the files remaining while the Import is in
+   progress, when the bar's stripes move. The files remaining (`Import.remaining`) are the ones it has been given that are
+   still pending and, while it still takes files, the ones it expects and has not been given yet: an upload says how
+   many files it is about to send, and a scan how many it is about to offer, so the bar fills as the files settle rather
+   than as they arrive. An Import that takes no more files, closed or cancelled, shows only what was recorded. The chips
+   say what the bar shows, so the bar is hidden from a screen reader.
+
+   The status feed sends this element as the Import changes (`isPushed`, ImportStatusWsActor), to replace the one of the
+   same ID, with the Import's title out of band. It takes all it shows as parameters and reads no request context: the
+   actor that renders it has none. *@
+@count(n: Int) = @{ f"$n%,d" }
+
+<div id="@Const.ImportHistory.statusId(anImport.persistedId)" class="status@if(anImport.isInProgress) { in-progress}">
+    <div class="bar" aria-hidden="true">
+        @for(outcome <- ImportOutcome.settled if anImport.count(outcome) > 0) {
+        <span class="@outcome.dbValue" style="--files: @anImport.count(outcome)"></span>
+        }
+        @if(anImport.remaining > 0) {
+        <span class="@ImportOutcome.Pending.dbValue" style="--files: @anImport.remaining"></span>
+        }
+    </div>
+    <ul class="counts">
+        @for(outcome <- ImportOutcome.settled if anImport.count(outcome) > 0) {
+        <li class="@outcome.dbValue">@count(anImport.count(outcome)) @outcome.label</li>
+        }
+        @if(anImport.isInProgress && anImport.remaining > 0) {
+        <li class="pending">@count(anImport.remaining) remaining</li>
+        }
+    </ul>
+</div>
+@if(isPushed) {@includes.html.import_title(anImport, isOutOfBand = true)}

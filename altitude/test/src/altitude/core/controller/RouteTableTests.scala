@@ -17,10 +17,12 @@ import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
 import altitude.core.models.AccountType
+import altitude.core.models.ImportSource
 import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.Person
 import altitude.core.models.Repository
+import altitude.core.models.WatchFolder
 import altitude.core.routes.decorators.requireAccountCreator
 import altitude.core.routes.decorators.requireAdmin
 import altitude.core.routes.decorators.requireLibraryCreator
@@ -39,9 +41,10 @@ import altitude.core.routes.decorators.requirePermission
   /**
    * Who may call a route: anyone, for the reason given; any account logged in, and with access to the Library of the path when it
    * names one, as `requireLogin` checks it, or as the route checks it itself, for the reason given (`LoginInRoute`); a member, an
-   * account that is no Guest (`requireMember`); the holder of any one of `anyOf` in the path's Library (`requirePermission`); an
-   * Admin or the holder of Create Users or Create Guests in any Library (`requireAccountCreator`); an Admin or an account with
-   * the Create Libraries flag (`requireLibraryCreator`); an Admin alone (`requireAdmin`).
+   * account that is no Guest (`requireMember`); the holder of any one of `anyOf` in the path's Library (`requirePermission`), or
+   * as the route checks it itself, for the reason given (`HolderInRoute`); an Admin or the holder of Create Users or Create
+   * Guests in any Library (`requireAccountCreator`); an Admin or an account with the Create Libraries flag
+   * (`requireLibraryCreator`); an Admin alone (`requireAdmin`).
    */
   private enum Access:
     case Public(reason: String)
@@ -49,6 +52,7 @@ import altitude.core.routes.decorators.requirePermission
     case LoginInRoute(reason: String)
     case Member
     case Holder(anyOf: Set[Permission])
+    case HolderInRoute(anyOf: Set[Permission], reason: String)
     case AccountCreator
     case LibraryCreator
     case Admin
@@ -61,15 +65,16 @@ import altitude.core.routes.decorators.requirePermission
       case Public(_) | Login | LoginInRoute(_) => true
       case Member => accountType != AccountType.Guest
       case Holder(anyOf) => accountType == AccountType.Admin || anyOf.exists(permissions.has)
+      case HolderInRoute(anyOf, _) => accountType == AccountType.Admin || anyOf.exists(permissions.has)
       case AccountCreator =>
         accountType == AccountType.Admin || Access.creates.exists(permissions.has)
       case LibraryCreator => accountType == AccountType.Admin || canCreateLibraries
       case Admin => accountType == AccountType.Admin
     }
 
-    /** What the route's decorators declare of this: nothing for a route anyone calls or that checks the login itself */
+    /** What the route's decorators declare of this: nothing for a route anyone calls or that checks who calls it itself */
     def declared: Option[Access] = this match {
-      case Public(_) | LoginInRoute(_) => None
+      case Public(_) | LoginInRoute(_) | HolderInRoute(_, _) => None
       case access => Some(access)
     }
 
@@ -151,11 +156,26 @@ import altitude.core.routes.decorators.requirePermission
       category: String,
       person: String,
       face: String,
-      sequence: String) {
+      sequence: String,
+      anImport: String,
+      watchFolder: String) {
 
     /** The other repository's IDs, which an answer may show only when the request sent them */
     def theirIds: List[String] =
-      List(asset, recycled, folder, album, location, category, person, face, sequence, theirs.rootFolderId) ++ frames
+      List(
+        asset,
+        recycled,
+        folder,
+        album,
+        location,
+        category,
+        person,
+        face,
+        sequence,
+        anImport,
+        watchFolder,
+        theirs.rootFolderId) ++
+        frames
 
     /** The same requests with every ID of the other repository replaced by one that does not exist */
     def unknown: Fixtures = {
@@ -170,7 +190,9 @@ import altitude.core.routes.decorators.requirePermission
         category = random,
         person = random,
         face = random,
-        sequence = random
+        sequence = random,
+        anImport = random,
+        watchFolder = random
       )
     }
   }
@@ -195,6 +217,19 @@ import altitude.core.routes.decorators.requirePermission
 
   private val publicRoute = Access.Public
 
+  // The probes are a User's with every Permission, whom an Admin's route refuses before it reads an ID: what such a route
+  // answers an Admin who names another Library's Watch folder, a 404 that changes nothing, is WatchFolderControllerTests'
+  private val ADMIN_ROUTE = "an Admin's route, which refuses the probes' User before it reads an ID"
+
+  /** A probe of a route that only an Admin calls, which answers the probes' User a 403 whatever IDs it is sent */
+  private def adminOnly(query: Map[String, String] = Map.empty, body: Option[ujson.Value] = None): Probe =
+    Probe(403, query = query, body = body, why = ADMIN_ROUTE)
+
+  /** The other repository's Watch folder, as a request's parameter or body field names it */
+  private def watchFolderOf(fx: Fixtures): Map[String, String] = Map(Api.Field.WatchFolder.WATCH_FOLDER_ID -> fx.watchFolder)
+
+  private def watchFolderBody(fx: Fixtures): Option[ujson.Value] = json(Api.Field.WatchFolder.WATCH_FOLDER_ID -> fx.watchFolder)
+
   private val SCRUBBED_CATEGORY = "the Location dialogs' shared scrubber trims it, and the route reads no category"
 
   // Account management reaches every account, and gives Libraries of the whole instance
@@ -215,7 +250,6 @@ import altitude.core.routes.decorators.requirePermission
     none(POST, "/htmx/setup", publicRoute("setup runs before any account exists, and refuses once the instance is set up")),
     none(GET, "/static/", publicRoute("the app's own scripts, styles and fonts")),
     none(GET, "/assets/:name", publicRoute("the app's stylesheet bundle")),
-    none(WEBSOCKET, "/import/status", Access.LoginInRoute("a WebSocket handshake, which no decorator wraps, checks it")),
     // Pages
     none(GET, "/", Access.LoginInRoute("sends a request with no login to the login page, and one with a login to its Library")),
     probed(GET, "/r/:repoId") {
@@ -229,14 +263,49 @@ import altitude.core.routes.decorators.requirePermission
     probed(GET, "/r/:repoId/asset/:assetId")(fx => List(Probe(404, path = Map("assetId" -> fx.asset)))),
     none(GET, "/pipeline/r/:repoId").needs(Permission.Import),
     none(GET, "/settings/r/:repoId").forAdmins,
-    Row(
-      POST,
-      "/r/:repoId/upload/:uploadId/cancel",
-      Ids.NotEntity(Set("uploadId"), "the client's token for one upload, no row of a repository")).needs(Permission.Import),
-    Row(
-      POST,
-      "/import/r/:repoId/upload/:uploadId",
-      Ids.NotEntity(Set("uploadId"), "the client's token for one upload, no row of a repository")).needs(Permission.Import),
+    probed(POST, "/import/r/:repoId/imports") {
+      fx => List(Probe(404, body = json(Api.Field.Import.DEST_FOLDER_ID -> fx.folder), json = true))
+    }.needs(Permission.Import).ignoring(Api.Field.ID -> "the ID of the Import it opened, written into its answer"),
+    probed(POST, "/import/r/:repoId/imports/:importId/files") {
+      fx => List(Probe(404, path = Map("importId" -> fx.anImport), query = Map("relPath" -> "photo.jpg"), json = true))
+    }.needs(Permission.Import).ignoring(Api.Field.ID -> "the ID of the Import file, written into its answer"),
+    probed(POST, "/import/r/:repoId/imports/:importId/failures") {
+      fx =>
+        List(
+          Probe(404, path = Map("importId" -> fx.anImport), body = json(Api.Field.Import.REL_PATH -> "photo.jpg"), json = true))
+    }.needs(Permission.Import).ignoring(Api.Field.ID -> "the ID of the Import file, written into its answer"),
+    probed(POST, "/import/r/:repoId/imports/:importId/close") {
+      fx => List(Probe(404, path = Map("importId" -> fx.anImport), json = true))
+    }.needs(Permission.Import),
+    none(
+      WEBSOCKET,
+      "/import/r/:repoId/status",
+      Access.HolderInRoute(Set(Permission.Import), "a WebSocket handshake, which no decorator wraps, checks the login and Import")
+    ),
+    none(GET, "/htmx/import/r/:repoId/history").needs(Permission.Import),
+    probed(GET, "/htmx/import/r/:repoId/imports/:importId/files")(fx => List(Probe(404, path = Map("importId" -> fx.anImport))))
+      .needs(Permission.Import),
+    // Watch folders: the cards are a holder of Import's, everything else an Admin's
+    none(GET, "/htmx/watch-folders/r/:repoId/list").needs(Permission.Import),
+    none(GET, "/htmx/watch-folders/r/:repoId/dialogs/add").forAdmins,
+    probed(GET, "/htmx/watch-folders/r/:repoId/dialogs/edit")(fx => List(adminOnly(query = watchFolderOf(fx)))).forAdmins,
+    probed(POST, "/htmx/watch-folders/r/:repoId/add") {
+      fx => List(adminOnly(body = json(Api.Field.WatchFolder.DEST_FOLDER_ID -> fx.folder)))
+    }.forAdmins
+      .ignoring(Api.Field.WatchFolder.WATCH_FOLDER_ID -> "read with the form the edit shares, and not acted on by an add"),
+    probed(PUT, "/htmx/watch-folders/r/:repoId/edit") {
+      fx =>
+        List(
+          adminOnly(body =
+            json(Api.Field.WatchFolder.WATCH_FOLDER_ID -> fx.watchFolder, Api.Field.WatchFolder.DEST_FOLDER_ID -> fx.folder)))
+    }.forAdmins,
+    probed(GET, "/htmx/watch-folders/r/:repoId/deletion-notice")(fx => List(adminOnly(query = watchFolderOf(fx)))).forAdmins,
+    probed(PUT, "/htmx/watch-folders/r/:repoId/pause")(fx => List(adminOnly(body = watchFolderBody(fx)))).forAdmins,
+    probed(PUT, "/htmx/watch-folders/r/:repoId/resume")(fx => List(adminOnly(body = watchFolderBody(fx)))).forAdmins,
+    probed(PUT, "/htmx/watch-folders/r/:repoId/scan")(fx => List(adminOnly(body = watchFolderBody(fx)))).forAdmins,
+    probed(PUT, "/htmx/watch-folders/r/:repoId/retry")(fx => List(adminOnly(body = watchFolderBody(fx)))).forAdmins,
+    probed(GET, "/htmx/watch-folders/r/:repoId/dialogs/remove")(fx => List(adminOnly(query = watchFolderOf(fx)))).forAdmins,
+    probed(DELETE, "/htmx/watch-folders/r/:repoId/watch-folder")(fx => List(adminOnly(query = watchFolderOf(fx)))).forAdmins,
     probed(GET, "/content/r/:repoId/:dataType/:itemId") {
       fx =>
         List(
@@ -707,8 +776,11 @@ import altitude.core.routes.decorators.requirePermission
         }
         .orElse(decorators.collectFirst { case _: requireLogin | _: requireLoginOrSignature => Access.Login })
 
-    /** A route that changes something in a Library: any method but GET under `/r/:repoId` */
-    def changesLibrary: Boolean = method != GET && path.contains(LIBRARY_PATH)
+    /**
+     * A route that changes something in a Library: any method under `/r/:repoId` but GET and a WebSocket's handshake, which only
+     * opens a feed
+     */
+    def changesLibrary: Boolean = method != GET && method != WEBSOCKET && path.contains(LIBRARY_PATH)
 
     /** The parameters that name a row: `id`, or any `...Id` but the repository's, which the path's own check covers */
     def idParams: Set[String] = params.filter(RouteTableTests.isIdName).toSet - "repoId"
@@ -746,6 +818,20 @@ import altitude.core.routes.decorators.requirePermission
     host + pathParam.replaceAllIn(
       path,
       m => Regex.quoteReplacement(if m.group(1) == "repoId" then repoId else values(m.group(1))))
+
+  /**
+   * The status a route answers a request with no body and `values` as its path parameters: a WebSocket's handshake is answered
+   * what it is refused with, or 101 when it opens
+   */
+  private def statusOf(
+      host: String,
+      row: Row,
+      repoId: String,
+      values: Map[String, String],
+      cookies: Map[String, java.net.HttpCookie]): Int =
+    if (row.method == WEBSOCKET)
+      ImportControllerTests.importStatusHandshake(host, cookies, path = url("", row.path, repoId, values)).left.getOrElse(101)
+    else send(host, row, Probe(0, path = values), repoId, cookies).statusCode
 
   private def send(
       host: String,
@@ -798,7 +884,9 @@ import altitude.core.routes.decorators.requirePermission
       category = id,
       person = id,
       face = id,
-      sequence = id
+      sequence = id,
+      anImport = id,
+      watchFolder = id
     )
   }
 
@@ -872,14 +960,7 @@ import altitude.core.routes.decorators.requirePermission
       host =>
         for (row <- table if !row.access.isInstanceOf[Access.Public]) withClue(s"[${row.method} ${row.path}]: ") {
           val values = pathParam.findAllMatchIn(row.path).map(_.group(1) -> UUID.randomUUID.toString).toMap
-          val status =
-            if (row.method == WEBSOCKET)
-              ImportControllerTests
-                .importStatusHandshake(host, Map.empty, path = url("", row.path, repoId, values))
-                .left
-                .getOrElse(101)
-            else send(host, row, Probe(0, path = values), repoId, cookies = Map.empty).statusCode
-          List(302, 401) should contain(status)
+          List(302, 401) should contain(statusOf(host, row, repoId, values, cookies = Map.empty))
         }
     }
   }
@@ -902,7 +983,7 @@ import altitude.core.routes.decorators.requirePermission
      *
      * Edge cases:
      *
-     * A public row, and a route that checks the login itself (`/` and the import status WebSocket), have none of these
+     * A public row, and a route that checks who calls it itself (`/` and the import status WebSocket), have none of these
      * decorators.
      */
     val rows = table.map(row => row.key -> row).toMap
@@ -936,7 +1017,7 @@ import altitude.core.routes.decorators.requirePermission
      * Edge cases:
      *
      * The requests carry no body and random IDs, so an account let through is answered whatever the route answers such a request,
-     * a 400 or a 404 among them, but never 403. The import status WebSocket names no Library and is left out.
+     * a 400 or a 404 among them, but never 403. The import status WebSocket's handshake is refused with a 403 or opens.
      */
     val library = testContext.persistRepository()
     val repoId = library.persistedId
@@ -960,9 +1041,10 @@ import altitude.core.routes.decorators.requirePermission
           (AccountType.User, Permissions(Permissions.all.mask & ~Permissions.of(anyOf.toSeq*).mask), false) ::
             anyOf.toList.map(permission => (AccountType.User, Permissions.of(permission), false))
 
-        for (row <- table if row.method != WEBSOCKET) withClue(s"[${row.method} ${row.path}] ") {
+        for (row <- table) withClue(s"[${row.method} ${row.path}] ") {
           val holders: List[(AccountType, Permissions, Boolean)] = row.access match {
             case Access.Holder(anyOf) => holding(anyOf)
+            case Access.HolderInRoute(anyOf, _) => holding(anyOf)
             case Access.AccountCreator => holding(Access.creates)
             case _ => Nil
           }
@@ -978,7 +1060,7 @@ import altitude.core.routes.decorators.requirePermission
             withClue(s"as a $accountType holding $permissions${if (canCreateLibraries) " with the flag" else ""}: ") {
               val values = pathParam.findAllMatchIn(row.path).map(_.group(1) -> UUID.randomUUID.toString).toMap
               val cookies = session(accountType, permissions, canCreateLibraries)
-              val status = send(host, row, Probe(0, path = values), repoId, cookies).statusCode
+              val status = statusOf(host, row, repoId, values, cookies)
               (status == 403) shouldBe !row.access.allows(accountType, permissions, canCreateLibraries)
             }
         }
@@ -1007,7 +1089,7 @@ import altitude.core.routes.decorators.requirePermission
         val cookies = cookiesOf(host, stranger)
         for (row <- table if row.path.contains(LIBRARY_PATH)) withClue(s"[${row.method} ${row.path}]: ") {
           val values = pathParam.findAllMatchIn(row.path).map(_.group(1) -> UUID.randomUUID.toString).toMap
-          send(host, row, Probe(0, path = values), library.persistedId, cookies).statusCode shouldBe 404
+          statusOf(host, row, library.persistedId, values, cookies) shouldBe 404
         }
     }
   }
@@ -1015,8 +1097,8 @@ import altitude.core.routes.decorators.requirePermission
   /**
    * The user's repository with an asset, a folder, an album, a Location and an unnamed Person with a Face, and their other
    * repository with an imported asset (with a Preview, a point, a Face with its files, a folder, an album and a Location in a
-   * category holding it), a Person with that Face, two triaged assets in one Sequence and a recycled asset. The context is the
-   * user's repository again when it returns.
+   * category holding it), a Person with that Face, two triaged assets in one Sequence, a recycled asset, an Import in progress
+   * and a Watch folder. The context is the user's repository again when it returns.
    */
   private def fixtures(mine: Repository): Fixtures = {
     val myAsset = testContext.insertAsset(testContext.makeAsset(repository = Some(mine)))
@@ -1045,6 +1127,16 @@ import altitude.core.routes.decorators.requirePermission
     testContext.setAssetSequence(frames, sequence)
     val recycled = testContext.insertAsset(testContext.makeAsset(repository = Some(theirs)))
     testApp.service.library.recycleAssets(Set(recycled.persistedId))
+    val anImport = testApp.service.imports.open(ImportSource.Upload, name = Some(s"$MARK upload"))
+    // Written through the DAO, on a path that is on no disk, and paused: the server's own scans leave its row as it is
+    val watchFolder = testApp.txManager.withTransaction {
+      testApp.DAO.watchFolder.add(
+        WatchFolder(
+          name = s"$MARK watch",
+          path = s"/nonexistent/$MARK-${UUID.randomUUID}",
+          isPaused = true,
+          accountId = testContext.user.persistedId))
+    }
     testApp.service.repository.switchContextToRepository(mine)
 
     Fixtures(
@@ -1067,7 +1159,9 @@ import altitude.core.routes.decorators.requirePermission
       category = category.persistedId,
       person = person.persistedId,
       face = face.persistedId,
-      sequence = sequence
+      sequence = sequence,
+      anImport = anImport.persistedId,
+      watchFolder = watchFolder.persistedId
     )
   }
 
@@ -1079,7 +1173,7 @@ import altitude.core.routes.decorators.requirePermission
      * A logged-in User's repository with an asset, a folder, an album, a Location and a Person with a Face, and a second
      * repository of theirs (the User holds every Permission in both) holding a row of every kind a route takes an ID of, each
      * named with a mark: an asset with a Preview, a point, a Face with its files, a folder, an album and a Location in a
-     * category, a Person with that Face, two triaged assets in a Sequence and a recycled asset.
+     * category, a Person with that Face, two triaged assets in a Sequence, a recycled asset and an Import in progress.
      *
      * Assertions:
      *

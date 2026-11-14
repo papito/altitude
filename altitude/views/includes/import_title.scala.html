@@ -1,0 +1,11 @@
+@import altitude.core.Const
+@import altitude.core.models.Import
+
+@(anImport: Import, isOutOfBand: Boolean = false)
+
+@* An Import's title in the Import history (htmx/import_history): its name, an uploaded folder's ("3 folders" for a drop of
+   several) or a Watch folder's, or for an upload of files the number of its files: while the upload runs, the number it
+   said it would send, or the files it has when it said none or sent more (`Import.expectedTotal`); once it takes no more
+   files, the files it has. The status feed sends it beside the Import's status (includes/import_status) as an
+   out-of-band swap (`isOutOfBand`), by its ID, so the number follows the files. It reads no request context. *@
+<strong id="@Const.ImportHistory.titleId(anImport.persistedId)" class="title"@if(isOutOfBand) { hx-swap-oob="true"}>@anImport.name.getOrElse {@{f"${anImport.expectedTotal}%,d"} @if(anImport.expectedTotal == 1) {file} else {files}}</strong>

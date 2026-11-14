@@ -242,14 +242,14 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
 
   /**
    * The PostgreSQL pool. Unless `db.postgres.pool_size` says otherwise, it has a connection per core, for requests running at
-   * once, plus five for the import pipeline (a transaction at most per database stage of a repository's import), and never fewer
+   * once, plus six for the import pipeline (a transaction at most per database stage of a repository's import), and never fewer
    * than 10.
    */
   private def postgresPool(): HikariDataSource =
     val hikari = poolConfig(
       "postgres",
       if config.hasPath(Const.Conf.POSTGRES_POOL_SIZE) then config.getInt(Const.Conf.POSTGRES_POOL_SIZE)
-      else math.max(10, Runtime.getRuntime.availableProcessors + 5)
+      else math.max(10, Runtime.getRuntime.availableProcessors + 6)
     )
     hikari.setJdbcUrl(config.getString(Const.Conf.POSTGRES_URL))
     hikari.setUsername(config.getString(Const.Conf.POSTGRES_USER))
