@@ -76,7 +76,8 @@ image as transparent.
 Coordinates are continuous pixels: the top-left corner at (0, 0), y down, a pixel's center at +0.5. Angles are positive
 clockwise. Everything starts from the **upright original**, the original turned by its EXIF orientation as a browser
 shows it and the Preview is made, W₀ × H₀ (`AssetService.uprightSize` on the server: the stored size swapped for the
-orientations 5 to 8; the decoded bitmap's size, or the server's `uprightWidth` and `uprightHeight`, on the client).
+orientations 5 to 8; the decoded bitmap's size, or the server's `uprightWidth` and `uprightHeight`, on the client, which
+draws nothing live from a bitmap a quarter turn from the server's size: its geometry would be on the wrong frame).
 
 1. **Turn and mirror** (`turn`). The point (x, y) of the upright original turns clockwise by `rotate`: to (H₀ − y, x) at
    90, (W₀ − x, H₀ − y) at 180, (y, W₀ − x) at 270. That is the **frame**, W × H, W₀ × H₀ swapped for a quarter turn

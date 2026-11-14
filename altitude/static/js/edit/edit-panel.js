@@ -350,14 +350,7 @@ export function createEditPanel({ context, editStage, detailPanel }) {
             return
         }
         const shown = editStage.current()
-        if (shown?.drawFailed) {
-            subject.undrawable = isRendererSupported()
-                ? UNDECODABLE_REFUSAL
-                : NO_WEBGL_REFUSAL
-            editStage.setEditing(false)
-            stopSession()
-            syncToggle()
-            push()
+        if (refuseIfUndrawable(assetId)) {
             return
         }
         if (shown?.source === "canvas" && shown.upright) {
@@ -372,6 +365,25 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         }
         cropTool.sync()
         push()
+    }
+
+    /**
+     * A canvas that could not draw `assetId` (no WebGL2, an original the browser cannot decode or turns otherwise than the
+     * server) makes it one the panel cannot edit, saying why; answers whether it did
+     */
+    function refuseIfUndrawable(assetId) {
+        const shown = editStage.current()
+        if (subject?.assetId !== assetId || !shown?.drawFailed) {
+            return false
+        }
+        subject.undrawable =
+            shown.drawRefusal ??
+            (isRendererSupported() ? UNDECODABLE_REFUSAL : NO_WEBGL_REFUSAL)
+        editStage.setEditing(false)
+        stopSession()
+        syncToggle()
+        push()
+        return true
     }
 
     /**
@@ -625,7 +637,10 @@ export function createEditPanel({ context, editStage, detailPanel }) {
         if (subject?.assetId === assetId) {
             subject.edit = state
         }
-        editStage.adoptEdit(assetId, state, { present: !drawsAsset(assetId) })
+        editStage
+            .adoptEdit(assetId, state, { present: !drawsAsset(assetId) })
+            // The first state with the server's upright size has the stage check the canvas against it
+            .then(() => drawsAsset(assetId) && refuseIfUndrawable(assetId))
         followRender(assetId, state)
     }
 

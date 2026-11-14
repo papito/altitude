@@ -1964,7 +1964,8 @@ data.
   `includes/html_common` for a holder of Edit images alone). Whether it is open is remembered per browser
   (`Const.localStore.assetDetailView`'s `editOpen`) and written on the fragment as `data-app-edit-panel-open`, from which the
   stylesheet lays the grid out. On an asset no Edit may change (a Video, an animated image or an asset in the trash, the
-  server's `editRefusal`; an original the browser cannot decode; a browser without WebGL2) the toggle is `aria-disabled`
+  server's `editRefusal`; an original the browser cannot decode, or turns a quarter turn from the server's upright size; a
+  browser without WebGL2) the toggle is `aria-disabled`
   with the reason as its title, so a keyboard or a screen reader still reaches it, and its press does nothing, while `e`
   says the reason in the snackbar; open on such an asset (remembered open, or a step to it), the panel says why
   (`.edit-refusal`) and draws nothing. Closing it with a change pending asks first (**The warning**); closing it with focus
@@ -2087,7 +2088,12 @@ data.
   "none"`), for an edited asset whose render is pending or that the server could not render, and for every asset while the
   panel is open (`setEditing`, then `setLive` with the panel's Edit and the renderer's options: `wholeFrame` for the Crop
   tool, `split` for Before/after). A canvas that cannot draw (no WebGL2, an original the browser cannot decode) falls back to
-  the original, and a Display image that does not load to the canvas. The canvas is drawn at the device pixels of the box it
+  the original, and a Display image that does not load to the canvas. So does a decoded original a quarter turn from the
+  server's upright size (`uprightWidth`, `uprightHeight`: the browser applied, or skipped, an EXIF turn the server did not),
+  checked before every draw and once more when the first Edit carrying that size arrives (the Edit panel's read of an asset
+  never edited), with a console warning: every Edit's geometry is in the server's upright original, so the canvas would draw
+  it on the wrong frame, and the Edit panel cannot edit such an asset ("This browser turns this photo otherwise than the
+  server, so it cannot draw its Edit"). The canvas is drawn at the device pixels of the box it
   is shown in, at most the size of what it shows, from a source fitted to that size, drawn again and refitted once the
   stage's size settles (150 ms), and shown once drawn, so no earlier drawing shows in a new box; a lost WebGL context is
   rebuilt on `webglcontextrestored` and the last drawing made again. Whatever is shown, the box is fitted to it

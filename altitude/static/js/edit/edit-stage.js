@@ -12,7 +12,9 @@
  *   is not the one rendered), one the server could not render (rendered, with no revision: the
  *   Display image is never asked for at revision 0), and any asset while the Edit panel draws it
  *   (`setEditing`, `setLive`). A canvas that cannot be drawn (no WebGL2, an original the browser
- *   cannot decode) falls back to the original, and a Display image that does not load to the canvas.
+ *   cannot decode, or one it turns a quarter turn from the server's upright size, whose Edit would be
+ *   drawn on the wrong frame) falls back to the original, and a Display image that does not load to
+ *   the canvas.
  *   The canvas is drawn at the device pixels of the box it is shown in, at most the size of what it
  *   shows (the crop, or the whole frame for the Crop tool, `wholeFrame`), from a source fitted to
  *   that size, and drawn again, refitted, when the stage's size changes; it is shown once drawn, so
@@ -54,6 +56,10 @@ import { setMediaSrcAndWait } from "../search-results/detail-navigator.js"
 import { editedSize, frameSize, outputSize } from "./geometry.js"
 import { isIdentity, normalize } from "./recipe.js"
 import { createRenderer, decodeUpright } from "./renderer.js"
+
+// Why the Edit panel cannot edit an asset the browser turns otherwise than the server
+const ORIENTATION_REFUSAL =
+    "This browser turns this photo otherwise than the server, so it cannot draw its Edit"
 
 const CANVAS_ID = "editCanvas"
 const STAGE_ID = "imageDetailStage"
@@ -275,13 +281,44 @@ export function createEditStage({ context, detailPanel }) {
 
     /**
      * The upright original's size as the server read it (the Edit's `uprightWidth` and
-     * `uprightHeight`), or the stored size when the asset has no Edit or the server could not read it
+     * `uprightHeight`), or null when the asset has no Edit (until the Edit panel's session reads it)
+     * or the server could not read it
      */
-    function storedUpright() {
-        const { edit, width, height } = subject
+    function serverUpright() {
+        const { edit } = subject
         return edit?.uprightWidth > 0 && edit?.uprightHeight > 0
             ? { width: edit.uprightWidth, height: edit.uprightHeight }
-            : { width, height }
+            : null
+    }
+
+    /** The upright original's size as the server read it, or the stored size when it read none */
+    function storedUpright() {
+        return (
+            serverUpright() ?? { width: subject.width, height: subject.height }
+        )
+    }
+
+    /**
+     * Throws when the browser turned the decoded original a quarter turn from the server's upright
+     * size (`imageOrientation: "from-image"` not applied, or applied where the server read no
+     * orientation): every Edit's geometry is in the server's upright original, so the canvas would
+     * draw it on the wrong frame. The error's `refusal` says why the Edit panel cannot edit it.
+     */
+    function checkOrientation(bitmap) {
+        const expected = serverUpright()
+        if (
+            expected &&
+            expected.width !== expected.height &&
+            bitmap.width === expected.height &&
+            bitmap.height === expected.width
+        ) {
+            const error = new Error(
+                `The browser decoded the original as ${bitmap.width} × ${bitmap.height}, a quarter turn from the server's ` +
+                    `upright ${expected.width} × ${expected.height}`,
+            )
+            error.refusal = ORIENTATION_REFUSAL
+            throw error
+        }
     }
 
     /** Starts a presentation that overtakes any on its way */
@@ -482,6 +519,7 @@ export function createEditStage({ context, detailPanel }) {
      * or null when overtaken.
      */
     async function drawCanvas(bitmap, current) {
+        checkOrientation(bitmap)
         const upright = { width: bitmap.width, height: bitmap.height }
         const fitFor = regionOf(
             upright,
@@ -658,8 +696,13 @@ export function createEditStage({ context, detailPanel }) {
         if (subject?.assetId !== assetId) {
             return Promise.resolve(false)
         }
+        // The first Edit to carry the server's upright size has the canvas drawn again, so it is checked against it
+        const uprightLearned =
+            !serverUpright() &&
+            edit?.uprightWidth > 0 &&
+            shown?.source === Source.canvas
         subject = { ...subject, edit }
-        if (!present) {
+        if (!present && !uprightLearned) {
             syncControls()
             return Promise.resolve(true)
         }
@@ -669,8 +712,9 @@ export function createEditStage({ context, detailPanel }) {
     /**
      * What the stage shows: the asset, its Edit, whether the account may edit it, the
      * source, the Edit drawn, the upright size, and whether the canvas failed to draw the asset
-     * (`drawFailed`, which the Edit panel cannot edit); null before an asset or once Asset detail
-     * closed
+     * (`drawFailed`, which the Edit panel cannot edit, and `drawRefusal`, why, when the stage
+     * knows: a browser that turns the original otherwise than the server); null before an asset
+     * or once Asset detail closed
      */
     function current() {
         return subject
@@ -682,6 +726,7 @@ export function createEditStage({ context, detailPanel }) {
                   recipe: shown?.recipe ?? null,
                   upright: shown?.upright ?? null,
                   drawFailed: drawFailure !== null,
+                  drawRefusal: drawFailure?.refusal ?? null,
                   showsOriginal: showsOriginal(),
               }
             : null
