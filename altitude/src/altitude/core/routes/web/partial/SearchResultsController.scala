@@ -285,18 +285,16 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         ("HX-Replace-Url", browserUrl)
       )
 
-    // With a description the scope's assets are ranked by how much they look like it; anything else is a flat search of the scope
+    // With a description the scope's assets are ranked by how much they look like it, in the one order that search has, which
+    // its query does not name; anything else is a flat search of the scope by the sort
+    val searchQuery =
+      scope.query(rpp = rpp, searchSort = if scope.description.isDefined then Nil else List(searchSort), cursor = cursor)
+    logger.trace(s"${if scope.description.isDefined then "DESCRIBED " else ""}QUERY: ${searchQuery.toString}")
     val results =
       try
         scope.description match
-          case Some(description) =>
-            val searchQuery = scope.query(rpp = rpp, cursor = cursor)
-            logger.trace(s"DESCRIBED QUERY: ${searchQuery.toString}")
-            App.altitude.service.search.describe(description, searchQuery)
-          case None =>
-            val searchQuery = scope.query(rpp = rpp, searchSort = List(searchSort), cursor = cursor)
-            logger.trace(s"QUERY: ${searchQuery.toString}")
-            App.altitude.service.library.search(searchQuery)
+          case Some(description) => App.altitude.service.search.describe(description, searchQuery)
+          case None => App.altitude.service.library.search(searchQuery)
       catch
         case ex: SearchCursorException => return textError(ex.getMessage, 400)
         case _: QueryTimeoutException => return timedOut
@@ -316,8 +314,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     htmlResponse(
       includes.html.search_results(
         total = results.total.getOrElse(0),
-        // What the total is counted up to; a Describe search's is exact, bounded by its result limit, never above the cap
-        totalCap = Const.Search.TOTAL_CAP,
+        // What the query counted the total up to, as on the grouped grid and the map; a Describe search's total is exact, the
+        // count of what it ranked, which its result limit keeps at the cap or under (Settings)
+        totalCap = searchQuery.totalCap,
         sort = searchSort,
         grouping = None,
         grid = htmx.html.results_grid(isContinuousScroll = false, results = results),

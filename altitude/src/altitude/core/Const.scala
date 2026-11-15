@@ -79,7 +79,8 @@ object Const:
     // Every grid page is bounded: a flat page holds full asset rows, and a grouped one carries a count for each of its groups
     val MAX_RPP = 500
 
-    // A first page's total counts the matches up to this many; one past it reads "10000+"
+    // A first page's total counts the matches up to this many; one past it reads "10000+". It is also the most the Describe
+    // result limit can be set to (Settings), so the exact total of a Describe search never passes it
     val TOTAL_CAP = 10000
 
     // A group of the Search text with at most this many hits is answered from those hits; one with more is matched over the

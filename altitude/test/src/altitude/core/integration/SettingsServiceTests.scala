@@ -17,6 +17,7 @@ import altitude.core.models.SceneModel
 import altitude.core.models.SettingGroup
 import altitude.core.models.SettingKind
 import altitude.core.models.Settings
+import altitude.core.models.SettingType
 
 /**
  * The Settings: the seeds of the `setting` table, the one typed snapshot a save replaces, the validation that writes nothing when
@@ -366,8 +367,8 @@ import altitude.core.models.Settings
      *
      * Both are Live settings of the Search section, which the screen shows after Triage, on both engines, with the labels and
      * help of the screen and the defaults 0.00009 and 1000. The threshold is a probability strictly between 0 and 1, and the
-     * limit a whole number from 1 to 10,000, both bounds included. Saved values reach their accessors at once, with no restart
-     * waiting.
+     * limit a whole number from 1 to 10,000, both bounds included, the upper one being the cap a first page's total counts to
+     * (`Const.Search.TOTAL_CAP`). Saved values reach their accessors at once, with no restart waiting.
      *
      * Edge cases:
      *
@@ -404,9 +405,13 @@ import altitude.core.models.Settings
     testApp.settings.validate(Map(threshold -> "1.5")) shouldBe Map(threshold -> "Must be below 1")
 
     testApp.settings.validate(Map(limit -> "1")) shouldBe empty
-    testApp.settings.validate(Map(limit -> "10000")) shouldBe empty
+    // The most a first page's total counts to: a Describe search's total is exact, so its limit is no more than that
+    val cap = Const.Search.TOTAL_CAP
+    cap shouldBe 10000
+    Settings.byName(limit).valueType shouldBe SettingType.Integer(1, cap)
+    testApp.settings.validate(Map(limit -> cap.toString)) shouldBe empty
     testApp.settings.validate(Map(limit -> "0")) shouldBe Map(limit -> "Must be at least 1")
-    testApp.settings.validate(Map(limit -> "10001")) shouldBe Map(limit -> "Must be at most 10000")
+    testApp.settings.validate(Map(limit -> (cap + 1).toString)) shouldBe Map(limit -> s"Must be at most $cap")
     testApp.settings.validate(Map(limit -> "99.5")) shouldBe Map(limit -> "Must be a whole number")
 
     testApp.settings.save(Map(threshold -> "0.002", limit -> "250"))

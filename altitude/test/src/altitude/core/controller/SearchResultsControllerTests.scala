@@ -6,6 +6,7 @@ import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import java.time.{ LocalDateTime, OffsetDateTime, ZoneOffset }
+import org.apache.commons.dbutils.QueryRunner
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.should.Matchers.{ empty, include, not, should, shouldBe }
 import org.slf4j.LoggerFactory
@@ -15,6 +16,7 @@ import scala.jdk.CollectionConverters.*
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.RequestContext
 import altitude.core.dao.jdbc.BaseDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
@@ -659,6 +661,81 @@ import altitude.core.util.Util
       testContext
         .makeAsset(isTriaged = isTriaged)
         .copy(sceneEmbeddings = SceneEmbeddings(siglip2 = Some(TestContext.atCosine(embeddingOf(description), cosine, seed)))))
+
+  /**
+   * `copies` copies of the asset in its repository and folder, written straight to the table, with IDs and checksums of their own
+   * that open with "seeded-": more assets than a test could import. Returns what removes them again, since the bundle's database
+   * is every test's.
+   */
+  private def seedCopies(repositoryId: String, template: Asset, copies: Int): () => Unit = {
+    val (id, checksum) =
+      if (testApp.dataSourceType == Const.DbEngineName.POSTGRES)
+        ("'seeded-' || lpad(g.n::text, 29, '0')", "'seeded-' || lpad(g.n::text, 57, '0')")
+      else ("printf('seeded-%029d', g.n)", "printf('seeded-%057d', g.n)")
+    def run(sql: String, values: Object*): Unit =
+      testApp.txManager.withTransaction(new QueryRunner().update(RequestContext.getConn, sql, values*): Unit)
+
+    run(
+      s"""WITH RECURSIVE g (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM g WHERE n < $copies)
+         |INSERT INTO asset (id, repository_id, owner_user_id, original_owner, checksum, media_type, media_subtype, mime_type,
+         |                   width, height, area_size, folder_id, filename, size_bytes, is_triaged, is_recycled, is_purged,
+         |                   is_pipeline_processed, original_created_at, created_at)
+         |SELECT $id, repository_id, owner_user_id, original_owner, $checksum, media_type, media_subtype, mime_type,
+         |       width, height, area_size, folder_id, filename, size_bytes, is_triaged, is_recycled, is_purged,
+         |       is_pipeline_processed, original_created_at, created_at
+         |  FROM asset CROSS JOIN g
+         | WHERE asset.id = ?""".stripMargin,
+      template.persistedId
+    )
+    () => run("DELETE FROM asset WHERE repository_id = ? AND id LIKE 'seeded-%'", repositoryId)
+  }
+
+  test("A first page's total stops at the cap its search counts to, and says so, on the flat grid as on the others") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with one asset and as many copies of it as the cap a search counts its matches to, 10,000:
+     * one match more than the cap.
+     *
+     * Assertions:
+     *
+     * The first page of the flat grid shows the cap as its total and says there are more, as the grouped grid and the map layout
+     * do of the same search: each page is told the cap its own query counted to.
+     *
+     * Edge cases:
+     *
+     * With one copy fewer, exactly the cap's matches, each shows the cap as its total and does not say there are more.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val template = testContext.insertAsset()
+        val cap = Const.Search.TOTAL_CAP
+        val layouts = List(
+          Map.empty[String, String],
+          Map(Api.Field.Search.GROUP_BY -> "dateTaken"),
+          Map(Api.Field.Search.LAYOUT -> Const.Search.Layout.MAP))
+
+        /** Each layout's first page of two assets shows the cap as its total, and says there are more or does not */
+        def totals(isCapped: Boolean): Unit =
+          for (layout <- layouts) withClue(s"$layout: ") {
+            val page = htmlSearch(host, repoId, layout + ("rpp" -> "2")).text()
+            page should include(s"""data-results-total="$cap"""")
+            page should include(s"""data-results-total-capped="$isCapped"""")
+          }
+
+        val removeCopies = seedCopies(repoId, template, cap)
+        try {
+          totals(isCapped = true)
+          testApp.service.library.recycleAssets(Set(template.persistedId))
+          totals(isCapped = false)
+        } finally removeCopies()
+    }
+  }
 
   test("Grouped HTML pages open each day with a header and carry the cursor on the last cell") {
 

@@ -426,7 +426,8 @@ object Settings:
       Search,
       "Describe result limit",
       "The most photos a description shows, best first.",
-      Integer(1, 10000)
+      // No more than a first page's total counts to: a Describe search's total is exact, the count of what it ranked
+      Integer(1, Const.Search.TOTAL_CAP)
     ),
     SettingDef(
       MAP_TILE_URL,
