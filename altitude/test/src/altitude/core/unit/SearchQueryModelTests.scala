@@ -14,7 +14,6 @@ import altitude.core.util.SearchCursor
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSort
 import altitude.core.util.SortValue
-import altitude.core.util.TriageSubset
 
 @DoNotDiscover class SearchQueryModelTests extends funsuite.AnyFunSuite {
 
@@ -261,50 +260,19 @@ import altitude.core.util.TriageSubset
       fingerprint(query = filtered(7))
   }
 
-  test("A search narrows its view by any filter, and by nothing with the view's flags alone") {
+  test("A copy of a search keeps how many assets a Describe search ranks exactly") {
 
     /**
      * Setup:
      *
-     * Searches of the repository view, with the triaged assets and without, of the trash and of the Triage view, with no filter;
-     * and searches of the repository view with one filter each: a Search text, a folder, a person, an album, a Location, a Date
-     * Taken range, a Date Imported range, a Triage subset, a map area, a metadata filter and a column filter that is no flag of a
-     * view.
+     * A search of the repository view with nothing said of how many assets a Describe search ranks exactly, and one that says 7,
+     * then copied with a folder scope and without its total.
      *
      * Assertions:
      *
-     * The searches with no filter narrow their view by nothing, whatever the view, and each search with a filter narrows it.
-     *
-     * Edge cases:
-     *
-     * Search text with no usable term is no filter. A copy of a search keeps how many assets a Describe search ranks exactly,
-     * which is 75,000 unless the query says otherwise.
+     * The first ranks 75,000 exactly, the constant, and the copy of the second still 7.
      */
     val view = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false)
-    val june = DateRange(Some(LocalDate.parse("2024-06-01")), Some(LocalDate.parse("2024-06-30")))
-    val views = List(
-      view,
-      Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false),
-      Map[String, Any](FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_PURGED -> false),
-      SearchQuery.TRIAGE_VIEW
-    )
-    views.foreach(flags => new SearchQuery(params = flags).narrowsView shouldBe false)
-    new SearchQuery(params = view, text = Some("-")).narrowsView shouldBe false
-
-    val narrowed = List(
-      new SearchQuery(params = view, text = Some("beach")),
-      new SearchQuery(params = view, folderIds = Set("trips")),
-      new SearchQuery(params = view, personIds = Set("alice")),
-      new SearchQuery(params = view, albumIds = Set("best")),
-      new SearchQuery(params = view, locationIds = Set("lisbon")),
-      new SearchQuery(params = view, takenRange = Some(june)),
-      new SearchQuery(params = view, importedRange = Some(june)),
-      new SearchQuery(params = view, subset = Some(TriageSubset.NoLocation)),
-      new SearchQuery(params = view, bbox = Some(BoundingBox.parse("1,2,3,4"))),
-      new SearchQuery(params = view, metadataFilters = Map("field-1" -> "red")),
-      new SearchQuery(params = view + (FieldConst.Asset.FOLDER_ID -> "trips"))
-    )
-    narrowed.foreach(query => withClue(s"$query: ")(query.narrowsView shouldBe true))
 
     new SearchQuery(params = view).describeExactLimit shouldBe 75000
     val tuned = new SearchQuery(params = view, describeExactLimit = 7).withFolderIds(Set("trips")).withoutTotal

@@ -858,7 +858,7 @@ object DescribeSearchTests {
        *
        * A repository of 2,500 sorted assets, each with a random unit vector as its Scene embedding, with the planner told to read
        * the vector index, and a random unit vector as the description's embedding. pgvector keeps 1,000 candidates at most as it
-       * scans an index.
+       * scans an index. Every search ranks through the index, the limit of an exact ranking being 0.
        *
        * Assertions:
        *
@@ -877,11 +877,12 @@ object DescribeSearchTests {
         preferVectorIndex()
         // Before any search sets the transaction up, which lasts until it ends
         val notSetUp =
-          testApp.DAO.search.describe(Filters().query(pageSize = 700), description, minCosine = -1, limit = 2000)
+          testApp.DAO.search
+            .describe(Filters().query(pageSize = 700, exactLimit = 0), description, minCosine = -1, limit = 2000)
         notSetUp.total.value should be < 100
         val scansBefore = describeIndexScans
 
-        val first = page(description, limit = 2000, pageSize = 700)
+        val first = page(description, limit = 2000, pageSize = 700, exactLimit = 0)
         describeIndexScans shouldBe scansBefore + 1
         first.total shouldBe Some(2000)
         first.rows should have size 700
@@ -891,8 +892,8 @@ object DescribeSearchTests {
         def cursorAfter(found: SearchPage): Option[SearchCursor] =
           found.rows.lastOption.map(last => SearchCursor(None, None, last.sortValue, last.asset.persistedId, scope = ""))
 
-        val second = page(description, limit = 2000, cursor = cursorAfter(first), pageSize = 700)
-        val third = page(description, limit = 2000, cursor = cursorAfter(second), pageSize = 700)
+        val second = page(description, limit = 2000, cursor = cursorAfter(first), pageSize = 700, exactLimit = 0)
+        val third = page(description, limit = 2000, cursor = cursorAfter(second), pageSize = 700, exactLimit = 0)
         third.rows should have size 600
         third.hasMore shouldBe false
         val all = List(first, second, third)
@@ -920,8 +921,7 @@ object DescribeSearchTests {
        *
        * Edge cases:
        *
-       * The limit counts the assets that carry an embedding: six under a limit of 6 are ranked exactly. The description alone,
-       * with no filter, is not counted and reads the index, whatever the limit.
+       * The limit counts the assets that carry an embedding: six under a limit of 6 are ranked exactly.
        */
       val description = "a cactus"
       val trips = testApp.service.folder.add("Trips")
@@ -955,9 +955,6 @@ object DescribeSearchTests {
           indexScans shouldBe 1
 
           scanning(describe(description, inTrips, exactLimit = 6))._2 shouldBe 0
-          val (alone, aloneScans) = scanning(describe(description))
-          alone.total shouldBe Some(8)
-          aloneScans shouldBe 1
 
           val firstExact = describe(description, inTrips, pageSize = 2)
           val (restByIndex, restScans) =
@@ -971,6 +968,67 @@ object DescribeSearchTests {
             scanning(describe(description, inTrips, cursor = firstByIndex.nextCursor, pageSize = 10))
           ids(firstByIndex) ++ ids(restExact) shouldBe ids(exact)
           restExactScans shouldBe 0
+        }
+      }
+    }
+
+    test("A PostgreSQL description with no filter ranks a view of few embedded assets exactly") {
+
+      /**
+       * Setup:
+       *
+       * Two repositories. The context's holds three sorted assets placed at cosines of their own to "a cactus", two more left in
+       * triage, one sorted and then recycled, and a sorted asset with no Scene embedding; the other holds five sorted assets,
+       * each with an embedding. The planner is told to read the vector index wherever a statement lets it, and the Describe match
+       * threshold is one every image clears.
+       *
+       * Assertions:
+       *
+       * "a cactus" with no filter finds the context repository's three sorted assets, nearest first, and scans the vector index
+       * not once: the view's three are counted, as any search's matches are, and being under the limit of 75,000 they are ranked
+       * exactly. Under a limit of 3 they are ranked exactly still, and under a limit of 2 through the index, in one scan, to the
+       * same list.
+       *
+       * Edge cases:
+       *
+       * The count is of the view's assets that carry an embedding, so the other repository's five, the recycled asset, the two in
+       * triage and the one with no embedding count for nothing. With the triaged assets asked for the view holds five, ranked
+       * exactly under a limit of 5 and through the index under a limit of 4.
+       */
+      val description = "a cactus"
+      val kept = List(0.5, 0.4, 0.3).zipWithIndex.map((cosine, seed) => placed(description, cosine, seed))
+      val inTriage = List(0.45, 0.35).zipWithIndex.map((cosine, seed) => placed(description, cosine, seed + 10, isTriaged = true))
+      testApp.service.library.recycleAssets(Set(placed(description, 0.6, seed = 20).id))
+      testContext.insertAsset()
+
+      val first = testContext.repository
+      val second = testContext.persistRepository()
+      switchContextRepo(second)
+      (30 until 35).foreach {
+        seed =>
+          val asset = testContext.makeAsset(repository = Some(second))
+          testContext.insertAsset(asset.copy(sceneEmbeddings = SceneEmbeddings(siglip2 = Some(unitVector(seed)))))
+      }
+      switchContextRepo(first)
+
+      withSetting(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY, EVERY_IMAGE) {
+        testApp.txManager.withTransaction {
+          preferVectorIndex()
+
+          /** What the description finds under a limit of exact ranking, and how many scans of the vector index it made */
+          def scanning(exactLimit: Int, filters: Filters = Filters()): (List[String], Long) = {
+            val before = describeIndexScans
+            val found = describe(description, filters, exactLimit = exactLimit)
+            (ids(found), describeIndexScans - before)
+          }
+
+          scanning(Const.Search.DESCRIBE_EXACT_LIMIT) shouldBe (kept.map(_.id), 0)
+          scanning(exactLimit = 3) shouldBe (kept.map(_.id), 0)
+          scanning(exactLimit = 2) shouldBe (kept.map(_.id), 1)
+
+          val withTriage = ranked(kept ++ inTriage, description)
+          scanning(exactLimit = 5, Filters(triaged = true)) shouldBe (withTriage, 0)
+          scanning(exactLimit = 4, Filters(triaged = true)) shouldBe (withTriage, 1)
         }
       }
     }
@@ -1063,8 +1121,14 @@ object DescribeSearchTests {
        *
        * Assertions:
        *
-       * A page for a limit of 580 counts 580 rows, all the context repository's, though the scan passes nearly all of the other
-       * repository's 40,000 vectors to find them: the search lifts the cap.
+       * Ranked through the index, the limit of an exact ranking being 0, a page for a limit of 580 counts 580 rows, all the
+       * context repository's, though the scan passes nearly all of the other repository's 40,000 vectors to find them: the search
+       * lifts the cap.
+       *
+       * Edge cases:
+       *
+       * Under the limit of 75,000 the same search does not scan the index at all: the repository's 600 are counted and ranked
+       * exactly, and the page counts 580 of them again.
        */
       val template = testContext.insertAsset()
       val first = testContext.repository
@@ -1080,10 +1144,15 @@ object DescribeSearchTests {
         preferVectorIndex()
         val scansBefore = describeIndexScans
 
-        val found = page(unitVector(2), limit = 580, pageSize = 500)
+        val found = page(unitVector(2), limit = 580, pageSize = 500, exactLimit = 0)
         describeIndexScans shouldBe scansBefore + 1
         found.total shouldBe Some(580)
         found.rows.map(_.asset.persistedId).foreach(_ should startWith("small-"))
+
+        val exact = page(unitVector(2), limit = 580, pageSize = 500)
+        describeIndexScans shouldBe scansBefore + 1
+        exact.total shouldBe Some(580)
+        exact.rows.map(_.asset.persistedId).foreach(_ should startWith("small-"))
       }
     }
   }
