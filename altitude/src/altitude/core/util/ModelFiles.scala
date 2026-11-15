@@ -156,14 +156,29 @@ object ModelFiles:
     models
 
   /**
-   * The root of the model files: `models.dir` as configured, a relative one under the application's root path as the data
-   * directory is; empty, the per-user cache, `$XDG_CACHE_HOME/altitude/models`, else `~/.cache/altitude/models`. The XDG spec
-   * says an empty or relative `XDG_CACHE_HOME` is ignored.
+   * The root of the model files: `models.dir` as configured, `~` or a leading `~/` the home directory, a relative one under the
+   * application's root path as the data directory is; empty, the per-user cache, `$XDG_CACHE_HOME/altitude/models`, else
+   * `~/.cache/altitude/models`. The XDG spec says an empty or relative `XDG_CACHE_HOME` is ignored.
+   *
+   * Throws `ModelFilesException`, asking for `models.dir`, when the root needs the home directory and the JVM has no absolute one
+   * (`user.home` is `?` for a user with no passwd entry, as in some containers): it would otherwise be a relative directory under
+   * whatever the working directory is.
    */
   def root(configured: String, env: String => Option[String], home: String): Path =
-    if configured.nonEmpty then Path.of(Environment.ROOT_PATH).resolve(configured)
+    def absoluteHome(why: String): Path =
+      Option(home).map(Path.of(_)).filter(_.isAbsolute).getOrElse {
+        throw ModelFilesException(
+          s"The model files' directory is unknown: $why, and the home directory (user.home: $home) is not an absolute path. " +
+            s"Set ${Const.Conf.MODELS_DIR}, or the ALTITUDE_MODELS_DIR environment variable, to the directory to keep them in.")
+      }
+
+    if configured == "~" || configured.startsWith("~/") then
+      absoluteHome(s"${Const.Conf.MODELS_DIR} is $configured").resolve(configured.drop(2))
+    else if configured.nonEmpty then Path.of(Environment.ROOT_PATH).resolve(configured)
     else
-      val cache = env("XDG_CACHE_HOME").map(Path.of(_)).filter(_.isAbsolute).getOrElse(Path.of(home, ".cache"))
+      val cache = env("XDG_CACHE_HOME").map(Path.of(_)).filter(_.isAbsolute).getOrElse {
+        absoluteHome(s"${Const.Conf.MODELS_DIR} is empty and XDG_CACHE_HOME is not an absolute path").resolve(".cache")
+      }
       cache.resolve("altitude").resolve("models")
 
 /**

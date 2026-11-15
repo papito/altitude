@@ -62,7 +62,8 @@ The files of the pinned set are in `<models dir>/v1/`. The models directory is `
 * empty, the default: the per-user cache, `$XDG_CACHE_HOME/altitude/models`, else `~/.cache/altitude/models`, which
   the dev server, the tests and every worktree share
 * or set in `application.conf` (`application-dev.conf` in development), or by the `ALTITUDE_MODELS_DIR` environment
-  variable, which a `models.dir` in the file overrides. A relative path is under the application's folder.
+  variable, which a `models.dir` in the file overrides. `~/` is your home folder; any other relative path is under the
+  application's folder. A user with no home folder (some containers) must set one of the two.
 
 Under docker-compose, point `ALTITUDE_MODELS_DIR` at a named volume, so the files outlive the container:
 

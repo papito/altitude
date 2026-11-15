@@ -846,4 +846,38 @@ import altitude.core.util.Sha256
     models.directory shouldEqual Path.of("/srv/models/v1")
     models.path(ModelFile.Dinov2) shouldEqual Path.of("/srv/models/v1/dinov2_vitb14.onnx")
   }
+
+  test("A models.dir under ~ is under the home, and no absolute home fails asking for models.dir") {
+
+    /**
+     * Setup:
+     *
+     * `models.dir` as `~`, as `~/models`, and empty, with a home directory that is absolute, that is `?` (the JVM's `user.home`
+     * for a user with no passwd entry), or that is not set at all.
+     *
+     * Assertions:
+     *
+     * `~` and a leading `~/` are the home directory. With no absolute home, an empty `models.dir` and no absolute
+     * `XDG_CACHE_HOME`, the root fails with a message that asks for `models.dir` or `ALTITUDE_MODELS_DIR`, as does a `~` in
+     * `models.dir`, rather than a directory relative to the working directory.
+     *
+     * Edge cases:
+     *
+     * An absolute `XDG_CACHE_HOME` needs no home, and a `~` that is not followed by a slash (`~user`) is a name like any other,
+     * under the application's root path.
+     */
+    val noEnv: String => Option[String] = _ => None
+
+    ModelFiles.root("~", noEnv, "/home/user") shouldEqual Path.of("/home/user")
+    ModelFiles.root("~/models", noEnv, "/home/user") shouldEqual Path.of("/home/user/models")
+    ModelFiles.root("~user", noEnv, "/home/user") shouldEqual Path.of(Environment.ROOT_PATH, "~user")
+    ModelFiles.root("", Map("XDG_CACHE_HOME" -> "/var/cache").get, "?") shouldEqual Path.of("/var/cache/altitude/models")
+
+    Seq(("", "?"), ("", null), ("~/models", "?"), ("~", null)).foreach {
+      (configured, home) =>
+        val message = intercept[ModelFilesException](ModelFiles.root(configured, noEnv, home)).getMessage
+        message should include("models.dir")
+        message should include("ALTITUDE_MODELS_DIR")
+    }
+  }
 }
