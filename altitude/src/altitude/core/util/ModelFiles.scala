@@ -167,7 +167,7 @@ object ModelFiles:
  * every other process and thread, checks the free space against the bytes missing, streams each file to `<name>.part` hashing it
  * as it is written, resumes a `.part` with a `Range` request, retries an I/O error or a server error after each of the retry
  * delays, checks the size and the SHA-256, and moves the file to its name at once. A file whose size or SHA-256 is not its pin
- * fails at once.
+ * fails at once, as does a body declared other than the bytes missing or running past the pin, before a byte past it is written.
  *
  * The client's timeout covers the answer's headers alone: a body streamed after them has none, and a connection that stops
  * delivering without closing would hold the start forever. A watchdog therefore closes a body that has delivered no byte for the
@@ -213,7 +213,7 @@ final class ModelDownloader(
 
   private def downloadAll(missing: Seq[ModelFileSpec]): Unit =
     // What a `.part` holds is not downloaded again
-    val needed = missing.map(spec => spec.size - partSize(spec).min(spec.size)).sum
+    val needed = missing.map(spec => spec.size - resumable(spec)).sum
     logger.info(
       s"Model files missing in $directory: ${missing.map(_.name).mkString(", ")}, " +
         s"${megabytes(missing.map(_.size).sum)} in all, ${megabytes(needed)} to download")
@@ -244,6 +244,11 @@ final class ModelDownloader(
     val part = partOf(spec)
     if Files.isRegularFile(part) then Files.size(part) else 0L
 
+  /** The bytes of the `.part` a download keeps: none of one longer than the pin, which `transfer` starts over */
+  private def resumable(spec: ModelFileSpec): Long =
+    val held = partSize(spec)
+    if held > spec.size then 0L else held
+
   /** Why the files are not in place, and what an instance with no route to them needs to put them in place by hand */
   private def failure(reason: String, missing: Seq[ModelFileSpec]): String =
     val files = missing.map(spec => s"  ${spec.name} (${spec.size} bytes, SHA-256 ${spec.sha256}): ${spec.url}")
@@ -262,6 +267,10 @@ final class ModelDownloader(
 
   /** One try at a file: the rest of its `.part`, or all of it, then the checks and the move to its name */
   private def transfer(spec: ModelFileSpec): Unit =
+    // A `.part` longer than the pin holds no file to resume, whatever left it: it is dropped and the file starts over
+    if partSize(spec) > spec.size then
+      logger.info(s"${spec.name}.part holds ${partSize(spec)} bytes, more than its pinned ${spec.size}: starting it over")
+      Files.delete(partOf(spec))
     val held = partSize(spec)
     // The bytes already on disk are hashed first, so the digest covers the whole file once the rest is appended
     val digest = Sha256.Digest()
@@ -281,11 +290,12 @@ final class ModelDownloader(
     val body = response.body()
     try
       val appending = held > 0 && response.statusCode() == 206
+      val (partDigest, from) = if appending then (digest, held) else (Sha256.Digest(), 0L)
+      checkDeclared(spec, response, from)
       if appending then logger.info(s"Resuming ${spec.name} at ${megabytes(held)} of ${megabytes(spec.size)}: ${spec.url}")
       else
         if held > 0 then logger.info(s"The server sent ${spec.name} whole rather than its rest: starting it over")
         logger.info(s"Downloading ${spec.name}, ${megabytes(spec.size)}: ${spec.url}")
-      val (partDigest, from) = if appending then (digest, held) else (Sha256.Digest(), 0L)
       (partDigest, from + write(spec, body, partDigest, from))
     finally body.close()
 
@@ -304,8 +314,26 @@ final class ModelDownloader(
     response
 
   /**
+   * A body declared other than the file's bytes from `from` on will not become the file: it fails before it is read. A header the
+   * answer leaves out is not checked (an HTTP/2 answer may declare no length), and `write` bounds the body by the pin anyway.
+   */
+  private def checkDeclared(spec: ModelFileSpec, response: HttpResponse[?], from: Long): Unit =
+    val headers = response.headers()
+    if response.statusCode() == 206 then
+      val expected = s"bytes $from-${spec.size - 1}/${spec.size}"
+      val range = headers.firstValue("Content-Range")
+      // A total of `*` is a server that does not say it, which the pin then decides
+      if range.isPresent && range.get.trim != expected && range.get.trim != s"bytes $from-${spec.size - 1}/*" then
+        throw ModelFilesException(s"${spec.name} was answered with Content-Range ${range.get}, not $expected")
+    val length = headers.firstValueAsLong("Content-Length")
+    if length.isPresent && length.getAsLong != spec.size - from then
+      throw ModelFilesException(
+        s"${spec.name} was answered with Content-Length ${length.getAsLong}, not the ${spec.size - from} bytes expected")
+
+  /**
    * Reads the body to its end into the `.part`, appended past its first `from` bytes or, when `from` is 0, from its start, and
-   * into `digest`, under the stall watchdog. Returns the bytes written.
+   * into `digest`, under the stall watchdog. Returns the bytes written. A body that runs past the pin is read no further and
+   * fails, no byte past the pin written: a CDN or a proxy streaming more than the file would otherwise fill the disk.
    */
   private def write(spec: ModelFileSpec, body: InputStream, digest: Sha256.Digest, from: Long): Long =
     val part = partOf(spec)
@@ -314,30 +342,39 @@ final class ModelDownloader(
       else Files.newOutputStream(part, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
     val progress = Progress(spec, from)
     val watchdog = ModelDownloader.Watchdog(body, stallTimeout)
+    var overlong = false
     try
       val chunk = new Array[Byte](64 * 1024)
       var read = body.read(chunk)
-      while read != -1 do
+      while read != -1 && !overlong do
         watchdog.delivered()
-        digest.update(chunk, 0, read)
-        out.write(chunk, 0, read)
-        progress.add(read)
-        read = body.read(chunk)
+        overlong = from + progress.transferred + read > spec.size
+        if !overlong then
+          digest.update(chunk, 0, read)
+          out.write(chunk, 0, read)
+          progress.add(read)
+          read = body.read(chunk)
     catch {
       // The read failed because the watchdog closed the stream: the stall is the cause, not the closed stream
       case e: IOException if watchdog.fired => throw IOException(s"No byte of ${spec.name} came for $stallTimeout", e)
     } finally
       watchdog.cancel()
       out.close()
+    if overlong then throw rejected(spec, s"${spec.name} came longer than its pinned ${spec.size} bytes")
     progress.done()
     progress.transferred
 
-  /** A file whose size or SHA-256 is not its pin will not become it by asking again: its `.part` is deleted and it fails */
+  /** A file whose size or SHA-256 is not its pin will not become it by asking again */
   private def verify(spec: ModelFileSpec, size: Long, sha256: String): Unit =
     if size != spec.size || sha256 != spec.sha256 then
-      Files.delete(partOf(spec))
-      throw ModelFilesException(
+      throw rejected(
+        spec,
         s"${spec.name} came as $size bytes with SHA-256 $sha256, not its pinned ${spec.size} bytes with ${spec.sha256}")
+
+  /** The failure of a file that came as something other than its pin: its `.part` holds no file to resume, and is deleted */
+  private def rejected(spec: ModelFileSpec, reason: String): ModelFilesException =
+    Files.deleteIfExists(partOf(spec))
+    ModelFilesException(reason)
 
   /** A file's download as it goes: logged at every tenth of the file, and at its end with its time and rate */
   private class Progress(spec: ModelFileSpec, from: Long):

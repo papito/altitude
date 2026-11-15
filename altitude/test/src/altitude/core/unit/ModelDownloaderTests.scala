@@ -45,7 +45,8 @@ import altitude.core.util.Sha256
    * A stand-in for the release host (or its CDN) on localhost: it serves files by path, honouring `Range` with a 206 unless told
    * not to, and can be told to redirect a path, to answer a path with a status a number of times first, to cut the next answer of
    * a path short, to stall the next answer of a path (part of it sent, then nothing, the connection held open until the server
-   * stops), or to answer every request after a delay. It remembers every request.
+   * stops), or to answer every request after a delay. It declares each body's length unless told not to (a chunked body, which
+   * ends where the server stops), and remembers every request and every path whose body it wrote to its end.
    */
   private class FileServer {
     private val executor: ExecutorService = Executors.newCachedThreadPool()
@@ -59,7 +60,9 @@ import altitude.core.util.Sha256
     private val stopped = CountDownLatch(1)
 
     val requests: ConcurrentLinkedQueue[Request] = ConcurrentLinkedQueue[Request]()
+    val completed: ConcurrentLinkedQueue[String] = ConcurrentLinkedQueue[String]()
     @volatile var honoursRange: Boolean = true
+    @volatile var declaresLength: Boolean = true
     @volatile var delay: FiniteDuration = Duration.Zero
 
     server.setExecutor(executor)
@@ -105,12 +108,14 @@ import altitude.core.util.Sha256
         val content = contents.get(path)
         val from = range.filter(_ => honoursRange).map(_.stripPrefix("bytes=").stripSuffix("-").toInt)
         val body = content.drop(from.getOrElse(0))
+        // A length of 0 is a chunked body to `HttpServer`
+        val length = if declaresLength then body.length else 0
         from match {
           case Some(start) =>
             exchange.getResponseHeaders.add("Content-Range", s"bytes $start-${content.length - 1}/${content.length}")
-            exchange.sendResponseHeaders(206, body.length)
+            exchange.sendResponseHeaders(206, length)
           case None =>
-            exchange.sendResponseHeaders(200, body.length)
+            exchange.sendResponseHeaders(200, length)
         }
         (Option(cuts.remove(path)), Option(stalls.remove(path))) match {
           case (Some(afterBytes), _) =>
@@ -126,6 +131,8 @@ import altitude.core.util.Sha256
             stopped.await()
           case _ =>
             exchange.getResponseBody.write(body)
+            exchange.getResponseBody.flush()
+            completed.add(path): Unit
         }
   }
 
@@ -257,6 +264,103 @@ import altitude.core.util.Sha256
     Files.exists(fileOf(spec)) shouldBe false
     Files.exists(partOf(spec)) shouldBe false
     server.requestsOf("/model.onnx").size shouldBe 1
+    slept shouldBe empty
+  }
+
+  test("A body longer than the pin fails without writing past it") {
+
+    /**
+     * Setup:
+     *
+     * A local server that sends the file's 100,000 pinned bytes and 64 MB more after them, in a body of no declared length, as a
+     * proxy or a replaced asset might.
+     *
+     * Assertions:
+     *
+     * The ensure fails naming the pinned size as soon as the body runs past it: the server's write of the body breaks off before
+     * its end, and the directory holds neither the file nor its `.part`.
+     *
+     * Edge cases:
+     *
+     * An over-long body is not retried: the server sees one request and the downloader never sleeps.
+     */
+    val server = newServer()
+    server.declaresLength = false
+    val bytes = content(100_000, 21)
+    server.serve("/model.onnx", bytes ++ new Array[Byte](64 * 1024 * 1024))
+    val spec = ModelFileSpec("model.onnx", server.url("/model.onnx"), bytes.length, Sha256.hex(bytes))
+
+    val error = intercept[ModelFilesException](ensure(spec))
+
+    error.getMessage should include("longer than its pinned 100000 bytes")
+    server.completed shouldBe empty
+    Files.exists(fileOf(spec)) shouldBe false
+    Files.exists(partOf(spec)) shouldBe false
+    server.requestsOf("/model.onnx").size shouldBe 1
+    slept shouldBe empty
+  }
+
+  test("A declared length that is not the pin fails before the body is read") {
+
+    /**
+     * Setup:
+     *
+     * A local server that serves 64 MB under the file's URL, with that length declared, for a file pinned to its first 100,000
+     * bytes; and a second file with 30,000 of its bytes in its `.part` whose served content is 1,000 bytes longer than its pin.
+     *
+     * Assertions:
+     *
+     * The first ensure fails naming the `Content-Length` and the size expected, before the body: the server's write breaks off
+     * before its end and no `.part` is written. The second fails naming the 206's `Content-Range`, whose total is not the pin.
+     *
+     * Edge cases:
+     *
+     * Neither is retried: the downloader never sleeps, and the second file's `.part` keeps the 30,000 bytes it held.
+     */
+    val server = newServer()
+    val bytes = content(100_000, 22)
+    server.serve("/model.onnx", bytes ++ new Array[Byte](64 * 1024 * 1024))
+    val spec = ModelFileSpec("model.onnx", server.url("/model.onnx"), bytes.length, Sha256.hex(bytes))
+
+    val error = intercept[ModelFilesException](ensure(spec))
+
+    error.getMessage should include(s"Content-Length ${bytes.length + 64 * 1024 * 1024}, not the 100000 bytes expected")
+    server.completed shouldBe empty
+    Files.exists(partOf(spec)) shouldBe false
+
+    val resumed = content(50_000, 23)
+    server.serve("/resumed.onnx", resumed ++ new Array[Byte](1000))
+    val resumedSpec = ModelFileSpec("resumed.onnx", server.url("/resumed.onnx"), resumed.length, Sha256.hex(resumed))
+    writePart(resumedSpec, resumed.take(30_000))
+
+    val rangeError = intercept[ModelFilesException](ensure(resumedSpec))
+
+    rangeError.getMessage should include("Content-Range bytes 30000-50999/51000, not bytes 30000-49999/50000")
+    Files.size(partOf(resumedSpec)) shouldBe 30_000
+    slept shouldBe empty
+  }
+
+  test("A .part longer than the pin is dropped and the file downloaded from zero") {
+
+    /**
+     * Setup:
+     *
+     * A local server with one file, and a `.part` 1,000 bytes longer than the file's pin, as a body that ran past its pin before
+     * the start was killed might leave it.
+     *
+     * Assertions:
+     *
+     * The ensure drops the `.part`, asks for the whole file (no `Range`), and the file verifies; nothing fails.
+     */
+    val server = newServer()
+    val bytes = content(80_000, 24)
+    val spec = served(server, "model.onnx", bytes)
+    writePart(spec, bytes ++ new Array[Byte](1000))
+
+    ensure(spec)
+
+    Sha256.hex(fileOf(spec)) shouldEqual Sha256.hex(bytes)
+    server.requestsOf("/model.onnx").map(_.range) shouldEqual List(None)
     slept shouldBe empty
   }
 
