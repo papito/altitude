@@ -1,0 +1,1573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image editing playground</title>
+<style>
+/* ---------- playground chrome ---------- */
+:root {
+  color-scheme: dark;
+  --bg: #111318; --bg2: #181b22; --bg3: #20242d; --line: #2a2f3a; --fg: #e6e8ee; --fg2: #9aa1b1;
+  --acc: #3bcfce;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 var(--sans); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+header.top { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--bg2); flex-wrap: wrap; }
+header.top h1 { font-size: 14px; margin: 0; font-weight: 600; }
+header.top .sub { color: var(--fg2); font-size: 12px; }
+.presets { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.presets > span { color: var(--fg2); font-size: 12px; margin-right: 2px; }
+.pbtn { background: var(--bg3); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; cursor: pointer; }
+.pbtn:hover { border-color: var(--fg2); }
+.pbtn.on { border-color: var(--acc); color: var(--acc); }
+.shell { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 0; }
+aside.controls { overflow-y: auto; border-right: 1px solid var(--line); background: var(--bg2); padding: 6px 12px 30px; }
+aside.controls details { border-bottom: 1px solid var(--line); padding: 6px 0; }
+aside.controls summary { cursor: pointer; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg2); padding: 4px 0; }
+.ctl { margin: 8px 0; }
+.ctl > label, .ctl > .lbl { display: block; font-size: 12px; color: var(--fg2); margin-bottom: 3px; }
+.ctl .note { font-size: 11px; color: var(--acc); margin-top: 3px; }
+.ctl .hint { font-size: 11px; color: var(--fg2); margin-top: 2px; }
+.seg { display: flex; flex-wrap: wrap; gap: 3px; }
+.seg button { flex: 1 1 auto; background: var(--bg3); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 3px 7px; font: inherit; font-size: 12px; cursor: pointer; }
+.seg button.on { background: var(--acc); color: #06201f; border-color: var(--acc); font-weight: 600; }
+.tog { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: var(--fg); }
+.tog input { accent-color: var(--acc); }
+.rangectl { display: grid; grid-template-columns: 1fr 44px; gap: 8px; align-items: center; }
+.rangectl input { accent-color: var(--acc); width: 100%; }
+.rangectl span { font: 12px var(--mono); color: var(--fg2); text-align: right; }
+.right { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; min-width: 0; }
+.stagewrap { min-height: 0; min-width: 0; padding: 14px; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); background: repeating-conic-gradient(#15171d 0 25%, #121419 0 50%) 0 0 / 20px 20px; }
+.promptbox { border-top: 1px solid var(--line); background: var(--bg2); padding: 10px 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; max-height: 24vh; overflow: auto; }
+.promptbox pre { margin: 0; white-space: pre-wrap; font: 12px/1.5 var(--mono); color: var(--fg); }
+.copybtn { background: var(--acc); color: #06201f; border: 0; border-radius: 6px; padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; position: sticky; top: 0; }
+.filebtn { position: relative; overflow: hidden; }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* ---------- the mock app (Altitude tokens, after static/css/core.css) ---------- */
+#app {
+  --theme-primary: light-dark(#4159d4, #005bff);
+  --theme-primary-text: light-dark(#4057c2, #a4bbfe);
+  --theme-on-primary: light-dark(#f7f8fa, #f7f8fa);
+  --theme-secondary: light-dark(#dfe1e6, #484b52);
+  --theme-accent: light-dark(#1e7777, #3bcfce);
+  --theme-on-accent: light-dark(#f5f9f8, #0a1919);
+  --page: light-dark(#fdfdfe, #232427);
+  --theme-neutral-2: light-dark(#f4f5f7, #353639);
+  --theme-neutral-3: light-dark(#565b66, #babdc5);
+  --theme-neutral-4: light-dark(#12161f, #f7f8fa);
+  --panel-bg: light-dark(#fdfdfe, #2a2b2e);
+  --hair: light-dark(#d5d8de, #4a4c52);
+  --track: light-dark(#d5d8de, #4a4c52);
+  --stage-bg: light-dark(#e3e5e9, #161719);
+  --warning-color: light-dark(#976212, #ebb16b);
+  --error-color: light-dark(#be2229, #f88a81);
+  --info-color: light-dark(#0e6a9b, #69c1fb);
+  --radius: 0.3125rem; --radius-small: 0.1875rem; --radius-large: 0.5rem;
+  --u: 1;
+  --s1: calc(0.125rem * var(--u)); --s2: calc(0.25rem * var(--u)); --s3: calc(0.375rem * var(--u)); --s4: calc(0.5rem * var(--u));
+  --s5: calc(0.625rem * var(--u)); --s6: calc(1rem * var(--u)); --s7: calc(1.25rem * var(--u));
+  --toolbar-h: 2.25rem;
+  color: var(--theme-neutral-4);
+  font: 13px/1.4 var(--sans);
+  min-height: 0; min-width: 0;
+  display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+}
+#app[data-theme="dark"] { color-scheme: dark; }
+#app[data-theme="light"] { color-scheme: light; }
+#app[data-density="compact"] { --u: 0.72; font-size: 12px; }
+#app button { font: inherit; color: inherit; }
+.modal-box { display: grid; grid-template-rows: var(--toolbar-h) minmax(0, 1fr); background: var(--theme-neutral-2); border: 1px solid var(--theme-secondary); border-radius: var(--radius); overflow: hidden; min-height: 0; box-shadow: 0 8px 30px rgb(0 0 0 / .35); }
+.modal-toolbar { display: grid; align-items: center; grid-template-columns: 1fr; grid-auto-flow: column; grid-auto-columns: max-content; border-bottom: 1px solid var(--hair); }
+.modal-title { padding-left: var(--s5); font-weight: 700; display: flex; gap: var(--s4); align-items: baseline; white-space: nowrap; overflow: hidden; }
+.modal-title .dims { font-weight: 400; color: var(--theme-neutral-3); font-size: 12px; }
+.modal-title .edited { font-weight: 600; font-size: 11px; color: var(--theme-accent); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; }
+.toolbar-toggle { background: none; border: 0; color: var(--theme-neutral-3); padding: 0 var(--s5); cursor: pointer; height: 100%; display: grid; place-items: center; }
+.toolbar-toggle:hover { color: var(--theme-neutral-4); }
+.toolbar-toggle[aria-pressed="true"] { color: var(--theme-accent); }
+.toolbar-toggle:disabled { opacity: .35; cursor: default; }
+.toolbar-toggle svg, .icon { width: 18px; height: 18px; display: block; }
+.close-modal { background: none; border: 0; font-size: 20px; font-weight: 700; padding: 0 var(--s5) 0 var(--s2); cursor: pointer; line-height: 1; }
+
+#detailView { display: grid; min-height: 0; min-width: 0; }
+.divider { background: var(--hair); }
+.divider.v { width: 1px; } .divider.h { height: 1px; }
+
+#stage { container-type: size; min-width: 0; min-height: 0; display: grid; place-items: center; background: var(--stage-bg); position: relative; overflow: hidden; touch-action: none; }
+#mediaBox { --aw: 3; --ah: 2; position: relative; width: min(calc(100cqw - 2rem), calc((100cqh - 2rem) * var(--aw) / var(--ah))); aspect-ratio: var(--aw) / var(--ah); }
+#mediaBox.checker { background: repeating-conic-gradient(light-dark(#cfd2d8, #2c2d31) 0 25%, light-dark(#e8eaee, #212225) 0 50%) 0 0 / 16px 16px; }
+#mediaBox canvas { display: block; width: 100%; height: 100%; }
+#clipLayer { position: absolute; inset: 0; pointer-events: none; animation: blink 0.9s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.stage-badge { position: absolute; top: var(--s4); padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; background: rgb(0 0 0 / .55); color: #fff; pointer-events: none; }
+.stage-badge.l { left: var(--s4); } .stage-badge.r { right: var(--s4); }
+#splitHandle { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / .4); cursor: ew-resize; }
+#splitHandle::after { content: ""; position: absolute; top: 50%; left: -11px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transform: translateY(-50%); box-shadow: 0 1px 4px rgb(0 0 0 / .5); }
+#splitHandle::before { content: ""; position: absolute; inset: 0 -10px; }
+
+/* the crop tool's overlay */
+#cropLayer { position: absolute; inset: 0; pointer-events: none; }
+#cropRect { position: absolute; outline: 1px solid rgb(255 255 255 / .9); box-shadow: 0 0 0 200vmax rgb(0 0 0 / var(--mask, .6)); pointer-events: auto; cursor: move; }
+#cropRect .guides { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; transition: opacity .15s; }
+#cropRect .guides line { stroke: rgb(255 255 255 / .55); stroke-width: 1; vector-effect: non-scaling-stroke; }
+#cropLayer.guide-drag:not(.dragging) .guides { opacity: 0; }
+#cropRect .h { position: absolute; width: 14px; height: 14px; pointer-events: auto; }
+#cropRect .h::after { content: ""; position: absolute; background: #fff; box-shadow: 0 0 2px rgb(0 0 0 / .6); }
+#cropRect .h[data-h="nw"] { left: -3px; top: -3px; cursor: nwse-resize; } #cropRect .h[data-h="se"] { right: -3px; bottom: -3px; cursor: nwse-resize; }
+#cropRect .h[data-h="ne"] { right: -3px; top: -3px; cursor: nesw-resize; } #cropRect .h[data-h="sw"] { left: -3px; bottom: -3px; cursor: nesw-resize; }
+#cropRect .h[data-h="nw"]::after, #cropRect .h[data-h="ne"]::after, #cropRect .h[data-h="sw"]::after, #cropRect .h[data-h="se"]::after { inset: 0; clip-path: polygon(0 0, 100% 0, 100% 3px, 3px 3px, 3px 100%, 0 100%); }
+#cropRect .h[data-h="ne"]::after { transform: scaleX(-1); } #cropRect .h[data-h="sw"]::after { transform: scaleY(-1); } #cropRect .h[data-h="se"]::after { transform: scale(-1, -1); }
+#cropRect .h[data-h="n"], #cropRect .h[data-h="s"] { left: calc(50% - 10px); width: 20px; cursor: ns-resize; }
+#cropRect .h[data-h="n"] { top: -4px; } #cropRect .h[data-h="s"] { bottom: -4px; }
+#cropRect .h[data-h="e"], #cropRect .h[data-h="w"] { top: calc(50% - 10px); height: 20px; cursor: ew-resize; }
+#cropRect .h[data-h="e"] { right: -4px; } #cropRect .h[data-h="w"] { left: -4px; }
+#cropRect .h[data-h="n"]::after, #cropRect .h[data-h="s"]::after { left: 0; right: 0; height: 3px; top: 3px; }
+#cropRect .h[data-h="s"]::after { top: auto; bottom: 3px; }
+#cropRect .h[data-h="e"]::after, #cropRect .h[data-h="w"]::after { top: 0; bottom: 0; width: 3px; left: 3px; }
+#cropRect .h[data-h="e"]::after { left: auto; right: 3px; }
+#levelSvg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+#levelSvg line { stroke: var(--theme-accent); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-dasharray: 6 4; }
+#stage.crop-outside-rotate { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M5 9a8 8 0 0 1 14 0' fill='none' stroke='white' stroke-width='3'/%3E%3Cpath d='M5 9a8 8 0 0 1 14 0' fill='none' stroke='black' stroke-width='1.5'/%3E%3Cpath d='M17 5l2 4-4 1' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/svg%3E") 12 12, alias; }
+#stage.crop-outside-draw, #stage.level-active { cursor: crosshair; }
+#cropBar { position: absolute; left: 50%; bottom: var(--s5); transform: translateX(-50%); display: flex; gap: var(--s3); padding: var(--s3); background: var(--panel-bg); border: 1px solid var(--hair); border-radius: var(--radius-large); box-shadow: 0 4px 16px rgb(0 0 0 / .3); align-items: center; white-space: nowrap; }
+#cropBar .readout { font: 11px var(--mono); color: var(--theme-neutral-3); padding: 0 var(--s3); }
+
+/* buttons in the mock */
+.btn { background: var(--theme-secondary); border: 0; border-radius: var(--radius); padding: var(--s2) var(--s5); cursor: pointer; display: inline-flex; gap: var(--s3); align-items: center; }
+.btn:hover { filter: brightness(1.08); }
+.btn.primary { background: var(--theme-primary); color: var(--theme-on-primary); }
+.btn.ghost { background: none; color: var(--theme-primary-text); padding-inline: var(--s3); }
+.btn[aria-pressed="true"] { background: var(--theme-accent); color: var(--theme-on-accent); }
+.iconbtn { background: none; border: 0; border-radius: var(--radius); padding: var(--s2); cursor: pointer; color: var(--theme-neutral-3); display: inline-grid; place-items: center; }
+.iconbtn:hover:not(:disabled) { color: var(--theme-neutral-4); background: var(--theme-neutral-2); }
+.iconbtn:disabled { opacity: .35; cursor: default; }
+.iconbtn[aria-pressed="true"] { color: var(--theme-accent); }
+kbd { font: 10px var(--mono); border: 1px solid var(--hair); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; color: var(--theme-neutral-3); background: var(--page); }
+
+/* panels */
+aside.panel { background: var(--panel-bg); display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; min-width: 0; min-height: 0; overflow: hidden; }
+.panel-head { display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s4) var(--s3) var(--s5); border-bottom: 1px solid var(--hair); min-height: 2.25rem; }
+.panel-head h2 { font-size: 13px; margin: 0 auto 0 0; font-weight: 700; }
+.panel-head select { font: inherit; font-size: 12px; background: var(--page); color: inherit; border: 1px solid var(--hair); border-radius: var(--radius-small); padding: 1px 4px; }
+.panel-keys { border-top: 1px solid var(--hair); padding: var(--s3) var(--s5); font-size: 11px; color: var(--theme-neutral-3); display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); }
+.panel-keys span { white-space: nowrap; }
+.panel-scroll { overflow: auto; min-height: 0; }
+
+/* the Detail panel mock */
+.dp-sec { padding: var(--s4) var(--s5); }
+.dp-sec h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--theme-neutral-3); margin: 0 0 var(--s3); }
+.face-row { display: flex; align-items: center; gap: var(--s4); padding: var(--s2) 0; }
+.face-row i { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, #c99a7a, #7a5a48); display: block; }
+.face-row:nth-child(3) i { background: linear-gradient(135deg, #e0b896, #8d6a52); }
+dl.detail-rows { display: grid; grid-template-columns: max-content 1fr; gap: var(--s2) var(--s5); margin: 0; font-size: 12px; }
+dl.detail-rows dt { color: var(--theme-neutral-3); }
+dl.detail-rows dd { margin: 0; overflow-wrap: anywhere; }
+
+/* the Edit panel */
+#editPanel .ep-body { overflow: auto; min-height: 0; }
+.ep-hist { position: relative; margin: var(--s4) var(--s5) var(--s2); }
+.ep-hist canvas { width: 100%; height: 64px; display: block; border-radius: var(--radius-small); background: var(--theme-neutral-2); }
+.clip-corner { position: absolute; top: 2px; border: 0; background: none; font: 10px var(--mono); color: var(--theme-neutral-3); cursor: pointer; padding: 1px 4px; border-radius: 3px; display: flex; gap: 3px; align-items: center; }
+.clip-corner::before { content: ""; width: 0; height: 0; border: 5px solid transparent; }
+.clip-corner.sh { left: 2px; } .clip-corner.sh::before { border-right-color: currentColor; border-left: 0; }
+.clip-corner.hi { right: 2px; flex-direction: row-reverse; } .clip-corner.hi::before { border-left-color: currentColor; border-right: 0; }
+.clip-corner[aria-pressed="true"].sh { color: var(--info-color); } .clip-corner[aria-pressed="true"].hi { color: var(--error-color); }
+.ep-tabs { display: flex; gap: 2px; padding: var(--s2) var(--s5) 0; border-bottom: 1px solid var(--hair); position: sticky; top: 0; background: var(--panel-bg); z-index: 2; }
+.ep-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: var(--s3) var(--s4); cursor: pointer; color: var(--theme-neutral-3); font-weight: 600; font-size: 12px; white-space: nowrap; }
+.ep-tabs button[aria-selected="true"] { color: var(--theme-neutral-4); border-bottom-color: var(--theme-accent); }
+.ep-sec { border-bottom: 1px solid var(--hair); }
+.ep-sec-head { display: flex; align-items: center; gap: var(--s2); padding: 0 var(--s4) 0 var(--s2); background: var(--panel-bg); }
+.ep-sec-head .toggle { flex: 1; display: flex; align-items: center; gap: var(--s3); background: none; border: 0; cursor: pointer; padding: var(--s4) var(--s3); font-weight: 700; font-size: 12px; text-align: left; }
+.ep-sec-head .toggle .chev { transition: transform .15s; width: 12px; height: 12px; color: var(--theme-neutral-3); }
+.ep-sec.collapsed .chev { transform: rotate(-90deg); }
+.ep-sec .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--theme-accent); display: none; }
+.ep-sec.changed .dot { display: inline-block; }
+.ep-sec-body { padding: 0 var(--s5) var(--s5); display: grid; gap: var(--s4); }
+.ep-sec.collapsed .ep-sec-body { display: none; }
+#editPanel.mode-scroll .ep-sec-head { position: sticky; top: 0; z-index: 1; }
+#editPanel.mode-scroll .ep-sec-head .chev, #editPanel.mode-tabs .ep-sec-head { display: none; }
+#editPanel.mode-scroll .ep-sec-head .toggle { cursor: default; }
+#editPanel.mode-tabs .ep-sec:not(.active) { display: none; }
+#editPanel.mode-tabs .ep-sec-body { padding-top: var(--s5); }
+#editPanel.mode-tabs .ep-sec { border-bottom: 0; }
+.sub-head { display: flex; align-items: center; justify-content: space-between; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--theme-neutral-3); margin-top: var(--s3); }
+.tabreset { display: flex; justify-content: flex-end; }
+
+/* top/bottom dock: the sections side by side, the commit row in the header's row, no legend */
+#editPanel.horizontal { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "head commit" "body body"; }
+#editPanel.horizontal > .panel-head { grid-area: head; border-bottom: 0; }
+#editPanel.horizontal > .ep-commit { grid-area: commit; border-top: 0; }
+#editPanel.horizontal > .ep-body { grid-area: body; border-top: 1px solid var(--hair); }
+#editPanel.horizontal > .panel-keys, #editPanel.horizontal > div:empty { display: none; }
+#editPanel.horizontal .ep-body { display: flex; align-items: stretch; overflow-x: auto; overflow-y: hidden; }
+#editPanel.horizontal .ep-hist { flex: none; width: 14rem; align-self: start; }
+#editPanel.horizontal .ep-sections { display: flex; flex: none; }
+#editPanel.horizontal .ep-sec { width: 17rem; flex: none; overflow-y: auto; border-bottom: 0; border-left: 1px solid var(--hair); }
+#editPanel.horizontal.mode-accordion .ep-sec.collapsed { width: auto; }
+#editPanel.horizontal.mode-accordion .ep-sec.collapsed .ep-sec-head .toggle span:not(.dot) { writing-mode: vertical-rl; }
+#editPanel.horizontal.mode-tabs .ep-body { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+#editPanel.horizontal.mode-tabs .ep-hist { grid-column: 1; grid-row: 1 / span 2; }
+#editPanel.horizontal.mode-tabs .ep-tabs { grid-column: 2; grid-row: 1; }
+#editPanel.horizontal.mode-tabs .ep-sections { grid-column: 2; grid-row: 2; overflow-y: auto; min-height: 0; }
+#editPanel.horizontal.mode-tabs .ep-sections, #editPanel.horizontal.mode-tabs .ep-sec { width: auto; display: block; border-left: 0; }
+#editPanel.horizontal.mode-tabs .ep-sec-body > .sub-head { break-after: avoid; }
+#editPanel.horizontal.mode-tabs .ep-sec:not(.active) { display: none; }
+#editPanel.horizontal.mode-tabs .ep-sec-body { display: block; columns: 15rem; column-gap: var(--s7); }
+#editPanel.horizontal.mode-tabs .ep-sec-body > * { break-inside: avoid; margin-bottom: var(--s4); }
+#editPanel.horizontal.mode-tabs .ep-sec-body > .tabreset { column-span: all; }
+#editPanel.horizontal.mode-tabs .ep-hist { width: 14rem; }
+
+/* sliders */
+.sl { display: grid; gap: 1px; }
+.sl.secondary { margin-left: var(--s5); padding-left: var(--s4); border-left: 2px solid var(--hair); }
+.sl-top { display: flex; align-items: center; gap: var(--s3); min-height: 1.25rem; }
+.sl-top label { font-size: 12px; cursor: default; user-select: none; }
+.sl-top .spacer { flex: 1; }
+.sl-num { width: 4.4rem; text-align: right; font: 11px var(--mono); background: transparent; border: 1px solid transparent; border-radius: var(--radius-small); color: var(--theme-neutral-3); padding: 0 3px; }
+.sl-num:hover { border-color: var(--hair); }
+.sl-num:focus { border-color: var(--theme-primary); outline: none; color: var(--theme-neutral-4); background: var(--page); }
+.sl-out { font: 11px var(--mono); color: var(--theme-neutral-3); }
+#editPanel.val-field .sl-out, #editPanel.val-hover .sl-out, #editPanel.val-none .sl-out, #editPanel.val-none .sl-num, #editPanel.val-hover .sl-num { display: none; }
+#editPanel.val-hover .sl-out { display: inline; opacity: 0; transition: opacity .12s; }
+#editPanel.val-hover .sl:hover .sl-out, #editPanel.val-hover .sl:focus-within .sl-out { opacity: 1; }
+.sl.changed .sl-top label { color: var(--theme-neutral-4); font-weight: 600; }
+.sl-range { -webkit-appearance: none; appearance: none; width: 100%; height: 16px; background: transparent; margin: 0; cursor: pointer;
+  --fillc: var(--theme-primary); --tb: linear-gradient(to right, var(--track) 0 var(--lo), var(--fillc) var(--lo) var(--hi), var(--track) var(--hi) 100%); }
+.sl-range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--tb); }
+.sl-range::-moz-range-track { height: 4px; border-radius: 2px; background: var(--tb); }
+.sl-range::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: var(--theme-neutral-4); margin-top: -4.5px; border: 2px solid var(--panel-bg); box-shadow: 0 0 0 1px var(--hair); }
+.sl-range::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--theme-neutral-4); border: 2px solid var(--panel-bg); box-shadow: 0 0 0 1px var(--hair); }
+.sl-range:focus-visible { outline: 2px solid var(--theme-primary); outline-offset: 2px; border-radius: 3px; }
+.sl-range.grad-temp { --tb: linear-gradient(to right, #3f86e0, #c9ccd2 50%, #eeb345); }
+.sl-range.grad-tint { --tb: linear-gradient(to right, #3fbf5a, #c9ccd2 50%, #d24fd0); }
+.sl-range.grad-sat { --tb: linear-gradient(to right, #8a8d93, #c9ccd2 50%, #ff3d6e, #ffb53d, #3dd9ff); }
+.sl-range.grad-vib { --tb: linear-gradient(to right, #8a8d93, #c9ccd2 50%, #e8a07a, #4fc3e8); }
+.sl-range.grad-exposure { --tb: linear-gradient(to right, #111, #c9ccd2 50%, #fff); }
+
+/* crop & rotate controls */
+.tool-row { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+.tool-row .grow { flex: 1; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.chip { background: var(--theme-neutral-2); border: 1px solid var(--hair); border-radius: 999px; padding: 1px var(--s4); font-size: 12px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--theme-primary); border-color: var(--theme-primary); color: var(--theme-on-primary); }
+.check { display: flex; gap: var(--s3); align-items: center; font-size: 12px; cursor: pointer; }
+.crop-size { font: 11px var(--mono); color: var(--theme-neutral-3); }
+.auto-btn { font-size: 11px; padding: 0 var(--s4); border-radius: 999px; border: 1px solid var(--hair); background: none; cursor: pointer; color: var(--theme-primary-text); }
+.auto-btn:hover { border-color: var(--theme-primary); }
+.seg-mini { display: inline-flex; border: 1px solid var(--hair); border-radius: var(--radius-small); overflow: hidden; }
+.seg-mini button { background: none; border: 0; padding: 0 var(--s3); font-size: 11px; cursor: pointer; min-width: 1.6rem; }
+.seg-mini button[aria-pressed="true"] { background: var(--theme-secondary); font-weight: 700; }
+.curve-wrap { display: grid; gap: var(--s2); }
+#curveCanvas { width: 100%; max-width: 16rem; aspect-ratio: 1; display: block; border-radius: var(--radius-small); background: var(--theme-neutral-2); touch-action: none; cursor: crosshair; justify-self: center; }
+.curve-hint { font-size: 11px; color: var(--theme-neutral-3); text-align: center; }
+
+.ep-commit { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) var(--s5); border-top: 1px solid var(--hair); }
+.ep-commit .status { font-size: 11px; color: var(--theme-neutral-3); margin-right: auto; display: flex; align-items: center; gap: var(--s2); }
+.ep-commit .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--theme-accent); }
+.ep-commit .status.saving::before { background: var(--warning-color); }
+.ep-commit .grow { flex: 1; }
+.dropping #stage { outline: 2px dashed var(--theme-accent); outline-offset: -6px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+    <symbol id="i-panel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+    <symbol id="i-faces" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="11" r="3"/><path d="M7 18c1-2 3-3 5-3s4 1 5 3"/></symbol>
+    <symbol id="i-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></symbol>
+    <symbol id="i-compare" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 2v20"/><path d="M3 4h9v16H3z" fill="currentColor" stroke="none" opacity=".35"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+    <symbol id="i-crop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></symbol>
+    <symbol id="i-level" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 16 22 8"/><circle cx="12" cy="12" r="2.2"/><path d="M2 20h20" opacity=".5"/></symbol>
+    <symbol id="i-rotl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="12" height="12" rx="1.5"/><path d="M4 13V9a5 5 0 0 1 5-5h4"/><path d="m11 2 2 2-2 2"/></symbol>
+    <symbol id="i-rotr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="9" width="12" height="12" rx="1.5"/><path d="M20 13V9a5 5 0 0 0-5-5h-4"/><path d="m13 2-2 2 2 2"/></symbol>
+    <symbol id="i-fliph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 6 3 18h6zM15 6l6 12h-6z"/></symbol>
+    <symbol id="i-flipv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 12h18" stroke-dasharray="2 2"/><path d="M6 9 18 3v6zM6 15l12 6v-6z"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="14" height="10" rx="1"/><rect x="9" y="3" width="10" height="16" rx="1" stroke-dasharray="2 2"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></symbol>
+  </defs>
+</svg>
+
+<header class="top">
+  <h1>Image editing playground</h1>
+  <span class="sub">Asset detail's Edit panel, Tier 1 controls, UI only</span>
+  <div class="presets" id="presets"><span>Presets</span></div>
+  <label class="pbtn filebtn" title="Or drop an image on the stage">Use a photo…<input type="file" id="fileInput" accept="image/*"></label>
+  <button class="pbtn" id="themeBtn">Light theme</button>
+</header>
+
+<div class="shell">
+  <aside class="controls" id="controls"></aside>
+  <div class="right">
+    <div class="stagewrap">
+      <div id="app" data-theme="dark">
+        <div class="modal-box">
+          <div class="modal-toolbar">
+            <div class="modal-title"><span id="fileName">IMG_4821.jpg</span><span class="dims" id="tbDims"></span><span class="edited" id="editedBadge" hidden>Edited</span></div>
+            <button class="toolbar-toggle" id="tgEdit" title="Edit (E)" aria-pressed="true"><svg><use href="#i-edit"/></svg></button>
+            <button class="toolbar-toggle" id="tgDetail" title="Detail panel (M)" aria-pressed="true"><svg><use href="#i-panel"/></svg></button>
+            <button class="toolbar-toggle" title="Face highlights (P)" aria-pressed="false" disabled><svg><use href="#i-faces"/></svg></button>
+            <button class="toolbar-toggle" title="Fullscreen (F)" aria-pressed="false" disabled><svg><use href="#i-full"/></svg></button>
+            <button class="close-modal" title="Close (Esc)" disabled>×</button>
+          </div>
+          <div id="detailView">
+            <aside class="panel" id="editPanel" aria-label="Edit"></aside>
+            <div class="divider" id="editDivider"></div>
+            <div id="stage">
+              <div id="mediaBox">
+                <canvas id="view"></canvas>
+                <canvas id="clipLayer" hidden></canvas>
+                <div id="cropLayer" hidden>
+                  <div id="cropRect">
+                    <svg class="guides" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+                    <span class="h" data-h="nw"></span><span class="h" data-h="n"></span><span class="h" data-h="ne"></span><span class="h" data-h="e"></span>
+                    <span class="h" data-h="se"></span><span class="h" data-h="s"></span><span class="h" data-h="sw"></span><span class="h" data-h="w"></span>
+                  </div>
+                </div>
+                <svg id="levelSvg" hidden><line id="levelLine"/></svg>
+                <div id="splitHandle" hidden></div>
+                <span class="stage-badge l" id="badgeL" hidden>Before</span>
+                <span class="stage-badge r" id="badgeR" hidden>After</span>
+              </div>
+              <div id="cropBar" hidden>
+                <button class="btn ghost" id="guideBtn" title="Cycle the guide (O)">Guide: Thirds</button>
+                <span class="readout" id="cropReadout"></span>
+                <button class="btn" id="cropCancel">Cancel <kbd>Esc</kbd></button>
+                <button class="btn primary" id="cropDone">Done <kbd>↵</kbd></button>
+              </div>
+            </div>
+            <div class="divider" id="detailDivider"></div>
+            <aside class="panel" id="detailPanel" aria-label="Detail panel">
+              <div class="panel-head"><h2>Details</h2>
+                <label style="font-size:11px;color:var(--theme-neutral-3)">Dock side <select id="dpDock"><option value="left">Left</option><option value="right">Right</option><option value="top">Top</option><option value="bottom">Bottom</option></select></label>
+              </div>
+              <div class="panel-scroll">
+                <div class="dp-sec"><h3>People</h3>
+                  <div class="face-row"><i></i>Mara Lindqvist</div>
+                  <div class="face-row"><i></i>Unknown</div>
+                </div>
+                <div class="dp-sec"><h3>Details</h3>
+                  <dl class="detail-rows">
+                    <dt>File name</dt><dd id="dpName">IMG_4821.jpg</dd>
+                    <dt>MIME type</dt><dd>image/jpeg</dd>
+                    <dt>Dimensions</dt><dd id="dpDims"></dd>
+                    <dt>Size</dt><dd>8.4 MB</dd>
+                    <dt>Date Taken</dt><dd>Sep 14, 2026, 19:42 · EXIF</dd>
+                    <dt>Date Imported</dt><dd>Sep 20, 2026</dd>
+                    <dt>Folder</dt><dd style="color:var(--theme-primary-text)">Trips › Lake Bled</dd>
+                    <dt>Camera</dt><dd>FUJIFILM X-T5 · XF16-55mm</dd>
+                  </dl>
+                </div>
+              </div>
+              <div></div>
+              <footer class="panel-keys"><span><kbd>←</kbd> <kbd>→</kbd> Previous/Next</span><span><kbd>F</kbd> Fullscreen</span><span><kbd>M</kbd> Open/Close this panel</span><span><kbd>P</kbd> Face highlights</span><span><kbd>E</kbd> Edit</span></footer>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="promptbox"><pre id="prompt"></pre><button class="copybtn" id="copyBtn">Copy prompt</button></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const later = f => (document.visibilityState === "visible" ? requestAnimationFrame(f) : setTimeout(f, 0));
+
+/* ======================= specs ======================= */
+const signed = (d = 0) => v => (v > 0 ? "+" : "") + v.toFixed(d);
+const SLIDERS = {
+  straighten: { label: "Straighten", min: -45, max: 45, step: 0.1, def: 0, fmt: v => signed(1)(v) + "°" },
+  perspV: { label: "Vertical", min: -100, max: 100, step: 1, def: 0 },
+  perspH: { label: "Horizontal", min: -100, max: 100, step: 1, def: 0 },
+  exposure: { label: "Exposure", min: -5, max: 5, step: 0.05, def: 0, fmt: v => signed(2)(v) + " EV", track: "exposure" },
+  contrast: { label: "Contrast", min: -100, max: 100, step: 1, def: 0 },
+  highlights: { label: "Highlights", min: -100, max: 100, step: 1, def: 0 },
+  shadows: { label: "Shadows", min: -100, max: 100, step: 1, def: 0 },
+  whites: { label: "Whites", min: -100, max: 100, step: 1, def: 0 },
+  blacks: { label: "Blacks", min: -100, max: 100, step: 1, def: 0 },
+  gamma: { label: "Gamma", min: -100, max: 100, step: 1, def: 0, fmt: v => "γ " + gammaOf(v).toFixed(2), parse: s => Math.log2(parseFloat(s.replace(/[^\d.]/g, ""))) * 100 },
+  temp: { label: "Temperature", min: -100, max: 100, step: 1, def: 0, track: "temp" },
+  tint: { label: "Tint", min: -100, max: 100, step: 1, def: 0, track: "tint" },
+  vibrance: { label: "Vibrance", min: -100, max: 100, step: 1, def: 0, track: "vib" },
+  saturation: { label: "Saturation", min: -100, max: 100, step: 1, def: 0, track: "sat" },
+  sharpen: { label: "Sharpen", min: 0, max: 150, step: 1, def: 0 },
+  sharpenRadius: { label: "Radius", min: 0.5, max: 3, step: 0.1, def: 1, secondary: true, fmt: v => v.toFixed(1) + " px" },
+  clarity: { label: "Clarity", min: -100, max: 100, step: 1, def: 0 },
+  vignette: { label: "Vignette", min: -100, max: 100, step: 1, def: 0 },
+  vignetteMid: { label: "Midpoint", min: 0, max: 100, step: 1, def: 50, secondary: true },
+  grain: { label: "Grain", min: 0, max: 100, step: 1, def: 0 },
+  grainSize: { label: "Size", min: 0, max: 100, step: 1, def: 25, secondary: true },
+};
+const gammaOf = p => Math.pow(2, p / 100);
+const SECTIONS = {
+  crop: { title: "Crop & rotate", params: ["straighten", "perspV", "perspH"], geometry: true },
+  light: { title: "Light", params: ["exposure", "contrast", "highlights", "shadows", "whites", "blacks", "gamma"], curve: true },
+  color: { title: "Color", params: ["temp", "tint", "vibrance", "saturation"] },
+  effects: { title: "Effects", params: ["sharpen", "sharpenRadius", "clarity", "vignette", "vignetteMid", "grain", "grainSize"] },
+};
+// [a, b] as a landscape ratio; the label flips with the orientation
+const ASPECTS = [["original"], ["free"], ["1:1", 1, 1], ["5:4", 5, 4], ["7:5", 7, 5], ["3:2", 3, 2], ["16:9", 16, 9]];
+const GUIDES = ["thirds", "grid", "golden", "diagonal", "none"];
+const GUIDE_NAMES = { thirds: "Thirds", grid: "Grid", golden: "Golden ratio", diagonal: "Diagonals", none: "None" };
+const OPP = { left: "right", right: "left", top: "bottom", bottom: "top" };
+const ID_CURVE = () => ({ m: [[0, 0], [1, 1]], r: [[0, 0], [1, 1]], g: [[0, 0], [1, 1]], b: [[0, 0], [1, 1]] });
+
+/* ======================= design state ======================= */
+const DEFAULT_DESIGN = {
+  detailSide: "right", detailOpen: true, together: "both", share: 28, shareV: 42,
+  sections: "accordion", order: "crop", density: "comfortable", histogram: true, legend: true, sectionReset: true,
+  value: "field", fill: "center", gradients: true, secondary: false,
+  guide: "thirds", guideWhen: "always", outside: "rotate", mask: 60, defaultAspect: "original", cropOnOpen: false, level: true,
+  curveChannels: "master", compare: "both", commit: "auto", includeRecipe: false,
+};
+const PRESETS = {
+  "Recommended": {},
+  "Lightroom-like": { order: "light", curveChannels: "rgb", secondary: true, compare: "both", guideWhen: "drag", guide: "thirds" },
+  "Quick fix": { sections: "tabs", density: "compact", histogram: false, value: "hover", secondary: false, compare: "hold", commit: "explicit", legend: false, sectionReset: false, level: false },
+  "Bottom strip": { detailSide: "top", sections: "scroll", density: "compact", shareV: 48 },
+  "Crop-first": { order: "crop", cropOnOpen: true, guide: "grid", guideWhen: "drag", outside: "draw", mask: 75, level: true },
+};
+let design = { ...DEFAULT_DESIGN };
+let activePreset = "Recommended";
+
+const DESIGN_SPEC = [
+  { group: "Placement", items: [
+    { key: "detailSide", label: "Detail panel's Dock side", type: "seg", options: [["left", "Left"], ["right", "Right"], ["top", "Top"], ["bottom", "Bottom"]], note: () => `Edit docks ${OPP[design.detailSide]}, the opposite side` },
+    { key: "detailOpen", label: "Detail panel open (M)", type: "toggle" },
+    { key: "together", label: "Opening Edit with the Detail panel open", type: "seg", options: [["both", "Both stay open"], ["swap", "Edit closes it"]] },
+    { key: "share", label: "Edit panel share of the width (docked left or right)", type: "range", min: 20, max: 45, step: 1, unit: "%" },
+    { key: "shareV", label: "Edit panel share of the height (docked top or bottom)", type: "range", min: 25, max: 60, step: 1, unit: "%" },
+  ]},
+  { group: "Panel layout", items: [
+    { key: "sections", label: "Sections", type: "seg", options: [["accordion", "Accordion"], ["tabs", "Tabs"], ["scroll", "One scroll"]] },
+    { key: "order", label: "Section order", type: "seg", options: [["crop", "Crop first"], ["light", "Light first"]] },
+    { key: "density", label: "Density", type: "seg", options: [["comfortable", "Comfortable"], ["compact", "Compact"]] },
+    { key: "histogram", label: "Live histogram on top", type: "toggle", hint: "Its corner fractions switch the Clipping blink on the stage" },
+    { key: "sectionReset", label: "A reset per section", type: "toggle" },
+    { key: "legend", label: "Key legend footer", type: "toggle" },
+  ]},
+  { group: "Sliders", items: [
+    { key: "value", label: "Value", type: "seg", options: [["field", "Editable number"], ["hover", "On hover"], ["none", "Hidden"]] },
+    { key: "fill", label: "Fill", type: "seg", options: [["center", "From zero"], ["left", "From the left"]] },
+    { key: "gradients", label: "Color gradient tracks", type: "toggle", hint: "Exposure, Temperature, Tint, Vibrance, Saturation" },
+    { key: "secondary", label: "Secondary parameters", type: "toggle", hint: "Sharpen radius, vignette midpoint, grain size" },
+  ]},
+  { group: "Crop tool", items: [
+    { key: "guide", label: "Overlay guide (O cycles)", type: "seg", options: GUIDES.map(g => [g, GUIDE_NAMES[g].replace(" ratio", "")]) },
+    { key: "guideWhen", label: "Show the guide", type: "seg", options: [["always", "Always"], ["drag", "While dragging"]] },
+    { key: "outside", label: "Dragging outside the crop", type: "seg", options: [["rotate", "Rotates"], ["draw", "Draws a new crop"]] },
+    { key: "mask", label: "Dimming outside the crop", type: "range", min: 20, max: 90, step: 5, unit: "%" },
+    { key: "defaultAspect", label: "Default aspect", type: "seg", options: [["original", "Original"], ["free", "Free"]] },
+    { key: "level", label: "Level tool (draw along the horizon)", type: "toggle" },
+    { key: "cropOnOpen", label: "Edit opens in the crop tool", type: "toggle" },
+  ]},
+  { group: "Curve & compare", items: [
+    { key: "curveChannels", label: "Tone curve channels", type: "seg", options: [["master", "RGB only"], ["rgb", "RGB + R, G, B"]] },
+    { key: "compare", label: "Before / after", type: "seg", options: [["hold", "Hold \\"], ["split", "Split view"], ["both", "Both"]] },
+  ]},
+  { group: "Saving", items: [
+    { key: "commit", label: "Committing an edit", type: "seg", options: [["auto", "Autosave"], ["explicit", "Done / Cancel"]] },
+  ]},
+  { group: "Prompt", items: [
+    { key: "includeRecipe", label: "Include the current edit as a sample recipe", type: "toggle" },
+  ]},
+];
+
+/* ======================= edit state ======================= */
+function defaultEdit() {
+  const e = { rot: 0, flipH: false, flipV: false, crop: { x: 0, y: 0, w: 1, h: 1 }, cropAuto: true, aspect: design.defaultAspect, portrait: null, constrain: true, curve: ID_CURVE() };
+  for (const [k, s] of Object.entries(SLIDERS)) e[k] = s.def;
+  return e;
+}
+let edit = defaultEdit();
+const ui = { editOpen: true, detailReopen: false, cropMode: false, cropBefore: null, levelActive: false, curveChannel: "m", activeTab: "crop", collapsed: new Set(), holding: false, split: false, splitPos: 0.5, clipHi: false, clipSh: false, theme: "dark", openSnapshot: null, saveTimer: 0, saving: false };
+let history = [], hIndex = -1;
+const snap = () => JSON.stringify(edit);
+function pushHistory() { const s = snap(); if (history[hIndex] === s) return; history = history.slice(0, hIndex + 1); history.push(s); hIndex = history.length - 1; afterCommit(); }
+function undo() { if (hIndex <= 0) return; hIndex--; edit = JSON.parse(history[hIndex]); afterHistory(); }
+function redo() { if (hIndex >= history.length - 1) return; hIndex++; edit = JSON.parse(history[hIndex]); afterHistory(); }
+function afterHistory() { invalidate(); refreshPanel(); scheduleRender(); afterCommit(); }
+function afterCommit() {
+  refreshUndo(); updatePrompt();
+  if (design.commit === "auto") { ui.saving = true; refreshCommit(); clearTimeout(ui.saveTimer); ui.saveTimer = setTimeout(() => { ui.saving = false; refreshCommit(); }, 650); }
+}
+
+/* ======================= the source image ======================= */
+const PROXY = 1200;
+let src = null;              // canvas holding the proxy of the original, upright
+let asset = { name: "IMG_4821.jpg", w: 6000, h: 4000 };
+
+function proceduralScene() {
+  const W = 1200, H = 800;
+  const base = document.createElement("canvas"); base.width = W; base.height = H;
+  const g = base.getContext("2d");
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const hy = 0.56 * H;
+  let gr = g.createLinearGradient(0, 0, 0, hy);
+  gr.addColorStop(0, "#14204a"); gr.addColorStop(0.35, "#4b3f86"); gr.addColorStop(0.7, "#d9775c"); gr.addColorStop(1, "#ffd08a");
+  g.fillStyle = gr; g.fillRect(0, 0, W, hy + 2);
+  // sun and glow
+  const sx = 0.66 * W, sy = 0.47 * H;
+  gr = g.createRadialGradient(sx, sy, 0, sx, sy, 0.35 * W);
+  gr.addColorStop(0, "rgba(255,240,200,0.95)"); gr.addColorStop(0.08, "rgba(255,210,150,0.6)"); gr.addColorStop(1, "rgba(255,170,120,0)");
+  g.fillStyle = gr; g.fillRect(0, 0, W, hy);
+  g.fillStyle = "#fffdf4"; g.beginPath(); g.arc(sx, sy, 0.03 * W, 0, 7); g.fill();
+  // clouds
+  for (let i = 0; i < 14; i++) {
+    const cx = rnd() * W, cy = (0.08 + rnd() * 0.3) * H, rw = (0.08 + rnd() * 0.15) * W;
+    gr = g.createRadialGradient(cx, cy, 0, cx, cy, rw);
+    gr.addColorStop(0, `rgba(${250 - i * 3},${180 - i * 4},${170},0.30)`); gr.addColorStop(1, "rgba(255,200,180,0)");
+    g.save(); g.scale(1, 0.25); g.fillStyle = gr; g.beginPath(); g.arc(cx, cy * 4, rw, 0, 7); g.fill(); g.restore();
+  }
+  // mountain ranges
+  const ridge = (yBase, amp, col, rough) => {
+    g.fillStyle = col; g.beginPath(); g.moveTo(0, hy + 2);
+    let y = yBase;
+    for (let x = 0; x <= W; x += 6) { y += (rnd() - 0.5) * rough; y = clamp(y, yBase - amp, yBase + amp * 0.3); g.lineTo(x, y); }
+    g.lineTo(W, hy + 2); g.closePath(); g.fill();
+  };
+  ridge(0.42 * H, 0.08 * H, "#7a5f8c", 9); ridge(0.47 * H, 0.07 * H, "#4d3c66", 11); ridge(0.52 * H, 0.04 * H, "#2b2440", 8);
+  // lake: the sky mirrored, darker, with ripples
+  g.save(); g.translate(0, 2 * hy); g.scale(1, -1); g.globalAlpha = 0.75; g.drawImage(base, 0, 0, W, hy, 0, 0, W, hy); g.restore();
+  g.fillStyle = "rgba(10,15,40,0.35)"; g.fillRect(0, hy, W, H - hy);
+  for (let i = 0; i < 420; i++) {
+    const y = hy + Math.pow(rnd(), 1.6) * (H - hy), x = rnd() * W, l = (8 + rnd() * 60) * (1 + (y - hy) / 200);
+    g.strokeStyle = `rgba(${rnd() < 0.3 ? "255,220,170" : "20,25,55"},${0.15 + rnd() * 0.25})`; g.lineWidth = 1 + (y - hy) / 260;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + l, y); g.stroke();
+  }
+  // lighthouse, leaning in as if shot from below (for Vertical)
+  const tx = 0.2 * W, tb = 0.8 * H, tt = 0.18 * H, wb = 0.07 * W, wt = 0.045 * W;
+  g.fillStyle = "#e9e4dc"; g.beginPath(); g.moveTo(tx - wb / 2, tb); g.lineTo(tx - wt / 2, tt); g.lineTo(tx + wt / 2, tt); g.lineTo(tx + wb / 2, tb); g.closePath(); g.fill();
+  g.fillStyle = "#b23a3a";
+  for (let k = 0; k < 4; k++) {
+    const y0 = tt + (tb - tt) * (0.12 + k * 0.22), y1 = y0 + (tb - tt) * 0.09;
+    const w0 = wt + (wb - wt) * (y0 - tt) / (tb - tt), w1 = wt + (wb - wt) * (y1 - tt) / (tb - tt);
+    g.beginPath(); g.moveTo(tx - w0 / 2, y0); g.lineTo(tx + w0 / 2, y0); g.lineTo(tx + w1 / 2, y1); g.lineTo(tx - w1 / 2, y1); g.fill();
+  }
+  g.fillStyle = "#2a2a30"; g.fillRect(tx - wt * 0.7, tt - 0.05 * H, wt * 1.4, 0.05 * H);
+  g.fillStyle = "#ffe7a0"; g.fillRect(tx - wt * 0.45, tt - 0.042 * H, wt * 0.9, 0.032 * H);
+  g.fillStyle = "#1d1d22"; g.beginPath(); g.moveTo(tx - wt * 0.8, tt - 0.05 * H); g.lineTo(tx, tt - 0.09 * H); g.lineTo(tx + wt * 0.8, tt - 0.05 * H); g.fill();
+  // dark shore with grass in the foreground
+  g.fillStyle = "#0d0f12"; g.beginPath(); g.moveTo(0, H); g.lineTo(0, 0.83 * H);
+  for (let x = 0; x <= W; x += 20) g.lineTo(x, 0.83 * H + Math.sin(x / 90) * 18 + rnd() * 6 + (x > 0.6 * W ? (x - 0.6 * W) * 0.08 : 0));
+  g.lineTo(W, H); g.fill();
+  for (let i = 0; i < 900; i++) {
+    const x = rnd() * W, y = 0.84 * H + rnd() * 0.16 * H, l = 10 + rnd() * 40;
+    g.strokeStyle = `rgba(${30 + rnd() * 40},${40 + rnd() * 40},${25},0.8)`; g.lineWidth = 1.2;
+    g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + (rnd() - 0.5) * 12, y - l / 2, x + (rnd() - 0.5) * 18, y - l); g.stroke();
+  }
+  // sensor noise
+  const id = g.getImageData(0, 0, W, H), d = id.data;
+  for (let i = 0; i < d.length; i += 4) { const n = (rnd() - 0.5) * 9; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+  g.putImageData(id, 0, 0);
+  // the whole scene tilted 2.7° clockwise, for Straighten, Auto and the level tool
+  const out = document.createElement("canvas"); out.width = W; out.height = H;
+  const o = out.getContext("2d");
+  o.translate(W / 2, H / 2); o.rotate(2.7 * Math.PI / 180); o.scale(1.07, 1.07); o.drawImage(base, -W / 2, -H / 2);
+  return out;
+}
+function useCanvasAsSource(c, name, w, h) {
+  src = c; asset = { name, w, h };
+  $("#fileName").textContent = name; $("#dpName").textContent = name;
+  edit = defaultEdit(); invalidate(); ensureOriented(); edit.crop = fitMaxCentered();
+  history = [snap()]; hIndex = 0; ui.openSnapshot = snap();
+  refreshPanel(); scheduleRender(); updatePrompt();
+}
+function loadFile(file) {
+  if (!file || !file.type.startsWith("image/")) return;
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => {
+    const s = Math.min(1, PROXY / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    useCanvasAsSource(c, file.name, img.naturalWidth, img.naturalHeight);
+  };
+  img.src = url;
+}
+
+/* ======================= geometry ======================= */
+let oriented = null, orientKey = "";   // {W, H, data}
+let warped = null, warpKey = "";       // ImageData W×H
+function invalidate() { orientKey = ""; warpKey = ""; }
+const F = () => oriented;  // frame dims
+function ensureOriented() {
+  const key = `${edit.rot}|${edit.flipH}|${edit.flipV}|${src.width}`;
+  if (key === orientKey) return;
+  const swap = edit.rot % 2 === 1, W = swap ? src.height : src.width, H = swap ? src.width : src.height;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  g.translate(W / 2, H / 2); g.scale(edit.flipH ? -1 : 1, edit.flipV ? -1 : 1); g.rotate(edit.rot * Math.PI / 2);
+  g.drawImage(src, -src.width / 2, -src.height / 2);
+  oriented = { W, H, data: g.getImageData(0, 0, W, H) };
+  orientKey = key; warpKey = "";
+}
+const persp = () => ({ a: edit.perspH / 100 * 0.55, b: edit.perspV / 100 * 0.55 });
+function ensureWarped() {
+  const key = `${orientKey}|${edit.straighten}|${edit.perspV}|${edit.perspH}`;
+  if (key === warpKey) return;
+  const { W, H, data } = oriented;
+  if (!edit.straighten && !edit.perspV && !edit.perspH) { warped = new ImageData(new Uint8ClampedArray(data.data), W, H); warpKey = key; return; }
+  const out = new ImageData(W, H), o = out.data, s = data.data;
+  const sc = Math.max(W, H) / 2, cx = W / 2, cy = H / 2, th = edit.straighten * Math.PI / 180, c = Math.cos(th), sn = Math.sin(th);
+  const { a, b } = persp();
+  for (let Y = 0; Y < H; Y++) {
+    const qy = (Y + 0.5 - cy) / sc;
+    for (let X = 0; X < W; X++) {
+      const qx = (X + 0.5 - cx) / sc;
+      const ux = c * qx + sn * qy, uy = -sn * qx + c * qy;      // R(-θ)
+      const w = 1 - a * ux - b * uy;                             // P⁻¹
+      if (w <= 1e-3) continue;
+      const px = (ux / w) * sc + cx - 0.5, py = (uy / w) * sc + cy - 0.5;
+      if (px < -0.5 || py < -0.5 || px > W - 0.5 || py > H - 0.5) continue;
+      const x0 = Math.floor(px), y0 = Math.floor(py), fx = px - x0, fy = py - y0;
+      const xa = clamp(x0, 0, W - 1), xb = clamp(x0 + 1, 0, W - 1), ya = clamp(y0, 0, H - 1), yb = clamp(y0 + 1, 0, H - 1);
+      const i00 = (ya * W + xa) * 4, i10 = (ya * W + xb) * 4, i01 = (yb * W + xa) * 4, i11 = (yb * W + xb) * 4, oi = (Y * W + X) * 4;
+      for (let ch = 0; ch < 3; ch++) {
+        o[oi + ch] = (s[i00 + ch] * (1 - fx) + s[i10 + ch] * fx) * (1 - fy) + (s[i01 + ch] * (1 - fx) + s[i11 + ch] * fx) * fy;
+      }
+      o[oi + 3] = 255;
+    }
+  }
+  warped = out; warpKey = key;
+}
+// The image's outline in the frame, in normalized frame coordinates (TL, TR, BR, BL)
+function imageQuad() {
+  const { W, H } = oriented, sc = Math.max(W, H) / 2, th = edit.straighten * Math.PI / 180, c = Math.cos(th), sn = Math.sin(th), { a, b } = persp();
+  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => {
+    const x = sx * W / 2 / sc, y = sy * H / 2 / sc, w = 1 + a * x + b * y, px = x / w, py = y / w;
+    return [((c * px - sn * py) * sc + W / 2) / W, ((sn * px + c * py) * sc + H / 2) / H];
+  });
+}
+function insideQuad(q, x, y) {
+  const { W, H } = oriented; let sign = 0;
+  for (let i = 0; i < 4; i++) {
+    const [x1, y1] = q[i], [x2, y2] = q[(i + 1) % 4];
+    const cr = ((x2 - x1) * W) * ((y - y1) * H) - ((y2 - y1) * H) * ((x - x1) * W);
+    if (Math.abs(cr) < 1e-9) continue;
+    const s = Math.sign(cr); if (sign === 0) sign = s; else if (s !== sign) return false;
+  }
+  return true;
+}
+const EPS = 1e-6;
+function validRect(r, quad = edit.constrain ? imageQuad() : null) {
+  if (r.w < 0.01 || r.h < 0.01) return false;
+  if (r.x < -EPS || r.y < -EPS || r.x + r.w > 1 + EPS || r.y + r.h > 1 + EPS) return false;
+  if (!quad) return true;
+  return insideQuad(quad, r.x, r.y) && insideQuad(quad, r.x + r.w, r.y) && insideQuad(quad, r.x + r.w, r.y + r.h) && insideQuad(quad, r.x, r.y + r.h);
+}
+const lerpRect = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, w: a.w + (b.w - a.w) * t, h: a.h + (b.h - a.h) * t });
+function limitTransition(from, to) {
+  const quad = edit.constrain ? imageQuad() : null;
+  if (validRect(to, quad)) return to;
+  if (!validRect(from, quad)) return from;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 14; i++) { const m = (lo + hi) / 2; if (validRect(lerpRect(from, to, m), quad)) lo = m; else hi = m; }
+  return lerpRect(from, to, lo);
+}
+function scaleAbout(r, cx, cy, s) { return { x: cx - (cx - r.x) * s, y: cy - (cy - r.y) * s, w: r.w * s, h: r.h * s }; }
+function shrinkToValid(r) {
+  const quad = edit.constrain ? imageQuad() : null;
+  if (validRect(r, quad)) return r;
+  let cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+  if (!validRect(scaleAbout(r, cx, cy, 0.02), quad)) { cx = 0.5; cy = 0.5; r = { x: 0.5 - r.w / 2, y: 0.5 - r.h / 2, w: r.w, h: r.h }; }
+  const base = { x: cx - r.w / 2, y: cy - r.h / 2, w: r.w, h: r.h };
+  let lo = 0.01, hi = 1;
+  for (let i = 0; i < 18; i++) { const m = (lo + hi) / 2; if (validRect(scaleAbout(base, cx, cy, m), quad)) lo = m; else hi = m; }
+  return scaleAbout(base, cx, cy, lo);
+}
+const framePortrait = () => oriented.H > oriented.W;
+function isPortrait() { return edit.portrait ?? framePortrait(); }
+// The crop's width over its height in pixels, or null when Free
+function ratioPx() {
+  const { W, H } = oriented;
+  if (edit.aspect === "free") return null;
+  if (edit.aspect === "original") { let r = W / H; if (isPortrait() !== (H > W)) r = 1 / r; return r; }
+  const [, a, b] = ASPECTS.find(x => x[0] === edit.aspect);
+  return isPortrait() ? b / a : a / b;
+}
+const rn = r => r * oriented.H / oriented.W;  // as a ratio of normalized width to normalized height
+function fitMaxCentered() {
+  const r = ratioPx() ?? (oriented.W / oriented.H);
+  let w = 1, h = 1 / rn(r); if (h > 1) { h = 1; w = rn(r); }
+  return shrinkToValid({ x: 0.5 - w / 2, y: 0.5 - h / 2, w, h });
+}
+function rectWithRatioAround(r, ratio) {
+  const cx = r.x + r.w / 2, cy = r.y + r.h / 2, area = r.w * r.h, k = rn(ratio);
+  let w = Math.sqrt(area * k), h = Math.sqrt(area / k);
+  if (w > 1) { w = 1; h = w / k; } if (h > 1) { h = 1; w = h * k; }
+  let x = clamp(cx - w / 2, 0, 1 - w), y = clamp(cy - h / 2, 0, 1 - h);
+  return shrinkToValid({ x, y, w, h });
+}
+function refitCrop() {
+  if (edit.cropAuto) edit.crop = fitMaxCentered();
+  else edit.crop = shrinkToValid(edit.crop);
+}
+function applyAspect(key) {
+  edit.aspect = key;
+  const r = ratioPx();
+  if (edit.cropAuto) edit.crop = fitMaxCentered();
+  else if (r) edit.crop = rectWithRatioAround(edit.crop, r);
+}
+function swapAspect() {
+  edit.portrait = !isPortrait();
+  const r = ratioPx();
+  if (r) { if (edit.cropAuto) edit.crop = fitMaxCentered(); else edit.crop = rectWithRatioAround(edit.crop, r); }
+  else { const c = edit.crop, wpx = c.h * oriented.H, hpx = c.w * oriented.W; edit.crop = rectWithRatioAround({ ...c, w: wpx / oriented.W, h: hpx / oriented.H }, wpx / hpx); }
+}
+function rotate90(dir) {
+  const c = edit.crop;
+  edit.crop = dir > 0 ? { x: 1 - c.y - c.h, y: c.x, w: c.h, h: c.w } : { x: c.y, y: 1 - c.x - c.w, w: c.h, h: c.w };
+  edit.rot = (edit.rot + (dir > 0 ? 1 : 3)) % 4;
+  if (edit.portrait !== null) edit.portrait = !edit.portrait;
+  invalidate(); ensureOriented(); refitCrop();
+}
+function flip(axis) {
+  const c = edit.crop;
+  if (axis === "h") { edit.flipH = !edit.flipH; edit.crop = { ...c, x: 1 - c.x - c.w }; edit.perspH = -edit.perspH; }
+  else { edit.flipV = !edit.flipV; edit.crop = { ...c, y: 1 - c.y - c.h }; edit.perspV = -edit.perspV; }
+  edit.straighten = -edit.straighten;
+  invalidate(); ensureOriented(); refitCrop();
+}
+function setStraighten(v) { edit.straighten = Math.round(clamp(v, -45, 45) * 10) / 10; refitCrop(); }
+// Dominant tilt of straight edges, in degrees, clockwise positive: the client's stand-in for HoughLinesP on the server.
+// The image is area-averaged and blurred first, so a stair-stepped edge reads at its true angle rather than at 0°.
+function estimateTilt() {
+  const { W, H, data } = oriented, f = Math.max(W, H) / 640, gw = Math.round(W / f), gh = Math.round(H / f);
+  const c0 = document.createElement("canvas"); c0.width = W; c0.height = H; c0.getContext("2d").putImageData(data, 0, 0);
+  const c1 = document.createElement("canvas"); c1.width = gw; c1.height = gh;
+  const g1 = c1.getContext("2d"); g1.imageSmoothingQuality = "high"; g1.drawImage(c0, 0, 0, gw, gh);
+  const d = g1.getImageData(0, 0, gw, gh).data; let gray = new Float32Array(gw * gh);
+  for (let i = 0; i < gw * gh; i++) gray[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  gray = blur2(gray, gw, gh, 1);
+  const mags = [], devs = [], RANGE = 15;
+  for (let y = 2; y < gh - 2; y++) for (let x = 2; x < gw - 2; x++) {
+    const p = (yy, xx) => gray[(y + yy) * gw + x + xx];
+    const gx = p(-1, 1) + 2 * p(0, 1) + p(1, 1) - p(-1, -1) - 2 * p(0, -1) - p(1, -1);
+    const gy = p(1, -1) + 2 * p(1, 0) + p(1, 1) - p(-1, -1) - 2 * p(-1, 0) - p(-1, 1);
+    const m = Math.hypot(gx, gy); if (m < 8) continue;
+    const dev = ((Math.atan2(gy, gx) * 180 / Math.PI + 90 + 45) % 90 + 90) % 90 - 45;
+    if (Math.abs(dev) <= RANGE) { mags.push(m); devs.push(dev); }
+  }
+  if (!mags.length) return 0;
+  const cut = [...mags].sort((a, b) => b - a)[Math.floor(mags.length * 0.15)];
+  const BINS = RANGE * 20 * 2 + 1, bins = new Float64Array(BINS);
+  for (let i = 0; i < mags.length; i++) {
+    if (mags[i] < cut) continue;
+    const b = (devs[i] + RANGE) * 20, b0 = Math.floor(b), t = b - b0;
+    bins[b0] += mags[i] * (1 - t); if (b0 + 1 < BINS) bins[b0 + 1] += mags[i] * t;
+  }
+  let best = 0, bi = (BINS - 1) / 2;
+  for (let i = 6; i < BINS - 6; i++) { let s = 0; for (let k = -6; k <= 6; k++) s += bins[i + k] * (7 - Math.abs(k)); if (s > best) { best = s; bi = i; } }
+  return Math.round((bi / 20 - RANGE) * 10) / 10;
+}
+
+/* ======================= tone ======================= */
+const toLin = new Float32Array(256);
+for (let i = 0; i < 256; i++) { const c = i / 255; toLin[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+const enc = l => l <= 0.0031308 ? 12.92 * l : 1.055 * Math.pow(l, 1 / 2.4) - 0.055;
+const isIdentity = pts => pts.length === 2 && pts[0][0] === 0 && pts[0][1] === 0 && pts[1][0] === 1 && pts[1][1] === 1;
+// Monotone cubic (Fritsch–Carlson) through the points, as a 1025-entry table
+function curveLut(pts) {
+  if (isIdentity(pts)) return null;
+  const n = pts.length, xs = pts.map(p => p[0]), ys = pts.map(p => p[1]), d = [], m = new Array(n);
+  for (let i = 0; i < n - 1; i++) d.push((ys[i + 1] - ys[i]) / Math.max(1e-6, xs[i + 1] - xs[i]));
+  m[0] = d[0]; m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i], s = a * a + b * b;
+    if (s > 9) { const t = 3 / Math.sqrt(s); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+  }
+  const lut = new Float32Array(1025); let seg = 0;
+  for (let k = 0; k <= 1024; k++) {
+    const x = k / 1024;
+    if (x <= xs[0]) { lut[k] = ys[0]; continue; } if (x >= xs[n - 1]) { lut[k] = ys[n - 1]; continue; }
+    while (seg < n - 2 && x > xs[seg + 1]) seg++;
+    const h = xs[seg + 1] - xs[seg], t = (x - xs[seg]) / h, t2 = t * t, t3 = t2 * t;
+    lut[k] = clamp((2 * t3 - 3 * t2 + 1) * ys[seg] + (t3 - 2 * t2 + t) * h * m[seg] + (-2 * t3 + 3 * t2) * ys[seg + 1] + (t3 - t2) * h * m[seg + 1], 0, 1);
+  }
+  return lut;
+}
+const look = (lut, v) => { if (!lut) return v; const f = clamp(v, 0, 1) * 1024, i = Math.floor(f); return i >= 1024 ? lut[1024] : lut[i] + (lut[i + 1] - lut[i]) * (f - i); };
+function toneMap(v, e) {
+  const bp = -e.blacks / 100 * 0.1, wp = 1 - e.whites / 100 * 0.15;
+  v = (v - bp) / (wp - bp);
+  if (e.shadows) { const x = clamp(v, 0, 1); v += e.shadows / 100 * 0.95 * x * (1 - x) * (1 - x); }
+  // Highlights blend towards a monotone shoulder (recovery) or a lift above the midtones, so no tone overtakes a brighter one
+  if (e.highlights < 0) { const u = Math.max(0, v - 0.45), c = v - u + u / (1 + u * 1.6); v += (c - v) * (-e.highlights / 100); }
+  else if (e.highlights > 0) { const t = clamp((v - 0.35) / 0.65, 0, 1); v += e.highlights / 100 * 0.3 * t * t * (3 - 2 * t); }
+  if (e.gamma) v = v > 0 ? Math.pow(v, 1 / gammaOf(e.gamma)) : v;
+  if (e.contrast) { const c = e.contrast / 100, x = clamp(v, 0, 1), S = c > 0 ? 0.5 - 0.5 * Math.cos(Math.PI * x) : Math.acos(1 - 2 * x) / Math.PI; v = x + (S - x) * Math.abs(c) * 0.85; }
+  return clamp(v, 0, 1);
+}
+function buildLuts(e) {
+  const ev = Math.pow(2, e.exposure), t = e.temp / 100, ti = e.tint / 100;
+  let gains = [(1 + 0.28 * t) * (1 + 0.08 * ti), 1 - 0.2 * ti, (1 - 0.28 * t) * (1 + 0.08 * ti)];
+  const y = 0.2126 * gains[0] + 0.7152 * gains[1] + 0.0722 * gains[2]; gains = gains.map(x => x / y);
+  const cm = curveLut(e.curve.m), cc = [curveLut(e.curve.r), curveLut(e.curve.g), curveLut(e.curve.b)];
+  return [0, 1, 2].map(ch => { const L = new Float32Array(256); for (let i = 0; i < 256; i++) L[i] = look(cc[ch], look(cm, toneMap(enc(toLin[i] * gains[ch] * ev), e))); return L; });
+}
+function boxBlur(srcA, w, h, r) {
+  r = Math.max(1, Math.round(r));
+  const tmp = new Float32Array(w * h), dst = new Float32Array(w * h), inv = 1 / (2 * r + 1);
+  for (let y = 0; y < h; y++) {
+    const b = y * w; let acc = 0;
+    for (let k = -r; k <= r; k++) acc += srcA[b + clamp(k, 0, w - 1)];
+    for (let x = 0; x < w; x++) { tmp[b + x] = acc * inv; acc += srcA[b + Math.min(x + r + 1, w - 1)] - srcA[b + Math.max(x - r, 0)]; }
+  }
+  for (let x = 0; x < w; x++) {
+    let acc = 0;
+    for (let k = -r; k <= r; k++) acc += tmp[clamp(k, 0, h - 1) * w + x];
+    for (let y = 0; y < h; y++) { dst[y * w + x] = acc * inv; acc += tmp[Math.min(y + r + 1, h - 1) * w + x] - tmp[Math.max(y - r, 0) * w + x]; }
+  }
+  return dst;
+}
+const blur2 = (a, w, h, r) => boxBlur(boxBlur(a, w, h, r), w, h, r);
+function hash2(x, y) { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+function processTone(raw) {
+  const e = edit, w = raw.width, h = raw.height, d = raw.data, n = w * h;
+  const [lr, lg, lb] = buildLuts(e);
+  const R = new Float32Array(n), G = new Float32Array(n), B = new Float32Array(n), L = new Float32Array(n);
+  const sat = 1 + e.saturation / 100, vib = e.vibrance / 100;
+  for (let i = 0; i < n; i++) {
+    let r = lr[d[i * 4]], g = lg[d[i * 4 + 1]], b = lb[d[i * 4 + 2]];
+    if (sat !== 1 || vib) {
+      const Y = 0.2126 * r + 0.7152 * g + 0.0722 * b, cs = Math.max(r, g, b) - Math.min(r, g, b);
+      const k = sat * (1 + vib * (vib > 0 ? 1 - Math.min(1, cs * 1.6) : 1));
+      r = Y + (r - Y) * k; g = Y + (g - Y) * k; b = Y + (b - Y) * k;
+    }
+    R[i] = r; G[i] = g; B[i] = b; L[i] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+  const addL = (delta) => { for (let i = 0; i < n; i++) { const dl = delta(i); R[i] += dl; G[i] += dl; B[i] += dl; } };
+  if (e.clarity) { const Lb = blur2(L, w, h, Math.max(3, Math.min(w, h) * 0.018)), k = e.clarity / 100 * 1.4; addL(i => { const m = 2 * L[i] - 1; return (L[i] - Lb[i]) * k * (1 - m * m * 0.7); }); }
+  if (e.sharpen) { const Ls = boxBlur(L, w, h, e.sharpenRadius), k = e.sharpen / 100 * 2.2; addL(i => (L[i] - Ls[i]) * k); }
+  if (e.vignette) {
+    const v = e.vignette / 100, mid = 0.15 + e.vignetteMid / 100 * 0.75;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const dx = (x - w / 2) / (w / 2), dy = (y - h / 2) / (h / 2), dd = Math.sqrt((dx * dx + dy * dy) / 2);
+      const t = clamp((dd - mid * 0.75) / (1.05 - mid * 0.75), 0, 1), s = t * t * (3 - 2 * t), i = y * w + x;
+      if (v < 0) { const f = 1 + v * s; R[i] *= f; G[i] *= f; B[i] *= f; } else { const f = v * s; R[i] += (1 - R[i]) * f; G[i] += (1 - G[i]) * f; B[i] += (1 - B[i]) * f; }
+    }
+  }
+  if (e.grain) {
+    const amt = e.grain / 100 * 0.22, size = 1 + e.grainSize / 100 * 3;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x, gx = x / size, gy = y / size, x0 = Math.floor(gx), y0 = Math.floor(gy), fx = gx - x0, fy = gy - y0;
+      const nz = (hash2(x0, y0) * (1 - fx) + hash2(x0 + 1, y0) * fx) * (1 - fy) + (hash2(x0, y0 + 1) * (1 - fx) + hash2(x0 + 1, y0 + 1) * fx) * fy - 0.5;
+      const dl = nz * amt * (1 - Math.abs(2 * L[i] - 1) * 0.5); R[i] += dl; G[i] += dl; B[i] += dl;
+    }
+  }
+  const out = new ImageData(w, h), o = out.data;
+  for (let i = 0; i < n; i++) { o[i * 4] = R[i] * 255; o[i * 4 + 1] = G[i] * 255; o[i * 4 + 2] = B[i] * 255; o[i * 4 + 3] = d[i * 4 + 3]; }
+  return out;
+}
+
+/* ======================= render ======================= */
+let lastRaw = null, lastOut = null, renderQueued = false;
+function scheduleRender() { if (renderQueued) return; renderQueued = true; later(() => { renderQueued = false; render(); }); }
+function regionPx() {
+  const { W, H } = oriented;
+  if (ui.cropMode) return { x: 0, y: 0, w: W, h: H };
+  const c = edit.crop, x = Math.round(c.x * W), y = Math.round(c.y * H);
+  return { x, y, w: Math.max(1, Math.min(W - x, Math.round(c.w * W))), h: Math.max(1, Math.min(H - y, Math.round(c.h * H))) };
+}
+function render() {
+  if (!src) return;
+  ensureOriented(); ensureWarped();
+  const r = regionPx(), raw = new ImageData(r.w, r.h), wd = warped.data, rd = raw.data, W = oriented.W;
+  for (let y = 0; y < r.h; y++) rd.set(wd.subarray(((r.y + y) * W + r.x) * 4, ((r.y + y) * W + r.x + r.w) * 4), y * r.w * 4);
+  lastRaw = raw; lastOut = processTone(raw);
+  draw(); drawHistogram(); drawCurve(); refreshCropUi(); refreshDims();
+}
+const tmpCanvas = document.createElement("canvas");
+function draw() {
+  const view = $("#view"), box = $("#mediaBox"), g = view.getContext("2d");
+  const before = ui.holding;
+  const img = before ? null : lastOut;
+  if (before) { view.width = src.width; view.height = src.height; g.drawImage(src, 0, 0); box.style.setProperty("--aw", src.width); box.style.setProperty("--ah", src.height); }
+  else {
+    view.width = img.width; view.height = img.height; g.putImageData(img, 0, 0);
+    box.style.setProperty("--aw", img.width); box.style.setProperty("--ah", img.height);
+    if (splitOn()) {
+      tmpCanvas.width = lastRaw.width; tmpCanvas.height = lastRaw.height; tmpCanvas.getContext("2d").putImageData(lastRaw, 0, 0);
+      const sx = Math.round(ui.splitPos * img.width);
+      g.clearRect(0, 0, sx, img.height); g.drawImage(tmpCanvas, 0, 0, sx, img.height, 0, 0, sx, img.height);
+    }
+  }
+  box.classList.toggle("checker", ui.cropMode || !edit.constrain);
+  $("#badgeL").hidden = !(before || splitOn()); $("#badgeL").textContent = before ? "Before · the original" : "Before";
+  $("#badgeR").hidden = !splitOn();
+  $("#splitHandle").hidden = !splitOn(); $("#splitHandle").style.left = ui.splitPos * 100 + "%";
+  drawClipping(before);
+}
+const splitOn = () => ui.split && !ui.cropMode && !ui.holding && design.compare !== "hold";
+function clipStats() {
+  const d = lastOut.data; let hi = 0, sh = 0, n = 0;
+  for (let i = 0; i < d.length; i += 8) { if (d[i + 3] < 128) continue; n++; const m = Math.max(d[i], d[i + 1], d[i + 2]); if (m >= 254) hi++; else if (m <= 2) sh++; }
+  return { hi: n ? hi / n : 0, sh: n ? sh / n : 0 };
+}
+function drawClipping(before) {
+  const c = $("#clipLayer"), on = (ui.clipHi || ui.clipSh) && design.histogram && !before && !splitOn();
+  c.hidden = !on; if (!on) return;
+  const w = lastOut.width, h = lastOut.height; c.width = w; c.height = h;
+  const g = c.getContext("2d"), id = g.createImageData(w, h), o = id.data, d = lastOut.data;
+  const cs = getComputedStyle($("#app")), hiC = parseColor(cs.getPropertyValue("--error-color")), shC = parseColor(cs.getPropertyValue("--info-color"));
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 128) continue;
+    const m = Math.max(d[i], d[i + 1], d[i + 2]);
+    const col = ui.clipHi && m >= 254 ? hiC : ui.clipSh && m <= 2 ? shC : null;
+    if (col) { o[i] = col[0]; o[i + 1] = col[1]; o[i + 2] = col[2]; o[i + 3] = 255; }
+  }
+  g.putImageData(id, 0, 0);
+}
+function parseColor(str) {
+  const p = document.createElement("span"); p.style.color = str.trim(); $("#app").appendChild(p);
+  const s = getComputedStyle(p).color; p.remove();
+  const m = s.match(/[\d.]+/g).map(Number);
+  return s.startsWith("color(") ? m.slice(0, 3).map(x => x * 255) : m.slice(0, 3);
+}
+function histBins() {
+  const d = lastOut.data, bins = [new Float64Array(256), new Float64Array(256), new Float64Array(256), new Float64Array(256)];
+  for (let i = 0; i < d.length; i += 8) {
+    if (d[i + 3] < 128) continue;
+    bins[0][d[i]]++; bins[1][d[i + 1]]++; bins[2][d[i + 2]]++; bins[3][Math.round(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2])]++;
+  }
+  return bins;
+}
+function drawHistogram() {
+  const c = $("#hist"); if (!c || !lastOut) return;
+  const dpr = window.devicePixelRatio || 1, W = Math.max(10, c.clientWidth * dpr), H = 64 * dpr; c.width = W; c.height = H;
+  const g = c.getContext("2d"), bins = histBins(), dark = ui.theme === "dark";
+  let max = 1; for (let k = 0; k < 3; k++) for (let i = 2; i < 254; i++) max = Math.max(max, bins[k][i]);
+  const path = (b) => { g.beginPath(); g.moveTo(0, H); for (let i = 0; i < 256; i++) g.lineTo(i / 255 * W, H - Math.min(1, b[i] / max) * (H - 2)); g.lineTo(W, H); g.closePath(); };
+  g.globalCompositeOperation = dark ? "screen" : "multiply";
+  [["rgba(255,70,70,.55)", "rgba(255,120,120,.55)"], ["rgba(60,220,90,.5)", "rgba(80,200,110,.55)"], ["rgba(70,120,255,.6)", "rgba(110,140,255,.55)"]].forEach((col, k) => { path(bins[k]); g.fillStyle = col[dark ? 0 : 1]; g.fill(); });
+  g.globalCompositeOperation = "source-over";
+  g.beginPath(); for (let i = 0; i < 256; i++) { const y = H - Math.min(1, bins[3][i] / max) * (H - 2); i ? g.lineTo(i / 255 * W, y) : g.moveTo(0, y); }
+  g.strokeStyle = dark ? "rgba(240,240,245,.85)" : "rgba(20,22,30,.8)"; g.lineWidth = 1.2 * dpr; g.stroke();
+  const st = clipStats(), pct = v => (v * 100 < 0.05 ? "0" : (v * 100).toFixed(v < 0.1 ? 1 : 0)) + "%";
+  $("#clipSh").lastChild.textContent = pct(st.sh); $("#clipHi").lastChild.textContent = pct(st.hi);
+}
+
+/* ======================= the Edit panel ======================= */
+function sectionOrder() { return design.order === "crop" ? ["crop", "light", "color", "effects"] : ["light", "color", "effects", "crop"]; }
+function buildPanel() {
+  const p = $("#editPanel");
+  p.className = `panel mode-${design.sections} val-${design.value}` + (isHorizontal() ? " horizontal" : "");
+  const compareTitle = { hold: "Hold to see the original (\\)", split: "Split before/after (\\)", both: "Split before/after; hold \\ for the original" }[design.compare];
+  p.innerHTML = `
+    <div class="panel-head"><h2>Edit</h2>
+      <button class="iconbtn" id="undoBtn" title="Undo (Ctrl+Z)"><svg class="icon"><use href="#i-undo"/></svg></button>
+      <button class="iconbtn" id="redoBtn" title="Redo (Ctrl+Shift+Z)"><svg class="icon"><use href="#i-redo"/></svg></button>
+      <button class="iconbtn" id="compareBtn" title="${compareTitle}" aria-pressed="false"><svg class="icon"><use href="#i-compare"/></svg></button>
+      <button class="iconbtn" id="resetAllBtn" title="Reset all"><svg class="icon"><use href="#i-reset"/></svg></button>
+    </div>
+    <div class="ep-body">
+      ${design.histogram ? `<div class="ep-hist"><canvas id="hist"></canvas>
+        <button class="clip-corner sh" id="clipSh" title="Clipping blink: crushed shadows" aria-pressed="${ui.clipSh}"><span></span></button>
+        <button class="clip-corner hi" id="clipHi" title="Clipping blink: blown highlights" aria-pressed="${ui.clipHi}"><span></span></button></div>` : ""}
+      ${design.sections === "tabs" ? `<nav class="ep-tabs" role="tablist">${sectionOrder().map(k => `<button role="tab" data-tab="${k}" aria-selected="${ui.activeTab === k}">${SECTIONS[k].title}</button>`).join("")}</nav>` : ""}
+      <div class="ep-sections">${sectionOrder().map(sectionHtml).join("")}</div>
+    </div>
+    <footer class="ep-commit" id="epCommit"></footer>
+    ${design.legend ? `<footer class="panel-keys"><span><kbd>E</kbd> Close</span><span><kbd>C</kbd> Crop</span><span><kbd>\\</kbd> Before/After</span><span><kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo</span><span>Double-click a slider to reset it</span></footer>` : "<div></div>"}`;
+  wirePanel();
+  refreshPanel();
+}
+function sectionHtml(k) {
+  const s = SECTIONS[k];
+  const collapsed = design.sections === "accordion" && ui.collapsed.has(k);
+  const active = design.sections === "tabs" && ui.activeTab === k;
+  let body = "";
+  if (s.geometry) body += cropControlsHtml();
+  body += s.params.filter(p => !SLIDERS[p].secondary || design.secondary).map(p => {
+    let h = sliderHtml(p);
+    if (p === "perspV") h = `<div class="sub-head">Perspective</div>` + h;
+    return h;
+  }).join("");
+  if (s.geometry) body += `<label class="check"><input type="checkbox" id="constrainChk"> Keep the crop inside the image</label>`;
+  if (s.curve) body += curveHtml();
+  return `<section class="ep-sec${collapsed ? " collapsed" : ""}${active ? " active" : ""}" data-sec="${k}">
+    <div class="ep-sec-head"><button class="toggle" aria-expanded="${!collapsed}"><svg class="chev"><use href="#i-chev"/></svg><span>${s.title}</span><span class="dot" title="Changed"></span></button>
+    ${design.sectionReset && design.sections !== "tabs" ? `<button class="iconbtn sec-reset" title="Reset ${s.title}"><svg class="icon" style="width:14px;height:14px"><use href="#i-reset"/></svg></button>` : ""}</div>
+    <div class="ep-sec-body">${design.sections === "tabs" && design.sectionReset ? `<div class="tabreset"><button class="auto-btn sec-reset">Reset ${s.title}</button></div>` : ""}${body}</div></section>`;
+}
+function sliderHtml(k) {
+  const s = SLIDERS[k], grad = design.gradients && s.track ? ` grad-${s.track}` : "";
+  const extra = k === "straighten" ? `<button class="auto-btn" id="autoStraighten" title="Level the horizon from the image's straight edges">Auto</button>` : "";
+  return `<div class="sl${s.secondary ? " secondary" : ""}" data-param="${k}">
+    <div class="sl-top"><label for="sl-${k}" title="Double-click to reset">${s.label}</label>${extra}<span class="spacer"></span>
+      <input class="sl-num" type="text" inputmode="decimal" aria-label="${s.label} value"><output class="sl-out"></output></div>
+    <input type="range" class="sl-range${grad}" id="sl-${k}" min="${s.min}" max="${s.max}" step="${s.step}"></div>`;
+}
+function cropControlsHtml() {
+  return `<div class="tool-row">
+      <button class="btn" id="cropBtn" aria-pressed="false" title="Crop (C)"><svg class="icon"><use href="#i-crop"/></svg>Crop <kbd>C</kbd></button>
+      ${design.level ? `<button class="btn" id="levelBtn" aria-pressed="false" title="Draw along something that should be level"><svg class="icon"><use href="#i-level"/></svg>Level</button>` : ""}
+      <span class="grow"></span>
+      <button class="iconbtn" id="rotL" title="Rotate left"><svg class="icon"><use href="#i-rotl"/></svg></button>
+      <button class="iconbtn" id="rotR" title="Rotate right"><svg class="icon"><use href="#i-rotr"/></svg></button>
+      <button class="iconbtn" id="flipH" title="Flip horizontally"><svg class="icon"><use href="#i-fliph"/></svg></button>
+      <button class="iconbtn" id="flipV" title="Flip vertically"><svg class="icon"><use href="#i-flipv"/></svg></button>
+    </div>
+    <div class="sub-head">Aspect <button class="iconbtn" id="swapBtn" title="Swap orientation (X)"><svg class="icon"><use href="#i-swap"/></svg></button></div>
+    <div class="chips" id="aspectChips">${ASPECTS.map(a => `<button class="chip" data-aspect="${a[0]}"></button>`).join("")}</div>
+    <div class="crop-size" id="cropSize"></div>`;
+}
+function curveHtml() {
+  return `<div class="curve-wrap"><div class="sub-head">Tone curve
+      <span style="display:flex;gap:6px;align-items:center">${design.curveChannels === "rgb" ? `<span class="seg-mini" id="curveCh">${[["m", "RGB"], ["r", "R"], ["g", "G"], ["b", "B"]].map(([k, l]) => `<button data-ch="${k}" aria-pressed="${ui.curveChannel === k}">${l}</button>`).join("")}</span>` : ""}
+      <button class="auto-btn" id="curveReset" title="Reset the curve">Reset</button></span></div>
+    <canvas id="curveCanvas"></canvas><div class="curve-hint">Click to add a point · drag it off the box or double-click to remove</div></div>`;
+}
+function wirePanel() {
+  const p = $("#editPanel");
+  p.querySelectorAll(".sl").forEach(row => {
+    const k = row.dataset.param, s = SLIDERS[k], range = row.querySelector(".sl-range"), num = row.querySelector(".sl-num");
+    const set = v => {
+      v = clamp(v, s.min, s.max);
+      if (k === "straighten") setStraighten(v);
+      else { edit[k] = v; if (k === "perspV" || k === "perspH") refitCrop(); }
+      refreshSlider(row); refreshSecChanged(); scheduleRender();
+    };
+    range.addEventListener("input", () => set(parseFloat(range.value)));
+    range.addEventListener("change", pushHistory);
+    const reset = () => { set(s.def); pushHistory(); };
+    range.addEventListener("dblclick", reset); row.querySelector("label").addEventListener("dblclick", reset);
+    num.addEventListener("change", () => { const v = s.parse ? s.parse(num.value) : parseFloat(num.value.replace(/[^\d.+-]/g, "")); if (Number.isFinite(v)) set(v); refreshSlider(row); pushHistory(); });
+    num.addEventListener("keydown", e => { if (e.key === "Enter") num.blur(); e.stopPropagation(); });
+  });
+  p.querySelectorAll(".ep-sec").forEach(sec => {
+    const k = sec.dataset.sec;
+    sec.querySelector(".toggle").addEventListener("click", () => {
+      if (design.sections !== "accordion") return;
+      ui.collapsed.has(k) ? ui.collapsed.delete(k) : ui.collapsed.add(k);
+      sec.classList.toggle("collapsed", ui.collapsed.has(k)); sec.querySelector(".toggle").setAttribute("aria-expanded", !ui.collapsed.has(k));
+      if (!ui.collapsed.has(k)) later(drawCurve);
+    });
+    const r = sec.querySelector(".sec-reset"); if (r) r.addEventListener("click", () => resetSection(k));
+  });
+  p.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => { ui.activeTab = b.dataset.tab; p.querySelectorAll("[data-tab]").forEach(x => x.setAttribute("aria-selected", x === b)); p.querySelectorAll(".ep-sec").forEach(s => s.classList.toggle("active", s.dataset.sec === ui.activeTab)); later(drawCurve); }));
+  const on = (id, ev, f) => { const el = $("#" + id); if (el) el.addEventListener(ev, f); };
+  on("undoBtn", "click", undo); on("redoBtn", "click", redo);
+  on("resetAllBtn", "click", resetAll);
+  on("cropBtn", "click", () => setCropMode(!ui.cropMode));
+  on("levelBtn", "click", () => { if (!ui.cropMode) setCropMode(true); ui.levelActive = !ui.levelActive; refreshCropUi(); });
+  on("rotL", "click", () => { rotate90(-1); afterGeometry(); });
+  on("rotR", "click", () => { rotate90(1); afterGeometry(); });
+  on("flipH", "click", () => { flip("h"); afterGeometry(); });
+  on("flipV", "click", () => { flip("v"); afterGeometry(); });
+  on("swapBtn", "click", () => { swapAspect(); afterGeometry(); });
+  on("autoStraighten", "click", () => { ensureOriented(); setStraighten(-estimateTilt()); afterGeometry(); });
+  on("constrainChk", "change", e => { edit.constrain = e.target.checked; refitCrop(); afterGeometry(); });
+  p.querySelectorAll("[data-aspect]").forEach(b => b.addEventListener("click", () => { applyAspect(b.dataset.aspect); afterGeometry(); }));
+  on("clipSh", "click", () => { ui.clipSh = !ui.clipSh; $("#clipSh").setAttribute("aria-pressed", ui.clipSh); draw(); });
+  on("clipHi", "click", () => { ui.clipHi = !ui.clipHi; $("#clipHi").setAttribute("aria-pressed", ui.clipHi); draw(); });
+  p.querySelectorAll("[data-ch]").forEach(b => b.addEventListener("click", () => { ui.curveChannel = b.dataset.ch; p.querySelectorAll("[data-ch]").forEach(x => x.setAttribute("aria-pressed", x === b)); drawCurve(); }));
+  on("curveReset", "click", () => { edit.curve[ui.curveChannel] = [[0, 0], [1, 1]]; refreshSecChanged(); scheduleRender(); pushHistory(); });
+  const cb = $("#compareBtn");
+  cb.addEventListener("pointerdown", () => { if (design.compare === "hold") setHolding(true); });
+  cb.addEventListener("pointerup", () => { if (design.compare === "hold") setHolding(false); });
+  cb.addEventListener("pointerleave", () => { if (design.compare === "hold" && ui.holding) setHolding(false); });
+  cb.addEventListener("click", () => { if (design.compare !== "hold") { ui.split = !ui.split; refreshCompare(); draw(); } });
+  wireCurve();
+}
+function afterGeometry() { refreshPanel(); scheduleRender(); pushHistory(); }
+function resetSection(k) {
+  const s = SECTIONS[k];
+  for (const p of s.params) edit[p] = SLIDERS[p].def;
+  if (s.curve) edit.curve = ID_CURVE();
+  if (s.geometry) { const keep = edit.constrain; Object.assign(edit, { rot: 0, flipH: false, flipV: false, aspect: design.defaultAspect, portrait: null, cropAuto: true, constrain: keep }); invalidate(); ensureOriented(); edit.crop = fitMaxCentered(); }
+  refreshPanel(); scheduleRender(); pushHistory();
+}
+function resetAll() { edit = defaultEdit(); invalidate(); ensureOriented(); edit.crop = fitMaxCentered(); refreshPanel(); scheduleRender(); pushHistory(); }
+const changedSlider = k => Math.abs(edit[k] - SLIDERS[k].def) > 1e-9;
+function sectionChanged(k) {
+  const s = SECTIONS[k];
+  if (s.params.some(changedSlider)) return true;
+  if (s.curve && Object.values(edit.curve).some(c => !isIdentity(c))) return true;
+  if (s.geometry) { const c = edit.crop; if (edit.rot || edit.flipH || edit.flipV || !edit.cropAuto || c.w < 0.999 || c.h < 0.999 || edit.aspect !== design.defaultAspect) return true; }
+  return false;
+}
+const anyChanged = () => Object.keys(SECTIONS).some(sectionChanged);
+function refreshSlider(row) {
+  const k = row.dataset.param, s = SLIDERS[k], v = edit[k], range = row.querySelector(".sl-range");
+  range.value = v;
+  const pct = (v - s.min) / (s.max - s.min) * 100, zero = design.fill === "center" && s.min < 0 ? clamp((0 - s.min) / (s.max - s.min) * 100, 0, 100) : 0;
+  range.style.setProperty("--lo", Math.min(zero, pct) + "%"); range.style.setProperty("--hi", Math.max(zero, pct) + "%");
+  const txt = (s.fmt || (s.min < 0 ? signed(0) : (x => x.toFixed(0))))(v);
+  const num = row.querySelector(".sl-num"); if (document.activeElement !== num) num.value = txt;
+  row.querySelector(".sl-out").textContent = txt;
+  row.classList.toggle("changed", changedSlider(k));
+}
+function refreshSecChanged() {
+  document.querySelectorAll(".ep-sec").forEach(s => s.classList.toggle("changed", sectionChanged(s.dataset.sec)));
+  $("#editedBadge").hidden = !anyChanged();
+}
+function refreshPanel() {
+  if (!oriented) return;
+  document.querySelectorAll("#editPanel .sl").forEach(refreshSlider);
+  const portrait = isPortrait();
+  document.querySelectorAll("[data-aspect]").forEach(b => {
+    const a = ASPECTS.find(x => x[0] === b.dataset.aspect);
+    b.textContent = a[0] === "original" ? "Original" : a[0] === "free" ? "Free" : portrait ? `${a[2]}:${a[1]}` : `${a[1]}:${a[2]}`;
+    b.setAttribute("aria-pressed", edit.aspect === a[0]);
+  });
+  const ck = $("#constrainChk"); if (ck) ck.checked = edit.constrain;
+  refreshSecChanged(); refreshUndo(); refreshCommit(); refreshCompare(); refreshCropUi(); drawCurve();
+}
+function refreshUndo() { const u = $("#undoBtn"), r = $("#redoBtn"); if (u) u.disabled = hIndex <= 0; if (r) r.disabled = hIndex >= history.length - 1; }
+function refreshCompare() { const b = $("#compareBtn"); if (b) b.setAttribute("aria-pressed", ui.holding || splitOn()); }
+function refreshCommit() {
+  const f = $("#epCommit"); if (!f) return;
+  if (design.commit === "auto") {
+    f.innerHTML = `<span class="status${ui.saving ? " saving" : ""}">${ui.saving ? "Saving…" : anyChanged() ? "Edit saved · the original is untouched" : "No changes"}</span><button class="btn ghost" id="revertBtn"${anyChanged() ? "" : " disabled"}>Revert to original</button>`;
+  } else {
+    f.innerHTML = `<button class="btn ghost" id="revertBtn">Revert</button><span class="grow"></span><button class="btn" id="cancelBtn">Cancel</button><button class="btn primary" id="doneBtn">Done</button>`;
+    $("#cancelBtn").onclick = () => { if (ui.openSnapshot) { edit = JSON.parse(ui.openSnapshot); afterHistory(); pushHistory(); } setEditOpen(false); };
+    $("#doneBtn").onclick = () => setEditOpen(false);
+  }
+  $("#revertBtn").onclick = resetAll;
+}
+function refreshDims() {
+  const swap = edit.rot % 2 === 1, AW = swap ? asset.h : asset.w, AH = swap ? asset.w : asset.h;
+  const cw = Math.round(edit.crop.w * AW), ch = Math.round(edit.crop.h * AH);
+  const cropped = edit.crop.w < 0.999 || edit.crop.h < 0.999;
+  $("#tbDims").textContent = `${asset.w} × ${asset.h}`;
+  $("#dpDims").textContent = `${asset.w} × ${asset.h}` + (cropped || swap ? ` · edited ${cw} × ${ch}` : "");
+  const t = `${cw} × ${ch} px`;
+  const cs = $("#cropSize"); if (cs) cs.textContent = `Crop ${t}` + (edit.straighten ? ` · ${signed(1)(edit.straighten)}°` : "");
+  $("#cropReadout").textContent = t;
+}
+
+/* ---------- tone curve editor ---------- */
+let curveDrag = null;
+function curvePts() { return edit.curve[ui.curveChannel]; }
+function drawCurve() {
+  const c = $("#curveCanvas"); if (!c || !c.clientWidth) return;
+  const dpr = window.devicePixelRatio || 1, S = c.clientWidth * dpr; c.width = S; c.height = S;
+  const g = c.getContext("2d"), dark = ui.theme === "dark", line = dark ? "rgba(255,255,255," : "rgba(0,0,0,";
+  if (lastOut) {
+    const b = histBins()[3]; let m = 1; for (let i = 2; i < 254; i++) m = Math.max(m, b[i]);
+    g.beginPath(); g.moveTo(0, S); for (let i = 0; i < 256; i++) g.lineTo(i / 255 * S, S - Math.min(1, b[i] / m) * S * 0.9); g.lineTo(S, S); g.fillStyle = line + ".08)"; g.fill();
+  }
+  g.strokeStyle = line + ".12)"; g.lineWidth = 1;
+  for (let i = 1; i < 4; i++) { g.beginPath(); g.moveTo(i * S / 4, 0); g.lineTo(i * S / 4, S); g.moveTo(0, i * S / 4); g.lineTo(S, i * S / 4); g.stroke(); }
+  g.strokeStyle = line + ".25)"; g.beginPath(); g.moveTo(0, S); g.lineTo(S, 0); g.stroke();
+  const col = { m: dark ? "#f0f0f4" : "#20232b", r: "#ef5050", g: "#3cbf5a", b: "#4f7bff" }[ui.curveChannel];
+  if (design.curveChannels === "rgb") for (const k of ["r", "g", "b"]) if (k !== ui.curveChannel && !isIdentity(edit.curve[k])) strokeCurve(g, S, edit.curve[k], { r: "#ef5050", g: "#3cbf5a", b: "#4f7bff" }[k] + "66", dpr);
+  strokeCurve(g, S, curvePts(), col, dpr * 1.6);
+  for (const [x, y] of curvePts()) { g.beginPath(); g.arc(x * S, (1 - y) * S, 4.5 * dpr, 0, 7); g.fillStyle = col; g.fill(); g.strokeStyle = dark ? "#000" : "#fff"; g.lineWidth = dpr; g.stroke(); }
+}
+function strokeCurve(g, S, pts, col, lw) {
+  const lut = curveLut(pts); g.beginPath();
+  for (let i = 0; i <= 256; i++) { const x = i / 256, y = look(lut, x); i ? g.lineTo(x * S, (1 - y) * S) : g.moveTo(0, (1 - y) * S); }
+  g.strokeStyle = col; g.lineWidth = lw; g.stroke();
+}
+function wireCurve() {
+  const c = $("#curveCanvas"); if (!c) return;
+  const pos = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, 1 - (e.clientY - r.top) / r.height, r.width]; };
+  const nearest = (x, y, w) => { const pts = curvePts(); let bi = -1, bd = 12 / w; pts.forEach(([px, py], i) => { const d = Math.hypot(px - x, py - y); if (d < bd) { bd = d; bi = i; } }); return bi; };
+  c.addEventListener("pointerdown", e => {
+    const [x, y, w] = pos(e), pts = curvePts(); let i = nearest(x, y, w);
+    if (i < 0) {
+      if (pts.some(p => Math.abs(p[0] - x) < 0.03)) return;
+      pts.push([clamp(x, 0, 1), clamp(y, 0, 1)]); pts.sort((a, b) => a[0] - b[0]); i = pts.findIndex(p => p[0] === clamp(x, 0, 1));
+    }
+    curveDrag = { i, remove: false }; c.setPointerCapture(e.pointerId); scheduleRender();
+  });
+  c.addEventListener("pointermove", e => {
+    if (!curveDrag) return;
+    const [x, y] = pos(e), pts = curvePts(), i = curveDrag.i, last = pts.length - 1;
+    const end = i === 0 || i === last;
+    curveDrag.remove = !end && (y < -0.12 || y > 1.12 || x < -0.12 || x > 1.12);
+    const lo = i === 0 ? 0 : pts[i - 1][0] + 0.02, hi = i === last ? 1 : pts[i + 1][0] - 0.02;
+    pts[i] = [end ? (i === 0 ? 0 : 1) : clamp(x, lo, hi), clamp(y, 0, 1)];
+    refreshSecChanged(); scheduleRender();
+  });
+  c.addEventListener("pointerup", () => {
+    if (!curveDrag) return;
+    if (curveDrag.remove) curvePts().splice(curveDrag.i, 1);
+    curveDrag = null; refreshSecChanged(); scheduleRender(); pushHistory();
+  });
+  c.addEventListener("dblclick", e => { const [x, y, w] = pos(e), pts = curvePts(), i = nearest(x, y, w); if (i > 0 && i < pts.length - 1) { pts.splice(i, 1); scheduleRender(); pushHistory(); } });
+}
+
+/* ======================= layout: the two panels ======================= */
+const editSide = () => OPP[design.detailSide];
+const isHorizontal = () => editSide() === "top" || editSide() === "bottom";
+function layout() {
+  const v = $("#detailView"), dOpen = design.detailOpen, eOpen = ui.editOpen;
+  const vertical = design.detailSide === "top" || design.detailSide === "bottom";
+  const areas = [];
+  const push = (name, track) => areas.push([name, track]);
+  // from the start edge (left or top) to the end edge
+  const startIsEdit = editSide() === "left" || editSide() === "top";
+  const panelTrack = (share, min) => `minmax(${min}, ${share}%)`;
+  const ePart = eOpen ? [["edit", panelTrack(vertical ? design.shareV : design.share, vertical ? "12rem" : "16rem")], ["eg", "1px"]] : [];
+  const dPart = dOpen ? [["dg", "1px"], ["detail", panelTrack(vertical ? 22 : 24, vertical ? "6rem" : "14rem")]] : [];
+  const seq = startIsEdit ? [...ePart, ["stage", "minmax(0, 1fr)"], ...dPart] : [...dPart.slice().reverse(), ["stage", "minmax(0, 1fr)"], ...ePart.slice().reverse()];
+  seq.forEach(([n, t]) => push(n, t));
+  const names = areas.map(a => a[0]), tracks = areas.map(a => a[1]).join(" ");
+  v.style.gridTemplateColumns = vertical ? "minmax(0, 1fr)" : tracks;
+  v.style.gridTemplateRows = vertical ? tracks : "minmax(0, 1fr)";
+  v.style.gridTemplateAreas = vertical ? names.map(n => `"${n}"`).join(" ") : `"${names.join(" ")}"`;
+  $("#editPanel").style.gridArea = "edit"; $("#editPanel").hidden = !eOpen;
+  $("#editDivider").style.gridArea = "eg"; $("#editDivider").hidden = !eOpen; $("#editDivider").className = "divider " + (vertical ? "h" : "v");
+  $("#detailPanel").style.gridArea = "detail"; $("#detailPanel").hidden = !dOpen;
+  $("#detailDivider").style.gridArea = "dg"; $("#detailDivider").hidden = !dOpen; $("#detailDivider").className = "divider " + (vertical ? "h" : "v");
+  $("#stage").style.gridArea = "stage";
+  $("#tgEdit").setAttribute("aria-pressed", eOpen); $("#tgDetail").setAttribute("aria-pressed", dOpen);
+  $("#dpDock").value = design.detailSide;
+  $("#app").dataset.density = design.density;
+  later(() => { drawHistogram(); drawCurve(); });
+}
+function setEditOpen(open) {
+  if (open === ui.editOpen) return;
+  ui.editOpen = open;
+  if (open) {
+    ui.openSnapshot = snap();
+    if (design.together === "swap" && design.detailOpen) { ui.detailReopen = true; design.detailOpen = false; syncControls(); }
+    if (design.cropOnOpen) setCropMode(true);
+  } else {
+    if (ui.cropMode) setCropMode(false);
+    if (ui.detailReopen) { design.detailOpen = true; ui.detailReopen = false; syncControls(); }
+    ui.split = false; ui.holding = false;
+  }
+  layout(); draw(); updatePrompt();
+}
+function setDetailOpen(open) {
+  design.detailOpen = open; ui.detailReopen = false;
+  if (open && ui.editOpen && design.together === "swap") { ui.editOpen = false; if (ui.cropMode) setCropMode(false); }
+  syncControls(); layout(); updatePrompt();
+}
+
+/* ======================= the crop tool ======================= */
+function setCropMode(on) {
+  if (on === ui.cropMode) return;
+  ui.cropMode = on;
+  if (on) { ui.cropBefore = JSON.stringify({ crop: edit.crop, straighten: edit.straighten, aspect: edit.aspect, portrait: edit.portrait, cropAuto: edit.cropAuto }); ui.split = false; }
+  else { ui.levelActive = false; }
+  refreshCropUi(); refreshCompare(); scheduleRender();
+}
+function cancelCrop() { if (ui.cropBefore) Object.assign(edit, JSON.parse(ui.cropBefore)); setCropMode(false); refreshPanel(); pushHistory(); }
+function doneCrop() { setCropMode(false); pushHistory(); }
+function refreshCropUi() {
+  const layer = $("#cropLayer"), bar = $("#cropBar"), stage = $("#stage");
+  layer.hidden = !ui.cropMode; bar.hidden = !ui.cropMode;
+  const cb = $("#cropBtn"); if (cb) cb.setAttribute("aria-pressed", ui.cropMode);
+  const lb = $("#levelBtn"); if (lb) lb.setAttribute("aria-pressed", ui.levelActive);
+  stage.classList.toggle("crop-outside-rotate", ui.cropMode && !ui.levelActive && design.outside === "rotate");
+  stage.classList.toggle("crop-outside-draw", ui.cropMode && !ui.levelActive && design.outside === "draw");
+  stage.classList.toggle("level-active", ui.cropMode && ui.levelActive);
+  if (!ui.cropMode) return;
+  const c = edit.crop, r = $("#cropRect");
+  Object.assign(r.style, { left: c.x * 100 + "%", top: c.y * 100 + "%", width: c.w * 100 + "%", height: c.h * 100 + "%" });
+  r.style.setProperty("--mask", design.mask / 100);
+  r.style.pointerEvents = ui.levelActive ? "none" : "auto";
+  layer.classList.toggle("guide-drag", design.guideWhen === "drag");
+  $("#guideBtn").textContent = "Guide: " + GUIDE_NAMES[design.guide];
+  $("#guideBtn").title = "Cycle the guide (O)";
+  drawGuides();
+}
+function drawGuides() {
+  const svg = $("#cropRect .guides"), L = [];
+  const v = x => L.push(`<line x1="${x}" y1="0" x2="${x}" y2="100"/>`), h = y => L.push(`<line x1="0" y1="${y}" x2="100" y2="${y}"/>`);
+  if (design.guide === "thirds") { [100 / 3, 200 / 3].forEach(x => { v(x); h(x); }); }
+  if (design.guide === "grid") { for (let i = 1; i < 8; i++) { v(i * 12.5); h(i * 12.5); } }
+  if (design.guide === "golden") { [38.2, 61.8].forEach(x => { v(x); h(x); }); }
+  if (design.guide === "diagonal") { L.push(`<line x1="0" y1="0" x2="100" y2="100"/><line x1="100" y1="0" x2="0" y2="100"/>`); }
+  svg.innerHTML = L.join("");
+}
+let drag = null;
+function boxPoint(e) { const r = $("#mediaBox").getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, rw: r.width, rh: r.height }; }
+$("#stage").addEventListener("pointerdown", e => {
+  if (!ui.cropMode || e.button !== 0 || e.target.closest("#cropBar")) return;
+  const p = boxPoint(e), c = edit.crop;
+  if (ui.levelActive) { drag = { mode: "level", p0: p }; }
+  else {
+    const hEl = e.target.closest(".h");
+    const inside = p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h;
+    if (hEl) drag = { mode: "resize", dir: hEl.dataset.h };
+    else if (inside) drag = { mode: "move" };
+    else if (design.outside === "rotate") { const cx = (c.x + c.w / 2) * p.rw, cy = (c.y + c.h / 2) * p.rh; drag = { mode: "rotate", a0: Math.atan2(p.y * p.rh - cy, p.x * p.rw - cx), s0: edit.straighten }; }
+    else drag = { mode: "draw" };
+  }
+  Object.assign(drag, { p0: p, start: { ...c } });
+  $("#cropLayer").classList.add("dragging");
+  $("#stage").setPointerCapture(e.pointerId); e.preventDefault();
+});
+$("#stage").addEventListener("pointermove", e => {
+  if (!drag) return;
+  const p = boxPoint(e), dx = p.x - drag.p0.x, dy = p.y - drag.p0.y, s = drag.start;
+  const ratio = ratioPx(), k = ratio ? rn(ratio) : null;
+  if (drag.mode === "level") {
+    const svg = $("#levelSvg"), l = $("#levelLine"); svg.hidden = false;
+    svg.setAttribute("viewBox", `0 0 ${p.rw} ${p.rh}`);
+    l.setAttribute("x1", drag.p0.x * p.rw); l.setAttribute("y1", drag.p0.y * p.rh); l.setAttribute("x2", p.x * p.rw); l.setAttribute("y2", p.y * p.rh);
+    drag.p1 = p; return;
+  }
+  if (drag.mode === "rotate") {
+    const c = edit.crop, cx = (c.x + c.w / 2) * p.rw, cy = (c.y + c.h / 2) * p.rh;
+    let da = (Math.atan2(p.y * p.rh - cy, p.x * p.rw - cx) - drag.a0) * 180 / Math.PI;
+    if (da > 180) da -= 360; if (da < -180) da += 360;
+    setStraighten(drag.s0 + da); refreshPanel(); scheduleRender(); return;
+  }
+  let next;
+  if (drag.mode === "move") {
+    next = { ...s, x: clamp(s.x + dx, 0, 1 - s.w), y: clamp(s.y + dy, 0, 1 - s.h) };
+  } else if (drag.mode === "draw") {
+    let x1 = drag.p0.x, y1 = drag.p0.y, w = p.x - x1, h = p.y - y1;
+    if (k) { const aw = Math.abs(w), ah = Math.abs(h); if (aw / k > ah) h = Math.sign(h || 1) * aw / k; else w = Math.sign(w || 1) * ah * k; }
+    next = { x: Math.min(x1, x1 + w), y: Math.min(y1, y1 + h), w: Math.abs(w), h: Math.abs(h) };
+    if (next.w < 0.01 || next.h < 0.01) return;
+    next = clampIntoFrame(next);
+  } else {
+    let x0 = s.x, y0 = s.y, x1 = s.x + s.w, y1 = s.y + s.h; const d = drag.dir;
+    if (d.includes("w")) x0 = clamp(s.x + dx, 0, x1 - 0.02); if (d.includes("e")) x1 = clamp(x1 + dx, x0 + 0.02, 1);
+    if (d.includes("n")) y0 = clamp(s.y + dy, 0, y1 - 0.02); if (d.includes("s")) y1 = clamp(y1 + dy, y0 + 0.02, 1);
+    let w = x1 - x0, h = y1 - y0;
+    if (k) {
+      if (d.length === 2) { if (w / k > h) h = w / k; else w = h * k; if (d.includes("w")) x0 = x1 - w; else x1 = x0 + w; if (d.includes("n")) y0 = y1 - h; else y1 = y0 + h; }
+      else if (d === "n" || d === "s") { w = h * k; const cx = s.x + s.w / 2; x0 = cx - w / 2; x1 = cx + w / 2; }
+      else { h = w / k; const cy = s.y + s.h / 2; y0 = cy - h / 2; y1 = cy + h / 2; }
+    }
+    next = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+  edit.crop = limitTransition(edit.crop, next); edit.cropAuto = false;
+  refreshCropUi(); refreshDims(); refreshSecChanged();
+});
+function clampIntoFrame(r) { const w = Math.min(r.w, 1), h = Math.min(r.h, 1); return { x: clamp(r.x, 0, 1 - w), y: clamp(r.y, 0, 1 - h), w, h }; }
+function endDrag() {
+  if (!drag) return;
+  if (drag.mode === "level" && drag.p1) {
+    const p = drag.p1, dx = (p.x - drag.p0.x) * p.rw, dy = (p.y - drag.p0.y) * p.rh;
+    if (Math.hypot(dx, dy) > 12) {
+      let a = Math.atan2(dy, dx) * 180 / Math.PI;
+      if (a > 90) a -= 180; if (a < -90) a += 180;
+      if (Math.abs(a) > 45) a = a > 0 ? a - 90 : a + 90;
+      setStraighten(edit.straighten - a); ui.levelActive = false; refreshPanel(); scheduleRender();
+    }
+    $("#levelSvg").hidden = true;
+  }
+  drag = null; $("#cropLayer").classList.remove("dragging");
+  pushHistory();
+}
+$("#stage").addEventListener("pointerup", endDrag);
+$("#stage").addEventListener("pointercancel", endDrag);
+$("#cropDone").addEventListener("click", doneCrop);
+$("#cropCancel").addEventListener("click", cancelCrop);
+$("#guideBtn").addEventListener("click", cycleGuide);
+function cycleGuide() { design.guide = GUIDES[(GUIDES.indexOf(design.guide) + 1) % GUIDES.length]; syncControls(); refreshCropUi(); updatePrompt(); }
+
+/* ---------- split compare handle ---------- */
+(() => {
+  const h = $("#splitHandle"); let on = false;
+  h.addEventListener("pointerdown", e => { on = true; h.setPointerCapture(e.pointerId); e.stopPropagation(); });
+  h.addEventListener("pointermove", e => { if (!on) return; ui.splitPos = clamp(boxPoint(e).x, 0.02, 0.98); draw(); });
+  h.addEventListener("pointerup", () => { on = false; });
+})();
+function setHolding(v) { if (ui.holding === v) return; ui.holding = v; refreshCompare(); draw(); }
+
+/* ======================= keys ======================= */
+document.addEventListener("keydown", e => {
+  const t = e.target;
+  if (t.matches && t.matches("input[type=text], input[type=number], textarea, select")) return;
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && k === "z" && ui.editOpen) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && k === "y" && ui.editOpen) { e.preventDefault(); redo(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "\\" && ui.editOpen) {
+    e.preventDefault();
+    if (design.compare === "split") { if (!e.repeat) { ui.split = !ui.split; refreshCompare(); draw(); } }
+    else setHolding(true);
+    return;
+  }
+  if (e.repeat) return;
+  if (k === "e") { setEditOpen(!ui.editOpen); return; }
+  if (k === "m") { setDetailOpen(!design.detailOpen); return; }
+  if (!ui.editOpen) return;
+  if (k === "c") { ui.cropMode ? doneCrop() : setCropMode(true); return; }
+  if (ui.cropMode) {
+    if (k === "x") { swapAspect(); afterGeometry(); }
+    else if (k === "o") cycleGuide();
+    else if (e.key === "Enter") { e.preventDefault(); doneCrop(); }
+    else if (e.key === "Escape") { e.preventDefault(); cancelCrop(); }
+  }
+});
+document.addEventListener("keyup", e => { if (e.key === "\\" && design.compare !== "split") setHolding(false); });
+window.addEventListener("blur", () => setHolding(false));
+
+/* ======================= playground controls ======================= */
+function buildControls() {
+  const host = $("#controls"); host.innerHTML = "";
+  for (const grp of DESIGN_SPEC) {
+    const det = document.createElement("details"); det.open = true;
+    det.innerHTML = `<summary>${grp.group}</summary>`;
+    for (const it of grp.items) {
+      const div = document.createElement("div"); div.className = "ctl"; div.dataset.key = it.key;
+      if (it.type === "seg") {
+        div.innerHTML = `<span class="lbl">${it.label}</span><div class="seg">${it.options.map(([v, l]) => `<button data-v="${v}">${l}</button>`).join("")}</div>`;
+        div.querySelectorAll("button").forEach(b => b.addEventListener("click", () => setDesign(it.key, b.dataset.v)));
+      } else if (it.type === "toggle") {
+        div.innerHTML = `<label class="tog"><input type="checkbox"> ${it.label}</label>`;
+        div.querySelector("input").addEventListener("change", e => setDesign(it.key, e.target.checked));
+      } else if (it.type === "range") {
+        div.innerHTML = `<span class="lbl">${it.label}</span><div class="rangectl"><input type="range" min="${it.min}" max="${it.max}" step="${it.step}"><span></span></div>`;
+        div.querySelector("input").addEventListener("input", e => setDesign(it.key, parseFloat(e.target.value)));
+      }
+      if (it.hint) div.insertAdjacentHTML("beforeend", `<div class="hint">${it.hint}</div>`);
+      if (it.note) div.insertAdjacentHTML("beforeend", `<div class="note"></div>`);
+      det.appendChild(div);
+    }
+    host.appendChild(det);
+  }
+  const pr = $("#presets");
+  for (const name of Object.keys(PRESETS)) {
+    const b = document.createElement("button"); b.className = "pbtn"; b.textContent = name; b.dataset.preset = name;
+    b.addEventListener("click", () => applyPreset(name)); pr.appendChild(b);
+  }
+}
+function syncControls() {
+  for (const grp of DESIGN_SPEC) for (const it of grp.items) {
+    const div = document.querySelector(`.ctl[data-key="${it.key}"]`), v = design[it.key];
+    if (it.type === "seg") div.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === String(v)));
+    else if (it.type === "toggle") div.querySelector("input").checked = !!v;
+    else { div.querySelector("input").value = v; div.querySelector(".rangectl span").textContent = v + (it.unit || ""); }
+    if (it.note) div.querySelector(".note").textContent = it.note();
+  }
+  document.querySelectorAll("[data-preset]").forEach(b => b.classList.toggle("on", b.dataset.preset === activePreset));
+}
+const PANEL_KEYS = new Set(["sections", "order", "histogram", "legend", "sectionReset", "value", "gradients", "secondary", "level", "curveChannels", "compare", "commit", "detailSide", "fill"]);
+function setDesign(key, v, fromPreset) {
+  const prevDefaultAspect = design.defaultAspect;
+  design[key] = v;
+  if (!fromPreset) activePreset = null;
+  if (key === "defaultAspect" && edit.aspect === prevDefaultAspect && edit.cropAuto) { applyAspect(v); pushHistory(); }
+  if (key === "detailOpen") { setDetailOpen(v); }
+  if (key === "compare") { ui.split = false; ui.holding = false; }
+  if (key === "level" && !v) ui.levelActive = false;
+  if (!fromPreset) applyDesign(key);
+}
+function applyDesign(key) {
+  if (!key || PANEL_KEYS.has(key)) buildPanel();
+  layout(); refreshCropUi(); draw(); syncControls(); updatePrompt();
+}
+function applyPreset(name) {
+  const next = { ...DEFAULT_DESIGN, ...PRESETS[name], includeRecipe: design.includeRecipe };
+  activePreset = name;
+  for (const [k, v] of Object.entries(next)) if (design[k] !== v) setDesign(k, v, true);
+  ui.split = false;
+  if (design.cropOnOpen && ui.editOpen && !ui.cropMode) setCropMode(true);
+  applyDesign();
+}
+
+/* ======================= prompt ======================= */
+function updatePrompt() {
+  const d = design, es = OPP[d.detailSide], L = [];
+  const dir = { left: "left", right: "right", top: "top", bottom: "bottom" };
+  L.push(`Add an Edit panel to Asset detail for still images, with the Tier 1 adjustments. This pass is UI only: the controls write an edit recipe that stays in the browser and drive a live preview on the stage. No backend, no saving to the server and no server-side rendering yet. HSL and the channel mixer are out of scope.`);
+  L.push(`\nPlacement and keys`);
+  L.push(`- It docks on the side opposite the Detail panel's Dock side and follows it when that changes: Detail right → Edit left, left → right, top → bottom, bottom → top. It has no Dock side menu of its own. With the Detail panel docked ${d.detailSide}, Edit sits ${dir[es]}.`);
+  L.push(`- Its divider and share come from js/common/dock.js, like the Detail panel's: ${d.share} % of the width docked left or right, and ${d.shareV} % of the height docked top or bottom, until dragged, with minimums in core.css.`);
+  L.push(d.together === "both"
+    ? `- Both panels can be open at once, with the stage between them.`
+    : `- Opening Edit closes the Detail panel, and closing Edit reopens it if it was open. Opening the Detail panel (M) while Edit is open closes Edit.`);
+  L.push(`- E opens and closes it from anywhere in Asset detail except a text field, ignoring a held key or a modifier, like M, P and F in global.js (a toggleEditPanel event). A toolbar toggle goes before the Detail panel's, titled "Edit (E)", with aria-pressed. The Detail panel's key legend gains "E Edit". Whether Edit is open is remembered under Const.localStore.assetDetailView, like panelOpen.`);
+  L.push(`- The toggle is disabled on a Video and an animated image.`);
+  L.push(`\nPanel`);
+  const order = sectionOrder().map(k => SECTIONS[k].title).join(", ");
+  const struct = { accordion: "collapsible sections (an accordion; each remembers whether it is open)", tabs: "tabs, one section at a time", scroll: "one scrolling column with sticky section headings" }[d.sections];
+  L.push(`- Sections in this order: ${order}. They are laid out as ${struct}. A section with changes shows a dot in its heading.`);
+  L.push(`- Docked top or bottom, the sections sit side by side as columns that each scroll${d.sections === "tabs" ? " (with tabs, the shown section's controls flow into columns)" : ""}. The commit controls move into the header's row and the key legend is left out, so the strip keeps its height for the controls.`);
+  L.push(`- Header: "Edit", then Undo, Redo, Before/after and Reset all.`);
+  if (d.histogram) L.push(`- A live histogram of the edited image sits under the header: red, green and blue shapes plus a luminance line, drawn as Curation's Histogram is. The crushed and blown fractions in its corners switch a Clipping blink on the stage, marking crushed shadows in the info color and blown highlights in the error color.`);
+  if (d.sectionReset) L.push(`- Each section heading has a reset for that section.`);
+  if (d.density === "compact") L.push(`- Compact density: the rows are about 70 % of the regular spacing.`);
+  if (d.legend) L.push(`- A key legend footer, like the Detail panel's: E Close, C Crop, \\ Before/After, Ctrl+Z Undo, and "Double-click a slider to reset it".`);
+  L.push(`\nControls`);
+  L.push(`- Crop & rotate: a Crop tool toggle (C)${d.level ? ", a Level tool" : ""}, Rotate left and right by 90°, and Flip horizontal and vertical. Aspect chips: Original, Free, 1:1, 5:4, 7:5, 3:2 and 16:9. Their labels flip with the orientation (4:5, 2:3, …), and a swap button (X) flips the orientation. Straighten (±45°, 0.1° steps) with an Auto button that levels from the image's straight edges (HoughLinesP on the server later). Perspective Vertical and Horizontal (±100). A "Keep the crop inside the image" checkbox, on by default. A readout of the crop's size in the original's pixels.`);
+  L.push(`- Light: Exposure (±5 EV in 0.05 steps), Contrast, Highlights, Shadows, Whites and Blacks (±100), and Gamma (0.50 to 2.00 on a log scale, centered on 1.00). A tone curve editor below them: click to add a point, drag to move one, drag it off the box or double-click to remove it, with a monotone cubic through the points and the luminance histogram behind it.${d.curveChannels === "rgb" ? " A RGB / R / G / B switch picks the channel, and the other channels' curves show faintly." : " It edits the RGB (master) curve only."} A Reset link sits beside it.`);
+  L.push(`- Color: Temperature, Tint, Vibrance and Saturation (±100).`);
+  L.push(`- Effects: Sharpen (0 to 150), Clarity (±100), Vignette (±100; negative darkens the corners) and Grain (0 to 100).${d.secondary ? " Each has an indented secondary parameter: Sharpen Radius (0.5 to 3 px), Vignette Midpoint and Grain Size." : " No secondary parameters: sharpen radius, vignette midpoint and grain size are fixed."}`);
+  L.push(`\nSliders`);
+  const val = { field: "an editable number at the end of the label row (typing a value and pressing Enter sets it)", hover: "the value shown only while the row is hovered or focused", none: "no value shown" }[d.value];
+  L.push(`- Each slider is a label row with ${val}, over a thin track. The fill runs ${d.fill === "center" ? "from zero to the thumb, so a bipolar slider fills either way from its middle" : "from the left end to the thumb"}. A changed slider's label turns bold. Double-clicking the label or the track resets it. The arrow keys step it, as a native range does.`);
+  if (d.gradients) L.push(`- Exposure, Temperature, Tint, Vibrance and Saturation show a gradient track (dark to light, blue to amber, green to magenta, gray to color), defined as tokens rather than color literals.`);
+  L.push(`\nThe crop tool`);
+  L.push(`- C or the Crop button enters it${d.cropOnOpen ? ", and Edit opens in it" : ""}. The stage then shows the whole straightened frame with the crop rectangle over it. Outside the crop is dimmed to ${d.mask} %. The rectangle has corner and edge handles.`);
+  L.push(`- The guide is ${GUIDE_NAMES[d.guide].toLowerCase()}${d.guide === "none" ? "" : d.guideWhen === "always" ? ", always shown" : ", shown only while dragging"}. O cycles Thirds, Grid, Golden ratio, Diagonals and None.`);
+  L.push(`- Dragging inside the crop moves it. The handles resize it, locked to the aspect unless it is Free. Dragging outside the crop ${d.outside === "rotate" ? "rotates the image (Straighten), with a rotate cursor" : "draws a new crop at the aspect"}.${d.level ? " The Level tool draws a line along something that should be level or plumb and rotates the image to match." : ""}`);
+  L.push(`- With "Keep the crop inside the image" on, no move, resize or rotation lets the crop reach past the image's edges. An untouched crop re-fits to the largest rectangle at the aspect as Straighten and Perspective change, and a crop the user has set shrinks around its center only as much as it must.`);
+  L.push(`- A floating bar on the stage shows the guide, the crop's size, Cancel (Esc: restores the crop and the angle from when the tool opened) and Done (Enter or C). Outside the tool, the stage shows only the cropped result.`);
+  L.push(`- The default aspect is ${d.defaultAspect === "original" ? "Original" : "Free"}.`);
+  L.push(`\nBefore and after`);
+  L.push({ hold: `- Holding \\, or holding the Before/after button down, shows the untouched original. Releasing it returns to the edit.`, split: `- \\ and the Before/after button toggle a split view: a draggable vertical divider over the stage, with "Before" (geometry applied, no tone) on the left and "After" on the right.`, both: `- The Before/after button toggles a split view with a draggable divider, "Before" (geometry applied, no tone) on the left and "After" on the right. Holding \\ shows the untouched original for as long as it is held.` }[d.compare]);
+  L.push(`\nCommitting`);
+  L.push(d.commit === "auto"
+    ? `- Autosave: each change is kept as it happens, with undo and redo per change (a slider drag counts once, on release). The footer reads "Saving…" and then "Edit saved · the original is untouched", with a "Revert to original" button. For this pass, "saved" means held in the browser.`
+    : `- Done / Cancel: the footer has Revert, Cancel and Done. Cancel restores the edit as it was when the panel opened, then closes the panel. Done keeps it and closes the panel. Undo and redo work per change while the panel is open.`);
+  L.push(`- When an asset has an edit, the title shows an "Edited" badge, and the Detail panel's Dimensions row adds "edited W × H".`);
+  L.push(`\nPreview and naming`);
+  L.push(`- Render the live preview on the client from the shown image. Per-pixel adjustments run as a WebGL fragment shader, and Clarity, Sharpen and the warp from Straighten and Perspective run on a downscaled proxy. Later, the server renders the same recipe with OpenCV for the Previews and exports, so keep the math simple enough to match.`);
+  L.push(`- Before naming things in code, add the new terms to CONTEXT.md: the panel (Edit panel), the recipe (Edit) and the Crop tool. "Edit" already names the Advanced search action, so settle the words first. The section of Sharpen, Clarity, Vignette and Grain is "Effects" here because "Detail" would clash with Asset detail and the Detail panel; pick its final name with the rest.`);
+  L.push(`- Follow the frontend rules: no color literals in stylesheets, spacing from the --space-* steps, an Alpine component registered in alpine/components, and the style guide page updated with the new controls.`);
+  if (d.includeRecipe) L.push(`\nSample recipe (the current edit; fields at their defaults omitted):\n${recipeJson()}`);
+  $("#prompt").textContent = L.join("\n");
+}
+function recipeJson() {
+  const r = {};
+  if (edit.rot) r.rotate = edit.rot * 90;
+  if (edit.flipH) r.flipH = true; if (edit.flipV) r.flipV = true;
+  const c = edit.crop; if (c.w < 0.999 || c.h < 0.999) r.crop = { x: +c.x.toFixed(4), y: +c.y.toFixed(4), w: +c.w.toFixed(4), h: +c.h.toFixed(4), aspect: edit.aspect };
+  for (const k of Object.keys(SLIDERS)) if (changedSlider(k)) r[k] = k === "gamma" ? +gammaOf(edit[k]).toFixed(2) : edit[k];
+  for (const [ch, pts] of Object.entries(edit.curve)) if (!isIdentity(pts)) (r.curve ??= {})[ch] = pts.map(p => p.map(v => +v.toFixed(3)));
+  return JSON.stringify({ version: 1, ...r }, null, 2);
+}
+$("#copyBtn").addEventListener("click", async () => {
+  const t = $("#prompt").textContent;
+  try { await navigator.clipboard.writeText(t); } catch { const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+  const b = $("#copyBtn"); b.textContent = "Copied!"; setTimeout(() => b.textContent = "Copy prompt", 1200);
+});
+
+/* ======================= wiring ======================= */
+$("#tgEdit").addEventListener("click", () => setEditOpen(!ui.editOpen));
+$("#tgDetail").addEventListener("click", () => setDetailOpen(!design.detailOpen));
+$("#dpDock").addEventListener("change", e => setDesign("detailSide", e.target.value));
+$("#themeBtn").addEventListener("click", () => {
+  ui.theme = ui.theme === "dark" ? "light" : "dark"; $("#app").dataset.theme = ui.theme;
+  $("#themeBtn").textContent = ui.theme === "dark" ? "Light theme" : "Dark theme"; draw(); drawHistogram(); drawCurve();
+});
+$("#fileInput").addEventListener("change", e => loadFile(e.target.files[0]));
+const stageWrap = document.querySelector(".stagewrap");
+stageWrap.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("dropping"); });
+stageWrap.addEventListener("dragleave", () => document.body.classList.remove("dropping"));
+stageWrap.addEventListener("drop", e => { e.preventDefault(); document.body.classList.remove("dropping"); loadFile(e.dataTransfer.files[0]); });
+new ResizeObserver(() => { drawHistogram(); drawCurve(); }).observe($("#editPanel"));
+
+buildControls();
+syncControls();
+buildPanel();
+layout();
+src = proceduralScene();
+ensureOriented();
+edit.crop = fitMaxCentered();
+history = [snap()]; hIndex = 0; ui.openSnapshot = snap();
+refreshPanel();
+render();
+updatePrompt();
+</script>
+</body>
+</html>
