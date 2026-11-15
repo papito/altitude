@@ -37,14 +37,15 @@ shell sets (POSIX `sh` reads its startup file's path from `ENV`) never puts an i
 `<App home>/application.conf` over `reference.conf`. Dev and test keep the working directory as the root and read their
 configs as they do.
 
-**Models.** The classpath carries one model, YuNet (233 KB). ArcFace (`w600k_r50.onnx`, 174 MB) and the two Scene models
-(`dinov2_vitb14.onnx`, `clip_vitb16_image.onnx`, about 330 MB each) live in a models folder: `<App home>/models` in prod,
-the repository's `models/` (git-ignored) in dev, and `ALTITUDE_MODELS_DIR` under test, set in the test module's `forkEnv`.
-`Environment.modelPath(file)` gives a model's path, and ArcFace and the Scene models load from it in place, never copied.
-`altitude/resources/models.json` lists each model's file name, size, SHA-256 and URL. ArcFace's URL is its pinned Hugging
-Face revision; the Scene models' are assets of the `models-1` release of `papito/altitude`. A model file sits under its
-final name only once its checksum has passed, so a start checks presence and size alone. The server's rule holds: a missing
-model fails the start. First run gets the models before the server starts.
+**Models.** The classpath carries no model. The model files, YuNet among them, seven files of about 1.6 GB, are pinned in
+`ModelFile` (`altitude/src/altitude/core/util/ModelFiles.scala`), the manifest: each one's name, URL, size and SHA-256.
+Six are the assets of release `v1` of `renegade-otter/altitude-models`; ArcFace (`w600k_r50.onnx`, 174 MB) is its pinned
+Hugging Face revision. The set's files are in `<models.dir>/v1/`: `models.dir` names `<App home>/models` in prod, in the
+App home's `application.conf`, and is empty in dev and under test, the per-user cache (`$XDG_CACHE_HOME/altitude/models`,
+else `~/.cache/altitude/models`) that the dev server and the tests share. Every model loads from there in place, never
+copied. A model file sits under its final name only once its checksum has passed, so a start checks presence and size
+alone. A start downloads a missing model, and one it cannot put in place fails it. First run gets the models before the
+server starts.
 
 **Natives.** A packaged app carries its native libraries unpacked in its `native/` folder: JavaCPP, OpenCV, FFmpeg and
 OpenBLAS, ONNX Runtime, sqlite-jdbc and sqlite-vector, for its one platform. The JVM options point each library there
@@ -219,8 +220,7 @@ checks for nothing. The GitHub release also carries an unsigned Windows build, f
 ### A. The environment, the folders and the server's lifecycle
 
 - `Environment.scala`: `altitude.env` before `ENV`, an unrecognised value is prod; `ROOT_PATH` in prod is `altitude.home`;
-  `modelPath(file)` and `nativeDir`. `resolveResourcePath` remains for YuNet, and for sqlite-vector where no native folder
-  is set.
+  `modelPath(file)` and `nativeDir`. `resolveResourcePath` remains for sqlite-vector where no native folder is set.
 - `Altitude.scala`: prod reads `<ROOT_PATH>/application.conf`; an absolute `fs.data.dir` is used as it is.
 - `reference.conf`: `server.host` and `server.port`.
 - `App.scala`: `host`, `port` and `debugMode` overrides.
@@ -232,11 +232,10 @@ checks for nothing. The GitHub release also carries an unsigned Windows build, f
 
 ### B. The models
 
-- `altitude/resources/onnx/*` and `../../../altitude/resources/opencv/w600k_r50.onnx` move to `models/` at the repository root
-  (git-ignored); YuNet stays on the classpath.
-- `altitude/resources/models.json`, the manifest.
-- `../../../scripts/fetch-models.py` writes to `models/`, checks each file against the manifest, and with `--release` prints the
-  Scene models' SHA-256 and sizes for the manifest and the `gh release create models-1` command.
+- The model files, YuNet among them, are in neither the repository nor the classpath: `ModelFile` pins them, and the start
+  downloads the missing ones into `<models.dir>/v1/` (see **Models**).
+- `ModelFile`, the manifest. A new set is a new release tag of `renegade-otter/altitude-models` and new pins; that
+  repository's `export-models.py` makes the set's files and their `SHA256SUMS`.
 - `../../../build.mill`: the test module's `forkEnv` sets `ALTITUDE_MODELS_DIR`.
 - `altitude/src/altitude/desktop/ModelDownloader.scala`: resume, checksum, rename into place, progress, the system proxy.
   Its tests run against a local `com.sun.net.httpserver` server: an interrupted transfer resumes, a bad checksum fetches
