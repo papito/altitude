@@ -114,11 +114,14 @@ enum ModelFile(val spec: ModelFileSpec):
 
 object ModelFile:
 
+  // The enum's cases are built, URLs and all, as this object is, before a plain `val` here would be set: the two constants are
+  // `inline`, written into the URLs where they are used, so they can never be read as null
+
   /** The release tag of the set, and the name of its directory under `models.dir` */
-  final val TAG = "v1"
+  inline val TAG = "v1"
 
   /** The revision of `maze/faceX` on Hugging Face that ArcFace is downloaded from */
-  final val FACEX_REVISION = "e010b5098c3685fd00b22dd2aec6f37320e3d850"
+  inline val FACEX_REVISION = "e010b5098c3685fd00b22dd2aec6f37320e3d850"
 
   /** An asset of release `TAG` of `altitude-models` */
   private def release(name: String, size: Long, sha256: String): ModelFileSpec =

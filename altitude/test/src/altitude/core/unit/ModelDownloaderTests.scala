@@ -352,6 +352,39 @@ import altitude.core.util.Sha256
     slept shouldBe empty
   }
 
+  test("A short body that ends cleanly fails at once on its size") {
+
+    /**
+     * Setup:
+     *
+     * A local server that sends the first 40,000 bytes of a file pinned to 50,000, in a body of no declared length that ends
+     * cleanly where they do.
+     *
+     * Assertions:
+     *
+     * The ensure fails naming the 40,000 bytes that came and the 50,000 pinned, and the directory holds neither the file nor its
+     * `.part`.
+     *
+     * Edge cases:
+     *
+     * A short file is not retried: the server sees one request and the downloader never sleeps.
+     */
+    val server = newServer()
+    server.declaresLength = false
+    val bytes = content(50_000, 31)
+    server.serve("/model.onnx", bytes.take(40_000))
+    val spec = ModelFileSpec("model.onnx", server.url("/model.onnx"), bytes.length, Sha256.hex(bytes))
+
+    val error = intercept[ModelFilesException](ensure(spec))
+
+    error.getMessage should include("came as 40000 bytes")
+    error.getMessage should include("not its pinned 50000 bytes")
+    Files.exists(fileOf(spec)) shouldBe false
+    Files.exists(partOf(spec)) shouldBe false
+    server.requestsOf("/model.onnx").size shouldBe 1
+    slept shouldBe empty
+  }
+
   test("A body longer than the pin fails without writing past it") {
 
     /**
@@ -903,6 +936,44 @@ import altitude.core.util.Sha256
     downloader(freeSpace = _ => 80_000).ensure(specs)
 
     specs.foreach(spec => Files.exists(fileOf(spec)) shouldBe true)
+  }
+
+  test("Each model file is pinned to its release asset or its Hugging Face revision, with a size and a SHA-256") {
+
+    /**
+     * Setup:
+     *
+     * The seven files of the set, read offline from `ModelFile`.
+     *
+     * Assertions:
+     *
+     * The six of the release are its assets at `.../releases/download/v1/<name>`, and ArcFace is its file at the pinned revision
+     * of `maze/faceX`; every name is distinct, every size positive, and every SHA-256 is 64 lowercase hex characters.
+     *
+     * Edge cases:
+     *
+     * The URLs are built while the enum's cases are, so a tag or a revision that was not yet set then would show in them as
+     * `null`.
+     */
+    val release = "https://github.com/renegade-otter/altitude-models/releases/download/v1"
+    ModelFile.values.map(file => file -> file.spec.url.toString).toMap shouldEqual Map(
+      ModelFile.Dinov2 -> s"$release/dinov2_vitb14.onnx",
+      ModelFile.Siglip2Image -> s"$release/siglip2_b16_256_image.onnx",
+      ModelFile.Siglip2Text -> s"$release/siglip2_b16_256_text.onnx",
+      ModelFile.Siglip2TokenEmbeddings -> s"$release/siglip2_token_embeddings.f16",
+      ModelFile.Siglip2Tokenizer -> s"$release/siglip2_tokenizer.tsv",
+      ModelFile.YuNet -> s"$release/face_detection_yunet_2023mar.onnx",
+      ModelFile.ArcFace ->
+        "https://huggingface.co/maze/faceX/resolve/e010b5098c3685fd00b22dd2aec6f37320e3d850/w600k_r50.onnx"
+    )
+    ModelFile.values.map(_.spec.name).distinct.length shouldBe ModelFile.values.length
+    ModelFile.values.foreach {
+      file =>
+        withClue(s"$file: ") {
+          file.spec.size should be > 0L
+          (file.spec.sha256 should fullyMatch).regex("[0-9a-f]{64}")
+        }
+    }
   }
 
   test("The set lives in models.dir, else in the per-user cache, in a directory named by its tag") {
