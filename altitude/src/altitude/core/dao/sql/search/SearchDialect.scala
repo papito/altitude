@@ -20,9 +20,9 @@ import altitude.core.util.SortDirection
 import altitude.core.util.SortValue
 
 /**
- * The ranked rows of a Describe search as an engine writes them ([[SearchDialect.ranked]], and PostgreSQL's own
- * `PostgresSearchDialect.rankedByIndex`): `rows` is the select of each ranked asset's ID and its cosine distance from the
- * description, in that order, and `sources` the CTEs that select reads, which head the statement's own.
+ * The ranked rows of a Describe search as an engine writes them ([[SearchDialect.ranked]]): `rows` is the select of each ranked
+ * asset's ID and its cosine distance from the description, in that order, and `sources` the CTEs that select reads, which head
+ * the statement's own.
  */
 case class RankedRows(rows: SqlStr, sources: Seq[SqlStr] = Nil)
 
@@ -71,12 +71,12 @@ trait SearchDialect:
   def excludes(assetId: Expr[String], relation: String): Expr[Boolean]
 
   /**
-   * The ranked rows of a Describe search, read exactly: the assets of `matching`, the relation of the search's filters, that
-   * carry a SigLIP 2 Scene embedding no further than the ranking's `maxDistance`, a cosine distance, from its `embedding`, a
-   * description's, each with that distance, the nearest `limit` of them at most, by distance and then ID. Every matching
-   * embedding is read and compared, so the result is exact and its cost is the matching assets'. It is the one way of ranking
-   * every engine has; an engine with a vector index has a second of its own (`PostgresSearchDialect.rankedByIndex`), which its
-   * DAO chooses.
+   * The ranked rows of a Describe search: the assets of `matching`, the relation of the search's filters, that carry a SigLIP 2
+   * Scene embedding no further than the ranking's `maxDistance`, a cosine distance, from its `embedding`, a description's, each
+   * with that distance, the nearest `limit` of them at most. Read exactly, every matching embedding is read and compared, by
+   * distance and then ID, so the result is exact and its cost is the matching assets': the one way of ranking every engine has.
+   * An engine with a vector index reads a ranking that asks for it (`DescribeRanking.throughIndex`, which its DAO decides)
+   * through that index (`PostgresSearchDialect.rankedByIndex`); an engine with none reads every ranking exactly.
    */
   def ranked(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows
 

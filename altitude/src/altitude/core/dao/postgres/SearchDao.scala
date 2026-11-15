@@ -1,28 +1,21 @@
 package altitude.core.dao.postgres
 
 import com.typesafe.config.Config
-import scalasql.Sc
-import scalasql.core.Expr
-import scalasql.query.Select
 
 import altitude.core.RequestContext
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.search.PostgresSearchDialect
-import altitude.core.dao.sql.search.RankedRows
 import altitude.core.dao.sql.search.SearchDialect
 import altitude.core.dao.sql.search.SearchQueries
-import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.util.DescribeRanking
 import altitude.core.util.SearchQuery
 
 class SearchDao(override val config: Config) extends altitude.core.dao.jdbc.SearchDao(config) with PostgresOverrides:
   override protected val searchDialect: SearchDialect = PostgresSearchDialect
 
-  /** The ranked rows of a page: exact for the searches that leave few assets to rank, through the vector index for the rest */
-  override protected def rankedRows(
-      query: SearchQuery,
-      ranking: DescribeRanking): Select[AssetRow[Expr], AssetRow[Sc]] => RankedRows =
-    if ranksExactly(query) then PostgresSearchDialect.ranked(_, ranking) else PostgresSearchDialect.rankedByIndex(_, ranking)
+  /** The ranking read exactly for the searches that leave few assets to rank, through the vector index for the rest */
+  override def rankingFor(query: SearchQuery, ranking: DescribeRanking): DescribeRanking =
+    ranking.copy(throughIndex = !ranksExactly(query))
 
   /**
    * The choice follows how many assets the search leaves to rank: its view's (the repository, outside the trash and, unless asked

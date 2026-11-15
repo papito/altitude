@@ -140,7 +140,7 @@ test("a search typed or described in Triage stays there, and holds no filter", (
     })
     assert.equal(
         serializeSearchParams(described),
-        "view=triage&describe=a+cactus",
+        "view=triage&describe=a+cactus&sort=similarity",
     )
     assert.equal(seedMember("?view=triage&describe=a+cactus").triaged, null)
 })

@@ -9,10 +9,12 @@ import altitude.core.FieldConst
 import altitude.core.routes.SearchRequestParser.Scope
 import altitude.core.util.BoundingBox
 import altitude.core.util.DateRange
+import altitude.core.util.DescribedPart
 import altitude.core.util.PeopleMatch
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSort
+import altitude.core.util.SortDirection
 import altitude.core.util.SortValue
 
 @DoNotDiscover class SearchQueryModelTests extends funsuite.AnyFunSuite {
@@ -206,7 +208,8 @@ import altitude.core.util.SortValue
      * The fingerprint of a description's search of the repository view in a repository on an engine; of the same search with the
      * triaged assets, with another description, in another repository, on the other engine, and within each filter in turn: a
      * Search text, a folder, a person, two people, the two matching any, a Location, a Date Taken range and a Date Imported
-     * range; and of the searches of the same filters with no description.
+     * range; of the searches of the same filters with no description; and of the description's search sorted by file name, in
+     * each of its two parts, and sorted the other way.
      *
      * Assertions:
      *
@@ -217,7 +220,8 @@ import altitude.core.util.SortValue
      * Edge cases:
      *
      * A description is fingerprinted as written: another case, or a space more, is another search. A search whose Search text is
-     * the description's words is another search too.
+     * the description's words is another search too. A sorted Describe search is read in two parts, and a cursor continues one:
+     * each part's fingerprint is its own, and neither is the search's in its own order or under another sort.
      */
     val june = DateRange(Some(LocalDate.parse("2024-06-01")), Some(LocalDate.parse("2024-06-30")))
     def view(triaged: Boolean): Map[String, Any] =
@@ -239,8 +243,11 @@ import altitude.core.util.SortValue
         description: String = "a cactus",
         query: SearchQuery = unfiltered,
         repositoryId: String = "repo-1",
-        dbEngine: String = "sqlite"): String =
-      SearchCursor.describeFingerprint(description, query, repositoryId, dbEngine)
+        dbEngine: String = "sqlite",
+        part: Option[DescribedPart] = None): String =
+      SearchCursor.describeFingerprint(description, query, repositoryId, dbEngine, part)
+    def byName(direction: SortDirection): SearchQuery =
+      new SearchQuery(params = view(triaged = false), searchSort = List(SearchSort(FieldConst.Asset.FILENAME, direction)))
     def withoutDescription(query: SearchQuery): String =
       SearchCursor.scopeFingerprint(query, repositoryId = "repo-1", dbEngine = "sqlite")
 
@@ -251,7 +258,10 @@ import altitude.core.util.SortValue
       fingerprint(dbEngine = "postgres"),
       fingerprint(description = "A cactus"),
       fingerprint(description = "a  cactus"),
-      withoutDescription(new SearchQuery(params = view(triaged = false), text = Some("a cactus")))
+      withoutDescription(new SearchQuery(params = view(triaged = false), text = Some("a cactus"))),
+      fingerprint(query = byName(SortDirection.ASC), part = Some(DescribedPart.Nearer)),
+      fingerprint(query = byName(SortDirection.ASC), part = Some(DescribedPart.Weaker)),
+      fingerprint(query = byName(SortDirection.DESC), part = Some(DescribedPart.Nearer))
     ) ++ filtered.map(query => fingerprint(query = query)) ++ (unfiltered :: filtered).map(withoutDescription)
 
     fingerprints.distinct.size shouldBe fingerprints.size

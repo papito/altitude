@@ -1,5 +1,7 @@
 import { Const } from "../constants.js"
 
+const WEAKER_MATCHES_CLASS = "weaker-matches"
+
 /**
  * The group headers of a grouped grid (`.result-group`, a day, a Location or a Sequence, rendered by
  * `htmx/results_grid_grouped.scala.html` with the group's full match count in `.count`, across every
@@ -20,13 +22,30 @@ import { Const } from "../constants.js"
  * Takes `cellEl` off the count of its group's header, removing the header when the count reaches zero.
  * Call it before the cell leaves the grid: the header is found by walking back over the cell's
  * siblings, which crosses page boundaries, since a continued group repeats no header.
+ *
+ * A Describe search's weaker matches have a header of their own (`.weaker-matches`,
+ * includes/weaker_matches_header.scala.html) counting all of them. On the ungrouped grid it is the
+ * header the walk finds; on a grouped grid the weaker matches' groups follow it, each under its own
+ * header, so a cell of one of them leaves the count of its group and of the weaker matches both.
  */
 export function decrementDateGroupOf(cellEl) {
-    const headerEl = dateGroupOf(cellEl)
+    const headerEl = headerBefore(cellEl, "result-group")
     if (!headerEl) {
         return
     }
 
+    decrement(headerEl)
+
+    if (!headerEl.classList.contains(WEAKER_MATCHES_CLASS)) {
+        const weakerEl = headerBefore(headerEl, WEAKER_MATCHES_CLASS)
+        if (weakerEl) {
+            decrement(weakerEl)
+        }
+    }
+}
+
+/** Takes one off a header's count, removing the header when none is left */
+function decrement(headerEl) {
     const countEl = headerEl.querySelector(".count")
     const count = Math.max(0, Number(countEl?.dataset.count) - 1)
 
@@ -67,12 +86,13 @@ function itemCountText(count) {
     return count === 1 ? "(1 item)" : `(${count} items)`
 }
 
-function dateGroupOf(cellEl) {
-    let el = cellEl.previousElementSibling
+/** The nearest element before `el` among its siblings that has the class, a header of the grid */
+function headerBefore(el, className) {
+    let previous = el.previousElementSibling
 
-    while (el && !el.classList.contains("result-group")) {
-        el = el.previousElementSibling
+    while (previous && !previous.classList.contains(className)) {
+        previous = previous.previousElementSibling
     }
 
-    return el
+    return previous
 }

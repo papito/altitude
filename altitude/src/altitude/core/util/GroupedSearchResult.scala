@@ -60,7 +60,8 @@ case class AssetGroup(key: SearchGroupKey, total: Int, assets: List[Asset])
 /**
  * A grouped page with its assets in page order: what the grouped grid renders. `total` is present on a first page only, unless
  * its search counts no total. `continuesGroup` says the first group continues the previous page's last group, including the "No
- * date", "No location" and "No sequence" groups.
+ * date", "No location" and "No sequence" groups. `weaker` is where a Describe search's weaker matches begin, on the page that
+ * holds the first of them: the place among `groups` of their first group, with their count.
  */
 case class GroupedSearchResult(
     groups: List[AssetGroup],
@@ -68,7 +69,8 @@ case class GroupedSearchResult(
     grouping: SearchGrouping,
     sort: SearchSort,
     nextCursor: Option[SearchCursor],
-    continuesGroup: Boolean):
+    continuesGroup: Boolean,
+    weaker: Option[WeakerMatches] = None):
   val assets: List[Asset] = groups.flatMap(_.assets)
   val isEmpty: Boolean = groups.isEmpty
 

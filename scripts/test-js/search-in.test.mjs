@@ -74,22 +74,21 @@ test("a pick made in Triage for Library or All is Browse's search, with its filt
 
     assert.equal(
         serializeSearchParams(all),
-        "view=repository&describe=a+cactus&triaged=true",
+        "view=repository&describe=a+cactus&triaged=true&sort=similarity",
     )
     // Browse opens on the URL's filter, which wins over the remembered choice
     assert.equal(seedMember(`?${serializeSearchParams(all)}`).triaged, "true")
 })
 
-test("a description searches Triage on the grid, sent without the grouping Triage keeps", () => {
+test("a description searches Triage most alike first, under the grouping Triage keeps", () => {
     const store = memberStore("?view=triage&groupBy=sequence")
 
     store.replaceFilters({ describe: "a cactus", personId: "ann", ...TRIAGE })
 
     assert.equal(
         store.toQueryString(),
-        "view=triage&personId=ann&describe=a+cactus",
+        "view=triage&personId=ann&describe=a+cactus&sort=similarity&groupBy=sequence",
     )
-    assert.equal(store.groupBy, "sequence")
 })
 
 test("a pick is not remembered, and lasts until its search is replaced", () => {

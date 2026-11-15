@@ -7,8 +7,14 @@ import altitude.core.models.SceneEmbedding
 
 case class SearchSort(field: String, direction: SortDirection):
 
-  /** Relevance is the one sort that is not an asset column: it is computed from the Search text */
+  /** Relevance is computed from the Search text, and is no asset column */
   def isRelevance: Boolean = field == Const.Search.SORT_RELEVANCE
+
+  /** Similarity is how much a still image looks like a Describe search's description, and is no asset column either */
+  def isSimilarity: Boolean = field == Const.Search.SORT_SIMILARITY
+
+  /** Whether the sort is by a value a statement computes for each match, the Relevance or the similarity, and by no column */
+  def isScored: Boolean = isRelevance || isSimilarity
 
   def toJson: ujson.Obj = ujson.Obj(
     Api.Field.SearchSort.DIRECTION -> direction.toString,
@@ -28,12 +34,30 @@ object SearchSort:
  * What a Describe search ranks the assets of its query by: the description's embedding; the least cosine an asset's SigLIP 2
  * Scene embedding has to it to be ranked at all, the Describe match threshold as a cosine; the most assets ranked, the Describe
  * result limit; and the fraction of the nearest ranked asset's cosine under which a ranked asset is a weaker match
- * ([[WeakerMatches]]), the Describe weaker matches Setting
+ * ([[WeakerMatches]]), the Describe weaker matches Setting. `throughIndex` is how an engine with a vector index reads the
+ * ranking, through that index and not one asset at a time, which its DAO decides for the query's matches
+ * (`SearchDao.rankingFor`); an engine with none reads every ranking exactly.
  */
-case class DescribeRanking(embedding: SceneEmbedding, minCosine: Double, limit: Int, weakerRatio: Double):
+case class DescribeRanking(
+    embedding: SceneEmbedding,
+    minCosine: Double,
+    limit: Int,
+    weakerRatio: Double,
+    throughIndex: Boolean = false):
 
   /** The cutoff as a statement compares it: the furthest cosine distance from the description's embedding */
   def maxDistance: Double = 1 - minCosine
+
+/** The two parts of a Describe search's ranked matches: those above the line of its weaker matches, and the weaker ones */
+enum DescribedPart:
+  case Nearer, Weaker
+
+/**
+ * A description as one of a search's filters, for a Describe search in another order than likeness alone, sorted or grouped: the
+ * search is among one part of the matches the ranking ranks, and orders them as any search orders its matches. The ranking is of
+ * the search's other filters, so the part is of the matches they leave.
+ */
+case class Described(ranking: DescribeRanking, part: DescribedPart)
 
 class SearchQuery(
     val text: Option[String] = None,
@@ -66,7 +90,11 @@ class SearchQuery(
     val textProbeLimit: Int = Const.Search.TEXT_PROBE_LIMIT,
     // How many matching assets a Describe search ranks one by one on PostgreSQL; past it, it ranks through the vector index
     // (postgres.SearchDao). Tuning too, and no more part of what identifies the search to a cursor.
-    val describeExactLimit: Int = Const.Search.DESCRIBE_EXACT_LIMIT)
+    val describeExactLimit: Int = Const.Search.DESCRIBE_EXACT_LIMIT,
+    // The part of a description's ranked matches the search is among, which `SearchService` sets for a Describe search that is
+    // sorted or grouped, a page at a time. What identifies such a search to a cursor is its description and the part
+    // (`SearchCursor.describeFingerprint`), not this.
+    val described: Option[Described] = None)
   extends Query(params = metadataFilters, rpp = rpp):
 
   if sort.nonEmpty then throw IllegalArgumentException("Cannot use 'sort' in this context - use 'searchSort'")
@@ -123,6 +151,18 @@ class SearchQuery(
   def withoutTotal: SearchQuery =
     copyWith(countsTotal = false)
 
+  /** The same search among one part of a description's ranked matches */
+  def describedBy(described: Described): SearchQuery =
+    copyWith(described = Some(described))
+
+  /** The search of the filters alone, whose matches a description ranks */
+  def undescribed: SearchQuery =
+    copyWith(described = None)
+
+  /** The same search's page of `rpp` assets after `cursor`, or its first */
+  def paged(rpp: Int, cursor: Option[SearchCursor]): SearchQuery =
+    copyWith(rpp = rpp, cursor = cursor)
+
   override def add(_params: (String, Any)*): SearchQuery =
     copyWith(params = params ++ _params)
 
@@ -133,7 +173,10 @@ class SearchQuery(
       folderIds: Set[String] = folderIds,
       resolvedText: Option[ResolvedSearchText] = resolvedText,
       countsTotal: Boolean = countsTotal,
-      textProbeLimit: Int = textProbeLimit): SearchQuery =
+      textProbeLimit: Int = textProbeLimit,
+      described: Option[Described] = described,
+      rpp: Int = rpp,
+      cursor: Option[SearchCursor] = cursor): SearchQuery =
     SearchQuery(
       text = text,
       params = params,
@@ -155,7 +198,8 @@ class SearchQuery(
       totalCap = totalCap,
       countsTotal = countsTotal,
       textProbeLimit = textProbeLimit,
-      describeExactLimit = describeExactLimit
+      describeExactLimit = describeExactLimit,
+      described = described
     )
 
 object SearchQuery:

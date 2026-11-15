@@ -254,15 +254,16 @@ against how the still images look.
 _Avoid_: Prompt, Caption, Query, Semantic query.
 
 **Describe search**:
-A search with a Description: the still images that look most like it, most
-alike first, among the assets its other Search filters match. The filters
-decide which assets are in it and nothing of their order, the Search text
-included. It ends at the Describe match threshold and the Describe result
-limit, both Settings, so a narrow filter can leave few results or none; its
-Weaker matches come last, under a header of their own. It is
-laid out on the grid in that one order, with no sort, grouping or map, in
-Browse or in Triage, and never searches the trash. Videos and animated images
-are never in it.
+A search with a Description: the still images that look like it among the
+assets its other Search filters match. It opens by Similarity, most alike
+first, where the filters decide which assets are in it and nothing of their
+order, the Search text included. It ends at the Describe match threshold and
+the Describe result limit, both Settings, so a narrow filter can leave few
+results or none; its Weaker matches come last, under a header of their own.
+Sorted otherwise, or grouped, it shows the matches above that header in the
+sort's order and grouping, and then the Weaker matches in the same. It is laid
+out on the grid, never on the map, in Browse or in Triage, and never searches
+the trash. Videos and animated images are never in it.
 _Avoid_: Semantic search, AI search, Visual search, Smart search in user-facing text.
 
 **Weaker match**:
@@ -271,6 +272,9 @@ Description as the best match does: the Describe weaker matches Setting, a
 fraction of the best match's likeness and no fixed score, since a short
 Description scores low throughout. The Weaker matches are the end of the
 results, under the header "Weaker matches" with their count; none is hidden.
+In a sorted or grouped Describe search they are sorted and grouped apart,
+after the other matches, so a day or a Location with matches on both sides of
+the header is there twice.
 _Avoid_: Poor match, Bad match, Low-confidence result, Irrelevant result; Strong
 match for the ones above the header, which have no name.
 
@@ -297,6 +301,12 @@ or album, Search document), and the terms add up. It orders a search by Search
 text, never a Describe search, where the Search text only decides which assets
 are ranked.
 _Avoid_: Rank, Score, Weight in user-facing text.
+
+**Similarity**:
+How much a still image looks like a Description. It is the order a Describe
+search opens in, most alike first, the first choice of its Sort menu, and the
+order within each group of a grouped one; no other search has it.
+_Avoid_: Likeness score, Match score, Confidence, Distance in user-facing text.
 
 **Admin**:
 The account type that may do everything in every Library. It alone changes

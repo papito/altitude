@@ -41,9 +41,6 @@ import altitude.core.util.SearchQuery
         triaged = values.get(fields.TRIAGED).map(_.toBoolean),
         subset = values.get(fields.SUBSET),
         describe = values.get(fields.DESCRIBE),
-        sort = values.get(fields.SORT),
-        groupBy = values.get(fields.GROUP_BY),
-        groupDirection = values.get(fields.GROUP_DIRECTION),
         layout = values.get(fields.LAYOUT)
       ))
   }
@@ -438,14 +435,14 @@ import altitude.core.util.SearchQuery
     (browse(fields.DESCRIBE -> (" " + "a" * 300 + " ")).value.description.value should have).length(300)
   }
 
-  test("A description takes no album, subset, map area, sort, grouping or map layout, and does not search the trash") {
+  test("A description takes no album, subset, map area or map layout, and does not search the trash") {
 
     /**
      * Setup:
      *
      * Requests of the repository view with a description beside each parameter a Describe search does not take, in turn: an
-     * album, a Triage subset, a map area, a sort, a grouping, a group direction and the map layout; a request with a sort and an
-     * album beside the description and a folder; and requests with a description in the trash.
+     * album, a Triage subset, a map area and the map layout; a request with a subset and an album beside the description and a
+     * folder; and requests with a description in the trash.
      *
      * Assertions:
      *
@@ -455,19 +452,14 @@ import altitude.core.util.SearchQuery
      *
      * Edge cases:
      *
-     * Such a parameter is refused whatever its value: the similarity sort itself, a subset that is none. With a filter that would
-     * be refused on its own beside the description too, the parameter the description does not take is what is refused.
+     * Such a parameter is refused whatever its value: a subset that is none. With a filter that would be refused on its own
+     * beside the description too, the parameter the description does not take is what is refused.
      */
     val refused = List(
       fields.ALBUM_ID -> "best",
       fields.SUBSET -> "noLocation",
       fields.SUBSET -> "nothing",
-      fields.BBOX -> "1,2,3,4",
-      fields.SORT -> "created_at1",
-      fields.SORT -> Const.Search.SORT_RELEVANCE,
-      fields.SORT -> Const.Search.SORT_SIMILARITY,
-      fields.GROUP_BY -> "dateTaken",
-      fields.GROUP_DIRECTION -> "asc"
+      fields.BBOX -> "1,2,3,4"
     )
     for (param <- refused) withClue(s"$param: ") {
       browse(fields.DESCRIBE -> "a cactus", param).left.value shouldBe s"A description takes no ${param._1}"
@@ -479,11 +471,11 @@ import altitude.core.util.SearchQuery
       "A description takes no layout=map"
     browse(
       fields.DESCRIBE -> "a cactus",
-      fields.SORT -> "filename0",
+      fields.SUBSET -> "noLocation",
       fields.FOLDER_ID -> "trips",
-      fields.ALBUM_ID -> "best").left.value shouldBe "A description takes no albumId, sort"
-    browse(fields.DESCRIBE -> "a cactus", fields.SORT -> "filename0", fields.TAKEN_FROM -> "not a date").left.value shouldBe
-      "A description takes no sort"
+      fields.ALBUM_ID -> "best").left.value shouldBe "A description takes no albumId, subset"
+    browse(fields.DESCRIBE -> "a cactus", fields.BBOX -> "1,2,3,4", fields.TAKEN_FROM -> "not a date").left.value shouldBe
+      "A description takes no bbox"
 
     parse(Const.Search.View.TRASHBIN, fields.DESCRIBE -> "a cactus").left.value shouldBe "A description does not search the trash"
     parse(Const.Search.View.TRASHBIN, fields.DESCRIBE -> "a cactus", fields.QUERY_TEXT -> "beach").left.value shouldBe
@@ -505,8 +497,8 @@ import altitude.core.util.SearchQuery
      *
      * Edge cases:
      *
-     * What a description takes in no view is refused in the Triage view too, named by the message: a Triage subset, a sort, the
-     * Sequence grouping and the map layout. `triaged=false` is refused with the Triage view, with a description as without one.
+     * What a description takes in no view is refused in the Triage view too, named by the message: a Triage subset and the map
+     * layout. `triaged=false` is refused with the Triage view, with a description as without one.
      */
     val triage = Const.Search.View.TRIAGE
     val described = parse(triage, fields.DESCRIBE -> "a cactus").value
@@ -529,14 +521,8 @@ import altitude.core.util.SearchQuery
     narrowed.query().personIds shouldBe Set("alice", "bob")
     narrowed.query().locationIds shouldBe Set("lisbon", "sintra")
 
-    val refused = List(
-      fields.SUBSET -> "unknownPeople",
-      fields.SORT -> "created_at1",
-      fields.GROUP_BY -> "sequence"
-    )
-    for (param <- refused) withClue(s"$param: ") {
-      parse(triage, fields.DESCRIBE -> "a cactus", param).left.value shouldBe s"A description takes no ${param._1}"
-    }
+    parse(triage, fields.DESCRIBE -> "a cactus", fields.SUBSET -> "unknownPeople").left.value shouldBe
+      "A description takes no subset"
     parse(triage, fields.DESCRIBE -> "a cactus", fields.LAYOUT -> Const.Search.Layout.MAP).left.value shouldBe
       "A description takes no layout=map"
     parse(triage, fields.DESCRIBE -> "a cactus", fields.TRIAGED -> "false").left.value shouldBe

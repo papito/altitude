@@ -49,9 +49,9 @@ import altitude.core.util.TriageSubset
  * search with one finds the still images that look most like it, most alike first, on the grid, among the assets its other
  * filters match: the Search text, a folder, people with their match, Locations and the two date ranges, each read and refused as
  * it is without a description, in the repository view, with the triaged assets when `triaged=true`, or in the Triage view, among
- * the triaged assets alone. Its one order is likeness, so it takes no sort, no grouping and no map layout, and no album, Triage
- * subset or map area either, and it does not search the trash. The results route and the advanced search panel's form read a
- * description; the other routes that parse a scope never hand one in.
+ * the triaged assets alone. It is sorted and grouped as any search of the grid is, in its own order, likeness, when it names no
+ * sort; it takes no map layout, and no album, Triage subset or map area either, and it does not search the trash. The results
+ * route and the advanced search panel's form read a description; the other routes that parse a scope never hand one in.
  */
 object SearchRequestParser:
 
@@ -79,11 +79,8 @@ object SearchRequestParser:
       subset: Option[String] = None,
       // The description the search ranks its matches by
       describe: Option[String] = None,
-      // How the request orders, groups and lays out the results, as it spells them: a route that takes a description hands them
-      // on, since a search with one has one order and one layout and names neither
-      sort: Option[String] = None,
-      groupBy: Option[String] = None,
-      groupDirection: Option[String] = None,
+      // How the request lays out the results, as it spells it: a route that takes a description hands it on, since a search
+      // with one is laid out on the grid
       layout: Option[String] = None)
 
   /**
@@ -212,9 +209,9 @@ object SearchRequestParser:
    * description is not blank, has at most `Const.Search.MAX_DESCRIPTION_LENGTH` characters, as a form counts them, and searches
    * the repository view or the Triage view, never the trash. Beside it a search takes its filters (the Search text, a folder,
    * people and their match, Locations, the four dates and the triage filter) and the grid layout; any other parameter is refused,
-   * whatever its value, and named by the message: an album, a Triage subset, a map area, a sort, a grouping or the map layout.
-   * What is taken is what is left out of the request below, so a parameter `Params` gains is refused beside a description until
-   * it is left out too.
+   * whatever its value, and named by the message: an album, a Triage subset, a map area or the map layout. What is taken is what
+   * is left out of the request below, so a parameter `Params` gains is refused beside a description until it is left out too. The
+   * sort and the grouping are no parameters of a scope: the results route reads them, beside a description as without one.
    */
   private def descriptionOf(request: Params, written: String): Either[String, String] =
     val description = written.strip

@@ -16,7 +16,6 @@ import scalasql.query.Select
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.sql.Db
-import altitude.core.dao.sql.search.RankedRows
 import altitude.core.dao.sql.search.SearchDialect
 import altitude.core.dao.sql.search.SearchQueries
 import altitude.core.dao.sql.tables.AlbumRow
@@ -74,12 +73,11 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
   protected def searchDialect: SearchDialect
 
   /**
-   * How the matches of a Describe search's page, the resolved `query`'s, are ranked: exactly, each matching asset's embedding
-   * compared with the description's (`SearchDialect.ranked`), which is the one way every engine has. An engine with a vector
-   * index chooses here, page by page, between that and its index.
+   * How the matches of the resolved `query` are ranked: exactly, each matching asset's embedding compared with the description's,
+   * which is the one way every engine has. An engine with a vector index chooses here between that and its index.
    */
-  protected def rankedRows(query: SearchQuery, ranking: DescribeRanking): Select[AssetRow[Expr], AssetRow[Sc]] => RankedRows =
-    searchDialect.ranked(_, ranking)
+  override def rankingFor(query: SearchQuery, ranking: DescribeRanking): DescribeRanking =
+    ranking.copy(throughIndex = false)
 
   /**
    * One statement for both engines (`SearchQueries.described`) around the engine's ranked rows, which are the query's matches, so
@@ -93,12 +91,8 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
     val isTotalCounted = query.isTotalCounted
     if matchesNothing(query) then return SearchPage(Nil, Option.when(isTotalCounted)(0), hasMore = false)
 
-    val statement = SearchQueries.described(
-      searchDialect,
-      query,
-      RequestContext.getRepository.persistedId,
-      rankedRows(query, ranking),
-      ranking.weakerRatio)
+    val statement =
+      SearchQueries.described(searchDialect, query, RequestContext.getRepository.persistedId, rankingFor(query, ranking))
     // One row past the page says whether another follows
     val candidates = readPage[(AssetRow[Sc], Double, Double, Int)](statement, isTotalCounted)
     val rows = candidates.take(query.rpp).toList.map(_._1)
@@ -111,8 +105,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
       // A page that counts the total carries it on every row; an empty one has no rows because nothing was ranked
       total = Option.when(isTotalCounted)(candidates.headOption.flatMap(_._2).getOrElse(0)),
       hasMore = candidates.length > query.rpp,
-      // A ratio of 0 asks for no line: a line at a cosine of 0 would still have the rows of a negative cosine under it
-      weaker = rows.headOption.filter(_ => ranking.weakerRatio > 0).flatMap {
+      weaker = rows.headOption.flatMap {
         (_, _, weakerUnder, weakerCount) => weakerMatches(rows.map(_._2), query.cursor, weakerUnder, weakerCount)
       }
     )
@@ -121,10 +114,10 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
 
   /**
    * Where the weaker matches begin on a page of a Describe search whose rows stand at `distances`, nearest first: at its first
-   * row with a cosine under `weakerUnder`, when the row before that one is not under it, which is the page's own or, for the
-   * page's first row, the one the cursor continues from. So one page of a search names them, a page that begins among them does
-   * not, and neither does a search whose every row is under the line, whose nearest row has no positive cosine to take a fraction
-   * of.
+   * row with a cosine under `weakerUnder`, the line, when the row before that one is not under it, which is the page's own or,
+   * for the page's first row, the one the cursor continues from. So one page of a search names them and a page that begins among
+   * them does not. A line that is not positive is none (`SearchQueries.IS_WEAKER`): under a ratio of 0, and where the nearest row
+   * has no positive cosine to take a fraction of.
    */
   private def weakerMatches(
       distances: List[Double],
@@ -132,7 +125,7 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
       weakerUnder: Double,
       count: Int): Option[WeakerMatches] =
     // As the statement compares a row with the line, so that a row is on one side of it here and in the count
-    def isWeaker(distance: Double): Boolean = 1 - distance < weakerUnder
+    def isWeaker(distance: Double): Boolean = weakerUnder > 0 && 1 - distance < weakerUnder
     val index = distances.indexWhere(isWeaker)
     val followsNearer = index > 0 || cursor.map(_.sortValue).exists {
       case SortValue.Real(distance) => !isWeaker(distance)

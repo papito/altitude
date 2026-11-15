@@ -2079,7 +2079,8 @@ import altitude.core.util.Util
   private val mapSegment = s"""data-app-search-layout="${Const.Search.Layout.MAP}""""
 
   /** The one option of a described search's Sort menu, which is no search trigger */
-  private val similarityOption = """<button type="button" aria-checked="true">Similarity</button>"""
+  private val similarityOption =
+    s"""<button type="button" data-app-search="click" data-app-search-sort="${Const.Search.SORT_SIMILARITY}" aria-checked="true">Similarity</button>"""
 
   /** What an empty described search says beside Edit: within other filters, and alone */
   private val nothingWithinFilters = "Nothing within these filters looks like that."
@@ -2368,11 +2369,11 @@ import altitude.core.util.Util
      * The first page is the results fragment with the two nearest assets in order and the total of 5, not capped: it names no
      * Search text, it is titled "Search results" with the Edit control, as a filtered search is, over one chip, the
      * description's, "Describe: “a cactus”", which carries the description, trimmed, and is the one place the fragment holds it;
-     * its last cell carries the cursor of the next page, and the replaced URL carries the description and no sort. The toolbar
-     * offers what the search takes: the Sort menu is disabled and holds "Similarity" alone, checked, which is no search trigger,
-     * the Group menu is disabled, and the layout toggle has no Map segment. On one page the five are in the order of their
-     * cosines and no cell carries a cursor. With the triaged assets the total is 6, the triaged one second, and the URL keeps the
-     * flag.
+     * its last cell carries the cursor of the next page, and the replaced URL carries the description and the similarity sort.
+     * The toolbar offers what the search takes: the Sort menu holds "Similarity" first, checked, a search trigger as the column
+     * sorts after it are, and no Relevance, the Group menu is enabled, and the layout toggle has no Map segment. On one page the
+     * five are in the order of their cosines and no cell carries a cursor. With the triaged assets the total is 6, the triaged
+     * one second, and the URL keeps the flag.
      *
      * Edge cases:
      *
@@ -2406,16 +2407,17 @@ import altitude.core.util.Util
         page should include(editFilters)
         filterChipsIn(page) shouldBe List(describeChip(description))
         (page should not).include("looks like that")
-        menuHost(page, "sortMenuHost") should include(menuDisabled)
+        (menuHost(page, "sortMenuHost") should not).include(menuDisabled)
         page should include(similarityOption)
-        (page should not).include("data-app-search-sort=")
-        menuHost(page, "groupMenuHost") should include(menuDisabled)
+        ordered(page, similarityOption, """data-app-search-sort="original_created_at1"""")
+        (page should not).include(s"""data-app-search-sort="${Const.Search.SORT_RELEVANCE}"""")
+        (menuHost(page, "groupMenuHost") should not).include(menuDisabled)
         (page should not).include(mapSegment)
         cursorOf(page).size shouldBe 1
         ordered(page, cell(nearest(1)), "data-app-search-after")
         val url = first.headers("hx-replace-url").head
         url should include("describe=a+cactus")
-        (url should not).include("sort=")
+        url should include(s"sort=${Const.Search.SORT_SIMILARITY}")
 
         val whole = htmlSearch(host, repoId, Map("describe" -> description)).text()
         cellIds(whole) shouldBe nearest.map(_.persistedId)
@@ -2442,10 +2444,10 @@ import altitude.core.util.Util
      * Assertions:
      *
      * Alone, the results are the three triaged assets in the order of their cosines, with the total of 3, titled "Search results"
-     * over the description's chip with Edit, in the Triage view, and the replaced URL carries the view and the description and no
-     * sort. The toolbar offers what the search takes: the Sort menu is disabled and holds "Similarity", the Group menu is
-     * disabled, and the layout toggle has no Map segment. One to a page, the first page's cursor continues to the second asset.
-     * Beside "beach" the one triaged asset of that name is shown, under the chips of both.
+     * over the description's chip with Edit, in the Triage view, and the replaced URL carries the view and the description. The
+     * toolbar offers what the search takes: the Sort menu holds "Similarity", checked, the Group menu is enabled, and the layout
+     * toggle has no Map segment. One to a page, the first page's cursor continues to the second asset. Beside "beach" the one
+     * triaged asset of that name is shown, under the chips of both.
      *
      * Edge cases:
      *
@@ -2495,14 +2497,14 @@ import altitude.core.util.Util
         page should include(editFilters)
         filterChipsIn(page) shouldBe List(describeChip(description))
         (page should not).include("looks like that")
-        menuHost(page, "sortMenuHost") should include(menuDisabled)
+        (menuHost(page, "sortMenuHost") should not).include(menuDisabled)
         page should include(similarityOption)
-        menuHost(page, "groupMenuHost") should include(menuDisabled)
+        (menuHost(page, "groupMenuHost") should not).include(menuDisabled)
         (page should not).include(mapSegment)
         val url = described.headers("hx-replace-url").head
         url should include(s"view=${Const.Search.View.TRIAGE}")
         url should include("describe=a+cactus")
-        (url should not).include("sort=")
+        url should include(s"sort=${Const.Search.SORT_SIMILARITY}")
 
         val firstPage = htmlSearch(host, repoId, triage ++ Map("describe" -> description, "rpp" -> "1")).text()
         cellIds(firstPage) shouldBe List(nearest.persistedId)
@@ -2730,7 +2732,7 @@ import altitude.core.util.Util
       host =>
         val description = "a cactus"
         val nearest = List(0.9, 0.8, 0.7, 0.5, 0.3).zipWithIndex.map((cosine, seed) => lookingLike(description, cosine, seed))
-        val header = """class="result-group""""
+        val header = """class="result-group weaker-matches""""
         val weakerCount = """<span class="count" data-count="2">(2 items)</span>"""
         def search(params: (String, String)*): String = htmlSearch(host, repoId, Map("describe" -> description) ++ params).text()
         App.altitude.settings.save(Map(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO -> "0.75"))
@@ -2755,6 +2757,103 @@ import altitude.core.util.Util
 
         App.altitude.settings.save(Map(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO -> "0"))
         (search() should not).include(header)
+    }
+  }
+
+  test("A sorted or grouped description shows its matches in two parts, the weaker ones under their header") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with five sorted assets whose Scene embeddings are at cosines of 0.9, 0.8, 0.7, 0.5 and 0.3
+     * to the embedding of "a cactus", named c, a, e, d and b, the first, third and fifth taken on January 2, 2026 and the others
+     * on January 1; a Describe weaker matches ratio of 0.75, so d and b are weaker matches. The description is searched sorted by
+     * file name, then grouped by Date Taken.
+     *
+     * Assertions:
+     *
+     * Sorted by file name, the cells are a, c, e and then b, d, the weaker matches' header between e and b with their count of 2;
+     * the Sort menu's checked option is File Name (A-Z), with "Similarity" offered before it, unchecked, and the replaced URL
+     * carries the sort. Two to a page, the second page holds e, the header and b, and the third d alone. Grouped by Date Taken,
+     * the page has four day headers: January 2 with c and e and January 1 with a, then the weaker matches' header, then January 2
+     * with b and January 1 with d; the Group menu's checked option is Date Taken (Newest first), and the replaced URL carries the
+     * grouping.
+     *
+     * Edge cases:
+     *
+     * The weaker matches' header has no checkbox, while every day header has one. A cursor of the sorted search is refused for
+     * the search in its own order.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val description = "a cactus"
+        val second = LocalDateTime.of(2026, 1, 2, 10, 0)
+        val first = LocalDateTime.of(2026, 1, 1, 10, 0)
+        val assets = List(
+          (0.9, "c", second),
+          (0.8, "a", first),
+          (0.7, "e", second),
+          (0.5, "d", first),
+          (0.3, "b", second)).zipWithIndex.map {
+          case ((cosine, name, taken), seed) =>
+            name -> testContext.insertAsset(
+              testContext
+                .makeAsset(filename = s"$name.jpg", originalCreatedAt = Some(taken))
+                .copy(sceneEmbeddings =
+                  SceneEmbeddings(siglip2 = Some(TestContext.atCosine(embeddingOf(description), cosine, seed)))))
+        }.toMap
+        def named(names: String): List[String] = names.map(name => assets(name.toString).persistedId).toList
+        val weakerHeader = """class="result-group weaker-matches""""
+        val weakerCount = """<span class="count" data-count="2">(2 items)</span>"""
+        def search(params: (String, String)*) = htmlSearch(host, repoId, Map("describe" -> description) ++ params)
+        App.altitude.settings.save(Map(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO -> "0.75"))
+
+        val sorted = search("sort" -> "filename0")
+        sorted.statusCode shouldBe 200
+        val byName = sorted.text()
+        cellIds(byName) shouldBe named("acebd")
+        weakerHeader.r.findAllIn(byName).size shouldBe 1
+        ordered(byName, cell(assets("e")), weakerHeader)
+        ordered(byName, weakerHeader, weakerCount)
+        ordered(byName, weakerCount, cell(assets("b")))
+        byName should include("""data-app-search-sort="filename0" aria-checked="true">File Name (A-Z)</button>""")
+        byName should include(s"""data-app-search-sort="${Const.Search.SORT_SIMILARITY}" >Similarity</button>""")
+        (menuHost(byName, "sortMenuHost") should not).include(menuDisabled)
+        replacedUrl(sorted) should include("sort=filename0")
+
+        val page1 = search("sort" -> "filename0", "rpp" -> "2").text()
+        cellIds(page1) shouldBe named("ac")
+        (page1 should not).include(weakerHeader)
+        val page2 =
+          search("sort" -> "filename0", "rpp" -> "2", "after" -> cursorOf(page1).head, "isContinuousScroll" -> "true").text()
+        cellIds(page2) shouldBe named("eb")
+        ordered(page2, cell(assets("e")), weakerHeader)
+        ordered(page2, weakerHeader, cell(assets("b")))
+        val page3 =
+          search("sort" -> "filename0", "rpp" -> "2", "after" -> cursorOf(page2).head, "isContinuousScroll" -> "true").text()
+        cellIds(page3) shouldBe named("d")
+        (page3 should not).include(weakerHeader)
+        search("after" -> cursorOf(page1).head, "isContinuousScroll" -> "true").statusCode shouldBe 400
+
+        val grouped = search("groupBy" -> "dateTaken")
+        grouped.statusCode shouldBe 200
+        val byDay = grouped.text()
+        cellIds(byDay) shouldBe named("ceabd")
+        val headers =
+          """class="result-group[^"]*"( data-group-key="([^"]*)")?""".r.findAllMatchIn(byDay).map(m => Option(m.group(2))).toList
+        headers shouldBe List(Some("2026-01-02"), Some("2026-01-01"), None, Some("2026-01-02"), Some("2026-01-01"))
+        ordered(byDay, cell(assets("a")), weakerHeader)
+        // A day's header counts two as well: the weaker matches' count is the one after their header
+        ordered(byDay.substring(byDay.indexOf(weakerHeader)), weakerCount, cell(assets("b")))
+        "group-checkmark".r.findAllIn(byDay).size shouldBe 4
+        byDay should include(
+          """data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" aria-checked="true">""")
+        byDay should include(similarityOption)
+        replacedUrl(grouped) should include("groupBy=dateTaken")
     }
   }
 
@@ -2907,8 +3006,7 @@ import altitude.core.util.Util
           FilterChip(Map("taken-from" -> "2024-06-01", "taken-to" -> "2024-06-30"), "Taken 1 Jun – 30 Jun 2024")
         )
         val url = replacedUrl(first)
-        (filters.values.toList :+ "describe=a cactus").foreach(url should include(_))
-        (url should not).include("sort=")
+        (filters.values.toList :+ "describe=a cactus" :+ s"sort=${Const.Search.SORT_SIMILARITY}").foreach(url should include(_))
 
         val second = htmlSearch(host, repoId, described + ("after" -> cursorOf(page).head) + ("isContinuousScroll" -> "true"))
         second.statusCode shouldBe 200
@@ -2940,20 +3038,22 @@ import altitude.core.util.Util
      * Setup:
      *
      * A logged-in user's repository with the folder Trips, and requests with a description that is empty, blank and of 301
-     * characters; a description beside an album, a Triage subset, a map area, a sort, a grouping, a group direction and the map
-     * layout; a description in the trash; and a description beside a filter that is refused on its own: eleven people, a date
-     * that is no day, an unknown people match.
+     * characters; a description beside an album, a Triage subset, a map area and the map layout; a description in the trash; a
+     * description beside a filter that is refused on its own: eleven people, a date that is no day, an unknown people match; and
+     * a description beside a sort or a grouping that no search takes.
      *
      * Assertions:
      *
      * Each is a plain-text 400 whose message says what is wrong: a blank description, one past 300 characters, the parameter a
-     * description takes none of, the view a description does not search, or what the filter is refused for without a description.
+     * description takes none of, the view a description does not search, what the filter is refused for without a description, or
+     * what the sort or the grouping is refused for: the Relevance sort with no Search text, an unknown sort, an unknown grouping.
      *
      * Edge cases:
      *
-     * A description of 300 characters, one with the grid layout and the triage filter named, and one beside each Search filter
-     * (the Search text, the folder, a person, a Location, a people match, each end of the two date ranges) are answered. A page
-     * size out of bounds is refused for a description as for any search.
+     * A description of 300 characters, one with the grid layout and the triage filter named, one beside each Search filter (the
+     * Search text, the folder, a person, a Location, a people match, each end of the two date ranges), and one beside a sort (a
+     * column's, the similarity sort itself, Relevance with Search text) or a grouping are answered. A page size out of bounds is
+     * refused for a description as for any search, and the similarity sort for a search with no description.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2971,13 +3071,12 @@ import altitude.core.util.Util
           Map("albumId" -> "best") -> s"$takesNo albumId",
           Map("subset" -> TriageSubset.NoLocation.apiValue) -> s"$takesNo subset",
           Map("bbox" -> "1,2,3,4") -> s"$takesNo bbox",
-          Map("sort" -> "created_at1") -> s"$takesNo sort",
-          Map("sort" -> Const.Search.SORT_SIMILARITY) -> s"$takesNo sort",
-          Map("q" -> "beach", "sort" -> Const.Search.SORT_RELEVANCE) -> s"$takesNo sort",
-          Map("groupBy" -> "dateTaken") -> s"$takesNo groupBy",
-          Map("groupDirection" -> "asc") -> s"$takesNo groupDirection",
           Map("layout" -> Const.Search.Layout.MAP) -> s"$takesNo layout=map",
-          Map("folderId" -> folder.persistedId, "albumId" -> "best", "sort" -> "filename0") -> s"$takesNo albumId, sort",
+          Map("folderId" -> folder.persistedId, "albumId" -> "best", "subset" -> TriageSubset.NoLocation.apiValue) ->
+            s"$takesNo albumId, subset",
+          Map("sort" -> Const.Search.SORT_RELEVANCE) -> "sort=relevance needs Search text (q)",
+          Map("sort" -> "likeness") -> "Unknown sort",
+          Map("groupBy" -> "album") -> "Unknown groupBy value",
           Map("view" -> Const.Search.View.TRASHBIN) -> "A description does not search the trash",
           Map("personId" -> elevenPeople) -> "A search names at most 10 people",
           Map("takenFrom" -> "june") -> "takenFrom must be a date, as 2024-06-01",
@@ -3003,9 +3102,18 @@ import altitude.core.util.Util
           Map("describe" -> "a cactus", "takenFrom" -> "2024-06-01"),
           Map("describe" -> "a cactus", "takenTo" -> "2024-06-30"),
           Map("describe" -> "a cactus", "importedFrom" -> "2024-06-01"),
-          Map("describe" -> "a cactus", "importedTo" -> "2024-06-30")
+          Map("describe" -> "a cactus", "importedTo" -> "2024-06-30"),
+          Map("describe" -> "a cactus", "sort" -> "created_at1"),
+          Map("describe" -> "a cactus", "sort" -> Const.Search.SORT_SIMILARITY),
+          Map("describe" -> "a cactus", "q" -> "beach", "sort" -> Const.Search.SORT_RELEVANCE),
+          Map("describe" -> "a cactus", "groupBy" -> "dateTaken", "groupDirection" -> "asc"),
+          Map("describe" -> "a cactus", "groupBy" -> "location")
         )
         for (params <- taken) withClue(s"$params: ")(htmlSearch(host, repoId, params).statusCode shouldBe 200)
+
+        val undescribed = htmlSearch(host, repoId, Map("sort" -> Const.Search.SORT_SIMILARITY))
+        undescribed.statusCode shouldBe 400
+        undescribed.text() shouldBe "sort=similarity needs a description (describe)"
     }
   }
 }

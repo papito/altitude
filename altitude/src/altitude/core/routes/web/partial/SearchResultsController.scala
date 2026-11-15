@@ -57,16 +57,19 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * and the browser URL keeps them. A filtered search (`isFiltered`) is titled by its filters, a chip each, and an ID among them
    * that names nothing in the repository is no 404: it matches nothing and has no chip.
    *
-   * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
-   * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
+   * `sort` defaults to similarity when the request has a description, to Relevance when it has Search text (`q` with a usable
+   * term) and no description, and to the newest import first when it has neither; `sort=relevance` without text and
+   * `sort=similarity` without a description are a 400, as is text with the trash view, which text does not search.
    *
-   * A search with a description (`describe`, `SearchRequestParser`) answers the still images that look most like it, most alike
-   * first, among the assets its other filters match (the Search text, a folder, people, Locations, the two date ranges, and
-   * `triaged=true`, which adds the triaged assets), as a flat grid page continued by cursor like any other. Its one order,
-   * similarity, is implied: a blank or overlong description, and an album, a subset, a map area, a sort, a grouping, the trash or
-   * the Triage view or the map layout beside one, is a 400. It is a filtered search whatever else it holds (`isFiltered`), so the
-   * fragment holds the description as the first of its filters' chips, which is also what tells the template to offer the one
-   * order and layout such a search has, and the browser URL carries it and no sort.
+   * A search with a description (`describe`, `SearchRequestParser`) answers the still images that look like it among the assets
+   * its other filters match (the Search text, a folder, people, Locations, the two date ranges, and `triaged=true`, which adds
+   * the triaged assets), on the grid, continued by cursor like any other. In its own order, similarity, most alike first, it is
+   * one ranked list whose weaker matches are its end; under another sort, or grouped, it is two parts, the matches above the line
+   * of the weaker ones and then the weaker ones, each sorted and grouped as the request says (`SearchService.describe`,
+   * `describeGrouped`). Either way the page that holds the first weaker match has a header before it. A blank or overlong
+   * description, and an album, a subset, a map area, the trash or the map layout beside one, is a 400. It is a filtered search
+   * whatever else it holds (`isFiltered`), so the fragment holds the description as the first of its filters' chips, which is
+   * also what tells the template to offer the similarity sort and no map layout, and the browser URL carries it with its sort.
    *
    * With `groupBy`, a header opens each date, Location or, in the Triage view, Sequence (`parseGrouping`). Grouped or not, a page
    * is `rpp` assets, 1 to `Const.Search.MAX_RPP`, and is continued by the `after` cursor its last cell carries
@@ -141,9 +144,6 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       triaged = triaged,
       subset = subset,
       describe = describe,
-      sort = sort,
-      groupBy = groupBy,
-      groupDirection = groupDirection,
       layout = Some(layout)
     )
     val scope = SearchRequestParser.parse(params) match
@@ -152,19 +152,25 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     if layout != Const.Search.Layout.GRID && layout != Const.Search.Layout.MAP then return textError("Unknown layout", 400)
 
-    // A search with a description has one order, which no request names: it has no sort parameter, in the browser URL either
+    // A search that names no sort is in the order its filters ask for: likeness with a description, whatever else it holds,
+    // Relevance with Search text, and otherwise the newest import first
     def defaultSort: String =
-      if scope.text.isDefined then Const.Search.SORT_RELEVANCE
+      if scope.description.isDefined then Const.Search.SORT_SIMILARITY
+      else if scope.text.isDefined then Const.Search.SORT_RELEVANCE
       else s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}"
-    val effectiveSort = Option.when(scope.description.isEmpty)(sort.getOrElse(defaultSort))
+    val effectiveSort = sort.getOrElse(defaultSort)
 
-    val searchSort = effectiveSort.fold(Option(SearchSort.Similarity))(parseSort) match
+    val searchSort = parseSort(effectiveSort) match
       case None => return textError("Unknown sort", 400)
       case Some(searchSort) => searchSort
 
     if searchSort.isRelevance && scope.text.isEmpty then
       return textError(
         s"${Api.Field.Search.SORT}=${Const.Search.SORT_RELEVANCE} needs Search text (${Api.Field.Search.QUERY_TEXT})",
+        400)
+    if searchSort.isSimilarity && scope.description.isEmpty then
+      return textError(
+        s"${Api.Field.Search.SORT}=${Const.Search.SORT_SIMILARITY} needs a description (${Api.Field.Search.DESCRIBE})",
         400)
 
     // What the results title names. A filtered search is named by its filters, a chip each, through what its IDs name in the
@@ -244,8 +250,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
       logger.trace(s"GROUPED QUERY: ${searchQuery.toString}")
 
+      // With a description the scope's assets are grouped in two parts, the weaker matches last
       val results: GroupedSearchResult =
-        try App.altitude.service.library.searchGrouped(searchQuery)
+        try
+          scope.description match
+            case Some(description) => App.altitude.service.search.describeGrouped(description, searchQuery)
+            case None => App.altitude.service.library.searchGrouped(searchQuery)
         catch
           case ex: SearchCursorException => return textError(ex.getMessage, 400)
           case _: QueryTimeoutException => return timedOut
@@ -285,10 +295,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         ("HX-Replace-Url", browserUrl)
       )
 
-    // With a description the scope's assets are ranked by how much they look like it, in the one order that search has, which
-    // its query does not name; anything else is a flat search of the scope by the sort
+    // With a description the scope's assets are ranked by how much they look like it, in that order, which its query does not
+    // name, or shown in the sort's, in two parts; anything else is a flat search of the scope by the sort
     val searchQuery =
-      scope.query(rpp = rpp, searchSort = if scope.description.isDefined then Nil else List(searchSort), cursor = cursor)
+      scope.query(rpp = rpp, searchSort = if searchSort.isSimilarity then Nil else List(searchSort), cursor = cursor)
     logger.trace(s"${if scope.description.isDefined then "DESCRIBED " else ""}QUERY: ${searchQuery.toString}")
     val results =
       try
@@ -384,10 +394,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
   /**
    * The sort argument is one of the results UI's fields with the direction appended as a single digit, e.g. "filename0", or
-   * "relevance" alone, which has one direction: best match first
+   * "relevance" or "similarity" alone, each of which has one direction: best match first
    */
   private def parseSort(sort: String): Option[SearchSort] =
     if sort == Const.Search.SORT_RELEVANCE then return Some(SearchSort.Relevance)
+    if sort == Const.Search.SORT_SIMILARITY then return Some(SearchSort.Similarity)
 
     val field = sort.dropRight(1)
     Try(SortDirection(sort.takeRight(1).toInt)).toOption
@@ -451,12 +462,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   /**
    * The bookmarkable URL for this search. Only parameters that are not at their default are included, and always in the same
    * order, so the same search always yields the same URL. `rpp` and `after` are left out on purpose - a shared link opens at the
-   * first page. A search with a description has no `sort`: its URL carries the description, without the white space around it,
-   * after its other filters, and no sort.
+   * first page. A search with a description carries it, without the white space around it, after its other filters.
    */
   private def browserViewUrl(
       search: SearchRequestParser.Params,
-      sort: Option[String],
+      sort: String,
       layout: String,
       groupBy: Option[String],
       groupDirection: Option[String],
@@ -478,7 +488,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       Option.when(layout != Const.Search.Layout.GRID)(Api.Field.Search.LAYOUT -> layout),
       search.q.map(Api.Field.Search.QUERY_TEXT -> _),
       search.describe.map(Api.Field.Search.DESCRIBE -> _.strip),
-      sort.map(Api.Field.Search.SORT -> _),
+      Some(Api.Field.Search.SORT -> sort),
       groupBy.map(Api.Field.Search.GROUP_BY -> _),
       groupDirection.map(Api.Field.Search.GROUP_DIRECTION -> _)
     ).flatten

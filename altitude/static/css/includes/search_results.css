@@ -248,6 +248,12 @@
   margin-top: var(--space-7);
 }
 
+/* A Describe search's weaker matches open under a header of their own (includes/weaker_matches_header). On a grouped grid the
+   first of their groups follows it at once, with no gap between the two headers */
+#assets .weaker-matches + .result-group {
+  margin-top: 0;
+}
+
 /* A Location group's category, dimmed before the › */
 #assets .result-group .category {
   color: var(--theme-neutral-3);

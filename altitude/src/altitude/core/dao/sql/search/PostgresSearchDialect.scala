@@ -57,6 +57,10 @@ object PostgresSearchDialect extends SearchDialect:
     val cte = SqlStr.raw(relation)
     Expr[Boolean](implicit ctx => sql"(NOT EXISTS (SELECT 1 FROM $cte WHERE $cte.asset_id = $assetId))")
 
+  /** The ranked rows as the ranking asks for them: through the vector index ([[rankedByIndex]]), or exactly ([[rankedExactly]]) */
+  override def ranked(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows =
+    if ranking.throughIndex then rankedByIndex(matching, ranking) else rankedExactly(matching, ranking)
+
   /** The type the `asset_describe` index holds a SigLIP 2 Scene embedding as: the column's vector at half precision */
   private val HALF_PRECISION: SqlStr = SqlStr.raw(s"halfvec(${SceneModel.Siglip2.dimensions})")
 
@@ -77,7 +81,7 @@ object PostgresSearchDialect extends SearchDialect:
    * `OFFSET 0` keeps it from flattening the inner select into the outer one, where each distance would be computed once for the
    * cutoff and again for the order.
    */
-  override def ranked(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows =
+  def rankedExactly(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows =
     val embedded = distances(SearchQueries.embedded(matching), PostgresOverrides.vectorLiteral(ranking.embedding.values))
     RankedRows(sql"""
       SELECT embedded.id, embedded.distance
@@ -132,6 +136,8 @@ object PostgresSearchDialect extends SearchDialect:
           r.getObject(idx) match
             case null => SortValue.Null
             case text: String => SortValue.Text(text)
+            // A similarity; every other number a search sorts by is whole
+            case real: java.lang.Double => SortValue.Real(real)
             case number: java.lang.Number => SortValue.Num(number.longValue)
             case other => throw IllegalArgumentException(s"Unsupported sort value: $other")
 

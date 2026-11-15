@@ -802,13 +802,13 @@ Alpine set as the fragment initialized. Each switch applies immediately; View se
 
 A **choice menu** (the toolbar's Group `#groupMenuHost` and Sort `#sortMenuHost`, `includes/search_results.scala.html`)
 picks one of several values. The server renders a host, `data-choice-menu="<name>"` with `data-choice-menu-icon` and,
-for Group in the map layout and for Group and Sort of a search with a description, `data-choice-menu-disabled`,
+for Group in the map layout, `data-choice-menu-disabled`,
 holding one `button` per option: a search trigger carrying
 its literals (`data-app-search="click"` with `data-app-search-sort`, or `data-app-search-group-by` and
-`data-app-search-group-direction`), the effective one `aria-checked="true"`. A search with a description has one
-order, which the server takes no parameter for: its Sort host holds a single checked `button`, "Similarity", which is
-no search trigger, so the disabled trigger reads "Sort Similarity", and its Group host keeps its options under the
-disabled trigger, "No grouping" checked. A disabled trigger is the `disabled` button of `buildChoiceMenuCtrl`, which
+`data-app-search-group-direction`), the effective one `aria-checked="true"`. The Sort host of a search with a
+description opens with "Similarity" (`data-app-search-sort="similarity"`), the order such a search has while it names
+no other, and that of a search with Search text with "Relevance" after it; both are search triggers as the column
+sorts are. A disabled trigger is the `disabled` button of `buildChoiceMenuCtrl`, which
 opens nothing, and is dimmed as every disabled `.action-button` is (**Control states**). `ensureChoiceMenus` (`js/common/choice-menus.js`,
 called by `fragments/index.js` for every hydrated root) hands each host to `buildChoiceMenuCtrl`, which builds the
 control into it: a `.choice-menu-ctrl` root (`data-menu-kind="choice"`, centered under its trigger), the trigger
@@ -1590,7 +1590,7 @@ Triage as anywhere). The block and the toolbar
 under the title: `js/search-results/sticky-offsets.js`, run by the results hydrator, writes the title's rendered height to
 `--results-title-height` on the fragment (the toolbar's `top`; 0 without a title) and the two heights together to
 `--results-sticky-height` (the group headers' `top`, **Group headers**) through one `ResizeObserver`. The toolbar's former
-margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a wrapping flex row of three groups, `--space-9` apart: the lead (the total, then the batch ops while assets are selected, see **Batch ops**), the controls (the layout toggle and the View, Group and Sort menus; for a search with a description the toggle has its Grid segment alone, the Group menu is disabled and the Sort menu is disabled on its one option, "Similarity", see **Context menus** and **Search parameters**) and the trail, empty but in the trash view, where the Purge button (`htmx/trashbin_header`, rendered into the toolbar) holds its right edge. The lead and the trail grow from the same zero basis, so they split what the controls leave evenly and the controls sit on the bar's center whatever the sides measure; neither side shrinks below its content, so the batch ops push the controls right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one, `--space-6` below, which the sticky offsets follow. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules, but for the
+margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a wrapping flex row of three groups, `--space-9` apart: the lead (the total, then the batch ops while assets are selected, see **Batch ops**), the controls (the layout toggle and the View, Group and Sort menus; for a search with a description the toggle has its Grid segment alone and the Sort menu opens with "Similarity", see **Context menus** and **Search parameters**) and the trail, empty but in the trash view, where the Purge button (`htmx/trashbin_header`, rendered into the toolbar) holds its right edge. The lead and the trail grow from the same zero basis, so they split what the controls leave evenly and the controls sit on the bar's center whatever the sides measure; neither side shrinks below its content, so the batch ops push the controls right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one, `--space-6` below, which the sticky offsets follow. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules, but for the
 advanced search panel's, which combines them into a filtered search; the template renders the filtered search's title
 when `filters` is set, and otherwise the first of person, folder, album, Location, subset and text that is set. The crowded-pin panel hides
 the fragment's title with its controls (`static/css/htmx/map_view.css`).
@@ -1658,7 +1658,7 @@ an asset in two Locations has a cell in each group (`asset-<id>-in-<locationId>`
 an asset's cells by `data-asset-id`: removal takes every cell out, decrementing each header a cell
 leaves, while the footer total, which counts assets, drops once per asset (unless it is capped: see `resultsTotal` under **Alpine.js Stores**).
 
-The ungrouped grid of a Describe search has one group header too (`htmx/results_grid.scala.html`): "Weaker matches", before the cell of the first weaker match (`SearchResult.weaker`; **Weaker matches** in `altitude/AGENTS.md`), on the one page that holds it, with the count of the weaker matches across every page in `.count` as any header's. It is a `.result-group` and nothing more, so everything above holds for it with no code of its own: it sticks over the weaker matches as they scroll, the page window keeps it before its page's spacer and takes it away when the page reloads with its own, `decrementDateGroupOf` counts it down as a weaker match's cell leaves the grid and removes it at zero, and the detail modal's walk passes it. It has no checkbox and no `data-group-key`: the weaker matches are the tail of one ranking, no group to select, and the cells above the header have no header to count them.
+A Describe search's weaker matches open under a header of their own (`includes/weaker_matches_header.scala.html`, rendered by both grid partials), "Weaker matches", on the one page that holds the first of them (`SearchResult.weaker`, `GroupedSearchResult.weaker`; **Weaker matches** and **Sorted or grouped** in `altitude/AGENTS.md`), with their count across every page in `.count` as any header's. It is a `.result-group`, marked `weaker-matches`, so everything above holds for it with next to no code of its own: it sticks as a header does, the page window treats it as one, and the detail modal's walk passes it. It has no checkbox and no `data-group-key`: the weaker matches are no group to select. On the ungrouped grid it stands before the first weaker match's cell and the weaker matches are every cell after it, so it sticks over them as they scroll, the page window keeps it before its page's spacer and takes it away when the page reloads with its own, and `decrementDateGroupOf` finds it as the nearest header of a weaker match's cell. On a grouped grid it stands before the first group of the weaker matches, whose groups follow it each under its own header, a day or a Location that also has matches above the line being a second group here; the first of those headers follows it with no gap (`.weaker-matches + .result-group`), each later header paints over it as it sticks, and a cell of one of those groups leaves two counts, its group's and the weaker matches', which `decrementDateGroupOf` finds by walking back from the group's header to the nearest `.weaker-matches`, when its page is still loaded. The cells above the header are counted by their own group's header on a grouped grid and by none on the ungrouped one.
 
 The header's checkbox is `x-data="initDateGroupSelectable()"`
 (`js/alpine/components/date-group-selectable.js`). Its set is the group's cells *in the grid*, read off
@@ -3324,8 +3324,8 @@ shadow, translate and scale over 160 ms, ease-out; a menu action's own rule shor
 the colors and shadows still change. A disabled button takes neither the hover nor the press look
 (`:hover:not(:disabled)`, `:active:not(:disabled)`) and is dimmed whole, whatever its variant
 (`.action-button:disabled`: `opacity: 0.5` under the default cursor, what the account form's Permission chip
-wears while its input is disabled, `pages/users.css`). The buttons that can be disabled: a choice menu's trigger (Sort
-and Group of a search with a description, Group on the map), the upload sections' Choose files and Choose folder
+wears while its input is disabled, `pages/users.css`). The buttons that can be disabled: a choice menu's trigger (Group
+on the map), the upload sections' Choose files and Choose folder
 and their Cancel, the Edit panel's Revert to original, the Add to location dialog's Add with no Location to add to,
 Curation's Previous and Next, a paused Watch folder's Scan now, and a Face's Change and Remove while its correction
 is out. The upload sections' Choose buttons are disabled only while their zone waits, which dims the zone whole, so
@@ -3712,7 +3712,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/edit/recipe.js`, `geometry.js`, `tone.js`, `renderer.js` | The Edit as the client holds it (defaults, sliders, sections, the server's normalization), its geometry with the crop's rules and `mapBox`, its per-pixel math, all three DOM-free and checked against the shared vectors; and the WebGL2 renderer that draws it (`createRenderer`: `render`, `renderBefore`, `readHistogram`) |
 | `static/js/listeners/edit.js` | The Edit's events in Asset detail: Show original held, the Edit panel's toggle, the Crop tool's keys, Undo and Redo |
 | `static/js/common/content-urls.js`, `histogram.js` | An asset's content URLs (`previewUrl` by revision, `displayUrl`, `originalUrl`) and an image repointed at a new Preview (`repointImage`); a Histogram's SVG paths (`channelPaths`) and a fraction's label (`percentLabel`), Curation's and the Edit panel's |
-| `static/js/stores/search-params.js` | the search parameter set, its defaults, the scope rules that decide what a change clears, and the advanced search panel's filters set together (`replaceFilters`, `filters`, `filterCount`, `viewedPersonId`, `viewedLocationId`; `applySearchFilters`, `idsOf`, `ID_LISTS`), a searched Person's or Location's ID replaced or dropped (`names`, `replaceId`), and a Describe search's description: what it clears, what a search with one is sent without (`DESCRIBED_UNSENT`) and whether the results are on the map (`showsMap`), and the triage filter as a remembered choice (`seedSearchParams`' `seesTriaged`, `rememberedTriaged`, `showsTriaged`); its rules for a description are tested by `scripts/test-js/search-params.test.mjs` and those for the triage filter by `scripts/test-js/triage-filter.test.mjs` (`make test-js`) |
+| `static/js/stores/search-params.js` | the search parameter set, its defaults, the scope rules that decide what a change clears, and the advanced search panel's filters set together (`replaceFilters`, `filters`, `filterCount`, `viewedPersonId`, `viewedLocationId`; `applySearchFilters`, `idsOf`, `ID_LISTS`), a searched Person's or Location's ID replaced or dropped (`names`, `replaceId`), and a Describe search's description: what it clears, the Similarity sort a new one takes, what a search with one is sent without (`DESCRIBED_UNSENT`) and whether the results are on the map (`showsMap`), and the triage filter as a remembered choice (`seedSearchParams`' `seesTriaged`, `rememberedTriaged`, `showsTriaged`); its rules for a description are tested by `scripts/test-js/search-params.test.mjs` and those for the triage filter by `scripts/test-js/triage-filter.test.mjs` (`make test-js`) |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch`, and routes a trigger's click by the view (`routeOf`: in Triage a folder, Person or Location trigger asks the scope route, `requestScopeDialog`, and the root folder's does nothing; in the trash a folder trigger does nothing); `runTriggerSearch`, the search a trigger declares, which a 204 from the scope route runs |
 | `static/js/listeners/triage.js` | the Triage summary's reload: `registerTriageListeners` (on `peopleChanged`) and `reloadTriageSummary`, one request per change, issued from the host so the reloads take turns |
@@ -3766,13 +3766,14 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/design-tweaks.js` | the design tweaks panel's adapter: `createTokenTweaks` of the vendored tokentweak package with Altitude's storage key, host id, stylesheet, trigger, shortcut, sources URL, sections, scales, the two scoped tokens, the explorer control and the export file name |
 | `static/js/lib/tokentweak.js` | the tokentweak package (vendored, dev only): the panel, its store and adopted sheet, the controls per kind, Inspect, the exports; its options are its README's |
 | `static/js/lib/tokentweak-boot.js` | tokentweak's boot script (vendored, dev only): adopts the stored override sheet and theme before the first paint, keyed by its tag's `data-key` |
-| `views/includes/search_results.scala.html` | Search grid wrapper with the results title (**Results title**), the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip, the controls of a search with a description reduced to its one order and layout (Sort and Group disabled, no Map segment); the controller passes in the rendered grid partial, or the map shell, and the scope the title names (the person, the folder's path, the album, the Location, the Triage subset), or a filtered search's filters (`includes/search_filter_chips`). Its CSS (`static/css/includes/search_results.css`) gives `#assets` `overflow-anchor: none` and the page spacer its full row; `#assets` carries the preview size as `--preview-box` for the cell size |
+| `views/includes/search_results.scala.html` | Search grid wrapper with the results title (**Results title**), the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip, the controls of a search with a description (the Sort menu opening with "Similarity", no Map segment); the controller passes in the rendered grid partial, or the map shell, and the scope the title names (the person, the folder's path, the album, the Location, the Triage subset), or a filtered search's filters (`includes/search_filter_chips`). Its CSS (`static/css/includes/search_results.css`) gives `#assets` `overflow-anchor: none` and the page spacer its full row; `#assets` carries the preview size as `--preview-box` for the cell size |
 | `views/includes/results_title.scala.html`, `results_title_inner.scala.html` | The results title block and its inside (icon, title, the way back, subtitle or a filtered search's filters; a person's cover face and actions); styled by `static/css/includes/results_title.css` |
 | `views/htmx/person.scala.html`, `person_inner.scala.html`, `view_person_name.scala.html`, `edit_person_name.scala.html` | The person scope's results title: the block that is the merge drop zone and the person actions' swap target, its inside, and the inline name editor's two states; the person's own styles are `static/css/htmx/person.css` |
 | `static/js/search-results/sticky-offsets.js` | `bindStickyOffsets`: writes the results title's rendered height to `--results-title-height` (the toolbar's sticky offset) and the title's and toolbar's together to `--results-sticky-height` (the group headers') on the fragment |
 | `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page, and the thumbnail its preview URL in `data-src`, a first page's in `src` too. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration switch like every other field |
-| `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor; a Describe search's "Weaker matches" group header before the first weaker match's cell |
-| `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day, Location or Sequence, infinite-scroll trigger by cursor |
+| `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor; a Describe search's weaker matches' header before the first weaker match's cell |
+| `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day, Location or Sequence, infinite-scroll trigger by cursor; a Describe search's weaker matches' header before their first group |
+| `views/includes/weaker_matches_header.scala.html` | The header that opens a Describe search's weaker matches in either grid: a group header with their count and no checkbox |
 | `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, and the crowded-pin panel `#mapPanel`; its CSS, the pin styles included, is `static/css/htmx/map_view.css` |
 | `static/js/common/vendor-loader.js` | loads Leaflet (with its stylesheet), supercluster, media-chrome and Flatpickr (with its stylesheet, in a cascade layer of its own) once, when a view first needs them |
 | `static/js/map/map-view.js` | the map view: Leaflet map, viewport cells requests, supercluster pins and their clicks, one map at a time (`disposeMapView`) |
@@ -3881,8 +3882,8 @@ a date range whose first day is after its last is dropped, `peopleMatch` goes wi
 panel combines (a description, a date range, several people or Locations, or more than one of `q`, a folder, a person
 and a Location: `combinesFilters`, the server's rule) drops an album and a subset, a description leaves the trash
 for the repository view as they do, stays in the Triage view, and drops the map area, `sort=relevance`
-(`Const.search.sortRelevance`) without `q` drops the sort, so Relevance is the one sort that ends with
-the text it ranked, and `triaged` in any view but the repository view is dropped, the remembered choice included (the triage view
+(`Const.search.sortRelevance`) without `q` drops the sort, as `sort=similarity` (`Const.search.sortSimilarity`)
+without a description does, so each of the two sorts ends with what it ranked by, and `triaged` in any view but the repository view is dropped, the remembered choice included (the triage view
 refuses it). The server also refuses a page size outside 1 to 500; the store keeps only whole numbers
 in that range (`normalize`, with
 `Const.search.maxRpp` the client's copy of `Const.Search.MAX_RPP`) and turns anything else into its
@@ -3921,10 +3922,11 @@ refuses it without text.
 A Describe search's description (the words the results were ranked by; **Describe search** in
 `altitude/AGENTS.md`) is not a parameter of the template and is not on the fragment's root: it is the first of the
 filters the template is handed, where its chip carries it (`data-app-filter-describe`), and the template reads off
-those filters whether the search has one (`isDescribed`). The `sort` it is handed is then the similarity sort, the search's one order, so the toolbar offers
-nothing the server refuses beside a description: the Sort menu is disabled on a single checked option, "Similarity",
-which is no search trigger, the Group menu is disabled, and the layout toggle has no Map segment (**Context menus**,
-**Map view**).
+those filters whether the search has one (`isDescribed`). Its Sort menu then offers "Similarity" before the other
+sorts, checked while it is the effective sort, since the server refuses it without a description, and its layout
+toggle has no Map segment, so the toolbar offers nothing the server refuses beside a description (**Context menus**,
+**Map view**). Sorted otherwise, or grouped, the grid shows the search's matches in two parts, the weaker matches
+last under their header (**Group headers**).
 
 **A description in the store.** `describe` is a parameter like the others: seeded from the URL, so a reload keeps
 it, serialized after `q`, as the server's `HX-Replace-Url` orders them, and sent by every request built from the
@@ -3934,14 +3936,21 @@ search's title sets what the other chips name, and a place, a view or new quick 
 server refuses beside a description is settled in two ways. What no later search wants back is dropped from the
 store (`withoutRefusedCombinations`): an album, a Triage subset, the map area and the trash. A description searches
 Browse or Triage, whichever view the search is of.
-What the user chose for every search, the sort, the grouping and the layout (`DESCRIBED_UNSENT`), stays in the store
-and is left out of the request instead (`serializeSearchParams`, whatever the store and the request's overrides hold
-of them), as the server's URL for a described search leaves them out: they are in force again as soon as the
-description goes, the way Relevance goes with its text, in the other direction. A reload of a described search
-therefore opens with the server's default sort and no grouping once the description is removed, since the URL carried
-neither; the layout is remembered in `localStorage` as always. While a description is in force the store's `layout`
-may say map over a grid: `showsMap()` is the question to ask of the store (Curation's closing asks it), and the
-fragment's `data-results-layout` says how the results on the page were rendered.
+The layout the user chose for every search (`DESCRIBED_UNSENT`) stays in the store and is left out of the request
+instead (`serializeSearchParams`, whatever the store and the request's overrides hold of it), as the server's URL
+for a described search leaves it out: it is in force again as soon as the description goes, and is remembered in
+`localStorage` as always. While a description is in force the store's `layout` may say map over a grid: `showsMap()`
+is the question to ask of the store (Curation's closing asks it), and the fragment's `data-results-layout` says how
+the results on the page were rendered.
+
+The sort and the grouping apply to a described search as to any, and go out with it. Its own order is likeness, so
+a search from the panel that sets a description the search did not hold, a new one or a changed one, takes the
+Similarity sort (`applySearchFilters` sets `sort=similarity`, `Const.search.sortSimilarity`), whatever sort was in
+force, which it replaces as a pick from the Sort menu would: a new description always opens most alike first, and
+the filters around an unchanged description leave its sort as it is. Any sort picked from the menu after that stays
+for the description, and the grouping in force groups its results from the start. The Similarity sort goes with the
+description as Relevance goes with the text: `withoutRefusedCombinations` drops it once no description is left, so
+the server's default applies, while a column sort stays.
 
 `groupBy` (`dateTaken`) with `groupDirection` (`asc`/`desc`) groups the grid by
 day, and `location` and `sequence`, whose order is fixed, by Location and by Sequence with an empty direction; each option of the

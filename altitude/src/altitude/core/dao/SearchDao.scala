@@ -34,6 +34,14 @@ trait SearchDao:
    */
   def describe(query: SearchQuery, ranking: DescribeRanking): SearchPage
 
+  /**
+   * The ranking as this engine reads it for the matches of `query`, a resolved search with no description of its own: through its
+   * vector index when it has one and the matches are many (`DescribeRanking.throughIndex`), exactly otherwise. `describe` reads
+   * its ranking so itself; a search among a part of a description's matches (`SearchQuery.described`) is handed the ranking read
+   * here, once for its pages' statements.
+   */
+  def rankingFor(query: SearchQuery, ranking: DescribeRanking): DescribeRanking
+
   /** The number of assets a search matches, exact, without reading any of them */
   def count(query: SearchQuery): Int
 

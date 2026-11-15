@@ -22,10 +22,10 @@
    are the scope the results title names (includes/results_title); `text` is its title when none of them is set. `filters` are
    a filtered search's, which the title names in their place, a chip each (includes/search_filter_chips), the description's
    first. `view` is the view searched: in the Triage view the Search text's title and a description's empty line name Triage, the
-   assets searched there. A search with a description is a filtered one, and its filters say so (`isDescribed`): `sort` is then the similarity
-   sort, its one order on the flat grid, so the toolbar offers nothing the server refuses beside a description: the Sort menu
-   is disabled and shows "Similarity", the Group menu is disabled, and the layout toggle has no Map segment. An empty result of
-   a description is said in the title, after Edit. *@
+   assets searched there. A search with a description is a filtered one, and its filters say so (`isDescribed`): the Sort menu
+   then offers "Similarity" first, the order such a search has unless it names another, and the layout toggle has no Map
+   segment, so the toolbar offers nothing the server refuses beside a description. An empty result of a description is said in
+   the title, after Edit. *@
 @(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None, subset: Option[TriageSubset] = None, filters: Option[SearchFilters] = None)
 
 @* Whether the results are a Describe search's, ranked by a description: the description is one of the search's filters, and
@@ -129,8 +129,8 @@
          aria-checked is the effective grouping the server used. Each option is a search trigger carrying the two parameters it
          sets (js/search-results/search-triggers.js), which the search funnel combines with every other parameter in the
          `searchParams` store. Grouping is a reorder, like the sort: it survives a change of folder, person, album or view.
-         The map layout groups nothing, and neither does a search with a description, so its host is then disabled. *@
-      <div id="groupMenuHost" data-choice-menu="Group" data-choice-menu-icon="fas fa-layer-group" @if(layout == Const.Search.Layout.MAP || isDescribed) {data-choice-menu-disabled}>
+         The map layout groups nothing, so its host is then disabled. *@
+      <div id="groupMenuHost" data-choice-menu="Group" data-choice-menu-icon="fas fa-layer-group" @if(layout == Const.Search.Layout.MAP) {data-choice-menu-disabled}>
         <button type="button" data-app-search="click" data-app-search-group-by="" data-app-search-group-direction="" @if(grouping.isEmpty) {aria-checked="true"}>No grouping</button>
         <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))) {aria-checked="true"}>Date Taken (Newest first)</button>
         <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="asc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.ASC))) {aria-checked="true"}>Date Taken (Oldest first)</button>
@@ -147,12 +147,12 @@
     <div class="sort">
       @* A choice menu whose checked option is the effective sort the server used; each option is a search trigger carrying
          its sort, which the search funnel combines with every other search parameter held in the `searchParams` store
-         (js/search-results/search.js). A search with a description has one order, which the server takes no parameter for: its
-         menu is disabled and holds that order alone, "Similarity", checked, which is no search trigger *@
-      <div id="sortMenuHost" data-choice-menu="Sort" data-choice-menu-icon="fas fa-sort-amount-down" @if(isDescribed) {data-choice-menu-disabled}>
+         (js/search-results/search.js) *@
+      <div id="sortMenuHost" data-choice-menu="Sort" data-choice-menu-icon="fas fa-sort-amount-down">
+        @* Similarity ranks by the description, so it is offered only while the results have one: the server refuses it otherwise *@
         @if(isDescribed) {
-        <button type="button" aria-checked="true">Similarity</button>
-        } else {
+          <button type="button" data-app-search="click" data-app-search-sort="@{Const.Search.SORT_SIMILARITY}" @if(sort.isSimilarity) {aria-checked="true"}>Similarity</button>
+        }
         @* Relevance ranks by the Search text, so it is offered only while the results have text: the server refuses it otherwise *@
         @if(text.isDefined) {
           <button type="button" data-app-search="click" data-app-search-sort="@{Const.Search.SORT_RELEVANCE}" @if(sort.isRelevance) {aria-checked="true"}>Relevance</button>
@@ -167,7 +167,6 @@
         <button type="button" data-app-search="click" data-app-search-sort="size_bytes1" @if(sort.field == "size_bytes" && sort.direction.id == 1) {aria-checked="true"}>File Size (Largest)</button>
         <button type="button" data-app-search="click" data-app-search-sort="area_size0" @if(sort.field == "area_size" && sort.direction.id == 0) {aria-checked="true"}>Dimensions (Smallest)</button>
         <button type="button" data-app-search="click" data-app-search-sort="area_size1" @if(sort.field == "area_size" && sort.direction.id == 1) {aria-checked="true"}>Dimensions (Largest)</button>
-        }
       </div>
     </div>
   </div>

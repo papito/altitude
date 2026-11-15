@@ -28,12 +28,17 @@ import altitude.core.models.SceneModel
 import altitude.core.models.Settings
 import altitude.core.util.DateRange
 import altitude.core.util.DescribeRanking
+import altitude.core.util.GroupBy
+import altitude.core.util.GroupedSearchResult
 import altitude.core.util.PeopleMatch
 import altitude.core.util.SearchCursor
+import altitude.core.util.SearchGrouping
+import altitude.core.util.SearchGroupKey
 import altitude.core.util.SearchPage
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 import altitude.core.util.SearchSort
+import altitude.core.util.SortDirection
 import altitude.core.util.SortValue
 import altitude.core.util.WeakerMatches
 
@@ -62,13 +67,16 @@ object DescribeSearchTests {
       importedRange: Option[DateRange] = None) {
 
     /**
-     * The search of these filters as a request asks for it, unresolved: the page of `pageSize` assets after `cursor`.
-     * `exactLimit` is how many matching assets PostgreSQL ranks one by one before it ranks through its vector index.
+     * The search of these filters as a request asks for it, unresolved: the page of `pageSize` assets after `cursor`, in the
+     * order of `sort` and under `grouping` when it has them. `exactLimit` is how many matching assets PostgreSQL ranks one by one
+     * before it ranks through its vector index.
      */
     def query(
         cursor: Option[SearchCursor] = None,
         pageSize: Int = 50,
-        exactLimit: Int = Const.Search.DESCRIBE_EXACT_LIMIT): SearchQuery =
+        exactLimit: Int = Const.Search.DESCRIBE_EXACT_LIMIT,
+        sort: Option[SearchSort] = None,
+        grouping: Option[SearchGrouping] = None): SearchQuery =
       new SearchQuery(
         params =
           if (triageView) SearchQuery.TRIAGE_VIEW
@@ -84,7 +92,9 @@ object DescribeSearchTests {
         importedRange = importedRange,
         rpp = pageSize,
         cursor = cursor,
-        describeExactLimit = exactLimit
+        describeExactLimit = exactLimit,
+        searchSort = sort.toList,
+        grouping = grouping
       )
   }
 
@@ -122,8 +132,9 @@ object DescribeSearchTests {
       embedding: SceneEmbedding,
       folder: Option[Folder] = None,
       filename: Option[String] = None,
-      isTriaged: Boolean = false): Asset = {
-    val asset = testContext.makeAsset(folder = folder, isTriaged = isTriaged)
+      isTriaged: Boolean = false,
+      taken: Option[LocalDateTime] = None): Asset = {
+    val asset = testContext.makeAsset(folder = folder, isTriaged = isTriaged, originalCreatedAt = taken)
     testContext.insertAsset(
       asset.copy(fileName = filename.getOrElse(asset.fileName), sceneEmbeddings = SceneEmbeddings(siglip2 = Some(embedding))))
   }
@@ -141,9 +152,10 @@ object DescribeSearchTests {
       seed: Int,
       folder: Option[Folder] = None,
       filename: Option[String] = None,
-      isTriaged: Boolean = false): Photo = {
+      isTriaged: Boolean = false,
+      taken: Option[LocalDateTime] = None): Photo = {
     val embedding = TestContext.atCosine(embeddingOf(description), cosine, seed)
-    Photo(embedded(embedding, folder, filename, isTriaged), embedding)
+    Photo(embedded(embedding, folder, filename, isTriaged, taken), embedding)
   }
 
   /** The photos' IDs in the order a description ranks them: the highest cosine of their Scene embedding to its own first */
@@ -181,8 +193,34 @@ object DescribeSearchTests {
       filters: Filters = Filters(),
       cursor: Option[SearchCursor] = None,
       pageSize: Int = 50,
-      exactLimit: Int = Const.Search.DESCRIBE_EXACT_LIMIT): SearchResult =
-    testApp.service.search.describe(description, filters.query(cursor, pageSize, exactLimit))
+      exactLimit: Int = Const.Search.DESCRIBE_EXACT_LIMIT,
+      sort: Option[SearchSort] = None): SearchResult =
+    testApp.service.search.describe(description, filters.query(cursor, pageSize, exactLimit, sort))
+
+  /** A page of a description's results grouped by `grouping`, each group's assets in the order of `sort` */
+  private def describeGrouped(
+      description: String,
+      grouping: SearchGrouping,
+      sort: SearchSort,
+      cursor: Option[SearchCursor] = None,
+      pageSize: Int = 50,
+      exactLimit: Int = Const.Search.DESCRIBE_EXACT_LIMIT,
+      filters: Filters = Filters()): GroupedSearchResult =
+    testApp.service.search
+      .describeGrouped(description, filters.query(cursor, pageSize, exactLimit, Some(sort), Some(grouping)))
+
+  /** Every page of a search that a cursor continues, the first read with no cursor and each next one from the cursor before it */
+  private def continued[Page](read: Option[SearchCursor] => Page)(next: Page => Option[SearchCursor]): List[Page] = {
+    val first = read(None)
+    first :: List.unfold(next(first))(_.map {
+      cursor =>
+        val page = read(Some(cursor))
+        (page, next(page))
+    })
+  }
+
+  /** A page's groups as its assets' IDs, group by group */
+  private def groupIds(result: GroupedSearchResult): List[List[String]] = result.groups.map(_.assets.map(_.persistedId))
 
   /**
    * A page read from the DAO, with the cutoff and the limit given, inside a transaction set up for a search of that limit, where
@@ -211,16 +249,12 @@ object DescribeSearchTests {
    * Every page of a description's results within the filters, `pageSize` assets at a time, each continued from the cursor of the
    * page before it
    */
-  private def pages(description: String, pageSize: Int, filters: Filters = Filters()): List[SearchResult] = {
-    val first = describe(description, filters, pageSize = pageSize)
-    first :: List.unfold(first.nextCursor) {
-      _.map {
-        cursor =>
-          val next = describe(description, filters, cursor = Some(cursor), pageSize = pageSize)
-          (next, next.nextCursor)
-      }
-    }
-  }
+  private def pages(
+      description: String,
+      pageSize: Int,
+      filters: Filters = Filters(),
+      sort: Option[SearchSort] = None): List[SearchResult] =
+    continued(cursor => describe(description, filters, cursor, pageSize, sort = sort))(_.nextCursor)
 
   test("A description ranks the still images that look most like it first") {
 
@@ -587,6 +621,208 @@ object DescribeSearchTests {
     }
   }
 
+  test("A sorted Describe search shows the matches above the line in the sort's order, then the weaker ones in it") {
+
+    /**
+     * Setup:
+     *
+     * A repository with six photos placed at cosines of 0.40, 0.38, 0.36, 0.29, 0.25 and 0.20 to "a cactus", named c, a, e, f, b
+     * and d in that order, a Describe match threshold every image clears and a Describe weaker matches ratio of 0.75: the line is
+     * at 0.30, so a, c and e are above it and b, d and f are weaker matches. The description is searched sorted by file name, A
+     * to Z.
+     *
+     * Assertions:
+     *
+     * One page holds a, c, e and then b, d, f: each part in the order of the names. It says the weaker matches begin at its
+     * fourth asset and are three, carries the total of 6, and says it is sorted by file name. Read two at a time, the second page
+     * holds e and b and says the weaker matches begin at its second asset; the first page carries the total and the others none.
+     * Read one at a time, the fourth page says so at its only asset.
+     *
+     * Edge cases:
+     *
+     * Read three at a time, the first page ends with the last match above the line and still has a cursor, and the weaker matches
+     * open the second page. Under a ratio of 0 the six are one part, a to f, with no weaker match named. A cursor of the sorted
+     * search is refused by the search in its own order, by the search sorted Z to A and by another description, and a cursor of
+     * the search in its own order by the sorted one.
+     */
+    val description = "a cactus"
+    val byName = Some(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC))
+    val photos = List(0.40 -> "c", 0.38 -> "a", 0.36 -> "e", 0.29 -> "f", 0.25 -> "b", 0.20 -> "d").zipWithIndex.map {
+      case ((cosine, name), seed) => name -> placed(description, cosine, seed, filename = Some(s"$name.jpg")).id
+    }.toMap
+    def named(names: String): List[String] = names.map(name => photos(name.toString)).toList
+    val threeWeaker = (index: Int) => Some(WeakerMatches(index, count = 3))
+
+    withSetting(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY, EVERY_IMAGE) {
+      withSetting(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO, "0.75") {
+        val whole = describe(description, sort = byName)
+        ids(whole) shouldBe named("acebdf")
+        whole.weaker shouldBe threeWeaker(3)
+        whole.total shouldBe Some(6)
+        whole.nextCursor shouldBe None
+        whole.sort shouldBe byName.toList
+
+        val byTwo = pages(description, pageSize = 2, sort = byName)
+        byTwo.map(ids) shouldBe List(named("ac"), named("eb"), named("df"))
+        byTwo.map(_.weaker) shouldBe List(None, threeWeaker(1), None)
+        byTwo.map(_.total) shouldBe List(Some(6), None, None)
+
+        val byOne = pages(description, pageSize = 1, sort = byName)
+        byOne.flatMap(ids) shouldBe named("acebdf")
+        byOne.map(_.weaker) shouldBe List(None, None, None, threeWeaker(0), None, None)
+
+        val byThree = pages(description, pageSize = 3, sort = byName)
+        byThree.map(ids) shouldBe List(named("ace"), named("bdf"))
+        byThree.map(_.weaker) shouldBe List(None, threeWeaker(0))
+
+        val sortedCursor = byTwo.head.nextCursor
+        intercept[SearchCursorException](describe(description, cursor = sortedCursor))
+        intercept[SearchCursorException](
+          describe(description, cursor = sortedCursor, sort = Some(SearchSort(FieldConst.Asset.FILENAME, SortDirection.DESC))))
+        intercept[SearchCursorException](describe("a man in a suit", cursor = sortedCursor, sort = byName))
+        intercept[SearchCursorException](
+          describe(description, cursor = describe(description, pageSize = 2).nextCursor, sort = byName))
+      }
+
+      withSetting(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO, "0") {
+        val onePart = describe(description, sort = byName)
+        ids(onePart) shouldBe named("abcdef")
+        onePart.weaker shouldBe None
+        onePart.total shouldBe Some(6)
+      }
+    }
+  }
+
+  test("A grouped Describe search groups each of its two parts, and under the similarity sort a group is most alike first") {
+
+    /**
+     * Setup:
+     *
+     * A repository with six photos placed at cosines to "a cactus": taken on January 2, 2026 the ones at 0.40, 0.36 and 0.29, and
+     * on January 1 the ones at 0.38, 0.25 and 0.20, named c, e, f, a, b and d. The Describe match threshold is one every image
+     * clears and the Describe weaker matches ratio 0.75, so the photos under 0.30 are weaker matches. The description is searched
+     * grouped by Date Taken, newest day first, sorted by similarity and then by file name.
+     *
+     * Assertions:
+     *
+     * Sorted by similarity, the page has four groups: January 2 with the photos at 0.40 and 0.36, most alike first, and January 1
+     * with the one at 0.38, then, for the weaker matches, January 2 with the one at 0.29 and January 1 with those at 0.25 and
+     * 0.20. Each group counts its own part's matches of its day, the weaker matches begin at the third group and are three, and
+     * the total is 6. Read two at a time, the second page holds January 1's match above the line and then the weaker matches'
+     * January 2, which it names as its second group and does not take for a continuation; the third page continues nothing
+     * either, its group being the weaker matches' January 1.
+     *
+     * Edge cases:
+     *
+     * Sorted by file name, each group is in the order of the names within its part: January 2 is c, e and January 1 is a, then
+     * January 2 is f and January 1 is b, d. A page of one continues the first group with its second photo.
+     */
+    val description = "a cactus"
+    val second = LocalDateTime.of(2026, 1, 2, 10, 0)
+    val first = LocalDateTime.of(2026, 1, 1, 10, 0)
+    val photos = List(
+      (0.40, "c", second),
+      (0.36, "e", second),
+      (0.29, "f", second),
+      (0.38, "a", first),
+      (0.25, "b", first),
+      (0.20, "d", first)).zipWithIndex.map {
+      case ((cosine, name, taken), seed) =>
+        name -> placed(description, cosine, seed, filename = Some(s"$name.jpg"), taken = Some(taken)).id
+    }.toMap
+    def named(names: String): List[String] = names.map(name => photos(name.toString)).toList
+    val byDay = SearchGrouping(GroupBy.DateTaken, SortDirection.DESC)
+    val byName = SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC)
+    def days(result: GroupedSearchResult): List[Int] =
+      result.groups.map(_.key).collect { case SearchGroupKey.Day(Some(date)) => date.getDayOfMonth }
+
+    withSetting(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY, EVERY_IMAGE) {
+      withSetting(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO, "0.75") {
+        val alike = describeGrouped(description, byDay, SearchSort.Similarity)
+        groupIds(alike) shouldBe List(named("ce"), named("a"), named("f"), named("bd"))
+        days(alike) shouldBe List(2, 1, 2, 1)
+        alike.groups.map(_.total) shouldBe List(2, 1, 1, 2)
+        alike.weaker shouldBe Some(WeakerMatches(index = 2, count = 3))
+        alike.total shouldBe Some(6)
+        alike.sort shouldBe SearchSort.Similarity
+        alike.continuesGroup shouldBe false
+
+        val byTwo =
+          continued(cursor => describeGrouped(description, byDay, SearchSort.Similarity, cursor, pageSize = 2))(_.nextCursor)
+        byTwo.map(groupIds) shouldBe List(List(named("ce")), List(named("a"), named("f")), List(named("bd")))
+        byTwo.map(_.weaker) shouldBe List(None, Some(WeakerMatches(index = 1, count = 3)), None)
+        byTwo.map(_.continuesGroup) shouldBe List(false, false, false)
+        byTwo.map(_.total) shouldBe List(Some(6), None, None)
+
+        val inNameOrder = describeGrouped(description, byDay, byName)
+        groupIds(inNameOrder) shouldBe List(named("ce"), named("a"), named("f"), named("bd"))
+        inNameOrder.weaker shouldBe Some(WeakerMatches(index = 2, count = 3))
+
+        val byOne =
+          continued(cursor => describeGrouped(description, byDay, SearchSort.Similarity, cursor, pageSize = 1))(_.nextCursor)
+        byOne.flatMap(groupIds).flatten shouldBe named("ceafbd")
+        byOne.map(_.continuesGroup) shouldBe List(false, true, false, false, false, true)
+        byOne.map(_.weaker.map(_.index)) shouldBe List(None, None, None, Some(0), None, None)
+      }
+    }
+  }
+
+  test("A Describe search grouped by Location or by Sequence groups each of its parts, most alike first within a group") {
+
+    /**
+     * Setup:
+     *
+     * A repository with the Locations Lisbon and Porto and four sorted photos placed at cosines of 0.40, 0.36, 0.29 and 0.25 to
+     * "a cactus": the first and the third in Lisbon, the second in Porto and the fourth in no Location; and three triaged photos
+     * at 0.39, 0.33 and 0.21, in no Sequence. The Describe match threshold is one every image clears and the Describe weaker
+     * matches ratio 0.75: among the sorted photos the line is at 0.30, and among the triaged ones at 0.2925.
+     *
+     * Assertions:
+     *
+     * Grouped by Location under the similarity sort, the sorted photos are in four groups: Lisbon with the photo at 0.40 and
+     * Porto with the one at 0.36, then, for the weaker matches, Lisbon with the one at 0.29 and the photos in no Location with
+     * the one at 0.25; the weaker matches begin at the third group and are two. In the Triage view grouped by Sequence, the
+     * triaged photos are in two groups of no Sequence: the photos at 0.39 and 0.33, most alike first, then the weaker one.
+     *
+     * Edge cases:
+     *
+     * Read one at a time, the pages of the Location grouping hold the same photos in the same order.
+     */
+    val description = "a cactus"
+    val lisbon = testApp.service.location.addLocation("Lisbon", 38.72, -9.14)
+    val porto = testApp.service.location.addLocation("Porto", 41.15, -8.61)
+    val sorted = List(0.40, 0.36, 0.29, 0.25).zipWithIndex.map((cosine, seed) => placed(description, cosine, seed).id)
+    testApp.service.location.addAssets(lisbon.persistedId, Set(sorted(0), sorted(2))) shouldBe 2
+    testApp.service.location.addAssets(porto.persistedId, Set(sorted(1))) shouldBe 1
+    val inTriage =
+      List(0.39, 0.33, 0.21).zipWithIndex.map((cosine, seed) => placed(description, cosine, seed + 10, isTriaged = true).id)
+    val byLocation = SearchGrouping(GroupBy.Location)
+
+    withSetting(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY, EVERY_IMAGE) {
+      withSetting(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO, "0.75") {
+        val located = describeGrouped(description, byLocation, SearchSort.Similarity)
+        groupIds(located) shouldBe List(List(sorted(0)), List(sorted(1)), List(sorted(2)), List(sorted(3)))
+        located.groups.map(_.key).collect { case SearchGroupKey.Location(_, _, name, _) => name } shouldBe
+          List(Some("Lisbon"), Some("Porto"), Some("Lisbon"), None)
+        located.weaker shouldBe Some(WeakerMatches(index = 2, count = 2))
+        located.total shouldBe Some(4)
+
+        continued(cursor => describeGrouped(description, byLocation, SearchSort.Similarity, cursor, pageSize = 1))(_.nextCursor)
+          .flatMap(groupIds)
+          .flatten shouldBe sorted
+
+        val sequenced = describeGrouped(
+          description,
+          SearchGrouping(GroupBy.Sequence),
+          SearchSort.Similarity,
+          filters = Filters(triageView = true))
+        groupIds(sequenced) shouldBe List(inTriage.take(2), inTriage.drop(2))
+        sequenced.groups.map(_.key) shouldBe List.fill(2)(SearchGroupKey.Sequence(None, None))
+        sequenced.weaker shouldBe Some(WeakerMatches(index = 1, count = 1))
+      }
+    }
+  }
+
   test("The pages of a description concatenate to its ranked list, with no repeat and no gap") {
 
     /**
@@ -604,8 +840,8 @@ object DescribeSearchTests {
      *
      * The three images at one distance are in the order of their IDs, and a page that ends among them is continued with the next
      * of them. A cursor is refused for another description and for the same description with the triaged assets asked for. A page
-     * of no assets is refused, and so is a search asked for with a sort, the similarity sort included: likeness is the one order,
-     * and no query names it.
+     * of no assets is refused, and so is a flat search asked for with the similarity sort: likeness is the order of the query
+     * that names no sort.
      */
     val cactus = sorted(CACTUS)
     PHOTOS.foreach(sorted(_))
@@ -1070,7 +1306,9 @@ object DescribeSearchTests {
        * not once and the search past the limit once a page. A cursor of the exact search's first page continues through the index
        * and one of the index's continues exactly, each to the rest of the list with no repeat and no gap. Both ways name the same
        * weaker matches, the five after the asset placed at 0.5, the folder's best match, and the page that continues past their
-       * first names none.
+       * first names none. Sorted by file name, the search holds the same six in its two parts either way, the best match and then
+       * the five weaker ones: ranked exactly it scans the vector index not once, and past the limit once for each part's
+       * statement.
        *
        * Edge cases:
        *
@@ -1125,6 +1363,16 @@ object DescribeSearchTests {
             scanning(describe(description, inTrips, cursor = firstByIndex.nextCursor, pageSize = 10))
           ids(firstByIndex) ++ ids(restExact) shouldBe ids(exact)
           restExactScans shouldBe 0
+
+          val byName = Some(SearchSort(FieldConst.Asset.FILENAME, SortDirection.ASC))
+          val (sortedExact, sortedExactScans) = scanning(describe(description, inTrips, sort = byName))
+          ids(sortedExact).toSet shouldBe ids(exact).toSet
+          sortedExact.weaker shouldBe exact.weaker
+          sortedExactScans shouldBe 0
+          val (sortedByIndex, sortedIndexScans) = scanning(describe(description, inTrips, exactLimit = 5, sort = byName))
+          ids(sortedByIndex) shouldBe ids(sortedExact)
+          sortedByIndex.weaker shouldBe sortedExact.weaker
+          sortedIndexScans shouldBe 2
         }
       }
     }
@@ -1244,13 +1492,8 @@ object DescribeSearchTests {
         val ranking = DescribeRanking(description, minCosine = -1, limit = 1000, weakerRatio = 0)
         def planned(exactly: Boolean): String =
           planOf(
-            SearchQueries.described(
-              searchDialect,
-              query,
-              testContext.repository.persistedId,
-              if (exactly) PostgresSearchDialect.ranked(_, ranking) else PostgresSearchDialect.rankedByIndex(_, ranking),
-              ranking.weakerRatio
-            ))
+            SearchQueries
+              .described(searchDialect, query, testContext.repository.persistedId, ranking.copy(throughIndex = !exactly)))
 
         val exactPlan = planned(exactly = true)
         (exactPlan should not).include("asset_describe")

@@ -102,6 +102,8 @@ object SqliteSearchDialect extends SearchDialect:
     def get(r: ResultSet, idx: Int): SortValue = r.getObject(idx) match
       case null => SortValue.Null
       case text: String => SortValue.Text(text)
+      // A similarity; every other number a search sorts by is whole
+      case real: java.lang.Double => SortValue.Real(real)
       case number: java.lang.Number => SortValue.Num(number.longValue)
       case other => throw IllegalArgumentException(s"Unsupported sort value: $other")
 

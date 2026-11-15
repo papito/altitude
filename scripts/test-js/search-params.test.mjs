@@ -1,7 +1,7 @@
 /**
  * The search parameters' rules for a description (`altitude/static/js/stores/search-params.js`): a
- * Describe search's `describe` beside the other parameters, what clears it, what a search that
- * holds one is sent without, and what comes back when it goes. The store's module is the browser's
+ * Describe search's `describe` beside the other parameters, what clears it, the sort it opens in,
+ * what a search that holds one is sent without, and what comes back when it goes. The store's module is the browser's
  * as it is: `constants.js` publishes itself on `window`, and the store reads the remembered layout
  * from `localStorage`, so a stand-in for each is in place before the module is loaded. Run by
  * `make test-js`.
@@ -74,7 +74,7 @@ test("a description the server would refuse is no description", () => {
     )
 })
 
-test("a described search is sent without a sort, a grouping or the map layout, which the store keeps", () => {
+test("a described search is sent with its sort and its grouping, and without the map layout, which the store keeps", () => {
     const params = seedSearchParams(
         "?describe=a+cactus&q=beach&sort=relevance&groupBy=dateTaken&groupDirection=asc&layout=map",
     )
@@ -83,6 +83,9 @@ test("a described search is sent without a sort, a grouping or the map layout, w
         view: "repository",
         q: "beach",
         describe: "a cactus",
+        sort: "relevance",
+        groupBy: "dateTaken",
+        groupDirection: "asc",
     })
     assert.equal(params.sort, "relevance")
     assert.equal(params.groupBy, "dateTaken")
@@ -90,7 +93,7 @@ test("a described search is sent without a sort, a grouping or the map layout, w
     assert.equal(params.layout, "map")
 })
 
-test("the sort, the grouping and the layout come back when the description goes", () => {
+test("the layout comes back when the description goes, and a column sort and the grouping stay", () => {
     const described = seedSearchParams(
         "?describe=a+cactus&folderId=trips&sort=filename0&groupBy=location&layout=map",
     )
@@ -169,7 +172,7 @@ test("a place, a view or new quick search text clears the description with the p
     }
 })
 
-test("a sort, a grouping or a layout chosen meanwhile leaves the description in force", () => {
+test("a sort, a grouping or a layout chosen meanwhile leaves the description in force, and the first two are sent", () => {
     const next = applySearchParamChanges(
         seedSearchParams("?describe=a+cactus"),
         { sort: "filename0", groupBy: "dateTaken", layout: "map" },
@@ -179,7 +182,37 @@ test("a sort, a grouping or a layout chosen meanwhile leaves the description in 
     assert.deepEqual(sent(serializeSearchParams(next)), {
         view: "repository",
         describe: "a cactus",
+        sort: "filename0",
+        groupBy: "dateTaken",
     })
+})
+
+test("a new or a changed description takes the Similarity sort, which goes with the description", () => {
+    const browsing = seedSearchParams("?sort=filename0&groupBy=location")
+    const described = applySearchFilters(browsing, { describe: "a cactus" })
+    assert.equal(described.sort, "similarity")
+    assert.equal(described.groupBy, "location")
+
+    // A sort picked for the description stays while the filters around it change
+    const byName = applySearchParamChanges(described, { sort: "filename0" })
+    const narrowed = applySearchFilters(byName, {
+        describe: "a cactus",
+        q: "beach",
+    })
+    assert.equal(narrowed.sort, "filename0")
+
+    // Another description opens most alike first again
+    const changed = applySearchFilters(narrowed, { describe: "a man in a suit" })
+    assert.equal(changed.sort, "similarity")
+
+    // With the description gone the Similarity sort is no sort; a column sort stays
+    assert.equal(applySearchFilters(changed, { q: "beach" }).sort, null)
+    assert.equal(applySearchFilters(narrowed, { q: "beach" }).sort, "filename0")
+    assert.equal(seedSearchParams("?sort=similarity").sort, null)
+    assert.equal(
+        seedSearchParams("?describe=a+cactus&sort=similarity").sort,
+        "similarity",
+    )
 })
 
 test("a search from the panel sets the description with the other filters, and one left out is none", () => {
@@ -207,6 +240,7 @@ test("a search from the panel sets the description with the other filters, and o
         folderId: "trips",
         q: "beach",
         describe: "woman in a park",
+        sort: "similarity",
     })
 
     assert.equal(
@@ -226,7 +260,7 @@ test("the filter button counts a description as one filter", () => {
     assert.equal(countSearchFilters(seedSearchParams("")), 0)
 })
 
-test("a continuation of a described search carries the description, the filters and its cursor, and no sort", () => {
+test("a continuation of a described search carries the description, the filters, its sort and its cursor", () => {
     const params = seedSearchParams(
         "?describe=a+cactus&folderId=trips&sort=filename0&groupBy=dateTaken&layout=map",
     )
@@ -243,6 +277,7 @@ test("a continuation of a described search carries the description, the filters 
         view: "repository",
         folderId: "trips",
         describe: "a cactus",
+        sort: "filename0",
         after: "cursor",
         isContinuousScroll: "true",
     })
@@ -254,27 +289,29 @@ test("the store seeds, replaces and clears a description, and says where the res
 
     assert.equal(store.filters().describe, "a cactus")
     assert.equal(store.filterCount(), 1)
-    assert.equal(store.toQueryString(), "view=repository&describe=a+cactus")
+    assert.equal(
+        store.toQueryString(),
+        "view=repository&describe=a+cactus&sort=filename0",
+    )
     assert.equal(
         store.toQueryString({ after: "cursor", isContinuousScroll: true }),
-        "view=repository&describe=a+cactus&after=cursor&isContinuousScroll=true",
+        "view=repository&describe=a+cactus&sort=filename0&after=cursor&isContinuousScroll=true",
     )
     // The map is kept for the search after it: a description's results are on the grid
     assert.equal(store.layout, "map")
     assert.equal(store.showsMap(), false)
 
+    // Another description opens most alike first, in place of the sort in force
     store.replaceFilters({ describe: "a man in a suit", q: "beach" })
     assert.equal(
         store.toQueryString(),
-        "view=repository&q=beach&describe=a+man+in+a+suit",
+        "view=repository&q=beach&describe=a+man+in+a+suit&sort=similarity",
     )
 
+    // The Similarity sort goes with the description
     store.merge({ q: "sunset" })
     assert.equal(store.describe, null)
     assert.equal(store.filterCount(), 1)
     assert.equal(store.showsMap(), true)
-    assert.equal(
-        store.toQueryString(),
-        "view=repository&q=sunset&layout=map&sort=filename0",
-    )
+    assert.equal(store.toQueryString(), "view=repository&q=sunset&layout=map")
 })

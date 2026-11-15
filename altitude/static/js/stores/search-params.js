@@ -73,12 +73,16 @@ const DEFAULTS = {
  * replaced, by looking somewhere else or by the removal of its last filter, the triage filter is
  * the remembered choice again (`withRememberedTriaged`).
  *
- * A description (`describe`, the words of a Describe search) ranks what the other filters match on
- * the grid, in its one order, in Browse or in Triage. A search that holds one drops what the server
- * refuses beside it and no later search wants back, an album, a Triage subset, the map area and
- * the trash (`withoutRefusedCombinations`), and is sent without the sort, the grouping and
- * the layout (`DESCRIBED_UNSENT`), which the store keeps: they are the choices of the search after
- * it, and go out again once the description is gone.
+ * A description (`describe`, the words of a Describe search) finds what looks like it among what
+ * the other filters match, on the grid, in Browse or in Triage. A search that holds one drops what
+ * the server refuses beside it and no later search wants back, an album, a Triage subset, the map
+ * area and the trash (`withoutRefusedCombinations`), and is sent without the layout
+ * (`DESCRIBED_UNSENT`), which the store keeps: it is the choice of the search after it, and goes
+ * out again once the description is gone. Its own order is likeness: a search from the panel that
+ * sets a description, or changes it, takes the Similarity sort whatever sort was in force
+ * (`applySearchFilters`), so a new description always opens most alike first; any sort picked
+ * after that, and the grouping, apply to it as to any search. The Similarity sort goes with the
+ * description as Relevance goes with the text.
  */
 const PLACES = ["folderId", "personId", "albumId", "locationId", "subset"]
 
@@ -99,11 +103,10 @@ const FILTERS = ["q", "folderId", "personId", "locationId", ...PANEL_FILTERS]
 const FILTER_RESETS = ["albumId", "subset", "bbox"]
 
 /**
- * What a search with a description is sent without, though the store holds it: the server refuses a
- * sort, a grouping and the map layout beside a description, whose results are a flat grid in the
- * order of their likeness
+ * What a search with a description is sent without, though the store holds it: the server refuses
+ * the map layout beside a description, whose results are on the grid
  */
-const DESCRIBED_UNSENT = ["layout", "sort", "groupBy", "groupDirection"]
+const DESCRIBED_UNSENT = ["layout"]
 
 /** What looking at `place` (or, with none, at another view) clears */
 const elsewhere = (place) => [
@@ -201,8 +204,9 @@ export function seedSearchParams(search, { seesTriaged = false } = {}) {
 /**
  * The combinations the server refuses, settled the way the scope rules would have: text, a date
  * range and several people or Locations search no trash, and leave it for the repository view; a date range
- * whose first day is after its last is no range; the Relevance sort goes with the text: a change
- * that clears the text drops it, so the server's default applies, while any other sort stays; and
+ * whose first day is after its last is no range; the Relevance sort goes with the text, and the
+ * Similarity sort with the description: a change that clears the one it ranks by drops it, so the
+ * server's default applies, while any other sort stays; and
  * the triage filter is the repository view's, so another view drops it (the server refuses it with
  * the triage view, and the View settings dialog offers it nowhere else), the remembered choice
  * among them. A URL can ask for any of them as well.
@@ -210,9 +214,9 @@ export function seedSearchParams(search, { seesTriaged = false } = {}) {
  * only the advanced search panel combines searches by the panel's filters alone, so it drops an
  * album and a Triage subset (`combinesFilters`), which the server refuses beside it. A description
  * is one of those filters, and searches the repository view or the Triage view, on the grid: it
- * leaves the trash as the others do, and drops the map area. The sort, the grouping and the
- * layout it takes none of stay in the store and are left out of its requests instead
- * (`serializeSearchParams`), so they are in force again once it is gone.
+ * leaves the trash as the others do, and drops the map area. The map layout it does not take
+ * stays in the store and is left out of its requests instead (`serializeSearchParams`), so it is
+ * in force again once the description is gone.
  */
 function withoutRefusedCombinations(params) {
     DATE_RANGES.forEach(([from, to]) => {
@@ -243,7 +247,11 @@ function withoutRefusedCombinations(params) {
         params.bbox = DEFAULTS.bbox
     }
 
-    if (params.q === null && params.sort === Const.search.sortRelevance) {
+    if (
+        (params.q === null && params.sort === Const.search.sortRelevance) ||
+        (params.describe === null &&
+            params.sort === Const.search.sortSimilarity)
+    ) {
         params.sort = DEFAULTS.sort
     }
 
@@ -372,8 +380,10 @@ export function applySearchParamChanges(current, changes) {
  * brought goes with it (`withRememberedTriaged`).
  *
  * The layout, the grouping, the sort and the page size stay, under the rules every change is held
- * to (`withoutRefusedCombinations`); a search with a description keeps the first three and sends
- * none of them (`DESCRIBED_UNSENT`).
+ * to (`withoutRefusedCombinations`), with one exception: a description the search did not hold
+ * before, a new one or a changed one, takes the Similarity sort, so it opens most alike first
+ * whatever the search before it was sorted by. The filters around an unchanged description leave
+ * its sort as it is.
  */
 export function applySearchFilters(current, filters) {
     const next = { ...current }
@@ -382,6 +392,9 @@ export function applySearchFilters(current, filters) {
     FILTERS.forEach((name) => {
         next[name] = normalize(name, filters[name])
     })
+    if (next.describe !== null && next.describe !== current.describe) {
+        next.sort = Const.search.sortSimilarity
+    }
     FILTER_RESETS.forEach((name) => {
         next[name] = DEFAULTS[name]
     })
@@ -430,8 +443,8 @@ export function countSearchFilters(params) {
  *
  * An `rpp` that is not a whole number in range never gets this far (`normalize`).
  *
- * A search with a description is sent without its sort, grouping and layout (`DESCRIBED_UNSENT`),
- * whatever `params` and `overrides` hold of them.
+ * A search with a description is sent without its layout (`DESCRIBED_UNSENT`), whatever `params`
+ * and `overrides` hold of it.
  */
 export function serializeSearchParams(params, overrides = {}) {
     const query = new URLSearchParams()

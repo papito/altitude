@@ -20,6 +20,10 @@
    once it is dispatched, after Alpine has run its effects (see `paint` there). The count is rendered as text and kept as a
    number in `data-count`, which is what the client decrements as cells leave the grid.
 
+   A Describe search's groups are in two parts, the weaker matches' groups last, so a group with matches in both parts has a
+   header in each: before the first group of the weaker matches, on the page that holds it (`results.weaker`), their own header
+   stands (includes/weaker_matches_header).
+
    A Sequence's header with two frames or more has a Curate button, opening Curation on that one Sequence: all its frames still out
    of the trash, even under a search showing only some of them. With Curate own alone, `curatable` counts the frames of each
    Sequence Curation would show the account, its own (`CurationService.curatableFrameCounts`), and the button needs two of them
@@ -30,6 +34,9 @@
 @* The position (group, cell) of the page's last cell, found once: a List's size is a walk of the list *@
 @defining(results.groups.lastOption.map(group => (results.groups.size - 1, group.assets.size - 1))) { lastCell =>
 @for((group, groupIdx) <- results.groups.zipWithIndex) {
+@for(weaker <- results.weaker if weaker.index == groupIdx) {
+@includes.html.weaker_matches_header(weaker.count)
+}
 @if(!(groupIdx == 0 && results.continuesGroup)) {
 <div class="result-group" data-group-key="@{group.key.cursorGroupId.orElse(group.key.cursorKey).getOrElse("")}" x-data="initDateGroupSelectable()">
   <input type="checkbox"

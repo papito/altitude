@@ -15,9 +15,10 @@ case class SearchRow(asset: Asset, day: Option[LocalDate], sortValue: SortValue,
 /**
  * Where the weaker matches of a Describe search begin, on the one page that holds the first of them: a result is a weaker match
  * when the cosine of its Scene embedding to the description's is under a fraction (`DescribeRanking.weakerRatio`) of the best
- * match's, so they are the tail of the ranking. `index` is the first weaker row's place on the page, and `count` how many of the
- * search's results are weaker, on this page and after it. The best match is never one, and a search whose best match has no
- * positive cosine has no such line.
+ * match's. In the search's own order, likeness, they are the tail of the ranking; sorted or grouped, the search shows the other
+ * matches first and then the weaker ones, each part in its order. `index` is the first weaker match's place on the page, among
+ * its assets on a flat page and among its groups on a grouped one, and `count` how many of the search's results are weaker, on
+ * this page and after it. The best match is never one, and a search whose best match has no positive cosine has no such line.
  */
 case class WeakerMatches(index: Int, count: Int)
 
