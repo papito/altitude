@@ -682,6 +682,15 @@ floor (over the 11,408 pairs of groups at most two apart in the set's numbering,
 0.80 / 0.74 / 0.77 and the default 0.83 / 0.75 / 0.79, with 0.89 the best F1 among those no less precise than the
 baseline at 0.81 / 0.78 / 0.79). DINOv2's threshold was not swept. Both remain to calibrate on real files.
 
+One order did not survive the change of model, and is accepted. On the unit fixtures (`SceneEmbedderTests`:
+`people/bullock.jpg`, its middle third, and `people/affleck.jpg`, another portrait) DINOv2 finds the other photo less
+like the original than the tight crop of the original is, the least like it of all. SigLIP 2 does not: it scores the
+other portrait 0.69 and the crop 0.68, since it reads what a picture shows and two portraits show much the same. Both
+are well under the threshold of 0.90, so neither pairs by it, but no test holds a different photo below a reframed
+shot of the same one for SigLIP 2: that assertion is DINOv2's alone, and the rest of the fixture's order (the
+burst-like copy above the flipped copy, the crop and the other photo; the other photo below the flipped copy) holds
+for both models.
+
 ### A description's match probability
 
 A description's embedding (`DescribeEmbedder`) and an image's SigLIP 2 Scene embedding give the probability, by the
