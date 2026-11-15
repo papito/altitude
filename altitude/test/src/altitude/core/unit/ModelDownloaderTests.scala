@@ -37,8 +37,8 @@ import altitude.core.util.Sha256
  */
 @DoNotDiscover class ModelDownloaderTests extends AnyFunSuite with BeforeAndAfterEach {
 
-  /** One request the server saw: its path, its `Range` header and its `User-Agent` */
-  private case class Request(path: String, range: Option[String], userAgent: Option[String])
+  /** One request the server saw: its path, its `Range` header, its `User-Agent` and its `Upgrade` header */
+  private case class Request(path: String, range: Option[String], userAgent: Option[String], upgrade: Option[String])
 
   /**
    * A stand-in for the release host (or its CDN) on localhost: it serves files by path, honouring `Range` with a 206 unless told
@@ -97,7 +97,8 @@ import altitude.core.util.Sha256
     private def answer(exchange: HttpExchange): Unit =
       val path = exchange.getRequestURI.getPath
       val range = Option(exchange.getRequestHeaders.getFirst("Range"))
-      requests.add(Request(path, range, Option(exchange.getRequestHeaders.getFirst("User-Agent"))))
+      val headers = exchange.getRequestHeaders
+      requests.add(Request(path, range, Option(headers.getFirst("User-Agent")), Option(headers.getFirst("Upgrade"))))
       if delay > Duration.Zero then Thread.sleep(delay.toMillis)
 
       val status = Option(statuses.get(path)).flatMap(answers => Option(answers.poll()))
@@ -219,6 +220,26 @@ import altitude.core.util.Sha256
     ensure(specs*)
 
     server.requests.size shouldBe 2
+  }
+
+  test("The downloader's client speaks HTTP/1.1") {
+
+    /**
+     * Setup:
+     *
+     * A local server, plain HTTP, with one file, and a downloader with its default client.
+     *
+     * Assertions:
+     *
+     * The request carries no `Upgrade` header: the client asks for HTTP/1.1 and never for HTTP/2, which it would over plain HTTP
+     * with `Upgrade: h2c`, so a connection whose body was cancelled is closed rather than kept for the retry.
+     */
+    val server = newServer()
+    val spec = served(server, "model.onnx", content(10_000, 28))
+
+    ensure(spec)
+
+    server.requestsOf("/model.onnx").map(_.upgrade) shouldEqual List(None)
   }
 
   test("A file of the wrong size is downloaded again") {

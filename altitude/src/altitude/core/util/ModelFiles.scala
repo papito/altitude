@@ -182,8 +182,10 @@ object ModelFiles:
  * @param models
  *   where the files go: the set's directory, and the lock file
  * @param client
- *   the HTTP client: redirects followed (a release host and Hugging Face both redirect to a CDN, of another origin, which
- *   `Redirect.NORMAL` follows; it refuses only HTTPS to HTTP), the JVM's proxy settings (the default proxy selector)
+ *   the HTTP client: HTTP/1.1, so a body cancelled mid-file (a stall, a body past its pin) closes its connection, where an HTTP/2
+ *   one might stay pooled, dead, for the retry to reuse; redirects followed (a release host and Hugging Face both redirect to a
+ *   CDN, of another origin, which `Redirect.NORMAL` follows; it refuses only HTTPS to HTTP); the JVM's proxy settings (the
+ *   default proxy selector)
  * @param retryDelays
  *   the waits before each retry of a file, as many retries as there are delays
  * @param sleep
@@ -195,7 +197,8 @@ object ModelFiles:
  */
 final class ModelDownloader(
     models: ModelFiles,
-    client: HttpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build(),
+    client: HttpClient =
+      HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).followRedirects(HttpClient.Redirect.NORMAL).build(),
     retryDelays: Seq[FiniteDuration] = Seq(2.seconds, 4.seconds, 8.seconds),
     sleep: FiniteDuration => Unit = delay => Thread.sleep(delay.toMillis),
     freeSpace: Path => Long = Files.getFileStore(_).getUsableSpace,

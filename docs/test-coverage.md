@@ -674,7 +674,7 @@ Sources: [ModelFiles](../altitude/src/altitude/core/util/ModelFiles.scala) (`Mod
 
 `ModelDownloaderTests` runs the downloader against local HTTP servers (the JDK's `HttpServer`) and a temporary directory, never the network, with files of its own pinned by their size and SHA-256; its waits are recorded, not slept. Every test instance and the unit suites that run a model ensure the real set from the test config (`TestAltitudeApp`, `TestModelFiles`), so a missing file is downloaded before the first test that needs it.
 
-- ✅ Missing files are downloaded once, under their names and with their content, leaving no `.part`, into a directory created when it does not exist; every request carries the `User-Agent` `Altitude`; a second ensure sends no request.
+- ✅ Missing files are downloaded once, under their names and with their content, leaving no `.part`, into a directory created when it does not exist; every request carries the `User-Agent` `Altitude`; a second ensure sends no request. The client speaks HTTP/1.1: over plain HTTP its request asks for no `Upgrade` to HTTP/2.
 - ✅ A file in place under its name but of another size is downloaded again.
 - ✅ A size or SHA-256 that is not the pin fails at once, unretried, and leaves neither the file nor its `.part`.
 - ✅ The body is bounded by the pin: one of no declared length running past it fails, unretried, as soon as it does, the server's write breaking off before its end and no `.part` left; a declared `Content-Length` other than the bytes expected, and a 206's `Content-Range` whose total is not the pin, fail before the body is read, unretried, the resumed `.part` kept as it was; a `.part` longer than the pin is dropped and the file downloaded from zero.
