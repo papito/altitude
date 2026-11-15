@@ -2979,7 +2979,8 @@ in the code, its comments, the guides and the server's messages is Search text (
   read goes
   through the axios client and only the latest opening's answer is put in the panel; a failure is an error snackbar and
   the panel closes. The panel is invisible while empty (`.search-panel:empty`), takes focus in its first field, Describe
-  (`#searchPanelDescribe`, the caret where the browser puts it, before a description already there), once the form is
+  (`#searchPanelDescribe`, the caret after its text, so that typing adds to a description in force: `focusAtEnd`, since
+  a field filled in by its markup would take the caret before it), once the form is
   in, and is emptied again as it closes (`toggle`), which removes its components
   with their listeners and calendars. `openSearchPanel(filters)` opens it from a script with `filters`, each under its
   search parameter's name, laid over the ones in force, and loads an already open panel again: a folder's Search here

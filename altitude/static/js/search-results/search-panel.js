@@ -39,7 +39,7 @@ import { runSearch } from "./search.js"
 
 const PANEL_ID = "searchPanel"
 
-// The form's first field, Describe (htmx/search_panel), which takes focus once the form is in
+// The form's first field, Describe (htmx/search_panel), which takes focus once the form is in, the caret after its text
 const DESCRIBE_ID = "searchPanelDescribe"
 
 // The latest load of the form; an earlier one's answer is dropped
@@ -206,7 +206,7 @@ async function loadForm(panelEl) {
 
         // Alpine's mutation observer initializes the form's components
         panelEl.innerHTML = response.data
-        document.getElementById(DESCRIBE_ID)?.focus()
+        focusAtEnd(document.getElementById(DESCRIBE_ID))
     } catch (error) {
         if (token !== loadToken) {
             return
@@ -218,6 +218,20 @@ async function loadForm(panelEl) {
         showErrorSnackBar("Could not load the search panel")
         closeOpenSearchPanel()
     }
+}
+
+/**
+ * Puts focus in the text field with the caret after its text. A field filled in by its markup
+ * takes focus with the caret before its text, where typing would go ahead of a description in
+ * force instead of adding to it.
+ */
+function focusAtEnd(fieldEl) {
+    if (!fieldEl) {
+        return
+    }
+
+    fieldEl.focus()
+    fieldEl.setSelectionRange(fieldEl.value.length, fieldEl.value.length)
 }
 
 /** A closed panel holds nothing: its components go with their form, and a load still out is dropped */

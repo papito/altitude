@@ -559,7 +559,7 @@ Sources: [SearchPanelController](../altitude/src/altitude/core/routes/web/partia
 - ✅ `RouteTableTests` holds the four routes: any account with access to the Library may call them, an anonymous request is refused, an account with no grant gets a 404, and the panel answers another Library's folder, person and Location as unknown ones, naming none. A Guest's request for the People options or the panel's form with `triaged=true` is a 403, and without it a 200 ([PermissionControllerTests](../altitude/test/src/altitude/core/controller/PermissionControllerTests.scala)).
 - [ ] The options and the panel over HTTP run on SQLite only, as every controller test does; the services beneath are tested on both engines, but for the cap, which is applied in memory to the names read. [MINOR]
 - [ ] How long the folder options take over a tree of tens of thousands of folders is not measured. [MINOR]
-- [ ] The panel's host, its Describe field (the focus on opening, Enter searching and Shift+Enter breaking the line, its height following its text, Clear), its comboboxes and date fields, a folder's Search here and what a search from the panel does to the scope are verified in the browser only; no test under Node loads the panel's modules. [MINOR]
+- [ ] The panel's host, its Describe field (the focus on opening with the caret after a description in force, Enter searching and Shift+Enter breaking the line, its height following its text, Clear), its comboboxes and date fields, a folder's Search here and what a search from the panel does to the scope are verified in the browser only; no test under Node loads the panel's modules. [MINOR]
 
 ## Grouped search and cursor continuation
 
