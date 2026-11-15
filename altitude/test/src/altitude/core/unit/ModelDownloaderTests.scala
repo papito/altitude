@@ -43,9 +43,10 @@ import altitude.core.util.Sha256
   /**
    * A stand-in for the release host (or its CDN) on localhost: it serves files by path, honouring `Range` with a 206 unless told
    * not to, and can be told to redirect a path, to answer a path with a status a number of times first, to cut the next answer of
-   * a path short, to stall the next answer of a path (part of it sent, then nothing, the connection held open until the server
-   * stops), or to answer every request after a delay. It declares each body's length unless told not to (a chunked body, which
-   * ends where the server stops), and remembers every request and every path whose body it wrote to its end.
+   * a path short once the client has taken the part sent, to stall the next answer of a path (part of it sent, then nothing, the
+   * connection held open until the server stops), or to answer every request after a delay. It declares each body's length unless
+   * told not to (a chunked body, which ends where the server stops), and remembers every request and every path whose body it
+   * wrote to its end.
    */
   private class FileServer {
     private val executor: ExecutorService = Executors.newCachedThreadPool()
@@ -54,7 +55,8 @@ import altitude.core.util.Sha256
     private val redirects = ConcurrentHashMap[String, String]()
     // The answers a path is given before it is served, in order: a status and its headers
     private val statuses = ConcurrentHashMap[String, ConcurrentLinkedQueue[(Int, Map[String, String])]]()
-    private val cuts = ConcurrentHashMap[String, Integer]()
+    // A cut answer's bytes, and what says the client has taken them
+    private val cuts = ConcurrentHashMap[String, (Int, () => Boolean)]()
     private val stalls = ConcurrentHashMap[String, Integer]()
     // What a stalled answer waits for before its handler returns
     private val stopped = CountDownLatch(1)
@@ -84,7 +86,7 @@ import altitude.core.util.Sha256
     def answer(path: String, status: Int, times: Int, headers: Map[String, String] = Map.empty): Unit =
       val answers = statuses.computeIfAbsent(path, _ => ConcurrentLinkedQueue())
       (1 to times).foreach(_ => answers.add((status, headers)))
-    def cutNext(path: String, afterBytes: Int): Unit = cuts.put(path, afterBytes): Unit
+    def cutNext(path: String, afterBytes: Int, taken: () => Boolean): Unit = cuts.put(path, (afterBytes, taken)): Unit
     def stallNext(path: String, afterBytes: Int): Unit = stalls.put(path, afterBytes): Unit
 
     def requestsOf(path: String): List[Request] = requests.asScala.toList.filter(_.path == path)
@@ -123,11 +125,13 @@ import altitude.core.util.Sha256
             exchange.sendResponseHeaders(200, length)
         }
         (Option(cuts.remove(path)), Option(stalls.remove(path))) match {
-          case (Some(afterBytes), _) =>
-            // Part of the body, a pause for the client to read it, then the connection dropped before the rest
+          case (Some((afterBytes, taken)), _) =>
+            // Part of the body, then, once the client has taken all of it, the connection dropped before the rest; a cut with the
+            // part still in flight would leave the client with less of it, at a point no test could name
             exchange.getResponseBody.write(body, 0, afterBytes)
             exchange.getResponseBody.flush()
-            Thread.sleep(200)
+            val deadline = System.nanoTime() + 10.seconds.toNanos
+            while !taken() && System.nanoTime() < deadline do Thread.sleep(5)
             throw IOException("cut short")
           case (_, Some(afterBytes)) =>
             // Part of the body, then nothing more, the connection neither closed nor sent to until the server stops
@@ -541,7 +545,8 @@ import altitude.core.util.Sha256
     /**
      * Setup:
      *
-     * A local server whose first answer for the file drops the connection after 80,000 of its bytes.
+     * A local server whose first answer for the file drops the connection after 80,000 of its bytes, once the file's `.part`
+     * holds all of them.
      *
      * Assertions:
      *
@@ -551,7 +556,10 @@ import altitude.core.util.Sha256
     val server = newServer()
     val bytes = content(300_000, 11)
     val spec = served(server, "model.onnx", bytes)
-    server.cutNext("/model.onnx", afterBytes = 80_000)
+    server.cutNext(
+      "/model.onnx",
+      afterBytes = 80_000,
+      taken = () => Files.isRegularFile(partOf(spec)) && Files.size(partOf(spec)) >= 80_000)
 
     ensure(spec)
 
