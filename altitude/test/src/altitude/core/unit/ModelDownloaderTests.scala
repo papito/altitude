@@ -275,7 +275,8 @@ import altitude.core.util.Sha256
     counting().ensure(specs)
 
     built.size shouldBe 1
-    built.peek().isTerminated shouldBe true
+    // A shutdown ends the client's selector thread on its own time; a client never shut down would not end in the 5 seconds
+    built.peek().awaitTermination(java.time.Duration.ofSeconds(5)) shouldBe true
 
     counting().ensure(specs)
 
