@@ -26,10 +26,11 @@ object SearchSort:
 
 /**
  * What a Describe search ranks the assets of its query by: the description's embedding; the least cosine an asset's SigLIP 2
- * Scene embedding has to it to be ranked at all, the Describe match threshold as a cosine; and the most assets ranked, the
- * Describe result limit
+ * Scene embedding has to it to be ranked at all, the Describe match threshold as a cosine; the most assets ranked, the Describe
+ * result limit; and the fraction of the nearest ranked asset's cosine under which a ranked asset is a weaker match
+ * ([[WeakerMatches]]), the Describe weaker matches Setting
  */
-case class DescribeRanking(embedding: SceneEmbedding, minCosine: Double, limit: Int):
+case class DescribeRanking(embedding: SceneEmbedding, minCosine: Double, limit: Int, weakerRatio: Double):
 
   /** The cutoff as a statement compares it: the furthest cosine distance from the description's embedding */
   def maxDistance: Double = 1 - minCosine

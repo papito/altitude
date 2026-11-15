@@ -24,6 +24,7 @@ import altitude.core.models.EditRecipe
 import altitude.core.models.Person
 import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneEmbeddings
+import altitude.core.models.Settings
 import altitude.core.service.SearchService
 import altitude.core.util.TriageSubset
 import altitude.core.util.Util
@@ -2699,6 +2700,61 @@ import altitude.core.util.Util
 
         val withoutFlag = htmlSearch(host, repoId, params + ("after" -> cursorOf(page1).head))
         withoutFlag.statusCode shouldBe 400
+    }
+  }
+
+  test("A description's weaker matches open under a group header with their count, on the page that holds their first") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with five sorted assets whose Scene embeddings are at cosines of 0.9, 0.8, 0.7, 0.5 and 0.3
+     * to the embedding of "a cactus", and a Describe weaker matches ratio of 0.75: the line is at a cosine of 0.675, so the last
+     * two are weaker matches. The description is searched on one page, then two to a page.
+     *
+     * Assertions:
+     *
+     * On one page a group header stands between the third cell and the fourth: "Weaker matches" with the count "(2 items)" and
+     * the number 2 for the client to count down, and no checkbox. Two to a page, the header is on the second page alone, between
+     * its two cells, with the same count.
+     *
+     * Edge cases:
+     *
+     * With a ratio of 0 the page has no header.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val description = "a cactus"
+        val nearest = List(0.9, 0.8, 0.7, 0.5, 0.3).zipWithIndex.map((cosine, seed) => lookingLike(description, cosine, seed))
+        val header = """class="result-group""""
+        val weakerCount = """<span class="count" data-count="2">(2 items)</span>"""
+        def search(params: (String, String)*): String = htmlSearch(host, repoId, Map("describe" -> description) ++ params).text()
+        App.altitude.settings.save(Map(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO -> "0.75"))
+
+        val whole = search()
+        cellIds(whole) shouldBe nearest.map(_.persistedId)
+        header.r.findAllIn(whole).size shouldBe 1
+        ordered(whole, cell(nearest(2)), header)
+        ordered(whole, header, "<span>Weaker matches</span>")
+        ordered(whole, "<span>Weaker matches</span>", weakerCount)
+        ordered(whole, weakerCount, cell(nearest(3)))
+        (whole should not).include("group-checkmark")
+
+        val page1 = search("rpp" -> "2")
+        (page1 should not).include(header)
+        val page2 = search("rpp" -> "2", "after" -> cursorOf(page1).head, "isContinuousScroll" -> "true")
+        ordered(page2, cell(nearest(2)), header)
+        ordered(page2, weakerCount, cell(nearest(3)))
+        val page3 = search("rpp" -> "2", "after" -> cursorOf(page2).head, "isContinuousScroll" -> "true")
+        cellIds(page3) shouldBe List(nearest(4).persistedId)
+        (page3 should not).include(header)
+
+        App.altitude.settings.save(Map(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO -> "0"))
+        (search() should not).include(header)
     }
   }
 

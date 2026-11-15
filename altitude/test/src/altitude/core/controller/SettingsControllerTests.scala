@@ -247,9 +247,9 @@ import altitude.core.models.Settings
      *
      * Assertions:
      *
-     * The page has a Search section with the threshold and the result limit, the threshold's field, its Reset default and its
-     * help all showing 0.00009. Saving the default back answers the form with 0.00009 in the field and leaves the row as it was.
-     * The JSON number is stored and shown as the plain decimal 0.00002.
+     * The page has a Search section with the threshold, the result limit and the weaker matches ratio, the threshold's field, its
+     * Reset default and its help all showing 0.00009. Saving the default back answers the form with 0.00009 in the field and
+     * leaves the row as it was. The JSON number is stored and shown as the plain decimal 0.00002.
      *
      * Edge cases:
      *
@@ -265,6 +265,7 @@ import altitude.core.models.Settings
         page should include("<h2>Search</h2>")
         page should include("Describe match threshold")
         page should include("Describe result limit")
+        page should include("Describe weaker matches")
         (page should include).regex(field(threshold, "0\\.00009"))
         (page should include).regex(field(Settings.SEARCH_DESCRIBE_MAX_RESULTS, "1000"))
         page should include("""data-setting-default="0.00009"""")

@@ -159,6 +159,12 @@ case class Settings(private val text: Map[String, String], private val defaults:
 
   /** The most assets a Describe search shows */
   val searchDescribeMaxResults: Int = number(SEARCH_DESCRIBE_MAX_RESULTS).toInt
+
+  /**
+   * The fraction of the best match's cosine to a description under which a Describe search's result is a weaker match; 0 leaves
+   * every result above the line
+   */
+  val searchDescribeWeakerMatchRatio: Double = number(SEARCH_DESCRIBE_WEAKER_MATCH_RATIO)
   val mapTileUrl: String = text(MAP_TILE_URL)
   val mapTileAttribution: String = text(MAP_TILE_ATTRIBUTION)
   val mapGeocoderEnabled: Boolean = text(MAP_GEOCODER_ENABLED) == "true"
@@ -206,6 +212,7 @@ object Settings:
   val CURATION_LUMINANCE_GAP = "curation.luminance_gap"
   val SEARCH_DESCRIBE_MIN_PROBABILITY = "search.describe.min_probability"
   val SEARCH_DESCRIBE_MAX_RESULTS = "search.describe.max_results"
+  val SEARCH_DESCRIBE_WEAKER_MATCH_RATIO = "search.describe.weaker_match_ratio"
   val MAP_TILE_URL = "map.tile.url"
   val MAP_TILE_ATTRIBUTION = "map.tile.attribution"
   val MAP_GEOCODER_ENABLED = "map.geocoder.enabled"
@@ -431,6 +438,14 @@ object Settings:
       "The most photos a description shows, best first.",
       // No more than a first page's total counts to: a Describe search's total is exact, the count of what it ranked
       Integer(1, Const.Search.TOTAL_CAP)
+    ),
+    SettingDef(
+      SEARCH_DESCRIBE_WEAKER_MATCH_RATIO,
+      Search,
+      "Describe weaker matches",
+      "A photo that looks less than this fraction as much like a description as the best match does is a weaker match, " +
+        "shown after the others under its own header. Higher puts more photos under it; 0 shows no such header.",
+      Decimal(0, 1)
     ),
     SettingDef(
       MAP_TILE_URL,

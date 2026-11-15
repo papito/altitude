@@ -79,6 +79,7 @@ import altitude.core.models.SettingType
     current.curationLuminanceGap shouldBe 0.1
     current.searchDescribeMinProbability shouldBe 0.00009
     current.searchDescribeMaxResults shouldBe 1000
+    current.searchDescribeWeakerMatchRatio shouldBe 0.75
     current.mapTileUrl shouldBe "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
     current.mapTileAttribution shouldBe "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"
     current.mapGeocoderEnabled shouldBe false
@@ -355,28 +356,32 @@ import altitude.core.models.SettingType
     testApp.settings.pendingRestart shouldBe empty
   }
 
-  test("The Describe Settings are Live settings of the Search section: a probability between 0 and 1, and a limit to 10,000") {
+  test(
+    "The Describe Settings are Live settings of the Search section: a probability, a limit to 10,000 and a ratio from 0 to 1") {
 
     /**
      * Setup:
      *
-     * The registry's entries of the Describe match threshold and the Describe result limit, and values validated and saved for
-     * them.
+     * The registry's entries of the Describe match threshold, the Describe result limit and the Describe weaker matches ratio,
+     * and values validated and saved for them.
      *
      * Assertions:
      *
-     * Both are Live settings of the Search section, which the screen shows after Triage, on both engines, with the labels and
-     * help of the screen and the defaults 0.00009 and 1000. The threshold is a probability strictly between 0 and 1, and the
-     * limit a whole number from 1 to 10,000, both bounds included, the upper one being the cap a first page's total counts to
-     * (`Const.Search.TOTAL_CAP`). Saved values reach their accessors at once, with no restart waiting.
+     * The three are Live settings of the Search section, which the screen shows after Triage, on both engines, with the labels
+     * and help of the screen and the defaults 0.00009, 1000 and 0.75. The threshold is a probability strictly between 0 and 1,
+     * the limit a whole number from 1 to 10,000, both bounds included, the upper one being the cap a first page's total counts to
+     * (`Const.Search.TOTAL_CAP`), and the ratio a decimal from 0 to 1. Saved values reach their accessors at once, with no
+     * restart waiting.
      *
      * Edge cases:
      *
-     * 0 and 1 themselves are no probability, and a limit of 0, of 10,001 or with a fraction is refused, each saying why.
+     * 0 and 1 themselves are no probability, and a limit of 0, of 10,001 or with a fraction is refused, each saying why. 0 and 1
+     * are both a ratio, the one showing no weaker matches and the other every match but the best; under 0 or over 1 is refused.
      */
     val threshold = Settings.SEARCH_DESCRIBE_MIN_PROBABILITY
     val limit = Settings.SEARCH_DESCRIBE_MAX_RESULTS
-    List(threshold, limit).map(Settings.byName).foreach {
+    val ratio = Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO
+    List(threshold, limit, ratio).map(Settings.byName).foreach {
       definition =>
         definition.group shouldBe SettingGroup.Search
         definition.kind shouldBe SettingKind.Live
@@ -385,16 +390,21 @@ import altitude.core.models.SettingType
     SettingGroup.Search.label shouldBe "Search"
     SettingGroup.values.toList.map(_.label) shouldBe
       List("Face detection", "Face recognition and quality", "Video", "Triage", "Search", "Map", "Operations")
-    Settings.all.filter(_.group == SettingGroup.Search).map(_.name) shouldBe List(threshold, limit)
-    testApp.settings.applicable.map(_.name) should contain allElementsOf List(threshold, limit)
+    Settings.all.filter(_.group == SettingGroup.Search).map(_.name) shouldBe List(threshold, limit, ratio)
+    testApp.settings.applicable.map(_.name) should contain allElementsOf List(threshold, limit, ratio)
 
     Settings.byName(threshold).label shouldBe "Describe match threshold"
     Settings.byName(threshold).help shouldBe
       "How likely, by the model, a photo must be to match a description to be shown. Lower shows more, weaker matches."
     Settings.byName(limit).label shouldBe "Describe result limit"
     Settings.byName(limit).help shouldBe "The most photos a description shows, best first."
+    Settings.byName(ratio).label shouldBe "Describe weaker matches"
+    Settings.byName(ratio).help shouldBe
+      "A photo that looks less than this fraction as much like a description as the best match does is a weaker match, " +
+      "shown after the others under its own header. Higher puts more photos under it; 0 shows no such header."
     testApp.settings.current.default(threshold) shouldBe "0.00009"
     testApp.settings.current.default(limit) shouldBe "1000"
+    testApp.settings.current.default(ratio) shouldBe "0.75"
 
     testApp.settings.validate(Map(threshold -> "0.5")) shouldBe empty
     testApp.settings.validate(Map(threshold -> "0.999999")) shouldBe empty
@@ -414,9 +424,16 @@ import altitude.core.models.SettingType
     testApp.settings.validate(Map(limit -> (cap + 1).toString)) shouldBe Map(limit -> s"Must be at most $cap")
     testApp.settings.validate(Map(limit -> "99.5")) shouldBe Map(limit -> "Must be a whole number")
 
-    testApp.settings.save(Map(threshold -> "0.002", limit -> "250"))
+    Settings.byName(ratio).valueType shouldBe SettingType.Decimal(0, 1)
+    testApp.settings.validate(Map(ratio -> "0")) shouldBe empty
+    testApp.settings.validate(Map(ratio -> "1")) shouldBe empty
+    testApp.settings.validate(Map(ratio -> "-0.1")) shouldBe Map(ratio -> "Must be at least 0")
+    testApp.settings.validate(Map(ratio -> "1.1")) shouldBe Map(ratio -> "Must be at most 1")
+
+    testApp.settings.save(Map(threshold -> "0.002", limit -> "250", ratio -> "0.65"))
     testApp.settings.current.searchDescribeMinProbability shouldBe 0.002
     testApp.settings.current.searchDescribeMaxResults shouldBe 250
+    testApp.settings.current.searchDescribeWeakerMatchRatio shouldBe 0.65
     testApp.settings.pendingRestart shouldBe empty
   }
 

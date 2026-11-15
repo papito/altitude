@@ -27,9 +27,10 @@ trait SearchDao:
    * nearest first and then by ID. The query is resolved as any search's is, and carries the page: the `rpp` rows after its
    * cursor, whose position is a row's cosine distance and ID, or the first ones without it, each row standing at its distance
    * (`SearchRow.sortValue`, a `SortValue.Real`); a page that counts the total (`SearchQuery.isTotalCounted`) carries the count of
-   * all the ranked rows. Its sort and grouping are not read. An asset with no embedding (a Video, an animated image, a still
-   * image the model could not embed) is in no page. The caller's transaction is set up for a vector search of that many rows
-   * (`TransactionManager.withVectorSearch`).
+   * all the ranked rows, and the page on which the search's weaker matches begin, the ranked rows whose cosine is under the
+   * ranking's `weakerRatio` of the nearest one's, says where (`SearchPage.weaker`). Its sort and grouping are not read. An asset
+   * with no embedding (a Video, an animated image, a still image the model could not embed) is in no page. The caller's
+   * transaction is set up for a vector search of that many rows (`TransactionManager.withVectorSearch`).
    */
   def describe(query: SearchQuery, ranking: DescribeRanking): SearchPage
 

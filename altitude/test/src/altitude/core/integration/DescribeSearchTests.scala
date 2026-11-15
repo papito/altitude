@@ -35,6 +35,7 @@ import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
 import altitude.core.util.SearchSort
 import altitude.core.util.SortValue
+import altitude.core.util.WeakerMatches
 
 object DescribeSearchTests {
 
@@ -197,7 +198,7 @@ object DescribeSearchTests {
       exactLimit: Int = Const.Search.DESCRIBE_EXACT_LIMIT): SearchPage =
     testApp.txManager.withVectorSearch(limit) {
       val query = testApp.service.search.withResolvedScope(filters.query(cursor, pageSize, exactLimit))
-      testApp.DAO.search.describe(query, DescribeRanking(embedding, minCosine, limit))
+      testApp.DAO.search.describe(query, DescribeRanking(embedding, minCosine, limit, weakerRatio = 0))
     }
 
   private def ids(result: SearchResult): List[String] = result.records.map(_.persistedId)
@@ -489,6 +490,99 @@ object DescribeSearchTests {
         val onePerPage = pages("a cactus", pageSize = 1)
         onePerPage.flatMap(ids) shouldBe nearest
         onePerPage.map(_.total) shouldBe List(Some(2), None)
+      }
+    }
+  }
+
+  test("A description's weaker matches begin where a photo looks under a fraction as much like it as the best match") {
+
+    /**
+     * Setup:
+     *
+     * A repository with five photos placed at cosines of 0.40, 0.36, 0.31, 0.29 and 0.20 to "a cactus", the last three in the
+     * folder Trips, and two at -0.05 and -0.10 in the folder Apart; a Describe match threshold every image clears, and a Describe
+     * weaker matches ratio of 0.75, which puts the line at a cosine of 0.30, three quarters of the best match's.
+     *
+     * Assertions:
+     *
+     * The search finds the seven in the order of their cosines and says its weaker matches begin at the fourth, four of them.
+     * Within Trips the best match is the photo at 0.31, so the line is at 0.2325 and the last photo alone is weaker.
+     *
+     * Edge cases:
+     *
+     * A ratio of 0 names no weaker match. A ratio of 1 leaves the best match alone above the line. A search whose best match has
+     * no positive cosine, here the folder Apart with photos at -0.05 and -0.10, names none: a fraction of such a cosine is no
+     * line.
+     */
+    val description = "a cactus"
+    val trips = testApp.service.folder.add("Trips")
+    val photos = List(
+      placed(description, 0.40, seed = 1),
+      placed(description, 0.36, seed = 2),
+      placed(description, 0.31, seed = 3, folder = Some(trips)),
+      placed(description, 0.29, seed = 4, folder = Some(trips)),
+      placed(description, 0.20, seed = 5, folder = Some(trips))
+    )
+    val apart = testApp.service.folder.add("Apart")
+    val opposed =
+      List(placed(description, -0.05, seed = 6, folder = Some(apart)), placed(description, -0.10, seed = 7, folder = Some(apart)))
+
+    withSetting(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY, EVERY_IMAGE) {
+      withSetting(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO, "0.75") {
+        val found = describe(description)
+        ids(found) shouldBe (photos ++ opposed).map(_.id)
+        found.weaker shouldBe Some(WeakerMatches(index = 3, count = 4))
+
+        val inTrips = describe(description, Filters(folderIds = Set(trips.persistedId)))
+        ids(inTrips) shouldBe photos.drop(2).map(_.id)
+        inTrips.weaker shouldBe Some(WeakerMatches(index = 2, count = 1))
+      }
+
+      withSetting(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO, "0") {
+        describe(description).weaker shouldBe None
+      }
+
+      withSetting(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO, "1") {
+        describe(description).weaker shouldBe Some(WeakerMatches(index = 1, count = 6))
+      }
+
+      withSetting(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO, "0.75") {
+        val unlike = describe(description, Filters(folderIds = Set(apart.persistedId)))
+        ids(unlike) shouldBe opposed.map(_.id)
+        unlike.weaker shouldBe None
+      }
+    }
+  }
+
+  test("The page that holds the first weaker match of a description names it, wherever the pages end") {
+
+    /**
+     * Setup:
+     *
+     * A repository with six photos placed at cosines of 0.40, 0.38, 0.36, 0.29, 0.25 and 0.20 to "a cactus", a Describe match
+     * threshold every image clears, and a Describe weaker matches ratio of 0.75: the line is at 0.30, so the last three are
+     * weaker.
+     *
+     * Assertions:
+     *
+     * Read two at a time, the second page, which holds the photos at 0.36 and 0.29, says its weaker matches begin at its second
+     * row and are three, and the pages before and after it say nothing. Read one at a time, the fourth page alone says so, at its
+     * only row.
+     *
+     * Edge cases:
+     *
+     * Read three at a time, the weaker matches open the second page: it names its first row, which follows the cursor's, a match
+     * above the line.
+     */
+    val description = "a cactus"
+    List(0.40, 0.38, 0.36, 0.29, 0.25, 0.20).zipWithIndex.foreach((cosine, seed) => placed(description, cosine, seed))
+    val three = Some(WeakerMatches(index = 0, count = 3))
+
+    withSetting(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY, EVERY_IMAGE) {
+      withSetting(Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO, "0.75") {
+        pages(description, pageSize = 2).map(_.weaker) shouldBe List(None, Some(WeakerMatches(index = 1, count = 3)), None)
+        pages(description, pageSize = 1).map(_.weaker) shouldBe List(None, None, None, three, None, None)
+        pages(description, pageSize = 3).map(_.weaker) shouldBe List(None, three)
       }
     }
   }
@@ -933,7 +1027,9 @@ object DescribeSearchTests {
         // Before any search sets the transaction up, which lasts until it ends
         val notSetUp =
           testApp.DAO.search
-            .describe(Filters().query(pageSize = 700, exactLimit = 0), DescribeRanking(description, minCosine = -1, limit = 2000))
+            .describe(
+              Filters().query(pageSize = 700, exactLimit = 0),
+              DescribeRanking(description, minCosine = -1, limit = 2000, weakerRatio = 0))
         notSetUp.total.value should be < 100
         val scansBefore = describeIndexScans
 
@@ -964,15 +1060,17 @@ object DescribeSearchTests {
        *
        * A repository with the folder Trips, which holds the photo of a cactus and three portraits, imported, two assets placed at
        * cosines of their own to "a cactus", and one asset with no Scene embedding: six that carry an embedding. Two more are
-       * placed outside the folder. The planner is told to read the vector index wherever a statement lets it, and the Describe
-       * match threshold is one every image clears.
+       * placed outside the folder. The planner is told to read the vector index wherever a statement lets it, the Describe match
+       * threshold is one every image clears, and the Describe weaker matches ratio is the test Settings' 0.75.
        *
        * Assertions:
        *
        * Within the folder, "a cactus" ranked exactly, as six assets are under the limit of 75,000, and ranked through the index,
        * under a limit of 5, finds the same six in the same order, with the same total. The exact search scans the vector index
        * not once and the search past the limit once a page. A cursor of the exact search's first page continues through the index
-       * and one of the index's continues exactly, each to the rest of the list with no repeat and no gap.
+       * and one of the index's continues exactly, each to the rest of the list with no repeat and no gap. Both ways name the same
+       * weaker matches, the five after the asset placed at 0.5, the folder's best match, and the page that continues past their
+       * first names none.
        *
        * Edge cases:
        *
@@ -1002,11 +1100,13 @@ object DescribeSearchTests {
           val (exact, exactScans) = scanning(describe(description, inTrips))
           exact.total shouldBe Some(6)
           ids(exact) should have size 6
+          exact.weaker shouldBe Some(WeakerMatches(index = 1, count = 5))
           exactScans shouldBe 0
 
           val (byIndex, indexScans) = scanning(describe(description, inTrips, exactLimit = 5))
           ids(byIndex) shouldBe ids(exact)
           byIndex.total shouldBe Some(6)
+          byIndex.weaker shouldBe exact.weaker
           indexScans shouldBe 1
 
           scanning(describe(description, inTrips, exactLimit = 6))._2 shouldBe 0
@@ -1015,6 +1115,8 @@ object DescribeSearchTests {
           val (restByIndex, restScans) =
             scanning(describe(description, inTrips, cursor = firstExact.nextCursor, pageSize = 10, exactLimit = 5))
           ids(firstExact) ++ ids(restByIndex) shouldBe ids(exact)
+          firstExact.weaker shouldBe exact.weaker
+          restByIndex.weaker shouldBe None
           restScans shouldBe 1
 
           val firstByIndex = describe(description, inTrips, pageSize = 2, exactLimit = 5)
@@ -1139,14 +1241,15 @@ object DescribeSearchTests {
       } {
         preferVectorIndex()
         val query = testApp.service.search.withResolvedScope(filters.query())
-        val ranking = DescribeRanking(description, minCosine = -1, limit = 1000)
+        val ranking = DescribeRanking(description, minCosine = -1, limit = 1000, weakerRatio = 0)
         def planned(exactly: Boolean): String =
           planOf(
             SearchQueries.described(
               searchDialect,
               query,
               testContext.repository.persistedId,
-              if (exactly) PostgresSearchDialect.ranked(_, ranking) else PostgresSearchDialect.rankedByIndex(_, ranking)
+              if (exactly) PostgresSearchDialect.ranked(_, ranking) else PostgresSearchDialect.rankedByIndex(_, ranking),
+              ranking.weakerRatio
             ))
 
         val exactPlan = planned(exactly = true)

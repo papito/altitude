@@ -728,12 +728,18 @@ object SearchQueries:
    * ([[assetColumnsWithoutBulkyMetadata]]), each with its distance; and, on a page that counts the total, the count of the ranked
    * rows, which the limit bounds. Every page ranks again, so a cursor continues from its position among the rows as they are
    * then. A cursor whose position is not a distance is no Describe search's (`SearchCursorException`).
+   *
+   * Every row also carries where the weaker matches of the search begin (`WeakerMatches`), the same on each: `weaker_under`, the
+   * cosine under which a ranked row is one, `weakerRatio` of the nearest ranked row's cosine (`weaker_line`, read off the ranked
+   * rows, so it is the line of the whole ranking whatever the page), and `weaker_count`, how many ranked rows are under it. A
+   * row's cosine is 1 less its distance, here and wherever the line is compared, so a row is on the same side of it everywhere.
    */
   def described(
       engine: SearchDialect,
       query: SearchQuery,
       repositoryId: String,
-      ranked: Select[AssetRow[Expr], AssetRow[Sc]] => RankedRows): SqlStr =
+      ranked: Select[AssetRow[Expr], AssetRow[Sc]] => RankedRows,
+      weakerRatio: Double): SqlStr =
     import engine.dialect.*
 
     if query.rpp < 1 then throw IllegalArgumentException("A page of a Describe search needs a page size")
@@ -751,9 +757,14 @@ object SearchQueries:
     statement(
       engine,
       query,
-      rankedMatches.sources :+ sql"ranked (id, distance) AS MATERIALIZED (${rankedMatches.rows})",
+      rankedMatches.sources ++ Seq(
+        sql"ranked (id, distance) AS MATERIALIZED (${rankedMatches.rows})",
+        sql"weaker_line (cosine) AS (SELECT $weakerRatio * (1 - min(distance)) FROM ranked)"
+      ),
       sql"""
-      SELECT $assetColumnsWithoutBulkyMetadata, page.distance AS distance$total
+      SELECT $assetColumnsWithoutBulkyMetadata, page.distance AS distance,
+             (SELECT cosine FROM weaker_line) AS weaker_under,
+             (SELECT count(*) FROM ranked WHERE 1 - distance < (SELECT cosine FROM weaker_line)) AS weaker_count$total
         FROM (SELECT id, distance
                 FROM ranked
                $after

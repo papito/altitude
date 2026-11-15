@@ -1,10 +1,21 @@
 @import altitude.core.util.SearchResult
+@import altitude.core.util.Util
 @import altitude.core.FieldConst
 
-@* The ungrouped grid: the page's cells, the last of which carries the cursor of the next page when there is one *@
+@* The ungrouped grid: the page's cells, the last of which carries the cursor of the next page when there is one. On the one page
+   of a Describe search that holds its first weaker match (`results.weaker`), a group header opens them before that match's cell,
+   "Weaker matches" with their count across every page, as a grouped grid's header carries its group's: it sticks over them, the
+   page window keeps it while its page is folded, and its count follows the cells that leave the grid
+   (js/search-results/date-groups.js). It has no checkbox: the weaker matches are no group to select. *@
 @(isContinuousScroll: Boolean = false, results: SearchResult)
 
 @for(idx <- results.records.indices) {
+@for(weaker <- results.weaker if weaker.index == idx) {
+<div class="result-group">
+  <span>Weaker matches</span>
+  <span class="count" data-count="@{weaker.count}">@{Util.humanReadableItemCount(weaker.count)}</span>
+</div>
+}
 @htmx.html.result_cell(
     asset = results.records(idx),
     isContinuousScroll = isContinuousScroll,

@@ -33,6 +33,7 @@ object TestSettings {
     Settings.CURATION_LUMINANCE_GAP -> "0.1",
     Settings.SEARCH_DESCRIBE_MIN_PROBABILITY -> "0.00009",
     Settings.SEARCH_DESCRIBE_MAX_RESULTS -> "1000",
+    Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO -> "0.75",
     Settings.MAP_TILE_URL -> "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     Settings.MAP_TILE_ATTRIBUTION -> "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors",
     Settings.MAP_GEOCODER_ENABLED -> "false",

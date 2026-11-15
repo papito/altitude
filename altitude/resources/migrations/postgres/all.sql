@@ -62,6 +62,7 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('curation.luminance_gap', '0.1', '0.1'),
   ('search.describe.min_probability', '0.00009', '0.00009'),
   ('search.describe.max_results', '1000', '1000'),
+  ('search.describe.weaker_match_ratio', '0.75', '0.75'),
   ('map.tile.url', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
   ('map.tile.attribution', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'),
   ('map.geocoder.enabled', 'false', 'false'),

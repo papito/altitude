@@ -258,11 +258,21 @@ A search with a Description: the still images that look most like it, most
 alike first, among the assets its other Search filters match. The filters
 decide which assets are in it and nothing of their order, the Search text
 included. It ends at the Describe match threshold and the Describe result
-limit, both Settings, so a narrow filter can leave few results or none. It is
+limit, both Settings, so a narrow filter can leave few results or none; its
+Weaker matches come last, under a header of their own. It is
 laid out on the grid in that one order, with no sort, grouping or map, in
 Browse or in Triage, and never searches the trash. Videos and animated images
 are never in it.
 _Avoid_: Semantic search, AI search, Visual search, Smart search in user-facing text.
+
+**Weaker match**:
+A result of a Describe search that looks under a set fraction as much like the
+Description as the best match does: the Describe weaker matches Setting, a
+fraction of the best match's likeness and no fixed score, since a short
+Description scores low throughout. The Weaker matches are the end of the
+results, under the header "Weaker matches" with their count; none is hidden.
+_Avoid_: Poor match, Bad match, Low-confidence result, Irrelevant result; Strong
+match for the ones above the header, which have no name.
 
 **Search term**:
 One word or one quoted phrase of the Search text. A word matches the start of a

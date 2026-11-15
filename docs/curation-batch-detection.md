@@ -750,6 +750,52 @@ are at a median cosine of 0.993 to the reference's, the difference being the res
 application does, is worth three points there: the reference with the captions as written retrieves 69.6%. The
 scripts are not kept.
 
+### A description's weaker matches
+
+The match probability above ends a Describe search where nine in ten true matches are kept, which is far down the
+ranking: a description of a COCO category finds a median of 172 of the 5,000 photos, of which about half show it. So
+the results say where their tail begins: a result is a weaker match when its cosine to the description is under a
+fraction of the best match's, the Setting `search.describe.weaker_match_ratio`, and the weaker matches follow the
+others under a header. The line is a fraction of the best match and not a second probability because the cosines of
+a description are on a scale of their own: the shorter the text, the lower a true pair scores (above), so a cosine
+that ends the good matches of a sentence is over every match of two words. This is the measurement the default comes
+from. The rule: the lowest fraction, to 0.05, at which nine in ten of the photos above the line show
+what the description names. Nothing is hidden under the line, so a right photo under it costs a scroll, and a wrong
+one above it is the line failing at what it is for.
+
+Measured on **COCO 2017 val** again, its 5,000 photos embedded as an import embeds them (the preparation of
+`OnnxSceneEmbedder` over the application's image tower, checked on two photos to give the embedding the application
+stored, at a cosine of 1.0000). The descriptions are the names of COCO's 80 object categories ("dog", "traffic
+light"), lowercased and embedded by the checkpoint's text tower, which `OnnxDescribeEmbedder` reproduces. A
+description's results are the photos within the default match threshold (a cosine of 0.066), the nearest 1,000 at
+most, and a photo is right when COCO annotates the category in it, at any size. Each figure is the mean over the 80
+categories:
+
+| Ratio | Photos above the line, median | Right, of those above | Right results kept above | Wrong results let above | Kept less let (Youden's J) |
+|---|---|---|---|---|---|
+| none (the whole results) | 172 | 52.9% | 100% | 100% | 0 |
+| 0.50 | 142 | 60.5% | 94.1% | 71.0% | 0.231 |
+| 0.60 | 94 | 76.8% | 79.1% | 28.4% | 0.507 |
+| 0.65 | 79 | 83.9% | 69.8% | 15.2% | 0.546 |
+| 0.70 | 62 | 88.2% | 60.1% | 8.3% | 0.518 |
+| 0.75 (the rule's) | 46 | 91.5% | 50.1% | 4.4% | 0.458 |
+| 0.80 | 34 | 94.4% | 40.0% | 2.1% | 0.379 |
+| 0.90 | 10 | 97.7% | 17.4% | 0.3% | 0.171 |
+
+With an article before the name ("a dog", "an apple") the figures move little: 92.4% right above the line at 0.75 and
+89.8% at 0.70, and the best separation at 0.65 again.
+
+What the figures say. At **0.75** nine in ten photos above the line are right and one wrong result in twenty-three is
+let above it, at the price of half the right results standing under the header, where they are still shown, best
+first. The line that separates right from wrong best, by the right results kept above less the wrong ones let above,
+is lower, at 0.65: 84% right above it, 70% of the right results kept. An Admin who would rather have fewer right
+photos under the header than fewer wrong ones above it lowers the Setting to that. A category's name is the plainest
+description there is; for a caption as written, which says more than a short description does, the caption's own
+photo is above the line at 0.75 for 91.3% of 5,000 captions, one an image, with a median of 8 photos above the line.
+COCO annotates each category wherever it shows, however small, so a wrong photo here is one without the thing, and
+the figures say nothing of a description that tells two alike subjects apart ("woman holding a baby" against a man
+holding one), which the same cosine ranks close together. The scripts are not kept.
+
 ### Other open-source references
 
 digiKam's similarity search (Haar wavelet signatures), czkawka (pHash family), imagededup (Python, CNN plus hashes).

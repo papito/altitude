@@ -350,19 +350,23 @@ class SearchService(val app: Altitude):
       case None => SearchPage(Nil, Option.when(query.isTotalCounted)(0), hasMore = false)
       case Some(embedding) =>
         txManager.withVectorSearch(limit) {
-          searchDao.describe(withResolvedScope(query), DescribeRanking(embedding, minCosine, limit))
+          searchDao.describe(
+            withResolvedScope(query),
+            DescribeRanking(embedding, minCosine, limit, settings.searchDescribeWeakerMatchRatio))
         }
 
     val nextCursor = Option.when(page.hasMore) {
       val last = page.rows.last
       SearchCursor(key = None, groupId = None, sortValue = last.sortValue, id = last.asset.persistedId, scope = scope)
     }
-    val result = SearchResult(page.rows.map(_.asset), page.total, nextCursor, query.rpp, List(SearchSort.Similarity))
+    val result =
+      SearchResult(page.rows.map(_.asset), page.total, nextCursor, query.rpp, List(SearchSort.Similarity), page.weaker)
 
     // A description is typed, line breaks and all: escaped, it cannot start a log line of its own
     logger.debug(
       s"Describe search [${Util.printable(description, Const.Search.MAX_DESCRIPTION_LENGTH)}]: ${result.records.length} assets" +
         result.total.map(total => s" of $total").getOrElse(", total not counted") +
+        result.weaker.map(weaker => s", the ${weaker.count} weaker matches from row ${weaker.index} of the page").getOrElse("") +
         f" at a cosine of $minCosine%.4f or more (probability ${settings.value(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY)}), " +
         s"limit $limit, in ${System.currentTimeMillis - started}ms")
     result
