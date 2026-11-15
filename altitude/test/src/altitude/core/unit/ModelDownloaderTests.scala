@@ -149,16 +149,15 @@ import altitude.core.util.Sha256
     servers = server :: servers
     server
 
-  /** The set's directory and the lock file, laid out as `ModelFiles` lays them out */
+  /** The set's directory, laid out as `ModelFiles` lays it out */
   private def directory: Path = ModelFiles(root).directory
-  private def lockFile: Path = ModelFiles(root).lockFile
 
   private def downloader(
       freeSpace: Path => Long = _ => Long.MaxValue,
       stallTimeout: FiniteDuration = 60.seconds): ModelDownloader =
-    ModelDownloader(sleep = delay => slept.add(delay): Unit, freeSpace = freeSpace, stallTimeout = stallTimeout)
+    ModelDownloader(ModelFiles(root), sleep = delay => slept.add(delay): Unit, freeSpace = freeSpace, stallTimeout = stallTimeout)
 
-  private def ensure(files: ModelFileSpec*): Unit = downloader().ensure(files, directory, lockFile)
+  private def ensure(files: ModelFileSpec*): Unit = downloader().ensure(files)
 
   private def content(size: Int, seed: Int): Array[Byte] =
     val bytes = new Array[Byte](size)
@@ -394,7 +393,7 @@ import altitude.core.util.Sha256
     val spec = served(server, "model.onnx", bytes)
     server.stallNext("/model.onnx", afterBytes = 80_000)
 
-    downloader(stallTimeout = 500.millis).ensure(Seq(spec), directory, lockFile)
+    downloader(stallTimeout = 500.millis).ensure(Seq(spec))
 
     Sha256.hex(fileOf(spec)) shouldEqual Sha256.hex(bytes)
     server.requestsOf("/model.onnx").map(_.range) shouldEqual List(None, Some("bytes=80000-"))
@@ -521,7 +520,7 @@ import altitude.core.util.Sha256
         val thread = Thread(
           () =>
             start.await()
-            try downloader().ensure(specs, directory, lockFile)
+            try downloader().ensure(specs)
             catch { case e: Throwable => errors.add(e): Unit })
         thread.start()
         thread
@@ -559,14 +558,14 @@ import altitude.core.util.Sha256
     writePart(specs(0), first.take(20_000))
 
     val message =
-      intercept[ModelFilesException](downloader(freeSpace = _ => 79_999).ensure(specs, directory, lockFile)).getMessage
+      intercept[ModelFilesException](downloader(freeSpace = _ => 79_999).ensure(specs)).getMessage
 
     message should include("80000")
     message should include("79999")
     specs.foreach(spec => message should include(spec.url.toString))
     server.requests shouldBe empty
 
-    downloader(freeSpace = _ => 80_000).ensure(specs, directory, lockFile)
+    downloader(freeSpace = _ => 80_000).ensure(specs)
 
     specs.foreach(spec => Files.exists(fileOf(spec)) shouldBe true)
   }

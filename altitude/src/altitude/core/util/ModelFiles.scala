@@ -3,7 +3,6 @@ package altitude.core.util
 import com.typesafe.config.Config
 import java.io.InputStream
 import java.io.IOException
-import java.io.OutputStream
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -13,9 +12,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
-import java.security.MessageDigest
 import java.time.Duration
-import java.util.HexFormat
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledThreadPoolExecutor
@@ -38,78 +35,97 @@ final case class ModelFileSpec(name: String, url: URI, size: Long, sha256: Strin
  * revision of `maze/faceX` the face code was tuned with (its licence forbids re-hosting it). The URL, size and SHA-256 here are
  * the trust anchor: a new set is a new tag and new pins.
  */
-enum ModelFile(val fileName: String, val url: URI, val size: Long, val sha256: String):
+enum ModelFile(val spec: ModelFileSpec):
 
   /** DINOv2 ViT-B/14, a Scene model */
   case Dinov2
     extends ModelFile(
-      "dinov2_vitb14.onnx",
-      ModelFile.release("dinov2_vitb14.onnx"),
-      346462331L,
-      "53feca43cf4c943e056b7c3e2fe72e8a25c97be6ab22cc2df5dc7fd0a23c1ebb")
+      ModelFile.release(
+        "dinov2_vitb14.onnx",
+        346462331L,
+        "53feca43cf4c943e056b7c3e2fe72e8a25c97be6ab22cc2df5dc7fd0a23c1ebb"
+      )
+    )
 
   /** SigLIP 2's image tower, a Scene model */
   case Siglip2Image
     extends ModelFile(
-      "siglip2_b16_256_image.onnx",
-      ModelFile.release("siglip2_b16_256_image.onnx"),
-      371802977L,
-      "e3c6f8acddca4e08cba87284e2aff36d7e8de0d267871f378dd315385307b7af"
+      ModelFile.release(
+        "siglip2_b16_256_image.onnx",
+        371802977L,
+        "e3c6f8acddca4e08cba87284e2aff36d7e8de0d267871f378dd315385307b7af"
+      )
     )
 
   /** SigLIP 2's text tower, the Describe model */
   case Siglip2Text
     extends ModelFile(
-      "siglip2_b16_256_text.onnx",
-      ModelFile.release("siglip2_b16_256_text.onnx"),
-      342852627L,
-      "f93c2d65225f7d934e5846db3c7b452707941223101199bef6ed2838f4ab10fd"
+      ModelFile.release(
+        "siglip2_b16_256_text.onnx",
+        342852627L,
+        "f93c2d65225f7d934e5846db3c7b452707941223101199bef6ed2838f4ab10fd"
+      )
     )
 
   /** The token table the text tower reads its input from */
   case Siglip2TokenEmbeddings
     extends ModelFile(
-      "siglip2_token_embeddings.f16",
-      ModelFile.release("siglip2_token_embeddings.f16"),
-      393216000L,
-      "3b559c1353ed1cfbe37db73d684e9a1ca095586e820704346446a51a69f6ecc4"
+      ModelFile.release(
+        "siglip2_token_embeddings.f16",
+        393216000L,
+        "3b559c1353ed1cfbe37db73d684e9a1ca095586e820704346446a51a69f6ecc4"
+      )
     )
 
   /** The text tower's vocabulary */
   case Siglip2Tokenizer
     extends ModelFile(
-      "siglip2_tokenizer.tsv",
-      ModelFile.release("siglip2_tokenizer.tsv"),
-      6166714L,
-      "946f9003e78dc5d947b60bdfa9ed6184895f0ff4a378b4f395c27e49ed1d0871")
+      ModelFile.release(
+        "siglip2_tokenizer.tsv",
+        6166714L,
+        "946f9003e78dc5d947b60bdfa9ed6184895f0ff4a378b4f395c27e49ed1d0871"
+      )
+    )
 
   /** The face detector */
   case YuNet
     extends ModelFile(
-      "face_detection_yunet_2023mar.onnx",
-      ModelFile.release("face_detection_yunet_2023mar.onnx"),
-      232589L,
-      "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
+      ModelFile.release(
+        "face_detection_yunet_2023mar.onnx",
+        232589L,
+        "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
+      )
     )
 
   /** The face recognition net */
   case ArcFace
     extends ModelFile(
-      "w600k_r50.onnx",
-      URI.create("https://huggingface.co/maze/faceX/resolve/e010b5098c3685fd00b22dd2aec6f37320e3d850/w600k_r50.onnx"),
-      174383860L,
-      "4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43"
+      ModelFile.faceX(
+        "w600k_r50.onnx",
+        174383860L,
+        "4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43"
+      )
     )
-
-  def spec: ModelFileSpec = ModelFileSpec(fileName, url, size, sha256)
 
 object ModelFile:
 
   /** The release tag of the set, and the name of its directory under `models.dir` */
   final val TAG = "v1"
 
-  private def release(fileName: String): URI =
-    URI.create(s"https://github.com/renegade-otter/altitude-models/releases/download/$TAG/$fileName")
+  /** The revision of `maze/faceX` on Hugging Face that ArcFace is downloaded from */
+  final val FACEX_REVISION = "e010b5098c3685fd00b22dd2aec6f37320e3d850"
+
+  /** An asset of release `TAG` of `altitude-models` */
+  private def release(name: String, size: Long, sha256: String): ModelFileSpec =
+    ModelFileSpec(
+      name,
+      URI.create(s"https://github.com/renegade-otter/altitude-models/releases/download/$TAG/$name"),
+      size,
+      sha256)
+
+  /** A file of `maze/faceX` at `FACEX_REVISION` */
+  private def faceX(name: String, size: Long, sha256: String): ModelFileSpec =
+    ModelFileSpec(name, URI.create(s"https://huggingface.co/maze/faceX/resolve/$FACEX_REVISION/$name"), size, sha256)
 
 /**
  * Where the model files of the pinned set are, under a root (`models.dir`): in the set's own directory, named by its tag, so two
@@ -119,7 +135,7 @@ final class ModelFiles(root: Path):
   val directory: Path = root.resolve(ModelFile.TAG)
   val lockFile: Path = root.resolve(".lock")
 
-  def path(file: ModelFile): Path = directory.resolve(file.fileName)
+  def path(file: ModelFile): Path = directory.resolve(file.spec.name)
 
 object ModelFiles:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -131,7 +147,7 @@ object ModelFiles:
   def ensure(config: Config): ModelFiles =
     val models = ModelFiles(root(config.getString(Const.Conf.MODELS_DIR), sys.env.get, System.getProperty("user.home")))
     logger.info(s"Model files: ${models.directory}")
-    ModelDownloader().ensure(ModelFile.values.toSeq.map(_.spec), models.directory, models.lockFile)
+    ModelDownloader(models).ensure(ModelFile.values.toSeq.map(_.spec))
     models
 
   /**
@@ -146,16 +162,19 @@ object ModelFiles:
       cache.resolve("altitude").resolve("models")
 
 /**
- * Puts a list of files in a directory, downloading the ones not in place: a file is in place when it is there under its name with
- * its pinned size, so a start never reads a file to hash it. A download holds the lock file against every other process and
- * thread, checks the free space against the bytes missing, streams each file to `<name>.part` hashing it as it is written,
- * resumes a `.part` with a `Range` request, retries an I/O error or a server error after each of the retry delays, checks the
- * size and the SHA-256, and moves the file to its name at once. A file whose size or SHA-256 is not its pin fails at once.
+ * Puts a list of files in the directory of a set of model files, downloading the ones not in place: a file is in place when it is
+ * there under its name with its pinned size, so a start never reads a file to hash it. A download holds the lock file against
+ * every other process and thread, checks the free space against the bytes missing, streams each file to `<name>.part` hashing it
+ * as it is written, resumes a `.part` with a `Range` request, retries an I/O error or a server error after each of the retry
+ * delays, checks the size and the SHA-256, and moves the file to its name at once. A file whose size or SHA-256 is not its pin
+ * fails at once.
  *
  * The client's timeout covers the answer's headers alone: a body streamed after them has none, and a connection that stops
  * delivering without closing would hold the start forever. A watchdog therefore closes a body that has delivered no byte for the
  * stall timeout, which the read sees as an I/O error, retried and resumed as any other.
  *
+ * @param models
+ *   where the files go: the set's directory, and the lock file
  * @param client
  *   the HTTP client: redirects followed (a release host and Hugging Face both redirect to a CDN, of another origin, which
  *   `Redirect.NORMAL` follows; it refuses only HTTPS to HTTP), the JVM's proxy settings (the default proxy selector)
@@ -169,6 +188,7 @@ object ModelFiles:
  *   how long a body may deliver no byte before the watchdog closes it
  */
 final class ModelDownloader(
+    models: ModelFiles,
     client: HttpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build(),
     retryDelays: Seq[FiniteDuration] = Seq(2.seconds, 4.seconds, 8.seconds),
     sleep: FiniteDuration => Unit = delay => Thread.sleep(delay.toMillis),
@@ -176,31 +196,33 @@ final class ModelDownloader(
     stallTimeout: FiniteDuration = 60.seconds):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
+  private val directory = models.directory
+
   /** Throws `ModelFilesException`, naming the files missing, their URLs and the directory, when they cannot be put in place */
-  def ensure(files: Seq[ModelFileSpec], directory: Path, lockFile: Path): Unit =
-    if files.forall(inPlace(_, directory)) then logger.debug(s"The model files are in place in $directory")
+  def ensure(files: Seq[ModelFileSpec]): Unit =
+    if files.forall(inPlace) then logger.debug(s"The model files are in place in $directory")
     else
       Files.createDirectories(directory)
-      Files.createDirectories(lockFile.getParent)
-      ModelDownloader.locked(lockFile) {
+      Files.createDirectories(models.lockFile.getParent)
+      ModelDownloader.locked(models.lockFile) {
         // Whoever held the lock before may have put them in place meanwhile
-        val missing = files.filterNot(inPlace(_, directory))
+        val missing = files.filterNot(inPlace)
         if missing.isEmpty then logger.info(s"The model files were put in place in $directory while this one waited")
-        else downloadAll(missing, directory)
+        else downloadAll(missing)
       }
 
-  private def downloadAll(missing: Seq[ModelFileSpec], directory: Path): Unit =
+  private def downloadAll(missing: Seq[ModelFileSpec]): Unit =
     // What a `.part` holds is not downloaded again
-    val needed = missing.map(spec => spec.size - partSize(spec, directory).min(spec.size)).sum
+    val needed = missing.map(spec => spec.size - partSize(spec).min(spec.size)).sum
     logger.info(
       s"Model files missing in $directory: ${missing.map(_.name).mkString(", ")}, " +
         s"${megabytes(missing.map(_.size).sum)} in all, ${megabytes(needed)} to download")
 
     val free = freeSpace(directory)
     if free < needed then
-      throw ModelFilesException(failure(s"$needed bytes are needed in $directory and $free are free", missing, directory))
+      throw ModelFilesException(failure(s"$needed bytes are needed in $directory and $free are free", missing))
 
-    try missing.foreach(download(_, directory))
+    try missing.foreach(download(_))
     catch {
       case e @ (_: IOException | _: ModelFilesException) =>
         // An I/O error's message alone may be empty (a refused connection), so it is named with its class
@@ -208,110 +230,114 @@ final class ModelDownloader(
           case _: ModelFilesException => e.getMessage
           case _ => e.toString
         }
-        throw ModelFilesException(failure(reason, missing.filterNot(inPlace(_, directory)), directory))
+        throw ModelFilesException(failure(reason, missing.filterNot(inPlace)))
     }
 
-  private def inPlace(spec: ModelFileSpec, directory: Path): Boolean =
-    val file = directory.resolve(spec.name)
+  private def inPlace(spec: ModelFileSpec): Boolean =
+    val file = fileOf(spec)
     Files.isRegularFile(file) && Files.size(file) == spec.size
 
-  private def partOf(spec: ModelFileSpec, directory: Path): Path = directory.resolve(s"${spec.name}.part")
+  private def fileOf(spec: ModelFileSpec): Path = directory.resolve(spec.name)
+  private def partOf(spec: ModelFileSpec): Path = directory.resolve(s"${spec.name}.part")
 
-  private def partSize(spec: ModelFileSpec, directory: Path): Long =
-    val part = partOf(spec, directory)
+  private def partSize(spec: ModelFileSpec): Long =
+    val part = partOf(spec)
     if Files.isRegularFile(part) then Files.size(part) else 0L
 
   /** Why the files are not in place, and what an instance with no route to them needs to put them in place by hand */
-  private def failure(reason: String, missing: Seq[ModelFileSpec], directory: Path): String =
+  private def failure(reason: String, missing: Seq[ModelFileSpec]): String =
     val files = missing.map(spec => s"  ${spec.name} (${spec.size} bytes, SHA-256 ${spec.sha256}): ${spec.url}")
     (s"The model files could not be put in place: $reason. Download them by hand into $directory:" +: files).mkString("\n")
 
   /** One file, tried once and then again after each of the retry delays, each try resuming what the one before it wrote */
-  private def download(spec: ModelFileSpec, directory: Path): Unit =
-    var attempt = 0
-    var done = false
-    while !done do
-      try
-        transfer(spec, directory)
-        done = true
-      catch {
-        case e: IOException if attempt < retryDelays.size =>
-          val delay = retryDelays(attempt)
-          attempt += 1
-          logger.warn(s"Downloading ${spec.name} failed ($e): retry $attempt of ${retryDelays.size} in ${delay.toSeconds} s")
-          sleep(delay)
-      }
+  private def download(spec: ModelFileSpec, attempt: Int = 0): Unit =
+    try transfer(spec)
+    catch {
+      case e: IOException if attempt < retryDelays.size =>
+        val delay = retryDelays(attempt)
+        logger.warn(s"Downloading ${spec.name} failed ($e): retry ${attempt + 1} of ${retryDelays.size} in ${delay.toSeconds} s")
+        sleep(delay)
+        download(spec, attempt + 1)
+    }
 
   /** One try at a file: the rest of its `.part`, or all of it, then the checks and the move to its name */
-  private def transfer(spec: ModelFileSpec, directory: Path): Unit =
-    val part = partOf(spec, directory)
-    val digest = MessageDigest.getInstance("SHA-256")
-    var written = partSize(spec, directory)
+  private def transfer(spec: ModelFileSpec): Unit =
+    val held = partSize(spec)
     // The bytes already on disk are hashed first, so the digest covers the whole file once the rest is appended
-    if written > 0 then
-      val existing = Files.newInputStream(part)
-      try copy(existing, digest, OutputStream.nullOutputStream())(_ => ())
-      finally existing.close()
-
+    val digest = Sha256.Digest()
+    if held > 0 then digest.update(partOf(spec))
     // A `.part` already whole (cut off between its last byte and its move) needs no request, which the server would refuse
-    if written < spec.size then
-      val request = HttpRequest.newBuilder(spec.url).header("User-Agent", "Altitude").timeout(ModelDownloader.HEADERS_TIMEOUT)
-      if written > 0 then request.header("Range", s"bytes=$written-")
-      val response = client.send(request.GET().build(), HttpResponse.BodyHandlers.ofInputStream())
-      val body = response.body()
-      try
-        val status = response.statusCode()
-        // A server error is the host's passing trouble, retried as an I/O error is
-        if status >= 500 then throw IOException(s"HTTP $status from ${response.uri()}")
-        // Anything else that is not the file will not become it by asking again
-        if status != 200 && status != 206 then throw ModelFilesException(s"HTTP $status from ${response.uri()}")
+    val (fileDigest, size) = if held < spec.size then receive(spec, digest, held) else (digest, held)
+    verify(spec, size, fileDigest.hex())
+    Files.move(partOf(spec), fileOf(spec), StandardCopyOption.ATOMIC_MOVE)
 
-        // A 206 is the rest, appended; a 200 is the whole file, which a server that ignores the range sends: it starts over
-        val appending = written > 0 && status == 206
-        if appending then logger.info(s"Resuming ${spec.name} at ${megabytes(written)} of ${megabytes(spec.size)}: ${spec.url}")
-        else
-          if written > 0 then logger.info(s"The server sent ${spec.name} whole rather than its rest: starting it over")
-          logger.info(s"Downloading ${spec.name}, ${megabytes(spec.size)}: ${spec.url}")
-          digest.reset()
-          written = 0
-        val out =
-          if appending then Files.newOutputStream(part, StandardOpenOption.APPEND)
-          else Files.newOutputStream(part, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
-        val progress = Progress(spec, written)
-        val watchdog = ModelDownloader.Watchdog(body, stallTimeout)
-        try
-          copy(body, digest, out) {
-            bytes =>
-              watchdog.delivered()
-              progress.add(bytes)
-          }
-        catch {
-          // The read failed because the watchdog closed the stream: the stall is the cause, not the closed stream
-          case e: IOException if watchdog.fired =>
-            throw IOException(s"No byte of ${spec.name} came for $stallTimeout", e)
-        } finally
-          watchdog.cancel()
-          out.close()
-        written += progress.transferred
-        progress.done()
-      finally body.close()
+  /**
+   * Asks for the file from byte `held` on and writes what comes to its `.part`. A 206 is the rest, appended to the `held` bytes
+   * that `digest` covers; a 200 is the whole file, which a server that ignores the range sends: the `.part` starts over, with a
+   * new digest. Returns the digest of the `.part` and its size.
+   */
+  private def receive(spec: ModelFileSpec, digest: Sha256.Digest, held: Long): (Sha256.Digest, Long) =
+    val response = send(spec, held)
+    val body = response.body()
+    try
+      val appending = held > 0 && response.statusCode() == 206
+      if appending then logger.info(s"Resuming ${spec.name} at ${megabytes(held)} of ${megabytes(spec.size)}: ${spec.url}")
+      else
+        if held > 0 then logger.info(s"The server sent ${spec.name} whole rather than its rest: starting it over")
+        logger.info(s"Downloading ${spec.name}, ${megabytes(spec.size)}: ${spec.url}")
+      val (partDigest, from) = if appending then (digest, held) else (Sha256.Digest(), 0L)
+      (partDigest, from + write(spec, body, partDigest, from))
+    finally body.close()
 
-    val sha256 = HexFormat.of().formatHex(digest.digest())
-    if written != spec.size || sha256 != spec.sha256 then
-      Files.delete(part)
+  /** The request for the file from byte `from` on, answered with the file or a part of it; any other status fails here */
+  private def send(spec: ModelFileSpec, from: Long): HttpResponse[InputStream] =
+    val request = HttpRequest.newBuilder(spec.url).header("User-Agent", "Altitude").timeout(ModelDownloader.HEADERS_TIMEOUT)
+    if from > 0 then request.header("Range", s"bytes=$from-")
+    val response = client.send(request.GET().build(), HttpResponse.BodyHandlers.ofInputStream())
+    val status = response.statusCode()
+    if status != 200 && status != 206 then
+      response.body().close()
+      // A server error is the host's passing trouble, retried as an I/O error is
+      if status >= 500 then throw IOException(s"HTTP $status from ${response.uri()}")
+      // Anything else that is not the file will not become it by asking again
+      throw ModelFilesException(s"HTTP $status from ${response.uri()}")
+    response
+
+  /**
+   * Reads the body to its end into the `.part`, appended past its first `from` bytes or, when `from` is 0, from its start, and
+   * into `digest`, under the stall watchdog. Returns the bytes written.
+   */
+  private def write(spec: ModelFileSpec, body: InputStream, digest: Sha256.Digest, from: Long): Long =
+    val part = partOf(spec)
+    val out =
+      if from > 0 then Files.newOutputStream(part, StandardOpenOption.APPEND)
+      else Files.newOutputStream(part, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
+    val progress = Progress(spec, from)
+    val watchdog = ModelDownloader.Watchdog(body, stallTimeout)
+    try
+      val chunk = new Array[Byte](64 * 1024)
+      var read = body.read(chunk)
+      while read != -1 do
+        watchdog.delivered()
+        digest.update(chunk, 0, read)
+        out.write(chunk, 0, read)
+        progress.add(read)
+        read = body.read(chunk)
+    catch {
+      // The read failed because the watchdog closed the stream: the stall is the cause, not the closed stream
+      case e: IOException if watchdog.fired => throw IOException(s"No byte of ${spec.name} came for $stallTimeout", e)
+    } finally
+      watchdog.cancel()
+      out.close()
+    progress.done()
+    progress.transferred
+
+  /** A file whose size or SHA-256 is not its pin will not become it by asking again: its `.part` is deleted and it fails */
+  private def verify(spec: ModelFileSpec, size: Long, sha256: String): Unit =
+    if size != spec.size || sha256 != spec.sha256 then
+      Files.delete(partOf(spec))
       throw ModelFilesException(
-        s"${spec.name} came as $written bytes with SHA-256 $sha256, not its pinned ${spec.size} bytes with ${spec.sha256}")
-    Files.move(part, directory.resolve(spec.name), StandardCopyOption.ATOMIC_MOVE)
-
-  /** Reads `in` to its end into `digest` and `out`, telling `progress` the length of each chunk */
-  private def copy(in: InputStream, digest: MessageDigest, out: OutputStream)(progress: Int => Unit): Unit =
-    val chunk = new Array[Byte](64 * 1024)
-    var read = in.read(chunk)
-    while read != -1 do
-      digest.update(chunk, 0, read)
-      out.write(chunk, 0, read)
-      progress(read)
-      read = in.read(chunk)
+        s"${spec.name} came as $size bytes with SHA-256 $sha256, not its pinned ${spec.size} bytes with ${spec.sha256}")
 
   /** A file's download as it goes: logged at every tenth of the file, and at its end with its time and rate */
   private class Progress(spec: ModelFileSpec, from: Long):
