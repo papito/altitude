@@ -4,6 +4,7 @@
 # dependencies = [
 #   "torch==2.15.0",
 #   "transformers==5.22.1",
+#   "pillow==13.0.0",
 #   "numpy==2.5.4",
 # ]
 #
@@ -22,12 +23,15 @@ processor and its PyTorch model (`google/siglip2-base-patch16-256`, the checkpoi
                                                      IDs the reference processor gives it, for `Siglip2TokenizerTests`
     altitude/test/resources/siglip2/embeddings.json  a list of {"description", "embedding"}: a description and the 768
                                                      floats of its embedding by the PyTorch model, L2-normalized as
-                                                     the model normalizes it, for `DescribeEmbedderTests`
+                                                     the model normalizes it, for `DescribeEmbedderTests`. The model
+                                                     is given the description as the application's embedder gives it
+                                                     to the tokenizer, each run of whitespace one space (`normalized`)
 
 The IDs are the processor's with `padding="max_length"`, `max_length=64`, `truncation=True`, as the model was trained,
 over the description in lowercase. The lowercasing is done here, explicitly: SigLIP 2 was trained on lowercased text,
 but the checkpoint's tokenizer (`GemmaTokenizer`) leaves the case as it is. A golden description is stored as written,
-since lowercasing it is the tokenizer's work in the application too.
+since lowercasing it is the tokenizer's work in the application too, and collapsing its whitespace the embedder's: the
+token IDs are of the description as written, which is what the application's tokenizer is given in its own test.
 
 The descriptions cover what a description can hold: plain words, punctuation, digits, spaces at the ends and repeated,
 tabs and line breaks, apostrophes, accents and other scripts, characters whose lowercase is not one character or
@@ -504,6 +508,13 @@ EMBEDDED = [
 ]
 
 
+def normalized(description: str) -> str:
+    """A description as the application's embedder hands it to its tokenizer (`OnnxDescribeEmbedder.normalized`): each
+    run of whitespace one space and none at the ends. `EMBEDDED` holds no whitespace but spaces and a line feed, which
+    Python and the JVM both count as whitespace."""
+    return " ".join(description.split())
+
+
 def padded_to(count: int, token_count) -> str:
     """A description of plain words whose tokens, the <eos> not among them, number exactly `count`."""
     words = ["tree", "river", "stone", "cloud", "bird", "road", "house", "field"]
@@ -586,7 +597,7 @@ def main() -> None:
 
     model = SiglipModel.from_pretrained(CHECKPOINT).eval()
     with torch.no_grad():
-        pooled = model.get_text_features(input_ids=token_ids(EMBEDDED)).pooler_output
+        pooled = model.get_text_features(input_ids=token_ids([normalized(text) for text in EMBEDDED])).pooler_output
     # Unit length, as `SiglipModel.forward` normalizes the text embeddings it compares and as the application stores them
     unit = pooled / pooled.norm(p=2, dim=-1, keepdim=True)
     embeddings = [

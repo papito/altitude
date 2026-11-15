@@ -18,8 +18,9 @@ import altitude.core.util.OnnxDescribeEmbedder
 
 /**
  * [[OnnxDescribeEmbedder]] against the PyTorch model of the SigLIP 2 checkpoint: `siglip2/embeddings.json`, which
- * `scripts/siglip2-golden.py` writes, holds the embedding the model gives each of its descriptions. Needs the text tower, the
- * token-embedding table and the tokenizer file `scripts/fetch-models.py` writes, as the Scene model tests need the model files.
+ * `scripts/siglip2-golden.py` writes, holds the embedding the model gives each of its descriptions, each run of whitespace handed
+ * to it as one space, as the embedder hands a description to its tokenizer. Needs the text tower, the token-embedding table and
+ * the tokenizer file `scripts/fetch-models.py` writes, as the Scene model tests need the model files.
  */
 @DoNotDiscover class DescribeEmbedderTests extends AnyFunSuite with TestFocus {
 
@@ -130,8 +131,12 @@ import altitude.core.util.OnnxDescribeEmbedder
      * Assertions:
      *
      * Each description's embedding is of SigLIP 2's dimensions and of unit length, and its cosine to the PyTorch model's
-     * embedding is at least 0.9999: the tokenizer, the float16 token embeddings and the exported text tower together give what
-     * the reference gives.
+     * embedding is at least 0.9999: the normalization, the tokenizer, the float16 token embeddings and the exported text tower
+     * together give what the reference gives.
+     *
+     * Edge cases:
+     *
+     * The description with a line break embeds as the reference embeds it with a space in the line break's place.
      */
     golden.size should be >= 12
 
@@ -159,12 +164,14 @@ import altitude.core.util.OnnxDescribeEmbedder
      * Assertions:
      *
      * The same description again is answered with the embedding of the first time, the same object, and so is the description in
-     * another case or with its whitespace written differently: the cache's key is the lowercase text with each run of whitespace
-     * as one space and none at the ends.
+     * another case or with its whitespace written differently: the cache's key is the text that is embedded, in lowercase with
+     * each run of whitespace as one space and none at the ends.
      *
      * Edge cases:
      *
-     * A description of other words has an embedding of its own.
+     * A description of other words has an embedding of its own. So have two descriptions the tokenizer lowercases differently
+     * though the JDK lowercases them alike, a capital sigma beside a digit and the same written with small sigmas: neither is
+     * served the other's embedding.
      */
     withEmbedder() {
       embedder =>
@@ -177,6 +184,57 @@ import altitude.core.util.OnnxDescribeEmbedder
         val other = embedder.embed("a woman in the park").value
         other should not be theSameInstanceAs(first)
         other.similarity(first) should be < 1.0
+
+        val capitals = embedder.embed("ΣΑΣ1a").value
+        val small = embedder.embed("σασ1a").value
+        small should not be theSameInstanceAs(capitals)
+        small should not be capitals
+    }
+  }
+
+  test("A description embeds as its normalized text does, whatever its case and whitespace") {
+
+    /**
+     * Setup:
+     *
+     * An embedder whose cache holds one description, so that a description asked after another one is embedded by a pass of the
+     * text tower and not served from the cache. "a woman in a park" is embedded, then, each after another description, the same
+     * words in capitals, between tabs, line breaks, doubled spaces and no-break spaces, and with spaces at the ends.
+     *
+     * Assertions:
+     *
+     * Each variant's embedding is a new object, the work of a pass of its own, and equal to that of "a woman in a park": what is
+     * embedded is the normalized text, so the embedding of one description does not depend on which way of writing it was asked
+     * first.
+     *
+     * Edge cases:
+     *
+     * The words in another order, which no normalization makes the same text, embed differently.
+     */
+    withEmbedder(OnnxDescribeEmbedder(cacheSize = 1)) {
+      embedder =>
+        val normalized = embedder.embed("a woman in a park").value
+        val variants = List(
+          "A Woman in a PARK",
+          "a\twoman\tin\ta\tpark",
+          "a woman\nin a\r\npark",
+          "a  woman   in a park",
+          "a woman in\u00a0a park",
+          "  a woman\tin  a\npark \n"
+        )
+
+        variants.foreach {
+          variant =>
+            withClue(s"${ujson.Str(variant)}: ") {
+              // Takes the one place of the cache, so the variant is embedded anew
+              embedder.embed("a dog")
+              val embedding = embedder.embed(variant).value
+              embedding should not be theSameInstanceAs(normalized)
+              embedding shouldBe normalized
+            }
+        }
+
+        embedder.embed("a park in a woman").value should not be normalized
     }
   }
 

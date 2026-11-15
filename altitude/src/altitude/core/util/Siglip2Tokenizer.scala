@@ -143,8 +143,10 @@ object Siglip2Tokenizer:
    * the nearest character that is not case-ignorable on each side of it, where the JDK looks for a cased letter anywhere in the
    * word its break iterator finds, so the two disagree on a sigma beside a digit ("ΣΑΣ1a" ends in a final sigma by Unicode and
    * not by the JDK). Each capital sigma is therefore lowercased here, by Unicode's rule, before the JDK lowercases the rest.
+   * Lowercasing a text already in lowercase changes nothing, so a caller that keys by the lowercase text
+   * (`OnnxDescribeEmbedder.normalized`) can hand that text to [[tokenize]].
    */
-  private def lowercase(text: String): String =
+  private[util] def lowercase(text: String): String =
     if text.indexOf(CAPITAL_SIGMA) < 0 then text.toLowerCase(Locale.ROOT)
     else
       val chars = text.toCharArray

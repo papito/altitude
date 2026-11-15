@@ -10,7 +10,6 @@ import java.nio.channels.FileChannel
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.util.LinkedHashMap
-import java.util.Locale
 import java.util.Map.Entry
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import org.slf4j.Logger
@@ -31,8 +30,8 @@ trait DescribeEmbedder extends AutoCloseable:
 
   /**
    * The description's embedding, a [[SceneEmbedding]] of `SceneModel.Siglip2`, or none where this embedder embeds nothing (a test
-   * instance whose suite has not turned the model on). The description is embedded as it is written: SigLIP 2 is trained on plain
-   * captions, so there is no prompt around it.
+   * instance whose suite has not turned the model on). The description is embedded as it is written but for its case and its
+   * whitespace, which say nothing of a photo: SigLIP 2 is trained on plain captions, so there is no prompt around it.
    */
   def embed(description: String): Option[SceneEmbedding]
 
@@ -56,11 +55,13 @@ object OnnxDescribeEmbedder:
   private val WHITESPACE = "(?U)\\s+".r
 
   /**
-   * What a description is cached by: its text in lowercase, each run of whitespace one space and none at the ends. The tokenizer
-   * lowercases too, so descriptions of one key differ to the model in their whitespace alone.
+   * A description as it is embedded, and so what its embedding is cached by: each run of whitespace one space and none at the
+   * ends, in lowercase as the tokenizer lowercases it. The tokenizer tells a tab, a line break and a doubled space from a space,
+   * so the same words spaced differently would be different inputs to the model; embedding the one text the key is makes a
+   * description's embedding the same whichever way of writing it was asked first.
    */
-  private def cacheKey(description: String): String =
-    WHITESPACE.replaceAllIn(description, " ").strip().toLowerCase(Locale.ROOT)
+  private[core] def normalized(description: String): String =
+    Siglip2Tokenizer.lowercase(WHITESPACE.replaceAllIn(description, " ").strip())
 
   /**
    * A float16 widened to the float of the same value: the sign, five bits of exponent and ten of mantissa spread into a float's
@@ -138,9 +139,10 @@ object OnnxDescribeEmbedder:
       }
 
 /**
- * A description's embedding by SigLIP 2's text tower through ONNX Runtime: the description is tokenized (`Siglip2Tokenizer`), its
- * 64 tokens' rows are looked up in the token-embedding table, the tower runs over them, and the output row is L2-normalized, so
- * it compares with an image's SigLIP 2 Scene embedding by their dot product.
+ * A description's embedding by SigLIP 2's text tower through ONNX Runtime: the description is normalized (`normalized`: its case
+ * and its whitespace) and tokenized (`Siglip2Tokenizer`), its 64 tokens' rows are looked up in the token-embedding table, the
+ * tower runs over them, and the output row is L2-normalized, so it compares with an image's SigLIP 2 Scene embedding by their dot
+ * product.
  *
  * Nothing is loaded when this is built. The first description opens the text tower (`TextTower`) and the tokenizer loads its
  * vocabulary, which takes about a second, and both stay loaded until `close`. A server that is never asked for a description
@@ -153,9 +155,9 @@ object OnnxDescribeEmbedder:
  * and is not set) and the vocabulary about 30 MB of heap. A pass takes about 91 ms on one thread whatever the description's
  * length, the input being 64 tokens always; a cached description is answered in microseconds.
  *
- * The embeddings of the descriptions used last are kept, `cacheSize` of them, by `cacheKey`: paging through a search's results
- * asks for the same description once a page. Two threads asking for one new description at once both run the tower, and the first
- * to finish is the embedding kept.
+ * The embeddings of the descriptions used last are kept, `cacheSize` of them, by the normalized text they are of: paging through
+ * a search's results asks for the same description once a page. Two threads asking for one new description at once both run the
+ * tower, and the first to finish is the embedding kept.
  */
 class OnnxDescribeEmbedder(cacheSize: Int = OnnxDescribeEmbedder.CACHE_SIZE) extends DescribeEmbedder:
   import OnnxDescribeEmbedder.*
@@ -172,21 +174,21 @@ class OnnxDescribeEmbedder(cacheSize: Int = OnnxDescribeEmbedder.CACHE_SIZE) ext
   @volatile private var tower: Option[TextTower] = None
   @volatile private var closed = false
 
-  /** The embeddings of the descriptions used last, by `cacheKey`, in the order of their use; guarded by its own monitor */
+  /** The embeddings of the descriptions used last, by their normalized text, in the order of their use; guarded by its own monitor */
   private val cache = new LinkedHashMap[String, SceneEmbedding](16, 0.75f, true):
     override def removeEldestEntry(eldest: Entry[String, SceneEmbedding]): Boolean = size() > cacheSize
 
   /** The description's embedding, from the cache or by a pass of the text tower; a closed embedder refuses */
   override def embed(description: String): Option[SceneEmbedding] =
     if closed then throw closedException
-    val key = cacheKey(description)
-    val cached = cache.synchronized(Option(cache.get(key)))
+    val text = normalized(description)
+    val cached = cache.synchronized(Option(cache.get(text)))
     cached.orElse {
       val started = System.nanoTime()
-      val embedding = pass(Siglip2Tokenizer.tokenize(description))
+      val embedding = pass(Siglip2Tokenizer.tokenize(text))
       logger.debug(s"Embedded the description \"$description\" in ${(System.nanoTime() - started) / 1000000} ms")
       // Another thread may have embedded the same description meanwhile: the first one kept is everyone's
-      Some(cache.synchronized(Option(cache.putIfAbsent(key, embedding)).getOrElse(embedding)))
+      Some(cache.synchronized(Option(cache.putIfAbsent(text, embedding)).getOrElse(embedding)))
     }
 
   /** One pass of the text tower, opened first if this is the first */
