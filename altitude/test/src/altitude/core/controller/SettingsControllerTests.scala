@@ -253,8 +253,8 @@ import altitude.core.models.Settings
      *
      * Edge cases:
      *
-     * The probability written with an exponent is refused beside its field and nothing is written, so neither the form nor the
-     * row ever holds an exponent.
+     * The probability written with an exponent is refused beside its field, which says to write a plain decimal with no exponent
+     * and not that it is no number, and nothing is written, so neither the form nor the row ever holds an exponent.
      */
     val repoId = loginAs(AccountType.Admin, Permissions.all)
     val threshold = Settings.SEARCH_DESCRIBE_MIN_PROBABILITY
@@ -288,7 +288,8 @@ import altitude.core.models.Settings
         val refused = save(host, repoId, ujson.Obj(threshold -> "3e-5"))
         refused.statusCode shouldBe 200
         refused.headers("hx-retarget") shouldBe Seq("this")
-        refused.text() should include("Must be a number")
+        refused.text() should include("Must be a plain decimal, with no exponent")
+        (refused.text() should not).include("Must be a number")
         storedValue(threshold) shouldBe "0.00002"
     }
   }

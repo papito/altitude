@@ -47,6 +47,8 @@ enum SettingType:
   def error(text: String): Option[String] = this match
     case Decimal(min, max, minExclusive, maxExclusive) =>
       number(text) match
+        // What a JVM reads as a number and a Setting does not take is refused for how it is written, not as no number
+        case None if text.toDoubleOption.exists(_.isFinite) => Some("Must be a plain decimal, with no exponent")
         case None => Some("Must be a number")
         case Some(value) if value < min || (minExclusive && value == min) =>
           Some(if minExclusive then s"Must be above ${SettingType.bound(min)}" else s"Must be at least ${SettingType.bound(min)}")
@@ -79,7 +81,8 @@ object SettingType:
    * A decimal as a Setting spells it: digits with at most one point, after an optional sign. A number with an exponent is not
    * one, though a JVM reads it, and prints a small number as one (0.00009 as 9.0E-5): a Setting is stored and shown as the text
    * that was saved, so only what reads as a number on the screen is saved. Nor is anything else a JVM reads as a double: a
-   * hexadecimal number, a type suffix, the words for infinity and for no number.
+   * hexadecimal number, a type suffix, the words for infinity and for no number. The first three are numbers written another way,
+   * and [[SettingType.error]] says so; the words are no number.
    */
   private val PLAIN_DECIMAL = """[+-]?(\d+\.?\d*|\.\d+)""".r
 

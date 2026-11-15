@@ -435,9 +435,10 @@ import altitude.core.models.SettingType
      *
      * Edge cases:
      *
-     * A number written with an exponent, in either case, is refused as no number, as are a hexadecimal number, a number with a
-     * type suffix, and the words for infinity and for no number, so no row ever holds one; nothing is written for them. A leading
-     * sign and a digit left out on one side of the point are still a plain decimal.
+     * A number written with an exponent, in either case, a hexadecimal number and a number with a type suffix are each a number
+     * to a JVM and none as a Setting is written: each is refused with what to write in its place, a plain decimal with no
+     * exponent. The words for infinity and for no number, and a word that is neither, are refused as no number. No row ever holds
+     * any of them: nothing is written. A leading sign and a digit left out on one side of the point are still a plain decimal.
      */
     val threshold = Settings.SEARCH_DESCRIBE_MIN_PROBABILITY
     storedValues(threshold) shouldBe "0.00009"
@@ -445,10 +446,13 @@ import altitude.core.models.SettingType
     testApp.settings.current.default(threshold) shouldBe "0.00009"
     testApp.settings.current.searchDescribeMinProbability shouldBe 0.00009
 
-    List("9e-5", "9.0E-5", "9E-5", "1e-1", "0x1p-3", "0.5d", "0.5f", "NaN", "Infinity").foreach {
-      text =>
-        withClue(text) {
-          testApp.settings.validate(Map(threshold -> text)) shouldBe Map(threshold -> "Must be a number")
+    val refused =
+      List("9e-5", "9.0E-5", "9E-5", "1e-1", "0x1p-3", "0.5d", "0.5f").map(_ -> "Must be a plain decimal, with no exponent") ++
+        List("NaN", "Infinity", "-Infinity", "high", "").map(_ -> "Must be a number")
+    refused.foreach {
+      (text, message) =>
+        withClue(s"[$text]: ") {
+          testApp.settings.validate(Map(threshold -> text)) shouldBe Map(threshold -> message)
           intercept[ValidationException](testApp.settings.save(Map(threshold -> text)))
         }
     }
