@@ -4,6 +4,7 @@ import java.util.Arrays
 
 import altitude.core.FieldConst
 import altitude.core.util.JsonCodec
+import altitude.core.util.ModelFile
 
 /** How `OnnxSceneEmbedder` fits an image, of any size and shape, to the square a Scene model takes */
 enum SceneFit:
@@ -15,16 +16,16 @@ enum SceneFit:
 
 /**
  * One of the vision models the import embeds every still image with (the glossary's Scene model). Each knows its name in the logs
- * (`name`), how its embedding is stored (`column`: its `asset` column, named in `FieldConst.Asset`, `dimensions`), where its ONNX
- * export lives on the classpath, the side of the square it takes (`inputSize`) and how an image is fitted to it (`fit`), and the
- * per-channel mean and std, in RGB order, its input is normalized with after a scale to 0..1: what the checkpoint was trained
- * with, so `OnnxSceneEmbedder` feeds it what it expects.
+ * (`name`), how its embedding is stored (`column`: its `asset` column, named in `FieldConst.Asset`, `dimensions`), its ONNX
+ * export among the model files (`file`), the side of the square it takes (`inputSize`) and how an image is fitted to it (`fit`),
+ * and the per-channel mean and std, in RGB order, its input is normalized with after a scale to 0..1: what the checkpoint was
+ * trained with, so `OnnxSceneEmbedder` feeds it what it expects.
  */
 enum SceneModel(
     val name: String,
     val dimensions: Int,
     val column: String,
-    val resourcePath: String,
+    val file: ModelFile,
     val inputSize: Int,
     val fit: SceneFit,
     val mean: IArray[Float],
@@ -36,7 +37,7 @@ enum SceneModel(
       "dinov2",
       768,
       FieldConst.Asset.DINOV2_EMBEDDING,
-      "/onnx/dinov2_vitb14.onnx",
+      ModelFile.Dinov2,
       224,
       SceneFit.CenterCrop,
       IArray(0.485f, 0.456f, 0.406f),
@@ -53,7 +54,7 @@ enum SceneModel(
       "siglip2",
       768,
       FieldConst.Asset.SIGLIP2_EMBEDDING,
-      "/onnx/siglip2_b16_256_image.onnx",
+      ModelFile.Siglip2Image,
       256,
       SceneFit.Squash,
       IArray(0.5f, 0.5f, 0.5f),
@@ -66,8 +67,9 @@ object SceneModel:
    * What SigLIP 2's checkpoint learned beside its two towers: the scale `t = exp(logit_scale)` and the bias `b = logit_bias` of
    * the probability that an image and a description match, `sigmoid(cosine * t + b)` over the cosine of the image's Scene
    * embedding and the description's embedding (`DescribeEmbedder`). They are the checkpoint's, as the mean and std above are, and
-   * `scripts/fetch-models.py` refuses to export a text tower whose checkpoint holds others. A probability `p` is the cosine
-   * `(ln(p / (1 - p)) - b) / t`: 0.5 is the cosine 0.1486, and a hundredth of cosine is a factor of about 3 in the odds.
+   * the export script of `altitude-models` (`export-models.py`) refuses to export a text tower whose checkpoint holds others. A
+   * probability `p` is the cosine `(ln(p / (1 - p)) - b) / t`: 0.5 is the cosine 0.1486, and a hundredth of cosine is a factor of
+   * about 3 in the odds.
    */
   val SIGLIP2_LOGIT_SCALE = 112.90117645263672
   val SIGLIP2_LOGIT_BIAS = -16.77180290222168

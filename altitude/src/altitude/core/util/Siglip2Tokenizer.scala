@@ -1,13 +1,15 @@
 package altitude.core.util
 
 import java.nio.charset.StandardCharsets.UTF_8
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.Locale
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
-import scala.io.Source
+import scala.jdk.CollectionConverters._
 import scala.util.Using
 
 /**
@@ -27,17 +29,16 @@ import scala.util.Using
  *   1. Merge: while two adjacent pieces concatenate to a piece, merge the pair that comes first by `Candidate`'s order.
  *   1. Keep the first 63 tokens, add the EOS, and pad to 64 with the pad ID. The reference adds no BOS.
  *
- * The vocabulary is the file `scripts/fetch-models.py` writes from the checkpoint's tokenizer (not in git, like the models): a
- * line per piece with its ID, its score and whether it is matched whole. It is read on the first call and kept, about 30 MB of
- * heap; `tokenize` only reads it, so any number of threads tokenize at once.
+ * The vocabulary is one of the model files (`ModelFile.Siglip2Tokenizer`), which the export script of `altitude-models` writes
+ * from the checkpoint's tokenizer: a line per piece with its ID, its score and whether it is matched whole. A tokenizer is built
+ * from it by [[Siglip2Tokenizer.load]] and holds it, about 30 MB of heap; `tokenize` only reads it, so any number of threads
+ * tokenize at once.
  */
 object Siglip2Tokenizer:
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
   /** The length of the text tower's input: a description's tokens, the EOS, and the pad ID to the end */
   val MAX_TOKENS = 64
-
-  private val RESOURCE = "/onnx/siglip2_tokenizer.tsv"
 
   /** What a space is written as in a piece, U+2581 */
   private val SPACE_MARK = '\u2581'
@@ -79,44 +80,31 @@ object Siglip2Tokenizer:
       order
 
   /**
-   * The checkpoint's pieces by their text, and the ones matched whole, by their first character with the longest first, so the
-   * first of a character's that the text continues with is the longest match there
+   * A tokenizer over the vocabulary file at the path: a line per piece, `<id> <score> <whole> <piece>` between tabs, the piece's
+   * text escaped. Reading it takes about a second.
    */
-  private class Vocabulary(val pieces: HashMap[String, Piece], whole: Map[Char, Seq[String]]):
-    val eos: Int = id(EOS)
-    val pad: Int = id(PAD)
-
-    def id(piece: String): Int =
-      pieces.getOrElse(piece, throw IllegalStateException(s"The SigLIP 2 vocabulary has no piece $piece")).id
-
-    /** The longest whole piece the text holds at the index, if it holds one */
-    def wholeAt(text: String, index: Int): Option[String] =
-      whole.get(text.charAt(index)).flatMap(_.find(text.startsWith(_, index)))
-
-  private lazy val vocabulary: Vocabulary = load()
-
-  /** Reads the tokenizer file: a line per piece, `<id> <score> <whole> <piece>` between tabs, the piece's text escaped */
-  private def load(): Vocabulary =
-    val stream = getClass.getResourceAsStream(RESOURCE)
-    if stream == null then
-      throw IllegalStateException(s"SigLIP 2's tokenizer file is not on the classpath at $RESOURCE: run scripts/fetch-models.py")
+  def load(path: Path): Siglip2Tokenizer =
+    // The model files are put in place at the start, so a file missing now was taken away since
+    if !Files.isRegularFile(path) then
+      throw IllegalStateException(s"SigLIP 2's tokenizer file is missing at $path: a restart downloads it again")
     val pieces = HashMap.newBuilder[String, Piece]
     val whole = mutable.ArrayBuffer.empty[String]
-    Using.resource(Source.fromInputStream(stream, UTF_8.name)) {
-      source =>
-        source.getLines().foreach {
+    Using.resource(Files.lines(path, UTF_8)) {
+      lines =>
+        lines.iterator().asScala.foreach {
           line =>
             line.split("\t", 4) match
               case Array(id, score, isWhole, escaped) =>
                 val piece = unescaped(escaped)
                 pieces += piece -> Piece(id.toInt, score.toFloat)
                 if isWhole == "1" then whole += piece
-              case _ => throw IllegalStateException(s"A line of $RESOURCE is not an ID, a score, a flag and a piece: $line")
+              case _ => throw IllegalStateException(s"A line of $path is not an ID, a score, a flag and a piece: $line")
         }
     }
-    val loaded = Vocabulary(pieces.result(), whole.toSeq.groupBy(_.charAt(0)).view.mapValues(_.sortBy(-_.length)).toMap)
-    logger.info(s"Loaded SigLIP 2's vocabulary: ${loaded.pieces.size} pieces, ${whole.size} matched whole")
-    loaded
+    val tokenizer =
+      Siglip2Tokenizer(pieces.result(), whole.toSeq.groupBy(_.charAt(0)).view.mapValues(_.sortBy(-_.length)).toMap)
+    logger.info(s"Loaded SigLIP 2's vocabulary from $path: ${tokenizer.pieceCount} pieces, ${whole.size} matched whole")
+    tokenizer
 
   /** A piece's text from the file, where a backslash, a tab, a line feed and a carriage return are written `\\`, `\t`, `\n`, `\r` */
   private def unescaped(escaped: String): String =
@@ -179,28 +167,48 @@ object Siglip2Tokenizer:
         true
       case _ => CASE_IGNORABLE_PUNCTUATION.contains(point)
 
+/**
+ * SigLIP 2's tokenizer over its vocabulary, built by [[Siglip2Tokenizer.load]]: the checkpoint's pieces by their text, and the
+ * ones matched whole, by their first character with the longest first, so the first of a character's that the text continues with
+ * is the longest match there
+ */
+final class Siglip2Tokenizer private (pieces: HashMap[String, Siglip2Tokenizer.Piece], whole: Map[Char, Seq[String]]):
+  import Siglip2Tokenizer.*
+
+  private val eos: Int = id(EOS)
+  private val pad: Int = id(PAD)
+
+  /** How many pieces the vocabulary holds */
+  private def pieceCount: Int = pieces.size
+
+  private def id(piece: String): Int =
+    pieces.getOrElse(piece, throw IllegalStateException(s"The SigLIP 2 vocabulary has no piece $piece")).id
+
+  /** The longest whole piece the text holds at the index, if it holds one */
+  private def wholeAt(text: String, index: Int): Option[String] =
+    whole.get(text.charAt(index)).flatMap(_.find(text.startsWith(_, index)))
+
   /** The description's 64 token IDs: its tokens, at most 63, then the EOS, then the pad ID to the end */
   def tokenize(description: String): IArray[Int] =
-    val vocabulary = this.vocabulary
     val text = lowercase(description)
     val tokens = mutable.ArrayBuffer.empty[Int]
     // The start of the stretch read so far that holds no whole piece
     var stretch = 0
     var index = 0
     while index < text.length do
-      vocabulary.wholeAt(text, index) match
+      wholeAt(text, index) match
         case Some(piece) =>
-          merge(text.substring(stretch, index), vocabulary, tokens)
-          tokens += vocabulary.id(piece)
+          merge(text.substring(stretch, index), tokens)
+          tokens += id(piece)
           index += piece.length
           stretch = index
         case None => index += 1
-    merge(text.substring(stretch), vocabulary, tokens)
+    merge(text.substring(stretch), tokens)
 
-    val ids = Array.fill(MAX_TOKENS)(vocabulary.pad)
+    val ids = Array.fill(MAX_TOKENS)(pad)
     val kept = Math.min(tokens.length, MAX_TOKENS - 1)
     tokens.copyToArray(ids, 0, kept)
-    ids(kept) = vocabulary.eos
+    ids(kept) = eos
     IArray.unsafeFromArray(ids)
 
   /**
@@ -208,8 +216,7 @@ object Siglip2Tokenizer:
    * adjacent ones concatenate to a piece, the best candidate first. The symbols are a linked list over arrays, so a merge is
    * constant work, and the candidates wait in a priority queue, so a stretch of n symbols takes about n log n steps.
    */
-  private def merge(stretch: String, vocabulary: Vocabulary, tokens: mutable.ArrayBuffer[Int]): Unit =
-    val pieces = vocabulary.pieces
+  private def merge(stretch: String, tokens: mutable.ArrayBuffer[Int]): Unit =
     val symbols = mutable.ArrayBuffer.empty[String]
     stretch.replace(' ', SPACE_MARK).codePoints().forEach {
       point =>
@@ -222,7 +229,7 @@ object Siglip2Tokenizer:
     // A symbol's text (null once it is merged into the one before it), its ID, its length in code points and its neighbors
     val count = symbols.length
     val texts = symbols.toArray
-    val ids = texts.map(vocabulary.id)
+    val ids = texts.map(id)
     val points = texts.map(text => text.codePointCount(0, text.length))
     val next = Array.tabulate(count)(i => if i + 1 < count then i + 1 else -1)
     val previous = Array.tabulate(count)(_ - 1)

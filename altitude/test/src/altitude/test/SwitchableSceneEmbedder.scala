@@ -7,21 +7,22 @@ import org.opencv.core.CvType
 import org.opencv.core.Mat
 
 import altitude.core.models.SceneEmbeddings
+import altitude.core.util.ModelFiles
 import altitude.core.util.OnnxSceneEmbedder
 import altitude.core.util.SceneEmbedder
 
 /**
  * The test instances' Scene embedder: off, it embeds nothing, so a fixture import runs no Scene model; on, it answers the real
- * models' embeddings. A suite whose subject is the embeddings turns it on (`IntegrationTestCore.usesSceneModels`,
- * `withSceneModels`). The real models are opened when it is first turned on, on the test's thread, so a model that fails to open
- * fails the suite or the test with its own error rather than an import thread's WARN, and a test JVM that never turns it on never
- * loads them (about 1.2 GB).
+ * models' embeddings, from the instance's model files. A suite whose subject is the embeddings turns it on
+ * (`IntegrationTestCore.usesSceneModels`, `withSceneModels`). The real models are opened when it is first turned on, on the
+ * test's thread, so a model that fails to open fails the suite or the test with its own error rather than an import thread's
+ * WARN, and a test JVM that never turns it on never loads them (about 1.2 GB).
  *
  * The real models' answers are kept for the instance's life, by the image's pixels: the suites that turn the models on import the
  * same synthesized frames (`BurstFrames`) test after test, and a model pass is a pure function of the pixels, so each image is
  * embedded once. Two threads embedding the same new image at once both run the models and store the same answer.
  */
-class SwitchableSceneEmbedder extends SceneEmbedder with ModelSwitch {
+class SwitchableSceneEmbedder(models: ModelFiles) extends SceneEmbedder with ModelSwitch {
 
   // Read on the import dispatcher's threads, set on the test's
   @volatile private var switchedOn = false
@@ -37,7 +38,7 @@ class SwitchableSceneEmbedder extends SceneEmbedder with ModelSwitch {
 
   /** Opens the real models if they are not open yet, then switches them on; a model that fails to open throws here */
   override def turnOn(): Unit = synchronized {
-    if (onnx.isEmpty) onnx = Some(OnnxSceneEmbedder())
+    if (onnx.isEmpty) onnx = Some(OnnxSceneEmbedder(models))
     switchedOn = true
   }
 

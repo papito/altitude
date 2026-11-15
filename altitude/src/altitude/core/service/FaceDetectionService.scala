@@ -32,6 +32,7 @@ import altitude.core.util.ImageUtil.determineImageScale
 import altitude.core.util.ImageUtil.makeImageThumbnail
 import altitude.core.util.ImageUtil.matFromBytes
 import altitude.core.util.ImportParallelism
+import altitude.core.util.ModelFile
 import altitude.core.util.NetPool
 import altitude.core.util.Sha256
 
@@ -210,8 +211,9 @@ class FaceDetectionService(app: Altitude):
     FileUtils.cleanDirectory(new File(debugDir))
     logger.debug(s"Cleared debug directory: $debugDir")
 
-  private val YUNET_MODEL_PATH = Environment.resolveResourcePath("/opencv/face_detection_yunet_2023mar.onnx")
-  private val ARCFACE_MODEL_PATH = Environment.resolveResourcePath("/opencv/w600k_r50.onnx")
+  // Model files, in place before any service is built (`Altitude.models`); OpenCV reads them by their path
+  private val YUNET_MODEL_PATH = app.models.path(ModelFile.YuNet).toString
+  private val ARCFACE_MODEL_PATH = app.models.path(ModelFile.ArcFace).toString
 
   /**
    * ArcFace (InsightFace w600k_r50) – produces 512-d L2-normalized embeddings.

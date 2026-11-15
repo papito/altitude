@@ -17,6 +17,9 @@ import java.security.MessageDigest
 import java.time.Duration
 import java.util.HexFormat
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -149,6 +152,10 @@ object ModelFiles:
  * resumes a `.part` with a `Range` request, retries an I/O error or a server error after each of the retry delays, checks the
  * size and the SHA-256, and moves the file to its name at once. A file whose size or SHA-256 is not its pin fails at once.
  *
+ * The client's timeout covers the answer's headers alone: a body streamed after them has none, and a connection that stops
+ * delivering without closing would hold the start forever. A watchdog therefore closes a body that has delivered no byte for the
+ * stall timeout, which the read sees as an I/O error, retried and resumed as any other.
+ *
  * @param client
  *   the HTTP client: redirects followed (a release host and Hugging Face both redirect to a CDN, of another origin, which
  *   `Redirect.NORMAL` follows; it refuses only HTTPS to HTTP), the JVM's proxy settings (the default proxy selector)
@@ -158,12 +165,15 @@ object ModelFiles:
  *   how a wait is waited, which a test records instead
  * @param freeSpace
  *   the bytes free in the file store of a directory
+ * @param stallTimeout
+ *   how long a body may deliver no byte before the watchdog closes it
  */
 final class ModelDownloader(
     client: HttpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build(),
     retryDelays: Seq[FiniteDuration] = Seq(2.seconds, 4.seconds, 8.seconds),
     sleep: FiniteDuration => Unit = delay => Thread.sleep(delay.toMillis),
-    freeSpace: Path => Long = Files.getFileStore(_).getUsableSpace):
+    freeSpace: Path => Long = Files.getFileStore(_).getUsableSpace,
+    stallTimeout: FiniteDuration = 60.seconds):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   /** Throws `ModelFilesException`, naming the files missing, their URLs and the directory, when they cannot be put in place */
@@ -268,8 +278,20 @@ final class ModelDownloader(
           if appending then Files.newOutputStream(part, StandardOpenOption.APPEND)
           else Files.newOutputStream(part, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
         val progress = Progress(spec, written)
-        try copy(body, digest, out)(progress.add)
-        finally out.close()
+        val watchdog = ModelDownloader.Watchdog(body, stallTimeout)
+        try
+          copy(body, digest, out) {
+            bytes =>
+              watchdog.delivered()
+              progress.add(bytes)
+          }
+        catch {
+          // The read failed because the watchdog closed the stream: the stall is the cause, not the closed stream
+          case e: IOException if watchdog.fired =>
+            throw IOException(s"No byte of ${spec.name} came for $stallTimeout", e)
+        } finally
+          watchdog.cancel()
+          out.close()
         written += progress.transferred
         progress.done()
       finally body.close()
@@ -314,8 +336,48 @@ final class ModelDownloader(
 object ModelDownloader:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  /** How long a request waits for the answer's headers; the body, which may take minutes, has no limit */
+  /** How long a request waits for the answer's headers; the body, which may take minutes, has a watchdog instead (`Watchdog`) */
   private val HEADERS_TIMEOUT: Duration = Duration.ofMinutes(1)
+
+  /**
+   * The one thread every download's watchdog runs its checks on. A daemon, so it never keeps the process up, and a check that is
+   * cancelled is taken out of its queue at once.
+   */
+  private lazy val watchdogs: ScheduledExecutorService =
+    val executor = ScheduledThreadPoolExecutor(
+      1,
+      runnable =>
+        val thread = Thread(runnable, "model-download-watchdog")
+        thread.setDaemon(true)
+        thread
+    )
+    executor.setRemoveOnCancelPolicy(true)
+    executor
+
+  /**
+   * Watches a body as it is read: checked ten times a stall timeout, it closes the stream once no byte has been delivered for the
+   * stall timeout, which fails the read blocked on it with an I/O error. Cancelled once the body is read, or its read has failed.
+   */
+  private class Watchdog(stream: InputStream, stallTimeout: FiniteDuration):
+    @volatile private var lastDelivery = System.nanoTime()
+
+    /** Whether the watchdog closed the stream */
+    @volatile var fired = false
+
+    private val period = (stallTimeout / 10).toNanos.max(1)
+    private val check = watchdogs.scheduleWithFixedDelay(() => checkStall(), period, period, TimeUnit.NANOSECONDS)
+
+    /** The body delivered bytes now */
+    def delivered(): Unit = lastDelivery = System.nanoTime()
+
+    def cancel(): Unit = check.cancel(false): Unit
+
+    private def checkStall(): Unit =
+      if !fired && System.nanoTime() - lastDelivery >= stallTimeout.toNanos then
+        fired = true
+        // A check that throws is never run again, and the stream is the reader's to close as well
+        try stream.close()
+        catch { case e: IOException => logger.debug(s"Closing a stalled body failed: $e") }
 
   /**
    * One lock per lock file for the whole JVM. A file lock is held by the process, not the thread: a second thread locking the

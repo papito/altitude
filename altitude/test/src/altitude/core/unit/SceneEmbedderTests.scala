@@ -1,6 +1,7 @@
 package altitude.core.unit
 
 import altitude.test.TestFocus
+import altitude.test.TestModelFiles
 import java.security.MessageDigest
 import java.util.HexFormat
 import org.bytedeco.javacpp.Loader
@@ -28,8 +29,8 @@ import altitude.core.util.OnnxSceneEmbedder
 
 /**
  * The Scene embeddings of [[OnnxSceneEmbedder]] over the `people/` photos, as orderings of similarities, never values: the one
- * place the preprocessing is checked against what the models were trained on. Needs the model files, as the face tests need
- * ArcFace.
+ * place the preprocessing is checked against what the models were trained on. Needs the model files (`TestModelFiles`), as the
+ * face tests need ArcFace.
  */
 @DoNotDiscover class SceneEmbedderTests extends AnyFunSuite with BeforeAndAfterAll with TestFocus {
 
@@ -38,7 +39,7 @@ import altitude.core.util.OnnxSceneEmbedder
   /** One embedder for the suite, opened before the first test and closed after the last: a session per Scene model is 550 MB */
   private var embedder: OnnxSceneEmbedder = uninitialized
 
-  override def beforeAll(): Unit = embedder = OnnxSceneEmbedder()
+  override def beforeAll(): Unit = embedder = OnnxSceneEmbedder(TestModelFiles.models)
 
   override def afterAll(): Unit = embedder.close()
 

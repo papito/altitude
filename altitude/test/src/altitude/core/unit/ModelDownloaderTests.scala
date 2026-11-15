@@ -44,7 +44,8 @@ import altitude.core.util.Sha256
   /**
    * A stand-in for the release host (or its CDN) on localhost: it serves files by path, honouring `Range` with a 206 unless told
    * not to, and can be told to redirect a path, to answer a path with a status a number of times first, to cut the next answer of
-   * a path short, or to answer every request after a delay. It remembers every request.
+   * a path short, to stall the next answer of a path (part of it sent, then nothing, the connection held open until the server
+   * stops), or to answer every request after a delay. It remembers every request.
    */
   private class FileServer {
     private val executor: ExecutorService = Executors.newCachedThreadPool()
@@ -53,6 +54,9 @@ import altitude.core.util.Sha256
     private val redirects = ConcurrentHashMap[String, String]()
     private val statuses = ConcurrentHashMap[String, (Int, AtomicInteger)]()
     private val cuts = ConcurrentHashMap[String, Integer]()
+    private val stalls = ConcurrentHashMap[String, Integer]()
+    // What a stalled answer waits for before its handler returns
+    private val stopped = CountDownLatch(1)
 
     val requests: ConcurrentLinkedQueue[Request] = ConcurrentLinkedQueue[Request]()
     @volatile var honoursRange: Boolean = true
@@ -76,10 +80,12 @@ import altitude.core.util.Sha256
     def redirect(path: String, to: URI): Unit = redirects.put(path, to.toString): Unit
     def answer(path: String, status: Int, times: Int): Unit = statuses.put(path, (status, AtomicInteger(times))): Unit
     def cutNext(path: String, afterBytes: Int): Unit = cuts.put(path, afterBytes): Unit
+    def stallNext(path: String, afterBytes: Int): Unit = stalls.put(path, afterBytes): Unit
 
     def requestsOf(path: String): List[Request] = requests.asScala.toList.filter(_.path == path)
 
     def stop(): Unit =
+      stopped.countDown()
       server.stop(0)
       executor.shutdownNow(): Unit
 
@@ -106,14 +112,19 @@ import altitude.core.util.Sha256
           case None =>
             exchange.sendResponseHeaders(200, body.length)
         }
-        Option(cuts.remove(path)) match {
-          case Some(afterBytes) =>
+        (Option(cuts.remove(path)), Option(stalls.remove(path))) match {
+          case (Some(afterBytes), _) =>
             // Part of the body, a pause for the client to read it, then the connection dropped before the rest
             exchange.getResponseBody.write(body, 0, afterBytes)
             exchange.getResponseBody.flush()
             Thread.sleep(200)
             throw IOException("cut short")
-          case None =>
+          case (_, Some(afterBytes)) =>
+            // Part of the body, then nothing more, the connection neither closed nor sent to until the server stops
+            exchange.getResponseBody.write(body, 0, afterBytes)
+            exchange.getResponseBody.flush()
+            stopped.await()
+          case _ =>
             exchange.getResponseBody.write(body)
         }
   }
@@ -142,8 +153,10 @@ import altitude.core.util.Sha256
   private def directory: Path = ModelFiles(root).directory
   private def lockFile: Path = ModelFiles(root).lockFile
 
-  private def downloader(freeSpace: Path => Long = _ => Long.MaxValue): ModelDownloader =
-    ModelDownloader(sleep = delay => slept.add(delay): Unit, freeSpace = freeSpace)
+  private def downloader(
+      freeSpace: Path => Long = _ => Long.MaxValue,
+      stallTimeout: FiniteDuration = 60.seconds): ModelDownloader =
+    ModelDownloader(sleep = delay => slept.add(delay): Unit, freeSpace = freeSpace, stallTimeout = stallTimeout)
 
   private def ensure(files: ModelFileSpec*): Unit = downloader().ensure(files, directory, lockFile)
 
@@ -355,6 +368,40 @@ import altitude.core.util.Sha256
     Sha256.hex(fileOf(spec)) shouldEqual Sha256.hex(bytes)
     server.requestsOf("/model.onnx").map(_.range) shouldEqual List(None, Some("bytes=80000-"))
     slept.asScala.toList shouldEqual List(2.seconds)
+  }
+
+  test("A body that stops arriving mid-file is closed after the stall timeout, retried and resumed") {
+
+    /**
+     * Setup:
+     *
+     * A local server whose first answer for the file sends 80,000 of its bytes and then nothing more, holding the connection
+     * open, and a downloader whose stall timeout is 500 ms rather than 60 seconds.
+     *
+     * Assertions:
+     *
+     * The stalled body is closed once no byte has come for the stall timeout, which is an I/O error: the downloader sleeps 2
+     * seconds (recorded, not waited), asks again for the rest alone (`Range: bytes=80000-`), and the file verifies.
+     *
+     * Edge cases:
+     *
+     * The client's own timeout covers the response headers alone, which came at once, so without the watchdog the read would wait
+     * for as long as the server held the connection. The watchdog's checks run on one thread for every download, a daemon, so it
+     * never keeps a process up.
+     */
+    val server = newServer()
+    val bytes = content(300_000, 20)
+    val spec = served(server, "model.onnx", bytes)
+    server.stallNext("/model.onnx", afterBytes = 80_000)
+
+    downloader(stallTimeout = 500.millis).ensure(Seq(spec), directory, lockFile)
+
+    Sha256.hex(fileOf(spec)) shouldEqual Sha256.hex(bytes)
+    server.requestsOf("/model.onnx").map(_.range) shouldEqual List(None, Some("bytes=80000-"))
+    slept.asScala.toList shouldEqual List(2.seconds)
+    val watchdogs = Thread.getAllStackTraces.keySet.asScala.filter(_.getName == "model-download-watchdog")
+    watchdogs.map(_.isDaemon) shouldEqual Set(true)
+    watchdogs.size shouldBe 1
   }
 
   test("A 503 is retried 2, 4 and 8 seconds apart, then served") {
