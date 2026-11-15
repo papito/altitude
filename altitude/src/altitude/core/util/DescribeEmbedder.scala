@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory
 
 import scala.util.Using
 
-import altitude.core.Environment
 import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneModel
 
@@ -39,9 +38,6 @@ object OnnxDescribeEmbedder:
 
   /** How many descriptions' embeddings are kept, the ones used last */
   val CACHE_SIZE = 256
-
-  private val TEXT_TOWER = "/onnx/siglip2_b16_256_text.onnx"
-  private val TOKEN_EMBEDDINGS = "/onnx/siglip2_token_embeddings.f16"
 
   /** The name of the text tower's one input in its export */
   private val INPUT = "token_embeddings"
@@ -119,7 +115,7 @@ object OnnxDescribeEmbedder:
   private[core] object TextTower:
 
     /** Opens the session and maps the table; a table that fails to map leaves no session open */
-    def open(environment: OrtEnvironment, towerPath: String, tablePath: String): TextTower =
+    def open(environment: OrtEnvironment, towerPath: Path, tablePath: Path): TextTower =
       val session = OnnxSessions.open(environment, towerPath)
       try TextTower(environment, session, mapTable(tablePath))
       catch
@@ -128,8 +124,8 @@ object OnnxDescribeEmbedder:
           throw e
 
     /** The table file as float16 values, read where they are on disk; a file of another size is not this model's table */
-    private def mapTable(path: String): ShortBuffer =
-      Using.resource(FileChannel.open(Path.of(path), StandardOpenOption.READ)) {
+    private def mapTable(path: Path): ShortBuffer =
+      Using.resource(FileChannel.open(path, StandardOpenOption.READ)) {
         channel =>
           val expected = VOCABULARY_SIZE.toLong * DIMENSIONS * java.lang.Short.BYTES
           if channel.size() != expected then
@@ -144,11 +140,12 @@ object OnnxDescribeEmbedder:
  * tower runs over them, and the output row is L2-normalized, so it compares with an image's SigLIP 2 Scene embedding by their dot
  * product.
  *
- * Nothing is loaded when this is built. The first description opens the text tower (`TextTower`) and the tokenizer loads its
- * vocabulary, which takes about a second. The tower stays loaded until `close`; the vocabulary is the tokenizer object's
- * (`Siglip2Tokenizer`, a `lazy val`) and stays for the life of the JVM. A server that is never asked for a description never pays
- * for either, and neither does an import, which embeds images alone. A missing model file therefore fails the first search with a
- * description, and each one after it, rather than the start.
+ * The text tower, the token-embedding table and the tokenizer's vocabulary are model files (`ModelFiles`), in place before this
+ * is built. Nothing is loaded when it is: the first description loads the tokenizer (`Siglip2Tokenizer.load`), which takes about
+ * a second, and opens the text tower (`TextTower`). The tower stays loaded until `close`, and the tokenizer for the life of this
+ * embedder. A server that is never asked for a description never pays for either, and neither does an import, which embeds images
+ * alone. A model file that fails to load therefore fails the first search with a description, and each one after it, rather than
+ * the start.
  *
  * Measured on the machine of [[ImportParallelism]]'s figures, in a JVM with the two Scene models open: the first description adds
  * about 570 MB resident, of which the session is about 430 MB once opened (343 MB of weights, which the runtime pre-packs and
@@ -160,7 +157,7 @@ object OnnxDescribeEmbedder:
  * a search's results asks for the same description once a page. Two threads asking for one new description at once both run the
  * tower, and the first to finish is the embedding kept.
  */
-class OnnxDescribeEmbedder(cacheSize: Int = OnnxDescribeEmbedder.CACHE_SIZE) extends DescribeEmbedder:
+class OnnxDescribeEmbedder(models: ModelFiles, cacheSize: Int = OnnxDescribeEmbedder.CACHE_SIZE) extends DescribeEmbedder:
   import OnnxDescribeEmbedder.*
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -175,6 +172,9 @@ class OnnxDescribeEmbedder(cacheSize: Int = OnnxDescribeEmbedder.CACHE_SIZE) ext
   @volatile private var tower: Option[TextTower] = None
   @volatile private var closed = false
 
+  /** Loaded by the first description; one that fails to load is tried again by the next */
+  private lazy val tokenizer: Siglip2Tokenizer = Siglip2Tokenizer.load(models.path(ModelFile.Siglip2Tokenizer))
+
   /** The embeddings of the descriptions used last, by their normalized text, in the order of their use; guarded by its own monitor */
   private val cache = new LinkedHashMap[String, SceneEmbedding](16, 0.75f, true):
     override def removeEldestEntry(eldest: Entry[String, SceneEmbedding]): Boolean = size() > cacheSize
@@ -186,7 +186,7 @@ class OnnxDescribeEmbedder(cacheSize: Int = OnnxDescribeEmbedder.CACHE_SIZE) ext
     val cached = cache.synchronized(Option(cache.get(text)))
     cached.orElse {
       val started = System.nanoTime()
-      val embedding = pass(Siglip2Tokenizer.tokenize(text))
+      val embedding = pass(tokenizer.tokenize(text))
       // The description itself is in the search's own line (`SearchService.describe`), escaped: typed text, line breaks and all
       logger.debug(s"Embedded a description by a pass of the text tower in ${(System.nanoTime() - started) / 1000000} ms")
       // Another thread may have embedded the same description meanwhile: the first one kept is everyone's
@@ -211,11 +211,11 @@ class OnnxDescribeEmbedder(cacheSize: Int = OnnxDescribeEmbedder.CACHE_SIZE) ext
       if tower.isEmpty then tower = Some(openTower())
     finally writing.unlock()
 
-  /** The text tower over the model files of the classpath; the tests count its calls */
+  /** The text tower over its model files; the tests count its calls */
   protected def openTower(): TextTower =
     val started = System.nanoTime()
-    val towerPath = Environment.resolveResourcePath(TEXT_TOWER)
-    val tablePath = Environment.resolveResourcePath(TOKEN_EMBEDDINGS)
+    val towerPath = models.path(ModelFile.Siglip2Text)
+    val tablePath = models.path(ModelFile.Siglip2TokenEmbeddings)
     val opened = TextTower.open(OrtEnvironment.getEnvironment, towerPath, tablePath)
     logger.info(
       s"Opened SigLIP 2's text tower from $towerPath and mapped its token embeddings from $tablePath in " +

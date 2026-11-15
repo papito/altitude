@@ -1,6 +1,7 @@
 package altitude.core.unit
 
 import altitude.test.TestFocus
+import altitude.test.TestModelFiles
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -20,7 +21,7 @@ import altitude.core.util.OnnxDescribeEmbedder
  * [[OnnxDescribeEmbedder]] against the PyTorch model of the SigLIP 2 checkpoint: `siglip2/embeddings.json`, which
  * `scripts/siglip2-golden.py` writes, holds the embedding the model gives each of its descriptions, each run of whitespace handed
  * to it as one space, as the embedder hands a description to its tokenizer. Needs the text tower, the token-embedding table and
- * the tokenizer file `scripts/fetch-models.py` writes, as the Scene model tests need the model files.
+ * the tokenizer file among the model files (`TestModelFiles`), as the Scene model tests do.
  */
 @DoNotDiscover class DescribeEmbedderTests extends AnyFunSuite with TestFocus {
 
@@ -36,13 +37,14 @@ import altitude.core.util.OnnxDescribeEmbedder
       .toSeq
 
   /** Runs `f` over an embedder of its own, closed afterwards: the text tower is 340 MB, opened by the first description */
-  private def withEmbedder[T](embedder: OnnxDescribeEmbedder = OnnxDescribeEmbedder())(f: OnnxDescribeEmbedder => T): T =
+  private def withEmbedder[T](embedder: OnnxDescribeEmbedder = OnnxDescribeEmbedder(TestModelFiles.models))(
+      f: OnnxDescribeEmbedder => T): T =
     try f(embedder)
     finally embedder.close()
 
   /** An embedder that counts how many times it opened its text tower */
   private def counting(opens: AtomicInteger): OnnxDescribeEmbedder =
-    new OnnxDescribeEmbedder() {
+    new OnnxDescribeEmbedder(TestModelFiles.models) {
       override protected def openTower(): OnnxDescribeEmbedder.TextTower = {
         opens.incrementAndGet()
         super.openTower()
@@ -211,7 +213,7 @@ import altitude.core.util.OnnxDescribeEmbedder
      *
      * The words in another order, which no normalization makes the same text, embed differently.
      */
-    withEmbedder(OnnxDescribeEmbedder(cacheSize = 1)) {
+    withEmbedder(OnnxDescribeEmbedder(TestModelFiles.models, cacheSize = 1)) {
       embedder =>
         val normalized = embedder.embed("a woman in a park").value
         val variants = List(
@@ -250,7 +252,7 @@ import altitude.core.util.OnnxDescribeEmbedder
      * The first and the third description are still served from the cache. The second, the one used longest ago when the third
      * came, is embedded again: its embedding is a new object, equal to the one before.
      */
-    withEmbedder(OnnxDescribeEmbedder(cacheSize = 2)) {
+    withEmbedder(OnnxDescribeEmbedder(TestModelFiles.models, cacheSize = 2)) {
       embedder =>
         val cactus = embedder.embed("a cactus").value
         val dog = embedder.embed("a dog").value

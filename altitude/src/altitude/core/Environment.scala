@@ -58,8 +58,9 @@ object Environment:
     else true
 
   /**
-   * Lazily created temp directory for extracting classpath resources that need to be accessed as filesystem paths (e.g. OpenCV
-   * model files). Only used when running from a JAR (prod) where classpath resources are not directly on the filesystem.
+   * Lazily created temp directory `resolveResourcePath` extracts the SQLite vector extension's native library to
+   * (`TransactionManager`), since SQLite loads an extension from a filesystem path. Only used when running from a JAR (prod),
+   * where classpath resources are not directly on the filesystem.
    */
   private lazy val tempResourceDir: Path =
     val dir = Files.createTempDirectory("altitude-resources")
@@ -68,11 +69,12 @@ object Environment:
     dir
 
   /**
-   * Resolve a classpath resource to a filesystem path. If the resource lives directly on the filesystem (dev/test), we return its
-   * path. If it's inside a JAR (prod), we extract it to a temp directory first.
+   * Resolve a classpath resource to a filesystem path: the SQLite vector extension's native library (`TransactionManager`), which
+   * SQLite loads by its path. If the resource lives directly on the filesystem (dev/test), we return its path. If it's inside a
+   * JAR (prod), we extract it to a temp directory first.
    *
    * @param classpathPath
-   *   the classpath resource path, e.g. "/opencv/deploy.prototxt"
+   *   the classpath resource path, e.g. "/sqlite-vector/linux-x86/vector.so"
    * @return
    *   an absolute filesystem path to the resource file
    */

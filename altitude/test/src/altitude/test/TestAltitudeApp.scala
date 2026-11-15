@@ -15,6 +15,6 @@ object TestAltitudeApp {
   def build(dbEngine: String): Altitude =
     new Altitude(
       dbEngineOverride = Some(dbEngine),
-      newSceneEmbedder = () => SwitchableSceneEmbedder(),
-      newDescribeEmbedder = () => SwitchableDescribeEmbedder())
+      newSceneEmbedder = SwitchableSceneEmbedder(_),
+      newDescribeEmbedder = SwitchableDescribeEmbedder(_))
 }

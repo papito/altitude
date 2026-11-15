@@ -49,33 +49,56 @@ You will need:
 * Java 17 or up (21 recommended)
 * Docker (if using Postgres)
 * [Mill](https://mill-build.org/mill/cli/installation-ide.html)
-* [uv](https://docs.astral.sh/uv/) (to fetch the models)
 
 ### Models
 
-The model files are too large for git. Fetch them once, from the repository root:
+The model files, about 1.6 GB, are in neither git nor the build. The first start downloads them into the models
+directory, and a file in place there is never downloaded again. Each file is pinned in code by its URL, its size and its
+SHA-256 (`ModelFile` in `altitude/src/altitude/core/util/ModelFiles.scala`) and checked against its pins before it gets
+its name; the start waits for the downloads and logs their progress, and a download cut off resumes at the next start.
 
-```sh
-uv run scripts/fetch-models.py
+The files of the pinned set are in `<models dir>/v1/`. The models directory is `models.dir`:
+
+* empty, the default: the per-user cache, `$XDG_CACHE_HOME/altitude/models`, else `~/.cache/altitude/models`, which
+  the dev server, the tests and every worktree share
+* or set in `application.conf` (`application-dev.conf` in development), or by the `ALTITUDE_MODELS_DIR` environment
+  variable, which a `models.dir` in the file overrides. `~/` is your home folder; any other relative path is under the
+  application's folder. A user with no home folder (some containers) must set one of the two.
+
+Under docker-compose, point `ALTITUDE_MODELS_DIR` at a named volume, so the files outlive the container:
+
+```yaml
+services:
+  altitude:
+    environment:
+      - ALTITUDE_MODELS_DIR=/models
+    volumes:
+      - models:/models
+volumes:
+  models:
 ```
 
-The first run needs the internet: it pulls the CPU build of torch and the Hugging Face checkpoints, which it caches.
-A model already in place is skipped, and `--force` fetches them all again.
+An instance with no route to the internet takes the files by hand: download each from its URL into `<models dir>/v1/`
+under its name. A start that cannot download them fails with the same list: the files missing, their sizes, SHA-256
+and URLs, and the directory to put them in. A start takes a file as in place by its size alone, so check the files
+placed by hand against their SHA-256 (`sha256sum -c SHA256SUMS` with the release's file, for the first six).
 
-* `altitude/resources/opencv/w600k_r50.onnx`: the ArcFace face embedding net (InsightFace `w600k_r50`, 174 MB),
-  downloaded from a pinned revision of [maze/faceX](https://huggingface.co/maze/faceX/blob/e010b5098c3685fd00b22dd2aec6f37320e3d850/w600k_r50.onnx)
-  and checked against its SHA-256
-* `altitude/resources/onnx/dinov2_vitb14.onnx`: DINOv2 ViT-B/14 (`facebook/dinov2-base`), about 350 MB
-* `altitude/resources/onnx/siglip2_b16_256_image.onnx`: the SigLIP 2 ViT-B/16 image tower at 256 pixels
-  (`google/siglip2-base-patch16-256`), about 370 MB
-* The same checkpoint's text side, which embeds a description, in three files exported together:
-  `altitude/resources/onnx/siglip2_b16_256_text.onnx`, the text tower without its token embeddings, about 345 MB;
-  `altitude/resources/onnx/siglip2_token_embeddings.f16`, the token-embedding table as float16, 393 MB; and
-  `altitude/resources/onnx/siglip2_tokenizer.tsv`, the tokenizer's pieces, 6 MB
+| File | Size | What it is |
+|---|---|---|
+| `dinov2_vitb14.onnx` | 346 MB | DINOv2 ViT-B/14, a Scene model |
+| `siglip2_b16_256_image.onnx` | 372 MB | The SigLIP 2 ViT-B/16 image tower at 256 pixels, a Scene model |
+| `siglip2_b16_256_text.onnx` | 343 MB | The same checkpoint's text tower, which embeds a description |
+| `siglip2_token_embeddings.f16` | 393 MB | The text tower's token-embedding table |
+| `siglip2_tokenizer.tsv` | 6 MB | The text tower's tokenizer |
+| `face_detection_yunet_2023mar.onnx` | 233 kB | YuNet, the face detector |
+| `w600k_r50.onnx` | 174 MB | ArcFace (InsightFace `w600k_r50`), the face embedding net |
 
-The two Scene models and the text tower are exported to ONNX from their checkpoints, and each export is checked against
-PyTorch before it is written. The application does not start without the first three; the text side is loaded by the
-first description, which fails without its files.
+The first six are the assets of release `v1` of
+[renegade-otter/altitude-models](https://github.com/renegade-otter/altitude-models), at
+`https://github.com/renegade-otter/altitude-models/releases/download/v1/<file>`; that repository's README has each
+file's source checkpoint and licence.
+ArcFace is under InsightFace's non-commercial research licence, so it is not re-hosted: it comes from a pinned revision
+of [maze/faceX](https://huggingface.co/maze/faceX/resolve/e010b5098c3685fd00b22dd2aec6f37320e3d850/w600k_r50.onnx).
 
 ### Developer settings
 

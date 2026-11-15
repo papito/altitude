@@ -55,6 +55,43 @@ import altitude.core.util.Sha256
     }
   }
 
+  test("A digest fed in pieces hashes as the whole") {
+
+    /**
+     * Setup:
+     *
+     * 50,000 seeded random bytes, fed to one digest in pieces of uneven lengths, and to another as the first 20,000 bytes and
+     * then a stream of the rest.
+     *
+     * Assertions:
+     *
+     * Both digests give the hash of the whole array.
+     *
+     * Edge cases:
+     *
+     * A piece of no bytes changes nothing, and a digest read once is empty again: fed the same bytes, it gives the same hash.
+     */
+    val bytes = new Array[Byte](50_000)
+    new Random(13).nextBytes(bytes)
+
+    val pieces = Sha256.Digest()
+    Seq(0, 1, 63, 64, 65, 8192, 0, 10_000).foldLeft(0) {
+      (offset, length) =>
+        pieces.update(bytes, offset, length)
+        offset + length
+    }
+    pieces.update(bytes, 18_385, bytes.length - 18_385)
+    pieces.hex() shouldEqual Sha256.hex(bytes)
+
+    val mixed = Sha256.Digest()
+    mixed.update(bytes, 0, 20_000)
+    mixed.update(new ByteArrayInputStream(bytes, 20_000, bytes.length - 20_000))
+    mixed.hex() shouldEqual Sha256.hex(bytes)
+
+    mixed.update(bytes, 0, bytes.length)
+    mixed.hex() shouldEqual Sha256.hex(bytes)
+  }
+
   test("A file hashes as its content") {
 
     /**

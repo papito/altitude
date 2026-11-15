@@ -4,6 +4,7 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import java.nio.FloatBuffer
+import java.nio.file.Path
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 import org.opencv.core.Mat
@@ -16,7 +17,6 @@ import org.slf4j.LoggerFactory
 import scala.collection.mutable
 import scala.util.control.NonFatal
 
-import altitude.core.Environment
 import altitude.core.ImageException
 import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneEmbeddings
@@ -43,12 +43,12 @@ private[util] object OnnxSessions:
    * import's threads or a search's, and concurrent passes each spreading over every core would thrash. A session is thread-safe,
    * so its callers share it.
    */
-  def open(environment: OrtEnvironment, path: String): OrtSession =
+  def open(environment: OrtEnvironment, path: Path): OrtSession =
     val options = new OrtSession.SessionOptions()
     try
       options.setIntraOpNumThreads(1)
       options.setInterOpNumThreads(1)
-      environment.createSession(path, options)
+      environment.createSession(path.toString, options)
     finally options.close()
 
   /**
@@ -161,11 +161,11 @@ object OnnxSceneEmbedder:
 /**
  * The Scene embeddings of a still image, computed by every [[altitude.core.models.SceneModel]] through ONNX Runtime.
  *
- * The process has one `OrtEnvironment` and this class opens one `OrtSession` per Scene model when it is built, so a missing model
- * file fails the start and never an import (a library imported without embeddings would fall back to the hash silently). An
- * `OrtSession` is thread-safe, so every import thread runs the same two; each session is opened with one intra-op and one
- * inter-op thread (`OnnxSessions.open`), since the parallelism is the import threads' and twelve concurrent passes each spreading
- * over every core would thrash.
+ * The process has one `OrtEnvironment` and this class opens one `OrtSession` per Scene model when it is built, from the model's
+ * file among the model files (`SceneModel.file`), so a model that fails to open fails the start and never an import (a library
+ * imported without embeddings would fall back to the hash silently). An `OrtSession` is thread-safe, so every import thread runs
+ * the same two; each session is opened with one intra-op and one inter-op thread (`OnnxSessions.open`), since the parallelism is
+ * the import threads' and twelve concurrent passes each spreading over every core would thrash.
  *
  * The preprocessing is each model's own (`SceneModel.inputSize` and `fit`), over the one decoded image. DINOv2 takes the center
  * square: the short side fitted to 224 and a center crop, this project's transform rather than the checkpoint's (its processor
@@ -182,7 +182,7 @@ object OnnxSceneEmbedder:
  * plus about 50 ms a model to fit a 24-megapixel image; the figures and what they mean for the import are in
  * [[ImportParallelism]].
  */
-class OnnxSceneEmbedder extends SceneEmbedder:
+class OnnxSceneEmbedder(models: ModelFiles) extends SceneEmbedder:
   import OnnxSceneEmbedder.*
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -211,7 +211,7 @@ class OnnxSceneEmbedder extends SceneEmbedder:
         throw e
 
   private def openSession(model: SceneModel): OrtSession =
-    val path = Environment.resolveResourcePath(model.resourcePath)
+    val path = models.path(model.file)
     val session = OnnxSessions.open(environment, path)
     logger.info(s"Opened the ONNX session of Scene model ${model.name} from $path")
     session

@@ -23,6 +23,7 @@ import altitude.core.unit.ImageUtilTests
 import altitude.core.unit.ImportParallelismTests
 import altitude.core.unit.ImportStatusTests
 import altitude.core.unit.ImportStatusWsActorTests
+import altitude.core.unit.ModelDownloaderTests
 import altitude.core.unit.NameKeyTests
 import altitude.core.unit.NaturalOrderTests
 import altitude.core.unit.NetPoolTests
@@ -79,6 +80,7 @@ abstract class AllUnitTestSuites
     new PipelineUtilsTests,
     new EnvironmentTests,
     new Sha256Tests,
+    new ModelDownloaderTests,
     new NetPoolTests,
     new ImportParallelismTests,
     new ImportStatusTests,
