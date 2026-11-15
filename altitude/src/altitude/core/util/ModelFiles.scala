@@ -343,11 +343,17 @@ final class ModelDownloader(
     val status = response.statusCode()
     if status != 200 && status != 206 then
       response.body().close()
+      // The URL a redirect ended at carries a CDN's signature in its path and query, so only its host is named
+      val answered = response.uri()
+      val by =
+        if answered == spec.url then ""
+        else s" (answered by ${answered.getHost}${Option(answered.getPort).filter(_ != -1).fold("")(p => s":$p")})"
+      val reason = s"HTTP $status for ${spec.url}$by"
       // A server error, a rate limit (429) or a request timeout (408) is the host's passing trouble, retried as an I/O error is
       if status >= 500 || status == 429 || status == 408 then
-        throw ModelDownloader.Unavailable(s"HTTP $status from ${response.uri()}", ModelDownloader.retryAfter(response))
+        throw ModelDownloader.Unavailable(reason, ModelDownloader.retryAfter(response))
       // Anything else that is not the file will not become it by asking again
-      throw ModelFilesException(s"HTTP $status from ${response.uri()}")
+      throw ModelFilesException(reason)
     response
 
   /**

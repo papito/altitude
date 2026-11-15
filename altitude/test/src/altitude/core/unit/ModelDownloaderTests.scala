@@ -474,6 +474,32 @@ import altitude.core.util.Sha256
     cdn.requestsOf("/blob/model.onnx").map(_.range) shouldEqual List(Some("bytes=60000-"))
   }
 
+  test("A redirected failure names the pinned URL and the host that answered, not its signed path") {
+
+    /**
+     * Setup:
+     *
+     * Two local servers on different ports: the first redirects the file's URL to a path and a signed query on the second, as a
+     * release host redirects to its CDN, and the second answers it with a 404.
+     *
+     * Assertions:
+     *
+     * The ensure fails with a message that names the 404, the pinned URL and the host and port that answered, but neither the
+     * path nor the query it was redirected to, which carry a CDN's signature.
+     */
+    val origin = newServer()
+    val cdn = newServer()
+    origin.redirect("/model.onnx", cdn.url("/blob/model.onnx?X-Amz-Signature=secret"))
+    val spec = ModelFileSpec("model.onnx", origin.url("/model.onnx"), 1000, "ab" * 32)
+
+    val message = intercept[ModelFilesException](ensure(spec)).getMessage
+
+    message should include(s"HTTP 404 for ${spec.url}")
+    message should include(s"127.0.0.1:${cdn.url("/").getPort}")
+    (message should not).include("/blob")
+    (message should not).include("secret")
+  }
+
   test("An I/O error mid-file is retried after 2 seconds and resumes where it stopped") {
 
     /**
