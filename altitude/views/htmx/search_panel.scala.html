@@ -1,4 +1,5 @@
 @import altitude.core.Api
+@import altitude.core.Const
 @import altitude.core.RequestContext
 @import altitude.core.models.SearchFilterNames
 @import altitude.core.routes.SearchRequestParser
@@ -8,13 +9,19 @@
 @(text: String, names: SearchFilterNames, peopleMatch: PeopleMatch, takenRange: Option[DateRange], importedRange: Option[DateRange], showTriaged: Boolean = false, idPrefix: String = "searchPanel", description: String = "")
 
 @* The form of the advanced search panel (GET /htmx/search/r/:repoId/panel), filled in from the parameters of a search:
-   the Search text, one folder, people, Locations, and the Date Taken and Date Imported ranges. The nav's panel loads it
-   on opening (includes/nav, js/search-results/search-panel.js). Every filter is an input under its search parameter's
-   name (`Api.Field.Search`), holding the value a search takes: `q`, `folderId`, `personId` and `locationId` (IDs
-   separated by commas), `peopleMatch` (`all` or `any`), and `takenFrom`, `takenTo`, `importedFrom` and `importedTo` (ISO
-   dates). The form is the `searchPanel` component (js/alpine/components/search-panel.js): its submit, Search and Enter
-   in the text field, searches by those entries, and Clear empties every field. `idPrefix` opens every ID of the form,
-   `searchPanel` in the nav's panel; the style guide's specimen passes its own, so the two can be on one page.
+   a description, the Search text, one folder, people, Locations, and the Date Taken and Date Imported ranges. The nav's
+   panel loads it on opening (includes/nav, js/search-results/search-panel.js). Every filter is a field under its search
+   parameter's name (`Api.Field.Search`), holding the value a search takes: `describe`, `q`, `folderId`, `personId` and
+   `locationId` (IDs separated by commas), `peopleMatch` (`all` or `any`), and `takenFrom`, `takenTo`, `importedFrom` and
+   `importedTo` (ISO dates). The form is the `searchPanel` component (js/alpine/components/search-panel.js): its submit,
+   Search and Enter in the Describe field or the Search text's, searches by those entries, and Clear empties every field.
+   `idPrefix` opens every ID of the form, `searchPanel` in the nav's panel; the style guide's specimen passes its own, so
+   the two can be on one page.
+
+   The Describe field comes first and takes the focus as the panel opens: a textarea, as tall as its text, holding at most
+   as many characters as a search takes (`Const.Search.MAX_DESCRIPTION_LENGTH`). Enter searches from it as from a one-line
+   field, and Shift+Enter breaks the line (`searchOnEnter`). The Search text's field is labelled "Keywords", a label of this
+   form alone.
 
    A combobox field is includes/filter_combobox, the `filterCombobox` component
    (js/alpine/components/filter-combobox.js), with its options from htmx/search_options_folders, _people and _locations.
@@ -94,7 +101,20 @@
 <form id="@{idPrefix}Form" role="search" x-data="searchPanel" x-on:submit.prevent="search()" x-on:input="countFilters()" x-on:change="countFilters()">
     <div class="fields">
         <div class="field">
-            <label for="@{idPrefix}Text">Search text</label>
+            <label for="@{idPrefix}Describe">Describe</label>
+            <div class="box">
+                @includes.html.search_filter_icon("describe")
+                <textarea id="@{idPrefix}Describe"
+                          name="@{Api.Field.Search.DESCRIBE}"
+                          maxlength="@{Const.Search.MAX_DESCRIPTION_LENGTH}"
+                          autocomplete="off"
+                          placeholder="What's in the photo? e.g. woman in a park"
+                          x-on:keydown.enter="searchOnEnter($event)">@description</textarea>
+            </div>
+        </div>
+
+        <div class="field">
+            <label for="@{idPrefix}Text">Keywords</label>
             <div class="box">
                 @includes.html.search_filter_icon("search-text")
                 <input type="search"

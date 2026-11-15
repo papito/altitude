@@ -21,6 +21,7 @@ const DEFAULTS = {
     importedTo: null,
     subset: null,
     q: null,
+    describe: null,
     bbox: null,
     triaged: null,
     layout: Const.search.layout.grid,
@@ -55,17 +56,25 @@ const DEFAULTS = {
  * clears it, and the store drops it from any other view. This table is what the server's old `newSearch=true` flag used to express, and it is the whole
  * reason a widget can send just the one parameter it knows about.
  *
- * The advanced search panel is the one widget that combines them: it sets the text, a folder,
- * people and Locations together (`personId` and `locationId` then hold several IDs, separated by
- * commas), with how several people combine (`peopleMatch`) and the Date Taken and Date Imported
- * ranges, through `applySearchFilters`, which goes around this table. The panel's own parameters
- * (`PANEL_FILTERS`) are what looking somewhere else clears as well: a place, a view or new text
- * drops them, and with a place's single ID the several the panel chose.
+ * The advanced search panel is the one widget that combines them: it sets a description, the text,
+ * a folder, people and Locations together (`personId` and `locationId` then hold several IDs,
+ * separated by commas), with how several people combine (`peopleMatch`) and the Date Taken and Date
+ * Imported ranges, through `applySearchFilters`, which goes around this table. The panel's own
+ * parameters (`PANEL_FILTERS`) are what looking somewhere else clears as well: a place, a view or
+ * new text drops them, and with a place's single ID the several the panel chose.
+ *
+ * A description (`describe`, the words of a Describe search) ranks what the other filters match on
+ * the grid, in its one order. A search that holds one drops what the server refuses beside it and
+ * no later search wants back, an album, a Triage subset, the map area and any view but the
+ * repository view (`withoutRefusedCombinations`), and is sent without the sort, the grouping and
+ * the layout (`DESCRIBED_UNSENT`), which the store keeps: they are the choices of the search after
+ * it, and go out again once the description is gone.
  */
 const PLACES = ["folderId", "personId", "albumId", "locationId", "subset"]
 
-/** The parameters only the advanced search panel sets: how several people combine, and the two date ranges */
+/** The parameters only the advanced search panel sets: the description, how several people combine, and the two date ranges */
 const PANEL_FILTERS = [
+    "describe",
     "peopleMatch",
     "takenFrom",
     "takenTo",
@@ -78,6 +87,13 @@ const FILTERS = ["q", "folderId", "personId", "locationId", ...PANEL_FILTERS]
 
 /** What a search from the panel returns to its default: it searches the repository view by its filters alone */
 const FILTER_RESETS = ["view", "albumId", "subset", "bbox"]
+
+/**
+ * What a search with a description is sent without, though the store holds it: the server refuses a
+ * sort, a grouping and the map layout beside a description, whose results are a flat grid in the
+ * order of their likeness
+ */
+const DESCRIBED_UNSENT = ["layout", "sort", "groupBy", "groupDirection"]
 
 /** What looking at `place` (or, with none, at another view) clears */
 const elsewhere = (place) => [
@@ -108,6 +124,11 @@ const ALLOWED_VALUES = {
     peopleMatch: Object.values(Const.search.peopleMatch),
 }
 
+/** The texts the server reads, each held to the length it accepts once the white space around it is dropped */
+const TEXT_LENGTHS = {
+    describe: Const.search.maxDescriptionLength,
+}
+
 /** The days the server reads, each an ISO date (`2024-06-01`) */
 const DATE_PARAMS = ["takenFrom", "takenTo", "importedFrom", "importedTo"]
 
@@ -124,8 +145,8 @@ const PARAM_NAMES = Object.keys(DEFAULTS)
 
 /**
  * Search parameters read out of a browser URL's query string. Unknown parameters are ignored, and so
- * is a page size, a subset, a people match or a day the server would refuse, and a list of people or
- * Locations is held to the IDs the server takes (`normalize`). The layout is the one
+ * is a page size, a subset, a people match, a day or a description the server would refuse, and a
+ * list of people or Locations is held to the IDs the server takes (`normalize`). The layout is the one
  * exception to "the URL, then the defaults": a URL that says nothing about it gets the layout last
  * chosen in this browser (`localStorage`), so a map user opens on the map.
  */
@@ -151,7 +172,11 @@ export function seedSearchParams(search) {
  * the triage view, and the toolbar offers it nowhere else). A URL can ask for any of them as well.
  * A people match says nothing of fewer than two people, so it goes with the second of them. What
  * only the advanced search panel combines searches by the panel's filters alone, so it drops an
- * album and a Triage subset (`combinesFilters`), which the server refuses beside it.
+ * album and a Triage subset (`combinesFilters`), which the server refuses beside it. A description
+ * is one of those filters, and searches the repository view alone, on the grid: it leaves the
+ * Triage view as it leaves the trash, and drops the map area. The sort, the grouping and the
+ * layout it takes none of stay in the store and are left out of its requests instead
+ * (`serializeSearchParams`), so they are in force again once it is gone.
  */
 function withoutRefusedCombinations(params) {
     DATE_RANGES.forEach(([from, to]) => {
@@ -178,6 +203,11 @@ function withoutRefusedCombinations(params) {
         params.view = DEFAULTS.view
     }
 
+    if (params.describe !== null) {
+        params.view = DEFAULTS.view
+        params.bbox = DEFAULTS.bbox
+    }
+
     if (params.q === null && params.sort === Const.search.sortRelevance) {
         params.sort = DEFAULTS.sort
     }
@@ -189,23 +219,24 @@ function withoutRefusedCombinations(params) {
     return params
 }
 
-/** Text, a date range, or several people or Locations: what the server searches the repository view for, never the trash */
+/** Text, a description, a date range, or several people or Locations: what the server searches the repository view for, never the trash */
 function searchesOutsideTrash(params) {
     return params.q !== null || hasPanelFilter(params)
 }
 
-/** A date range, or several people or Locations: what only the advanced search panel sets */
+/** A description, a date range, or several people or Locations: what only the advanced search panel sets */
 function hasPanelFilter(params) {
     return (
+        params.describe !== null ||
         DATE_PARAMS.some((name) => params[name] !== null) ||
         ID_LISTS.some((name) => idsOf(params[name]).length > 1)
     )
 }
 
 /**
- * What only the advanced search panel combines, as the server tells it (`SearchRequestParser`): a
- * date range, several people or Locations, or more than one of the text, a folder, a person and a
- * Location
+ * What only the advanced search panel combines, as the server tells it (`SearchRequestParser`,
+ * `SearchResultsController.isFiltered`): a description, a date range, several people or Locations,
+ * or more than one of the text, a folder, a person and a Location
  */
 function combinesFilters(params) {
     const places = [
@@ -267,7 +298,8 @@ export function applySearchParamChanges(current, changes) {
  * (`FILTERS`) is set as `filters` gives it, one left out being no filter, and the view, the album,
  * the Triage subset and the map area return to their defaults, so the search is the repository
  * view's by the panel's filters alone. The layout, the grouping, the sort, the page size and the
- * triage filter stay, under the rules every change is held to (`withoutRefusedCombinations`).
+ * triage filter stay, under the rules every change is held to (`withoutRefusedCombinations`); a
+ * search with a description keeps the first three and sends none of them (`DESCRIBED_UNSENT`).
  */
 export function applySearchFilters(current, filters) {
     const next = { ...current }
@@ -288,11 +320,13 @@ export function searchFiltersOf(params) {
 }
 
 /**
- * How many of the advanced search panel's fields `params` fill: the text, the folder, the people,
- * the Locations and each date range count once, however many people or Locations are chosen.
+ * How many of the advanced search panel's fields `params` fill: the description, the text, the
+ * folder, the people, the Locations and each date range count once, however many people or
+ * Locations are chosen.
  */
 export function countSearchFilters(params) {
     return [
+        params.describe,
         params.q,
         params.folderId,
         params.personId,
@@ -309,15 +343,22 @@ export function countSearchFilters(params) {
  * as-is: those are per-request flags that must never end up in the store.
  *
  * An `rpp` that is not a whole number in range never gets this far (`normalize`).
+ *
+ * A search with a description is sent without its sort, grouping and layout (`DESCRIBED_UNSENT`),
+ * whatever `params` and `overrides` hold of them.
  */
 export function serializeSearchParams(params, overrides = {}) {
     const query = new URLSearchParams()
     const effective = (name) =>
         name in overrides ? overrides[name] : params[name]
+    const isDescribed = !isOmitted("describe", effective("describe"))
     PARAM_NAMES.forEach((name) => {
         const value = effective(name)
 
-        if (isOmitted(name, value)) {
+        if (
+            isOmitted(name, value) ||
+            (isDescribed && DESCRIBED_UNSENT.includes(name))
+        ) {
             return
         }
 
@@ -419,6 +460,17 @@ export function createSearchParamsStore() {
             return oneIdOf(this.locationId)
         },
 
+        /**
+         * Whether the results are laid out on the map. A search with a description is on the grid,
+         * whatever layout the store keeps for the search after it.
+         */
+        showsMap() {
+            return (
+                this.describe === null &&
+                this.layout === Const.search.layout.map
+            )
+        },
+
         /** How many of the panel's fields the search in force fills: the number on the nav's filter button */
         filterCount() {
             return countSearchFilters(this.snapshot())
@@ -453,10 +505,12 @@ function isOmitted(name, value) {
 }
 
 /**
- * A parameter's value as the store keeps it. A number, a word or a day the server would refuse is no
- * opinion, like an empty one, so a hand-edited URL cannot turn every search into a 400: the server's
- * default applies. A list of people or Locations is its IDs, each once, without the empty segments
- * and the IDs past the most a search names, which the server would refuse the whole list for.
+ * A parameter's value as the store keeps it. A number, a word, a day or a text the server would
+ * refuse is no opinion, like an empty one, so a hand-edited URL cannot turn every search into a 400:
+ * the server's default applies. A description is kept without the white space around it, as the
+ * server reads it, and is none when nothing is left of it or it is longer than the server takes. A
+ * list of people or Locations is its IDs, each once, without the empty segments and the IDs past
+ * the most a search names, which the server would refuse the whole list for.
  */
 function normalize(name, value) {
     if (value === null || value === undefined || value === "") {
@@ -479,6 +533,13 @@ function normalize(name, value) {
 
     if (DATE_PARAMS.includes(name)) {
         return isIsoDate(String(value)) ? String(value) : DEFAULTS[name]
+    }
+
+    if (name in TEXT_LENGTHS) {
+        const text = String(value).trim()
+        return text !== "" && text.length <= TEXT_LENGTHS[name]
+            ? text
+            : DEFAULTS[name]
     }
 
     if (ID_LISTS.includes(name)) {

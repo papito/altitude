@@ -28,19 +28,19 @@ import { runSearch } from "./search.js"
  * with the search as the query string, as the quick search does.
  *
  * Opening loads the form (`GET /htmx/search/r/:repoId/panel`, the host's `data-panel-url`) filled
- * in from the search parameters in force, so the server names the chips, with the search's triage
- * filter, which the form's People options count by. The text is the quick
- * search input's, typed or not yet searched, so the two fields hold one value: the input's is
- * copied to the panel as it opens, and the panel's to the input as it searches. The form is read
- * through the axios client and put in the panel here, not by htmx, so that only the answer of the
- * latest opening is shown; the panel is emptied as it closes, and stays invisible until its form
- * arrives (`htmx/search_panel.css`).
+ * in from the search parameters in force, its description included, so the server names the chips,
+ * with the search's triage filter, which the form's People options count by. The text is the quick
+ * search input's, typed or not yet searched, so the form's field for it and the input hold one
+ * value: the input's is copied to the panel as it opens, and the panel's to the input as it
+ * searches. The form is read through the axios client and put in the panel here, not by htmx, so
+ * that only the answer of the latest opening is shown; the panel is emptied as it closes, and stays
+ * invisible until its form arrives (`htmx/search_panel.css`).
  */
 
 const PANEL_ID = "searchPanel"
 
-// The form's text field (htmx/search_panel), which takes focus once the form is in
-const TEXT_ID = "searchPanelText"
+// The form's first field, Describe (htmx/search_panel), which takes focus once the form is in
+const DESCRIBE_ID = "searchPanelDescribe"
 
 // The latest load of the form; an earlier one's answer is dropped
 let loadToken = 0
@@ -206,7 +206,7 @@ async function loadForm(panelEl) {
 
         // Alpine's mutation observer initializes the form's components
         panelEl.innerHTML = response.data
-        document.getElementById(TEXT_ID)?.focus()
+        document.getElementById(DESCRIBE_ID)?.focus()
     } catch (error) {
         if (token !== loadToken) {
             return

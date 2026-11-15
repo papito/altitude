@@ -38,4 +38,12 @@ case class SearchFilters(
     names: SearchFilterNames,
     peopleMatch: PeopleMatch,
     takenRange: Option[DateRange],
-    importedRange: Option[DateRange])
+    importedRange: Option[DateRange]):
+
+  /**
+   * Whether the title names a filter beside the description, one the description's results are found within: an empty result of a
+   * description is then said to be these filters', and otherwise the Library's
+   */
+  def narrowsDescription: Boolean =
+    text.isDefined || names.folder.isDefined || names.people.nonEmpty || names.locations.nonEmpty || takenRange.isDefined ||
+      importedRange.isDefined

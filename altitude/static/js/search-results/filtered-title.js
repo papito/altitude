@@ -17,7 +17,9 @@ import { runSearch } from "./search.js"
  * else Browse with the search as its query string). A second × before the first search has answered
  * therefore searches without both. An ID of the search that names nothing in the Library has no
  * chip, so it goes with the first removal, as it goes with a search from the panel. The people match
- * is the search's; it goes with the second person (`withoutRefusedCombinations`).
+ * is the search's; it goes with the second person (`withoutRefusedCombinations`). A description's
+ * chip carries its `describe` like any other: removing it leaves the search of the other filters,
+ * or Browse when it was the only one.
  */
 
 // The dataset key of the marker, and the prefix of the literals' keys

@@ -4,16 +4,19 @@
  * is an input of the form under its search parameter's name, kept by the field's own component
  * (`filterCombobox`, `dateRange`), so the form's entries are the search.
  *
- * **Search**, the form's submit and so Enter in the text field too, runs the search of those entries
- * (`searchByFilters`): the text trimmed, and the people match only when it says something, two
- * people or more matched by any of them, since all of them is the server's rule with none given.
- * **Clear** empties every field and searches nothing: the text, the match back to all, and each
- * field's component through `search-panel-clear`, dispatched on its root.
+ * **Search**, the form's submit and so Enter in the Search text's field too, runs the search of
+ * those entries (`searchByFilters`): the text trimmed, the description as the store keeps it,
+ * without the white space around it, and the people match only when it says something, two people
+ * or more matched by any of them, since all of them is the server's rule with none given. The Describe
+ * field is a textarea, where Enter alone would break the line: Enter searches there as well
+ * (`searchOnEnter`), and Shift+Enter breaks the line. **Clear** empties every field and searches
+ * nothing: the description, the text, the match back to all, and each field's component through
+ * `search-panel-clear`, dispatched on its root.
  *
  * The nav's filter button counts the fields the form fills while the panel is open
  * (`showFormFilterCount`): as the form loads, and on every `input` and `change` that reaches the
- * form, which the text field fires as it is typed in and each field's component as it writes its
- * hidden inputs.
+ * form, which the Describe field and the Search text's fire as they are typed in and each field's
+ * component as it writes its hidden inputs.
  *
  * The people match is the form's own state: a switch that is on for all of the people (`matchesAll`)
  * and off for any of them, its value in the hidden `peopleMatch` input. The People field shows it
@@ -57,11 +60,25 @@ export function searchPanel() {
             formEl.elements.peopleMatch.value = matchesAll ? all : any
         },
 
-        /** Clear: every field empty, nothing searched, the caret in the text field */
-        clear() {
-            const textEl = formEl.elements.q
+        /**
+         * Enter in the Describe field searches, as it does in a one-line field; with Shift it
+         * breaks the line, and while an input method is composing it is the composition's
+         */
+        searchOnEnter(event) {
+            if (event.shiftKey || event.isComposing) {
+                return
+            }
 
-            textEl.value = ""
+            event.preventDefault()
+            formEl.requestSubmit()
+        },
+
+        /** Clear: every field empty, nothing searched, the caret in the first field, Describe */
+        clear() {
+            const describeEl = formEl.elements.describe
+
+            describeEl.value = ""
+            formEl.elements.q.value = ""
             this.setMatch(true)
             formEl
                 .querySelectorAll("[x-data]")
@@ -71,7 +88,7 @@ export function searchPanel() {
                     ),
                 )
             this.countFilters()
-            textEl.focus()
+            describeEl.focus()
         },
 
         /** Search: the form's entries are the filters of the search */

@@ -359,6 +359,9 @@ export const Const = {
         // The most people, and the most Locations, one search names (`SearchRequestParser.MAX_IDS`); the server refuses
         // more in either parameter
         maxIds: 10,
+        // The longest description of a Describe search (`Const.Search.MAX_DESCRIPTION_LENGTH`), counted without the
+        // white space around it; the server refuses a longer one
+        maxDescriptionLength: 300,
     },
 
     http: {

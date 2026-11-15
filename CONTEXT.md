@@ -199,32 +199,55 @@ _Avoid_: Header, Banner, Scope bar.
 
 **Search text**:
 What the user types into the nav's quick search input, or the Advanced search's
-text field, which holds the same text: Search terms, optionally joined by `OR`,
-excluded with a leading `-`, or quoted into a phrase. It searches the whole
-Library outside the trash, or as much of it as the other Search filters of an
-Advanced search leave.
-_Avoid_: Query, Keywords, Search string in user-facing text.
+field for it, which holds the same text: Search terms, optionally joined by
+`OR`, excluded with a leading `-`, or quoted into a phrase. It searches the
+whole Library outside the trash, or as much of it as the other Search filters
+of an Advanced search leave. The Advanced search labels its field Keywords, and
+the Search text's chip in a Filtered search's Results title names its remove
+control with that word; it is a label of those two and no term: the term is
+Search text.
+_Avoid_: Query, Search string in user-facing text.
 
 **Advanced search**:
 The panel under the nav's quick search that combines Search filters into one
-search, and the search it runs. It searches the whole Library outside the trash,
-narrowed by every filter at once. A folder's Search here opens it with that
-folder chosen.
+search, and the search it runs. Its first field is Describe, which takes a
+Description; the Search text's field and the other Search filters follow. It
+searches the whole Library outside the trash, narrowed by every filter at
+once. A folder's Search here opens it with that folder chosen.
 _Avoid_: Filter panel, Search builder, Query builder in user-facing text.
 
 **Search filter**:
-One thing an Advanced search narrows by: the Search text, one folder (with the
-folders below it), people (all of them, or any of them), Locations (any of
-them), a Date Taken range or a Date Imported range of whole days. Every filter
-must hold for an asset to match.
+One thing an Advanced search narrows by: a Description, the Search text, one
+folder (with the folders below it), people (all of them, or any of them),
+Locations (any of them), a Date Taken range or a Date Imported range of whole
+days. Every filter must hold for an asset to match.
 _Avoid_: Facet, Criterion, Condition.
 
 **Filtered search**:
-A search with a date range, two people or more, two Locations or more, or more
-than one of the Search text, a folder, a person and a Location: one that no
-single scope names. Its Results title shows each Search filter as a chip that
-removes it, and Edit, which opens the Advanced search on it.
+A search with a Description, whatever else it holds, a date range, two people
+or more, two Locations or more, or more than one of the Search text, a folder,
+a person and a Location: one that no single scope names. Its Results title
+shows each Search filter as a chip that removes it, the Description's first,
+and Edit, which opens the Advanced search on it.
 _Avoid_: Advanced search when referring to the results, Combined search, Multi-search.
+
+**Description**:
+The words that say what a photo shows ("woman in a park"), written into the
+Advanced search's Describe field: at most 300 characters, on one line or
+several. It is not matched against names or words, as the Search text is, but
+against how the still images look.
+_Avoid_: Prompt, Caption, Query, Semantic query.
+
+**Describe search**:
+A search with a Description: the still images that look most like it, most
+alike first, among the assets its other Search filters match. The filters
+decide which assets are in it and nothing of their order, the Search text
+included. It ends at the Describe match threshold and the Describe result
+limit, both Settings, so a narrow filter can leave few results or none. It is
+laid out on the grid in that one order, with no sort, grouping or map, and
+searches neither the trash nor Triage. Videos and animated images are never in
+it.
+_Avoid_: Semantic search, AI search, Visual search, Smart search in user-facing text.
 
 **Search term**:
 One word or one quoted phrase of the Search text. A word matches the start of a
@@ -245,7 +268,9 @@ _Avoid_: Index entry, Search index when referring to one asset's words.
 **Relevance**:
 How strongly an asset matches the Search text: each Search term counts for the
 most important Search source it matched (Person, then Location, Category, folder
-or album, Search document), and the terms add up.
+or album, Search document), and the terms add up. It orders a search by Search
+text, never a Describe search, where the Search text only decides which assets
+are ranked.
 _Avoid_: Rank, Score, Weight in user-facing text.
 
 **Admin**:

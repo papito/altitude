@@ -104,9 +104,9 @@
     font-weight: var(--font-weight-semibold);
 }
 
-/* A field's box wears the field style in place of the input inside it: the sunken fill and the hairline, and with focus
-   anywhere in it the accent edge and ring. It holds the field's icon, the chips of what is chosen and the input, which
-   wrap */
+/* A field's box wears the field style in place of the input inside it (the Describe field's textarea): the sunken fill
+   and the hairline, and with focus anywhere in it the accent edge and ring. It holds the field's icon, the chips of what
+   is chosen and the input, which wrap */
 .search-panel .box {
     display: flex;
     flex-wrap: wrap;
@@ -130,7 +130,7 @@
     color: var(--theme-neutral-3);
 }
 
-.search-panel .box input {
+.search-panel .box :is(input, textarea) {
     flex: 1 1 var(--space-9);
     min-width: var(--space-9);
     padding: var(--space-2) 0;
@@ -143,12 +143,19 @@
 }
 
 /* The box draws the focus indicator */
-.search-panel .box input:focus-visible {
+.search-panel .box :is(input, textarea):focus-visible {
     outline: none;
 }
 
-.search-panel .box input::placeholder {
+.search-panel .box :is(input, textarea)::placeholder {
     color: var(--theme-neutral-3);
+}
+
+/* The Describe field is as tall as its text, one line while it is empty, as the other fields are */
+.search-panel .box textarea {
+    field-sizing: content;
+    resize: none;
+    line-height: var(--line-height-text);
 }
 
 .search-panel .box input[readonly] {

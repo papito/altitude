@@ -1982,6 +1982,25 @@ import altitude.core.util.Util
         )
     }
 
+  /** The chip of a description, which comes first among a filtered search's */
+  private def describeChip(description: String): FilterChip =
+    FilterChip(Map("describe" -> description), s"Describe: “$description”")
+
+  /** The opening tag of a choice menu's host (`sortMenuHost`, `groupMenuHost`), which says whether the menu is disabled */
+  private def menuHost(html: String, id: String): String = s"""<div id="$id"[^>]*>""".r.findFirstIn(html).get
+
+  private val menuDisabled = "data-choice-menu-disabled"
+
+  /** The layout toggle's Map segment */
+  private val mapSegment = s"""data-app-search-layout="${Const.Search.Layout.MAP}""""
+
+  /** The one option of a described search's Sort menu, which is no search trigger */
+  private val similarityOption = """<button type="button" aria-checked="true">Similarity</button>"""
+
+  /** What an empty described search says beside Edit: within other filters, and alone */
+  private val nothingWithinFilters = "Nothing within these filters looks like that."
+  private val nothingInLibrary = "Nothing in this Library looks like that."
+
   /** The title of a filtered search, which opens its block */
   private val filteredTitle = "Search results"
 
@@ -2002,12 +2021,15 @@ import altitude.core.util.Util
      * Date Imported range is titled "Search results" with the Edit control, over one chip per filter, in the order of the panel's
      * fields: the text, the folder by its path, each person by name in the order given, each Location with its Category in the
      * order given, then the two ranges as "Taken" and "Imported" days. Each chip carries the parameters its × leaves out: the
-     * text, the folder, its own person or Location, or both days of its range. Alice's chip leads with her cover Face; the people
-     * are announced as "any of" them, and as "all of" them when the match is left out.
+     * text, the folder, its own person or Location, or both days of its range. The text's chip names its remove control "Remove
+     * Keywords beach", as the panel labels the field. Alice's chip leads with her cover Face; the people are announced as "any
+     * of" them, and as "all of" them when the match is left out.
      *
      * Edge cases:
      *
-     * The title of one scope is not rendered: no person block, no folder crumbs, no quoted text.
+     * The title of one scope is not rendered: no person block, no folder crumbs, no quoted text. The search has no description:
+     * no chip is a description's, the Sort and Group menus are enabled, with no Similarity option, the layout toggle offers the
+     * map, and the title says nothing of an empty result, though nothing matches.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2055,9 +2077,17 @@ import altitude.core.util.Util
           FilterChip(Map("taken-from" -> "2024-06-01", "taken-to" -> "2024-06-30"), "Taken 1 Jun – 30 Jun 2024"),
           FilterChip(Map("imported-from" -> "2025-01-08", "imported-to" -> "2025-01-08"), "Imported 8 Jan 2025")
         )
+        page should include("""aria-label="Remove Keywords beach"""")
         val cover = testApp.service.person.getById(alice.persistedId).coverFaceId.get
         page should include(Util.contentUrl(Const.DataStore.FACE, cover))
         ordered(page, "any of", "Bob")
+
+        page should include("""data-results-total="0"""")
+        (page should not).include("looks like that")
+        (menuHost(page, "sortMenuHost") should not).include(menuDisabled)
+        (menuHost(page, "groupMenuHost") should not).include(menuDisabled)
+        (page should not).include("Similarity")
+        page should include(mapSegment)
 
         val allOf = htmlSearch(host, repoId, filters - Api.Field.Search.PEOPLE_MATCH).text()
         ordered(allOf, "all of", "Bob")
@@ -2251,14 +2281,17 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The first page is the results fragment with the two nearest assets in order and the total of 5, not capped: it names the
-     * description, trimmed, and no Search text, it is titled "Search results" with the Edit control, as a filtered search is, its
-     * last cell carries the cursor of the next page, and the replaced URL carries the description and no sort. On one page the
-     * five are in the order of their cosines and no cell carries a cursor. With the triaged assets the total is 6, the triaged
-     * one second, and the URL keeps the flag.
+     * description, trimmed, and no Search text, it is titled "Search results" with the Edit control, as a filtered search is,
+     * over one chip, the description's, "Describe: “a cactus”", which carries the description, its last cell carries the cursor
+     * of the next page, and the replaced URL carries the description and no sort. The toolbar offers what the search takes: the
+     * Sort menu is disabled and holds "Similarity" alone, checked, which is no search trigger, the Group menu is disabled, and
+     * the layout toggle has no Map segment. On one page the five are in the order of their cosines and no cell carries a cursor.
+     * With the triaged assets the total is 6, the triaged one second, and the URL keeps the flag.
      *
      * Edge cases:
      *
-     * The asset under the threshold, the recycled one and the one with no embedding are in no page.
+     * The asset under the threshold, the recycled one and the one with no embedding are in no page. A search that found something
+     * says nothing of an empty result.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2285,6 +2318,13 @@ import altitude.core.util.Util
         page should include("""data-results-q=""""")
         page should include(filteredTitle)
         page should include(editFilters)
+        filterChipsIn(page) shouldBe List(describeChip(description))
+        (page should not).include("looks like that")
+        menuHost(page, "sortMenuHost") should include(menuDisabled)
+        page should include(similarityOption)
+        (page should not).include("data-app-search-sort=")
+        menuHost(page, "groupMenuHost") should include(menuDisabled)
+        (page should not).include(mapSegment)
         cursorOf(page).size shouldBe 1
         ordered(page, cell(nearest(1)), "data-app-search-after")
         val url = first.headers("hx-replace-url").head
@@ -2314,10 +2354,14 @@ import altitude.core.util.Util
      * Assertions:
      *
      * "a cactus" answers 200 with the results fragment, a total of 0 and no cell, and the replaced URL carries the description.
+     * Its title keeps the description's chip and Edit, and says after Edit that nothing in this Library looks like that. Within a
+     * Date Taken range or a Search text that match nothing, it says that nothing within these filters does, after the chips of
+     * the description and the filter and Edit.
      *
      * Edge cases:
      *
-     * A continuation of it, from a cursor a moment old whose rows are gone, is a 204 with nothing to add.
+     * A continuation of it, from a cursor a moment old whose rows are gone, is a 204 with nothing to add. The same filters
+     * without the description find nothing too, and say nothing of it.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2340,6 +2384,26 @@ import altitude.core.util.Util
         nothing.text() should include("""data-results-total="0"""")
         cellIds(nothing.text()) shouldBe empty
         nothing.headers("hx-replace-url").head should include("describe=a+cactus")
+        filterChipsIn(nothing.text()) shouldBe List(describeChip(description))
+        ordered(nothing.text(), editFilters, nothingInLibrary)
+        (nothing.text() should not).include(nothingWithinFilters)
+
+        val filters = List(
+          Map(Api.Field.Search.TAKEN_FROM -> "2031-01-01") -> FilterChip(
+            Map("taken-from" -> "2031-01-01"),
+            "Taken from 1 Jan 2031"),
+          Map(Api.Field.Search.QUERY_TEXT -> "beach") -> FilterChip(Map("q" -> "beach"), "beach")
+        )
+        for ((filter, chip) <- filters) withClue(s"$filter: ") {
+          val within = htmlSearch(host, repoId, filter + ("describe" -> description)).text()
+          within should include("""data-results-total="0"""")
+          filterChipsIn(within) shouldBe List(describeChip(description), chip)
+          ordered(within, editFilters, nothingWithinFilters)
+          (within should not).include(nothingInLibrary)
+        }
+        val undescribed = htmlSearch(host, repoId, filters.head._1).text()
+        undescribed should include("""data-results-total="0"""")
+        (undescribed should not).include("looks like that")
 
         val dry =
           htmlSearch(host, repoId, Map("describe" -> description, "after" -> cursor, "isContinuousScroll" -> "true"))
@@ -2479,14 +2543,16 @@ import altitude.core.util.Util
      * The description within the Search text "beach", the folder, Alice, the Location and June 2024, two to a page, answers the
      * results fragment with the two nearest of the three assets every filter matches, in the order of their cosines, and the
      * total of 3. The fragment names the description and the Search text; it is titled "Search results" with the Edit control and
-     * a chip for each of the filters, in the order of the panel's fields; and the replaced URL carries every filter with the
-     * description and no sort. The page after its cursor is the third asset, cells alone, with no title.
+     * the description's chip, then a chip for each of the filters, in the order of the panel's fields; and the replaced URL
+     * carries every filter with the description and no sort. The page after its cursor is the third asset, cells alone, with no
+     * title.
      *
      * Edge cases:
      *
-     * The description within one filter, the folder or the person alone, is titled "Search results" over that filter's chip, not
-     * by the folder's path or the person's block. A person the repository does not have beside the description is no 404: it
-     * matches nothing and has no chip.
+     * The description within one filter, the folder or the person alone, is titled "Search results" over the description's chip
+     * and that filter's, not by the folder's path or the person's block. A person the repository does not have beside the
+     * description is no 404: it matches nothing and has no chip, so the description's is the only one, and the empty result is
+     * said to be the Library's.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2534,7 +2600,8 @@ import altitude.core.util.Util
         page should include(editFilters)
         (page should not).include("""id="person"""")
         (page should not).include("""class="crumbs"""")
-        filterChipsIn(page).filterNot(_.filter.contains("describe")) shouldBe List(
+        filterChipsIn(page) shouldBe List(
+          describeChip(description),
           FilterChip(Map("q" -> "beach"), "beach"),
           FilterChip(Map("folder-id" -> trips.persistedId), "Trips"),
           FilterChip(Map("person-id" -> alice.persistedId), "Alice"),
@@ -2556,15 +2623,16 @@ import altitude.core.util.Util
           one should include(filteredTitle)
           (one should not).include("""id="person"""")
           (one should not).include("""class="crumbs"""")
-          filterChipsIn(one).filterNot(_.filter.contains("describe")).map(_.text) shouldBe
-            List(if (filter == Api.Field.Search.FOLDER_ID) "Trips" else "Alice")
+          filterChipsIn(one).map(_.text) shouldBe
+            List(describeChip(description).text, if (filter == Api.Field.Search.FOLDER_ID) "Trips" else "Alice")
         }
 
         val unknown = java.util.UUID.randomUUID.toString
         val nobody = htmlSearch(host, repoId, Map("describe" -> description, Api.Field.Search.PERSON_ID -> unknown))
         nobody.statusCode shouldBe 200
         nobody.text() should include("""data-results-total="0"""")
-        filterChipsIn(nobody.text()).filterNot(_.filter.contains("describe")) shouldBe empty
+        filterChipsIn(nobody.text()) shouldBe List(describeChip(description))
+        nobody.text() should include(nothingInLibrary)
     }
   }
 

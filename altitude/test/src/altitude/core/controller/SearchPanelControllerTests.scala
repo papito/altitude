@@ -45,6 +45,12 @@ import altitude.core.util.Util
     """\bvalue="([^"]*)"""".r.findFirstMatchIn(input).map(_.group(1)).getOrElse("")
   }
 
+  /** The form's Describe field, a textarea: its opening tag, and the description it holds */
+  private def describeField(html: String): (String, String) = {
+    val field = s"""(?s)(<textarea\\b[^>]*\\bname="${fields.DESCRIBE}"[^>]*>)(.*?)</textarea>""".r.findFirstMatchIn(html).get
+    (field.group(1), field.group(2))
+  }
+
   private def get(host: String, repoId: String, path: String, params: Map[String, String] = Map.empty) =
     requests.get(
       s"$host/htmx/search/r/$repoId/$path",
@@ -416,15 +422,18 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The panel asked for with a search's parameters is a form whose inputs hold them under their parameter names: the text, the
-     * folder, the people and the Locations as given, comma-separated, the people match and the four dates. The folder is a chip
-     * labelled by its path, each person a chip with their name, Alice's showing her cover Face, and each Location a chip labelled
-     * with its Category, the chips of a field in the order its IDs were given in.
+     * The panel asked for with a search's parameters is a form whose fields hold them under their parameter names: the
+     * description, without the white space around it, the text, the folder, the people and the Locations as given,
+     * comma-separated, the people match and the four dates. The Describe field comes first, a multi-line field of at most 300
+     * characters labelled "Describe", whose placeholder asks what is in the photo; the Search text's field follows it, labelled
+     * "Keywords", under the ID and the parameter it has always had. The folder is a chip labelled by its path, each person a chip
+     * with their name, Alice's showing her cover Face, and each Location a chip labelled with its Category, the chips of a field
+     * in the order its IDs were given in.
      *
      * Edge cases:
      *
-     * The panel asked for with no parameter holds no text, no chip and no date, and matches all people. The parameters of a
-     * search that are no filter of the panel (the view, the sort, the layout) are ignored.
+     * The panel asked for with no parameter holds no description, no text, no chip and no date, and matches all people. The
+     * parameters of a search that are no filter of the panel (the view, the sort, the layout) are ignored.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -449,6 +458,7 @@ import altitude.core.util.Util
           repoId,
           "panel",
           Map(
+            fields.DESCRIBE -> "  woman in a park ",
             fields.QUERY_TEXT -> "beach -sunset",
             fields.FOLDER_ID -> folder.persistedId,
             fields.PERSON_ID -> personIds,
@@ -467,6 +477,18 @@ import altitude.core.util.Util
         response.headers("content-type").head should include("text/html")
         val form = response.text()
         form should include("<form")
+
+        val (describe, description) = describeField(form)
+        description shouldBe "woman in a park"
+        describe should include("""id="searchPanelDescribe"""")
+        describe should include(s"""maxlength="${Const.Search.MAX_DESCRIPTION_LENGTH}"""")
+        describe should include("""placeholder="What's in the photo? e.g. woman in a park"""")
+        val labels =
+          List("""<label for="searchPanelDescribe">Describe</label>""", """<label for="searchPanelText">Keywords</label>""")
+        labels.foreach(form should include(_))
+        (form.indexOf(labels.head) < form.indexOf(labels.last)) shouldBe true
+        (form should not).include("Search text")
+        """<input\b[^>]*\bid="searchPanelText"[^>]*>""".r.findFirstIn(form).get should include(s"""name="${fields.QUERY_TEXT}"""")
 
         inputValue(form, fields.QUERY_TEXT) shouldBe "beach -sunset"
         inputValue(form, fields.FOLDER_ID) shouldBe folder.persistedId
@@ -493,6 +515,7 @@ import altitude.core.util.Util
 
         val blank = get(host, repoId, "panel").text()
         carriedIn(blank) shouldBe empty
+        describeField(blank)._2 shouldBe ""
         inputValue(blank, fields.PEOPLE_MATCH) shouldBe "all"
         for (
           name <- List(
@@ -629,7 +652,8 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * Each answers the form, filled in from the filters beside the description: the Search text as typed and the folder's chip.
+     * Each answers the form, filled in from the description and the filters beside it: the description in the Describe field, the
+     * Search text as typed and the folder's chip.
      *
      * Edge cases:
      *
@@ -656,6 +680,7 @@ import altitude.core.util.Util
         for (params <- described) withClue(s"$params: ") {
           val response = get(host, repoId, "panel", params)
           response.statusCode shouldBe 200
+          describeField(response.text())._2 shouldBe "woman in a park"
           inputValue(response.text(), fields.QUERY_TEXT) shouldBe params.getOrElse(fields.QUERY_TEXT, "")
           carriedIn(response.text()).map(_.id) shouldBe params.get(fields.FOLDER_ID).toList
         }
