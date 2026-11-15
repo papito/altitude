@@ -14,6 +14,9 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.time.Duration
+import java.time.Instant
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledThreadPoolExecutor
@@ -23,6 +26,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration._
+import scala.util.Try
 
 import altitude.core.Const
 import altitude.core.Environment
@@ -166,9 +170,10 @@ object ModelFiles:
  * Puts a list of files in the directory of a set of model files, downloading the ones not in place: a file is in place when it is
  * there under its name with its pinned size, so a start never reads a file to hash it. A download holds the lock file against
  * every other process and thread, checks the free space against the bytes missing, streams each file to `<name>.part` hashing it
- * as it is written, resumes a `.part` with a `Range` request, retries an I/O error or a server error after each of the retry
- * delays, checks the size and the SHA-256, and moves the file to its name at once. A file whose size or SHA-256 is not its pin
- * fails at once, as does a body declared other than the bytes missing or running past the pin, before a byte past it is written.
+ * as it is written, resumes a `.part` with a `Range` request, retries an I/O error, a server error, a 429 or a 408 after each of
+ * the retry delays (or the wait the answer's `Retry-After` names), checks the size and the SHA-256, and moves the file to its
+ * name at once. A file whose size or SHA-256 is not its pin fails at once, as does a body declared other than the bytes missing
+ * or running past the pin, before a byte past it is written.
  *
  * The client's timeout covers the answer's headers alone: a body streamed after them has none, and a connection that stops
  * delivering without closing would hold the start forever. A watchdog therefore closes a body that has delivered no byte for the
@@ -258,8 +263,9 @@ final class ModelDownloader(
     (s"The model files could not be put in place: $reason. Download them by hand into $directory:" +: files).mkString("\n")
 
   /**
-   * One file, tried once and then again after each of the retry delays, each try resuming what the one before it wrote. An I/O
-   * error still failing it after the last retry is a `ModelFilesException`, with the I/O error as its cause.
+   * One file, tried once and then again after each of the retry delays (or the wait an answer's `Retry-After` names), each try
+   * resuming what the one before it wrote. An I/O error still failing it after the last retry is a `ModelFilesException`, with
+   * the I/O error as its cause.
    */
   private def download(spec: ModelFileSpec, attempt: Int = 0): Unit =
     try transfer(spec)
@@ -267,7 +273,11 @@ final class ModelDownloader(
       case e: IOException =>
         val reason = s"${ModelDownloader.describe(e)}, downloading ${spec.name} from ${spec.url.getHost}"
         if attempt == retryDelays.size then throw ModelFilesException(reason, Some(e))
-        val delay = retryDelays(attempt)
+        // A host that names its wait is waited for that long rather than the retry delay
+        val delay = e match {
+          case unavailable: ModelDownloader.Unavailable => unavailable.retryAfter.getOrElse(retryDelays(attempt))
+          case _ => retryDelays(attempt)
+        }
         logger.warn(s"$reason: retry ${attempt + 1} of ${retryDelays.size} in ${delay.toSeconds} s")
         sleep(delay)
         download(spec, attempt + 1)
@@ -315,8 +325,9 @@ final class ModelDownloader(
     val status = response.statusCode()
     if status != 200 && status != 206 then
       response.body().close()
-      // A server error is the host's passing trouble, retried as an I/O error is
-      if status >= 500 then throw IOException(s"HTTP $status from ${response.uri()}")
+      // A server error, a rate limit (429) or a request timeout (408) is the host's passing trouble, retried as an I/O error is
+      if status >= 500 || status == 429 || status == 408 then
+        throw ModelDownloader.Unavailable(s"HTTP $status from ${response.uri()}", ModelDownloader.retryAfter(response))
       // Anything else that is not the file will not become it by asking again
       throw ModelFilesException(s"HTTP $status from ${response.uri()}")
     response
@@ -412,6 +423,27 @@ object ModelDownloader:
 
   /** How long a request waits for the answer's headers; the body, which may take minutes, has a watchdog instead (`Watchdog`) */
   private val HEADERS_TIMEOUT: Duration = Duration.ofMinutes(1)
+
+  /** The longest wait a `Retry-After` is followed for: a host that asks for more is asked again after this */
+  private val MAX_RETRY_AFTER: FiniteDuration = 60.seconds
+
+  /** An answer that is the host's passing trouble (a 5xx, a 429, a 408), and the wait it asks for before the next try, if any */
+  final private class Unavailable(message: String, val retryAfter: Option[FiniteDuration]) extends IOException(message)
+
+  /**
+   * The wait an answer's `Retry-After` asks for, in seconds or until an HTTP-date, at most `MAX_RETRY_AFTER`; none when the
+   * header is absent or reads as neither.
+   */
+  private def retryAfter(response: HttpResponse[?]): Option[FiniteDuration] =
+    val header = Option(response.headers().firstValue("Retry-After").orElse(null)).map(_.trim)
+    val wait = header.flatMap {
+      value =>
+        value.toLongOption.filter(_ >= 0).map(_.seconds).orElse {
+          Try(ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME)).toOption
+            .map(date => Duration.between(Instant.now(), date.toInstant).toMillis.max(0).millis)
+        }
+    }
+    wait.map(_.min(MAX_RETRY_AFTER))
 
   /**
    * An error as a reason: itself and the root of its cause chain, each by its class and its message. The JDK's client reports a

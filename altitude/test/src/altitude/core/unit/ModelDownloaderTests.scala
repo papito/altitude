@@ -13,7 +13,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import org.apache.commons.io.FileUtils
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.DoNotDiscover
@@ -53,7 +52,8 @@ import altitude.core.util.Sha256
     private val server: HttpServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0)
     private val contents = ConcurrentHashMap[String, Array[Byte]]()
     private val redirects = ConcurrentHashMap[String, String]()
-    private val statuses = ConcurrentHashMap[String, (Int, AtomicInteger)]()
+    // The answers a path is given before it is served, in order: a status and its headers
+    private val statuses = ConcurrentHashMap[String, ConcurrentLinkedQueue[(Int, Map[String, String])]]()
     private val cuts = ConcurrentHashMap[String, Integer]()
     private val stalls = ConcurrentHashMap[String, Integer]()
     // What a stalled answer waits for before its handler returns
@@ -81,7 +81,9 @@ import altitude.core.util.Sha256
 
     def serve(path: String, content: Array[Byte]): Unit = contents.put(path, content): Unit
     def redirect(path: String, to: URI): Unit = redirects.put(path, to.toString): Unit
-    def answer(path: String, status: Int, times: Int): Unit = statuses.put(path, (status, AtomicInteger(times))): Unit
+    def answer(path: String, status: Int, times: Int, headers: Map[String, String] = Map.empty): Unit =
+      val answers = statuses.computeIfAbsent(path, _ => ConcurrentLinkedQueue())
+      (1 to times).foreach(_ => answers.add((status, headers)))
     def cutNext(path: String, afterBytes: Int): Unit = cuts.put(path, afterBytes): Unit
     def stallNext(path: String, afterBytes: Int): Unit = stalls.put(path, afterBytes): Unit
 
@@ -98,11 +100,13 @@ import altitude.core.util.Sha256
       requests.add(Request(path, range, Option(exchange.getRequestHeaders.getFirst("User-Agent"))))
       if delay > Duration.Zero then Thread.sleep(delay.toMillis)
 
-      val status = Option(statuses.get(path)).filter(_._2.getAndDecrement() > 0).map(_._1)
+      val status = Option(statuses.get(path)).flatMap(answers => Option(answers.poll()))
       if redirects.containsKey(path) then
         exchange.getResponseHeaders.add("Location", redirects.get(path))
         exchange.sendResponseHeaders(302, -1)
-      else if status.isDefined then exchange.sendResponseHeaders(status.get, -1)
+      else if status.isDefined then
+        status.get._2.foreach((name, value) => exchange.getResponseHeaders.add(name, value))
+        exchange.sendResponseHeaders(status.get._1, -1)
       else if !contents.containsKey(path) then exchange.sendResponseHeaders(404, -1)
       else
         val content = contents.get(path)
@@ -528,6 +532,64 @@ import altitude.core.util.Sha256
     Sha256.hex(fileOf(spec)) shouldEqual Sha256.hex(bytes)
     server.requestsOf("/model.onnx").size shouldBe 4
     slept.asScala.toList shouldEqual List(2.seconds, 4.seconds, 8.seconds)
+  }
+
+  test("A 429 is retried after its Retry-After, capped at a minute, then served") {
+
+    /**
+     * Setup:
+     *
+     * A local server that answers the file with a 429 three times, with `Retry-After: 3`, then `Retry-After: 3600`, then an
+     * HTTP-date 30 seconds ahead, before it serves it.
+     *
+     * Assertions:
+     *
+     * The downloader waits what each answer asks rather than its own 2, 4 and 8 seconds (recorded, not waited): 3 seconds, then a
+     * minute, the most it waits, then the 30 seconds to the date; its fourth request is served and the file verifies.
+     *
+     * Edge cases:
+     *
+     * The date is a whole second, so its wait is a little under 30 seconds by the time it is read.
+     */
+    val server = newServer()
+    val bytes = content(40_000, 26)
+    val spec = served(server, "model.onnx", bytes)
+    val date = java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME
+      .format(java.time.ZonedDateTime.now(java.time.ZoneOffset.UTC).plusSeconds(30))
+    server.answer("/model.onnx", 429, times = 1, Map("Retry-After" -> "3"))
+    server.answer("/model.onnx", 429, times = 1, Map("Retry-After" -> "3600"))
+    server.answer("/model.onnx", 429, times = 1, Map("Retry-After" -> date))
+
+    ensure(spec)
+
+    Sha256.hex(fileOf(spec)) shouldEqual Sha256.hex(bytes)
+    server.requestsOf("/model.onnx").size shouldBe 4
+    val waits = slept.asScala.toList
+    waits.take(2) shouldEqual List(3.seconds, 60.seconds)
+    waits(2) should ((be > 28.seconds).and(be <= 30.seconds))
+  }
+
+  test("A 408 is retried after 2 seconds, then served") {
+
+    /**
+     * Setup:
+     *
+     * A local server that answers the file with a 408, with no `Retry-After`, once before it serves it.
+     *
+     * Assertions:
+     *
+     * The downloader sleeps its own 2 seconds (recorded, not waited), its second request is served, and the file verifies.
+     */
+    val server = newServer()
+    val bytes = content(20_000, 27)
+    val spec = served(server, "model.onnx", bytes)
+    server.answer("/model.onnx", 408, times = 1)
+
+    ensure(spec)
+
+    Sha256.hex(fileOf(spec)) shouldEqual Sha256.hex(bytes)
+    server.requestsOf("/model.onnx").size shouldBe 2
+    slept.asScala.toList shouldEqual List(2.seconds)
   }
 
   test("A failed download names the files missing, their URLs and the directory to put them in") {
