@@ -12,6 +12,10 @@
     </root>
 
     <logger name="altitude" level="OFF" />
+    <!-- A first run downloads the model files, 1.6 GB: their progress shows, so the run does not look hung -->
+    <logger name="altitude.core.util.ModelFiles$" level="INFO" />
+    <logger name="altitude.core.util.ModelDownloader" level="INFO" />
+    <logger name="altitude.core.util.ModelDownloader$" level="INFO" />
     <logger name="altitude.core.transactions" level="OFF" />
     <logger name="altitude.core.actors" level="ERROR" />
     <logger name="org.apache" level="ERROR" />

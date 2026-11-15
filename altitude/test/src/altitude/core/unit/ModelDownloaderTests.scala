@@ -1,5 +1,7 @@
 package altitude.core.unit
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.IOException
@@ -14,6 +16,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
 import org.apache.commons.io.FileUtils
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite.AnyFunSuite
@@ -35,7 +38,23 @@ import altitude.core.util.Sha256
  * The downloader puts a set of files in a directory: what is missing is downloaded, resumed, retried and checked against its
  * pins, and what is in place is never asked for again. Every server here is a local one, so no test touches the network.
  */
-@DoNotDiscover class ModelDownloaderTests extends AnyFunSuite with BeforeAndAfterEach {
+@DoNotDiscover class ModelDownloaderTests extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfterEach {
+
+  /**
+   * The downloader's loggers, the class's and its companion's, which `logback-test.xml` keeps at INFO so that a real first
+   * download in a test run shows its progress. This suite's own small downloads would print some 300 lines, so it turns them off
+   * while it runs, and puts back their levels after it; the unit suites run one at a time, so no real download is silenced.
+   */
+  private val downloaderLoggers =
+    Seq(classOf[ModelDownloader].getName, ModelDownloader.getClass.getName)
+      .map(org.slf4j.LoggerFactory.getLogger(_).asInstanceOf[Logger])
+  private var downloaderLevels: Seq[Level] = Nil
+
+  override def beforeAll(): Unit =
+    downloaderLevels = downloaderLoggers.map(_.getLevel)
+    downloaderLoggers.foreach(_.setLevel(Level.OFF))
+
+  override def afterAll(): Unit = downloaderLoggers.zip(downloaderLevels).foreach((logger, level) => logger.setLevel(level))
 
   /** One request the server saw: its path, its `Range` header, its `User-Agent` and its `Upgrade` header */
   private case class Request(path: String, range: Option[String], userAgent: Option[String], upgrade: Option[String])
