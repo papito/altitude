@@ -410,8 +410,7 @@ class Altitude(
 
   /**
    * The Scene models every imported still image is embedded with (`AssetService.measureImage`), built before the services, so a
-   * model that fails to open fails the start and never an import, as the ArcFace pool's file does. The import threads share it,
-   * and `cleanup` closes it.
+   * model that fails to open fails the start and never an import. The import threads share it, and `cleanup` closes it.
    */
   final val sceneEmbedder: SceneEmbedder = newSceneEmbedder(models)
 

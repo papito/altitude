@@ -53,8 +53,8 @@ for the transaction.
 `FaceDetectionService.extractFaces` takes a decoded BGR `Mat` (the byte-array overload decodes and delegates) and
 returns a `(Face, FaceImages)` per face it keeps.
 
-1. **YuNet** (`resources/opencv/face_detection_yunet_2023mar.onnx`, OpenCV `FaceDetectorYN`, one instance per thread)
-   finds faces. The image is downscaled to fit the `face.detection.bounding_box_size` Setting (1280 px) first and the boxes and
+1. **YuNet** (`face_detection_yunet_2023mar.onnx`, `ModelFile.YuNet` among the model files, OpenCV `FaceDetectorYN`,
+   one instance per thread) finds faces. The image is downscaled to fit the `face.detection.bounding_box_size` Setting (1280 px) first and the boxes and
    landmarks scaled back; the score is not, so that size decides how small a face in a 12 to 48 MP photo can be found.
    A detection needs a score of at least `face.yunet.confidence_threshold` (0.85, set on the thread's detector before each
    detection together with NMS `face.yunet.nms_threshold`, 0.3, OpenCV's default; tighter and one of two cheek-to-cheek
@@ -63,8 +63,8 @@ returns a `(Face, FaceImages)` per face it keeps.
 2. **Alignment**: the five YuNet landmarks (eyes, nose, mouth corners) are warped by a similarity transform
    (`Calib3d.estimateAffinePartial2D`) onto the ArcFace 112×112 reference template (`ARCFACE_REF_LANDMARKS_112`,
    `alignCropFaceFromDetection`).
-3. **Embedding**: ArcFace w600k_r50 (`resources/opencv/w600k_r50.onnx`, OpenCV DNN) turns the aligned crop into 512
-   floats (`getArcFaceEmbedding`). The threads share one `Net` (`arcFaceNets`, a `util/NetPool`, Winograd off: about
+3. **Embedding**: ArcFace w600k_r50 (`w600k_r50.onnx`, `ModelFile.ArcFace` among the model files, OpenCV DNN) turns
+   the aligned crop into 512 floats (`getArcFaceEmbedding`). The threads share one `Net` (`arcFaceNets`, a `util/NetPool`, Winograd off: about
    370 MB, against about 780 MB with it on). A `Net` is not thread-safe, so an embedding borrows it for its one
    forward pass, waiting while it is out, and copies the output inside the borrow, because the output shares its
    memory with the net. The result is an `Embedding`: the L2-normalized vector, which

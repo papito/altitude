@@ -17,7 +17,8 @@
 # torch = { index = "pytorch-cpu" }
 # ///
 """Writes the golden files SigLIP 2's text side is tested against, from the reference implementation: the checkpoint's
-processor and its PyTorch model (`google/siglip2-base-patch16-256`, the checkpoint `fetch-models.py` exports).
+processor and its PyTorch model (`google/siglip2-base-patch16-256`, the checkpoint the export script of
+`renegade-otter/altitude-models`, `export-models.py`, exports).
 
     altitude/test/resources/siglip2/tokens.json      a list of {"description", "ids"}: a description and the 64 token
                                                      IDs the reference processor gives it, for `Siglip2TokenizerTests`
@@ -43,7 +44,7 @@ Both files are tracked. Run from the repository root, after a change to the desc
 
     uv run scripts/siglip2-golden.py
 
-The versions pinned above are those of `fetch-models.py`.
+The versions pinned above are those of `export-models.py`.
 """
 
 from __future__ import annotations
