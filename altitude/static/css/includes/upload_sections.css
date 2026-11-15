@@ -49,6 +49,11 @@
   opacity: 0.5;
 }
 
+/* The zone's button is disabled only while the zone waits, which dims it with the rest: it is not dimmed a second time */
+#importUploads .drop-zone .action-button:disabled {
+  opacity: 1;
+}
+
 #importUploads .toggle-group button:disabled {
   cursor: default;
 }

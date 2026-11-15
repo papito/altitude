@@ -803,8 +803,7 @@ its literals (`data-app-search="click"` with `data-app-search-sort`, or `data-ap
 order, which the server takes no parameter for: its Sort host holds a single checked `button`, "Similarity", which is
 no search trigger, so the disabled trigger reads "Sort Similarity", and its Group host keeps its options under the
 disabled trigger, "No grouping" checked. A disabled trigger is the `disabled` button of `buildChoiceMenuCtrl`, which
-opens nothing; `core.css` gives a disabled `.action-button` no look of its own beyond taking neither the hover nor
-the press. `ensureChoiceMenus` (`js/common/choice-menus.js`,
+opens nothing, and is dimmed as every disabled `.action-button` is (**Control states**). `ensureChoiceMenus` (`js/common/choice-menus.js`,
 called by `fragments/index.js` for every hydrated root) hands each host to `buildChoiceMenuCtrl`, which builds the
 control into it: a `.choice-menu-ctrl` root (`data-menu-kind="choice"`, centered under its trigger), the trigger
 (`action-button small`, `aria-haspopup="menu"`: the icon, the name dimmed, the checked option's text in `.choice`, a
@@ -3286,7 +3285,14 @@ shadow, translate and scale over 160 ms, ease-out; a menu action's own rule shor
 `.action-button` lifts 1px, and a pressed one, toggle segment or filter chip scales to 0.97: both live in one
 `@media (prefers-reduced-motion: no-preference)` block, so nothing moves when the system asks for reduced motion while
 the colors and shadows still change. A disabled button takes neither the hover nor the press look
-(`:hover:not(:disabled)`, `:active:not(:disabled)`). `.action-button.primary`, the accent call to action, is a
+(`:hover:not(:disabled)`, `:active:not(:disabled)`) and is dimmed whole, whatever its variant
+(`.action-button:disabled`: `opacity: 0.5` under the default cursor, what the account form's Permission chip
+wears while its input is disabled, `pages/users.css`). The buttons that can be disabled: a choice menu's trigger (Sort
+and Group of a search with a description, Group on the map), the upload sections' Choose files and Choose folder
+and their Cancel, the Edit panel's Revert to original, the Add to location dialog's Add with no Location to add to,
+Curation's Previous and Next, a paused Watch folder's Scan now, and a Face's Change and Remove while its correction
+is out. The upload sections' Choose buttons are disabled only while their zone waits, which dims the zone whole, so
+they take no dimming of their own (`includes/upload_sections.css`). `.action-button.primary`, the accent call to action, is a
 dialog's or a form's main action: Add in the Add location and Add to location dialogs, Move, Merge, the Settings
 Save, the upload sections' Choose files and Choose folder, the Watch folder dialog's Save, and the empty lists' "Add your first album" and "Add your first location"; a destructive
 confirmation stays `.error`. The batch ops' buttons (`.batch-ops .action-button`) keep a normal weight, the small button size, and draw the

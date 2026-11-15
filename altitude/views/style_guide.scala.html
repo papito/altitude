@@ -611,7 +611,9 @@
              to action, <code>.primary</code>, in <code>--theme-accent</code>. Success, warning and error
              buttons take their color on a tint of it and signal an outcome, not emphasis. A button lifts and lightens its
              fill on hover and gives a little when pressed (it stays in place when the system asks for reduced motion, and
-             a disabled one does neither); keyboard focus is the ring of <code>:focus-visible</code>, not
+             a disabled one does neither). A disabled button of any variant is dimmed whole, at half opacity under the
+             default cursor, as a chip whose input is disabled is: the Sort and Group menus of a search with a
+             description, Group on the map. Keyboard focus is the ring of <code>:focus-visible</code>, not
              <code>:focus</code>, so a button a dialog returns focus to is not left ringed after a mouse click. A choice
              between ways of showing the same thing is a <code>.toggle-group</code>: its buttons joined on one track, the
              current one <code>aria-pressed="true"</code>, raised on the page surface. The theme switch above the contents
@@ -631,6 +633,8 @@
             <button type="button" class="action-button small curate"><i class="fas fa-check-double" aria-hidden="true"></i><span>.curate</span></button>
             <button type="button" class="action-button small curate lit"><i class="fas fa-check-double" aria-hidden="true"></i><span>.curate.lit</span></button>
             <button type="button" class="action-button" disabled>Disabled</button>
+            <button type="button" class="action-button primary" disabled>.primary, disabled</button>
+            <button type="button" class="action-button small" disabled><i class="fas fa-layer-group" aria-hidden="true"></i><span>.small, disabled</span></button>
             <div class="toggle-group" role="group" aria-label="Toggle group specimen">
               <button type="button" aria-pressed="true">Current</button>
               <button type="button" aria-pressed="false">Other</button>

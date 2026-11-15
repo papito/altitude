@@ -830,6 +830,12 @@ footer {
     box-shadow: var(--sheen-shadow), var(--lift-shadow);
 }
 
+/* A disabled button is dimmed whole, whatever its variant, as a chip whose input is disabled is (pages/users.css) */
+.action-button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
 .action-button.success {
     --button-fill: hsl(from var(--success-color) h s l / 0.16);
     border-color: var(--success-color);
