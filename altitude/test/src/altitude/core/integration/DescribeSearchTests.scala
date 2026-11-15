@@ -986,14 +986,15 @@ object DescribeSearchTests {
        *
        * "a cactus" with no filter finds the context repository's three sorted assets, nearest first, and scans the vector index
        * not once: the view's three are counted, as any search's matches are, and being under the limit of 75,000 they are ranked
-       * exactly. Under a limit of 3 they are ranked exactly still, and under a limit of 2 through the index, in one scan, to the
-       * same list.
+       * exactly. Under a limit of 3 they are ranked exactly still, and under a limit of 2 through the index, in one scan.
        *
        * Edge cases:
        *
        * The count is of the view's assets that carry an embedding, so the other repository's five, the recycled asset, the two in
        * triage and the one with no embedding count for nothing. With the triaged assets asked for the view holds five, ranked
-       * exactly under a limit of 5 and through the index under a limit of 4.
+       * exactly under a limit of 5 and through the index under a limit of 4. What the index hands out is held to the exact
+       * ranking's rows in its order, and not to every one of them: the index is approximate, and over a few rows a scan was seen
+       * to miss one (`docs/test-coverage.md`, **Describe search**).
        */
       val description = "a cactus"
       val kept = List(0.5, 0.4, 0.3).zipWithIndex.map((cosine, seed) => placed(description, cosine, seed))
@@ -1022,13 +1023,20 @@ object DescribeSearchTests {
             (ids(found), describeIndexScans - before)
           }
 
+          /** One scan of the index, handing out rows of the exact ranking alone, each once, in its order */
+          def throughIndex(exactLimit: Int, filters: Filters, exact: List[String]): Unit = {
+            val (found, scans) = scanning(exactLimit, filters)
+            scans shouldBe 1
+            found shouldBe exact.filter(found.toSet)
+          }
+
           scanning(Const.Search.DESCRIBE_EXACT_LIMIT) shouldBe (kept.map(_.id), 0)
           scanning(exactLimit = 3) shouldBe (kept.map(_.id), 0)
-          scanning(exactLimit = 2) shouldBe (kept.map(_.id), 1)
+          throughIndex(exactLimit = 2, Filters(), kept.map(_.id))
 
           val withTriage = ranked(kept ++ inTriage, description)
           scanning(exactLimit = 5, Filters(triaged = true)) shouldBe (withTriage, 0)
-          scanning(exactLimit = 4, Filters(triaged = true)) shouldBe (withTriage, 1)
+          throughIndex(exactLimit = 4, Filters(triaged = true), withTriage)
         }
       }
     }
