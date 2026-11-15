@@ -3849,9 +3849,10 @@ usable term) and puts it on the fragment as `data-results-q`. The Sort menu offe
 only then, checked when it is the effective sort, since the server
 refuses it without text.
 
-It takes a Describe search's description the same way (`description`, the words the results were ranked by;
-**Describe search** in `altitude/AGENTS.md`) and puts it on the fragment as `data-results-describe`, empty for
-any other search. The `sort` it is handed is then the similarity sort, the search's one order, so the toolbar offers
+A Describe search's description (the words the results were ranked by; **Describe search** in
+`altitude/AGENTS.md`) is not a parameter of the template and is not on the fragment's root: it is the first of the
+filters the template is handed, where its chip carries it (`data-app-filter-describe`), and the template reads off
+those filters whether the search has one (`isDescribed`). The `sort` it is handed is then the similarity sort, the search's one order, so the toolbar offers
 nothing the server refuses beside a description: the Sort menu is disabled on a single checked option, "Similarity",
 which is no search trigger, the Group menu is disabled, and the layout toggle has no Map segment (**Context menus**,
 **Map view**).

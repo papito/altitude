@@ -2280,13 +2280,14 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The first page is the results fragment with the two nearest assets in order and the total of 5, not capped: it names the
-     * description, trimmed, and no Search text, it is titled "Search results" with the Edit control, as a filtered search is,
-     * over one chip, the description's, "Describe: “a cactus”", which carries the description, its last cell carries the cursor
-     * of the next page, and the replaced URL carries the description and no sort. The toolbar offers what the search takes: the
-     * Sort menu is disabled and holds "Similarity" alone, checked, which is no search trigger, the Group menu is disabled, and
-     * the layout toggle has no Map segment. On one page the five are in the order of their cosines and no cell carries a cursor.
-     * With the triaged assets the total is 6, the triaged one second, and the URL keeps the flag.
+     * The first page is the results fragment with the two nearest assets in order and the total of 5, not capped: it names no
+     * Search text, it is titled "Search results" with the Edit control, as a filtered search is, over one chip, the
+     * description's, "Describe: “a cactus”", which carries the description, trimmed, and is the one place the fragment holds it;
+     * its last cell carries the cursor of the next page, and the replaced URL carries the description and no sort. The toolbar
+     * offers what the search takes: the Sort menu is disabled and holds "Similarity" alone, checked, which is no search trigger,
+     * the Group menu is disabled, and the layout toggle has no Map segment. On one page the five are in the order of their
+     * cosines and no cell carries a cursor. With the triaged assets the total is 6, the triaged one second, and the URL keeps the
+     * flag.
      *
      * Edge cases:
      *
@@ -2314,7 +2315,7 @@ import altitude.core.util.Util
         cellIds(page) shouldBe nearest.take(2).map(_.persistedId)
         page should include("""data-results-total="5"""")
         page should include("""data-results-total-capped="false"""")
-        page should include(s"""data-results-describe="$description"""")
+        (page should not).include("data-results-describe")
         page should include("""data-results-q=""""")
         page should include(filteredTitle)
         page should include(editFilters)
@@ -2604,10 +2605,10 @@ import altitude.core.util.Util
      *
      * The description within the Search text "beach", the folder, Alice, the Location and June 2024, two to a page, answers the
      * results fragment with the two nearest of the three assets every filter matches, in the order of their cosines, and the
-     * total of 3. The fragment names the description and the Search text; it is titled "Search results" with the Edit control and
-     * the description's chip, then a chip for each of the filters, in the order of the panel's fields; and the replaced URL
-     * carries every filter with the description and no sort. The page after its cursor is the third asset, cells alone, with no
-     * title.
+     * total of 3. The fragment names the Search text; it is titled "Search results" with the Edit control and the description's
+     * chip, which carries the description, then a chip for each of the filters, in the order of the panel's fields; and the
+     * replaced URL carries every filter with the description and no sort. The page after its cursor is the third asset, cells
+     * alone, with no title.
      *
      * Edge cases:
      *
@@ -2656,7 +2657,7 @@ import altitude.core.util.Util
         page should include("""data-app-fragment="search-results"""")
         cellIds(page) shouldBe matching.take(2).map(_.persistedId)
         page should include("""data-results-total="3"""")
-        page should include(s"""data-results-describe="$description"""")
+        (page should not).include("data-results-describe")
         page should include("""data-results-q="beach"""")
         page should include(filteredTitle)
         page should include(editFilters)

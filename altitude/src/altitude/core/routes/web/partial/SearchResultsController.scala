@@ -64,8 +64,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * first, among the assets its other filters match (the Search text, a folder, people, Locations, the two date ranges, and
    * `triaged=true`, which adds the triaged assets), as a flat grid page continued by cursor like any other. Its one order,
    * similarity, is implied: a blank or overlong description, and an album, a subset, a map area, a sort, a grouping, the trash or
-   * the Triage view or the map layout beside one, is a 400. It is a filtered search whatever else it holds (`isFiltered`). The
-   * fragment names the description (`data-results-describe`), and the browser URL carries it and no sort.
+   * the Triage view or the map layout beside one, is a 400. It is a filtered search whatever else it holds (`isFiltered`), so the
+   * fragment holds the description as the first of its filters' chips, which is also what tells the template to offer the one
+   * order and layout such a search has, and the browser URL carries it and no sort.
    *
    * With `groupBy`, a header opens each date, Location or, in the Triage view, Sequence (`parseGrouping`). Grouped or not, a page
    * is `rpp` assets, 1 to `Const.Search.MAX_RPP`, and is continued by the `after` cursor its last cell carries
@@ -331,8 +332,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         albumId = albumId,
         locationId = locationId,
         bbox = bbox,
-        text = scope.text,
-        description = scope.description
+        text = scope.text
       ),
       ("HX-Replace-Url", browserUrl)
     )

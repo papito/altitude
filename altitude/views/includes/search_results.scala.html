@@ -21,11 +21,15 @@
    then the folder; empty for the root), `album`, `location` (with its category's name) and `subset` (a Triage subset)
    are the scope the results title names (includes/results_title); `text` is its title when none of them is set. `filters` are
    a filtered search's, which the title names in their place, a chip each (includes/search_filter_chips), the description's
-   first. `description` is a Describe search's, the words its results were ranked by; `sort` is then the similarity sort, its
-   one order on the flat grid, so the toolbar offers nothing the server refuses beside a description: the Sort menu is disabled
-   and shows "Similarity", the Group menu is disabled, and the layout toggle has no Map segment. An empty result of a
-   description is said in the title, after Edit. *@
-@(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None, subset: Option[TriageSubset] = None, filters: Option[SearchFilters] = None, description: Option[String] = None)
+   first. A search with a description is a filtered one, and its filters say so (`isDescribed`): `sort` is then the similarity
+   sort, its one order on the flat grid, so the toolbar offers nothing the server refuses beside a description: the Sort menu
+   is disabled and shows "Similarity", the Group menu is disabled, and the layout toggle has no Map segment. An empty result of
+   a description is said in the title, after Edit. *@
+@(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None, subset: Option[TriageSubset] = None, filters: Option[SearchFilters] = None)
+
+@* Whether the results are a Describe search's, ranked by a description: the description is one of the search's filters, and
+   its chip is where the fragment holds it *@
+@isDescribed = @{ filters.exists(_.description.isDefined) }
 
 @* The effective scope of these results, as the server resolved them from the search parameters it was sent;
    the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js).
@@ -44,7 +48,6 @@
      data-results-location-id="@{locationId.getOrElse("")}"
      data-results-bbox="@{bbox.getOrElse("")}"
      data-results-q="@{text.getOrElse("")}"
-     data-results-describe="@{description.getOrElse("")}"
      data-results-layout="@{layout}"
      data-results-group-by="@{grouping.map(_.by.apiValue).getOrElse("")}"
      data-results-group-direction="@{grouping.filter(_.by.dateField.isDefined).map(_.direction.toString.toLowerCase).getOrElse("")}">
@@ -108,7 +111,7 @@
     <div id="layoutToggle" class="toggle-group" role="group" aria-label="Layout">
       <button type="button" title="Grid" aria-pressed="@{layout == Const.Search.Layout.GRID}"
               data-app-search="click" data-app-search-layout="@{Const.Search.Layout.GRID}"><i class="fas fa-th"></i></button>
-      @if(description.isEmpty) {
+      @if(!isDescribed) {
       <button type="button" title="Map" aria-pressed="@{layout == Const.Search.Layout.MAP}"
               data-app-search="click" data-app-search-layout="@{Const.Search.Layout.MAP}"><i class="fas fa-map"></i></button>
       }
@@ -126,7 +129,7 @@
          sets (js/search-results/search-triggers.js), which the search funnel combines with every other parameter in the
          `searchParams` store. Grouping is a reorder, like the sort: it survives a change of folder, person, album or view.
          The map layout groups nothing, and neither does a search with a description, so its host is then disabled. *@
-      <div id="groupMenuHost" data-choice-menu="Group" data-choice-menu-icon="fas fa-layer-group" @if(layout == Const.Search.Layout.MAP || description.isDefined) {data-choice-menu-disabled}>
+      <div id="groupMenuHost" data-choice-menu="Group" data-choice-menu-icon="fas fa-layer-group" @if(layout == Const.Search.Layout.MAP || isDescribed) {data-choice-menu-disabled}>
         <button type="button" data-app-search="click" data-app-search-group-by="" data-app-search-group-direction="" @if(grouping.isEmpty) {aria-checked="true"}>No grouping</button>
         <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))) {aria-checked="true"}>Date Taken (Newest first)</button>
         <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="asc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.ASC))) {aria-checked="true"}>Date Taken (Oldest first)</button>
@@ -145,8 +148,8 @@
          its sort, which the search funnel combines with every other search parameter held in the `searchParams` store
          (js/search-results/search.js). A search with a description has one order, which the server takes no parameter for: its
          menu is disabled and holds that order alone, "Similarity", checked, which is no search trigger *@
-      <div id="sortMenuHost" data-choice-menu="Sort" data-choice-menu-icon="fas fa-sort-amount-down" @if(description.isDefined) {data-choice-menu-disabled}>
-        @if(description.isDefined) {
+      <div id="sortMenuHost" data-choice-menu="Sort" data-choice-menu-icon="fas fa-sort-amount-down" @if(isDescribed) {data-choice-menu-disabled}>
+        @if(isDescribed) {
         <button type="button" aria-checked="true">Similarity</button>
         } else {
         @* Relevance ranks by the Search text, so it is offered only while the results have text: the server refuses it otherwise *@
