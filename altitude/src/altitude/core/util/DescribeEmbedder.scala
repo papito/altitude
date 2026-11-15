@@ -60,7 +60,7 @@ object OnnxDescribeEmbedder:
    * so the same words spaced differently would be different inputs to the model; embedding the one text the key is makes a
    * description's embedding the same whichever way of writing it was asked first.
    */
-  private[core] def normalized(description: String): String =
+  private def normalized(description: String): String =
     Siglip2Tokenizer.lowercase(WHITESPACE.replaceAllIn(description, " ").strip())
 
   /**
@@ -186,7 +186,8 @@ class OnnxDescribeEmbedder(cacheSize: Int = OnnxDescribeEmbedder.CACHE_SIZE) ext
     cached.orElse {
       val started = System.nanoTime()
       val embedding = pass(Siglip2Tokenizer.tokenize(text))
-      logger.debug(s"Embedded the description \"$description\" in ${(System.nanoTime() - started) / 1000000} ms")
+      // The description itself is in the search's own line (`SearchService.describe`), escaped: typed text, line breaks and all
+      logger.debug(s"Embedded a description by a pass of the text tower in ${(System.nanoTime() - started) / 1000000} ms")
       // Another thread may have embedded the same description meanwhile: the first one kept is everyone's
       Some(cache.synchronized(Option(cache.putIfAbsent(text, embedding)).getOrElse(embedding)))
     }
