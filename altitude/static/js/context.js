@@ -40,6 +40,19 @@ export const context = {
     },
 
     /**
+     * Whether the account sees triaged items: a member, as the nav's advanced search panel says it
+     * on every page with the nav (`data-app-sees-triaged`, from `RequestContext.isMember`). A Guest
+     * sees Browse alone and is refused the triage filter, so nothing asks for it on its behalf.
+     */
+    seesTriaged: function () {
+        return (
+            document
+                .getElementById("searchPanel")
+                ?.hasAttribute(Const.attributes.seesTriaged) ?? false
+        )
+    },
+
+    /**
      * The folder currently being browsed, or null when no folder filter is active. Read from the
      * search parameters rather than the address bar, which only catches up once the server has
      * replied.

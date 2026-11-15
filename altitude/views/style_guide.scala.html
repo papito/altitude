@@ -243,8 +243,18 @@
              marker. A filtered search, which the advanced search panel combines, is titled "Search results" under the
              panel's sliders icon, over a wrapping row of its filters (<code>includes/search_filter_chips</code>): the
              chips of a chosen filter that the panel's fields hold, each led by its kind's icon, dimmed, or a Person's
-             cover Face, the Search text in curly quotes, "all of" or "any of" dimmed before two people or more, each
-             date range as its days, and Edit, a small action button with the sliders icon, which opens the panel.</p>
+             cover Face, a description first, as "Describe:" and its words in curly quotes under <code>fa-magic</code>,
+             the Search text in curly quotes, "all of" or "any of" dimmed before two people or more, each
+             date range as its days, and Edit, a small action button with the sliders icon, which opens the panel. A
+             search with a description that found nothing says so after Edit, in the subtitle's
+             <code>--font-size-small</code> and <code>--theme-neutral-3</code>: "Nothing within these filters looks like
+             that." beside other filters, as in the last specimen here, "Nothing in this Library looks like that." alone.
+             Its toolbar offers what it takes: the Sort menu opens with "Similarity", the order it has until another
+             is picked, and the layout toggle has no Map segment. Its grid has a group header a grouped grid's lacks,
+             without a checkbox: "Weaker matches" and their count, before the first match that looks under a set
+             fraction as much like the description as the best one does. Sorted otherwise or grouped, the matches
+             above that header come first, in the sort's order and grouping, and the weaker ones after it in the
+             same.</p>
           <div class="results-title">
             <div class="text">
               <div class="title">
@@ -274,6 +284,7 @@
                 <button type="button" class="clear-scope" title="Back to all results" aria-label="Back to all results">&times;</button>
               </div>
               @includes.html.search_filter_chips(SearchFilters(
+                  description = Some("woman in a park"),
                   text = Some("beach"),
                   names = SearchFilterNames(
                       folder = Some(NamedPath("styleGuideTitleFolder", List("Trips", "2024", "Lisbon"))),
@@ -284,6 +295,28 @@
                   peopleMatch = PeopleMatch.Any,
                   takenRange = Some(DateRange(Some(LocalDate.of(2024, 6, 1)), Some(LocalDate.of(2024, 6, 30)))),
                   importedRange = Some(DateRange(Some(LocalDate.of(2025, 1, 8)), None))))
+            </div>
+          </div>
+          @* A description that nothing looks like within its other filter: the line after Edit *@
+          <div class="results-title">
+            <div class="text">
+              <div class="title">
+                <i class="fas fa-sliders-h kind-icon" aria-hidden="true"></i>
+                <span class="name">Search results</span>
+                <button type="button" class="clear-scope" title="Back to all results" aria-label="Back to all results">&times;</button>
+              </div>
+              @includes.html.search_filter_chips(
+                  SearchFilters(
+                      description = Some("a red kite over the dunes"),
+                      text = None,
+                      names = SearchFilterNames(
+                          folder = Some(NamedPath("styleGuideEmptyFolder", List("Trips", "2024", "Lisbon"))),
+                          people = Nil,
+                          locations = Nil),
+                      peopleMatch = PeopleMatch.All,
+                      takenRange = None,
+                      importedRange = None),
+                  foundNothing = true)
             </div>
           </div>
           <p>A Person's cell on the People tab (<code>#people .cell</code>, <code>htmx/people_list</code>) is the cover face,
@@ -582,9 +615,12 @@
              to action, <code>.primary</code>, in <code>--theme-accent</code>. Success, warning and error
              buttons take their color on a tint of it and signal an outcome, not emphasis. A button lifts and lightens its
              fill on hover and gives a little when pressed (it stays in place when the system asks for reduced motion, and
-             a disabled one does neither); keyboard focus is the ring of <code>:focus-visible</code>, not
-             <code>:focus</code>, so a button a dialog returns focus to is not left ringed after a mouse click. A choice
-             between ways of showing the same thing is a <code>.toggle-group</code>: its buttons joined on one track, the
+             a disabled one does neither). A disabled button of any variant is dimmed whole, at half opacity under the
+             default cursor, as a chip whose input is disabled is: the Sort and Group menus of a search with a
+             description, Group on the map. Keyboard focus is the ring of <code>:focus-visible</code>, not
+             <code>:focus</code>, so a button a dialog returns focus to is not left ringed after a mouse click. A pick
+             of one among a few that all stay in view (the grid or the map, where an upload lands, the assets a search
+             covers) is a <code>.toggle-group</code>: its buttons joined on one track, the
              current one <code>aria-pressed="true"</code>, raised on the page surface. The theme switch above the contents
              is a live one. The buttons that open Curation share <code>.curate</code>: a border in the fill's own color, regular weight,
              always at the small size. A selection's Curate is a veil of <code>--theme-primary</code> at 0.32, its text
@@ -602,6 +638,8 @@
             <button type="button" class="action-button small curate"><i class="fas fa-check-double" aria-hidden="true"></i><span>.curate</span></button>
             <button type="button" class="action-button small curate lit"><i class="fas fa-check-double" aria-hidden="true"></i><span>.curate.lit</span></button>
             <button type="button" class="action-button" disabled>Disabled</button>
+            <button type="button" class="action-button primary" disabled>.primary, disabled</button>
+            <button type="button" class="action-button small" disabled><i class="fas fa-layer-group" aria-hidden="true"></i><span>.small, disabled</span></button>
             <div class="toggle-group" role="group" aria-label="Toggle group specimen">
               <button type="button" aria-pressed="true">Current</button>
               <button type="button" aria-pressed="false">Other</button>
@@ -866,7 +904,14 @@
              corners <code>--radius-xl</code>, <code>--space-5</code> of padding and <code>--space-7</code> between
              fields. Each label sits above its field in <code>--font-size-small</code> and
              <code>--theme-neutral-3</code>; a field's box wears the field style in place of the input inside it, the
-             accent edge and <code>--field-focus-shadow</code> with focus anywhere in it. A combobox
+             accent edge and <code>--field-focus-shadow</code> with focus anywhere in it. The form opens with the
+             Search in row, a <code>.toggle-group</code> across the form in three equal segments, Library, Triage and
+             All, the assets the search covers; while Triage is picked the Folder field is hidden, since a folder
+             holds no triaged asset. Describe is the first field, under
+             <code>fa-magic</code>: a textarea in the box, one line tall while it is empty and as tall as its text
+             after, in <code>--line-height-text</code>, with no resize handle; it takes 300 characters, Enter searches
+             from it and Shift+Enter breaks the line. The Search text's field follows, labelled Keywords, a label of
+             this form and of its chip's remove control alone. A combobox
              (<code>filterCombobox</code>) holds what is chosen as chips inside its box: rounded rectangles
              (<code>--radius</code>) on the chips' fill, <code>--chip-fill</code>, a Person's led by the cover Face as a
              circle of <code>--search-panel-chip-cover-size</code>, each ending with its remove control; the folder takes
@@ -891,6 +936,7 @@
           <div class="sg-row">
             <div class="search-panel" x-data x-on:submit.capture.prevent.stop>
               @htmx.html.search_panel(
+                  description = "woman in a park",
                   text = "beach",
                   names = SearchFilterNames(
                       folder = Some(NamedPath("styleGuideFolder", List("Trips", "2024", "Lisbon"))),

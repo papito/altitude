@@ -6,6 +6,7 @@ import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.util.Base64
 
+import altitude.core.Api
 import altitude.core.SearchCursorException
 import altitude.core.util.Query.QueryParam
 
@@ -23,6 +24,10 @@ import altitude.core.util.Query.QueryParam
  *
  * The Relevance sort orders by two values before the ID, so its position has `secondSortValue` as well: the image's capture time,
  * [[SortValue.Null]] when it has none. Under any other sort it is absent, and it is read only under that sort.
+ *
+ * A Describe search in its own order, likeness, has no groups: its position is the image's cosine distance from the description,
+ * a [[SortValue.Real]], and its ID. Sorted or grouped it is read in two parts, each a search like any other, and a cursor's
+ * position is that search's, in the part its fingerprint names.
  */
 case class SearchCursor(
     key: Option[String],
@@ -84,7 +89,7 @@ object SearchCursor:
     def sortedPairs(values: Map[String, Any]): String =
       values.toList.map { case (key, value) => s"$key=${canonical(value)}" }.sorted.mkString(";")
 
-    val description = List(
+    fingerprintOf(
       dbEngine,
       repositoryId,
       query.text.getOrElse(""),
@@ -103,11 +108,29 @@ object SearchCursor:
       query.grouping.fold("")(_.direction.id.toString),
       query.searchSort.headOption.fold("")(_.field),
       query.searchSort.headOption.fold("")(_.direction.id.toString)
-    ).mkString("|")
+    )
 
+  /**
+   * Identifies the Describe search a cursor may continue: the description as written, with what identifies its filters' search
+   * ([[scopeFingerprint]]: the engine, the repository, the filters as requested and the view's flags, `triaged` among them, and
+   * the sort and the grouping of a search that has them). Marked as a description's, so the same filters without the description
+   * have another fingerprint, whatever their Search text. A sorted or grouped Describe search is read in two parts, and a cursor
+   * continues one of them: its fingerprint carries the `part`.
+   */
+  def describeFingerprint(
+      description: String,
+      query: SearchQuery,
+      repositoryId: String,
+      dbEngine: String,
+      part: Option[DescribedPart] = None): String =
+    fingerprintOf(
+      Seq(Api.Field.Search.DESCRIBE, description) ++ part.map(_.toString) :+ scopeFingerprint(query, repositoryId, dbEngine)*)
+
+  /** The first 16 bytes of the SHA-256 of what identifies a search, in hex */
+  private def fingerprintOf(parts: String*): String =
     MessageDigest
       .getInstance("SHA-256")
-      .digest(description.getBytes(StandardCharsets.UTF_8))
+      .digest(parts.mkString("|").getBytes(StandardCharsets.UTF_8))
       .take(16)
       .map("%02x".format(_))
       .mkString
@@ -115,6 +138,8 @@ object SearchCursor:
   private def sortValueToJson(value: SortValue): ujson.Obj = value match
     case SortValue.Text(text) => ujson.Obj("t" -> "text", "v" -> text)
     case SortValue.Num(number) => ujson.Obj("t" -> "num", "v" -> number.toString)
+    // A double's text reads back as the same double
+    case SortValue.Real(number) => ujson.Obj("t" -> "real", "v" -> number.toString)
     case SortValue.LocalTimestamp(dateTime) => ujson.Obj("t" -> "ts", "v" -> dateTime.toString)
     case SortValue.UtcInstant(instant) => ujson.Obj("t" -> "tsz", "v" -> instant.toString)
     case SortValue.Null => ujson.Obj("t" -> "null")
@@ -122,6 +147,7 @@ object SearchCursor:
   private def sortValueFromJson(json: ujson.Value): SortValue = json("t").str match
     case "text" => SortValue.Text(json("v").str)
     case "num" => SortValue.Num(json("v").str.toLong)
+    case "real" => SortValue.Real(json("v").str.toDouble)
     case "ts" => SortValue.LocalTimestamp(LocalDateTime.parse(json("v").str))
     case "tsz" => SortValue.UtcInstant(OffsetDateTime.parse(json("v").str))
     case "null" => SortValue.Null

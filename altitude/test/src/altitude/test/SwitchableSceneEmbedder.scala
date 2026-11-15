@@ -15,13 +15,13 @@ import altitude.core.util.SceneEmbedder
  * models' embeddings. A suite whose subject is the embeddings turns it on (`IntegrationTestCore.usesSceneModels`,
  * `withSceneModels`). The real models are opened when it is first turned on, on the test's thread, so a model that fails to open
  * fails the suite or the test with its own error rather than an import thread's WARN, and a test JVM that never turns it on never
- * loads them (about 1.1 GB).
+ * loads them (about 1.2 GB).
  *
  * The real models' answers are kept for the instance's life, by the image's pixels: the suites that turn the models on import the
  * same synthesized frames (`BurstFrames`) test after test, and a model pass is a pure function of the pixels, so each image is
  * embedded once. Two threads embedding the same new image at once both run the models and store the same answer.
  */
-class SwitchableSceneEmbedder extends SceneEmbedder {
+class SwitchableSceneEmbedder extends SceneEmbedder with ModelSwitch {
 
   // Read on the import dispatcher's threads, set on the test's
   @volatile private var switchedOn = false
@@ -33,16 +33,16 @@ class SwitchableSceneEmbedder extends SceneEmbedder {
   private val embedded = new ConcurrentHashMap[String, SceneEmbeddings]()
 
   /** Whether `embed` runs the real models */
-  def on: Boolean = switchedOn
+  override def on: Boolean = switchedOn
 
   /** Opens the real models if they are not open yet, then switches them on; a model that fails to open throws here */
-  def turnOn(): Unit = synchronized {
+  override def turnOn(): Unit = synchronized {
     if (onnx.isEmpty) onnx = Some(OnnxSceneEmbedder())
     switchedOn = true
   }
 
   /** Switches the real models off, leaving them open until `close` */
-  def turnOff(): Unit = switchedOn = false
+  override def turnOff(): Unit = switchedOn = false
 
   override def embed(image: Mat, name: String): SceneEmbeddings = onnx match {
     case Some(models) if switchedOn =>

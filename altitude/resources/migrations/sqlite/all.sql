@@ -38,7 +38,7 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('video.preview.min_luminance', '40', '40'),
   ('sequence.max_gap_ms', '60000', '60000'),
   ('sequence.dinov2.min_similarity', '0.80', '0.80'),
-  ('sequence.clip.min_similarity', '0.90', '0.90'),
+  ('sequence.siglip2.min_similarity', '0.90', '0.90'),
   ('sequence.max_hash_distance', '10', '10'),
   ('curation.blur_ratio', '0.5', '0.5'),
   ('curation.face_quality_gap', '2.0', '2.0'),
@@ -47,6 +47,9 @@ INSERT INTO setting (name, value, default_value) VALUES
   ('curation.dark_luminance', '0.15', '0.15'),
   ('curation.bright_luminance', '0.75', '0.75'),
   ('curation.luminance_gap', '0.1', '0.1'),
+  ('search.describe.min_probability', '0.00009', '0.00009'),
+  ('search.describe.max_results', '1000', '1000'),
+  ('search.describe.weaker_match_ratio', '0.75', '0.75'),
   ('map.tile.url', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
   ('map.tile.attribution', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'),
   ('map.geocoder.enabled', 'false', 'false'),
@@ -199,8 +202,8 @@ CREATE TABLE asset (
   -- (4 KB) spills into overflow pages, and reading a column walks the overflow pages of every large value before it. The two
   -- metadata JSON columns every general read selects (public_metadata also decides the Sequence candidates' device model) come
   -- before the Histogram, 1 KB a row that the read of a Curation set's Histograms alone selects, then the Scene embeddings,
-  -- about 5 KB a row that the Sequence candidates' statement alone selects, and the raw extracted metadata, the largest and the
-  -- least read, comes after everything.
+  -- about 6 KB a row that the Sequence candidates' statement selects and a Describe search scans, and the raw extracted
+  -- metadata, the largest and the least read, comes after everything.
   public_metadata TEXT,
   user_metadata TEXT,
   -- The Histogram of a still image (Histogram): its luminance, red, green and blue channels, each 64 bins of the fraction of
@@ -208,11 +211,13 @@ CREATE TABLE asset (
   -- pipeline did not measure, as the Image quality is.
   histogram BLOB,
   -- The Scene embeddings of a still image, one per Scene model, each a unit vector the Sequence rule compares by cosine
-  -- similarity, stored as its raw little-endian float32 values: DINOv2 ViT-B/14's pooled CLS token (768 of them) and CLIP
-  -- ViT-B/16's projected image embedding (512). NULL for a Video, an animated image, or a still image the model could not
-  -- embed. Selected by the Sequence candidates' statement alone and transferred by no other read.
+  -- similarity, stored as its raw little-endian float32 values: DINOv2 ViT-B/14's pooled CLS token and the pooled output of
+  -- SigLIP 2 ViT-B/16's image tower (768 of them each). NULL for a Video, an animated image, or a still image the model could
+  -- not embed. Selected by the Sequence candidates' statement alone and transferred by no other read. A Describe search reads
+  -- SigLIP 2's too, in the database: sqlite-vector scans the column, which every connection registers with it as it is opened
+  -- (TransactionManager.setUpSqliteConnection), and ranks the assets by the distance of theirs from a description's embedding.
   dinov2_embedding BLOB,
-  clip_embedding BLOB,
+  siglip2_embedding BLOB,
   extracted_metadata TEXT,
   UNIQUE (id, repository_id),
   FOREIGN KEY (repository_id) REFERENCES repository (id) ON DELETE CASCADE,

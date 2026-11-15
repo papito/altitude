@@ -17,6 +17,7 @@ import altitude.core.models.SceneModel
 import altitude.core.models.SettingGroup
 import altitude.core.models.SettingKind
 import altitude.core.models.Settings
+import altitude.core.models.SettingType
 
 /**
  * The Settings: the seeds of the `setting` table, the one typed snapshot a save replaces, the validation that writes nothing when
@@ -65,9 +66,9 @@ import altitude.core.models.Settings
     current.videoPreviewMinLuminance shouldBe 40
     current.sequenceMaxGapMs shouldBe 60000
     current.sequenceDinov2MinSimilarity shouldBe 0.8
-    current.sequenceClipMinSimilarity shouldBe 0.9
+    current.sequenceSiglip2MinSimilarity shouldBe 0.9
     current.sequenceMinSimilarity(SceneModel.Dinov2) shouldBe 0.8
-    current.sequenceMinSimilarity(SceneModel.Clip) shouldBe 0.9
+    current.sequenceMinSimilarity(SceneModel.Siglip2) shouldBe 0.9
     current.sequenceMaxHashDistance shouldBe 10
     current.curationBlurRatio shouldBe 0.5
     current.curationFaceQualityGap shouldBe 2.0
@@ -76,6 +77,9 @@ import altitude.core.models.Settings
     current.curationDarkLuminance shouldBe 0.15
     current.curationBrightLuminance shouldBe 0.75
     current.curationLuminanceGap shouldBe 0.1
+    current.searchDescribeMinProbability shouldBe 0.00009
+    current.searchDescribeMaxResults shouldBe 1000
+    current.searchDescribeWeakerMatchRatio shouldBe 0.75
     current.mapTileUrl shouldBe "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
     current.mapTileAttribution shouldBe "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"
     current.mapGeocoderEnabled shouldBe false
@@ -197,7 +201,7 @@ import altitude.core.models.Settings
       Settings.VIDEO_PREVIEW_MIN_LUMINANCE -> "256", // above 255
       Settings.SEQUENCE_MAX_GAP_MS -> "0", // below 1
       Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> "1.5", // above 1
-      Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> "-1.5", // below -1
+      Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY -> "-1.5", // below -1
       Settings.SEQUENCE_MAX_HASH_DISTANCE -> "65", // above 64, the bits of a hash
       Settings.CURATION_BLUR_RATIO -> "1.5", // above 1
       Settings.CURATION_FACE_QUALITY_GAP -> "-1", // below 0
@@ -248,7 +252,7 @@ import altitude.core.models.Settings
     val sequence = List(
       Settings.SEQUENCE_MAX_GAP_MS,
       Settings.SEQUENCE_DINOV2_MIN_SIMILARITY,
-      Settings.SEQUENCE_CLIP_MIN_SIMILARITY,
+      Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY,
       Settings.SEQUENCE_MAX_HASH_DISTANCE
     )
     sequence.map(Settings.byName).foreach {
@@ -262,7 +266,7 @@ import altitude.core.models.Settings
   }
 
   test("A similarity threshold is a cosine, inclusive of -1 and 1") {
-    List(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, Settings.SEQUENCE_CLIP_MIN_SIMILARITY).foreach {
+    List(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY).foreach {
       name =>
         withClue(name) {
           testApp.settings.validate(Map(name -> "-1")) shouldBe empty
@@ -279,21 +283,21 @@ import altitude.core.models.Settings
     testApp.settings.save(
       Map(
         Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> "0.7",
-        Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> "0.95",
+        Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY -> "0.95",
         Settings.SEQUENCE_MAX_GAP_MS -> "120000"
       ))
 
     val current = testApp.settings.current
     current.sequenceDinov2MinSimilarity shouldBe 0.7
-    current.sequenceClipMinSimilarity shouldBe 0.95
+    current.sequenceSiglip2MinSimilarity shouldBe 0.95
     current.sequenceMinSimilarity(SceneModel.Dinov2) shouldBe 0.7
-    current.sequenceMinSimilarity(SceneModel.Clip) shouldBe 0.95
+    current.sequenceMinSimilarity(SceneModel.Siglip2) shouldBe 0.95
     current.sequenceMaxGapMs shouldBe 120000
     testApp.settings.pendingRestart shouldBe empty
 
     // A reload reads the saved values back
     testApp.settings.load()
-    testApp.settings.current.sequenceClipMinSimilarity shouldBe 0.95
+    testApp.settings.current.sequenceSiglip2MinSimilarity shouldBe 0.95
   }
 
   test("The Curation thresholds are Live settings of the Triage section, and the fractions are inclusive of 0 and 1") {
@@ -350,6 +354,136 @@ import altitude.core.models.Settings
     current.curationBrightLuminance shouldBe 0.9
     current.curationLuminanceGap shouldBe 0.25
     testApp.settings.pendingRestart shouldBe empty
+  }
+
+  test(
+    "The Describe Settings are Live settings of the Search section: a probability, a limit to 10,000 and a ratio from 0 to 1") {
+
+    /**
+     * Setup:
+     *
+     * The registry's entries of the Describe match threshold, the Describe result limit and the Describe weaker matches ratio,
+     * and values validated and saved for them.
+     *
+     * Assertions:
+     *
+     * The three are Live settings of the Search section, which the screen shows after Triage, on both engines, with the labels
+     * and help of the screen and the defaults 0.00009, 1000 and 0.75. The threshold is a probability strictly between 0 and 1,
+     * the limit a whole number from 1 to 10,000, both bounds included, the upper one being the cap a first page's total counts to
+     * (`Const.Search.TOTAL_CAP`), and the ratio a decimal from 0 to 1. Saved values reach their accessors at once, with no
+     * restart waiting.
+     *
+     * Edge cases:
+     *
+     * 0 and 1 themselves are no probability, and a limit of 0, of 10,001 or with a fraction is refused, each saying why. 0 and 1
+     * are both a ratio, the one showing no weaker matches and the other every match but the best; under 0 or over 1 is refused.
+     */
+    val threshold = Settings.SEARCH_DESCRIBE_MIN_PROBABILITY
+    val limit = Settings.SEARCH_DESCRIBE_MAX_RESULTS
+    val ratio = Settings.SEARCH_DESCRIBE_WEAKER_MATCH_RATIO
+    List(threshold, limit, ratio).map(Settings.byName).foreach {
+      definition =>
+        definition.group shouldBe SettingGroup.Search
+        definition.kind shouldBe SettingKind.Live
+        definition.engine shouldBe None
+    }
+    SettingGroup.Search.label shouldBe "Search"
+    SettingGroup.values.toList.map(_.label) shouldBe
+      List("Face detection", "Face recognition and quality", "Video", "Triage", "Search", "Map", "Operations")
+    Settings.all.filter(_.group == SettingGroup.Search).map(_.name) shouldBe List(threshold, limit, ratio)
+    testApp.settings.applicable.map(_.name) should contain allElementsOf List(threshold, limit, ratio)
+
+    Settings.byName(threshold).label shouldBe "Describe match threshold"
+    Settings.byName(threshold).help shouldBe
+      "How likely, by the model, a photo must be to match a description to be shown. Lower shows more, weaker matches."
+    Settings.byName(limit).label shouldBe "Describe result limit"
+    Settings.byName(limit).help shouldBe "The most photos a description shows, best first."
+    Settings.byName(ratio).label shouldBe "Describe weaker matches"
+    Settings.byName(ratio).help shouldBe
+      "A photo that looks less than this fraction as much like a description as the best match does is a weaker match, " +
+      "shown after the others under its own header. Higher puts more photos under it; 0 shows no such header."
+    testApp.settings.current.default(threshold) shouldBe "0.00009"
+    testApp.settings.current.default(limit) shouldBe "1000"
+    testApp.settings.current.default(ratio) shouldBe "0.75"
+
+    testApp.settings.validate(Map(threshold -> "0.5")) shouldBe empty
+    testApp.settings.validate(Map(threshold -> "0.999999")) shouldBe empty
+    testApp.settings.validate(Map(threshold -> "0.0000001")) shouldBe empty
+    testApp.settings.validate(Map(threshold -> "0")) shouldBe Map(threshold -> "Must be above 0")
+    testApp.settings.validate(Map(threshold -> "-0.1")) shouldBe Map(threshold -> "Must be above 0")
+    testApp.settings.validate(Map(threshold -> "1")) shouldBe Map(threshold -> "Must be below 1")
+    testApp.settings.validate(Map(threshold -> "1.5")) shouldBe Map(threshold -> "Must be below 1")
+
+    testApp.settings.validate(Map(limit -> "1")) shouldBe empty
+    // The most a first page's total counts to: a Describe search's total is exact, so its limit is no more than that
+    val cap = Const.Search.TOTAL_CAP
+    cap shouldBe 10000
+    Settings.byName(limit).valueType shouldBe SettingType.Integer(1, cap)
+    testApp.settings.validate(Map(limit -> cap.toString)) shouldBe empty
+    testApp.settings.validate(Map(limit -> "0")) shouldBe Map(limit -> "Must be at least 1")
+    testApp.settings.validate(Map(limit -> (cap + 1).toString)) shouldBe Map(limit -> s"Must be at most $cap")
+    testApp.settings.validate(Map(limit -> "99.5")) shouldBe Map(limit -> "Must be a whole number")
+
+    Settings.byName(ratio).valueType shouldBe SettingType.Decimal(0, 1)
+    testApp.settings.validate(Map(ratio -> "0")) shouldBe empty
+    testApp.settings.validate(Map(ratio -> "1")) shouldBe empty
+    testApp.settings.validate(Map(ratio -> "-0.1")) shouldBe Map(ratio -> "Must be at least 0")
+    testApp.settings.validate(Map(ratio -> "1.1")) shouldBe Map(ratio -> "Must be at most 1")
+
+    testApp.settings.save(Map(threshold -> "0.002", limit -> "250", ratio -> "0.65"))
+    testApp.settings.current.searchDescribeMinProbability shouldBe 0.002
+    testApp.settings.current.searchDescribeMaxResults shouldBe 250
+    testApp.settings.current.searchDescribeWeakerMatchRatio shouldBe 0.65
+    testApp.settings.pendingRestart shouldBe empty
+  }
+
+  test("A decimal Setting is written in plain notation: 0.00009 is stored and read as typed, never with an exponent") {
+
+    /**
+     * Setup:
+     *
+     * The Describe match threshold, whose default of 0.00009 a JVM prints as 9.0E-5: its seeded row, and values validated and
+     * saved for it.
+     *
+     * Assertions:
+     *
+     * The seeded value and default are the text 0.00009, which the snapshot reads as that number and hands back as that text. A
+     * smaller plain decimal is saved as typed and read back as typed after a reload.
+     *
+     * Edge cases:
+     *
+     * A number written with an exponent, in either case, a hexadecimal number and a number with a type suffix are each a number
+     * to a JVM and none as a Setting is written: each is refused with what to write in its place, a plain decimal with no
+     * exponent. The words for infinity and for no number, and a word that is neither, are refused as no number. No row ever holds
+     * any of them: nothing is written. A leading sign and a digit left out on one side of the point are still a plain decimal.
+     */
+    val threshold = Settings.SEARCH_DESCRIBE_MIN_PROBABILITY
+    storedValues(threshold) shouldBe "0.00009"
+    testApp.settings.current.value(threshold) shouldBe "0.00009"
+    testApp.settings.current.default(threshold) shouldBe "0.00009"
+    testApp.settings.current.searchDescribeMinProbability shouldBe 0.00009
+
+    val refused =
+      List("9e-5", "9.0E-5", "9E-5", "1e-1", "0x1p-3", "0.5d", "0.5f").map(_ -> "Must be a plain decimal, with no exponent") ++
+        List("NaN", "Infinity", "-Infinity", "high", "").map(_ -> "Must be a number")
+    refused.foreach {
+      (text, message) =>
+        withClue(s"[$text]: ") {
+          testApp.settings.validate(Map(threshold -> text)) shouldBe Map(threshold -> message)
+          intercept[ValidationException](testApp.settings.save(Map(threshold -> text)))
+        }
+    }
+    storedValues(threshold) shouldBe "0.00009"
+
+    List("+0.5", ".5", "0.").foreach {
+      text => withClue(text)(testApp.settings.validate(Map(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> text)) shouldBe empty)
+    }
+
+    testApp.settings.save(Map(threshold -> "0.000012"))
+    storedValues(threshold) shouldBe "0.000012"
+    testApp.settings.load()
+    testApp.settings.current.value(threshold) shouldBe "0.000012"
+    testApp.settings.current.searchDescribeMinProbability shouldBe 0.000012
   }
 
   test("The vector index keeps at least four times the match count, a rule of PostgreSQL alone") {

@@ -5,13 +5,17 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.shouldBe
 
+import altitude.core.FieldConst
 import altitude.core.routes.SearchRequestParser.Scope
 import altitude.core.util.BoundingBox
 import altitude.core.util.DateRange
+import altitude.core.util.DescribedPart
 import altitude.core.util.PeopleMatch
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSort
+import altitude.core.util.SortDirection
+import altitude.core.util.SortValue
 
 @DoNotDiscover class SearchQueryModelTests extends funsuite.AnyFunSuite {
 
@@ -194,6 +198,115 @@ import altitude.core.util.SearchSort
 
     fingerprints.distinct.size shouldBe fingerprints.size
     fingerprint(takenRange = Some(june)) shouldBe fingerprints(2)
+  }
+
+  test("A Describe search's fingerprint is its description with its filters' search, and no other search's") {
+
+    /**
+     * Setup:
+     *
+     * The fingerprint of a description's search of the repository view in a repository on an engine; of the same search with the
+     * triaged assets, with another description, in another repository, on the other engine, and within each filter in turn: a
+     * Search text, a folder, a person, two people, the two matching any, a Location, a Date Taken range and a Date Imported
+     * range; of the searches of the same filters with no description; and of the description's search sorted by file name, in
+     * each of its two parts, and sorted the other way.
+     *
+     * Assertions:
+     *
+     * Every fingerprint differs from every other, so a cursor of one cannot continue another: a Describe search's from the same
+     * description within other filters, and from the same filters without the description. The same Describe search has the same
+     * fingerprint again.
+     *
+     * Edge cases:
+     *
+     * A description is fingerprinted as written: another case, or a space more, is another search. A search whose Search text is
+     * the description's words is another search too. A sorted Describe search is read in two parts, and a cursor continues one:
+     * each part's fingerprint is its own, and neither is the search's in its own order or under another sort.
+     */
+    val june = DateRange(Some(LocalDate.parse("2024-06-01")), Some(LocalDate.parse("2024-06-30")))
+    def view(triaged: Boolean): Map[String, Any] =
+      Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false) ++ Option.unless(triaged)(FieldConst.Asset.IS_TRIAGED -> false)
+    val unfiltered = new SearchQuery(params = view(triaged = false))
+    val filtered = List(
+      new SearchQuery(params = view(triaged = true)),
+      new SearchQuery(params = view(triaged = false), text = Some("beach")),
+      new SearchQuery(params = view(triaged = false), folderIds = Set("trips")),
+      new SearchQuery(params = view(triaged = false), personIds = Set("alice")),
+      new SearchQuery(params = view(triaged = false), personIds = Set("alice", "bob")),
+      new SearchQuery(params = view(triaged = false), personIds = Set("alice", "bob"), peopleMatch = PeopleMatch.Any),
+      new SearchQuery(params = view(triaged = false), locationIds = Set("lisbon")),
+      new SearchQuery(params = view(triaged = false), takenRange = Some(june)),
+      new SearchQuery(params = view(triaged = false), importedRange = Some(june))
+    )
+
+    def fingerprint(
+        description: String = "a cactus",
+        query: SearchQuery = unfiltered,
+        repositoryId: String = "repo-1",
+        dbEngine: String = "sqlite",
+        part: Option[DescribedPart] = None): String =
+      SearchCursor.describeFingerprint(description, query, repositoryId, dbEngine, part)
+    def byName(direction: SortDirection): SearchQuery =
+      new SearchQuery(params = view(triaged = false), searchSort = List(SearchSort(FieldConst.Asset.FILENAME, direction)))
+    def withoutDescription(query: SearchQuery): String =
+      SearchCursor.scopeFingerprint(query, repositoryId = "repo-1", dbEngine = "sqlite")
+
+    val fingerprints = List(
+      fingerprint(),
+      fingerprint(description = "a man in a suit"),
+      fingerprint(repositoryId = "repo-2"),
+      fingerprint(dbEngine = "postgres"),
+      fingerprint(description = "A cactus"),
+      fingerprint(description = "a  cactus"),
+      withoutDescription(new SearchQuery(params = view(triaged = false), text = Some("a cactus"))),
+      fingerprint(query = byName(SortDirection.ASC), part = Some(DescribedPart.Nearer)),
+      fingerprint(query = byName(SortDirection.ASC), part = Some(DescribedPart.Weaker)),
+      fingerprint(query = byName(SortDirection.DESC), part = Some(DescribedPart.Nearer))
+    ) ++ filtered.map(query => fingerprint(query = query)) ++ (unfiltered :: filtered).map(withoutDescription)
+
+    fingerprints.distinct.size shouldBe fingerprints.size
+    fingerprint() shouldBe fingerprints.head
+    fingerprint(query = new SearchQuery(params = view(triaged = false), takenRange = Some(june))) shouldBe
+      fingerprint(query = filtered(7))
+  }
+
+  test("A copy of a search keeps how many assets a Describe search ranks exactly") {
+
+    /**
+     * Setup:
+     *
+     * A search of the repository view with nothing said of how many assets a Describe search ranks exactly, and one that says 7,
+     * then copied with a folder scope and without its total.
+     *
+     * Assertions:
+     *
+     * The first ranks 75,000 exactly, the constant, and the copy of the second still 7.
+     */
+    val view = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false)
+
+    new SearchQuery(params = view).describeExactLimit shouldBe 75000
+    val tuned = new SearchQuery(params = view, describeExactLimit = 7).withFolderIds(Set("trips")).withoutTotal
+    tuned.describeExactLimit shouldBe 7
+  }
+
+  test("A cursor carries a Describe search's position, a distance, through its token unchanged") {
+
+    /**
+     * Setup:
+     *
+     * Cursors whose positions are cosine distances no short decimal spells: a third, the smallest double above zero, a distance
+     * past 1, and a float's value widened to a double.
+     *
+     * Assertions:
+     *
+     * Each cursor decoded from its token is the cursor that was encoded: the distance is the same double, bit for bit, so a page
+     * continues exactly after the row the cursor names.
+     */
+    List(1.0 / 3, java.lang.Double.MIN_VALUE, 1.0000001192092896, 0.9400720596313477f.toDouble).foreach {
+      distance =>
+        val cursor = SearchCursor(None, None, SortValue.Real(distance), "asset-1", scope = "fingerprint")
+        SearchCursor.decode(cursor.encode) shouldBe cursor
+    }
   }
 
   test("A scope hands its people match and date ranges to the query it builds") {

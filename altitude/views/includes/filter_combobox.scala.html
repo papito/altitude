@@ -1,6 +1,6 @@
 @import altitude.core.routes.SearchRequestParser
 
-@(id: String, label: String, param: String, optionsUrl: String, kind: String, placeholder: String, ids: List[String], fullMessage: Option[String] = None, afterLabel: Option[Html] = None)(chips: Html)
+@(id: String, label: String, param: String, optionsUrl: String, kind: String, placeholder: String, ids: List[String], fullMessage: Option[String] = None, afterLabel: Option[Html] = None, optionsParams: Seq[String] = Nil, shownBy: Option[String] = None, hidden: Boolean = false)(chips: Html)
 
 @* A combobox field that chooses names as chips: the fields of the advanced search panel (htmx/search_panel: a folder,
    people, Locations) and the destination folder of the Import page's upload sections (includes/upload_sections). It is
@@ -15,12 +15,16 @@
    (includes/search_chip), whose icon leads the box when it has one (a person has none); `chips` are the chips of what
    is chosen already, `ids` their IDs. `fullMessage` is what a field of several says once it holds as many as a search
    takes: it marks the field as one that takes several (`data-multiple`), with that most (`data-max-chosen`); a field of
-   one has none. `afterLabel` is what shares the label's row (`.label-row`), when anything does. *@
+   one has none. `afterLabel` is what shares the label's row (`.label-row`), when anything does. `optionsParams` are the
+   names of the inputs of the field's form whose values a request for the options carries (`data-options-params`), for
+   a field whose options depend on the rest of its form. `shownBy` is the expression of the component around the field
+   that the field is shown by (`x-show`), `hidden` whether it is rendered hidden, as that expression will have it. *@
 <div class="field"
      x-data="filterCombobox"
+     @for(shown <- shownBy) {x-show="@shown"@if(hidden) { style="display: none"}}
      x-on:focusout="onFocusOut($event)"
      x-on:search-panel-clear="clear()"
-     data-options-url="@optionsUrl"
+     data-options-url="@optionsUrl"@if(optionsParams.nonEmpty) { data-options-params="@{optionsParams.mkString(" ")}"}
      @for(message <- fullMessage) { data-multiple data-max-chosen="@{SearchRequestParser.MAX_IDS}" data-max-chosen-message="@message" }>
     @afterLabel match {
     case Some(control) => {

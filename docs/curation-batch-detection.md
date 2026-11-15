@@ -21,7 +21,7 @@ MeasureImageFlow                        asset.sequence_id                       
   Image quality (5 metrics + score)       shared by the frames of one scene        selectionSet
   perceptual hash                         (no table, no row of its own)            → frames + Faces + memberships
   Face sharpness per Face                                                          → CurationRule.assess
-  Scene embeddings (DINOv2, CLIP)
+  Scene embeddings (DINOv2, SigLIP 2)
         │                               Group by Sequence (grid)                       Bundles, chips, notices,
         ▼                               "Curate all N sequences" (Triage)              Contenders
 completeImport                          Curate (group header)                    resolve / reopen
@@ -54,8 +54,8 @@ What is measured, on the image fitted to a 1280 px box and converted to gray:
 | `crushed_shadows` | Fraction of pixels at 5 or below. |
 | `image_quality` | A 0 to 100 score from sharpness (over the union of the face boxes when they are large enough, else the whole frame) and the exposure penalties. **Curation never reads it**: its sharpness region varies per image, so two scores do not compare. |
 | `perceptual_hash` | OpenCV's pHash (DCT of a 32 × 32 downscale), 64 bits, held by `PerceptualHash` and compared by Hamming distance. |
-| `dinov2_embedding` | The DINOv2 ViT-B/14 Scene embedding: the pooled CLS token, 768 floats, L2-normalized (`vector(768)` on PostgreSQL, a BLOB of float32 on SQLite). |
-| `clip_embedding` | The CLIP ViT-B/16 Scene embedding: the projected image embedding, 512 floats, L2-normalized (`vector(512)`, or a BLOB). |
+| `dinov2_embedding` | The DINOv2 ViT-B/14 Scene embedding: the pooled CLS token of the frame's center square, 768 floats, L2-normalized (`vector(768)` on PostgreSQL, a BLOB of float32 on SQLite). |
+| `siglip2_embedding` | The SigLIP 2 ViT-B/16 Scene embedding: the image tower's pooled output over the whole frame, 768 floats, L2-normalized (`vector(768)`, or a BLOB). |
 
 And on each `face`: `sharpness`, the same Laplacian variance inside the face's box, or NULL under 2500 px² at the
 fitted scale. Face sharpness falls as a face fills more of the frame, so it only compares between Faces of one Person
@@ -106,16 +106,16 @@ too. A dated frame and an undated one never match, either way round; the check i
 test for both kinds:
 
 - by some Scene model whose embedding both carry, their cosine similarity is at least that model's threshold
-  (`sequence.dinov2.min_similarity` or `sequence.clip.min_similarity`): one model's likeness is enough, so the
+  (`sequence.dinov2.min_similarity` or `sequence.siglip2.min_similarity`): one model's likeness is enough, so the
   Sequences are the union of what either model finds, and a burst one model misses is caught by the other;
 - where no model embedded both, their hashes are at most `sequence.max_hash_distance` bits apart. A pair compared by
   any model is never rescued by its hashes.
 
 The similarity replaces the hash test rather than joining it: the hash at any usable distance rejects a reframed or
 zoomed shot of the scene, which the embedding holds under. Each model has its own threshold since their cosines live
-on different scales (CLIP's are compressed toward 1). The size test stays: a portrait and a landscape frame of one
-scene can embed alike and are not one Sequence. On the synthesized burst the frames measure 0.98 and up by DINOv2 and
-0.97 and up by CLIP, and a different picture about 0.26 and 0.62.
+on different scales (SigLIP 2's are compressed toward 1). The size test stays: a portrait and a landscape frame of
+one scene can embed alike and are not one Sequence. On the synthesized burst the frames measure 0.98 and up by either
+model, and a different picture about 0.25 by DINOv2 and 0.58 by SigLIP 2.
 
 ### Assignment (`SequenceService.assign`)
 
@@ -274,7 +274,7 @@ starting points:
 |---|---|---|
 | `sequence.max_gap_ms` | 60000 | Sequence assignment: the most two frames may be apart |
 | `sequence.dinov2.min_similarity` | 0.80 | Sequence assignment: the least DINOv2 cosine similarity to look alike, -1 to 1 |
-| `sequence.clip.min_similarity` | 0.90 | Sequence assignment: the least CLIP cosine similarity to look alike, -1 to 1 |
+| `sequence.siglip2.min_similarity` | 0.90 | Sequence assignment: the least SigLIP 2 cosine similarity to look alike, -1 to 1 |
 | `sequence.max_hash_distance` | 10 | Sequence assignment: the most bits two hashes may differ by, 0 to 64; decides only two frames no Scene model embedded both of, dated or undated |
 | `curation.blur_ratio` | 0.5 | Blurry: fraction of the best sharpness |
 | `curation.face_quality_gap` | 2.0 | Poor faces: distance below the Person's best quality |
@@ -576,7 +576,8 @@ Most of the options below need no new native dependency:
 - **Faces**: YuNet detection with five landmarks and a score, ArcFace 512-float embeddings, and the embedding norm as
   `Face.quality` (see [faces.md](faces.md)). The Video path clusters detections across Sampled frames with the pure
   `cluster` and `mergeClusters` functions of `FaceRecognitionService`.
-- **Vectors**: a pgvector column on PostgreSQL and the `sqlite-vector` extension on SQLite, wrapped by `withFaceVector`.
+- **Vectors**: a pgvector column on PostgreSQL and the `sqlite-vector` extension on SQLite, wrapped by `withFaceVector`
+  for the faces and by `withVectorSearch` for the Describe search.
 - **Metadata**: metadata-extractor 2.19 feeds `ExtractedMetadata` and the `PublicMetadata` fields (device model,
   f-number, focal length, ISO, exposure time, date/time original), plus `originalCreatedAt` with its
   `CaptureDateSource`, `width`, `height`, GPS, and a SHA-256 `checksum` of the file.
@@ -607,19 +608,28 @@ The signals it does not use:
 
 What is built (Part 1 §1 and §2): every still image is embedded at import by two Scene models through ONNX Runtime,
 **DINOv2 ViT-B/14** (768 floats, self-supervised and layout sensitive, the one for "same scene, different framing")
-and the **CLIP ViT-B/16** image tower (512 floats, semantic), both stored on the asset in a vector column per model
-(`vector` on PostgreSQL, a float32 BLOB on SQLite), and the Sequence rule compares by cosine similarity under both,
-each model with its own threshold, two frames alike by either being one Sequence. ArcFace and YuNet stay on OpenCV DNN.
+and the **SigLIP 2 ViT-B/16** image tower at 256 pixels (768 floats, semantic, trained against text), both stored on
+the asset in a vector column per model (`vector` on PostgreSQL, a float32 BLOB on SQLite), and the Sequence rule
+compares by cosine similarity under both, each model with its own threshold, two frames alike by either being one
+Sequence. Each model sees the image its own way: DINOv2 the center square, the short side fitted to 224 pixels, and
+SigLIP 2 the whole frame squashed to 256 × 256, as its checkpoint's processor does, so the edges of a wide frame stay
+in view. ArcFace and YuNet stay on OpenCV DNN.
+
+The SigLIP 2 embeddings are also searched by text: the Describe search embeds a description with the model's text
+tower, exported beside the image tower with its token-embedding table and its tokenizer (`DescribeEmbedder`,
+`Siglip2Tokenizer`), and the database ranks the assets by the cosine distance of their embedding from it, through an
+HNSW index over the vectors at half precision on PostgreSQL and sqlite-vector's exact scan on SQLite
+(`altitude/AGENTS.md`, **Describe search**). Its cutoff is measured below (**A description's match probability**).
 
 Still open:
 
-- **SigLIP 2** or **MobileCLIP 2** in CLIP's place, or **DINOv3** in DINOv2's, as better or smaller models of the same
-  two kinds; a third column, or a column replaced, and a re-import of the library.
-- **Similar-image search** over the stored embeddings, which needs a vector index on the columns (pgvector HNSW as the
-  faces have; sqlite-vector's scan on SQLite) and a search entry; the rule itself compares a frame with the handful of
-  candidates of its window and needs none.
-- **Text search** over the CLIP embedding, which needs the text tower exported beside the image tower.
-- An **aesthetic score** as a linear head on the CLIP embedding (see **Learned no-reference quality** below).
+- **DINOv3** in DINOv2's place, or **MobileCLIP 2** in SigLIP 2's, as better or smaller models of the same two kinds;
+  a column replaced, and a re-import of the library.
+- **Similar-image search** over the stored embeddings ("more like this"). The SigLIP 2 column is indexed and ranked
+  for the Describe search, whose statement would take an image's embedding as it takes a description's; the search
+  entry is missing, and DINOv2's column has no index. The rule itself compares a frame with the handful of candidates
+  of its window and needs none.
+- An **aesthetic score** as a linear head on the SigLIP 2 embedding (see **Learned no-reference quality** below).
 
 ### Geometric verification for doubtful pairs (`features2d`, ships)
 
@@ -641,8 +651,150 @@ The first four rows are the Sequence Settings of Part 1 §6, with their defaults
 | Capture gap | `sequence.max_gap_ms` | 60 s |
 | pHash Hamming | `sequence.max_hash_distance` | 10 bits, only where an embedding is missing |
 | DINOv2 cosine | `sequence.dinov2.min_similarity` | 0.80 |
-| CLIP cosine | `sequence.clip.min_similarity` | 0.90 |
+| SigLIP 2 cosine | `sequence.siglip2.min_similarity` | 0.90 |
 | Homography inliers | not built | 30% and up for a burst, 15% for a session |
+
+The SigLIP 2 default is measured on **INRIA Holidays** (Jégou, Douze and Schmid, ECCV 2008): 1,491 personal holiday
+photos in 500 groups, a group being the photos of one scene or object. Each image is embedded as an import embeds it
+(`ImageUtil.matFromBytes`, `OnnxSceneEmbedder`), and every pair of the images is scored: 1,110,795 pairs, of which the
+2,072 pairs of one group are the positives. A rule's precision, recall and F1 are of the pairs it calls alike against
+those. The baseline is the rule with the model SigLIP 2 took the place of, the CLIP ViT-B/16 image tower at its
+threshold of 0.90:
+
+| Rule | Precision | Recall | F1 |
+|---|---|---|---|
+| `dinov2 ≥ 0.80` alone | 0.819 | 0.536 | 0.648 |
+| `dinov2 ≥ 0.80 OR clip ≥ 0.90` (the baseline) | 0.538 | 0.744 | 0.625 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.88` | 0.499 | 0.821 | 0.620 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.89` | 0.549 | 0.780 | 0.644 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.90` (the default) | 0.610 | 0.752 | 0.674 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.91` | 0.667 | 0.717 | 0.691 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.92` | 0.713 | 0.676 | 0.694 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.93` | 0.755 | 0.638 | 0.692 |
+| `dinov2 ≥ 0.80 OR siglip2 ≥ 0.94` | 0.792 | 0.599 | 0.682 |
+
+0.90 is above the baseline on precision, recall and F1, and keeps the baseline's recall. 0.92 has the highest F1 among
+the thresholds no less precise than the baseline, and trades recall for precision against it (0.676 against 0.744);
+0.89 is the lowest that is no worse than the baseline on all three. What the figures do not say: a Holidays group is
+one scene from any viewpoint, which is looser than a Sequence, so the recall is not a burst's; and the rule only ever
+compares frames shot within the gap on one camera, where the pairs here are of the whole set, so the precision is a
+floor (over the 11,408 pairs of groups at most two apart in the set's numbering, the baseline measures
+0.80 / 0.74 / 0.77 and the default 0.83 / 0.75 / 0.79, with 0.89 the best F1 among those no less precise than the
+baseline at 0.81 / 0.78 / 0.79). DINOv2's threshold was not swept. Both remain to calibrate on real files.
+
+One order did not survive the change of model, and is accepted. On the unit fixtures (`SceneEmbedderTests`:
+`people/bullock.jpg`, its middle third, and `people/affleck.jpg`, another portrait) DINOv2 finds the other photo less
+like the original than the tight crop of the original is, the least like it of all. SigLIP 2 does not: it scores the
+other portrait 0.69 and the crop 0.68, since it reads what a picture shows and two portraits show much the same. Both
+are well under the threshold of 0.90, so neither pairs by it, but no test holds a different photo below a reframed
+shot of the same one for SigLIP 2: that assertion is DINOv2's alone, and the rest of the fixture's order (the
+burst-like copy above the flipped copy, the crop and the other photo; the other photo below the flipped copy) holds
+for both models.
+
+### A description's match probability
+
+A description's embedding (`DescribeEmbedder`) and an image's SigLIP 2 Scene embedding give the probability, by the
+model, that the two match: `sigmoid(cosine · t + b)` with the checkpoint's learned `t = 112.90` and `b = -16.77`
+(`SceneModel.SIGLIP2_LOGIT_SCALE`, `SIGLIP2_LOGIT_BIAS`). A probability of 0.5 is a cosine of 0.149, and a hundredth
+of cosine is a factor of about 3 in the odds. The Describe search ends its results at a minimum of this probability,
+the Setting `search.describe.min_probability`, which it converts to a cosine (`SceneModel.siglip2Cosine`); this is the
+measurement its default comes from. The rule: the probability that 90% of true image and description pairs reach,
+rounded down to one significant figure.
+
+Measured on **COCO 2017 val** (Lin et al., ECCV 2014): 5,000 everyday photos with 25,014 captions, five an image.
+Each image is embedded as an import embeds it (`ImageUtil.matFromBytes`, `OnnxSceneEmbedder`) and each text as a
+description is (`OnnxDescribeEmbedder`). A caption is a sentence ("A woman is sitting on a bench in a park."), where a
+description is short ("woman in a park"), so each caption is cut to its noun phrase with spaCy's `en_core_web_sm`
+parse: its head noun (the root when the caption is itself a noun phrase, else the subject of its verb) with its
+determiners, numbers, adjectives, compounds, coordinated nouns and the prepositional phrases attached to it, and
+without verbal clauses ("a man in a red shirt riding a wave" gives "a man in a red shirt"). That leaves 21,838
+different pairs of an image and a phrase, 13,507 different phrases with a median of 4 words; the cut is automatic, and
+a few phrases are a parser's mistake. A true pair is an image and a phrase of one of its captions; a mismatched pair is
+a phrase and any image it was not cut from, 67.5 million of them.
+
+90% of the true pairs reach a probability of 0.0000928 (a cosine of 0.066), so the rule gives **0.00009**:
+
+| Probability | Cosine | True pairs kept | Mismatched pairs admitted | Photos found of 5,000, median (90th percentile) |
+|---|---|---|---|---|
+| 0.5 | 0.149 | 17.5% | 0.02% | 0 (3) |
+| 0.1 | 0.129 | 35.9% | 0.10% | 2 (16) |
+| 0.01 | 0.108 | 58.0% | 0.38% | 10 (53) |
+| 0.001 | 0.087 | 75.5% | 1.01% | 36 (117) |
+| 0.0003 | 0.077 | 83.4% | 1.67% | 62 (173) |
+| 0.0001 | 0.067 | 89.6% | 2.67% | 92 (270) |
+| 0.00009 (the rule's) | 0.066 | 90.2% | 2.80% | 95 (281) |
+| 0.00001 | 0.047 | 97.7% | 7.12% | 195 (802) |
+| 0.000001 | 0.026 | 99.6% | 17.09% | 436 (2,257) |
+
+The same rule over other texts for the same images, since what a user writes lies between them:
+
+| Texts | Different pairs | True pairs: median probability | 90% reach | Rounded down | Mismatched admitted there |
+|---|---|---|---|---|---|
+| The captions as written (median 10 words) | 25,007 | 0.53 | 0.0146 | 0.01 | 0.42% |
+| Their noun phrases (median 4 words) | 21,838 | 0.024 | 0.0000928 | 0.00009 | 2.80% |
+| The head noun's bare chunk, without the prepositional phrases (median 2 words: "a man") | 19,649 | 0.0042 | 0.0000327 | 0.00003 | 7.74% |
+
+What the figures say. The probability is no likelihood a user can read at face value: the model's sigmoid was trained
+against whole captions, and the shorter the text the lower a true pair scores, so a threshold that keeps nine in ten
+true pairs of short phrases is four decimal places down. At 0.00009 a phrase finds a median of 95 of the 5,000 photos,
+about one in fifty, so with a result limit of 1,000 it is the limit, not the probability, that ends most searches of
+a library past some fifty thousand photos; the ranking is by cosine either way, and the best matches come first. The share
+of mismatched pairs admitted is a ceiling on the false matches, not their count: a photo that no caption described as
+"a man" can still show one. And COCO's photos are of everyday scenes with a few objects each, so a library of other
+subjects can sit elsewhere on the scale.
+
+As a check of the whole path, the nearest image of the 5,000 to a caption as written is its own for 53.1% of the
+captions, and on the first 1,000 images the application's embeddings and the reference's (the checkpoint's processor
+and PyTorch model) retrieve alike, 72.9% against 72.8%: the text embeddings are the same, and the image embeddings
+are at a median cosine of 0.993 to the reference's, the difference being the resize. Lowercasing the text, which the
+application does, is worth three points there: the reference with the captions as written retrieves 69.6%. The
+scripts are not kept.
+
+### A description's weaker matches
+
+The match probability above ends a Describe search where nine in ten true matches are kept, which is far down the
+ranking: a description of a COCO category finds a median of 172 of the 5,000 photos, of which about half show it. So
+the results say where their tail begins: a result is a weaker match when its cosine to the description is under a
+fraction of the best match's, the Setting `search.describe.weaker_match_ratio`, and the weaker matches follow the
+others under a header. The line is a fraction of the best match and not a second probability because the cosines of
+a description are on a scale of their own: the shorter the text, the lower a true pair scores (above), so a cosine
+that ends the good matches of a sentence is over every match of two words. This is the measurement the default comes
+from. The rule: the lowest fraction, to 0.05, at which nine in ten of the photos above the line show
+what the description names. Nothing is hidden under the line, so a right photo under it costs a scroll, and a wrong
+one above it is the line failing at what it is for.
+
+Measured on **COCO 2017 val** again, its 5,000 photos embedded as an import embeds them (the preparation of
+`OnnxSceneEmbedder` over the application's image tower, checked on two photos to give the embedding the application
+stored, at a cosine of 1.0000). The descriptions are the names of COCO's 80 object categories ("dog", "traffic
+light"), lowercased and embedded by the checkpoint's text tower, which `OnnxDescribeEmbedder` reproduces. A
+description's results are the photos within the default match threshold (a cosine of 0.066), the nearest 1,000 at
+most, and a photo is right when COCO annotates the category in it, at any size. Each figure is the mean over the 80
+categories:
+
+| Ratio | Photos above the line, median | Right, of those above | Right results kept above | Wrong results let above | Kept less let (Youden's J) |
+|---|---|---|---|---|---|
+| none (the whole results) | 172 | 52.9% | 100% | 100% | 0 |
+| 0.50 | 142 | 60.5% | 94.1% | 71.0% | 0.231 |
+| 0.60 | 94 | 76.8% | 79.1% | 28.4% | 0.507 |
+| 0.65 | 79 | 83.9% | 69.8% | 15.2% | 0.546 |
+| 0.70 | 62 | 88.2% | 60.1% | 8.3% | 0.518 |
+| 0.75 (the rule's) | 46 | 91.5% | 50.1% | 4.4% | 0.458 |
+| 0.80 | 34 | 94.4% | 40.0% | 2.1% | 0.379 |
+| 0.90 | 10 | 97.7% | 17.4% | 0.3% | 0.171 |
+
+With an article before the name ("a dog", "an apple") the figures move little: 92.4% right above the line at 0.75 and
+89.8% at 0.70, and the best separation at 0.65 again.
+
+What the figures say. At **0.75** nine in ten photos above the line are right and one wrong result in twenty-three is
+let above it, at the price of half the right results standing under the header, where they are still shown, best
+first. The line that separates right from wrong best, by the right results kept above less the wrong ones let above,
+is lower, at 0.65: 84% right above it, 70% of the right results kept. An Admin who would rather have fewer right
+photos under the header than fewer wrong ones above it lowers the Setting to that. A category's name is the plainest
+description there is; for a caption as written, which says more than a short description does, the caption's own
+photo is above the line at 0.75 for 91.3% of 5,000 captions, one an image, with a median of 8 photos above the line.
+COCO annotates each category wherever it shows, however small, so a wrong photo here is one without the thing, and
+the figures say nothing of a description that tells two alike subjects apart ("woman holding a baby" against a man
+holding one), which the same cosine ranks close together. The scripts are not kept.
 
 ### Other open-source references
 
@@ -674,7 +826,8 @@ Any of these would be computed in `MeasureImageFlow` and stored on the asset or 
 - **BRISQUE** ships in `opencv_quality`; it needs the two small model files from opencv_contrib
   (`brisque_model_live.yml`, `brisque_range_live.yml`).
 - **NIMA** (aesthetic and technical heads, MobileNet backbone, small ONNX exports) gives a 1 to 10 aesthetic score.
-- **LAION aesthetic predictor** is a linear head on a CLIP embedding, which every still image now carries.
+- **LAION aesthetic predictor** is a linear head on a CLIP embedding, which no image carries: the stored semantic
+  embedding is SigLIP 2's, so the head would be one trained on that, or the image embedded by CLIP as well.
 - **MUSIQ**, **TOPIQ**, **CLIP-IQA**, **ARNIQA** are the research-grade scorers (the `pyiqa` zoo). Heavier, and only
   worth it if the simple metrics prove insufficient.
 
@@ -708,9 +861,9 @@ import.
 - **Eyes closed** (`plans/todo/eye-state.md`): a per-Face eye-state measurement at import and an Eyes closed Bundle,
   the most serious problem a frame could have. Today eyes are judged in the face strip by eye. The landmarker it
   needs would bring smile and pose with it.
-- **Beyond the Sequence rule's use of the Scene embeddings**: similar-image search (a vector index on the columns),
-  text search over the CLIP embedding (its text tower), and the aesthetic score as a head on it. The embeddings are
-  stored for every still image; nothing reads them but the rule.
+- **Beyond the Sequence rule's and the Describe search's use of the Scene embeddings**: similar-image search (a search
+  entry, and an index on DINOv2's column) and the aesthetic score as a head on the SigLIP 2 embedding. The embeddings
+  are stored for every still image; the rule reads both, and the Describe search ranks by SigLIP 2's.
 - **Learned quality models** and the other measurements of §2.
 - Nothing ranks the frames and nothing suggests a Pick beyond the sole Contender; the score is never read.
 - Videos and animated images are never measured and never in a Sequence or a set.

@@ -160,10 +160,7 @@ export function registerCurationListeners(app) {
         Alpine.store(Const.state.selectedAssets).reset()
 
         if (recycledIds.length > 0 || clearedSequenceIds.length > 0) {
-            if (
-                Alpine.store(Const.state.searchParams).layout ===
-                Const.search.layout.map
-            ) {
+            if (Alpine.store(Const.state.searchParams).showsMap()) {
                 runSearch()
             } else {
                 app.assetActions.removeAssetsFromGrid(recycledIds)

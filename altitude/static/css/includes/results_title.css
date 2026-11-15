@@ -82,7 +82,9 @@
   background: hsl(from var(--theme-neutral-3) h s l / 0.15);
 }
 
-.results-title .subtitle {
+/* The subtitle, and what a described search that found nothing says after Edit, in the subtitle's place */
+.results-title .subtitle,
+.results-title .filters .empty {
   font-size: var(--font-size-small);
   color: var(--theme-neutral-3);
 }
@@ -109,7 +111,8 @@
 }
 
 /* A filtered search's filters under its title (includes/search_filter_chips): a wrapping row of chips, the chosen filter's
-   chip of core.css, each led by its kind's icon or a Person's cover Face, then Edit */
+   chip of core.css, each led by its kind's icon or a Person's cover Face, then Edit, then, for a description that nothing
+   looks like, the line that says so */
 .results-title .filters {
   display: flex;
   flex-wrap: wrap;

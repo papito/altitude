@@ -6,6 +6,7 @@ import altitude.core.models.MapCell
 import altitude.core.models.MapLocation
 import altitude.core.models.UserMetadataField
 import altitude.core.util.BoundingBox
+import altitude.core.util.DescribeRanking
 import altitude.core.util.GroupedSearchPage
 import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchName
@@ -19,6 +20,27 @@ trait SearchDao:
 
   /** One ordered page of a grouped search: its assets with their group and count data */
   def searchGrouped(query: SearchQuery): GroupedSearchPage
+
+  /**
+   * One page of a Describe search: the assets `query` matches, in the context repository, whose SigLIP 2 Scene embedding is at a
+   * cosine of at least the ranking's `minCosine` to its `embedding`, a description's, the nearest `limit` of them at most,
+   * nearest first and then by ID. The query is resolved as any search's is, and carries the page: the `rpp` rows after its
+   * cursor, whose position is a row's cosine distance and ID, or the first ones without it, each row standing at its distance
+   * (`SearchRow.sortValue`, a `SortValue.Real`); a page that counts the total (`SearchQuery.isTotalCounted`) carries the count of
+   * all the ranked rows, and the page on which the search's weaker matches begin, the ranked rows whose cosine is under the
+   * ranking's `weakerRatio` of the nearest one's, says where (`SearchPage.weaker`). Its sort and grouping are not read. An asset
+   * with no embedding (a Video, an animated image, a still image the model could not embed) is in no page. The caller's
+   * transaction is set up for a vector search of that many rows (`TransactionManager.withVectorSearch`).
+   */
+  def describe(query: SearchQuery, ranking: DescribeRanking): SearchPage
+
+  /**
+   * The ranking as this engine reads it for the matches of `query`, a resolved search with no description of its own: through its
+   * vector index when it has one and the matches are many (`DescribeRanking.throughIndex`), exactly otherwise. `describe` reads
+   * its ranking so itself; a search among a part of a description's matches (`SearchQuery.described`) is handed the ranking read
+   * here, once for its pages' statements.
+   */
+  def rankingFor(query: SearchQuery, ranking: DescribeRanking): DescribeRanking
 
   /** The number of assets a search matches, exact, without reading any of them */
   def count(query: SearchQuery): Int

@@ -20,8 +20,17 @@
    up to one past `totalCap`, which means more than the cap. `person`, `folderPath` (the folder's ancestors, top-level first,
    then the folder; empty for the root), `album`, `location` (with its category's name) and `subset` (a Triage subset)
    are the scope the results title names (includes/results_title); `text` is its title when none of them is set. `filters` are
-   a filtered search's, which the title names in their place, a chip each (includes/search_filter_chips). *@
+   a filtered search's, which the title names in their place, a chip each (includes/search_filter_chips), the description's
+   first. `view` is the view searched: in the Triage view the Search text's title and a description's empty line name Triage, the
+   assets searched there. A search with a description is a filtered one, and its filters say so (`isDescribed`): the Sort menu
+   then offers "Similarity" first, the order such a search has unless it names another, and the layout toggle has no Map
+   segment, so the toolbar offers nothing the server refuses beside a description. An empty result of a description is said in
+   the title, after Edit. *@
 @(total: Int, totalCap: Int, sort: SearchSort, grouping: Option[SearchGrouping], grid: Html, person: Person = null, view: String, folderId: Option[String] = None, albumId: Option[String] = None, locationId: Option[String] = None, bbox: Option[String] = None, layout: String = Const.Search.Layout.GRID, text: Option[String] = None, folderPath: List[Folder] = Nil, album: Option[Album] = None, location: Option[Location] = None, subset: Option[TriageSubset] = None, filters: Option[SearchFilters] = None)
+
+@* Whether the results are a Describe search's, ranked by a description: the description is one of the search's filters, and
+   its chip is where the fragment holds it *@
+@isDescribed = @{ filters.exists(_.description.isDefined) }
 
 @* The effective scope of these results, as the server resolved them from the search parameters it was sent;
    the folder tree and the album list highlight the viewed folder or album from it (js/fragments/search-results.js).
@@ -49,7 +58,7 @@
    path's breadcrumb, each ancestor a search trigger for that folder. A filtered search, which the advanced search panel
    combines, is "Search results" over its filters, under the panel's sliders icon. *@
 @if(filters.isDefined) {
-@includes.html.results_title("fa-sliders-h", filters = Some(includes.html.search_filter_chips(filters.get))) {
+@includes.html.results_title("fa-sliders-h", filters = Some(includes.html.search_filter_chips(filters.get, foundNothing = total == 0, inTriage = view == Const.Search.View.TRIAGE))) {
 <span class="name">Search results</span>
 }
 } else if (person != null) {
@@ -76,7 +85,7 @@
 <span class="name">No Location</span>
 }
 } else if (text.isDefined) {
-@includes.html.results_title("fa-search", subtitle = Some("in this library")) {
+@includes.html.results_title("fa-search", subtitle = Some(if (view == Const.Search.View.TRIAGE) "in Triage" else "in this library")) {
 <span class="query">@{text.get}</span>
 }
 }
@@ -98,12 +107,15 @@
   </div>
 
   <div class="controls">
-    @* Grid or map (js/map/map-view.js): a literal `layout` parameter each, remembered by the store in localStorage *@
+    @* Grid or map (js/map/map-view.js): a literal `layout` parameter each, remembered by the store in localStorage. A
+       description's results are on the grid alone, so its toggle offers no map *@
     <div id="layoutToggle" class="toggle-group" role="group" aria-label="Layout">
       <button type="button" title="Grid" aria-pressed="@{layout == Const.Search.Layout.GRID}"
               data-app-search="click" data-app-search-layout="@{Const.Search.Layout.GRID}"><i class="fas fa-th"></i></button>
+      @if(!isDescribed) {
       <button type="button" title="Map" aria-pressed="@{layout == Const.Search.Layout.MAP}"
               data-app-search="click" data-app-search-layout="@{Const.Search.Layout.MAP}"><i class="fas fa-map"></i></button>
+      }
     </div>
     @* The ⚙ View control is a dialog-trigger context menu, built into this host by
        js/search-results/view-settings-control.js like the Add album and Add folder controls; its dialog also holds the
@@ -117,7 +129,7 @@
          aria-checked is the effective grouping the server used. Each option is a search trigger carrying the two parameters it
          sets (js/search-results/search-triggers.js), which the search funnel combines with every other parameter in the
          `searchParams` store. Grouping is a reorder, like the sort: it survives a change of folder, person, album or view.
-         The map layout groups nothing, so its host is disabled. *@
+         The map layout groups nothing, so its host is then disabled. *@
       <div id="groupMenuHost" data-choice-menu="Group" data-choice-menu-icon="fas fa-layer-group" @if(layout == Const.Search.Layout.MAP) {data-choice-menu-disabled}>
         <button type="button" data-app-search="click" data-app-search-group-by="" data-app-search-group-direction="" @if(grouping.isEmpty) {aria-checked="true"}>No grouping</button>
         <button type="button" data-app-search="click" data-app-search-group-by="dateTaken" data-app-search-group-direction="desc" @if(grouping.contains(SearchGrouping(GroupBy.DateTaken, SortDirection.DESC))) {aria-checked="true"}>Date Taken (Newest first)</button>
@@ -137,6 +149,10 @@
          its sort, which the search funnel combines with every other search parameter held in the `searchParams` store
          (js/search-results/search.js) *@
       <div id="sortMenuHost" data-choice-menu="Sort" data-choice-menu-icon="fas fa-sort-amount-down">
+        @* Similarity ranks by the description, so it is offered only while the results have one: the server refuses it otherwise *@
+        @if(isDescribed) {
+          <button type="button" data-app-search="click" data-app-search-sort="@{Const.Search.SORT_SIMILARITY}" @if(sort.isSimilarity) {aria-checked="true"}>Similarity</button>
+        }
         @* Relevance ranks by the Search text, so it is offered only while the results have text: the server refuses it otherwise *@
         @if(text.isDefined) {
           <button type="button" data-app-search="click" data-app-search-sort="@{Const.Search.SORT_RELEVANCE}" @if(sort.isRelevance) {aria-checked="true"}>Relevance</button>

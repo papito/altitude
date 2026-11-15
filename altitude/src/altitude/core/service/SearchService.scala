@@ -8,17 +8,27 @@ import scala.collection.mutable
 
 import altitude.core.Altitude
 import altitude.core.Const
+import altitude.core.IllegalOperationException
+import altitude.core.RequestContext
+import altitude.core.SearchCursorException
 import altitude.core.dao.SearchDao
 import altitude.core.models.Asset
+import altitude.core.models.CountedAssets
 import altitude.core.models.ListedPerson
 import altitude.core.models.MapBounds
 import altitude.core.models.MapCells
 import altitude.core.models.NamedPath
+import altitude.core.models.SceneModel
 import altitude.core.models.SearchFilterNames
+import altitude.core.models.Settings
 import altitude.core.models.UserMetadataField
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.BoundingBox
+import altitude.core.util.Described
+import altitude.core.util.DescribedPart
+import altitude.core.util.DescribeRanking
 import altitude.core.util.GroupedSearchResult
+import altitude.core.util.GroupedSearchRow
 import altitude.core.util.NameKey
 import altitude.core.util.ResolvedSearchGroup
 import altitude.core.util.ResolvedSearchTerm
@@ -26,13 +36,18 @@ import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchExpression
 import altitude.core.util.SearchName
+import altitude.core.util.SearchPage
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchResult
+import altitude.core.util.SearchRow
+import altitude.core.util.SearchSort
 import altitude.core.util.SearchSource
 import altitude.core.util.SearchTerm
 import altitude.core.util.SearchText
 import altitude.core.util.SearchWords
 import altitude.core.util.SortValue
+import altitude.core.util.Util
+import altitude.core.util.WeakerMatches
 
 object SearchService:
 
@@ -119,6 +134,35 @@ class SearchService(val app: Altitude):
     }
 
   /**
+   * The search as every statement over it needs it, resolved against the repository as it is now: its folder as the folder with
+   * every folder below it, and its Search text against the repository's names ([[resolveText]]). Both are resolved afresh on
+   * every request and every page, in the caller's transaction, before the query reaches the DAO.
+   */
+  def withResolvedScope(query: SearchQuery): SearchQuery =
+    txManager.asReadOnly {
+      withResolvedText(withResolvedFolderScope(query))
+    }
+
+  /** The names a Search text matches are resolved on every request, so a rename, a merge or a move shows in the next search */
+  private def withResolvedText(query: SearchQuery): SearchQuery =
+    query.textExpression.fold(query)(expression => query.withResolvedText(resolveText(expression, query.textProbeLimit)))
+
+  /** Folder membership is resolved on every request: a folder filter means the folder and all of its current descendants */
+  private def withResolvedFolderScope(query: SearchQuery): SearchQuery =
+    if query.folderIds.isEmpty then return query
+    if query.folderIds.size > 1 then throw IllegalOperationException("Currently cannot search in multiple folders at once")
+
+    val folderId = query.folderIds.head
+
+    // If the root folder is selected, treat it as "no folder filter" so that
+    // triaged assets (which have an empty folderId) are included — matching the default view.
+    if app.service.folder.isRootFolder(folderId) then query.withFolderIds(Set.empty)
+    else
+      val allFolders = app.service.folder.getChildrenRecursive(rootId = folderId)
+      val allFolderIds = (folderId :: allFolders.map(_.persistedId)).toSet
+      query.withFolderIds(allFolderIds)
+
+  /**
    * The folders the advanced search panel offers for the text typed so far ([[offered]]), each by its path, in path order: a
    * folder directly before the folders below it, as the folder tree lists them. The root and the recycled folders are no option.
    */
@@ -144,13 +188,13 @@ class SearchService(val app: Altitude):
   /**
    * The people the advanced search panel offers for the text typed so far ([[offered]]), by name: the people a Search text
    * resolves names against, named and neither hidden, merged away nor a bad match, each with their cover and the number of assets
-   * a search of them finds, which counts their triaged assets only when the search shows triaged items. A Person the search would
-   * find nothing for is no option, as the People tab lists none (`PersonService.getListedSearchable`).
+   * a search of them finds among the `counted` assets, the ones the search covers: the sorted assets, the triaged ones, or both.
+   * A Person the search would find nothing for is no option, as the People tab lists none (`PersonService.getListedSearchable`).
    */
-  def peopleOptions(typed: String, showTriaged: Boolean): List[ListedPerson] =
+  def peopleOptions(typed: String, counted: CountedAssets): List[ListedPerson] =
     txManager.asReadOnly {
       val listed =
-        app.service.person.getListedSearchable(showTriaged).map(listed => listed.person.persistedId -> listed).toMap
+        app.service.person.getListedSearchable(counted).map(listed => listed.person.persistedId -> listed).toMap
       // A searchable Person is named
       val names = listed.values.toSeq.map(listed => SearchName(listed.person.persistedId, listed.person.name.get))
       offered(names, typed)(person => List(person.name)).map(person => listed(person.id))
@@ -280,8 +324,236 @@ class SearchService(val app: Altitude):
     result
 
   /**
+   * One page of a Describe search on the flat grid: the still images of the context repository that `query` matches and that look
+   * like `description`, the words that say what a photo shows. The query is the search's filters, its view's flags, its page size
+   * and its cursor, with no grouping ([[describeGrouped]] reads a grouped one). The filters decide which assets are ranked and
+   * nothing of where they stand; with no filter the search ranks the whole view. The page is the `query.rpp` assets after the
+   * cursor, or the first ones without it, and a first page carries the total.
+   *
+   * With no sort the order is likeness, most alike first, which the query does not name: the assets are ranked by the cosine
+   * distance of their SigLIP 2 Scene embedding from the description's, in the database (`SearchDao.describe`), and the page that
+   * holds the first weaker match says where (`SearchResult.weaker`). With a sort the matches are in two parts, each in the sort's
+   * order ([[describedInParts]]).
+   *
+   * The description is embedded by SigLIP 2's text tower (`DescribeEmbedder`), before the transaction, since a pass holds no
+   * connection. Inside it the query is resolved as any search's is ([[withResolvedScope]]). Three Settings, read from one
+   * snapshot ([[rankingBy]]), say where the results end, whatever the filters, and where the weaker matches begin. The cursor's
+   * fingerprint is the description with what identifies the query to a cursor (`SearchCursor.describeFingerprint`): a cursor of
+   * any other search is refused (`SearchCursorException`). Every page ranks again, so the results are live, as any search's are.
+   *
+   * An embedder that embeds nothing, a test instance's whose suite has not turned the model on, finds nothing.
+   */
+  def describe(description: String, query: SearchQuery): SearchResult =
+    require(query.rpp >= 1, "A page of a Describe search holds at least one asset")
+    require(!query.isGrouped, "A grouped Describe search is read as one")
+    require(!query.searchSort.exists(_.isSimilarity), "Likeness is the order of a Describe search that names no sort")
+    val started = System.currentTimeMillis
+
+    val result =
+      if query.isSorted then
+        val page = describedInParts[SearchRow](description, query)(
+          flatPart,
+          (part, scope, last) =>
+            cursorAt(part, scope, last.day.map(_.toString), None, last.asset, last.sortValue, last.secondSortValue)
+        )
+        SearchResult(
+          page.rows.map(_.asset),
+          page.total,
+          page.nextCursor,
+          query.rpp,
+          query.searchSort,
+          page.weaker.map((index, count) => WeakerMatches(index, count)))
+      else
+        val scope =
+          SearchCursor.describeFingerprint(description, query, RequestContext.getRepository.persistedId, app.dataSourceType)
+        query.cursor.foreach(_.requireScope(scope))
+
+        val page = rankingBy(description).fold(SearchPage(Nil, Option.when(query.isTotalCounted)(0), hasMore = false)) {
+          ranking => txManager.withVectorSearch(ranking.limit)(searchDao.describe(withResolvedScope(query), ranking))
+        }
+        val nextCursor = Option.when(page.hasMore) {
+          val last = page.rows.last
+          SearchCursor(key = None, groupId = None, sortValue = last.sortValue, id = last.asset.persistedId, scope = scope)
+        }
+        SearchResult(page.rows.map(_.asset), page.total, nextCursor, query.rpp, List(SearchSort.Similarity), page.weaker)
+
+    logDescribed(description, query, result.records.length, result.total, result.weaker, started)
+    result
+
+  /**
+   * One page of a grouped Describe search: the matches of [[describe]] in two parts, each grouped and sorted as the query says
+   * ([[describedInParts]]), so a group with matches in both parts is in the page twice, once in each. Under the similarity sort a
+   * group's assets are most alike first. The first weaker match's group is named by `GroupedSearchResult.weaker`, its place among
+   * the page's groups with the count of the weaker matches.
+   */
+  def describeGrouped(description: String, query: SearchQuery): GroupedSearchResult =
+    require(query.isGrouped, "A flat Describe search is read as one")
+    val started = System.currentTimeMillis
+
+    val page = describedInParts[GroupedSearchRow](description, query)(
+      groupedPart,
+      (part, scope, last) =>
+        cursorAt(part, scope, last.group.cursorKey, last.group.cursorGroupId, last.asset, last.sortValue, last.secondSortValue)
+    )
+
+    // Each part's rows are grouped apart: a group in both parts is two groups of the page
+    val (nearer, weaker) = page.rows.splitAt(page.weaker.fold(page.rows.length)(_._1))
+    val nearerGroups = GroupedSearchResult.groupsOf(nearer)
+    val groups = nearerGroups ++ GroupedSearchResult.groupsOf(weaker)
+    val result = GroupedSearchResult(
+      groups = groups,
+      total = page.total,
+      grouping = query.grouping.get,
+      sort = query.searchSort.head,
+      nextCursor = page.nextCursor,
+      // The cursor's group is continued only by rows of the part the cursor is in
+      continuesGroup = page.continuesCursor && query.cursor.exists(cursor => groups.headOption.exists(_.key.continues(cursor))),
+      weaker = page.weaker.map((_, count) => WeakerMatches(nearerGroups.length, count))
+    )
+
+    logDescribed(description, query, result.assets.length, result.total, result.weaker, started)
+    result
+
+  /** The rows of one part's page, whether the part has more after them and, on a page that counts it, the part's total */
+  private case class PartPage[Row](rows: List[Row], total: Option[Int], hasMore: Boolean)
+
+  /** A flat page of a search among one part of a description's matches, read in the transaction of [[describedInParts]] */
+  private def flatPart(part: SearchQuery): PartPage[SearchRow] =
+    val page = searchDao.search(part)
+    PartPage(page.rows, page.total, page.hasMore)
+
+  /** A grouped page of a search among one part of a description's matches, read in the transaction of [[describedInParts]] */
+  private def groupedPart(part: SearchQuery): PartPage[GroupedSearchRow] =
+    val page = searchDao.searchGrouped(part)
+    PartPage(page.rows, page.total, page.hasMore)
+
+  /**
+   * A page of a Describe search in two parts. `weaker` is, on the page that holds the first weaker match, how many of the page's
+   * rows come before it and how many weaker matches the search has; `continuesCursor` whether the page's first row follows the
+   * cursor's in the cursor's own part.
+   */
+  private case class DescribedPage[Row](
+      rows: List[Row],
+      total: Option[Int],
+      nextCursor: Option[SearchCursor],
+      weaker: Option[(Int, Int)],
+      continuesCursor: Boolean)
+
+  /**
+   * A page of a Describe search that is sorted or grouped. Its matches are in two parts, the ones above the line of the weaker
+   * matches and then the weaker ones (`DescribedPart`), and each part is a search of its own among the description's ranked
+   * matches of that part (`SearchQuery.described`), ordered and grouped as `query` says: `read` reads a page of such a search and
+   * `cursorAfter` makes the cursor that continues one after a row.
+   *
+   * A cursor says which part it continues by its fingerprint, the description's with the part
+   * (`SearchCursor.describeFingerprint`); a cursor of neither is refused. A page of the first part that ends it goes on with the
+   * weaker matches from their start, as many as it has room for, and says where they begin; a page with no room left still looks
+   * for one, and when there is one its cursor is the last row's of the first part, which the next page, finding nothing after it,
+   * continues from into the weaker matches. So a part's pages are continued by that part's own cursors, and no page names a place
+   * in both.
+   *
+   * A first page's total is the two parts' together: the first part's, and the weaker matches', counted when the page does not
+   * reach them. The ranking is read as the engine reads it for the query's matches once, for every statement of the page
+   * (`SearchDao.rankingFor`), each of which ranks again.
+   */
+  private def describedInParts[Row](description: String, query: SearchQuery)(
+      read: SearchQuery => PartPage[Row],
+      cursorAfter: (SearchQuery, String, Row) => SearchCursor): DescribedPage[Row] =
+    def scopeOf(part: DescribedPart): String =
+      SearchCursor.describeFingerprint(
+        description,
+        query,
+        RequestContext.getRepository.persistedId,
+        app.dataSourceType,
+        Some(part))
+    val continued = query.cursor.map {
+      cursor =>
+        DescribedPart.values
+          .find(part => cursor.scope == scopeOf(part))
+          .getOrElse(throw SearchCursorException("The cursor does not belong to this search"))
+    }
+
+    rankingBy(description).fold(DescribedPage[Row](Nil, Option.when(query.isTotalCounted)(0), None, None, false)) {
+      embedded =>
+        txManager.withVectorSearch(embedded.limit) {
+          val resolved = withResolvedScope(query)
+          val ranking = searchDao.rankingFor(resolved, embedded)
+          def among(part: DescribedPart): SearchQuery = resolved.describedBy(Described(ranking, part))
+          def continuing(part: DescribedPart, page: PartPage[Row]): Option[SearchCursor] =
+            Option.when(page.hasMore)(cursorAfter(among(part), scopeOf(part), page.rows.last))
+
+          if continued.contains(DescribedPart.Weaker) then
+            val weaker = read(among(DescribedPart.Weaker))
+            DescribedPage(
+              weaker.rows,
+              None,
+              continuing(DescribedPart.Weaker, weaker),
+              None,
+              continuesCursor = weaker.rows.nonEmpty)
+          else
+            val nearer = read(among(DescribedPart.Nearer))
+            if nearer.hasMore then
+              val total = nearer.total.map(_ + searchDao.count(among(DescribedPart.Weaker)))
+              DescribedPage(nearer.rows, total, continuing(DescribedPart.Nearer, nearer), None, continuesCursor = true)
+            else
+              // The first part ends on this page: the weaker matches follow from their start, counted, as a first page is
+              val room = query.rpp - nearer.rows.length
+              val weaker = read(among(DescribedPart.Weaker).paged(room.max(1), None))
+              val shown = if room > 0 then weaker.rows else Nil
+              DescribedPage(
+                rows = nearer.rows ++ shown,
+                total = nearer.total.map(_ + weaker.total.getOrElse(0)),
+                nextCursor =
+                  if room > 0 then continuing(DescribedPart.Weaker, weaker)
+                  else
+                    Option.when(weaker.rows.nonEmpty)(
+                      cursorAfter(among(DescribedPart.Nearer), scopeOf(DescribedPart.Nearer), nearer.rows.last))
+                ,
+                weaker = Option.when(shown.nonEmpty)((nearer.rows.length, weaker.total.getOrElse(0))),
+                continuesCursor = nearer.rows.nonEmpty
+              )
+        }
+    }
+
+  /**
+   * What a description ranks by, from one snapshot of the Settings: its embedding; the Describe match threshold, the least
+   * probability by the model that an image matches, as the least cosine (`SceneModel.siglip2Cosine`); the Describe result limit,
+   * the most assets ranked; and the Describe weaker matches ratio. None when the embedder embeds nothing, a test instance's whose
+   * suite has not turned the model on.
+   */
+  private def rankingBy(description: String): Option[DescribeRanking] =
+    val settings = app.settings.current
+    app.describeEmbedder
+      .embed(description)
+      .map(
+        DescribeRanking(
+          _,
+          SceneModel.siglip2Cosine(settings.searchDescribeMinProbability),
+          settings.searchDescribeMaxResults,
+          settings.searchDescribeWeakerMatchRatio))
+
+  /** A page of a Describe search, logged with its description: escaped, since one is typed, line breaks and all */
+  private def logDescribed(
+      description: String,
+      query: SearchQuery,
+      assets: Int,
+      total: Option[Int],
+      weaker: Option[WeakerMatches],
+      started: Long): Unit =
+    val settings = app.settings.current
+    logger.debug(
+      s"Describe search [${Util.printable(description, Const.Search.MAX_DESCRIPTION_LENGTH)}]" +
+        query.grouping.fold("")(grouping => s" grouped by ${grouping.by}") +
+        query.searchSort.headOption.fold("")(sort => s" sorted $sort") +
+        s": $assets assets" +
+        total.map(total => s" of $total").getOrElse(", total not counted") +
+        weaker.map(weaker => s", the ${weaker.count} weaker matches from place ${weaker.index} of the page").getOrElse("") +
+        s" at a probability of ${settings.value(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY)} or more, " +
+        s"limit ${settings.searchDescribeMaxResults}, in ${System.currentTimeMillis - started}ms")
+
+  /**
    * The cursor that continues a search after the image at this position. It carries the scope fingerprint of the search as
-   * requested and, under the Relevance sort, which orders by the capture time next, that too.
+   * requested and, under a scored sort, the Relevance or the similarity, which orders by the capture time next, that too.
    */
   private def cursorAt(
       query: SearchQuery,
@@ -297,7 +569,7 @@ class SearchService(val app: Altitude):
       sortValue = sortValue,
       id = asset.persistedId,
       scope = scopeFingerprint,
-      secondSortValue = Option.when(query.searchSort.exists(_.isRelevance))(secondSortValue)
+      secondSortValue = Option.when(query.searchSort.exists(_.isScored))(secondSortValue)
     )
 
   def count(query: SearchQuery): Int =

@@ -57,8 +57,19 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * and the browser URL keeps them. A filtered search (`isFiltered`) is titled by its filters, a chip each, and an ID among them
    * that names nothing in the repository is no 404: it matches nothing and has no chip.
    *
-   * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
-   * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
+   * `sort` defaults to similarity when the request has a description, to Relevance when it has Search text (`q` with a usable
+   * term) and no description, and to the newest import first when it has neither; `sort=relevance` without text and
+   * `sort=similarity` without a description are a 400, as is text with the trash view, which text does not search.
+   *
+   * A search with a description (`describe`, `SearchRequestParser`) answers the still images that look like it among the assets
+   * its other filters match (the Search text, a folder, people, Locations, the two date ranges, and `triaged=true`, which adds
+   * the triaged assets), on the grid, continued by cursor like any other. In its own order, similarity, most alike first, it is
+   * one ranked list whose weaker matches are its end; under another sort, or grouped, it is two parts, the matches above the line
+   * of the weaker ones and then the weaker ones, each sorted and grouped as the request says (`SearchService.describe`,
+   * `describeGrouped`). Either way the page that holds the first weaker match has a header before it. A blank or overlong
+   * description, and an album, a subset, a map area, the trash or the map layout beside one, is a 400. It is a filtered search
+   * whatever else it holds (`isFiltered`), so the fragment holds the description as the first of its filters' chips, which is
+   * also what tells the template to offer the similarity sort and no map layout, and the browser URL carries it with its sort.
    *
    * With `groupBy`, a header opens each date, Location or, in the Triage view, Sequence (`parseGrouping`). Grouped or not, a page
    * is `rpp` assets, 1 to `Const.Search.MAX_RPP`, and is continued by the `after` cursor its last cell carries
@@ -93,6 +104,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       bbox: Option[String] = None,
       triaged: Option[Boolean] = None,
       subset: Option[String] = None,
+      describe: Option[String] = None,
       layout: String = Const.Search.Layout.GRID,
       isContinuousScroll: Boolean = false,
       groupBy: Option[String] = None,
@@ -130,7 +142,9 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       importedTo = importedTo,
       bbox = bbox,
       triaged = triaged,
-      subset = subset
+      subset = subset,
+      describe = describe,
+      layout = Some(layout)
     )
     val scope = SearchRequestParser.parse(params) match
       case Left(message) => return textError(message, 400)
@@ -138,9 +152,13 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     if layout != Const.Search.Layout.GRID && layout != Const.Search.Layout.MAP then return textError("Unknown layout", 400)
 
-    val effectiveSort = sort.getOrElse(
-      if scope.text.isDefined then Const.Search.SORT_RELEVANCE
-      else s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}")
+    // A search that names no sort is in the order its filters ask for: likeness with a description, whatever else it holds,
+    // Relevance with Search text, and otherwise the newest import first
+    def defaultSort: String =
+      if scope.description.isDefined then Const.Search.SORT_SIMILARITY
+      else if scope.text.isDefined then Const.Search.SORT_RELEVANCE
+      else s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}"
+    val effectiveSort = sort.getOrElse(defaultSort)
 
     val searchSort = parseSort(effectiveSort) match
       case None => return textError("Unknown sort", 400)
@@ -149,6 +167,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     if searchSort.isRelevance && scope.text.isEmpty then
       return textError(
         s"${Api.Field.Search.SORT}=${Const.Search.SORT_RELEVANCE} needs Search text (${Api.Field.Search.QUERY_TEXT})",
+        400)
+    if searchSort.isSimilarity && scope.description.isEmpty then
+      return textError(
+        s"${Api.Field.Search.SORT}=${Const.Search.SORT_SIMILARITY} needs a description (${Api.Field.Search.DESCRIBE})",
         400)
 
     // What the results title names. A filtered search is named by its filters, a chip each, through what its IDs name in the
@@ -228,8 +250,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
       logger.trace(s"GROUPED QUERY: ${searchQuery.toString}")
 
+      // With a description the scope's assets are grouped in two parts, the weaker matches last
       val results: GroupedSearchResult =
-        try App.altitude.service.library.searchGrouped(searchQuery)
+        try
+          scope.description match
+            case Some(description) => App.altitude.service.search.describeGrouped(description, searchQuery)
+            case None => App.altitude.service.library.searchGrouped(searchQuery)
         catch
           case ex: SearchCursorException => return textError(ex.getMessage, 400)
           case _: QueryTimeoutException => return timedOut
@@ -269,12 +295,16 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         ("HX-Replace-Url", browserUrl)
       )
 
-    val searchQuery = scope.query(rpp = rpp, searchSort = List(searchSort), cursor = cursor)
-
-    logger.trace(s"QUERY: ${searchQuery.toString}")
-
+    // With a description the scope's assets are ranked by how much they look like it, in that order, which its query does not
+    // name, or shown in the sort's, in two parts; anything else is a flat search of the scope by the sort
+    val searchQuery =
+      scope.query(rpp = rpp, searchSort = if searchSort.isSimilarity then Nil else List(searchSort), cursor = cursor)
+    logger.trace(s"${if scope.description.isDefined then "DESCRIBED " else ""}QUERY: ${searchQuery.toString}")
     val results =
-      try App.altitude.service.library.search(searchQuery)
+      try
+        scope.description match
+          case Some(description) => App.altitude.service.search.describe(description, searchQuery)
+          case None => App.altitude.service.library.search(searchQuery)
       catch
         case ex: SearchCursorException => return textError(ex.getMessage, 400)
         case _: QueryTimeoutException => return timedOut
@@ -294,6 +324,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     htmlResponse(
       includes.html.search_results(
         total = results.total.getOrElse(0),
+        // What the query counted the total up to, as on the grouped grid and the map; a Describe search's total is exact, the
+        // count of what it ranked, which its result limit keeps at the cap or under (Settings)
         totalCap = searchQuery.totalCap,
         sort = searchSort,
         grouping = None,
@@ -362,10 +394,11 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
   /**
    * The sort argument is one of the results UI's fields with the direction appended as a single digit, e.g. "filename0", or
-   * "relevance" alone, which has one direction: best match first
+   * "relevance" or "similarity" alone, each of which has one direction: best match first
    */
   private def parseSort(sort: String): Option[SearchSort] =
     if sort == Const.Search.SORT_RELEVANCE then return Some(SearchSort.Relevance)
+    if sort == Const.Search.SORT_SIMILARITY then return Some(SearchSort.Similarity)
 
     val field = sort.dropRight(1)
     Try(SortDirection(sort.takeRight(1).toInt)).toOption
@@ -377,9 +410,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     textError(Const.Msg.Err.SEARCH_TIMED_OUT, 503)
 
   /**
-   * Whether the search is a filtered search (`CONTEXT.md`): one with a date range, two people or more, two Locations or more, or
-   * more than one of the Search text, a folder, a person and a Location. The root folder is the whole repository, so it is no
-   * folder here. Any other search has one scope at most, which its results title names on its own.
+   * Whether the search is a filtered search (`CONTEXT.md`): one with a description, whatever else it holds, a date range, two
+   * people or more, two Locations or more, or more than one of the Search text, a folder, a person and a Location. The root
+   * folder is the whole repository, so it is no folder here. Any other search has one scope at most, which its results title
+   * names on its own.
    */
   private def isFiltered(scope: SearchRequestParser.Scope): Boolean =
     val folders = App.altitude.service.folder
@@ -388,12 +422,16 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       scope.folderIds.exists(!folders.isRootFolder(_)),
       scope.personIds.nonEmpty,
       scope.locationIds.nonEmpty)
-    scope.takenRange.isDefined || scope.importedRange.isDefined || scope.personIds.size > 1 || scope.locationIds.size > 1 ||
-    scopes.count(identity) > 1
+    scope.description.isDefined || scope.takenRange.isDefined || scope.importedRange.isDefined || scope.personIds.size > 1 ||
+    scope.locationIds.size > 1 || scopes.count(identity) > 1
 
-  /** The filters a filtered search's title names, the people and the Locations in the order the request gives them */
+  /**
+   * The filters a filtered search's title names, the description first, the people and the Locations in the order the request
+   * gives them
+   */
   private def filtersOf(scope: SearchRequestParser.Scope): SearchFilters =
     SearchFilters(
+      description = scope.description,
       text = scope.text,
       names = App.altitude.service.search.filterNames(scope.folderIds.headOption, scope.personIds, scope.locationIds),
       peopleMatch = scope.peopleMatch,
@@ -424,7 +462,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   /**
    * The bookmarkable URL for this search. Only parameters that are not at their default are included, and always in the same
    * order, so the same search always yields the same URL. `rpp` and `after` are left out on purpose - a shared link opens at the
-   * first page.
+   * first page. A search with a description carries it, without the white space around it, after its other filters.
    */
   private def browserViewUrl(
       search: SearchRequestParser.Params,
@@ -449,6 +487,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       search.triaged.map(Api.Field.Search.TRIAGED -> _.toString),
       Option.when(layout != Const.Search.Layout.GRID)(Api.Field.Search.LAYOUT -> layout),
       search.q.map(Api.Field.Search.QUERY_TEXT -> _),
+      search.describe.map(Api.Field.Search.DESCRIBE -> _.strip),
       Some(Api.Field.Search.SORT -> sort),
       groupBy.map(Api.Field.Search.GROUP_BY -> _),
       groupDirection.map(Api.Field.Search.GROUP_DIRECTION -> _)

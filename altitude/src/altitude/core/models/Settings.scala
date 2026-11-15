@@ -13,6 +13,7 @@ enum SettingGroup(val label: String):
   case FaceRecognition extends SettingGroup("Face recognition and quality")
   case Video extends SettingGroup("Video")
   case Triage extends SettingGroup("Triage")
+  case Search extends SettingGroup("Search")
   case Maps extends SettingGroup("Map")
   case Operations extends SettingGroup("Operations")
 
@@ -22,8 +23,11 @@ enum SettingKind:
 
 /** What a Setting's text must be. `error` is why a text is not one, or nothing when it is. */
 enum SettingType:
-  /** A number between the bounds, the lower one excluded when `minExclusive` */
-  case Decimal(min: Double, max: Double = Double.MaxValue, minExclusive: Boolean = false)
+  /**
+   * A number between the bounds, the lower one excluded when `minExclusive` and the upper one when `maxExclusive`, written as a
+   * plain decimal ([[SettingType.PLAIN_DECIMAL]])
+   */
+  case Decimal(min: Double, max: Double = Double.MaxValue, minExclusive: Boolean = false, maxExclusive: Boolean = false)
 
   /** A whole number between the bounds */
   case Integer(min: Int, max: Int = Int.MaxValue)
@@ -36,17 +40,20 @@ enum SettingType:
 
   /** The text as a number, when this is a numeric type and the text is one; the one parse every reading of a number goes through */
   def number(text: String): Option[Double] = this match
-    case Decimal(_, _, _) => text.toDoubleOption.filter(_.isFinite)
+    case Decimal(_, _, _, _) => Option.when(SettingType.PLAIN_DECIMAL.matches(text))(text.toDouble)
     case Integer(_, _) => text.toIntOption.map(_.toDouble)
     case _ => None
 
   def error(text: String): Option[String] = this match
-    case Decimal(min, max, minExclusive) =>
+    case Decimal(min, max, minExclusive, maxExclusive) =>
       number(text) match
+        // What a JVM reads as a number and a Setting does not take is refused for how it is written, not as no number
+        case None if text.toDoubleOption.exists(_.isFinite) => Some("Must be a plain decimal, with no exponent")
         case None => Some("Must be a number")
         case Some(value) if value < min || (minExclusive && value == min) =>
           Some(if minExclusive then s"Must be above ${SettingType.bound(min)}" else s"Must be at least ${SettingType.bound(min)}")
-        case Some(value) if value > max => Some(s"Must be at most ${SettingType.bound(max)}")
+        case Some(value) if value > max || (maxExclusive && value == max) =>
+          Some(if maxExclusive then s"Must be below ${SettingType.bound(max)}" else s"Must be at most ${SettingType.bound(max)}")
         case _ => None
     case Integer(min, max) =>
       number(text) match
@@ -66,10 +73,19 @@ enum SettingType:
 
   /** Whether two valid texts mean the same value: a number by its value, anything else by its text */
   def same(a: String, b: String): Boolean = this match
-    case Decimal(_, _, _) | Integer(_, _) => number(a) == number(b)
+    case Decimal(_, _, _, _) | Integer(_, _) => number(a) == number(b)
     case _ => a == b
 
 object SettingType:
+  /**
+   * A decimal as a Setting spells it: digits with at most one point, after an optional sign. A number with an exponent is not
+   * one, though a JVM reads it, and prints a small number as one (0.00009 as 9.0E-5): a Setting is stored and shown as the text
+   * that was saved, so only what reads as a number on the screen is saved. Nor is anything else a JVM reads as a double: a
+   * hexadecimal number, a type suffix, the words for infinity and for no number. The first three are numbers written another way,
+   * and [[SettingType.error]] says so; the words are no number.
+   */
+  private val PLAIN_DECIMAL = """[+-]?(\d+\.?\d*|\.\d+)""".r
+
   // A whole bound reads as one: "255", not "255.0"
   private def bound(value: Double): String = if value == value.toLong then value.toLong.toString else value.toString
 
@@ -123,13 +139,13 @@ case class Settings(private val text: Map[String, String], private val defaults:
   val videoPreviewMinLuminance: Double = number(VIDEO_PREVIEW_MIN_LUMINANCE)
   val sequenceMaxGapMs: Int = number(SEQUENCE_MAX_GAP_MS).toInt
   val sequenceDinov2MinSimilarity: Double = number(SEQUENCE_DINOV2_MIN_SIMILARITY)
-  val sequenceClipMinSimilarity: Double = number(SEQUENCE_CLIP_MIN_SIMILARITY)
+  val sequenceSiglip2MinSimilarity: Double = number(SEQUENCE_SIGLIP2_MIN_SIMILARITY)
   val sequenceMaxHashDistance: Int = number(SEQUENCE_MAX_HASH_DISTANCE).toInt
 
   /** The least cosine similarity of two frames' embeddings of `model` to look alike */
   def sequenceMinSimilarity(model: SceneModel): Double = model match
     case SceneModel.Dinov2 => sequenceDinov2MinSimilarity
-    case SceneModel.Clip => sequenceClipMinSimilarity
+    case SceneModel.Siglip2 => sequenceSiglip2MinSimilarity
   val curationBlurRatio: Double = number(CURATION_BLUR_RATIO)
   val curationFaceQualityGap: Double = number(CURATION_FACE_QUALITY_GAP)
   val curationClippedFraction: Double = number(CURATION_CLIPPED_FRACTION)
@@ -137,6 +153,18 @@ case class Settings(private val text: Map[String, String], private val defaults:
   val curationDarkLuminance: Double = number(CURATION_DARK_LUMINANCE)
   val curationBrightLuminance: Double = number(CURATION_BRIGHT_LUMINANCE)
   val curationLuminanceGap: Double = number(CURATION_LUMINANCE_GAP)
+
+  /** The least probability, by SigLIP 2, that a still image matches a description for a Describe search to show it */
+  val searchDescribeMinProbability: Double = number(SEARCH_DESCRIBE_MIN_PROBABILITY)
+
+  /** The most assets a Describe search shows */
+  val searchDescribeMaxResults: Int = number(SEARCH_DESCRIBE_MAX_RESULTS).toInt
+
+  /**
+   * The fraction of the best match's cosine to a description under which a Describe search's result is a weaker match; 0 leaves
+   * every result above the line
+   */
+  val searchDescribeWeakerMatchRatio: Double = number(SEARCH_DESCRIBE_WEAKER_MATCH_RATIO)
   val mapTileUrl: String = text(MAP_TILE_URL)
   val mapTileAttribution: String = text(MAP_TILE_ATTRIBUTION)
   val mapGeocoderEnabled: Boolean = text(MAP_GEOCODER_ENABLED) == "true"
@@ -173,7 +201,7 @@ object Settings:
   val VIDEO_PREVIEW_MIN_LUMINANCE = "video.preview.min_luminance"
   val SEQUENCE_MAX_GAP_MS = "sequence.max_gap_ms"
   val SEQUENCE_DINOV2_MIN_SIMILARITY = "sequence.dinov2.min_similarity"
-  val SEQUENCE_CLIP_MIN_SIMILARITY = "sequence.clip.min_similarity"
+  val SEQUENCE_SIGLIP2_MIN_SIMILARITY = "sequence.siglip2.min_similarity"
   val SEQUENCE_MAX_HASH_DISTANCE = "sequence.max_hash_distance"
   val CURATION_BLUR_RATIO = "curation.blur_ratio"
   val CURATION_FACE_QUALITY_GAP = "curation.face_quality_gap"
@@ -182,6 +210,9 @@ object Settings:
   val CURATION_DARK_LUMINANCE = "curation.dark_luminance"
   val CURATION_BRIGHT_LUMINANCE = "curation.bright_luminance"
   val CURATION_LUMINANCE_GAP = "curation.luminance_gap"
+  val SEARCH_DESCRIBE_MIN_PROBABILITY = "search.describe.min_probability"
+  val SEARCH_DESCRIBE_MAX_RESULTS = "search.describe.max_results"
+  val SEARCH_DESCRIBE_WEAKER_MATCH_RATIO = "search.describe.weaker_match_ratio"
   val MAP_TILE_URL = "map.tile.url"
   val MAP_TILE_ATTRIBUTION = "map.tile.attribution"
   val MAP_GEOCODER_ENABLED = "map.geocoder.enabled"
@@ -248,7 +279,8 @@ object Settings:
       FaceRecognition,
       "Vector index search width",
       "How many candidates a search of the vector index keeps as it goes (pgvector's hnsw.ef_search). Higher finds more of " +
-        "the true nearest Faces and reads more of the index. At least four times the match count.",
+        "the true nearest Faces and reads more of the index. At least four times the match count. A Describe search keeps " +
+        "its result limit of candidates when that is more, up to pgvector's 1000.",
       Integer(4),
       engine = postgresOnly
     ),
@@ -316,18 +348,18 @@ object Settings:
       "Sequence DINOv2 similarity",
       "The least cosine similarity, -1 to 1, of two frames' DINOv2 Scene embeddings to look alike. Higher groups more " +
         "strictly. Two frames are one Sequence when either Scene model finds them alike, so lowering one threshold groups more " +
-        "freely whatever the other says. DINOv2's similarities spread lower than CLIP's, so the two thresholds are on " +
+        "freely whatever the other says. DINOv2's similarities spread lower than SigLIP 2's, so the two thresholds are on " +
         "different scales. A starting point to calibrate on real files.",
       Decimal(-1, 1)
     ),
     SettingDef(
-      SEQUENCE_CLIP_MIN_SIMILARITY,
+      SEQUENCE_SIGLIP2_MIN_SIMILARITY,
       Triage,
-      "Sequence CLIP similarity",
-      "The least cosine similarity, -1 to 1, of two frames' CLIP Scene embeddings to look alike. Higher groups more strictly. " +
-        "Two frames are one Sequence when either Scene model finds them alike, so lowering one threshold groups more freely " +
-        "whatever the other says. CLIP's similarities sit closer to 1 than DINOv2's, so the two thresholds are on different " +
-        "scales. A starting point to calibrate on real files.",
+      "Sequence SigLIP 2 similarity",
+      "The least cosine similarity, -1 to 1, of two frames' SigLIP 2 Scene embeddings to look alike. Higher groups more " +
+        "strictly. Two frames are one Sequence when either Scene model finds them alike, so lowering one threshold groups more " +
+        "freely whatever the other says. SigLIP 2's similarities sit closer to 1 than DINOv2's, so the two thresholds are on " +
+        "different scales. A starting point to calibrate on real files.",
       Decimal(-1, 1)
     ),
     SettingDef(
@@ -390,6 +422,29 @@ object Settings:
       "Curation brightness gap",
       "In a Sequence, a frame is Too dark or Too bright when its mean brightness, 0 to 1, is at least this much farther from " +
         s"the target of ${ImageMeasurement.TARGET_LUMINANCE} than the Sequence's frame nearest the target.",
+      Decimal(0, 1)
+    ),
+    SettingDef(
+      SEARCH_DESCRIBE_MIN_PROBABILITY,
+      Search,
+      "Describe match threshold",
+      "How likely, by the model, a photo must be to match a description to be shown. Lower shows more, weaker matches.",
+      Decimal(0, 1, minExclusive = true, maxExclusive = true)
+    ),
+    SettingDef(
+      SEARCH_DESCRIBE_MAX_RESULTS,
+      Search,
+      "Describe result limit",
+      "The most photos a description shows, best first.",
+      // No more than a first page's total counts to: a Describe search's total is exact, the count of what it ranked
+      Integer(1, Const.Search.TOTAL_CAP)
+    ),
+    SettingDef(
+      SEARCH_DESCRIBE_WEAKER_MATCH_RATIO,
+      Search,
+      "Describe weaker matches",
+      "A photo that looks less than this fraction as much like a description as the best match does is a weaker match, " +
+        "shown after the others under its own header. Higher puts more photos under it; 0 shows no such header.",
       Decimal(0, 1)
     ),
     SettingDef(

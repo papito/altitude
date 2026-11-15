@@ -220,7 +220,7 @@ import altitude.core.transactions.TransactionManager
       testApp.txManager.withTransaction(query("PRAGMA query_only").head("query_only").toString) shouldBe "0"
     }
 
-    test("A SQLite connection opened before the schema existed searches face vectors once the schema is created") {
+    test("A SQLite connection opened before the schema existed searches the vectors once the schema is created") {
 
       /**
        * Setup:
@@ -231,8 +231,9 @@ import altitude.core.transactions.TransactionManager
        *
        * Assertions:
        *
-       * A plain read transaction and a plain write transaction, with no face vector setup of their own, search the face vectors:
-       * a connection is set up for that as it is opened, so the ones opened before the `face` table existed have been replaced.
+       * A plain read transaction and a plain write transaction, with no vector setup of their own, search the face vectors and
+       * the SigLIP 2 Scene embeddings: a connection is set up for both as it is opened, so the ones opened before the `face` and
+       * `asset` tables existed have been replaced.
        */
       val dbFile = new File(testApp.config.getString(Const.Conf.TEST_DIR), "fresh.sqlite.db")
       dbFile.getParentFile.mkdirs()
@@ -241,13 +242,16 @@ import altitude.core.transactions.TransactionManager
         testApp.config.withValue(Const.Conf.SQLITE_URL, ConfigValueFactory.fromAnyRef(s"jdbc:sqlite:${dbFile.getPath}"))
       val manager = new TransactionManager(config, None, () => None)
 
-      // Nothing to search yet, but the scan has to find the column registered
-      val noFace = "[" + List.fill(512)("0.0").mkString(",") + "]"
+      // Nothing to search yet, but each scan has to find its column registered
+      def noVector(dimensions: Int): String = "[" + List.fill(dimensions)("0.0").mkString(",") + "]"
       def searchCount: Int =
-        query("SELECT count(*) AS n FROM vector_full_scan('face', 'features', vector_as_f32(?))", noFace)
-          .head("n")
-          .toString
-          .toInt
+        List(("face", "features", 512), ("asset", "siglip2_embedding", 768)).map {
+          case (table, column, dimensions) =>
+            query(s"SELECT count(*) AS n FROM vector_full_scan('$table', '$column', vector_as_f32(?))", noVector(dimensions))
+              .head("n")
+              .toString
+              .toInt
+        }.sum
 
       try {
         manager.asReadOnly(())
@@ -291,5 +295,85 @@ import altitude.core.transactions.TransactionManager
         }
       }
     }
+
+    test("A PostgreSQL vector search keeps its limit of candidates, up to pgvector's cap, and scans on until the limit is met") {
+
+      /**
+       * Setup:
+       *
+       * pgvector's four settings of an index scan, read inside a face vector transaction, written and read-only, and inside
+       * vector searches for 400, for 5,000 and for 10 rows, with the vector index search width Setting at its default of 100 and
+       * then saved as 150.
+       *
+       * Assertions:
+       *
+       * A face vector transaction keeps the Setting's candidates and scans on in relaxed order under pgvector's own caps, as
+       * before. A vector search keeps as many candidates as its limit, and lifts the cap on the tuples a scan visits and raises
+       * the one on its memory, so the scan ends when the limit is met and not before. It is a read transaction.
+       *
+       * Edge cases:
+       *
+       * pgvector keeps 1,000 candidates at most, so a search for 5,000 rows keeps 1,000. A search for fewer rows than the Setting
+       * keeps the Setting's candidates. Nested in a vector search, a face vector transaction runs under the search's setup, and a
+       * vector search nested in a face vector transaction raises the setup to its own.
+       */
+      def scanSettings: List[String] = {
+        // pgvector's settings are known to a session once it has used the extension
+        query("SELECT '[1]'::vector AS loaded")
+        List("ef_search", "iterative_scan", "max_scan_tuples", "scan_mem_multiplier").map(
+          name => query(s"SELECT current_setting('hnsw.$name') AS v").head("v").toString)
+      }
+      def faces(candidates: Int): List[String] = List(candidates.toString, "relaxed_order", "20000", "1")
+      def search(candidates: Int): List[String] = List(candidates.toString, "relaxed_order", "2147483647", "8")
+
+      testApp.txManager.withFaceVector(scanSettings) shouldBe faces(100)
+      testApp.txManager.withFaceVectorReadOnly(scanSettings) shouldBe faces(100)
+      testApp.txManager.withVectorSearch(limit = 400)(scanSettings) shouldBe search(400)
+      testApp.txManager.withVectorSearch(limit = 5000)(scanSettings) shouldBe search(1000)
+      testApp.txManager.withVectorSearch(limit = 10)(scanSettings) shouldBe search(100)
+      testApp.txManager.withVectorSearch(limit = 10) {
+        query("SELECT current_setting('transaction_read_only') AS v").head("v")
+      } shouldBe "on"
+
+      withSetting(Settings.FACE_RECOGNITION_HNSW_EF_SEARCH, "150") {
+        testApp.txManager.withFaceVector(scanSettings) shouldBe faces(150)
+        testApp.txManager.withVectorSearch(limit = 10)(scanSettings) shouldBe search(150)
+      }
+
+      testApp.txManager.withVectorSearch(limit = 400) {
+        testApp.txManager.withFaceVectorReadOnly(scanSettings) shouldBe search(400)
+      }
+      testApp.txManager.withFaceVector {
+        scanSettings shouldBe faces(100)
+        testApp.txManager.withVectorSearch(limit = 400)(scanSettings) shouldBe search(400)
+      }
+    }
+  }
+
+  test("A vector search is a read transaction that a search nested in it joins") {
+
+    /**
+     * Setup:
+     *
+     * A vector search for 10 rows that reads its connection, with a second vector search and a plain read transaction nested in
+     * it, each reading theirs.
+     *
+     * Assertions:
+     *
+     * The three run on one connection, which refuses writes, and none is left behind once the outermost ends.
+     */
+    def refusesWrites: Boolean =
+      if (isSqlite) query("PRAGMA query_only").head("query_only").toString == "1"
+      else query("SELECT current_setting('transaction_read_only') AS v").head("v") == "on"
+
+    val connections = testApp.txManager.withVectorSearch(limit = 10) {
+      refusesWrites shouldBe true
+      List(
+        RequestContext.getConn,
+        testApp.txManager.withVectorSearch(limit = 20)(RequestContext.getConn),
+        testApp.txManager.asReadOnly(RequestContext.getConn))
+    }
+    connections.distinct.size shouldBe 1
+    RequestContext.conn.value shouldBe None
   }
 }

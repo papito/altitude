@@ -187,6 +187,8 @@ object Api:
     object Search:
       val PERSON = "person"
       val QUERY_TEXT = "q"
+      // A description, the words of a Describe search
+      val DESCRIBE = "describe"
       val RESULTS_PER_PAGE = "rpp"
       val RESULTS = "results"
       val FOLDER_ID = "folderId"

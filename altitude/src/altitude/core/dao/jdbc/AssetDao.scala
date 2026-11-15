@@ -11,8 +11,8 @@ import scalasql.Table
 import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
-import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.tables.AssetRow
+import altitude.core.dao.sql.tables.BulkyMetadata
 import altitude.core.models.AccountSnapshot
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
@@ -115,7 +115,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       // Only the Sequence candidates' statement (`candidateColumns`) selects the embeddings: any other row map leaves them absent
       sceneEmbeddings = SceneEmbeddings(
         dinov2 = rec.get(SceneModel.Dinov2.column).flatMap(getVectorField),
-        clip = rec.get(SceneModel.Clip.column).flatMap(getVectorField)),
+        siglip2 = rec.get(SceneModel.Siglip2.column).flatMap(getVectorField)),
       sequenceId = Option(rec(FieldConst.Asset.SEQUENCE_ID)).map(_.toString),
       editRev = getIntField(rec(FieldConst.Asset.EDIT_REV)),
       createdAt = getDateTimeField(rec.get(FieldConst.CREATED_AT)),
@@ -220,18 +220,10 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
   /**
    * The columns of the hand-written reads that need no bulky metadata JSON (the library operations' locking read, a Sequence's
-   * frames and its live members): `AssetRow`'s labels, `asset.`-prefixed as `SearchQueries.assetColumns` builds them, so the
-   * typed row stays the one list of what a general read selects (the Scene embeddings are not on it), without `user_metadata` and
-   * `extracted_metadata`, which [[makeModel]] reads as empty when absent; `public_metadata` stays, since the Sequence rule
-   * compares the device model
+   * frames and its live members): the asset row's own list (`AssetRow.columnList`, on which no Scene embedding is) without
+   * `user_metadata` and `extracted_metadata`, which [[makeModel]] reads as empty when absent
    */
-  private val assetWithoutBulkyMetadata: String =
-    Table
-      .labels(AssetRow)
-      .map(Db.config.columnNameMapper)
-      .filterNot(Set(FieldConst.Asset.USER_METADATA, FieldConst.Asset.EXTRACTED_METADATA))
-      .map(name => s"asset.$name")
-      .mkString(", ")
+  private val assetWithoutBulkyMetadata: String = AssetRow.columnList(BulkyMetadata.Omitted)
 
   /**
    * The columns of the two reads that need a frame's Scene embeddings, [[sequenceCandidatesStatement]] and
@@ -263,7 +255,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
              ${FieldConst.Asset.PERCEPTUAL_HASH} = ?,
              ${FieldConst.Asset.HISTOGRAM} = ?,
              ${SceneModel.Dinov2.column} = $vectorPlaceholder,
-             ${SceneModel.Clip.column} = $vectorPlaceholder
+             ${SceneModel.Siglip2.column} = $vectorPlaceholder
        WHERE ${FieldConst.REPO_ID} = ? AND ${FieldConst.ID} = ?
     """
 
@@ -278,7 +270,7 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
       asset.perceptualHash.map(h => Long.box(h.bits)).orNull,
       asset.histogram.map(_.toBytes).orNull,
       vectorBind(asset.sceneEmbeddings.dinov2),
-      vectorBind(asset.sceneEmbeddings.clip),
+      vectorBind(asset.sceneEmbeddings.siglip2),
       RequestContext.getRepository.persistedId,
       asset.persistedId
     )

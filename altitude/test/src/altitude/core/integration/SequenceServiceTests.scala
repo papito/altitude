@@ -46,12 +46,12 @@ import altitude.core.util.SequenceRule
   /** A threshold of `model` no two frames of the burst clear */
   private def strictThreshold(model: SceneModel): Double = model match
     case SceneModel.Dinov2 => STRICT_DINOV2_SIMILARITY
-    case SceneModel.Clip => STRICT_CLIP_SIMILARITY
+    case SceneModel.Siglip2 => STRICT_SIGLIP2_SIMILARITY
 
   /** Runs `f` under thresholds no two frames of the burst clear by either model, so no pair is a Sequence by its likeness */
   private def withStrictThresholds[T](f: => T): T =
     withSetting(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, STRICT_DINOV2_SIMILARITY.toString) {
-      withSetting(Settings.SEQUENCE_CLIP_MIN_SIMILARITY, STRICT_CLIP_SIMILARITY.toString)(f)
+      withSetting(Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY, STRICT_SIGLIP2_SIMILARITY.toString)(f)
     }
 
   test("Two frames of a burst share a Sequence, and a frame alone has none") {
@@ -420,7 +420,7 @@ import altitude.core.util.SequenceRule
      *
      * None of the five is in a Sequence. The different picture's similarity to the frame is checked to be under each Scene
      * model's default threshold, so the test fails on its fixture rather than passing by accident (a DINOv2 similarity of about
-     * 0.26 against 0.80, a CLIP one of about 0.62 against 0.90); the half-size copy looks alike by either model, and only its
+     * 0.25 against 0.80, a SigLIP 2 one of about 0.58 against 0.90); the half-size copy looks alike by either model, and only its
      * size keeps it out.
      */
     val first = importFrame(frame(0))
@@ -747,8 +747,9 @@ import altitude.core.util.SequenceRule
      * the other model's likeness alone that pairs them. The third pair, alike by neither model under the raised thresholds, is no
      * Sequence, so neither model's likeness is assumed.
      */
-    val thresholdOf =
-      Map(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> SceneModel.Dinov2, Settings.SEQUENCE_CLIP_MIN_SIMILARITY -> SceneModel.Clip)
+    val thresholdOf = Map(
+      Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> SceneModel.Dinov2,
+      Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY -> SceneModel.Siglip2)
     thresholdOf.zipWithIndex.foreach {
       case ((setting, raised), index) =>
         val other = SceneModel.values.find(_ != raised).value
@@ -804,12 +805,11 @@ import altitude.core.util.SequenceRule
 object SequenceServiceTests {
 
   /**
-   * A threshold of each Scene model no two frames of the synthesized burst clear: by DINOv2 frames a few pixels apart measure
-   * 0.983 to 0.998, so 0.999 is above every pair with a margin, and far above the default of 0.80, which every pair clears; by
-   * CLIP they measure closer to 1, so only the cosine of identical embeddings, 1, is above every pair. A test that keeps frames
-   * apart with one asserts the observed similarity lies between it and the default, so the threshold, and nothing else, is what
-   * parts them.
+   * A threshold of each Scene model no two frames of the synthesized burst clear: frames a few pixels apart measure 0.982 to
+   * 0.998 by DINOv2 and 0.983 to 0.996 by SigLIP 2, so 0.999 is above every pair of either with a margin, and far above the
+   * defaults of 0.80 and 0.90, which every pair clears. A test that keeps frames apart with one asserts the observed similarity
+   * lies between it and the default, so the threshold, and nothing else, is what parts them.
    */
   private val STRICT_DINOV2_SIMILARITY = 0.999
-  private val STRICT_CLIP_SIMILARITY = 1.0
+  private val STRICT_SIGLIP2_SIMILARITY = 0.999
 }

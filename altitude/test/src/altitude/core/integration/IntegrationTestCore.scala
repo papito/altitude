@@ -1,6 +1,13 @@
 package altitude.core.integration
 
-import altitude.test.{ IntegrationTestUtil, SwitchableSceneEmbedder, TestContext, TestFocus }
+import altitude.test.{
+  IntegrationTestUtil,
+  ModelSwitch,
+  SwitchableDescribeEmbedder,
+  SwitchableSceneEmbedder,
+  TestContext,
+  TestFocus
+}
 import java.util.Locale
 import java.util.concurrent.{ CountDownLatch, TimeUnit }
 import java.util.concurrent.atomic.AtomicReference
@@ -64,7 +71,7 @@ abstract class IntegrationTestCore
 
   /**
    * Whether the suite's tests run the real Scene models. Off, a fixture import is measured and hashed but carries no Scene
-   * embedding, so its frames pair by the hash alone, which spares each import about 0.7 s of model passes; a suite whose subject
+   * embedding, so its frames pair by the hash alone, which spares each import about 0.75 s of model passes; a suite whose subject
    * is the embeddings turns them on for all its tests here, or for one test with `withSceneModels`. The real models are opened
    * when the switch is first turned on, by `beforeAll` or `withSceneModels`, so a model that fails to open aborts the suite or
    * fails the test with its own error, and they stay open until the test instance is cleaned up.
@@ -80,20 +87,45 @@ abstract class IntegrationTestCore
           "TestAltitudeApp.build")
   }
 
-  // The suites of a bundle run one after another, so the switch set here is this suite's alone until afterAll turns it off
+  /**
+   * Whether the suite's tests embed descriptions with the real SigLIP 2 text tower. Off, a description has no embedding; a suite
+   * whose subject is the Describe search turns the model on for all its tests here, or for one test with `withDescribeModel`. The
+   * text tower is opened by the first description embedded with the model on, on the test's thread, and stays open until the test
+   * instance is cleaned up.
+   */
+  protected def usesDescribeModel: Boolean = false
+
+  /** The test instance's Describe embedder, which the test bundles build switched off (`TestAltitudeApp.build`) */
+  private def describeModel: SwitchableDescribeEmbedder = testApp.describeEmbedder match {
+    case switchable: SwitchableDescribeEmbedder => switchable
+    case other =>
+      throw new IllegalStateException(
+        s"The test instance's Describe embedder is a ${other.getClass.getName}, which cannot be switched: build the instance " +
+          "with TestAltitudeApp.build")
+  }
+
+  // The suites of a bundle run one after another, so the switches set here are this suite's alone until afterAll turns them off
   override def beforeAll(): Unit = {
     if (usesSceneModels) sceneModels.turnOn() else sceneModels.turnOff()
+    if (usesDescribeModel) describeModel.turnOn() else describeModel.turnOff()
     super.beforeAll()
   }
 
   override def afterAll(): Unit = {
     try super.afterAll()
-    finally sceneModels.turnOff()
+    finally {
+      sceneModels.turnOff()
+      describeModel.turnOff()
+    }
   }
 
   /** Runs `f` with the real Scene models on, for one test of a suite that leaves them off, and puts the switch back as it was */
-  def withSceneModels[T](f: => T): T = {
-    val switch = sceneModels
+  def withSceneModels[T](f: => T): T = withSwitchOn(sceneModels)(f)
+
+  /** Runs `f` with the real Describe model on, for one test of a suite that leaves it off, and puts the switch back as it was */
+  def withDescribeModel[T](f: => T): T = withSwitchOn(describeModel)(f)
+
+  private def withSwitchOn[T](switch: ModelSwitch)(f: => T): T = {
     val was = switch.on
     switch.turnOn()
     try f

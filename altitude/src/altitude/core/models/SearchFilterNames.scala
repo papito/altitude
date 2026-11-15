@@ -28,13 +28,22 @@ object NamedPath:
 case class SearchFilterNames(folder: Option[NamedPath], people: List[Person], locations: List[NamedPath])
 
 /**
- * The filters of a filtered search as its results title names them, one chip each (includes/search_results): the Search text,
- * when it has a usable term, what its IDs name in the repository (an ID that names nothing has no chip), how several people
- * combine, and the two date ranges.
+ * The filters of a filtered search as its results title names them, one chip each (includes/search_results): the description the
+ * search ranks its matches by, when it has one, the Search text, when it has a usable term, what its IDs name in the repository
+ * (an ID that names nothing has no chip), how several people combine, and the two date ranges.
  */
 case class SearchFilters(
+    description: Option[String],
     text: Option[String],
     names: SearchFilterNames,
     peopleMatch: PeopleMatch,
     takenRange: Option[DateRange],
-    importedRange: Option[DateRange])
+    importedRange: Option[DateRange]):
+
+  /**
+   * Whether the title names a filter beside the description, one the description's results are found within: an empty result of a
+   * description is then said to be these filters', and otherwise the Library's
+   */
+  def narrowsDescription: Boolean =
+    text.isDefined || names.folder.isDefined || names.people.nonEmpty || names.locations.nonEmpty || takenRange.isDefined ||
+      importedRange.isDefined

@@ -162,6 +162,43 @@ import altitude.core.dao.sql.tables._
     modelColumns.diff(selected) shouldBe Set()
   }
 
+  test("The asset's column list keeps, leaves out or nulls the two bulky metadata columns, and nothing else") {
+
+    /**
+     * Setup:
+     *
+     * The asset row's column list as a hand-written select writes it, in its three forms: with the two bulky metadata JSON
+     * columns kept, left out, and read as NULL in their places.
+     *
+     * Assertions:
+     *
+     * Kept, the list is every label of the row in the order it declares them, each as `asset.<column>`. Left out, it is the same
+     * list without `user_metadata` and `extracted_metadata`. As NULL, it has as many entries as the row has labels, in the same
+     * order, with `NULL AS user_metadata` and `NULL AS extracted_metadata` where the two stood, so a typed read still reads the
+     * row back by position.
+     *
+     * Edge cases:
+     *
+     * `public_metadata` is in all three, and no Scene embedding is in any: the row declares none.
+     */
+    val labels = Table.labels(AssetRow).map(Db.config.columnNameMapper)
+    val bulky = Set("user_metadata", "extracted_metadata")
+    bulky.subsetOf(labels.toSet) shouldBe true
+    def entries(list: String): List[String] = list.split(", ").toList
+
+    entries(AssetRow.columnList()) shouldBe labels.map(name => s"asset.$name").toList
+    entries(AssetRow.columnList(BulkyMetadata.Omitted)) shouldBe labels.filterNot(bulky).map(name => s"asset.$name").toList
+    entries(AssetRow.columnList(BulkyMetadata.AsNull)) shouldBe
+      labels.map(name => if (bulky(name)) s"NULL AS $name" else s"asset.$name").toList
+
+    BulkyMetadata.values.foreach {
+      form =>
+        val list = entries(AssetRow.columnList(form))
+        list.contains("asset.public_metadata") shouldBe true
+        list.exists(_.contains("embedding")) shouldBe false
+    }
+  }
+
   test("Columns render unquoted, so an expression index can still match them") {
 
     /**

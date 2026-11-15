@@ -43,6 +43,15 @@ import altitude.core.util.TriageSubset
  * search searches outside the trash, as text does: a date range, several people or several Locations with the trash view are
  * refused. It searches by the panel's filters alone, so what only the panel combines (a date range, several people, several
  * Locations, or more than one of the Search text, a folder, a person and a Location) is refused with an album or a subset.
+ *
+ * A description (`describe`) is the words that say what a photo shows: at most
+ * [[altitude.core.Const.Search.MAX_DESCRIPTION_LENGTH]] characters once the white space around it is dropped, and not blank. A
+ * search with one finds the still images that look most like it, most alike first, on the grid, among the assets its other
+ * filters match: the Search text, a folder, people with their match, Locations and the two date ranges, each read and refused as
+ * it is without a description, in the repository view, with the triaged assets when `triaged=true`, or in the Triage view, among
+ * the triaged assets alone. It is sorted and grouped as any search of the grid is, in its own order, likeness, when it names no
+ * sort; it takes no map layout, and no album, Triage subset or map area either, and it does not search the trash. The results
+ * route and the advanced search panel's form read a description; the other routes that parse a scope never hand one in.
  */
 object SearchRequestParser:
 
@@ -67,9 +76,18 @@ object SearchRequestParser:
       importedTo: Option[String] = None,
       bbox: Option[String] = None,
       triaged: Option[Boolean] = None,
-      subset: Option[String] = None)
+      subset: Option[String] = None,
+      // The description the search ranks its matches by
+      describe: Option[String] = None,
+      // How the request lays out the results, as it spells it: a route that takes a description hands it on, since a search
+      // with one is laid out on the grid
+      layout: Option[String] = None)
 
-  /** A search's scope as read: the people and the Locations are in the order the request names them, each once */
+  /**
+   * A search's scope as read: the people and the Locations are in the order the request names them, each once. A `description` is
+   * as written but for the white space around it, and stands beside the filters the search ranks within: it is no part of the
+   * query the scope builds, which is the filters' own.
+   */
   case class Scope(
       params: Map[String, Any],
       text: Option[String],
@@ -82,7 +100,8 @@ object SearchRequestParser:
       // How several people combine, all of them unless the request says any, and the Date Taken and Date Imported ranges
       peopleMatch: PeopleMatch = PeopleMatch.All,
       takenRange: Option[DateRange] = None,
-      importedRange: Option[DateRange] = None):
+      importedRange: Option[DateRange] = None,
+      description: Option[String] = None):
     def query(
         rpp: Int = 0,
         searchSort: List[SearchSort] = Nil,
@@ -121,6 +140,11 @@ object SearchRequestParser:
       case Const.Search.View.TRASHBIN => triaged.map(FieldConst.Asset.IS_TRIAGED -> _)
       case _ => Option.unless(triaged.contains(true))(FieldConst.Asset.IS_TRIAGED -> false)
     val params = viewParams ++ triageParam
+
+    val description = request.describe.map(descriptionOf(request, _)) match
+      case Some(Left(message)) => return Left(message)
+      case Some(Right(description)) => Some(description)
+      case None => None
 
     val text = request.q.filter(SearchText.parse(_).isDefined)
     val isTrash = view == Const.Search.View.TRASHBIN
@@ -176,8 +200,46 @@ object SearchRequestParser:
         subset = triageSubset,
         peopleMatch = matched,
         takenRange = takenRange,
-        importedRange = importedRange
+        importedRange = importedRange,
+        description = description
       ))
+
+  /**
+   * The description of a search as its scope holds it, as written but for the white space around it, or the message of a 400: a
+   * description is not blank, has at most `Const.Search.MAX_DESCRIPTION_LENGTH` characters, as a form counts them, and searches
+   * the repository view or the Triage view, never the trash. Beside it a search takes its filters (the Search text, a folder,
+   * people and their match, Locations, the four dates and the triage filter) and the grid layout; any other parameter is refused,
+   * whatever its value, and named by the message: an album, a Triage subset, a map area or the map layout. What is taken is what
+   * is left out of the request below, so a parameter `Params` gains is refused beside a description until it is left out too. The
+   * sort and the grouping are no parameters of a scope: the results route reads them, beside a description as without one.
+   */
+  private def descriptionOf(request: Params, written: String): Either[String, String] =
+    val description = written.strip
+    if description.isEmpty then return Left("A description cannot be blank")
+    if description.length > Const.Search.MAX_DESCRIPTION_LENGTH then
+      return Left(s"A description has at most ${Const.Search.MAX_DESCRIPTION_LENGTH} characters")
+
+    if request.view == Const.Search.View.TRASHBIN then return Left("A description does not search the trash")
+
+    // Every parameter is a field of `Params` under the name the request spells it with. The layout is always handed in, and
+    // only the map is refused
+    val notTaken = request.copy(
+      q = None,
+      folderId = None,
+      personId = None,
+      locationId = None,
+      peopleMatch = None,
+      takenFrom = None,
+      takenTo = None,
+      importedFrom = None,
+      importedTo = None,
+      triaged = None,
+      describe = None,
+      layout = None
+    )
+    val refused = notTaken.productElementNames.zip(notTaken.productIterator).collect { case (name, Some(_)) => name }.toList ++
+      request.layout.filter(_ == Const.Search.Layout.MAP).map(layout => s"${Api.Field.Search.LAYOUT}=$layout")
+    Either.cond(refused.isEmpty, description, s"A description takes no ${refused.mkString(", ")}")
 
   /**
    * The IDs a comma-separated parameter names, each once, in the order given. An empty segment is no ID, so a parameter left out,

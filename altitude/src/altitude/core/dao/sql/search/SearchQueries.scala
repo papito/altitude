@@ -6,7 +6,6 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import scalasql.Sc
-import scalasql.Table
 import scalasql.core.Context
 import scalasql.core.Expr
 import scalasql.core.JoinNullable
@@ -15,13 +14,16 @@ import scalasql.core.SqlStr.SqlStringSyntax
 import scalasql.core.TypeMapper
 import scalasql.core.WithSqlExpr
 import scalasql.query.Select
+import scalasql.query.TableRef
 
 import altitude.core.FieldConst
+import altitude.core.SearchCursorException
 import altitude.core.dao.sql.Columns
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.DynamicFilter
 import altitude.core.dao.sql.tables.AlbumAssetRow
 import altitude.core.dao.sql.tables.AssetRow
+import altitude.core.dao.sql.tables.BulkyMetadata
 import altitude.core.dao.sql.tables.FaceRow
 import altitude.core.dao.sql.tables.LocationAssetRow
 import altitude.core.dao.sql.tables.LocationRow
@@ -29,8 +31,11 @@ import altitude.core.dao.sql.tables.MetadataParameterRow
 import altitude.core.dao.sql.tables.PersonRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.models.LocationKind
+import altitude.core.models.SceneModel
 import altitude.core.util.BoundingBox
 import altitude.core.util.DateRange
+import altitude.core.util.DescribedPart
+import altitude.core.util.DescribeRanking
 import altitude.core.util.NameKey
 import altitude.core.util.PeopleMatch
 import altitude.core.util.Query
@@ -70,8 +75,9 @@ object SearchQueries:
   private val PATH_SEPARATOR: String = 1.toChar.toString
 
   /**
-   * Every asset a search matches, unordered and unpaged; with Search text it refers to the text's CTEs ([[statement]]). The days
-   * of a Date Imported range are those of the server's time zone as the relation is built.
+   * Every asset a search matches, unordered and unpaged; with Search text it refers to the text's CTEs and, among a part of a
+   * description's ranked matches (`SearchQuery.described`), to the `described` CTE ([[statement]]). The days of a Date Imported
+   * range are those of the server's time zone as the relation is built.
    */
   def matching(engine: SearchDialect, query: SearchQuery, repositoryId: String): Select[AssetRow[Expr], AssetRow[Sc]] =
     import engine.dialect.*
@@ -91,6 +97,8 @@ object SearchQueries:
       .filterIf(query.subset.contains(TriageSubset.UnknownPeople))(asset => unknownPeopleFilter(engine, asset))
       .filterIf(query.subset.contains(TriageSubset.NoLocation))(asset => noLocationFilter(engine, asset.id))
       .filterIf(query.bbox.isDefined)(asset => bboxFilter(engine, asset, query, repositoryId, query.bbox.get))
+      .filterIf(query.described.isDefined)(
+        asset => Expr[Boolean](implicit ctx => sql"${asset.id} IN (SELECT id FROM ${SqlStr.raw(DescribedRow.tableName)})"))
 
   /** The people a Search text resolves names against, as (ID, name): named, visible, live and not a bad match */
   def searchablePeople(engine: SearchDialect, repositoryId: String): Select[(Expr[String], Expr[String]), (String, String)] =
@@ -122,6 +130,7 @@ object SearchQueries:
     statement(
       engine,
       query,
+      repositoryId,
       Nil,
       sql"SELECT count(*) FROM (${matchingIds(engine, matching(engine, query, repositoryId), None)}) AS m")
 
@@ -133,8 +142,18 @@ object SearchQueries:
     statement(
       engine,
       query,
+      repositoryId,
       Nil,
       sql"SELECT count(*) FROM (${cappedIds(engine, matching(engine, query, repositoryId), query.totalCap)}) AS m")
+
+  /**
+   * How many of the matches carry a SigLIP 2 Scene embedding, counted up to one past `cap`, as [[cappedCount]] counts the
+   * matches: the assets a Describe search would rank, which says whether they are few enough to rank one by one
+   * (`postgres.SearchDao`). A result one past the cap means more than it.
+   */
+  def embeddedCount(engine: SearchDialect, query: SearchQuery, repositoryId: String, cap: Int): SqlStr =
+    val matches = embedded(matching(engine, query, repositoryId))
+    statement(engine, query, repositoryId, Nil, sql"SELECT count(*) FROM (${cappedIds(engine, matches, cap)}) AS m")
 
   /**
    * One page of a flat search: which assets are on it is decided over narrow rows, then only those are read in full.
@@ -164,7 +183,7 @@ object SearchQueries:
     val asset = WithSqlExpr.get(base)
     val sort = query.searchSort.headOption
     val byCaptureDay = sort.filter(_.field == FieldConst.Asset.ORIGINAL_CREATED_AT)
-    val isRelevance = sort.exists(_.isRelevance)
+    val isScored = sort.exists(_.isScored)
 
     // Where the sort puts the rows without a value last, a continuation from a row that has one reads them in a second slice
     val needsNullSlice = query.cursor.exists(_.sortValue != SortValue.Null) &&
@@ -193,7 +212,7 @@ object SearchQueries:
 
     val candidates = byCaptureDay match
       case Some(byDay) => dayCandidates(engine, query, base, byDay.field, byDay.direction)
-      case None if isRelevance =>
+      case None if isScored =>
         val scored = ScoredRow.select
         candidatesOf(scored, scoredPosition(WithSqlExpr.get(scored)))
       case None =>
@@ -207,7 +226,7 @@ object SearchQueries:
         byCaptureDay.fold("")(byDay => s"${prefix}day ${byDay.direction}, ") +
           sort.fold(s"${prefix}id ASC")(candidateOrderWithinGroup(prefix, _)))
 
-    val ctes = Option.when(isRelevance)(scoredCte(engine, query, base, None)).toSeq ++ Seq(
+    val ctes = Option.when(isScored)(scoredCte(engine, query, base, None)).toSeq ++ Seq(
       candidates,
       sql"""page $narrowColumns AS MATERIALIZED (
         SELECT $narrowColumnList FROM candidates
@@ -219,6 +238,7 @@ object SearchQueries:
     statement(
       engine,
       query,
+      repositoryId,
       ctes,
       sql"""
       SELECT $assetColumns, p.day AS day, p.sort_value AS sort_value, p.second_sort_value AS second_sort_value,
@@ -261,7 +281,7 @@ object SearchQueries:
 
     // The slices read the matches themselves or, under the Relevance sort, the scored matches
     def candidates(extra: Option[Position => Expr[Boolean]], limit: SqlStr): SqlStr =
-      if sort.isRelevance then slice(scored, scoredPosition(WithSqlExpr.get(scored)), extra, limit)
+      if sort.isScored then slice(scored, scoredPosition(WithSqlExpr.get(scored)), extra, limit)
       else
         slice(
           base,
@@ -350,7 +370,7 @@ object SearchQueries:
     def order(prefix: String): SqlStr =
       SqlStr.raw(s"${prefix}day ${grouping.direction}, ${candidateOrderWithinGroup(prefix, sort)}")
 
-    val ctes = Option.when(sort.isRelevance)(scoredCte(engine, query, base, Some(day))).toSeq ++ Seq(
+    val ctes = Option.when(sort.isScored)(scoredCte(engine, query, base, Some(day))).toSeq ++ Seq(
       candidatesCte,
       sql"""page $narrowColumns AS MATERIALIZED (
         SELECT $narrowColumnList FROM candidates
@@ -367,6 +387,7 @@ object SearchQueries:
     statement(
       engine,
       query,
+      repositoryId,
       ctes,
       sql"""
       SELECT $assetColumns, p.day AS day, p.sort_value AS sort_value, p.second_sort_value AS second_sort_value, d.n AS day_total,
@@ -458,7 +479,7 @@ object SearchQueries:
 
     // The slices read the matches themselves or, under the Relevance sort, the scored matches
     val located =
-      if sort.isRelevance then
+      if sort.isScored then
         val relation = scored
           .join(LocationAssetRow)((row, link) => row.id `=` link.assetId)
           .join(LocationRow)((row, location) => row._2.locationId `=` location.id)
@@ -474,7 +495,7 @@ object SearchQueries:
         locatedSlice(relation, assetPosition(asset), location, category)
 
     val unlocated =
-      if sort.isRelevance then
+      if sort.isScored then
         val relation = scored.filter(row => noLocationFilter(engine, row.id))
         unlocatedSlice(relation, scoredPosition(WithSqlExpr.get(relation)))
       else
@@ -508,7 +529,7 @@ object SearchQueries:
       s"CASE WHEN ${prefix}location_id IS NULL THEN 1 ELSE 0 END, ${prefix}path_key ASC, ${prefix}location_id ASC, " +
         candidateOrderWithinGroup(prefix, sort))
 
-    val ctes = Option.when(sort.isRelevance)(scoredCte(engine, query, base, None)).toSeq ++ Seq(
+    val ctes = Option.when(sort.isScored)(scoredCte(engine, query, base, None)).toSeq ++ Seq(
       candidatesCte,
       sql"""page $locationColumns AS MATERIALIZED (
         SELECT $locationColumnList FROM candidates AS c
@@ -529,6 +550,7 @@ object SearchQueries:
     statement(
       engine,
       query,
+      repositoryId,
       ctes,
       sql"""
       SELECT $assetColumns, p.location_id AS location_id, p.path_key AS path_key, p.location_name AS location_name,
@@ -618,7 +640,7 @@ object SearchQueries:
       scored.join(AssetRow)((row, asset) => row.id `=` asset.id).filter((_, asset) => isIn(asset))
 
     val unsequenced =
-      if sort.isRelevance then
+      if sort.isScored then
         val relation = scoredWhere(_.sequenceId.isEmpty)
         unsequencedSlice(relation, scoredPosition(WithSqlExpr.get(relation)._1))
       else
@@ -628,7 +650,7 @@ object SearchQueries:
     val candidatesCte =
       if inSequencedPart then
         val sequenceFrames =
-          if sort.isRelevance then
+          if sort.isScored then
             val relation = scoredWhere(_.sequenceId.isDefined)
             val (row, asset) = WithSqlExpr.get(relation)
             framesOf(relation, asset, scoredPosition(row))
@@ -666,7 +688,7 @@ object SearchQueries:
       s"CASE WHEN ${prefix}sequence_id IS NULL THEN 1 ELSE 0 END, ${prefix}first_captured_at ASC NULLS LAST, " +
         s"${prefix}sequence_id ASC, " + candidateOrderWithinGroup(prefix, sort))
 
-    val ctes = Option.when(sort.isRelevance)(scoredCte(engine, query, base, None)).toSeq ++ Seq(
+    val ctes = Option.when(sort.isScored)(scoredCte(engine, query, base, None)).toSeq ++ Seq(
       candidatesCte,
       sql"""page $sequenceColumns AS MATERIALIZED (
         SELECT $sequenceColumnList FROM candidates AS c
@@ -687,6 +709,7 @@ object SearchQueries:
     statement(
       engine,
       query,
+      repositoryId,
       ctes,
       sql"""
       SELECT $assetColumns, p.sequence_id AS sequence_id, p.first_captured_at AS first_captured_at,
@@ -698,6 +721,60 @@ object SearchQueries:
              LEFT JOIN group_counts AS g ON g.sequence_id = p.sequence_id OR (g.sequence_id IS NULL AND p.sequence_id IS NULL)
              ${total.join}
        ORDER BY ${order("p.")}
+      """
+    )
+
+  /**
+   * One page of a Describe search in its own order: the matches ranked by how much they look like a description, most alike
+   * first.
+   *
+   * `ranked (id, distance)` is the engine's own, materialized once ([[rankedCtes]]): what the engine makes of the [[matching]]
+   * relation, the matches whose SigLIP 2 Scene embedding is within the ranking's cutoff of a description's, the nearest of them
+   * up to its limit, read exactly or, where the engine has a vector index and the ranking says so, through it
+   * (`SearchDialect.ranked`). Either way it is the relation of the search's matches that is ranked, so a Describe search cannot
+   * disagree with the search of its filters about the assets they leave, and the filters decide nothing of the order.
+   *
+   * Around it, the shell of every page: the rows after the cursor's position in the order of the ranking, their distance and then
+   * their ID, one more than the page holds to tell whether another follows; those rows' assets
+   * ([[assetColumnsWithoutBulkyMetadata]]), each with its distance; and, on a page that counts the total, the count of the ranked
+   * rows, which the limit bounds. Every page ranks again, so a cursor continues from its position among the rows as they are
+   * then. A cursor whose position is not a distance is no Describe search's (`SearchCursorException`).
+   *
+   * Every row also carries where the weaker matches of the search begin (`WeakerMatches`), the same on each: `weaker_under`, the
+   * cosine under which a ranked row is one (`weaker_line`, read off the ranked rows, so it is the line of the whole ranking
+   * whatever the page), and `weaker_count`, how many ranked rows are weaker ([[IS_WEAKER]]).
+   */
+  def described(engine: SearchDialect, query: SearchQuery, repositoryId: String, ranking: DescribeRanking): SqlStr =
+    import engine.dialect.*
+
+    if query.rpp < 1 then throw IllegalArgumentException("A page of a Describe search needs a page size")
+    if query.described.isDefined then
+      throw IllegalArgumentException("A search among a part of a description's matches is no ranking of them")
+
+    val after = query.cursor.fold(SqlStr.empty) {
+      cursor =>
+        cursor.sortValue match
+          case SortValue.Real(distance) => sql"WHERE (distance, id) > ($distance, ${cursor.id})"
+          case _ => throw SearchCursorException("Malformed cursor")
+    }
+    val total = if query.isTotalCounted then SqlStr.raw(", (SELECT count(*) FROM ranked) AS total") else SqlStr.empty
+
+    statement(
+      engine,
+      query,
+      repositoryId,
+      rankedCtes(engine, query, repositoryId, ranking),
+      sql"""
+      SELECT $assetColumnsWithoutBulkyMetadata, page.distance AS distance,
+             (SELECT cosine FROM weaker_line) AS weaker_under,
+             (SELECT count(*) FROM ranked WHERE $IS_WEAKER) AS weaker_count$total
+        FROM (SELECT id, distance
+                FROM ranked
+               $after
+               ORDER BY distance, id
+               LIMIT ${SqlStr.raw((query.rpp + 1).toString)}) AS page
+             JOIN asset ON asset.id = page.id
+       ORDER BY page.distance, page.id
       """
     )
 
@@ -745,6 +822,7 @@ object SearchQueries:
     statement(
       engine,
       query,
+      repositoryId,
       Seq(
         pointsCte(engine, query, repositoryId, Some(bbox)),
         sql"""gridded AS (
@@ -780,6 +858,7 @@ object SearchQueries:
     statement(
       engine,
       query,
+      repositoryId,
       Seq(
         sql"matched (id) AS MATERIALIZED (${matchingIds(engine, matching(engine, query, repositoryId), Some(asset => membersOfLocationsIn(engine, bbox).contains(asset.id)))})"),
       sql"""
@@ -801,6 +880,7 @@ object SearchQueries:
     statement(
       engine,
       query,
+      repositoryId,
       Seq(pointsCte(engine, query, repositoryId, None)),
       sql"SELECT min(latitude), max(latitude), min(longitude), max(longitude), count(*) FROM points"
     )
@@ -821,13 +901,63 @@ object SearchQueries:
     Option.when(branches.nonEmpty)(SqlStr.join(branches, sql" UNION ALL "))
 
   /**
-   * The one way a statement over a search is built: the Search text's CTEs, then the shell's own, then the shell's body. The
-   * [[matching]] relation tests membership in the text's CTEs by name, so a statement built any other way would not run.
+   * The one way a statement over a search is built: the Search text's CTEs, then those of the description the search is among a
+   * part of, then the shell's own, then the shell's body. The [[matching]] relation tests membership in the text's CTEs and in
+   * `described` by name, so a statement built any other way would not run.
    */
-  private def statement(engine: SearchDialect, query: SearchQuery, ctes: Seq[SqlStr], body: SqlStr): SqlStr =
-    textCtes(engine, query) ++ ctes match
+  private def statement(
+      engine: SearchDialect,
+      query: SearchQuery,
+      repositoryId: String,
+      ctes: Seq[SqlStr],
+      body: SqlStr): SqlStr =
+    textCtes(engine, query) ++ describedCtes(engine, query, repositoryId) ++ ctes match
       case Seq() => body
       case all => sql"WITH " + SqlStr.join(all, SqlStr.raw(", ")) + sql" " + body
+
+  /**
+   * The CTEs of a description's ranking of a search's matches: the engine's own sources, then `ranked (id, distance)`, the
+   * matches of `filters`, a search with no description of its own, ranked by the engine as the ranking says
+   * (`SearchDialect.ranked`), materialized once; then `weaker_line (cosine)`, the cosine under which a ranked row is a weaker
+   * match, the ranking's `weakerRatio` of the nearest ranked row's ([[IS_WEAKER]]).
+   */
+  private def rankedCtes(
+      engine: SearchDialect,
+      filters: SearchQuery,
+      repositoryId: String,
+      ranking: DescribeRanking): Seq[SqlStr] =
+    import engine.dialect.*
+
+    val rankedMatches = engine.ranked(matching(engine, filters, repositoryId), ranking)
+    rankedMatches.sources ++ Seq(
+      sql"ranked (id, distance) AS MATERIALIZED (${rankedMatches.rows})",
+      sql"weaker_line (cosine) AS (SELECT ${ranking.weakerRatio} * (1 - min(distance)) FROM ranked)"
+    )
+
+  /**
+   * Whether a row of `ranked` is a weaker match: its cosine, 1 less its distance, is under the line, where there is one. A line
+   * that is not positive is none: under a ratio of 0, which asks for no weaker matches, and where the nearest row has no positive
+   * cosine to take a fraction of, so the nearest row is never a weaker match. Wherever a row is compared with the line it is
+   * compared this way, so it is on one side of it everywhere.
+   */
+  private val IS_WEAKER: SqlStr =
+    SqlStr.raw("((SELECT cosine FROM weaker_line) > 0 AND 1 - distance < (SELECT cosine FROM weaker_line))")
+
+  /**
+   * The CTEs of the description a search is among a part of (`SearchQuery.described`), none for any other search: the ranking of
+   * the search's own filters ([[rankedCtes]]), then `described (id, similarity)` ([[DescribedRow]]), the ranked rows of the part,
+   * those above the line of the weaker matches or the weaker ones, each with its cosine to the description.
+   */
+  private def describedCtes(engine: SearchDialect, query: SearchQuery, repositoryId: String): Seq[SqlStr] =
+    query.described.fold(Seq.empty[SqlStr]) {
+      described =>
+        val part = described.part match
+          case DescribedPart.Nearer => sql"NOT $IS_WEAKER"
+          case DescribedPart.Weaker => IS_WEAKER
+        rankedCtes(engine, query.undescribed, repositoryId, described.ranking) :+
+          sql"""${SqlStr.raw(DescribedRow.tableName)} (id, similarity) AS MATERIALIZED (
+            SELECT id, 1 - distance FROM ranked WHERE $part)"""
+    }
 
   /**
    * Where a row stands in a page's order, as the relation it is sliced from has it: its ID, its day under a day grouping, what it
@@ -843,8 +973,11 @@ object SearchQueries:
     Position(row.id, nullDay, sortColumn(engine, query, row), row.originalCreatedAt)
 
   /**
-   * The matches with their Relevance computed once, for a grouped statement under the Relevance sort: what its slices, its cursor
-   * comparison and its order read instead of computing the Relevance again ([[ScoredRow]]). A day grouping's day rides along.
+   * The matches with what a scored sort orders them by, computed once: what a statement's slices, its cursor comparison and its
+   * order read instead of computing it again ([[ScoredRow]]). Under the Relevance sort it is the Relevance, computed from the
+   * Search text; under the similarity sort, of a search among a part of a description's ranked matches, the similarity each match
+   * has in `described` ([[DescribedRow]]), which the matches are joined to. The capture time is the next term of either order,
+   * and a day grouping's day rides along.
    */
   private def scoredCte(
       engine: SearchDialect,
@@ -853,9 +986,20 @@ object SearchQueries:
       day: Option[AssetRow[Expr] => Expr[Option[LocalDate]]]): SqlStr =
     import engine.dialect.*
 
-    val text = query.requireResolvedText
-    val scores = base.map(row => (row.id, day.fold(nullDay)(_(row)), relevance(engine, row, text), row.originalCreatedAt))
-    sql"scored (id, day, sort_value, second_sort_value) AS MATERIALIZED (${Db.render(scores, engine.dialect).withCompleteQuery(false)})"
+    val scores =
+      if query.searchSort.head.isSimilarity then
+        if query.described.isEmpty then throw IllegalArgumentException("The similarity sort requires a description")
+        val described = base.join(DescribedRow)((row, described) => row.id `=` described.id)
+        val (row, similar) = WithSqlExpr.get(described)
+        Db.render(
+          described.map(_ => (row.id, day.fold(nullDay)(_(row)), similar.similarity, row.originalCreatedAt)),
+          engine.dialect)
+      else
+        val text = query.requireResolvedText
+        Db.render(
+          base.map(row => (row.id, day.fold(nullDay)(_(row)), relevance(engine, row, text), row.originalCreatedAt)),
+          engine.dialect)
+    sql"scored (id, day, sort_value, second_sort_value) AS MATERIALIZED (${scores.withCompleteQuery(false)})"
 
   /**
    * Rows strictly after the cursor's anchor in day order, as lexicographic comparisons with independent directions: an earlier
@@ -925,7 +1069,7 @@ object SearchQueries:
         case value =>
           // What decides among the rows of the anchor's own sort value
           val afterTie =
-            if sort.isRelevance then afterByCaptureTime(engine, cursor.requireSecondSortValue, position.taken, afterById)
+            if sort.isScored then afterByCaptureTime(engine, cursor.requireSecondSortValue, position.taken, afterById)
             else afterById
           Expr[Boolean] {
             implicit ctx =>
@@ -964,12 +1108,36 @@ object SearchQueries:
     )
 
   /** A narrow candidate relation with a hand-written ORDER BY and LIMIT */
-  private def sliced[Q, R](engine: SearchDialect, projected: Select[Q, R], order: Context ?=> SqlStr, limit: SqlStr): SqlStr =
+  private[search] def sliced[Q, R](
+      engine: SearchDialect,
+      projected: Select[Q, R],
+      order: Context ?=> SqlStr,
+      limit: SqlStr): SqlStr =
     Db.render(orderedBy(projected, order + limit), engine.dialect).withCompleteQuery(false)
 
   /** A trailing slice that fills the page only once the leading one has run out, which is when it fetched no more than a page */
   private def guardedLimit(leading: String, rpp: Int): SqlStr =
     SqlStr.raw(s" LIMIT CASE WHEN (SELECT count(*) FROM $leading) > $rpp THEN 0 ELSE ${rpp + 1} END")
+
+  /**
+   * A column of the asset table that [[AssetRow]] does not map (a Scene embedding, which no typed read selects, or SQLite's
+   * rowid), under the name `relation` gives its asset, so a hand-written fragment over it can sit among the relation's typed
+   * predicates. The relation is [[matching]] or a filter or a join of it, which reads `FROM asset` alone.
+   */
+  private[search] def assetColumn(relation: Select[AssetRow[Expr], AssetRow[Sc]], name: String): Expr[?] =
+    Select.toSimpleFrom(relation).from match
+      case Seq(asset: TableRef) =>
+        Expr[Any] {
+          implicit ctx =>
+            // A context that names no table for the asset renders its columns bare, as `scalasql.query.Column` does
+            SqlStr.raw(ctx.fromNaming.get(asset).filter(_.nonEmpty).fold(name)(table => s"$table.$name"))
+        }
+      case other => throw IllegalStateException(s"A search reads the asset table alone, not $other")
+
+  /** The assets of a relation of matches that carry a SigLIP 2 Scene embedding: the ones a Describe search can rank */
+  private[search] def embedded(relation: Select[AssetRow[Expr], AssetRow[Sc]]): Select[AssetRow[Expr], AssetRow[Sc]] =
+    val embedding = assetColumn(relation, SceneModel.Siglip2.column)
+    relation.filter(_ => Expr[Boolean](implicit ctx => sql"$embedding IS NOT NULL"))
 
   /** The matching IDs alone, for a count that has to agree with the rows */
   private def matchingIds(
@@ -1003,9 +1171,14 @@ object SearchQueries:
       )
     else TotalFragments(None, SqlStr.empty, SqlStr.empty)
 
-  /** What a search sorts by: the sort's column or, under the Relevance sort, the Relevance computed from the Search text */
+  /**
+   * What a search sorts by: the sort's column or, under the Relevance sort, the Relevance computed from the Search text. The
+   * similarity is no expression of the asset's own row: it is read from `scored` ([[scoredCte]]), as every statement reads a
+   * scored sort.
+   */
   private def sortColumn(engine: SearchDialect, query: SearchQuery, row: AssetRow[Expr]): Expr[?] =
     val sort = query.searchSort.head
+    if sort.isSimilarity then throw IllegalStateException("The similarity is read from the scored matches")
     if sort.isRelevance then relevance(engine, row, query.requireResolvedText)
     else Columns.required(AssetRow, row, sort.field, engine.dialect)
 
@@ -1018,7 +1191,7 @@ object SearchQueries:
    * order and the cursor; NULL under a column sort, whose next term is the ID, so every candidate relation has the same columns.
    */
   private def secondSortValueOf(sort: SearchSort, position: Position)(using TypeMapper[SortValue]): Expr[SortValue] =
-    if sort.isRelevance then Expr[SortValue](implicit ctx => sql"${position.taken}") else nullSortValue
+    if sort.isScored then Expr[SortValue](implicit ctx => sql"${position.taken}") else nullSortValue
 
   /** The sort value of a page with no sort, whose only order is the ID, and the second sort value under a column sort */
   private def nullSortValue(using TypeMapper[SortValue]): Expr[SortValue] = Expr[SortValue](implicit ctx => sql"NULL")
@@ -1035,13 +1208,13 @@ object SearchQueries:
   private def orderWithinGroup(engine: SearchDialect, query: SearchQuery, position: Position)(using Context): SqlStr =
     val sort = query.searchSort.head
     val direction = towards(sort.direction)
-    if sort.isRelevance then sql"${position.sortValue} $direction, ${position.taken} DESC NULLS LAST, ${position.id} ASC"
+    if sort.isScored then sql"${position.sortValue} $direction, ${position.taken} DESC NULLS LAST, ${position.id} ASC"
     else
       sql"${query.grouping.fold(position.sortValue)(engine.secondarySort(position.sortValue, sort, _))} $direction, ${position.id} ASC"
 
   /** [[orderWithinGroup]] over the columns of a candidate relation, which carries what the slice computed */
   private def candidateOrderWithinGroup(prefix: String, sort: SearchSort): String =
-    val byCaptureTime = if sort.isRelevance then s"${prefix}second_sort_value DESC NULLS LAST, " else ""
+    val byCaptureTime = if sort.isScored then s"${prefix}second_sort_value DESC NULLS LAST, " else ""
     s"${prefix}sort_value ${sort.direction}, $byCaptureTime${prefix}id ASC"
 
   private def towards(direction: SortDirection): SqlStr = SqlStr.raw(direction.toString)
@@ -1063,8 +1236,14 @@ object SearchQueries:
   private val sequenceColumns: SqlStr = sql"($sequenceColumnList)"
 
   /** The asset columns the grouped statements select, in the order [[AssetRow]] declares them, so a row reads back positionally */
-  private val assetColumns: SqlStr =
-    SqlStr.raw(Table.labels(AssetRow).map(Db.config.columnNameMapper).map(name => s"asset.$name").mkString(", "))
+  private val assetColumns: SqlStr = SqlStr.raw(AssetRow.columnList())
+
+  /**
+   * The asset columns of a page whose cells show none of the bulky metadata JSON (a Describe search's): [[assetColumns]] with
+   * `user_metadata` and `extracted_metadata` read as NULL in their places, so a row still reads back positionally and its model's
+   * two are empty
+   */
+  private val assetColumnsWithoutBulkyMetadata: SqlStr = SqlStr.raw(AssetRow.columnList(BulkyMetadata.AsNull))
 
   /**
    * One source of one alternative of one group of the Search text: where the term can match, with the IDs it resolved to there

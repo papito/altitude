@@ -3,6 +3,7 @@ package altitude.core.unit
 import java.time.LocalDate
 import org.scalatest.DoNotDiscover
 import org.scalatest.EitherValues.*
+import org.scalatest.OptionValues.*
 import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.*
 
@@ -13,6 +14,7 @@ import altitude.core.routes.SearchRequestParser
 import altitude.core.routes.SearchRequestParser.Scope
 import altitude.core.util.DateRange
 import altitude.core.util.PeopleMatch
+import altitude.core.util.SearchQuery
 
 /** The parameters of an advanced search as `SearchRequestParser.parse` reads them into a scope */
 @DoNotDiscover class SearchRequestParserTests extends funsuite.AnyFunSuite {
@@ -37,7 +39,9 @@ import altitude.core.util.PeopleMatch
         importedTo = values.get(fields.IMPORTED_TO),
         bbox = values.get(fields.BBOX),
         triaged = values.get(fields.TRIAGED).map(_.toBoolean),
-        subset = values.get(fields.SUBSET)
+        subset = values.get(fields.SUBSET),
+        describe = values.get(fields.DESCRIBE),
+        layout = values.get(fields.LAYOUT)
       ))
   }
 
@@ -336,5 +340,220 @@ import altitude.core.util.PeopleMatch
     withTriaged.locationIds should have size 2
     withTriaged.takenRange shouldBe defined
     withTriaged.importedRange shouldBe defined
+  }
+
+  test("A description is read into the scope beside the Search filters, each read as it is without one") {
+
+    /**
+     * Setup:
+     *
+     * Requests of the repository view with a description: alone, with spaces and a line feed around it, with the grid layout
+     * named, and beside each Search filter in turn (the Search text, a folder, a person, several people matching any, several
+     * Locations, each end of the two date ranges, `triaged` true and false), then beside all of them at once.
+     *
+     * Assertions:
+     *
+     * Alone, the scope holds the description as written but for the white space around it, no Search text and no filter, and
+     * leaves the triaged assets out. Beside filters, the scope is the one the same request has without the description, with the
+     * description added: the filters are read the same, and the query the scope builds carries them.
+     *
+     * Edge cases:
+     *
+     * A description of 300 characters is taken, and so is one that would parse to no Search term, since a description is not read
+     * as Search text. Search text with no usable term beside a description is no text, as it is without one. A request without a
+     * description has none in its scope.
+     */
+    val scope = browse(fields.DESCRIBE -> "woman in a park").value
+    scope shouldBe browse().value.copy(description = Some("woman in a park"))
+    scope.text shouldBe None
+    scope.folderIds shouldBe empty
+    scope.personIds shouldBe empty
+    scope.locationIds shouldBe empty
+    scope.takenRange shouldBe None
+    scope.importedRange shouldBe None
+    scope.params shouldBe Map(FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false)
+
+    browse(fields.DESCRIBE -> "  woman in\na park \n").value.description shouldBe Some("woman in\na park")
+    browse(fields.DESCRIBE -> "a cactus", fields.LAYOUT -> Const.Search.Layout.GRID).value.description shouldBe Some("a cactus")
+
+    val filters = List(
+      List(fields.QUERY_TEXT -> "beach -sunset"),
+      List(fields.FOLDER_ID -> "trips"),
+      List(fields.PERSON_ID -> "alice"),
+      List(fields.PERSON_ID -> "bob,alice", fields.PEOPLE_MATCH -> "any"),
+      List(fields.LOCATION_ID -> "sintra,lisbon"),
+      List(fields.TAKEN_FROM -> "2024-06-01"),
+      List(fields.TAKEN_TO -> "2024-06-30"),
+      List(fields.IMPORTED_FROM -> "2025-01-08"),
+      List(fields.IMPORTED_TO -> "2025-01-09"),
+      List(fields.TRIAGED -> "true"),
+      List(fields.TRIAGED -> "false")
+    )
+    for (beside <- filters :+ filters.init.flatten) withClue(s"$beside: ") {
+      val described = browse((fields.DESCRIBE -> "a cactus") +: beside*).value
+      described shouldBe browse(beside*).value.copy(description = Some("a cactus"))
+    }
+
+    val all = browse((fields.DESCRIBE -> "a cactus") +: filters.init.flatten*).value
+    all.text shouldBe Some("beach -sunset")
+    all.query().text shouldBe Some("beach -sunset")
+    all.query().folderIds shouldBe Set("trips")
+    all.query().personIds shouldBe Set("alice", "bob")
+    all.query().peopleMatch shouldBe PeopleMatch.Any
+    all.query().locationIds shouldBe Set("lisbon", "sintra")
+    all.query().takenRange shouldBe Some(DateRange(Some(LocalDate.parse("2024-06-01")), Some(LocalDate.parse("2024-06-30"))))
+    all.query().importedRange shouldBe Some(DateRange(Some(LocalDate.parse("2025-01-08")), Some(LocalDate.parse("2025-01-09"))))
+    all.params shouldBe Map(FieldConst.Asset.IS_RECYCLED -> false)
+
+    (browse(fields.DESCRIBE -> "a" * 300).value.description.value should have).length(300)
+    browse(fields.DESCRIBE -> "-").value.description shouldBe Some("-")
+    browse(fields.DESCRIBE -> "a cactus", fields.QUERY_TEXT -> "-").value.text shouldBe None
+    browse(fields.QUERY_TEXT -> "beach").value.description shouldBe None
+  }
+
+  test("A blank description and one longer than 300 characters are refused") {
+
+    /**
+     * Setup:
+     *
+     * Requests with an empty description, with one of spaces and line feeds alone, with one of 301 characters, and with one of
+     * 300 characters between spaces; and a blank description beside a folder.
+     *
+     * Assertions:
+     *
+     * The empty and the blank description are refused as blank, alone or beside a filter, and the one of 301 characters as too
+     * long, naming the bound.
+     *
+     * Edge cases:
+     *
+     * The length is the trimmed description's: 300 characters between spaces are taken.
+     */
+    browse(fields.DESCRIBE -> "").left.value shouldBe "A description cannot be blank"
+    browse(fields.DESCRIBE -> " \n\t ").left.value shouldBe "A description cannot be blank"
+    browse(fields.DESCRIBE -> " ", fields.FOLDER_ID -> "trips").left.value shouldBe "A description cannot be blank"
+    browse(fields.DESCRIBE -> "a" * 301).left.value shouldBe "A description has at most 300 characters"
+    (browse(fields.DESCRIBE -> (" " + "a" * 300 + " ")).value.description.value should have).length(300)
+  }
+
+  test("A description takes no album, subset, map area or map layout, and does not search the trash") {
+
+    /**
+     * Setup:
+     *
+     * Requests of the repository view with a description beside each parameter a Describe search does not take, in turn: an
+     * album, a Triage subset, a map area and the map layout; a request with a subset and an album beside the description and a
+     * folder; and requests with a description in the trash.
+     *
+     * Assertions:
+     *
+     * Each is refused, and the message names the parameter a description takes none of; the request with two of them names both,
+     * in the order the parameters are declared, and not the folder, which a description takes. A description is refused in the
+     * trash, which the message names.
+     *
+     * Edge cases:
+     *
+     * Such a parameter is refused whatever its value: a subset that is none. With a filter that would be refused on its own
+     * beside the description too, the parameter the description does not take is what is refused.
+     */
+    val refused = List(
+      fields.ALBUM_ID -> "best",
+      fields.SUBSET -> "noLocation",
+      fields.SUBSET -> "nothing",
+      fields.BBOX -> "1,2,3,4"
+    )
+    for (param <- refused) withClue(s"$param: ") {
+      browse(fields.DESCRIBE -> "a cactus", param).left.value shouldBe s"A description takes no ${param._1}"
+      browse(fields.DESCRIBE -> "a cactus", fields.QUERY_TEXT -> "beach", param).left.value shouldBe
+        s"A description takes no ${param._1}"
+    }
+
+    browse(fields.DESCRIBE -> "a cactus", fields.LAYOUT -> Const.Search.Layout.MAP).left.value shouldBe
+      "A description takes no layout=map"
+    browse(
+      fields.DESCRIBE -> "a cactus",
+      fields.SUBSET -> "noLocation",
+      fields.FOLDER_ID -> "trips",
+      fields.ALBUM_ID -> "best").left.value shouldBe "A description takes no albumId, subset"
+    browse(fields.DESCRIBE -> "a cactus", fields.BBOX -> "1,2,3,4", fields.TAKEN_FROM -> "not a date").left.value shouldBe
+      "A description takes no bbox"
+
+    parse(Const.Search.View.TRASHBIN, fields.DESCRIBE -> "a cactus").left.value shouldBe "A description does not search the trash"
+    parse(Const.Search.View.TRASHBIN, fields.DESCRIBE -> "a cactus", fields.QUERY_TEXT -> "beach").left.value shouldBe
+      "A description does not search the trash"
+  }
+
+  test("A description searches the Triage view, among the triaged assets and beside the filters that view takes") {
+
+    /**
+     * Setup:
+     *
+     * Requests of the Triage view with a description: alone, with `triaged=true`, and beside the Search text, two people matching
+     * any, two Locations and both date ranges at once.
+     *
+     * Assertions:
+     *
+     * Each scope is the one the same request has without the description, with the description added: it holds the triaged assets
+     * out of the trash alone, and the query it builds carries the filters.
+     *
+     * Edge cases:
+     *
+     * What a description takes in no view is refused in the Triage view too, named by the message: a Triage subset and the map
+     * layout. `triaged=false` is refused with the Triage view, with a description as without one.
+     */
+    val triage = Const.Search.View.TRIAGE
+    val described = parse(triage, fields.DESCRIBE -> "a cactus").value
+    described shouldBe parse(triage).value.copy(description = Some("a cactus"))
+    described.params shouldBe SearchQuery.TRIAGE_VIEW
+    parse(triage, fields.DESCRIBE -> "a cactus", fields.TRIAGED -> "true").value shouldBe described
+
+    val filters = List(
+      fields.QUERY_TEXT -> "beach",
+      fields.PERSON_ID -> "bob,alice",
+      fields.PEOPLE_MATCH -> "any",
+      fields.LOCATION_ID -> "sintra,lisbon",
+      fields.TAKEN_FROM -> "2024-06-01",
+      fields.IMPORTED_TO -> "2025-01-09"
+    )
+    val narrowed = parse(triage, (fields.DESCRIBE -> "a cactus") +: filters*).value
+    narrowed shouldBe parse(triage, filters*).value.copy(description = Some("a cactus"))
+    narrowed.params shouldBe SearchQuery.TRIAGE_VIEW
+    narrowed.query().text shouldBe Some("beach")
+    narrowed.query().personIds shouldBe Set("alice", "bob")
+    narrowed.query().locationIds shouldBe Set("lisbon", "sintra")
+
+    parse(triage, fields.DESCRIBE -> "a cactus", fields.SUBSET -> "unknownPeople").left.value shouldBe
+      "A description takes no subset"
+    parse(triage, fields.DESCRIBE -> "a cactus", fields.LAYOUT -> Const.Search.Layout.MAP).left.value shouldBe
+      "A description takes no layout=map"
+    parse(triage, fields.DESCRIBE -> "a cactus", fields.TRIAGED -> "false").left.value shouldBe
+      "The triage view holds only triaged assets"
+  }
+
+  test("A filter beside a description is refused as it is without one") {
+
+    /**
+     * Setup:
+     *
+     * Requests of the repository view with a description beside a filter that is refused on its own: eleven people, eleven
+     * Locations, an unknown people match, a date that is no ISO day, and a range whose first day is after its last.
+     *
+     * Assertions:
+     *
+     * Each is refused with the message the same request has without the description.
+     */
+    val malformed = List(
+      List(fields.PERSON_ID -> ids(11)) -> "A search names at most 10 people",
+      List(fields.LOCATION_ID -> ids(11)) -> "A search names at most 10 Locations",
+      List(fields.PERSON_ID -> "alice,bob", fields.PEOPLE_MATCH -> "some") -> "Unknown peopleMatch value",
+      List(fields.TAKEN_FROM -> "June 2024") -> "takenFrom must be a date, as 2024-06-01",
+      List(fields.IMPORTED_TO -> "2024-02-30") -> "importedTo must be a date, as 2024-06-01"
+    )
+    for ((params, message) <- malformed) withClue(s"$params: ") {
+      browse(params*).left.value shouldBe message
+      browse((fields.DESCRIBE -> "a cactus") +: params*).left.value shouldBe message
+    }
+
+    val reversed = List(fields.TAKEN_FROM -> "2024-06-30", fields.TAKEN_TO -> "2024-06-01")
+    browse((fields.DESCRIBE -> "a cactus") +: reversed*).left.value shouldBe browse(reversed*).left.value
   }
 }

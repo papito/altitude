@@ -63,11 +63,15 @@ cs
 test-data
 data/db/*.db
 data/repositories
+data/staging
 /altitude/resources/opencv/w600k_r50.onnx
 /altitude/resources/onnx/*.onnx
+# SigLIP 2's token-embedding table and tokenizer file, exported with the text tower
+/altitude/resources/onnx/*.f16
+/altitude/resources/onnx/*.tsv
 # fetch-models.py's in-progress files, should a run be killed before it cleans up
 /altitude/resources/*/*.onnx.part
-/altitude/resources/*/*.onnx.unchecked
+/altitude/resources/*/*.unchecked
 __pycache__/
 debug/
 flow.yaml

@@ -79,7 +79,8 @@ object Const:
     // Every grid page is bounded: a flat page holds full asset rows, and a grouped one carries a count for each of its groups
     val MAX_RPP = 500
 
-    // A first page's total counts the matches up to this many; one past it reads "10000+"
+    // A first page's total counts the matches up to this many; one past it reads "10000+". It is also the most the Describe
+    // result limit can be set to (Settings), so the exact total of a Describe search never passes it
     val TOTAL_CAP = 10000
 
     // A group of the Search text with at most this many hits is answered from those hits; one with more is matched over the
@@ -97,6 +98,23 @@ object Const:
     // The sort that is not a column: how well an asset matches the Search text, best first. It is the whole `sort` value,
     // with no direction digit.
     val SORT_RELEVANCE = "relevance"
+
+    // The other sort that is not a column: how much a still image looks like a Describe search's description, most alike
+    // first. It is the whole `sort` value too, the order of a Describe search that names no sort, and refused without a
+    // description.
+    val SORT_SIMILARITY = "similarity"
+
+    // The most characters a description has
+    val MAX_DESCRIPTION_LENGTH = 300
+
+    // How many matching assets a Describe search ranks one by one on PostgreSQL, comparing each one's embedding with the
+    // description's; past it, the search ranks through the vector index, its filters applied as the index is read
+    // (postgres.SearchDao). An estimate, not measured, from what is known of a library of a million embedded assets: a scan
+    // of the whole index takes about 14 s, so about 14 µs for each row it visits, and an index search that fills 1,000 results
+    // from filters leaving n assets visits about 1,000 × 1,000,000 ÷ n rows over a base of about 0.2 s, while an exact ranking
+    // is taken to cost about 5 µs an embedding. The two cross near 75,000, at about 0.4 s each. The count that chooses between
+    // them, which every page runs first and which reads up to one past this many matches, is not measured either.
+    val DESCRIBE_EXACT_LIMIT = 75000
 
     // Quick view (htmx/quick_view_modal) shows a folder's first this many assets, by newest import
     val QUICK_VIEW_SIZE = 100

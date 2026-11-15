@@ -37,6 +37,7 @@ import altitude.core.models.ImportOutcome
 import altitude.core.models.Permissions
 import altitude.core.models.Person
 import altitude.core.models.Repository
+import altitude.core.models.SceneEmbedding
 import altitude.core.models.User
 import altitude.core.models.UserMetadata
 import altitude.core.models.WatchFileState
@@ -75,6 +76,21 @@ object TestContext {
    */
   def between(vector: Array[Float], other: Array[Float], parts: Int): Array[Float] =
     FaceRecognitionService.meanNormalized(Seq.fill(parts)(vector) :+ other)
+
+  /**
+   * A Scene embedding at `cosine` to `embedding`, a unit vector: that much of it, and the rest of a direction at a right angle to
+   * it, random by `seed`. Two seeds give embeddings that differ, each at the cosine asked for.
+   */
+  def atCosine(embedding: SceneEmbedding, cosine: Double, seed: Int): SceneEmbedding = {
+    val along = embedding.values.map(_.toDouble)
+    val random = new Random(seed)
+    val noise = Array.fill(along.length)(random.nextGaussian())
+    val overlap = noise.indices.map(i => noise(i) * along(i)).sum
+    val across = noise.indices.map(i => noise(i) - overlap * along(i))
+    val length = math.sqrt(across.map(v => v * v).sum)
+    SceneEmbedding(
+      IArray.from(across.indices.map(i => (cosine * along(i) + math.sqrt(1 - cosine * cosine) * across(i) / length).toFloat)))
+  }
 
   /** The tables that carry `repository_id`, whose rows only their own repository's context reaches */
   val SCOPED_TABLES: List[String] = List(

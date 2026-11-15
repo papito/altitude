@@ -75,7 +75,8 @@ test-unit:
 test-controllers:
 	ENV=test mill altitude.test.testOnly *ControllerSuiteBundle --show-output -- $(SKIP_SLOW)
 
-# The client modules' tests under Node's built-in runner, with no dependency: the Edit's parity with the server's renderer
+# The client modules' tests under Node's built-in runner, with no dependency: the Edit's parity with the server's renderer,
+# and the search parameters' rules for a description and for the triage filter
 test-js:
 	node --test 'scripts/test-js/*.test.mjs'
 

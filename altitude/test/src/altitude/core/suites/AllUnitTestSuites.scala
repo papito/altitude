@@ -9,6 +9,7 @@ import altitude.core.unit.ContentSignerTests
 import altitude.core.unit.CoreModelTests
 import altitude.core.unit.CurationRuleTests
 import altitude.core.unit.DataScrubberTests
+import altitude.core.unit.DescribeEmbedderTests
 import altitude.core.unit.DynamicFilterTests
 import altitude.core.unit.EditRecipeTests
 import altitude.core.unit.EditRendererTests
@@ -39,6 +40,7 @@ import altitude.core.unit.SearchWordsTests
 import altitude.core.unit.SequenceRuleTests
 import altitude.core.unit.SessionControllerTests
 import altitude.core.unit.Sha256Tests
+import altitude.core.unit.Siglip2TokenizerTests
 import altitude.core.unit.SqlDialectTests
 import altitude.core.unit.SqlExplainerTests
 import altitude.core.unit.SqliteOverridesTests
@@ -85,6 +87,8 @@ abstract class AllUnitTestSuites
     new ImageUtilTests,
     new ImageMeasurementTests,
     new SceneEmbedderTests,
+    new Siglip2TokenizerTests,
+    new DescribeEmbedderTests,
     new SequenceRuleTests,
     new CurationRuleTests,
     new RangeStreamingTests,

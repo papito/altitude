@@ -91,12 +91,12 @@ object SequenceRule:
 
   /**
    * Whether two eligible frames look alike: by some Scene model whose embedding both carry, their cosine similarity is at least
-   * that model's threshold (`sequence.dinov2.min_similarity` or `sequence.clip.min_similarity`); where no model embedded both,
+   * that model's threshold (`sequence.dinov2.min_similarity` or `sequence.siglip2.min_similarity`); where no model embedded both,
    * their hashes are at most `sequence.max_hash_distance` bits apart. One model's likeness is enough, so the Sequences are the
    * union of what either model finds and a burst one model misses is caught by the other; a pair compared by any model is never
    * rescued by its hashes. The similarity replaces the hash test rather than joining it: the hash at any usable distance rejects
    * a reframed or zoomed shot of the scene, which the embedding holds under. Each model has its own threshold because their
-   * cosines live on different scales (CLIP's are compressed toward 1, so one number cannot serve both). The size test in
+   * cosines live on different scales (SigLIP 2's are compressed toward 1, so one number cannot serve both). The size test in
    * [[matches]] stays beside the embedding: a portrait and a landscape frame of one scene can embed alike, and are not one
    * Sequence.
    */

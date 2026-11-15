@@ -47,13 +47,13 @@ import altitude.core.util.SearchQuery
    */
   private def rawEmbeddingColumns(assetId: String): (Option[Any], Option[Any]) = {
     val row = testApp.txManager.asReadOnly {
-      query("SELECT dinov2_embedding, clip_embedding FROM asset WHERE id = ?", assetId).head
+      query("SELECT dinov2_embedding, siglip2_embedding FROM asset WHERE id = ?", assetId).head
     }
     def comparable(value: AnyRef): Option[Any] = Option(value).map {
       case bytes: Array[Byte] => bytes.toSeq
       case other => other.toString
     }
-    (comparable(row("dinov2_embedding")), comparable(row("clip_embedding")))
+    (comparable(row("dinov2_embedding")), comparable(row("siglip2_embedding")))
   }
 
   test("Import duplicate") {
@@ -551,16 +551,16 @@ import altitude.core.util.SearchQuery
     val first = importFrame(frame(0))
     val second = importFrame(frame(1), taken = Some(takenAt(1)))
     val dinov2 = unitVector(SceneModel.Dinov2, seed = 1)
-    val clip = unitVector(SceneModel.Clip, seed = 2)
+    val siglip2 = unitVector(SceneModel.Siglip2, seed = 2)
 
     val stored: Asset = testApp.service.asset.getById(first.persistedId)
     testApp.service.asset.markAsCompleted(
-      stored.copy(sceneEmbeddings = SceneEmbeddings(dinov2 = Some(dinov2), clip = Some(clip))))
+      stored.copy(sceneEmbeddings = SceneEmbeddings(dinov2 = Some(dinov2), siglip2 = Some(siglip2))))
 
     // A write transaction: the candidates are locked until it ends
     val candidates = testApp.txManager.withTransaction(testApp.DAO.asset.getSequenceCandidates(second, gapMs = 3000))
     val candidate = candidates.find(_.id == first.id).value
-    candidate.sceneEmbeddings shouldBe SceneEmbeddings(dinov2 = Some(dinov2), clip = Some(clip))
+    candidate.sceneEmbeddings shouldBe SceneEmbeddings(dinov2 = Some(dinov2), siglip2 = Some(siglip2))
     candidate.imageQuality shouldBe stored.imageQuality
     candidate.perceptualHash shouldBe stored.perceptualHash
   }
@@ -576,7 +576,8 @@ import altitude.core.util.SearchQuery
      *
      * The columns hold the vectors, but a read by ID (the typed row) and the hand-written locking read of a library operation
      * (its own column list) each hand the asset back with neither: the embeddings are bulky columns no general read selects.
-     * Completing it again with a CLIP vector of DINOv2's dimensions is refused on both engines, and the stored vectors stand.
+     * Completing it again with a SigLIP 2 vector one value short of the model's dimensions is refused on both engines, and the
+     * stored vectors stand.
      */
     val frameAsset = importFrame(frame(0))
     val stored: Asset = testApp.service.asset.getById(frameAsset.persistedId)
@@ -584,21 +585,22 @@ import altitude.core.util.SearchQuery
       stored.copy(
         sceneEmbeddings = SceneEmbeddings(
           dinov2 = Some(unitVector(SceneModel.Dinov2, seed = 3)),
-          clip = Some(unitVector(SceneModel.Clip, seed = 4)))))
+          siglip2 = Some(unitVector(SceneModel.Siglip2, seed = 4)))))
 
-    val (dinov2Column, clipColumn) = rawEmbeddingColumns(frameAsset.persistedId)
+    val (dinov2Column, siglip2Column) = rawEmbeddingColumns(frameAsset.persistedId)
     dinov2Column should not be None
-    clipColumn should not be None
+    siglip2Column should not be None
 
     testApp.service.asset.getById(frameAsset.persistedId).sceneEmbeddings shouldBe SceneEmbeddings()
     val locked = testApp.txManager.withTransaction(testApp.DAO.asset.getAssetsToMove(Set(frameAsset.persistedId)))
     locked.map(_.sceneEmbeddings) shouldBe List(SceneEmbeddings())
 
+    // The two models' dimensions are equal, so a vector of the other model's size would be taken: this one is of neither's
+    val short = SceneEmbedding(unitVector(SceneModel.Siglip2, seed = 5).values.init)
     intercept[IllegalArgumentException] {
-      testApp.service.asset.markAsCompleted(
-        stored.copy(sceneEmbeddings = SceneEmbeddings(clip = Some(unitVector(SceneModel.Dinov2, seed = 5)))))
+      testApp.service.asset.markAsCompleted(stored.copy(sceneEmbeddings = SceneEmbeddings(siglip2 = Some(short))))
     }
-    rawEmbeddingColumns(frameAsset.persistedId) shouldBe (dinov2Column, clipColumn)
+    rawEmbeddingColumns(frameAsset.persistedId) shouldBe (dinov2Column, siglip2Column)
   }
 
   test("A Video completes with no Scene embeddings") {

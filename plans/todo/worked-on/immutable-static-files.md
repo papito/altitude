@@ -39,7 +39,7 @@ The time this costs is not measured. On a LAN it is small; over a VPN each wave 
 | Concern | Decision |
 |---|---|
 | What makes a URL immutable | One build version for everything under `static/`, as a path segment: `/static/v-<version>/js/global.js`. A file's URL changes whenever any static file changes |
-| The version | The first 8 hex characters of a SHA-256 over every file under `altitude/static/`, each file's relative path and bytes, in path order. Computed by the build, as the stylesheet bundle's hash is |
+| The version | The first 8 hex characters of a SHA-256 over every file under `../../../altitude/static`, each file's relative path and bytes, in path order. Computed by the build, as the stylesheet bundle's hash is |
 | How the server learns it | A one-line classpath resource, `static-version`, at the classpath root beside `static/`, written by the `resources` task and read once at startup. It is not compiled into `Assets`, so a JS edit recompiles nothing. A missing resource fails startup with a message naming it |
 | Why no source is rewritten | Everything a static file references is relative: module imports, the `../webfonts/` URLs of `font-awesome.min.css`, the setup page's Worker (`new URL("./setup-background-worker.js", import.meta.url)`) and its imports. A file loaded under the prefix resolves all of them under the prefix |
 | The versioned URL, current version | `200`, `Cache-Control: public, max-age=31536000, immutable`, `Vary: Accept-Encoding`, no ETag. The same header `/assets/:name` sends |
@@ -54,7 +54,7 @@ The time this costs is not measured. On a LAN it is small; over a VPN each wave 
 ## Constraints
 
 - Vendored files stay byte-identical to their upstream release (`static/js/lib/README.md`).
-- `/static/` stays a public route with no login, as `RouteTableTests` and `docs/READINESS.md` declare it.
+- `/static/` stays a public route with no login, as `RouteTableTests` and `../../../docs/READINESS.md` declare it.
 - No schema change, no new dependency.
 - A `.` or `..` path segment is dropped before the classpath lookup, as Cask's `StaticUtil.makePathAndContentType` does now.
 
@@ -64,16 +64,16 @@ Each group starts with its tests, red first.
 
 ### A. The version
 
-1. **`build.mill`.** A task hashing the tree `staticResources()` points at (relative path and bytes of each file, sorted by
+1. **`../../../build.mill`.** A task hashing the tree `staticResources()` points at (relative path and bytes of each file, sorted by
    path), giving the 8-character version. `resources` writes it to `static-version` at the root of its destination, beside the
    `static/` copy. The scaladoc says what the version covers and that the server reads it at startup.
-2. **Reading it (`../../altitude/src/altitude/core/util/Util.scala`, or a small object beside `Environment` if it reads
+2. **Reading it (`../../../altitude/src/altitude/core/util/Util.scala`, or a small object beside `Environment` if it reads
    better).** The version read once from the classpath resource; absent or empty, startup fails with a message naming
    `static-version` and the `resources` task. Logged at INFO at startup.
 
 ### B. Serving
 
-3. **Tests (`../../altitude/test/src/altitude/core/controller/StaticControllerTests.scala`).** Beside the four that exist:
+3. **Tests (`../../../altitude/test/src/altitude/core/controller/StaticControllerTests.scala`).** Beside the four that exist:
    - a file under the current version answers 200 with its bytes, the immutable header and `Vary: Accept-Encoding`, and no ETag;
    - the same file under another well-formed version (`v-00000000`) answers 200 with the same bytes, `no-cache` and an ETag,
      and 304 when asked again with that ETag;
@@ -101,11 +101,11 @@ Each group starts with its tests, red first.
 ### D. Guards and docs
 
 10. **No `/static/` literal (unit bundle, sources found through `ALTITUDE_SOURCE_DIR` as `StyleGuideScanTests` finds them).**
-    Fails, naming the file and line, when a template under `altitude/views/` or a module under `altitude/static/js/` outside
+    Fails, naming the file and line, when a template under `../../../altitude/views` or a module under `altitude/static/js/` outside
     `lib/` holds a quoted string starting with `/static/`.
 11. **A page links the current version (`StaticControllerTests`).** The login page, fetched with no login, links every static
     file under `/static/v-<version>/`, and the entry module answers immutable at the linked URL.
-12. **Docs.** `altitude/AGENTS.md`: the paragraph on how static files are served (the version, the two forms of a URL, dev) and
+12. **Docs.** `../../../altitude/AGENTS.md`: the paragraph on how static files are served (the version, the two forms of a URL, dev) and
     the key-files row of `decorators.scala`. `altitude/views/AGENTS.md`: the rule that a template links static files through
     `Util.staticUrl` and a module refers to them relative to `import.meta.url`, and why (one URL per module).
     `static/js/lib/README.md`: how `vendor-loader.js` names the libraries it loads.

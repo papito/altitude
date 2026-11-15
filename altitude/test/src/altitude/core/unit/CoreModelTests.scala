@@ -137,7 +137,7 @@ import altitude.core.models.UserMetadataValue
     embedded.toJson("scene_embeddings")("dinov2").arr.map(_.num.toFloat) should be(Seq(0.6f, 0.8f))
     embedded.toJson("scene_embeddings").obj.keySet should be(Set("dinov2"))
     Asset.fromJson(embedded.toJson).sceneEmbeddings.dinov2 should be(Some(embedding))
-    Asset.fromJson(embedded.toJson).sceneEmbeddings.clip should be(None)
+    Asset.fromJson(embedded.toJson).sceneEmbeddings.siglip2 should be(None)
 
     val unembedded = embedded.copy(sceneEmbeddings = SceneEmbeddings())
     unembedded.toJson.value.keySet.contains("scene_embeddings") should be(false)

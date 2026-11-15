@@ -4,6 +4,23 @@ import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import scalasql.Table
 
+import altitude.core.FieldConst
+import altitude.core.dao.sql.Db
+
+/**
+ * What a select of the asset's columns does with the two bulky metadata JSON columns, `user_metadata` and `extracted_metadata`
+ * ([[AssetRow.columnList]])
+ */
+enum BulkyMetadata:
+  /** Selected as stored */
+  case Kept
+
+  /** Left out of the list, for a hand-written read, whose mapper reads an absent column as empty (`AssetDao.makeModel`) */
+  case Omitted
+
+  /** Read as NULL in their places, for a typed read, whose row reads back by position: its model's two are empty */
+  case AsNull
+
 /**
  * The `asset` table.
  *
@@ -15,9 +32,10 @@ import scalasql.Table
  * `originalOwner` is the importer record's JSON: `jsonb` on PostgreSQL, which pgJDBC hands out as its JSON text, and `TEXT` on
  * SQLite.
  *
- * The Scene embeddings (`dinov2_embedding`, `clip_embedding`) are never carried back out of the database by a typed read, so the
- * row class does not even select them: they are bulky, and the one reader is the hand-written Sequence candidates' statement. The
- * search statements build their asset column list from these labels, so they leave them out too.
+ * The Scene embeddings (`dinov2_embedding`, `siglip2_embedding`) are never carried back out of the database by a typed read, so
+ * the row class does not even select them: they are bulky, and the one reader is the hand-written Sequence candidates' statement.
+ * The statements that name the asset's columns build their list from these labels ([[AssetRow.columnList]]), so they leave them
+ * out too.
  */
 case class AssetRow[T[_]](
     id: T[String],
@@ -59,3 +77,26 @@ case class AssetRow[T[_]](
 
 object AssetRow extends Table[AssetRow]:
   override def tableName: String = "asset"
+
+  private val BULKY_METADATA = Set(FieldConst.Asset.USER_METADATA, FieldConst.Asset.EXTRACTED_METADATA)
+
+  /**
+   * The asset's columns as a hand-written select lists them: this row's labels in the order it declares them, each as
+   * `asset.<column>`, so the typed row stays the one list of what a read of an asset selects. `bulkyMetadata` is what becomes of
+   * the two bulky metadata JSON columns, for the reads that show neither. `public_metadata` stays in every form: a cell shows it
+   * and the Sequence rule compares the device model.
+   */
+  def columnList(bulkyMetadata: BulkyMetadata = BulkyMetadata.Kept): String =
+    Table
+      .labels(this)
+      .map(Db.config.columnNameMapper)
+      .flatMap {
+        name =>
+          if !BULKY_METADATA(name) then Some(s"asset.$name")
+          else
+            bulkyMetadata match
+              case BulkyMetadata.Kept => Some(s"asset.$name")
+              case BulkyMetadata.Omitted => None
+              case BulkyMetadata.AsNull => Some(s"NULL AS $name")
+      }
+      .mkString(", ")

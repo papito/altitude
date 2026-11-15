@@ -45,6 +45,12 @@ import altitude.core.util.Util
     """\bvalue="([^"]*)"""".r.findFirstMatchIn(input).map(_.group(1)).getOrElse("")
   }
 
+  /** The form's Describe field, a textarea: its opening tag, and the description it holds */
+  private def describeField(html: String): (String, String) = {
+    val field = s"""(?s)(<textarea\\b[^>]*\\bname="${fields.DESCRIBE}"[^>]*>)(.*?)</textarea>""".r.findFirstMatchIn(html).get
+    (field.group(1), field.group(2))
+  }
+
   private def get(host: String, repoId: String, path: String, params: Map[String, String] = Map.empty) =
     requests.get(
       s"$host/htmx/search/r/$repoId/$path",
@@ -200,7 +206,7 @@ import altitude.core.util.Util
     }
   }
 
-  test("A People option shows the number of assets a search of the Person finds, with triaged items hidden or shown") {
+  test("A People option shows the number of assets a search of the Person finds: sorted, with the triaged, or triaged alone") {
 
     /**
      * Setup:
@@ -212,12 +218,14 @@ import altitude.core.util.Util
      *
      * With no `triaged` parameter Alice's option shows 2 assets, what the search finds, and Bella, whose search finds nothing, is
      * no option, as the People tab lists neither more for Alice nor Bella at all. With `triaged=true` Alice shows 5 assets and
-     * Bella is offered with 2. Cara's count is grouped, "1,840". The panel's form asked for with `triaged=true` gives its People
-     * field the options route with it, and without it the route alone.
+     * Bella is offered with 2. With the Triage view Alice shows her 3 triaged assets and Bella her 2, and Cara, with none, is no
+     * option. Cara's count is grouped, "1,840". The panel's form gives its People field the options route alone, and names the
+     * form's `view` and `triaged` as what a request for its options carries.
      *
      * Edge cases:
      *
-     * Only `true` shows triaged items: `triaged=false` reads as the default does. A value that is no boolean is a 400.
+     * Only `true` shows triaged items: `triaged=false` reads as the default does. A value that is no boolean is a 400, and so is
+     * `triaged=false` with the Triage view, which holds triaged assets alone; `triaged=true` with it changes nothing.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -255,11 +263,22 @@ import altitude.core.util.Util
         peopleOptions(Map("triaged" -> "true", fields.QUERY_TEXT -> "bel")).keySet shouldBe Set("Bella")
         peopleOptions(Map(fields.QUERY_TEXT -> "bel")) shouldBe empty
 
-        get(host, repoId, "options/people", Map("triaged" -> "maybe")).statusCode shouldBe 400
+        val triage = Map(fields.VIEW -> Const.Search.View.TRIAGE)
+        for (params <- List(triage, triage + ("triaged" -> "true"))) withClue(s"$params: ") {
+          val triaged = peopleOptions(params)
+          triaged.keySet shouldBe Set("Alice", "Bella")
+          triaged("Alice") should include("3 assets")
+          triaged("Bella") should include("2 assets")
+        }
+        peopleOptions(triage + (fields.QUERY_TEXT -> "car")) shouldBe empty
 
-        val route = s"""data-options-url="/htmx/search/r/$repoId/options/people"""
-        get(host, repoId, "panel", Map("triaged" -> "true")).text() should include(route + """?triaged=true"""")
-        get(host, repoId, "panel").text() should include(route + '"')
+        get(host, repoId, "options/people", Map("triaged" -> "maybe")).statusCode shouldBe 400
+        get(host, repoId, "options/people", triage + ("triaged" -> "false")).statusCode shouldBe 400
+
+        val route = s"""data-options-url="/htmx/search/r/$repoId/options/people" data-options-params="view triaged""""
+        for (params <- List(Map.empty[String, String], Map("triaged" -> "true"), triage)) withClue(s"$params: ") {
+          get(host, repoId, "panel", params).text() should include(route)
+        }
     }
   }
 
@@ -416,15 +435,18 @@ import altitude.core.util.Util
      *
      * Assertions:
      *
-     * The panel asked for with a search's parameters is a form whose inputs hold them under their parameter names: the text, the
-     * folder, the people and the Locations as given, comma-separated, the people match and the four dates. The folder is a chip
-     * labelled by its path, each person a chip with their name, Alice's showing her cover Face, and each Location a chip labelled
-     * with its Category, the chips of a field in the order its IDs were given in.
+     * The panel asked for with a search's parameters is a form whose fields hold them under their parameter names: the
+     * description, without the white space around it, the text, the folder, the people and the Locations as given,
+     * comma-separated, the people match and the four dates. The Describe field comes first, a multi-line field of at most 300
+     * characters labelled "Describe", whose placeholder asks what is in the photo; the Search text's field follows it, labelled
+     * "Keywords", under the ID and the parameter it has always had. The folder is a chip labelled by its path, each person a chip
+     * with their name, Alice's showing her cover Face, and each Location a chip labelled with its Category, the chips of a field
+     * in the order its IDs were given in.
      *
      * Edge cases:
      *
-     * The panel asked for with no parameter holds no text, no chip and no date, and matches all people. The parameters of a
-     * search that are no filter of the panel (the view, the sort, the layout) are ignored.
+     * The panel asked for with no parameter holds no description, no text, no chip and no date, and matches all people. The
+     * parameters of a search that are no filter of the panel (the sort, the layout) are ignored.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -449,6 +471,7 @@ import altitude.core.util.Util
           repoId,
           "panel",
           Map(
+            fields.DESCRIBE -> "  woman in a park ",
             fields.QUERY_TEXT -> "beach -sunset",
             fields.FOLDER_ID -> folder.persistedId,
             fields.PERSON_ID -> personIds,
@@ -458,7 +481,6 @@ import altitude.core.util.Util
             fields.TAKEN_TO -> "2024-06-30",
             fields.IMPORTED_FROM -> "2025-01-02",
             fields.IMPORTED_TO -> "2025-01-03",
-            fields.VIEW -> Const.Search.View.TRIAGE,
             fields.SORT -> "filename0",
             fields.LAYOUT -> Const.Search.Layout.MAP
           )
@@ -467,6 +489,18 @@ import altitude.core.util.Util
         response.headers("content-type").head should include("text/html")
         val form = response.text()
         form should include("<form")
+
+        val (describe, description) = describeField(form)
+        description shouldBe "woman in a park"
+        describe should include("""id="searchPanelDescribe"""")
+        describe should include(s"""maxlength="${Const.Search.MAX_DESCRIPTION_LENGTH}"""")
+        describe should include("""placeholder="What's in the photo? e.g. woman in a park"""")
+        val labels =
+          List("""<label for="searchPanelDescribe">Describe</label>""", """<label for="searchPanelText">Keywords</label>""")
+        labels.foreach(form should include(_))
+        (form.indexOf(labels.head) < form.indexOf(labels.last)) shouldBe true
+        (form should not).include("Search text")
+        """<input\b[^>]*\bid="searchPanelText"[^>]*>""".r.findFirstIn(form).get should include(s"""name="${fields.QUERY_TEXT}"""")
 
         inputValue(form, fields.QUERY_TEXT) shouldBe "beach -sunset"
         inputValue(form, fields.FOLDER_ID) shouldBe folder.persistedId
@@ -493,6 +527,7 @@ import altitude.core.util.Util
 
         val blank = get(host, repoId, "panel").text()
         carriedIn(blank) shouldBe empty
+        describeField(blank)._2 shouldBe ""
         inputValue(blank, fields.PEOPLE_MATCH) shouldBe "all"
         for (
           name <- List(
@@ -505,6 +540,81 @@ import altitude.core.util.Util
             fields.IMPORTED_FROM,
             fields.IMPORTED_TO)
         ) withClue(s"$name: ")(inputValue(blank, name) shouldBe "")
+    }
+  }
+
+  test("The panel opens with the assets its search covers, Library, Triage or All, by the view and the triage filter") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the folder Trips, and the panel asked for with no parameter, with `triaged=false`, with
+     * `triaged=true`, with the Triage view, and with the Triage view beside the folder.
+     *
+     * Assertions:
+     *
+     * The form opens with a toggle group named "Search in", before the Describe field, of three segments in the order Library,
+     * Triage and All, one of them pressed, and holds the pick in two hidden inputs, `view` and `triaged`: Library, the repository
+     * view with `triaged` false, with no parameter and with `triaged=false`; All, the repository view with `triaged` true; and
+     * Triage, the Triage view with no `triaged`. The Folder field is shown by whether the form searches Triage, and is rendered
+     * hidden under the Triage view alone, where it still holds the folder's chip and ID.
+     *
+     * Edge cases:
+     *
+     * `triaged=false` with the Triage view is a 400, as a search of it is. Any view but the Triage view is the repository view's:
+     * the panel searches no trash.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val trips = testApp.service.folder.add("Trips")
+        val triage = Map(fields.VIEW -> Const.Search.View.TRIAGE)
+
+        /** The labels of the row's segments in order, and the one pressed */
+        def segments(form: String): (List[String], List[String]) = {
+          val row = """(?s)<div class="toggle-group search-in" role="group" aria-label="Search in">(.*?)</div>""".r
+            .findFirstMatchIn(form)
+            .get
+          (form.indexOf(row.matched) < form.indexOf("searchPanelDescribe")) shouldBe true
+          val buttons = """(?s)<button\b[^>]*\baria-pressed="(true|false)"[^>]*>([^<]*)</button>""".r
+            .findAllMatchIn(row.group(1))
+            .map(button => button.group(2).trim -> button.group(1).toBoolean)
+            .toList
+          (buttons.map(_._1), buttons.filter(_._2).map(_._1))
+        }
+
+        /** The opening tag of the Folder field, which says how it is shown */
+        def folderField(form: String): String =
+          """(?s)<div class="field"[^>]*>(?=\s*<label for="searchPanelFolder">)""".r.findFirstIn(form).get
+
+        val picks = List(
+          Map.empty[String, String] -> ("Library", Const.Search.View.DEFAULT, "false"),
+          Map("triaged" -> "false") -> ("Library", Const.Search.View.DEFAULT, "false"),
+          Map("triaged" -> "true") -> ("All", Const.Search.View.DEFAULT, "true"),
+          triage -> ("Triage", Const.Search.View.TRIAGE, ""),
+          (triage + ("triaged" -> "true")) -> ("Triage", Const.Search.View.TRIAGE, ""),
+          Map(fields.VIEW -> Const.Search.View.TRASHBIN) -> ("Library", Const.Search.View.DEFAULT, "false")
+        )
+        for ((params, (pressed, view, triaged)) <- picks) withClue(s"$params: ") {
+          val response = get(host, repoId, "panel", params)
+          response.statusCode shouldBe 200
+          val form = response.text()
+          segments(form) shouldBe (List("Library", "Triage", "All"), List(pressed))
+          inputValue(form, fields.VIEW) shouldBe view
+          inputValue(form, fields.TRIAGED) shouldBe triaged
+          folderField(form) should include("""x-show="!searchesTriage"""")
+          folderField(form).contains("display: none") shouldBe (pressed == "Triage")
+        }
+
+        val withFolder = get(host, repoId, "panel", triage + (fields.FOLDER_ID -> trips.persistedId)).text()
+        folderField(withFolder) should include("display: none")
+        inputValue(withFolder, fields.FOLDER_ID) shouldBe trips.persistedId
+        carriedIn(withFolder).map(_.label) shouldBe List("Trips")
+
+        get(host, repoId, "panel", triage + ("triaged" -> "false")).statusCode shouldBe 400
     }
   }
 
@@ -593,7 +703,8 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The panel asked for with a date that is not an ISO day, a range whose start is after its end, a people match that is
-     * neither `all` nor `any`, or eleven people in one parameter is a plain-text 400, as the search with them is.
+     * neither `all` nor `any`, eleven people in one parameter, a blank description or one of 301 characters is a plain-text 400,
+     * as the search with them is.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -605,12 +716,60 @@ import altitude.core.util.Util
           Map(fields.TAKEN_FROM -> "june"),
           Map(fields.IMPORTED_FROM -> "2024-06-02", fields.IMPORTED_TO -> "2024-06-01"),
           Map(fields.PEOPLE_MATCH -> "some"),
-          Map(fields.PERSON_ID -> List.fill(11)(UUID.randomUUID.toString).mkString(","))
+          Map(fields.PERSON_ID -> List.fill(11)(UUID.randomUUID.toString).mkString(",")),
+          Map(fields.DESCRIBE -> "  "),
+          Map(fields.DESCRIBE -> "a" * 301, fields.QUERY_TEXT -> "beach")
         )
         for (params <- refused) withClue(s"$params: ") {
           val response = get(host, repoId, "panel", params)
           response.statusCode shouldBe 400
           response.headers("content-type").head should include("text/plain")
+        }
+    }
+  }
+
+  test("The panel takes a description beside its filters, and what a Describe search takes none of is ignored") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the folder Trips, and the panel asked for with a description alone, with a description
+     * beside the Search text and the folder, and with a description beside a sort, a grouping and the map layout, which the
+     * client's parameters of a search may still hold.
+     *
+     * Assertions:
+     *
+     * Each answers the form, filled in from the description and the filters beside it: the description in the Describe field, the
+     * Search text as typed and the folder's chip.
+     *
+     * Edge cases:
+     *
+     * The sort, the grouping and the layout are no filter of the panel: beside a description they are ignored there, where the
+     * results route refuses them.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val trips = testApp.service.folder.add("Trips")
+        val filters = Map(fields.QUERY_TEXT -> "beach", fields.FOLDER_ID -> trips.persistedId)
+        val described = List(
+          Map(fields.DESCRIBE -> "woman in a park"),
+          Map(fields.DESCRIBE -> "woman in a park") ++ filters,
+          Map(
+            fields.DESCRIBE -> "woman in a park",
+            fields.SORT -> "created_at1",
+            fields.GROUP_BY -> "dateTaken",
+            fields.LAYOUT -> Const.Search.Layout.MAP) ++ filters
+        )
+        for (params <- described) withClue(s"$params: ") {
+          val response = get(host, repoId, "panel", params)
+          response.statusCode shouldBe 200
+          describeField(response.text())._2 shouldBe "woman in a park"
+          inputValue(response.text(), fields.QUERY_TEXT) shouldBe params.getOrElse(fields.QUERY_TEXT, "")
+          carriedIn(response.text()).map(_.id) shouldBe params.get(fields.FOLDER_ID).toList
         }
     }
   }

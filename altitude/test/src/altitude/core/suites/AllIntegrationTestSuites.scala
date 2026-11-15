@@ -24,6 +24,7 @@ abstract class AllIntegrationTestSuites(val testApp: Altitude)
     new SearchGroupingTests(testApp),
     new SearchCursorTests(testApp),
     new SearchMapTests(testApp),
+    new DescribeSearchTests(testApp),
     new RepositoryServiceTests(testApp),
     new AssetImportServiceTests(testApp),
     new SequenceServiceTests(testApp),
