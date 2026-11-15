@@ -626,6 +626,32 @@ import altitude.core.util.Sha256
     slept.asScala.toList shouldEqual List(2.seconds, 4.seconds, 8.seconds)
   }
 
+  test("A directory that cannot be made fails naming the files and the directory") {
+
+    /**
+     * Setup:
+     *
+     * A regular file where the set's directory should be, and a file missing from it.
+     *
+     * Assertions:
+     *
+     * The ensure fails with a `ModelFilesException`, not the bare I/O error, whose message names the I/O error, the file missing
+     * with its URL, and the directory to put it in, and whose cause is the I/O error; the server sees no request.
+     */
+    val server = newServer()
+    val spec = served(server, "model.onnx", content(10_000, 25))
+    Files.write(directory, Array[Byte](1))
+
+    val error = intercept[ModelFilesException](ensure(spec))
+
+    error.getMessage should include("FileAlreadyExistsException")
+    error.getMessage should include(directory.toString)
+    error.getMessage should include(spec.name)
+    error.getMessage should include(spec.url.toString)
+    error.getCause shouldBe a[java.nio.file.FileAlreadyExistsException]
+    server.requests shouldBe empty
+  }
+
   test("Two threads ensuring the same files at once download each file once") {
 
     /**

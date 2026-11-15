@@ -199,17 +199,25 @@ final class ModelDownloader(
 
   private val directory = models.directory
 
-  /** Throws `ModelFilesException`, naming the files missing, their URLs and the directory, when they cannot be put in place */
+  /**
+   * Throws `ModelFilesException`, naming the files missing, their URLs and the directory, when they cannot be put in place: an
+   * I/O error anywhere on the way (the directory, the lock file, the file store, a download) is one, with the I/O error as its
+   * cause.
+   */
   def ensure(files: Seq[ModelFileSpec]): Unit =
     if files.forall(inPlace) then logger.debug(s"The model files are in place in $directory")
     else
-      Files.createDirectories(directory)
-      Files.createDirectories(models.lockFile.getParent)
-      ModelDownloader.locked(models.lockFile) {
-        // Whoever held the lock before may have put them in place meanwhile
-        val missing = files.filterNot(inPlace)
-        if missing.isEmpty then logger.info(s"The model files were put in place in $directory while this one waited")
-        else downloadAll(missing)
+      try
+        Files.createDirectories(directory)
+        Files.createDirectories(models.lockFile.getParent)
+        ModelDownloader.locked(models.lockFile) {
+          // Whoever held the lock before may have put them in place meanwhile
+          val missing = files.filterNot(inPlace)
+          if missing.isEmpty then logger.info(s"The model files were put in place in $directory while this one waited")
+          else downloadAll(missing)
+        }
+      catch {
+        case e: IOException => throw ModelFilesException(failure(ModelDownloader.describe(e), files.filterNot(inPlace)), Some(e))
       }
 
   private def downloadAll(missing: Seq[ModelFileSpec]): Unit =
