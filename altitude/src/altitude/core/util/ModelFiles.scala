@@ -196,11 +196,12 @@ object ModelFiles:
  *
  * @param models
  *   where the files go: the set's directory, and the lock file
- * @param client
- *   the HTTP client: HTTP/1.1, so a body cancelled mid-file (a stall, a body past its pin) closes its connection, where an HTTP/2
- *   one might stay pooled, dead, for the retry to reuse; redirects followed (a release host and Hugging Face both redirect to a
- *   CDN, of another origin, which `Redirect.NORMAL` follows; it refuses only HTTPS to HTTP); the JVM's proxy settings (the
- *   default proxy selector)
+ * @param newClient
+ *   builds the HTTP client, at the first request rather than with the downloader, which shuts it down once its downloads are
+ *   over: HTTP/1.1, so a body cancelled mid-file (a stall, a body past its pin) closes its connection, where an HTTP/2 one might
+ *   stay pooled, dead, for the retry to reuse; redirects followed (a release host and Hugging Face both redirect to a CDN, of
+ *   another origin, which `Redirect.NORMAL` follows; it refuses only HTTPS to HTTP); the JVM's proxy settings (the default proxy
+ *   selector)
  * @param retryDelays
  *   the waits before each retry of a file, as many retries as there are delays
  * @param sleep
@@ -212,8 +213,7 @@ object ModelFiles:
  */
 final class ModelDownloader(
     models: ModelFiles,
-    client: HttpClient =
-      HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).followRedirects(HttpClient.Redirect.NORMAL).build(),
+    newClient: () => HttpClient = ModelDownloader.newClient,
     retryDelays: Seq[FiniteDuration] = Seq(2.seconds, 4.seconds, 8.seconds),
     sleep: FiniteDuration => Unit = delay => Thread.sleep(delay.toMillis),
     freeSpace: Path => Long = Files.getFileStore(_).getUsableSpace,
@@ -221,6 +221,17 @@ final class ModelDownloader(
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   private val directory = models.directory
+
+  // Built by the first request and shut down once the downloads are over, so an ensure that finds every file in place (every
+  // start but the first) builds none, nor the selector thread a client starts
+  private var client: Option[HttpClient] = None
+
+  private def http: HttpClient =
+    client.getOrElse {
+      val built = newClient()
+      client = Some(built)
+      built
+    }
 
   /**
    * Throws `ModelFilesException`, naming the files missing, their URLs and the directory, when they cannot be put in place: an
@@ -257,7 +268,10 @@ final class ModelDownloader(
     try missing.foreach(download(_))
     catch {
       case e: ModelFilesException => throw ModelFilesException(failure(e.getMessage, missing.filterNot(inPlace)), e.cause)
-    }
+    } finally
+      // Every body is closed by now, so nothing is cut short; `close` would wait on whatever the client still holds
+      client.foreach(_.shutdownNow())
+      client = None
 
   private def inPlace(spec: ModelFileSpec): Boolean =
     val file = fileOf(spec)
@@ -339,7 +353,7 @@ final class ModelDownloader(
   private def send(spec: ModelFileSpec, from: Long): HttpResponse[InputStream] =
     val request = HttpRequest.newBuilder(spec.url).header("User-Agent", "Altitude").timeout(ModelDownloader.HEADERS_TIMEOUT)
     if from > 0 then request.header("Range", s"bytes=$from-")
-    val response = client.send(request.GET().build(), HttpResponse.BodyHandlers.ofInputStream())
+    val response = http.send(request.GET().build(), HttpResponse.BodyHandlers.ofInputStream())
     val status = response.statusCode()
     if status != 200 && status != 206 then
       response.body().close()
@@ -444,6 +458,10 @@ final class ModelDownloader(
 
 object ModelDownloader:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
+
+  /** The downloader's HTTP client, as its `newClient` says */
+  def newClient(): HttpClient =
+    HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).followRedirects(HttpClient.Redirect.NORMAL).build()
 
   /** How long a request waits for the answer's headers; the body, which may take minutes, has a watchdog instead (`Watchdog`) */
   private val HEADERS_TIMEOUT: Duration = Duration.ofMinutes(1)

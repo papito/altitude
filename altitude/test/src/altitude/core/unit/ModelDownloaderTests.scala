@@ -242,6 +242,42 @@ import altitude.core.util.Sha256
     server.requestsOf("/model.onnx").map(_.upgrade) shouldEqual List(None)
   }
 
+  test("The HTTP client is built only for a download, once, and shut down after it") {
+
+    /**
+     * Setup:
+     *
+     * A local server with two files, and downloaders whose client factory counts the clients it builds and keeps them.
+     *
+     * Assertions:
+     *
+     * An ensure that downloads both files builds one client for both and leaves it shut down; an ensure that finds every file in
+     * place builds none, so a start (every test instance) with the files in place makes no client and no selector thread.
+     */
+    val server = newServer()
+    val specs = Seq(served(server, "first.onnx", content(30_000, 29)), served(server, "second.onnx", content(20_000, 30)))
+    val built = ConcurrentLinkedQueue[java.net.http.HttpClient]()
+    def counting(): ModelDownloader =
+      ModelDownloader(
+        ModelFiles(root),
+        newClient = () =>
+          val client = ModelDownloader.newClient()
+          built.add(client)
+          client
+        ,
+        sleep = delay => slept.add(delay): Unit
+      )
+
+    counting().ensure(specs)
+
+    built.size shouldBe 1
+    built.peek().isTerminated shouldBe true
+
+    counting().ensure(specs)
+
+    built.size shouldBe 1
+  }
+
   test("A file of the wrong size is downloaded again") {
 
     /**
