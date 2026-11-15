@@ -8,6 +8,7 @@ import scala.collection.mutable
 
 import altitude.core.Altitude
 import altitude.core.Const
+import altitude.core.IllegalOperationException
 import altitude.core.RequestContext
 import altitude.core.dao.SearchDao
 import altitude.core.models.Asset
@@ -123,6 +124,35 @@ class SearchService(val app: Altitude):
 
       resolved
     }
+
+  /**
+   * The search as every statement over it needs it, resolved against the repository as it is now: its folder as the folder with
+   * every folder below it, and its Search text against the repository's names ([[resolveText]]). Both are resolved afresh on
+   * every request and every page, in the caller's transaction, before the query reaches the DAO.
+   */
+  def withResolvedScope(query: SearchQuery): SearchQuery =
+    txManager.asReadOnly {
+      withResolvedText(withResolvedFolderScope(query))
+    }
+
+  /** The names a Search text matches are resolved on every request, so a rename, a merge or a move shows in the next search */
+  private def withResolvedText(query: SearchQuery): SearchQuery =
+    query.textExpression.fold(query)(expression => query.withResolvedText(resolveText(expression, query.textProbeLimit)))
+
+  /** Folder membership is resolved on every request: a folder filter means the folder and all of its current descendants */
+  private def withResolvedFolderScope(query: SearchQuery): SearchQuery =
+    if query.folderIds.isEmpty then return query
+    if query.folderIds.size > 1 then throw IllegalOperationException("Currently cannot search in multiple folders at once")
+
+    val folderId = query.folderIds.head
+
+    // If the root folder is selected, treat it as "no folder filter" so that
+    // triaged assets (which have an empty folderId) are included — matching the default view.
+    if app.service.folder.isRootFolder(folderId) then query.withFolderIds(Set.empty)
+    else
+      val allFolders = app.service.folder.getChildrenRecursive(rootId = folderId)
+      val allFolderIds = (folderId :: allFolders.map(_.persistedId)).toSet
+      query.withFolderIds(allFolderIds)
 
   /**
    * The folders the advanced search panel offers for the text typed so far ([[offered]]), each by its path, in path order: a
@@ -286,43 +316,46 @@ class SearchService(val app: Altitude):
     result
 
   /**
-   * One page of a Describe search (`CONTEXT.md`): the still images of the context repository that look most like `description`,
-   * the words that say what a photo shows, most alike first, outside the trash and, unless `triaged`, outside triage. The page is
-   * the `pageSize` assets after `cursor`, or the first ones without it, and a first page carries the total.
+   * One page of a Describe search: the still images of the context repository that `query` matches and that look most like
+   * `description`, the words that say what a photo shows, most alike first. The query is the search's filters, its view's flags,
+   * its page size and its cursor, with no sort and no grouping, since likeness is the one order: the filters decide which assets
+   * are ranked and nothing of where they stand, the Search text's Relevance included. With no filter the search ranks the whole
+   * view. The page is the `query.rpp` assets after the cursor, or the first ones without it, and a first page carries the total.
    *
    * The description is embedded by SigLIP 2's text tower (`DescribeEmbedder`), before the transaction, since a pass holds no
-   * connection, and the assets are ranked by the cosine distance of their SigLIP 2 Scene embedding from it, in the database
-   * (`SearchDao.describe`). Two Settings, read from one snapshot, say where the results end: the Describe match threshold, the
-   * least probability by the model that an image matches, which is the least cosine (`SceneModel.siglip2Cosine`), and the
-   * Describe result limit, the most assets ranked. A description is all such a search is asked for, so the cursor's fingerprint
-   * is the description and `triaged` (`SearchCursor.describeFingerprint`): a cursor of any other search is refused
-   * (`SearchCursorException`). Every page ranks again, so the results are live, as any search's are.
+   * connection. Inside it the query is resolved as any search's is ([[withResolvedScope]]), and the assets it matches are ranked
+   * by the cosine distance of their SigLIP 2 Scene embedding from the description's, in the database (`SearchDao.describe`). Two
+   * Settings, read from one snapshot, say where the results end, whatever the filters: the Describe match threshold, the least
+   * probability by the model that an image matches, which is the least cosine (`SceneModel.siglip2Cosine`), and the Describe
+   * result limit, the most assets ranked. The cursor's fingerprint is the description with what identifies the query to a cursor
+   * (`SearchCursor.describeFingerprint`): a cursor of any other search is refused (`SearchCursorException`). Every page ranks
+   * again, so the results are live, as any search's are.
    *
    * An embedder that embeds nothing, a test instance's whose suite has not turned the model on, finds nothing.
    */
-  def describe(description: String, triaged: Boolean, cursor: Option[SearchCursor], pageSize: Int): SearchResult =
-    require(pageSize >= 1, "A page of a Describe search holds at least one asset")
+  def describe(description: String, query: SearchQuery): SearchResult =
+    require(query.rpp >= 1, "A page of a Describe search holds at least one asset")
+    require(!query.isSorted && !query.isGrouped, "A Describe search is ordered by likeness alone")
     val started = System.currentTimeMillis
-    val scope =
-      SearchCursor.describeFingerprint(description, triaged, RequestContext.getRepository.persistedId, app.dataSourceType)
-    cursor.foreach(_.requireScope(scope))
+    val scope = SearchCursor.describeFingerprint(description, query, RequestContext.getRepository.persistedId, app.dataSourceType)
+    query.cursor.foreach(_.requireScope(scope))
 
     val settings = app.settings.current
     val limit = settings.searchDescribeMaxResults
     val minCosine = SceneModel.siglip2Cosine(settings.searchDescribeMinProbability)
 
     val page = app.describeEmbedder.embed(description) match
-      case None => SearchPage(Nil, Option.when(cursor.isEmpty)(0), hasMore = false)
+      case None => SearchPage(Nil, Option.when(query.isTotalCounted)(0), hasMore = false)
       case Some(embedding) =>
         txManager.withVectorSearch(limit) {
-          searchDao.describe(embedding, minCosine, limit, triaged, cursor, pageSize)
+          searchDao.describe(withResolvedScope(query), embedding, minCosine, limit)
         }
 
     val nextCursor = Option.when(page.hasMore) {
       val last = page.rows.last
       SearchCursor(key = None, groupId = None, sortValue = last.sortValue, id = last.asset.persistedId, scope = scope)
     }
-    val result = SearchResult(page.rows.map(_.asset), page.total, nextCursor, pageSize, List(SearchSort.Similarity))
+    val result = SearchResult(page.rows.map(_.asset), page.total, nextCursor, query.rpp, List(SearchSort.Similarity))
 
     // A description is typed, line breaks and all: escaped, it cannot start a log line of its own
     logger.debug(

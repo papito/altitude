@@ -105,6 +105,14 @@ object Const:
     // The most characters a description has
     val MAX_DESCRIPTION_LENGTH = 300
 
+    // How many matching assets a Describe search ranks one by one on PostgreSQL, comparing each one's embedding with the
+    // description's; past it, the search ranks through the vector index, its filters applied as the index is read
+    // (postgres.SearchDao). An estimate, not measured, from what is known of a library of a million embedded assets: a scan
+    // of the whole index takes about 14 s, so about 14 µs for each row it visits, and an index search that fills 1,000 results
+    // from filters leaving n assets visits about 1,000 × 1,000,000 ÷ n rows over a base of about 0.2 s, while an exact ranking
+    // is taken to cost about 5 µs an embedding. The two cross near 75,000, at about 0.4 s each.
+    val DESCRIBE_EXACT_LIMIT = 75000
+
     // Quick view (htmx/quick_view_modal) shows a folder's first this many assets, by newest import
     val QUICK_VIEW_SIZE = 100
 

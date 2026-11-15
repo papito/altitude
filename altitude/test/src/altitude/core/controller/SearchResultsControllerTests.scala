@@ -651,24 +651,14 @@ import altitude.core.util.Util
   private def embeddingOf(description: String): SceneEmbedding = App.altitude.describeEmbedder.embed(description).get
 
   /**
-   * An asset with no file whose SigLIP 2 Scene embedding is at `cosine` to the description's, as the server embeds it: that much
-   * of the description's vector, and the rest of a direction at a right angle to it, random by `seed`. The default Describe match
-   * threshold is a cosine of 0.066.
+   * An asset with no file whose SigLIP 2 Scene embedding is at `cosine` to the description's, as the server embeds it
+   * (`TestContext.atCosine`). The default Describe match threshold is a cosine of 0.066.
    */
-  private def lookingLike(description: String, cosine: Double, seed: Int, isTriaged: Boolean = false): Asset = {
-    val along = embeddingOf(description).values.map(_.toDouble)
-    val random = new scala.util.Random(seed)
-    val noise = Array.fill(along.length)(random.nextGaussian())
-    val overlap = noise.indices.map(i => noise(i) * along(i)).sum
-    val across = noise.indices.map(i => noise(i) - overlap * along(i))
-    val length = math.sqrt(across.map(v => v * v).sum)
-    val values = across.indices.map(i => (cosine * along(i) + math.sqrt(1 - cosine * cosine) * across(i) / length).toFloat)
-
+  private def lookingLike(description: String, cosine: Double, seed: Int, isTriaged: Boolean = false): Asset =
     testContext.insertAsset(
       testContext
         .makeAsset(isTriaged = isTriaged)
-        .copy(sceneEmbeddings = SceneEmbeddings(siglip2 = Some(SceneEmbedding(IArray.from(values))))))
-  }
+        .copy(sceneEmbeddings = SceneEmbeddings(siglip2 = Some(TestContext.atCosine(embeddingOf(description), cosine, seed)))))
 
   test("Grouped HTML pages open each day with a header and carry the cursor on the last cell") {
 
@@ -2261,9 +2251,10 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The first page is the results fragment with the two nearest assets in order and the total of 5, not capped: it names the
-     * description, trimmed, and no Search text, its last cell carries the cursor of the next page, and the replaced URL carries
-     * the description and no sort. On one page the five are in the order of their cosines and no cell carries a cursor. With the
-     * triaged assets the total is 6, the triaged one second, and the URL keeps the flag.
+     * description, trimmed, and no Search text, it is titled "Search results" with the Edit control, as a filtered search is, its
+     * last cell carries the cursor of the next page, and the replaced URL carries the description and no sort. On one page the
+     * five are in the order of their cosines and no cell carries a cursor. With the triaged assets the total is 6, the triaged
+     * one second, and the URL keeps the flag.
      *
      * Edge cases:
      *
@@ -2292,6 +2283,8 @@ import altitude.core.util.Util
         page should include("""data-results-total-capped="false"""")
         page should include(s"""data-results-describe="$description"""")
         page should include("""data-results-q=""""")
+        page should include(filteredTitle)
+        page should include(editFilters)
         cursorOf(page).size shouldBe 1
         ordered(page, cell(nearest(1)), "data-app-search-after")
         val url = first.headers("hx-replace-url").head
@@ -2403,24 +2396,26 @@ import altitude.core.util.Util
     }
   }
 
-  test("A cursor of a search by Search text is refused for a description, and a description's for any other search") {
+  test("A cursor continues its own search alone: a description's, the same filters' without it, or the two together") {
 
     /**
      * Setup:
      *
      * A logged-in user's repository with three sorted assets near the embedding of "a cactus", two of them named for a cactus,
-     * and one in triage. The cursor of the first page of the Search text "cactus", one asset to a page, and the cursor of the
-     * first page of the description "a cactus", one asset to a page.
+     * and one in triage. Three searches, one asset to a page, each with the cursor of its first page: the Search text "cactus",
+     * the description "a cactus", and the description within that Search text.
      *
      * Assertions:
      *
-     * The Search text's cursor is refused for the description, and the description's for the Search text, each with a 400 saying
-     * the cursor does not belong to the search. Each cursor continues its own search.
+     * Each cursor continues its own search, and is refused for the other two with a 400 saying the cursor does not belong to the
+     * search: the filters' cursor for the same filters with a description, the Describe search's for the same filters without it,
+     * and the description's alone for the description within filters and the reverse.
      *
      * Edge cases:
      *
-     * A description's cursor is refused for another description and for the same description with the triaged assets, which are
-     * other searches.
+     * A Describe search's cursor is refused for another description within the same filters, for the same description within
+     * another Search text, and with the triaged assets, which are other searches. The description within the Search text
+     * continues to the second asset named for a cactus, and not to the nearer one that is not.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2431,22 +2426,32 @@ import altitude.core.util.Util
         val description = "a cactus"
         val assets = List(0.9, 0.5, 0.3).zipWithIndex.map((cosine, seed) => lookingLike(description, cosine, seed))
         lookingLike(description, 0.8, seed = 11, isTriaged = true)
-        assets.take(2).zip(List("cactus one.jpg", "cactus two.jpg")).foreach {
+        List(assets(0), assets(2)).zip(List("cactus one.jpg", "cactus two.jpg")).foreach {
           (asset, name) => testApp.service.asset.rename(asset.persistedId, name)
         }
 
         val byText = Map("q" -> "cactus", "rpp" -> "1")
         val byDescription = Map("describe" -> description, "rpp" -> "1")
-        val textCursor = cursorOf(htmlSearch(host, repoId, byText).text()).head
-        val describeCursor = cursorOf(htmlSearch(host, repoId, byDescription).text()).head
+        val within = byText ++ byDescription
+        val searches = List(byText, byDescription, within)
+        val cursors = searches.map(search => cursorOf(htmlSearch(host, repoId, search).text()).head)
         def continued(search: Map[String, String], cursor: String) =
           htmlSearch(host, repoId, search + ("after" -> cursor) + ("isContinuousScroll" -> "true"))
 
+        for ((search, n) <- searches.zipWithIndex; (cursor, m) <- cursors.zipWithIndex) withClue(s"$search, cursor $m: ") {
+          val response = continued(search, cursor)
+          if (n == m) response.statusCode shouldBe 200
+          else {
+            response.statusCode shouldBe 400
+            response.text() shouldBe "The cursor does not belong to this search"
+          }
+        }
+
         val refusals = List(
-          continued(byDescription, textCursor),
-          continued(byText, describeCursor),
-          continued(byDescription + ("describe" -> "a man in a suit"), describeCursor),
-          continued(byDescription + ("triaged" -> "true"), describeCursor)
+          continued(within + ("describe" -> "a man in a suit"), cursors(2)),
+          continued(within + ("q" -> "one"), cursors(2)),
+          continued(within + ("triaged" -> "true"), cursors(2)),
+          continued(byDescription + ("triaged" -> "true"), cursors(1))
         )
         refusals.foreach {
           refused =>
@@ -2454,31 +2459,135 @@ import altitude.core.util.Util
             refused.text() shouldBe "The cursor does not belong to this search"
         }
 
-        continued(byText, textCursor).statusCode shouldBe 200
-        val next = continued(byDescription, describeCursor)
-        next.statusCode shouldBe 200
-        cellIds(next.text()) shouldBe List(assets(1).persistedId)
+        cellIds(continued(byDescription, cursors(1)).text()) shouldBe List(assets(1).persistedId)
+        cellIds(continued(within, cursors(2)).text()) shouldBe List(assets(2).persistedId)
     }
   }
 
-  test("A description that is blank, too long or beside anything else of a search is refused with a 400 saying why") {
+  test("A description within filters shows the images most like it among the ones the filters match, titled by the filters") {
 
     /**
      * Setup:
      *
-     * A logged-in user's repository, and requests with a description that is empty, blank and of 301 characters; a description
-     * beside the Search text, a folder, a person, a Location, an album, a Triage subset, each date range, a map area, a sort, a
-     * grouping, a group direction and the map layout; and a description in the trash and in the Triage view.
+     * A logged-in user's repository with the folder Trips, the person Alice and the Location Lisbon. Six sorted assets near the
+     * embedding of "a cactus", at cosines of 0.9, 0.8, 0.7, 0.6, 0.5 and 0.4, all named for a beach and taken in June 2024: the
+     * first is outside the folder, the second has no Face of Alice, the fourth is outside the Location, and the other three are
+     * in the folder, with a Face of Alice, in the Location.
      *
      * Assertions:
      *
-     * Each is a plain-text 400 whose message says what is wrong: a blank description, one past 300 characters, the parameter that
-     * may not stand beside a description, the view a description does not search.
+     * The description within the Search text "beach", the folder, Alice, the Location and June 2024, two to a page, answers the
+     * results fragment with the two nearest of the three assets every filter matches, in the order of their cosines, and the
+     * total of 3. The fragment names the description and the Search text; it is titled "Search results" with the Edit control and
+     * a chip for each of the filters, in the order of the panel's fields; and the replaced URL carries every filter with the
+     * description and no sort. The page after its cursor is the third asset, cells alone, with no title.
      *
      * Edge cases:
      *
-     * A description of 300 characters, and one with the grid layout and the triage filter named, are answered. A page size out of
-     * bounds is refused for a description as for any search.
+     * The description within one filter, the folder or the person alone, is titled "Search results" over that filter's chip, not
+     * by the folder's path or the person's block. A person the repository does not have beside the description is no 404: it
+     * matches nothing and has no chip.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val description = "a cactus"
+        val trips = testApp.service.folder.add("Trips")
+        val alice = testApp.service.person.addPerson(Person(name = Some("Alice")))
+        val lisbon = testApp.service.location.addLocation("Lisbon", 38.72, -9.14)
+        val near = List(0.9, 0.8, 0.7, 0.6, 0.5, 0.4).zipWithIndex.map((cosine, seed) => lookingLike(description, cosine, seed))
+        near.zipWithIndex.foreach {
+          (asset, n) =>
+            testApp.service.asset.rename(asset.persistedId, s"beach $n.jpg")
+            val takenAt = LocalDateTime.parse("2024-06-15T10:00:00")
+            testContext.setAssetDates(asset.persistedId, Some(takenAt), OffsetDateTime.of(takenAt, ZoneOffset.UTC))
+        }
+        testApp.service.library.moveAssetsToFolder(near.tail.map(_.persistedId).toSet, trips.persistedId)
+        (near.head :: near.drop(2)).zipWithIndex.foreach {
+          (asset, seed) => testContext.addTestFace(alice, asset, TestContext.unitVector(seed))
+        }
+        testApp.service.location.addAssets(lisbon.persistedId, (near.take(3) ++ near.drop(4)).map(_.persistedId).toSet)
+        val matching = List(near(2), near(4), near(5))
+
+        val filters = Map(
+          Api.Field.Search.QUERY_TEXT -> "beach",
+          Api.Field.Search.FOLDER_ID -> trips.persistedId,
+          Api.Field.Search.PERSON_ID -> alice.persistedId,
+          Api.Field.Search.LOCATION_ID -> lisbon.persistedId,
+          Api.Field.Search.TAKEN_FROM -> "2024-06-01",
+          Api.Field.Search.TAKEN_TO -> "2024-06-30"
+        )
+        val described = filters + ("describe" -> description) + ("rpp" -> "2")
+
+        val first = htmlSearch(host, repoId, described)
+        first.statusCode shouldBe 200
+        val page = first.text()
+        page should include("""data-app-fragment="search-results"""")
+        cellIds(page) shouldBe matching.take(2).map(_.persistedId)
+        page should include("""data-results-total="3"""")
+        page should include(s"""data-results-describe="$description"""")
+        page should include("""data-results-q="beach"""")
+        page should include(filteredTitle)
+        page should include(editFilters)
+        (page should not).include("""id="person"""")
+        (page should not).include("""class="crumbs"""")
+        filterChipsIn(page).filterNot(_.filter.contains("describe")) shouldBe List(
+          FilterChip(Map("q" -> "beach"), "beach"),
+          FilterChip(Map("folder-id" -> trips.persistedId), "Trips"),
+          FilterChip(Map("person-id" -> alice.persistedId), "Alice"),
+          FilterChip(Map("location-id" -> lisbon.persistedId), "Lisbon"),
+          FilterChip(Map("taken-from" -> "2024-06-01", "taken-to" -> "2024-06-30"), "Taken 1 Jun – 30 Jun 2024")
+        )
+        val url = replacedUrl(first)
+        (filters.values.toList :+ "describe=a cactus").foreach(url should include(_))
+        (url should not).include("sort=")
+
+        val second = htmlSearch(host, repoId, described + ("after" -> cursorOf(page).head) + ("isContinuousScroll" -> "true"))
+        second.statusCode shouldBe 200
+        cellIds(second.text()) shouldBe List(matching(2).persistedId)
+        (second.text() should not).include(filteredTitle)
+        cursorOf(second.text()) shouldBe empty
+
+        for (filter <- List(Api.Field.Search.FOLDER_ID, Api.Field.Search.PERSON_ID)) withClue(s"$filter: ") {
+          val one = htmlSearch(host, repoId, Map("describe" -> description, filter -> filters(filter))).text()
+          one should include(filteredTitle)
+          (one should not).include("""id="person"""")
+          (one should not).include("""class="crumbs"""")
+          filterChipsIn(one).filterNot(_.filter.contains("describe")).map(_.text) shouldBe
+            List(if (filter == Api.Field.Search.FOLDER_ID) "Trips" else "Alice")
+        }
+
+        val unknown = java.util.UUID.randomUUID.toString
+        val nobody = htmlSearch(host, repoId, Map("describe" -> description, Api.Field.Search.PERSON_ID -> unknown))
+        nobody.statusCode shouldBe 200
+        nobody.text() should include("""data-results-total="0"""")
+        filterChipsIn(nobody.text()).filterNot(_.filter.contains("describe")) shouldBe empty
+    }
+  }
+
+  test("A description that is blank, too long or beside what it does not take is refused with a 400 saying why") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the folder Trips, and requests with a description that is empty, blank and of 301
+     * characters; a description beside an album, a Triage subset, a map area, a sort, a grouping, a group direction and the map
+     * layout; a description in the trash and in the Triage view; and a description beside a filter that is refused on its own:
+     * eleven people, a date that is no day, an unknown people match.
+     *
+     * Assertions:
+     *
+     * Each is a plain-text 400 whose message says what is wrong: a blank description, one past 300 characters, the parameter a
+     * description takes none of, the view a description does not search, or what the filter is refused for without a description.
+     *
+     * Edge cases:
+     *
+     * A description of 300 characters, one with the grid layout and the triage filter named, and one beside each Search filter
+     * (the Search text, the folder, a person, a Location, a people match, each end of the two date ranges) are answered. A page
+     * size out of bounds is refused for a description as for any search.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -2487,29 +2596,27 @@ import altitude.core.util.Util
     withServer(App) {
       host =>
         val folder = testApp.service.folder.add("Trips")
-        val alone = "A description stands alone, without"
+        val elevenPeople = List.fill(11)(java.util.UUID.randomUUID.toString).mkString(",")
+        val takesNo = "A description takes no"
         val refused = List(
           Map("describe" -> "") -> "A description cannot be blank",
           Map("describe" -> "  \n ") -> "A description cannot be blank",
           Map("describe" -> "a" * 301) -> "A description has at most 300 characters",
-          Map("q" -> "beach") -> s"$alone q",
-          Map("folderId" -> folder.persistedId) -> s"$alone folderId",
-          Map("personId" -> "alice") -> s"$alone personId",
-          Map("locationId" -> "lisbon") -> s"$alone locationId",
-          Map("albumId" -> "best") -> s"$alone albumId",
-          Map("subset" -> TriageSubset.NoLocation.apiValue) -> s"$alone subset",
-          Map("takenFrom" -> "2024-06-01") -> s"$alone takenFrom",
-          Map("takenTo" -> "2024-06-30") -> s"$alone takenTo",
-          Map("importedFrom" -> "2024-06-01") -> s"$alone importedFrom",
-          Map("importedTo" -> "2024-06-30") -> s"$alone importedTo",
-          Map("bbox" -> "1,2,3,4") -> s"$alone bbox",
-          Map("sort" -> "created_at1") -> s"$alone sort",
-          Map("sort" -> Const.Search.SORT_SIMILARITY) -> s"$alone sort",
-          Map("groupBy" -> "dateTaken") -> s"$alone groupBy",
-          Map("groupDirection" -> "asc") -> s"$alone groupDirection",
-          Map("layout" -> Const.Search.Layout.MAP) -> s"$alone layout=map",
+          Map("albumId" -> "best") -> s"$takesNo albumId",
+          Map("subset" -> TriageSubset.NoLocation.apiValue) -> s"$takesNo subset",
+          Map("bbox" -> "1,2,3,4") -> s"$takesNo bbox",
+          Map("sort" -> "created_at1") -> s"$takesNo sort",
+          Map("sort" -> Const.Search.SORT_SIMILARITY) -> s"$takesNo sort",
+          Map("q" -> "beach", "sort" -> Const.Search.SORT_RELEVANCE) -> s"$takesNo sort",
+          Map("groupBy" -> "dateTaken") -> s"$takesNo groupBy",
+          Map("groupDirection" -> "asc") -> s"$takesNo groupDirection",
+          Map("layout" -> Const.Search.Layout.MAP) -> s"$takesNo layout=map",
+          Map("folderId" -> folder.persistedId, "albumId" -> "best", "sort" -> "filename0") -> s"$takesNo albumId, sort",
           Map("view" -> Const.Search.View.TRASHBIN) -> "A description does not search the trash",
           Map("view" -> Const.Search.View.TRIAGE) -> "A description does not search the triage view",
+          Map("personId" -> elevenPeople) -> "A search names at most 10 people",
+          Map("takenFrom" -> "june") -> "takenFrom must be a date, as 2024-06-01",
+          Map("personId" -> "alice,bob", "peopleMatch" -> "some") -> "Unknown peopleMatch value",
           Map("rpp" -> "0") -> s"rpp must be between 1 and ${Const.Search.MAX_RPP}"
         )
 
@@ -2522,7 +2629,16 @@ import altitude.core.util.Util
         val taken = List(
           Map("describe" -> "a" * 300),
           Map("describe" -> "a cactus", "layout" -> Const.Search.Layout.GRID, "triaged" -> "false"),
-          Map("describe" -> "a cactus", "view" -> Const.Search.View.DEFAULT)
+          Map("describe" -> "a cactus", "view" -> Const.Search.View.DEFAULT),
+          Map("describe" -> "a cactus", "q" -> "beach"),
+          Map("describe" -> "a cactus", "folderId" -> folder.persistedId),
+          Map("describe" -> "a cactus", "personId" -> "alice"),
+          Map("describe" -> "a cactus", "personId" -> "alice,bob", "peopleMatch" -> "any"),
+          Map("describe" -> "a cactus", "locationId" -> "lisbon"),
+          Map("describe" -> "a cactus", "takenFrom" -> "2024-06-01"),
+          Map("describe" -> "a cactus", "takenTo" -> "2024-06-30"),
+          Map("describe" -> "a cactus", "importedFrom" -> "2024-06-01"),
+          Map("describe" -> "a cactus", "importedTo" -> "2024-06-30")
         )
         for (params <- taken) withClue(s"$params: ")(htmlSearch(host, repoId, params).statusCode shouldBe 200)
     }

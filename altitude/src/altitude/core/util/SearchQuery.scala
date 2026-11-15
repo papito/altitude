@@ -51,7 +51,10 @@ class SearchQuery(
     // they are not counted twice. Not part of what identifies the search to a cursor either.
     val countsTotal: Boolean = true,
     // How many hits a group of the Search text may have and still be answered from them (SearchService.resolveText)
-    val textProbeLimit: Int = Const.Search.TEXT_PROBE_LIMIT)
+    val textProbeLimit: Int = Const.Search.TEXT_PROBE_LIMIT,
+    // How many matching assets a Describe search ranks one by one on PostgreSQL; past it, it ranks through the vector index
+    // (postgres.SearchDao). Tuning too, and no more part of what identifies the search to a cursor.
+    val describeExactLimit: Int = Const.Search.DESCRIBE_EXACT_LIMIT)
   extends Query(params = metadataFilters, rpp = rpp):
 
   if sort.nonEmpty then throw IllegalArgumentException("Cannot use 'sort' in this context - use 'searchSort'")
@@ -82,6 +85,16 @@ class SearchQuery(
    */
   def requireResolvedText: ResolvedSearchText =
     resolvedText.getOrElse(throw IllegalStateException("The Search text was not resolved against the repository's names"))
+
+  /**
+   * Whether the search narrows its view by anything: Search text with a usable term, a folder, a person, an album, a Location, a
+   * date range, a Triage subset, a map area, a metadata filter, or a column filter other than the view's flags
+   * (`SearchQuery.VIEW_FLAGS`). Read on a resolved query, whose root folder is no folder.
+   */
+  def narrowsView: Boolean =
+    isText || folderIds.nonEmpty || personIds.nonEmpty || albumIds.nonEmpty || locationIds.nonEmpty || takenRange.isDefined ||
+      importedRange.isDefined || subset.isDefined || bbox.isDefined || hasMetadataFilters ||
+      !params.keySet.subsetOf(SearchQuery.VIEW_FLAGS)
 
   /** Whether this page counts the total: a first page does, unless the search was asked for without one (`withoutTotal`) */
   def isTotalCounted: Boolean = cursor.isEmpty && countsTotal
@@ -139,9 +152,13 @@ class SearchQuery(
       resolvedText = resolvedText,
       totalCap = totalCap,
       countsTotal = countsTotal,
-      textProbeLimit = textProbeLimit
+      textProbeLimit = textProbeLimit,
+      describeExactLimit = describeExactLimit
     )
 
 object SearchQuery:
+  /** The column filters that say which view a search reads (`SearchRequestParser`), and narrow nothing within it */
+  val VIEW_FLAGS: Set[String] = Set(FieldConst.Asset.IS_RECYCLED, FieldConst.Asset.IS_TRIAGED, FieldConst.Asset.IS_PURGED)
+
   /** The Triage view's flags: the triaged assets outside the trash, since an asset recycled from triage keeps its triage flag */
   val TRIAGE_VIEW: Map[String, Any] = Map(FieldConst.Asset.IS_TRIAGED -> true, FieldConst.Asset.IS_RECYCLED -> false)

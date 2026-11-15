@@ -33,6 +33,16 @@ object SqliteOverrides:
     .optionalEnd()
     .toFormatter
 
+  /**
+   * A Scene embedding as its BLOB: the raw little-endian float32 values, the layout `vector_as_f32` stores a Face's features in
+   * and sqlite-vector scans
+   */
+  def vectorBytes(embedding: SceneEmbedding): Array[Byte] =
+    val buffer = ByteBuffer.allocate(embedding.values.length * java.lang.Float.BYTES).order(ByteOrder.LITTLE_ENDIAN)
+    val floats = buffer.asFloatBuffer
+    embedding.values.foreach(floats.put)
+    buffer.array
+
 trait SqliteOverrides:
   this: BaseDao[?] =>
 
@@ -52,15 +62,8 @@ trait SqliteOverrides:
 
   override protected val vectorPlaceholder: String = "?"
 
-  // The BLOB is the raw little-endian float32 values, the layout `vector_as_f32` stores a Face's features in
   override protected def vectorBind(embedding: Option[SceneEmbedding]): Any =
-    embedding.map {
-      e =>
-        val buffer = ByteBuffer.allocate(e.values.length * java.lang.Float.BYTES).order(ByteOrder.LITTLE_ENDIAN)
-        val floats = buffer.asFloatBuffer
-        e.values.foreach(floats.put)
-        buffer.array
-    }.orNull
+    embedding.map(SqliteOverrides.vectorBytes).orNull
 
   override protected def getVectorField(value: AnyRef): Option[SceneEmbedding] = Option(value).map {
     case bytes: Array[Byte] =>

@@ -15,8 +15,10 @@ import scalasql.core.SqlStr.SqlStringSyntax
 import scalasql.core.TypeMapper
 import scalasql.core.WithSqlExpr
 import scalasql.query.Select
+import scalasql.query.TableRef
 
 import altitude.core.FieldConst
+import altitude.core.SearchCursorException
 import altitude.core.dao.sql.Columns
 import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.DynamicFilter
@@ -29,6 +31,8 @@ import altitude.core.dao.sql.tables.MetadataParameterRow
 import altitude.core.dao.sql.tables.PersonRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.models.LocationKind
+import altitude.core.models.SceneEmbedding
+import altitude.core.models.SceneModel
 import altitude.core.util.BoundingBox
 import altitude.core.util.DateRange
 import altitude.core.util.NameKey
@@ -135,6 +139,15 @@ object SearchQueries:
       query,
       Nil,
       sql"SELECT count(*) FROM (${cappedIds(engine, matching(engine, query, repositoryId), query.totalCap)}) AS m")
+
+  /**
+   * How many of the matches carry a SigLIP 2 Scene embedding, counted up to one past `cap`, as [[cappedCount]] counts the
+   * matches: the assets a Describe search would rank, which says whether they are few enough to rank one by one
+   * (`postgres.SearchDao`). A result one past the cap means more than it.
+   */
+  def embeddedCount(engine: SearchDialect, query: SearchQuery, repositoryId: String, cap: Int): SqlStr =
+    val matches = embedded(matching(engine, query, repositoryId))
+    statement(engine, query, Nil, sql"SELECT count(*) FROM (${cappedIds(engine, matches, cap)}) AS m")
 
   /**
    * One page of a flat search: which assets are on it is decided over narrow rows, then only those are read in full.
@@ -702,6 +715,62 @@ object SearchQueries:
     )
 
   /**
+   * One page of a Describe search: the matches ranked by how much they look like a description, most alike first.
+   *
+   * `ranked (id, distance)` is the engine's own, materialized once: the matches whose SigLIP 2 Scene embedding is no further than
+   * `maxDistance`, a cosine distance, from `embedding`, the description's, the nearest `limit` of them at most, read exactly
+   * (`SearchDialect.rankedExactly`) or, when not `exactly`, through the engine's vector index (`SearchDialect.rankedByIndex`).
+   * Either way it is the [[matching]] relation that is ranked, so a Describe search cannot disagree with the search of its
+   * filters about the assets they leave, and the filters decide nothing of the order.
+   *
+   * Around it, the shell of every page: the rows after the cursor's position in the order of the ranking, their distance and then
+   * their ID, one more than the page holds to tell whether another follows; those rows' assets
+   * ([[assetColumnsWithoutBulkyMetadata]]), each with its distance; and, on a page that counts the total, the count of the ranked
+   * rows, which the limit bounds. Every page ranks again, so a cursor continues from its position among the rows as they are
+   * then. A cursor whose position is not a distance is no Describe search's (`SearchCursorException`).
+   */
+  def described(
+      engine: SearchDialect,
+      query: SearchQuery,
+      repositoryId: String,
+      embedding: SceneEmbedding,
+      maxDistance: Double,
+      limit: Int,
+      exactly: Boolean): SqlStr =
+    import engine.dialect.*
+
+    if query.rpp < 1 then throw IllegalArgumentException("A page of a Describe search needs a page size")
+
+    val base = matching(engine, query, repositoryId)
+    val ranked =
+      if exactly then engine.rankedExactly(base, embedding, maxDistance, limit)
+      else engine.rankedByIndex(base, embedding, maxDistance, limit)
+
+    val after = query.cursor.fold(SqlStr.empty) {
+      cursor =>
+        cursor.sortValue match
+          case SortValue.Real(distance) => sql"WHERE (distance, id) > ($distance, ${cursor.id})"
+          case _ => throw SearchCursorException("Malformed cursor")
+    }
+    val total = if query.isTotalCounted then SqlStr.raw(", (SELECT count(*) FROM ranked) AS total") else SqlStr.empty
+
+    statement(
+      engine,
+      query,
+      ranked.sources :+ sql"ranked (id, distance) AS MATERIALIZED (${ranked.rows})",
+      sql"""
+      SELECT $assetColumnsWithoutBulkyMetadata, page.distance AS distance$total
+        FROM (SELECT id, distance
+                FROM ranked
+               $after
+               ORDER BY distance, id
+               LIMIT ${SqlStr.raw((query.rpp + 1).toString)}) AS page
+             JOIN asset ON asset.id = page.id
+       ORDER BY page.distance, page.id
+      """
+    )
+
+  /**
    * Every point the map plots for a search, one row per plotted point, with the asset's ID and capture time: a matching asset
    * with a point of its own is plotted there, and only there; one without is plotted at the pin of each Location it is in, so an
    * asset in two Locations is two points, as it is two cells in the Location grid. With a box, only the points inside it.
@@ -964,12 +1033,36 @@ object SearchQueries:
     )
 
   /** A narrow candidate relation with a hand-written ORDER BY and LIMIT */
-  private def sliced[Q, R](engine: SearchDialect, projected: Select[Q, R], order: Context ?=> SqlStr, limit: SqlStr): SqlStr =
+  private[search] def sliced[Q, R](
+      engine: SearchDialect,
+      projected: Select[Q, R],
+      order: Context ?=> SqlStr,
+      limit: SqlStr): SqlStr =
     Db.render(orderedBy(projected, order + limit), engine.dialect).withCompleteQuery(false)
 
   /** A trailing slice that fills the page only once the leading one has run out, which is when it fetched no more than a page */
   private def guardedLimit(leading: String, rpp: Int): SqlStr =
     SqlStr.raw(s" LIMIT CASE WHEN (SELECT count(*) FROM $leading) > $rpp THEN 0 ELSE ${rpp + 1} END")
+
+  /**
+   * A column of the asset table that [[AssetRow]] does not map (a Scene embedding, which no typed read selects, or SQLite's
+   * rowid), under the name `relation` gives its asset, so a hand-written fragment over it can sit among the relation's typed
+   * predicates. The relation is [[matching]] or a filter or a join of it, which reads `FROM asset` alone.
+   */
+  private[search] def assetColumn(relation: Select[AssetRow[Expr], AssetRow[Sc]], name: String): Expr[?] =
+    Select.toSimpleFrom(relation).from match
+      case Seq(asset: TableRef) =>
+        Expr[Any] {
+          implicit ctx =>
+            // A context that names no table for the asset renders its columns bare, as `scalasql.query.Column` does
+            SqlStr.raw(ctx.fromNaming.get(asset).filter(_.nonEmpty).fold(name)(table => s"$table.$name"))
+        }
+      case other => throw IllegalStateException(s"A search reads the asset table alone, not $other")
+
+  /** The assets of a relation of matches that carry a SigLIP 2 Scene embedding: the ones a Describe search can rank */
+  private[search] def embedded(relation: Select[AssetRow[Expr], AssetRow[Sc]]): Select[AssetRow[Expr], AssetRow[Sc]] =
+    val embedding = assetColumn(relation, SceneModel.Siglip2.column)
+    relation.filter(_ => Expr[Boolean](implicit ctx => sql"$embedding IS NOT NULL"))
 
   /** The matching IDs alone, for a count that has to agree with the rows */
   private def matchingIds(
@@ -1065,6 +1158,21 @@ object SearchQueries:
   /** The asset columns the grouped statements select, in the order [[AssetRow]] declares them, so a row reads back positionally */
   private val assetColumns: SqlStr =
     SqlStr.raw(Table.labels(AssetRow).map(Db.config.columnNameMapper).map(name => s"asset.$name").mkString(", "))
+
+  /**
+   * The asset columns of a page whose cells show none of the bulky metadata JSON (a Describe search's): [[assetColumns]] with
+   * `user_metadata` and `extracted_metadata` read as NULL in their places, so a row still reads back positionally and its model's
+   * two are empty. `public_metadata` stays, as it does where the hand-written reads leave the same two out
+   * (`AssetDao.assetWithoutBulkyMetadata`).
+   */
+  private val assetColumnsWithoutBulkyMetadata: SqlStr =
+    val bulky = Set(FieldConst.Asset.USER_METADATA, FieldConst.Asset.EXTRACTED_METADATA)
+    SqlStr.raw(
+      Table
+        .labels(AssetRow)
+        .map(Db.config.columnNameMapper)
+        .map(name => if bulky(name) then s"NULL AS $name" else s"asset.$name")
+        .mkString(", "))
 
   /**
    * One source of one alternative of one group of the Search text: where the term can match, with the IDs it resolved to there

@@ -2,44 +2,36 @@ package altitude.core.dao.postgres
 
 import com.typesafe.config.Config
 
-import altitude.core.FieldConst
 import altitude.core.RequestContext
+import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.search.PostgresSearchDialect
 import altitude.core.dao.sql.search.SearchDialect
-import altitude.core.models.SceneEmbedding
-import altitude.core.models.SceneModel
+import altitude.core.dao.sql.search.SearchQueries
+import altitude.core.util.SearchQuery
 
 class SearchDao(override val config: Config) extends altitude.core.dao.jdbc.SearchDao(config) with PostgresOverrides:
   override protected val searchDialect: SearchDialect = PostgresSearchDialect
 
   /**
-   * The candidates come from `asset_describe`, the HNSW index over the SigLIP 2 Scene embeddings at half precision, which the
-   * inner order is written to match. The repository and the flags are filtered as the index is read: the transaction is set up
-   * for a vector search of `limit` rows (`TransactionManager.withVectorSearch`), so the scan goes on until that many rows pass
-   * them, or the index ends. Each candidate's distance is the exact one, at full precision, and the cutoff is applied to it
-   * outside: inside, a description with nothing near enough would send the index looking for rows that are not there. An asset
-   * with no embedding is not in the index, and where the planner scans the table instead, over a few rows, its distance is NULL,
-   * which the cutoff drops. The search is approximate; over a handful of assets it is exhaustive.
-   *
-   * Binds: the vector, the repository, the vector, the limit, the cutoff.
+   * The choice follows how many assets the search's filters leave to rank. Few are ranked one by one, each embedding compared
+   * with the description's, since the vector index would walk far past them to find the ones the filters pass; many are ranked
+   * through the index, which reaches enough of them soon. What separates the two is `SearchQuery.describeExactLimit`
+   * (`Const.Search.DESCRIBE_EXACT_LIMIT`): the matches that carry an embedding are counted up to one past it, in the statement of
+   * a capped count, and at most that many are ranked exactly. A search that narrows its view by nothing is not counted: the index
+   * holds the whole view, and a description alone reads it as it always has.
    */
-  override protected def describeRanked(
-      embedding: SceneEmbedding,
-      maxDistance: Double,
-      limit: Int,
-      triaged: Boolean): (String, List[Any]) =
-    val column = s"asset.${SceneModel.Siglip2.column}"
-    val halfPrecision = s"halfvec(${SceneModel.Siglip2.dimensions})"
-    val vector = vectorBind(Some(embedding))
+  override protected def ranksExactly(query: SearchQuery): Boolean =
+    import dialect.*
 
-    val sql = s"""
-      SELECT nearest.id, nearest.distance
-        FROM (SELECT asset.${FieldConst.ID} AS id, $column <=> $vectorPlaceholder AS distance
-                FROM asset
-               WHERE asset.${FieldConst.REPO_ID} = ?
-                 AND ${describeFlags(triaged)}
-               ORDER BY $column::$halfPrecision <=> ?::$halfPrecision
-               LIMIT ?) AS nearest
-       WHERE nearest.distance <= ?
-    """
-    (sql, List(vector, RequestContext.getRepository.persistedId, vector, limit, maxDistance))
+    if !query.narrowsView then
+      logger.debug("A description with no filter is ranked through the vector index")
+      false
+    else
+      val limit = query.describeExactLimit
+      val statement = SearchQueries.embeddedCount(searchDialect, query, RequestContext.getRepository.persistedId, limit)
+      val embedded = Db.read(dialect)(_.runSql[Int](statement)).head
+      val exactly = embedded <= limit
+      logger.debug(
+        s"A description within filters that leave ${if exactly then embedded else s"more than $limit"} assets with an " +
+          s"embedding is ranked ${if exactly then "exactly" else "through the vector index"}")
+      exactly

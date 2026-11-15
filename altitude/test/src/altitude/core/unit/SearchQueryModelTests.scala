@@ -5,6 +5,7 @@ import org.scalatest.DoNotDiscover
 import org.scalatest.funsuite
 import org.scalatest.matchers.should.Matchers.shouldBe
 
+import altitude.core.FieldConst
 import altitude.core.routes.SearchRequestParser.Scope
 import altitude.core.util.BoundingBox
 import altitude.core.util.DateRange
@@ -13,6 +14,7 @@ import altitude.core.util.SearchCursor
 import altitude.core.util.SearchQuery
 import altitude.core.util.SearchSort
 import altitude.core.util.SortValue
+import altitude.core.util.TriageSubset
 
 @DoNotDiscover class SearchQueryModelTests extends funsuite.AnyFunSuite {
 
@@ -197,44 +199,116 @@ import altitude.core.util.SortValue
     fingerprint(takenRange = Some(june)) shouldBe fingerprints(2)
   }
 
-  test("A Describe search's fingerprint is its description and its triage filter, and no other search's") {
+  test("A Describe search's fingerprint is its description with its filters' search, and no other search's") {
 
     /**
      * Setup:
      *
-     * The fingerprint of a description's search in a repository on an engine; of the same search with the triaged assets, with
-     * another description, in another repository and on the other engine; and of a search whose Search text is the description's
-     * words.
+     * The fingerprint of a description's search of the repository view in a repository on an engine; of the same search with the
+     * triaged assets, with another description, in another repository, on the other engine, and within each filter in turn: a
+     * Search text, a folder, a person, two people, the two matching any, a Location, a Date Taken range and a Date Imported
+     * range; and of the searches of the same filters with no description.
      *
      * Assertions:
      *
-     * The six fingerprints differ, so a cursor of one cannot continue another, and the same Describe search has the same
+     * Every fingerprint differs from every other, so a cursor of one cannot continue another: a Describe search's from the same
+     * description within other filters, and from the same filters without the description. The same Describe search has the same
      * fingerprint again.
      *
      * Edge cases:
      *
-     * A description is fingerprinted as written: another case, or a space more, is another search.
+     * A description is fingerprinted as written: another case, or a space more, is another search. A search whose Search text is
+     * the description's words is another search too.
      */
+    val june = DateRange(Some(LocalDate.parse("2024-06-01")), Some(LocalDate.parse("2024-06-30")))
+    def view(triaged: Boolean): Map[String, Any] =
+      Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false) ++ Option.unless(triaged)(FieldConst.Asset.IS_TRIAGED -> false)
+    val unfiltered = new SearchQuery(params = view(triaged = false))
+    val filtered = List(
+      new SearchQuery(params = view(triaged = true)),
+      new SearchQuery(params = view(triaged = false), text = Some("beach")),
+      new SearchQuery(params = view(triaged = false), folderIds = Set("trips")),
+      new SearchQuery(params = view(triaged = false), personIds = Set("alice")),
+      new SearchQuery(params = view(triaged = false), personIds = Set("alice", "bob")),
+      new SearchQuery(params = view(triaged = false), personIds = Set("alice", "bob"), peopleMatch = PeopleMatch.Any),
+      new SearchQuery(params = view(triaged = false), locationIds = Set("lisbon")),
+      new SearchQuery(params = view(triaged = false), takenRange = Some(june)),
+      new SearchQuery(params = view(triaged = false), importedRange = Some(june))
+    )
+
     def fingerprint(
         description: String = "a cactus",
-        triaged: Boolean = false,
+        query: SearchQuery = unfiltered,
         repositoryId: String = "repo-1",
         dbEngine: String = "sqlite"): String =
-      SearchCursor.describeFingerprint(description, triaged, repositoryId, dbEngine)
+      SearchCursor.describeFingerprint(description, query, repositoryId, dbEngine)
+    def withoutDescription(query: SearchQuery): String =
+      SearchCursor.scopeFingerprint(query, repositoryId = "repo-1", dbEngine = "sqlite")
 
     val fingerprints = List(
       fingerprint(),
-      fingerprint(triaged = true),
       fingerprint(description = "a man in a suit"),
       fingerprint(repositoryId = "repo-2"),
       fingerprint(dbEngine = "postgres"),
-      SearchCursor.scopeFingerprint(new SearchQuery(text = Some("a cactus")), repositoryId = "repo-1", dbEngine = "sqlite"),
       fingerprint(description = "A cactus"),
-      fingerprint(description = "a  cactus")
-    )
+      fingerprint(description = "a  cactus"),
+      withoutDescription(new SearchQuery(params = view(triaged = false), text = Some("a cactus")))
+    ) ++ filtered.map(query => fingerprint(query = query)) ++ (unfiltered :: filtered).map(withoutDescription)
 
     fingerprints.distinct.size shouldBe fingerprints.size
     fingerprint() shouldBe fingerprints.head
+    fingerprint(query = new SearchQuery(params = view(triaged = false), takenRange = Some(june))) shouldBe
+      fingerprint(query = filtered(7))
+  }
+
+  test("A search narrows its view by any filter, and by nothing with the view's flags alone") {
+
+    /**
+     * Setup:
+     *
+     * Searches of the repository view, with the triaged assets and without, of the trash and of the Triage view, with no filter;
+     * and searches of the repository view with one filter each: a Search text, a folder, a person, an album, a Location, a Date
+     * Taken range, a Date Imported range, a Triage subset, a map area, a metadata filter and a column filter that is no flag of a
+     * view.
+     *
+     * Assertions:
+     *
+     * The searches with no filter narrow their view by nothing, whatever the view, and each search with a filter narrows it.
+     *
+     * Edge cases:
+     *
+     * Search text with no usable term is no filter. A copy of a search keeps how many assets a Describe search ranks exactly,
+     * which is 75,000 unless the query says otherwise.
+     */
+    val view = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false)
+    val june = DateRange(Some(LocalDate.parse("2024-06-01")), Some(LocalDate.parse("2024-06-30")))
+    val views = List(
+      view,
+      Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false),
+      Map[String, Any](FieldConst.Asset.IS_RECYCLED -> true, FieldConst.Asset.IS_PURGED -> false),
+      SearchQuery.TRIAGE_VIEW
+    )
+    views.foreach(flags => new SearchQuery(params = flags).narrowsView shouldBe false)
+    new SearchQuery(params = view, text = Some("-")).narrowsView shouldBe false
+
+    val narrowed = List(
+      new SearchQuery(params = view, text = Some("beach")),
+      new SearchQuery(params = view, folderIds = Set("trips")),
+      new SearchQuery(params = view, personIds = Set("alice")),
+      new SearchQuery(params = view, albumIds = Set("best")),
+      new SearchQuery(params = view, locationIds = Set("lisbon")),
+      new SearchQuery(params = view, takenRange = Some(june)),
+      new SearchQuery(params = view, importedRange = Some(june)),
+      new SearchQuery(params = view, subset = Some(TriageSubset.NoLocation)),
+      new SearchQuery(params = view, bbox = Some(BoundingBox.parse("1,2,3,4"))),
+      new SearchQuery(params = view, metadataFilters = Map("field-1" -> "red")),
+      new SearchQuery(params = view + (FieldConst.Asset.FOLDER_ID -> "trips"))
+    )
+    narrowed.foreach(query => withClue(s"$query: ")(query.narrowsView shouldBe true))
+
+    new SearchQuery(params = view).describeExactLimit shouldBe 75000
+    val tuned = new SearchQuery(params = view, describeExactLimit = 7).withFolderIds(Set("trips")).withoutTotal
+    tuned.describeExactLimit shouldBe 7
   }
 
   test("A cursor carries a Describe search's position, a distance, through its token unchanged") {

@@ -110,12 +110,12 @@ object SearchCursor:
     )
 
   /**
-   * Identifies the Describe search a cursor may continue: the engine, the repository, the description as written and whether the
-   * triaged assets are among its results, the two things such a search is asked for. Marked as a description's, so no search by
-   * filters has the same fingerprint, whatever its Search text.
+   * Identifies the Describe search a cursor may continue: the description as written, with what identifies its filters' search
+   * ([[scopeFingerprint]]: the engine, the repository, the filters as requested and the view's flags, `triaged` among them).
+   * Marked as a description's, so the same filters without the description have another fingerprint, whatever their Search text.
    */
-  def describeFingerprint(description: String, triaged: Boolean, repositoryId: String, dbEngine: String): String =
-    fingerprintOf(dbEngine, repositoryId, Api.Field.Search.DESCRIBE, description, triaged.toString)
+  def describeFingerprint(description: String, query: SearchQuery, repositoryId: String, dbEngine: String): String =
+    fingerprintOf(Api.Field.Search.DESCRIBE, description, scopeFingerprint(query, repositoryId, dbEngine))
 
   /** The first 16 bytes of the SHA-256 of what identifies a search, in hex */
   private def fingerprintOf(parts: String*): String =

@@ -593,7 +593,8 @@ import altitude.core.util.Util
      * Assertions:
      *
      * The panel asked for with a date that is not an ISO day, a range whose start is after its end, a people match that is
-     * neither `all` nor `any`, or eleven people in one parameter is a plain-text 400, as the search with them is.
+     * neither `all` nor `any`, eleven people in one parameter, a blank description or one of 301 characters is a plain-text 400,
+     * as the search with them is.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -605,12 +606,58 @@ import altitude.core.util.Util
           Map(fields.TAKEN_FROM -> "june"),
           Map(fields.IMPORTED_FROM -> "2024-06-02", fields.IMPORTED_TO -> "2024-06-01"),
           Map(fields.PEOPLE_MATCH -> "some"),
-          Map(fields.PERSON_ID -> List.fill(11)(UUID.randomUUID.toString).mkString(","))
+          Map(fields.PERSON_ID -> List.fill(11)(UUID.randomUUID.toString).mkString(",")),
+          Map(fields.DESCRIBE -> "  "),
+          Map(fields.DESCRIBE -> "a" * 301, fields.QUERY_TEXT -> "beach")
         )
         for (params <- refused) withClue(s"$params: ") {
           val response = get(host, repoId, "panel", params)
           response.statusCode shouldBe 400
           response.headers("content-type").head should include("text/plain")
+        }
+    }
+  }
+
+  test("The panel takes a description beside its filters, and what a Describe search takes none of is ignored") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with the folder Trips, and the panel asked for with a description alone, with a description
+     * beside the Search text and the folder, and with a description beside a sort, a grouping and the map layout, which the
+     * client's parameters of a search may still hold.
+     *
+     * Assertions:
+     *
+     * Each answers the form, filled in from the filters beside the description: the Search text as typed and the folder's chip.
+     *
+     * Edge cases:
+     *
+     * The sort, the grouping and the layout are no filter of the panel: beside a description they are ignored there, where the
+     * results route refuses them.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val trips = testApp.service.folder.add("Trips")
+        val filters = Map(fields.QUERY_TEXT -> "beach", fields.FOLDER_ID -> trips.persistedId)
+        val described = List(
+          Map(fields.DESCRIBE -> "woman in a park"),
+          Map(fields.DESCRIBE -> "woman in a park") ++ filters,
+          Map(
+            fields.DESCRIBE -> "woman in a park",
+            fields.SORT -> "created_at1",
+            fields.GROUP_BY -> "dateTaken",
+            fields.LAYOUT -> Const.Search.Layout.MAP) ++ filters
+        )
+        for (params <- described) withClue(s"$params: ") {
+          val response = get(host, repoId, "panel", params)
+          response.statusCode shouldBe 200
+          inputValue(response.text(), fields.QUERY_TEXT) shouldBe params.getOrElse(fields.QUERY_TEXT, "")
+          carriedIn(response.text()).map(_.id) shouldBe params.get(fields.FOLDER_ID).toList
         }
     }
   }

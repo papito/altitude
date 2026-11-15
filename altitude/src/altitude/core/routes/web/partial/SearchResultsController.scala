@@ -60,11 +60,12 @@ class SearchResultsController(using logger: Logger) extends BaseController:
    * `sort` defaults to Relevance when the request has Search text (`q` with a usable term) and to the newest import first when it
    * has none; `sort=relevance` without text is a 400, as is text with the trash view, which text does not search.
    *
-   * A Describe search (`describe`, `SearchRequestParser`) is asked for by a description alone and answers the still images that
-   * look most like it, most alike first, as a flat grid page continued by cursor like any other; `triaged=true` adds the triaged
-   * assets. Its one order, similarity, is implied: a blank or overlong description, and any filter, sort, grouping, trash or
-   * Triage view or map layout beside one, is a 400. The fragment names the description (`data-results-describe`), and the browser
-   * URL carries it and no sort.
+   * A search with a description (`describe`, `SearchRequestParser`) answers the still images that look most like it, most alike
+   * first, among the assets its other filters match (the Search text, a folder, people, Locations, the two date ranges, and
+   * `triaged=true`, which adds the triaged assets), as a flat grid page continued by cursor like any other. Its one order,
+   * similarity, is implied: a blank or overlong description, and an album, a subset, a map area, a sort, a grouping, the trash or
+   * the Triage view or the map layout beside one, is a 400. It is a filtered search whatever else it holds (`isFiltered`). The
+   * fragment names the description (`data-results-describe`), and the browser URL carries it and no sort.
    *
    * With `groupBy`, a header opens each date, Location or, in the Triage view, Sequence (`parseGrouping`). Grouped or not, a page
    * is `rpp` assets, 1 to `Const.Search.MAX_RPP`, and is continued by the `after` cursor its last cell carries
@@ -150,7 +151,7 @@ class SearchResultsController(using logger: Logger) extends BaseController:
 
     if layout != Const.Search.Layout.GRID && layout != Const.Search.Layout.MAP then return textError("Unknown layout", 400)
 
-    // A Describe search has one order, which no request names: it has no sort parameter, in the browser URL either
+    // A search with a description has one order, which no request names: it has no sort parameter, in the browser URL either
     def defaultSort: String =
       if scope.text.isDefined then Const.Search.SORT_RELEVANCE
       else s"${Api.Field.SearchSort.BY_ASSET_CREATED_AT}${SortDirection.DESC.id}"
@@ -283,11 +284,14 @@ class SearchResultsController(using logger: Logger) extends BaseController:
         ("HX-Replace-Url", browserUrl)
       )
 
-    // A description is its own search, ranked by the vector search; anything else is a flat search of the scope
+    // With a description the scope's assets are ranked by how much they look like it; anything else is a flat search of the scope
     val results =
       try
         scope.description match
-          case Some(description) => App.altitude.service.search.describe(description, triaged.contains(true), cursor, rpp)
+          case Some(description) =>
+            val searchQuery = scope.query(rpp = rpp, cursor = cursor)
+            logger.trace(s"DESCRIBED QUERY: ${searchQuery.toString}")
+            App.altitude.service.search.describe(description, searchQuery)
           case None =>
             val searchQuery = scope.query(rpp = rpp, searchSort = List(searchSort), cursor = cursor)
             logger.trace(s"QUERY: ${searchQuery.toString}")
@@ -396,9 +400,10 @@ class SearchResultsController(using logger: Logger) extends BaseController:
     textError(Const.Msg.Err.SEARCH_TIMED_OUT, 503)
 
   /**
-   * Whether the search is a filtered search (`CONTEXT.md`): one with a date range, two people or more, two Locations or more, or
-   * more than one of the Search text, a folder, a person and a Location. The root folder is the whole repository, so it is no
-   * folder here. Any other search has one scope at most, which its results title names on its own.
+   * Whether the search is a filtered search (`CONTEXT.md`): one with a description, whatever else it holds, a date range, two
+   * people or more, two Locations or more, or more than one of the Search text, a folder, a person and a Location. The root
+   * folder is the whole repository, so it is no folder here. Any other search has one scope at most, which its results title
+   * names on its own.
    */
   private def isFiltered(scope: SearchRequestParser.Scope): Boolean =
     val folders = App.altitude.service.folder
@@ -407,12 +412,16 @@ class SearchResultsController(using logger: Logger) extends BaseController:
       scope.folderIds.exists(!folders.isRootFolder(_)),
       scope.personIds.nonEmpty,
       scope.locationIds.nonEmpty)
-    scope.takenRange.isDefined || scope.importedRange.isDefined || scope.personIds.size > 1 || scope.locationIds.size > 1 ||
-    scopes.count(identity) > 1
+    scope.description.isDefined || scope.takenRange.isDefined || scope.importedRange.isDefined || scope.personIds.size > 1 ||
+    scope.locationIds.size > 1 || scopes.count(identity) > 1
 
-  /** The filters a filtered search's title names, the people and the Locations in the order the request gives them */
+  /**
+   * The filters a filtered search's title names, the description first, the people and the Locations in the order the request
+   * gives them
+   */
   private def filtersOf(scope: SearchRequestParser.Scope): SearchFilters =
     SearchFilters(
+      description = scope.description,
       text = scope.text,
       names = App.altitude.service.search.filterNames(scope.folderIds.headOption, scope.personIds, scope.locationIds),
       peopleMatch = scope.peopleMatch,
@@ -443,7 +452,8 @@ class SearchResultsController(using logger: Logger) extends BaseController:
   /**
    * The bookmarkable URL for this search. Only parameters that are not at their default are included, and always in the same
    * order, so the same search always yields the same URL. `rpp` and `after` are left out on purpose - a shared link opens at the
-   * first page. A Describe search has no `sort`: its URL carries the description, without the white space around it, and none.
+   * first page. A search with a description has no `sort`: its URL carries the description, without the white space around it,
+   * after its other filters, and no sort.
    */
   private def browserViewUrl(
       search: SearchRequestParser.Params,

@@ -5,7 +5,7 @@
 @import altitude.core.util.DateRange
 @import altitude.core.util.PeopleMatch
 
-@(text: String, names: SearchFilterNames, peopleMatch: PeopleMatch, takenRange: Option[DateRange], importedRange: Option[DateRange], showTriaged: Boolean = false, idPrefix: String = "searchPanel")
+@(text: String, names: SearchFilterNames, peopleMatch: PeopleMatch, takenRange: Option[DateRange], importedRange: Option[DateRange], showTriaged: Boolean = false, idPrefix: String = "searchPanel", description: String = "")
 
 @* The form of the advanced search panel (GET /htmx/search/r/:repoId/panel), filled in from the parameters of a search:
    the Search text, one folder, people, Locations, and the Date Taken and Date Imported ranges. The nav's panel loads it

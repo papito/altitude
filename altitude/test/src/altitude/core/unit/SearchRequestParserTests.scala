@@ -344,46 +344,72 @@ import altitude.core.util.PeopleMatch
     withTriaged.importedRange shouldBe defined
   }
 
-  test("A description is the scope of a Describe search, trimmed, in the repository view") {
+  test("A description is read into the scope beside the Search filters, each read as it is without one") {
 
     /**
      * Setup:
      *
      * Requests of the repository view with a description: alone, with spaces and a line feed around it, with the grid layout
-     * named, and with `triaged` true and false.
+     * named, and beside each Search filter in turn (the Search text, a folder, a person, several people matching any, several
+     * Locations, each end of the two date ranges, `triaged` true and false), then beside all of them at once.
      *
      * Assertions:
      *
-     * The scope holds the description as written but for the white space around it, and no Search text and no filter. It leaves
-     * the triaged assets out unless `triaged=true`, and the grid layout, the only one such a search has, is taken.
+     * Alone, the scope holds the description as written but for the white space around it, no Search text and no filter, and
+     * leaves the triaged assets out. Beside filters, the scope is the one the same request has without the description, with the
+     * description added: the filters are read the same, and the query the scope builds carries them.
      *
      * Edge cases:
      *
      * A description of 300 characters is taken, and so is one that would parse to no Search term, since a description is not read
-     * as Search text. A request without a description has none in its scope.
+     * as Search text. Search text with no usable term beside a description is no text, as it is without one. A request without a
+     * description has none in its scope.
      */
     val scope = browse(fields.DESCRIBE -> "woman in a park").value
-    scope.description shouldBe Some("woman in a park")
+    scope shouldBe browse().value.copy(description = Some("woman in a park"))
     scope.text shouldBe None
     scope.folderIds shouldBe empty
     scope.personIds shouldBe empty
-    scope.albumIds shouldBe empty
     scope.locationIds shouldBe empty
-    scope.bbox shouldBe None
-    scope.subset shouldBe None
     scope.takenRange shouldBe None
     scope.importedRange shouldBe None
     scope.params shouldBe Map(FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false)
 
     browse(fields.DESCRIBE -> "  woman in\na park \n").value.description shouldBe Some("woman in\na park")
     browse(fields.DESCRIBE -> "a cactus", fields.LAYOUT -> Const.Search.Layout.GRID).value.description shouldBe Some("a cactus")
-    browse(fields.DESCRIBE -> "a cactus", fields.TRIAGED -> "true").value.params shouldBe
-      Map(FieldConst.Asset.IS_RECYCLED -> false)
-    browse(fields.DESCRIBE -> "a cactus", fields.TRIAGED -> "false").value.params shouldBe
-      Map(FieldConst.Asset.IS_RECYCLED -> false, FieldConst.Asset.IS_TRIAGED -> false)
+
+    val filters = List(
+      List(fields.QUERY_TEXT -> "beach -sunset"),
+      List(fields.FOLDER_ID -> "trips"),
+      List(fields.PERSON_ID -> "alice"),
+      List(fields.PERSON_ID -> "bob,alice", fields.PEOPLE_MATCH -> "any"),
+      List(fields.LOCATION_ID -> "sintra,lisbon"),
+      List(fields.TAKEN_FROM -> "2024-06-01"),
+      List(fields.TAKEN_TO -> "2024-06-30"),
+      List(fields.IMPORTED_FROM -> "2025-01-08"),
+      List(fields.IMPORTED_TO -> "2025-01-09"),
+      List(fields.TRIAGED -> "true"),
+      List(fields.TRIAGED -> "false")
+    )
+    for (beside <- filters :+ filters.init.flatten) withClue(s"$beside: ") {
+      val described = browse((fields.DESCRIBE -> "a cactus") +: beside*).value
+      described shouldBe browse(beside*).value.copy(description = Some("a cactus"))
+    }
+
+    val all = browse((fields.DESCRIBE -> "a cactus") +: filters.init.flatten*).value
+    all.text shouldBe Some("beach -sunset")
+    all.query().text shouldBe Some("beach -sunset")
+    all.query().folderIds shouldBe Set("trips")
+    all.query().personIds shouldBe Set("alice", "bob")
+    all.query().peopleMatch shouldBe PeopleMatch.Any
+    all.query().locationIds shouldBe Set("lisbon", "sintra")
+    all.query().takenRange shouldBe Some(DateRange(Some(LocalDate.parse("2024-06-01")), Some(LocalDate.parse("2024-06-30"))))
+    all.query().importedRange shouldBe Some(DateRange(Some(LocalDate.parse("2025-01-08")), Some(LocalDate.parse("2025-01-09"))))
+    all.params shouldBe Map(FieldConst.Asset.IS_RECYCLED -> false)
 
     (browse(fields.DESCRIBE -> "a" * 300).value.description.value should have).length(300)
     browse(fields.DESCRIBE -> "-").value.description shouldBe Some("-")
+    browse(fields.DESCRIBE -> "a cactus", fields.QUERY_TEXT -> "-").value.text shouldBe None
     browse(fields.QUERY_TEXT -> "beach").value.description shouldBe None
   }
 
@@ -393,11 +419,12 @@ import altitude.core.util.PeopleMatch
      * Setup:
      *
      * Requests with an empty description, with one of spaces and line feeds alone, with one of 301 characters, and with one of
-     * 300 characters between spaces.
+     * 300 characters between spaces; and a blank description beside a folder.
      *
      * Assertions:
      *
-     * The empty and the blank description are refused as blank, and the one of 301 characters as too long, naming the bound.
+     * The empty and the blank description are refused as blank, alone or beside a filter, and the one of 301 characters as too
+     * long, naming the bound.
      *
      * Edge cases:
      *
@@ -405,60 +432,92 @@ import altitude.core.util.PeopleMatch
      */
     browse(fields.DESCRIBE -> "").left.value shouldBe "A description cannot be blank"
     browse(fields.DESCRIBE -> " \n\t ").left.value shouldBe "A description cannot be blank"
+    browse(fields.DESCRIBE -> " ", fields.FOLDER_ID -> "trips").left.value shouldBe "A description cannot be blank"
     browse(fields.DESCRIBE -> "a" * 301).left.value shouldBe "A description has at most 300 characters"
     (browse(fields.DESCRIBE -> (" " + "a" * 300 + " ")).value.description.value should have).length(300)
   }
 
-  test("A description stands alone: any filter, a sort, a grouping or the map layout beside it is refused") {
+  test("A description takes no album, subset, map area, sort, grouping or map layout, and searches the repository view alone") {
 
     /**
      * Setup:
      *
-     * Requests of the repository view with a description beside each other parameter of a search in turn: the Search text, a
-     * folder, a person, a Location, an album, a Triage subset, each end of the two date ranges, a map area, a sort, a grouping, a
-     * group direction and the map layout; and one request with a folder and a sort beside the description.
+     * Requests of the repository view with a description beside each parameter a Describe search does not take, in turn: an
+     * album, a Triage subset, a map area, a sort, a grouping, a group direction and the map layout; a request with a sort and an
+     * album beside the description and a folder; and requests with a description in the trash and in the Triage view.
      *
      * Assertions:
      *
-     * Each is refused, and the message names the parameter that may not stand beside a description; the request with two of them
-     * names both.
+     * Each is refused, and the message names the parameter a description takes none of; the request with two of them names both,
+     * in the order the parameters are declared, and not the folder, which a description takes. A description is refused in the
+     * trash and in the Triage view, each named by the message.
      *
      * Edge cases:
      *
-     * A parameter beside a description is refused whatever its value: an empty Search text, the similarity sort itself, a
-     * malformed date. A description is refused in the trash and in the Triage view, each named by the message.
+     * Such a parameter is refused whatever its value: the similarity sort itself, a subset that is none. With a filter that would
+     * be refused on its own beside the description too, the parameter the description does not take is what is refused.
      */
-    val beside = List(
-      fields.QUERY_TEXT -> "beach",
-      fields.QUERY_TEXT -> "",
-      fields.FOLDER_ID -> "trips",
-      fields.PERSON_ID -> "alice",
-      fields.LOCATION_ID -> "lisbon",
+    val refused = List(
       fields.ALBUM_ID -> "best",
       fields.SUBSET -> "noLocation",
-      fields.TAKEN_FROM -> "2024-06-01",
-      fields.TAKEN_TO -> "not a date",
-      fields.IMPORTED_FROM -> "2024-06-01",
-      fields.IMPORTED_TO -> "2024-06-30",
+      fields.SUBSET -> "nothing",
       fields.BBOX -> "1,2,3,4",
       fields.SORT -> "created_at1",
+      fields.SORT -> Const.Search.SORT_RELEVANCE,
       fields.SORT -> Const.Search.SORT_SIMILARITY,
       fields.GROUP_BY -> "dateTaken",
       fields.GROUP_DIRECTION -> "asc"
     )
-    for (param <- beside) withClue(s"$param: ") {
-      browse(fields.DESCRIBE -> "a cactus", param).left.value shouldBe s"A description stands alone, without ${param._1}"
+    for (param <- refused) withClue(s"$param: ") {
+      browse(fields.DESCRIBE -> "a cactus", param).left.value shouldBe s"A description takes no ${param._1}"
+      browse(fields.DESCRIBE -> "a cactus", fields.QUERY_TEXT -> "beach", param).left.value shouldBe
+        s"A description takes no ${param._1}"
     }
 
     browse(fields.DESCRIBE -> "a cactus", fields.LAYOUT -> Const.Search.Layout.MAP).left.value shouldBe
-      "A description stands alone, without layout=map"
-    browse(fields.DESCRIBE -> "a cactus", fields.SORT -> "filename0", fields.FOLDER_ID -> "trips").left.value shouldBe
-      "A description stands alone, without folderId, sort"
+      "A description takes no layout=map"
+    browse(
+      fields.DESCRIBE -> "a cactus",
+      fields.SORT -> "filename0",
+      fields.FOLDER_ID -> "trips",
+      fields.ALBUM_ID -> "best").left.value shouldBe "A description takes no albumId, sort"
+    browse(fields.DESCRIBE -> "a cactus", fields.SORT -> "filename0", fields.TAKEN_FROM -> "not a date").left.value shouldBe
+      "A description takes no sort"
 
     parse(Const.Search.View.TRASHBIN, fields.DESCRIBE -> "a cactus").left.value shouldBe "A description does not search the trash"
     parse(Const.Search.View.TRIAGE, fields.DESCRIBE -> "a cactus").left.value shouldBe
       "A description does not search the triage view"
     parse(Const.Search.View.TRIAGE, fields.DESCRIBE -> "a cactus", fields.TRIAGED -> "true").left.value shouldBe
       "A description does not search the triage view"
+    parse(Const.Search.View.TRASHBIN, fields.DESCRIBE -> "a cactus", fields.QUERY_TEXT -> "beach").left.value shouldBe
+      "A description does not search the trash"
+  }
+
+  test("A filter beside a description is refused as it is without one") {
+
+    /**
+     * Setup:
+     *
+     * Requests of the repository view with a description beside a filter that is refused on its own: eleven people, eleven
+     * Locations, an unknown people match, a date that is no ISO day, and a range whose first day is after its last.
+     *
+     * Assertions:
+     *
+     * Each is refused with the message the same request has without the description.
+     */
+    val malformed = List(
+      List(fields.PERSON_ID -> ids(11)) -> "A search names at most 10 people",
+      List(fields.LOCATION_ID -> ids(11)) -> "A search names at most 10 Locations",
+      List(fields.PERSON_ID -> "alice,bob", fields.PEOPLE_MATCH -> "some") -> "Unknown peopleMatch value",
+      List(fields.TAKEN_FROM -> "June 2024") -> "takenFrom must be a date, as 2024-06-01",
+      List(fields.IMPORTED_TO -> "2024-02-30") -> "importedTo must be a date, as 2024-06-01"
+    )
+    for ((params, message) <- malformed) withClue(s"$params: ") {
+      browse(params*).left.value shouldBe message
+      browse((fields.DESCRIBE -> "a cactus") +: params*).left.value shouldBe message
+    }
+
+    val reversed = List(fields.TAKEN_FROM -> "2024-06-30", fields.TAKEN_TO -> "2024-06-01")
+    browse((fields.DESCRIBE -> "a cactus") +: reversed*).left.value shouldBe browse(reversed*).left.value
   }
 }

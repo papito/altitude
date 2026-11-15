@@ -49,11 +49,12 @@ class SearchPanelController(using logger: Logger) extends BaseController:
     htmlResponse(htmx.html.search_options_locations(App.altitude.service.search.locationOptions(q)))
 
   /**
-   * The panel's form filled in from a search's parameters, which the client sends verbatim: the text as typed, the folder, the
-   * people and the Locations as chips named on the server, the people match and the two date ranges. `triaged` is the search's
-   * triage filter, which the form hands to its People options, so they count what the search will find; with `triaged=true` a
-   * Guest is refused as a search is (`refusedView`). The parameters that are no filter of the panel (the view, the sort, the
-   * layout, paging) are accepted and ignored (`cask.QueryParams`).
+   * The panel's form filled in from a search's parameters, which the client sends verbatim: the description (`describe`), without
+   * the white space around it, the text as typed, the folder, the people and the Locations as chips named on the server, the
+   * people match and the two date ranges. `triaged` is the search's triage filter, which the form hands to its People options, so
+   * they count what the search will find; with `triaged=true` a Guest is refused as a search is (`refusedView`). The parameters
+   * that are no filter of the panel (the view, the sort, the grouping, the layout, paging) are accepted and ignored
+   * (`cask.QueryParams`), beside a description too, where a search refuses them.
    *
    * The parameters are read as a search of the repository view reads them (`SearchRequestParser`), so what a search refuses is a
    * plain-text 400 here too. An ID that names nothing in the repository, one that no longer exists or another repository's, is
@@ -73,12 +74,14 @@ class SearchPanelController(using logger: Logger) extends BaseController:
       importedFrom: Option[String] = None,
       importedTo: Option[String] = None,
       triaged: Option[Boolean] = None,
+      describe: Option[String] = None,
       params: cask.QueryParams /* allow unknown params */ )(using request: Request): Response[String] =
     refusedView(Const.Search.View.DEFAULT, triaged) match
       case Some(refusal) => return refusal
       case None =>
     val parsed = SearchRequestParser.parse(
       SearchRequestParser.Params(
+        describe = describe,
         q = q,
         folderId = folderId,
         personId = personId,
@@ -95,6 +98,7 @@ class SearchPanelController(using logger: Logger) extends BaseController:
 
     htmlResponse(
       htmx.html.search_panel(
+        description = scope.description.getOrElse(""),
         text = q.getOrElse(""),
         names = App.altitude.service.search.filterNames(scope.folderIds.headOption, scope.personIds, scope.locationIds),
         peopleMatch = scope.peopleMatch,
