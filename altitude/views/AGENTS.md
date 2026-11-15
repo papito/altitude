@@ -329,6 +329,7 @@ Const.attributes.cropSize             // "data-app-crop-size"  (the bar's crop s
 Const.attributes.cropCancel           // "data-app-crop-cancel"  (the bar's Cancel, and `data-app-crop-done` its Done)
 Const.attributes.editLeave            // "data-app-edit-leave"  (a choice of the Edit panel's warning: `save`, `discard` or `stay`; `data-app-edit-leave-message` its message)
 Const.attributes.panelUrl             // "data-panel-url"  (the advanced search panel's host in the nav: the route of its form)
+Const.attributes.seesTriaged          // "data-app-sees-triaged"  (the same host, for a member: the account sees triaged items, `context.seesTriaged()`)
 Const.attributes.optionsUrl           // "data-options-url"  (a combobox field of the panel: the route of its options)
 Const.attributes.multiple             // "data-multiple"  (a combobox field that takes several names)
 Const.attributes.maxChosen            // "data-max-chosen"  (the most such a field takes, with the line that says so in `data-max-chosen-message`)
@@ -1074,8 +1075,8 @@ every one of them has only triaged assets with triaged items hidden (the server'
 "Everyone here is only in triaged items. Turn on Show triaged items to see them." The server renders no switch state, as with View settings: the component asks
 `GET /htmx/people/r/:repoId/list?pane=main&buckets=matched,hidden` (`pane` is the pane the list is for, `Const.PeoplePane`
 on the server, the Main pane when left out; comma-separated bucket names; a name that is no pane or no bucket is a 400),
-with `triaged=true` added only when the `searchParams` store's `triaged` is exactly `"true"`, read on every load (the store's
-null would go out as `triaged=null`, a 400), or when the view is Triage, whatever the store holds,
+with `triaged=true` added only when the `searchParams` store's `triaged` is exactly `"true"`, read on every load (the
+null it holds for a Guest and outside Browse would go out as `triaged=null`, a 400), or when the view is Triage, whatever the store holds,
 through `htmx.ajax` into the pane's `.list`, on init, when a switch flips, when a person changes and when "Show triaged
 items" flips, through a `$watch` on the store's `triaged` set up in `init()` (the host's
 `hx-sync="replace"` aborts a load of the pane still in flight, so the latest bucket set lands), and the response is
@@ -1339,8 +1340,10 @@ focus. It is two columns (`htmx/view_settings_dialog.scala.html`, `static/css/ht
 left the switches bound to the grid metadata set by its own Alpine component
 (`x-data="viewSettings"`, `js/alpine/components/view-settings.js`), which the mutation observer
 initializes as the fragment arrives, and on the right, behind a hairline, the scope: "Show triaged items", the
-`triaged` search parameter read from the `searchParams` store (off unless it is `true`), whose click runs `runSearch`
-with `triaged=true` or the empty literal that clears it, so the results re-render under the open panel: the View
+`triaged` search parameter read from the `searchParams` store (on when it is `true`), whose click runs `runSearch`
+with `triaged=true` or `triaged=false`, so the results re-render under the open panel. The switch is on until it is
+turned off, and a flip is remembered in `localStorage` (`Const.localStore.showTriaged`, written by the store's
+`merge`), so Browse opens with it as it was left, as the metadata switches do (**Search parameters**). The View
 control's host `#viewSettingsActions` is `hx-preserve` in `includes/search_results`, so the swap carries the built
 control and its open panel from the old fragment into the new one (htmx moves it with `moveBefore`, which keeps the
 popover showing), and `ensureViewSettingsControl` finds the host filled and builds nothing. The scope column is shown in
@@ -2975,7 +2978,10 @@ in the code, its comments, the guides and the server's messages is Search text (
 - **Load on open.** Each opening (`beforetoggle`, which fires for every one) empties the panel and reads its form from
   the host's `data-panel-url` (`GET /htmx/search/r/:repoId/panel`) with the filters of the search in force
   (`searchParams.filters()`; none on a page with no search of its own), so the server names the chips, and with the
-  search's triage filter (`triaged`), which a search from the panel keeps and the form's People options count by. The
+  triage filter (`triaged`) of the search the panel will run, which the form's People options count by
+  (`triagedOfPanelSearch`): in Browse the one in force, which a search from the panel keeps, and anywhere else, where
+  the search opens Browse and the store holds no filter or there is no store, the choice remembered in the browser
+  (`rememberedTriaged`), for a member alone (`context.seesTriaged()`), since a Guest is refused the filter. The
   read goes
   through the axios client and only the latest opening's answer is put in the panel; a failure is an error snackbar and
   the panel closes. The panel is invisible while empty (`.search-panel:empty`), takes focus in its first field, Describe
@@ -3194,7 +3200,9 @@ the request's Library through `RequestContext.holds(p, ...)` (any one of them), 
 main page (`index`) lists the Permissions held on its body, `data-app-permissions="Import CurateOwn ..."` (the `Permission`
 names), and marks `data-app-recycles` when the account may recycle what its view shows, and a script asks
 `context.holds(...)` or `context.recyclesHere()` (`js/context.js`, with `Const.permission` naming the Permissions) before it
-builds or binds a control. Where each control follows:
+builds or binds a control. The nav says one thing more, on every page that has it: the advanced search panel's host
+(`#searchPanel`) carries `data-app-sees-triaged` for a member (`RequestContext.isMember`), which `context.seesTriaged()`
+reads, so the scripts ask for the triage filter for a member alone (**Search parameters**). Where each control follows:
 
 - The nav (`includes/nav`): Triage and Trash for a member, Import for Import, Users for Create Users or Create Guests in any
   Library (`RequestContext.createsAccounts`, from the token's grants), New library for an Admin or the Create Libraries
@@ -3216,7 +3224,8 @@ builds or binds a control. Where each control follows:
   for. A Person's rename pencil (`htmx/people_list`) and the results title's name, the inline editor's trigger
   (`htmx/view_person_name`, plain text without it), for Edit metadata; the results title's cover choice and Hide / Show /
   Discard (`includes/results_title_inner`), and a taken name's "Merge into …" offer (`includes/person_name_taken`), for
-  Organize. The View settings dialog's "Show triaged items" for a member.
+  Organize. The View settings dialog's "Show triaged items" for a member, and with it the triage filter the scripts
+  send (`context.seesTriaged()`).
 - Drag and drop (`js/dragdrop/index.js`): every move, membership, folder and People drag for Organize; the thumbnails drag,
   and `#trash` is a drop zone, where the account may recycle what the view shows (`context.recyclesHere`) too.
 - The Detail panel: its People section (`htmx/detail_panel_people`) is read-only, Search alone, without Edit metadata, as
@@ -3676,7 +3685,7 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `static/js/edit/recipe.js`, `geometry.js`, `tone.js`, `renderer.js` | The Edit as the client holds it (defaults, sliders, sections, the server's normalization), its geometry with the crop's rules and `mapBox`, its per-pixel math, all three DOM-free and checked against the shared vectors; and the WebGL2 renderer that draws it (`createRenderer`: `render`, `renderBefore`, `readHistogram`) |
 | `static/js/listeners/edit.js` | The Edit's events in Asset detail: Show original held, the Edit panel's toggle, the Crop tool's keys, Undo and Redo |
 | `static/js/common/content-urls.js`, `histogram.js` | An asset's content URLs (`previewUrl` by revision, `displayUrl`, `originalUrl`) and an image repointed at a new Preview (`repointImage`); a Histogram's SVG paths (`channelPaths`) and a fraction's label (`percentLabel`), Curation's and the Edit panel's |
-| `static/js/stores/search-params.js` | the search parameter set, its defaults, the scope rules that decide what a change clears, and the advanced search panel's filters set together (`replaceFilters`, `filters`, `filterCount`, `viewedPersonId`, `viewedLocationId`; `applySearchFilters`, `idsOf`, `ID_LISTS`), a searched Person's or Location's ID replaced or dropped (`names`, `replaceId`), and a Describe search's description: what it clears, what a search with one is sent without (`DESCRIBED_UNSENT`) and whether the results are on the map (`showsMap`); its rules for a description are tested by `scripts/test-js/search-params.test.mjs` (`make test-js`) |
+| `static/js/stores/search-params.js` | the search parameter set, its defaults, the scope rules that decide what a change clears, and the advanced search panel's filters set together (`replaceFilters`, `filters`, `filterCount`, `viewedPersonId`, `viewedLocationId`; `applySearchFilters`, `idsOf`, `ID_LISTS`), a searched Person's or Location's ID replaced or dropped (`names`, `replaceId`), and a Describe search's description: what it clears, what a search with one is sent without (`DESCRIBED_UNSENT`) and whether the results are on the map (`showsMap`), and the triage filter as a remembered choice (`seedSearchParams`' `seesTriaged`, `rememberedTriaged`, `showsTriaged`); its rules for a description are tested by `scripts/test-js/search-params.test.mjs` and those for the triage filter by `scripts/test-js/triage-filter.test.mjs` (`make test-js`) |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
 | `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch`, and routes a trigger's click by the view (`routeOf`: in Triage a folder, Person or Location trigger asks the scope route, `requestScopeDialog`, and the root folder's does nothing; in the trash a folder trigger does nothing); `runTriggerSearch`, the search a trigger declares, which a 204 from the scope route runs |
 | `static/js/listeners/triage.js` | the Triage summary's reload: `registerTriageListeners` (on `peopleChanged`) and `reloadTriageSummary`, one request per change, issued from the host so the reloads take turns |
@@ -3809,10 +3818,20 @@ store carries the panel's parameters, since all are serialized from it: the resu
 
 The layout, the grouping, `rpp` and the sort narrow or reorder what is already in scope and survive
 all of those: a chosen sort is kept from one place to the next, and with no sort chosen the server's
-default applies (Relevance with text, newest import without). The triage filter (`triaged`), off by default so that the repository view holds the sorted assets alone,
+default applies (Relevance with text, newest import without). The triage filter (`triaged`)
 survives a place or `q`, but it is the repository view's: the View
 settings dialog's "Show triaged items" switch (see **Inline dialogs**) is shown in that view alone, and a
-change of view clears it. The People tab reads it too, on every load of a pane, and reloads its panes when it changes, so each
+change of view clears it. It is a choice remembered in the browser, like the layout, and on until it is turned off:
+the server's rule is unchanged, a search with no `triaged` leaves the triaged assets out, so the store of a member
+holds `true` or `false` in the repository view, never null, and every request and the bookmarkable URL say which.
+Seeding (`seedSearchParams(search, { seesTriaged })`) takes it from the URL first, when the URL names one of the two
+values, and otherwise from `localStorage` (`Const.localStore.showTriaged`, `rememberedTriaged()`), where nothing kept,
+or anything but the two values, is `true`; the store's `merge` writes a changed `triaged` there, which only the
+switch's flip is, so a URL that names the filter wins for its page and is not remembered. `seesTriaged` is
+`context.seesTriaged()`, which `index.scala.html` passes: a Guest sees no triaged item and is refused `triaged=true`
+(a 403), so its store is seeded none and reads nothing remembered, and a `triaged=false` in its URL is kept as written.
+A search that leaves Triage or the Trash for Browse (the quick search, the advanced search panel) is sent without the
+filter, which Browse then seeds. The People tab reads it too, on every load of a pane, and reloads its panes when it changes, so each
 Person's number follows the switch (see **People tab**), and the advanced search panel sends it with the request for
 its form, so the People options count what the search will find (**Advanced search panel**). The combinations the server refuses
 are settled by the store itself (`withoutRefusedCombinations`, on seeding from the URL and after every
@@ -3822,13 +3841,13 @@ panel combines (a description, a date range, several people or Locations, or mor
 and a Location: `combinesFilters`, the server's rule) drops an album and a subset, a description becomes the
 repository view from the Triage view as from the trash and drops the map area, `sort=relevance`
 (`Const.search.sortRelevance`) without `q` drops the sort, so Relevance is the one sort that ends with
-the text it ranked, and `triaged` in any view but the repository view is dropped (the triage view
+the text it ranked, and `triaged` in any view but the repository view is dropped, the remembered choice included (the triage view
 refuses it). The server also refuses a page size outside 1 to 500; the store keeps only whole numbers
 in that range (`normalize`, with
 `Const.search.maxRpp` the client's copy of `Const.Search.MAX_RPP`) and turns anything else into its
 default, so a hand-edited `?rpp=1000` falls back to the server's page size instead of failing every
 search. A word the server reads is held to the values it accepts in the same way (`ALLOWED_VALUES`): a `subset` that
-is neither `unknownPeople` nor `noLocation` is no subset, and a `peopleMatch` that is neither `all` nor `any` no match; a day that is no ISO date
+is neither `unknownPeople` nor `noLocation` is no subset, a `peopleMatch` that is neither `all` nor `any` no match, and a `triaged` that is neither `true` nor `false` no filter (for a member the remembered choice then applies); a day that is no ISO date
 (`DATE_PARAMS`) is no day; and a description is kept without the white space around it and is none when nothing is left
 of it or it is longer than `Const.search.maxDescriptionLength` (300, the client's copy of
 `Const.Search.MAX_DESCRIPTION_LENGTH`; `TEXT_LENGTHS`). A parameter still at
@@ -3888,10 +3907,10 @@ it the server groups nothing for `sequence`, the menu marks the grouping the ser
 for, as the URL does, so a return to Triage groups by Sequence again. A search has no page
 number, grouped or not: the grid is continued by the transient `after` cursor its last cell carries. Grouping is not
 remembered in `localStorage`; like every other parameter it lives in the store and the bookmarkable
-URL. The layout is the one exception: the store's `merge` writes a changed `layout` to
+URL. The layout and the triage filter are the two exceptions: the store's `merge` writes a changed `layout` to
 `localStorage` (`Const.localStore.resultsLayout`), and seeding takes the layout from the URL first and
 from `localStorage` when the URL has none, so a map user opens on the map (`Const.search.layout`
-names the two values).
+names the two values); the triage filter is remembered the same way (above).
 
 The browser URL is authoritative exactly once, at page load: `index.scala.html` seeds the store from
 `window.location.search`, so a bookmarked or shared search still opens. After that the store is the

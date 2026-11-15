@@ -51,10 +51,12 @@ const DEFAULTS = {
  *
  * The layout, the grouping and the sort narrow or reorder what is already in scope and survive all
  * of them; the one sort that does not outlive its search is Relevance, which goes with the text
- * (`withoutRefusedCombinations`). The triage filter (`triaged`, the toolbar's switch of the
- * repository view, off by default) survives them too, but belongs to that view: a change of view
- * clears it, and the store drops it from any other view. This table is what the server's old `newSearch=true` flag used to express, and it is the whole
- * reason a widget can send just the one parameter it knows about.
+ * (`withoutRefusedCombinations`). The triage filter (`triaged`, the View settings dialog's "Show
+ * triaged items" in the repository view) survives them too, but belongs to that view: a change of
+ * view clears it, and the store drops it from any other view. It is a choice as the layout is one:
+ * remembered in this browser, and what a page load opens Browse with (`seedSearchParams`). This
+ * table is what the server's old `newSearch=true` flag used to express, and it is the whole reason
+ * a widget can send just the one parameter it knows about.
  *
  * The advanced search panel is the one widget that combines them: it sets a description, the text,
  * a folder, people and Locations together (`personId` and `locationId` then hold several IDs,
@@ -118,10 +120,20 @@ const NUMBER_RANGES = {
     rpp: { min: 1, max: Const.search.maxRpp },
 }
 
-/** The words the server reads, each held to the values it accepts: a subset is one of the Triage subsets */
+/**
+ * The triage filter's two values, as the server reads them: the repository view with its triaged
+ * assets beside the sorted ones, or without them
+ */
+const TRIAGED = { shown: "true", hidden: "false" }
+
+/**
+ * The words the server reads, each held to the values it accepts: a subset is one of the Triage
+ * subsets, and the triage filter one of its two values
+ */
 const ALLOWED_VALUES = {
     subset: Object.values(Const.search.subsets),
     peopleMatch: Object.values(Const.search.peopleMatch),
+    triaged: Object.values(TRIAGED),
 }
 
 /** The texts the server reads, each held to the length it accepts once the white space around it is dropped */
@@ -145,12 +157,21 @@ const PARAM_NAMES = Object.keys(DEFAULTS)
 
 /**
  * Search parameters read out of a browser URL's query string. Unknown parameters are ignored, and so
- * is a page size, a subset, a people match, a day or a description the server would refuse, and a
- * list of people or Locations is held to the IDs the server takes (`normalize`). The layout is the one
- * exception to "the URL, then the defaults": a URL that says nothing about it gets the layout last
- * chosen in this browser (`localStorage`), so a map user opens on the map.
+ * is a page size, a subset, a people match, a triage filter, a day or a description the server
+ * would refuse, and a list of people or Locations is held to the IDs the server takes (`normalize`).
+ *
+ * Two parameters are the exceptions to "the URL, then the defaults", each a choice remembered in
+ * this browser (`localStorage`). A URL that says nothing about the layout gets the layout last
+ * chosen, so a map user opens on the map. And a URL that says nothing the server reads about the
+ * triage filter gets the choice last made with "Show triaged items" (`rememberedTriaged`), shown
+ * when none was made, so the store of an account that sees triaged items (`seesTriaged`: a member,
+ * as the page says) always holds one of the filter's two values in the repository view and its
+ * requests always say which. A Guest sees no triaged item and is refused the filter by the server,
+ * so its search is seeded none; without `seesTriaged` nothing is read from `localStorage`.
+ *
+ * A URL that names either wins for its page, and is not remembered: only a change is (`merge`).
  */
-export function seedSearchParams(search) {
+export function seedSearchParams(search, { seesTriaged = false } = {}) {
     const urlParams = new URLSearchParams(search || "")
     const seeded = { ...DEFAULTS, layout: rememberedLayout() }
 
@@ -159,6 +180,10 @@ export function seedSearchParams(search) {
             seeded[name] = normalize(name, urlParams.get(name))
         }
     })
+
+    if (seesTriaged) {
+        seeded.triaged ??= rememberedTriaged()
+    }
 
     return withoutRefusedCombinations(seeded)
 }
@@ -169,7 +194,8 @@ export function seedSearchParams(search) {
  * whose first day is after its last is no range; the Relevance sort goes with the text: a change
  * that clears the text drops it, so the server's default applies, while any other sort stays; and
  * the triage filter is the repository view's, so another view drops it (the server refuses it with
- * the triage view, and the toolbar offers it nowhere else). A URL can ask for any of them as well.
+ * the triage view, and the View settings dialog offers it nowhere else), the remembered choice
+ * among them. A URL can ask for any of them as well.
  * A people match says nothing of fewer than two people, so it goes with the second of them. What
  * only the advanced search panel combines searches by the panel's filters alone, so it drops an
  * album and a Triage subset (`combinesFilters`), which the server refuses beside it. A description
@@ -269,6 +295,17 @@ function rememberedLayout() {
 }
 
 /**
+ * The triage filter last chosen in this browser with "Show triaged items", for an account that sees
+ * triaged items: shown until the switch is turned off, so with no choice made, or with anything
+ * else under the key, Browse shows the triaged items too
+ */
+export function rememberedTriaged() {
+    const triaged = localStorage.getItem(Const.localStore.showTriaged)
+
+    return ALLOWED_VALUES.triaged.includes(triaged) ? triaged : TRIAGED.shown
+}
+
+/**
  * `current` with `changes` applied under the scope rules above. The store holds no position: a
  * search starts at its first page, and a later page is one request's `after` cursor.
  */
@@ -298,7 +335,8 @@ export function applySearchParamChanges(current, changes) {
  * (`FILTERS`) is set as `filters` gives it, one left out being no filter, and the view, the album,
  * the Triage subset and the map area return to their defaults, so the search is the repository
  * view's by the panel's filters alone. The layout, the grouping, the sort, the page size and the
- * triage filter stay, under the rules every change is held to (`withoutRefusedCombinations`); a
+ * triage filter stay, under the rules every change is held to (`withoutRefusedCombinations`: a
+ * search that leaves another view holds no triage filter, and Browse seeds its own); a
  * search with a description keeps the first three and sends none of them (`DESCRIBED_UNSENT`).
  */
 export function applySearchFilters(current, filters) {
@@ -385,11 +423,23 @@ export function createSearchParamsStore() {
     return {
         ...DEFAULTS,
 
-        /** The browser URL is authoritative exactly once, on page load; after that the store is. */
-        seedFromLocation(search = window.location.search) {
-            Object.assign(this, seedSearchParams(search))
+        /**
+         * The browser URL is authoritative exactly once, on page load; after that the store is.
+         * `seesTriaged` says whether the account sees triaged items, which seeds the triage filter
+         * (`seedSearchParams`).
+         */
+        seedFromLocation(
+            search = window.location.search,
+            { seesTriaged = false } = {},
+        ) {
+            Object.assign(this, seedSearchParams(search, { seesTriaged }))
         },
 
+        /**
+         * A change of the layout or of the triage filter is a choice, remembered for the page
+         * loads to come. The triage filter is remembered as one of its two values alone: the none
+         * a change of view leaves is no choice.
+         */
         merge(changes) {
             const next = applySearchParamChanges(this.snapshot(), changes)
 
@@ -398,6 +448,10 @@ export function createSearchParamsStore() {
                     Const.localStore.resultsLayout,
                     next.layout,
                 )
+            }
+
+            if (next.triaged !== this.triaged && next.triaged !== null) {
+                localStorage.setItem(Const.localStore.showTriaged, next.triaged)
             }
 
             Object.assign(this, next)
@@ -490,7 +544,7 @@ export function createSearchParamsStore() {
 
         /** Whether triaged items are shown: only `triaged=true` shows them, the server's rule as well */
         showsTriaged() {
-            return this.triaged === "true"
+            return this.triaged === TRIAGED.shown
         },
     }
 }
@@ -507,7 +561,7 @@ function isOmitted(name, value) {
 /**
  * A parameter's value as the store keeps it. A number, a word, a day or a text the server would
  * refuse is no opinion, like an empty one, so a hand-edited URL cannot turn every search into a 400:
- * the server's default applies. A description is kept without the white space around it, as the
+ * the server's default applies, or for the triage filter the remembered choice (`seedSearchParams`). A description is kept without the white space around it, as the
  * server reads it, and is none when nothing is left of it or it is longer than the server takes. A
  * list of people or Locations is its IDs, each once, without the empty segments and the IDs past
  * the most a search names, which the server would refuse the whole list for.

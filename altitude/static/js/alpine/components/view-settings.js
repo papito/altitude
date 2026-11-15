@@ -15,7 +15,9 @@ import { runSearch } from "../../search-results/search.js"
  * results are rendered again, and the People tab, which watches the parameter, reloads its panes;
  * the View control's host is `hx-preserve`d, so this panel outlives the swap and stays open. It
  * is offered in the repository view alone, the view the parameter belongs to
- * (`stores/search-params.js`).
+ * (`stores/search-params.js`). It is on until it is turned off, and the store remembers a flip in
+ * `localStorage` as the grid's fields are remembered, so it is as it was left on the next page
+ * load.
  *
  * The server knows nothing of the settings: the fragment arrives unbound and reads the set and the
  * store as Alpine initializes it, so the hydrator (`fragments/inline-dialog.js`) only places focus.
@@ -43,9 +45,9 @@ export function viewSettings() {
         },
 
         toggleTriaged() {
-            // An empty literal clears the parameter, so the view's own rule, triaged assets left out, applies again
+            // Either way the parameter says which, `true` or `false`: the choice the store remembers
             runSearch({
-                params: { triaged: this.showsTriaged() ? "" : "true" },
+                params: { triaged: String(!this.showsTriaged()) },
             })
         },
     }

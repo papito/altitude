@@ -2,9 +2,11 @@ import { Alpine } from "../lib/alpine.esm.min.js"
 import { Const } from "../constants.js"
 import { showErrorSnackBar } from "../common/snackbar.js"
 import { getHttpErrorMessage, http } from "../http/client.js"
+import { context } from "../context.js"
 import {
     applySearchFilters,
     countSearchFilters,
+    rememberedTriaged,
     seedSearchParams,
     serializeSearchParams,
 } from "../stores/search-params.js"
@@ -29,7 +31,8 @@ import { runSearch } from "./search.js"
  *
  * Opening loads the form (`GET /htmx/search/r/:repoId/panel`, the host's `data-panel-url`) filled
  * in from the search parameters in force, its description included, so the server names the chips,
- * with the search's triage filter, which the form's People options count by. The text is the quick
+ * with the triage filter of the search it will run (`triagedOfPanelSearch`), which the form's People
+ * options count by. The text is the quick
  * search input's, typed or not yet searched, so the form's field for it and the input hold one
  * value: the input's is copied to the panel as it opens, and the panel's to the input as it
  * searches. The form is read through the axios client and put in the panel here, not by htmx, so
@@ -170,6 +173,20 @@ export function searchByFilters(filters) {
     )
 }
 
+/**
+ * The triage filter of the search the panel runs. In Browse it is the one in force, which a search
+ * from the panel keeps. Anywhere else the search opens Browse, which holds no filter yet (the store
+ * drops it outside the repository view, and a page with no search has no store) and will be seeded
+ * the choice remembered in this browser, so that choice is the one: for an account that sees
+ * triaged items alone, since a Guest is refused the filter.
+ */
+function triagedOfPanelSearch() {
+    return (
+        Alpine.store(Const.state.searchParams)?.triaged ??
+        (context.seesTriaged() ? rememberedTriaged() : null)
+    )
+}
+
 function quickSearchFormEl() {
     return document.getElementById("searchForm")
 }
@@ -180,8 +197,8 @@ function filterButtonEl() {
 
 /**
  * Loads the panel's form for the search in force, with the quick search input's text as its text
- * and the filters of `openSearchPanel` over both, and with the search's triage filter, which a
- * search from the panel keeps. The panel shows nothing meanwhile; a failure closes it.
+ * and the filters of `openSearchPanel` over both, and with the triage filter of the search the
+ * panel will run. The panel shows nothing meanwhile; a failure closes it.
  */
 async function loadForm(panelEl) {
     const token = ++loadToken
@@ -190,7 +207,7 @@ async function loadForm(panelEl) {
         ...searchParams?.filters(),
         q: quickSearchFormEl().elements.q.value.trim(),
         ...openingFilters,
-        triaged: searchParams?.triaged ?? null,
+        triaged: triagedOfPanelSearch(),
     }
     openingFilters = null
     panelEl.replaceChildren()

@@ -389,7 +389,9 @@ _Avoid_: Display options, Grid options.
 
 **Browse**:
 The view of the sorted library, where the explorer finds assets by folder,
-album, Person or Location. It can also show triaged assets on request.
+album, Person or Location. It shows the triaged assets beside them until
+"Show triaged items" is turned off in the ⚙ View popover, a choice each
+browser remembers.
 _Avoid_: Browse mode, Repository view in user-facing text.
 
 **Triage**:

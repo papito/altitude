@@ -250,6 +250,9 @@ export const Const = {
         appAssetId: "data-app-asset-id",
         // The advanced search panel's host in the nav (includes/nav): the route its form is loaded from
         panelUrl: "data-panel-url",
+        // Whether the account sees triaged items, a member, on the same host: present on every page with the nav, and
+        // absent for a Guest (`context.seesTriaged`)
+        seesTriaged: "data-app-sees-triaged",
         // A combobox field of the panel's form (htmx/search_panel): the route of its options, whether it takes several
         // names, the most it takes and the line that says so once it holds them
         optionsUrl: "data-options-url",
@@ -305,6 +308,10 @@ export const Const = {
         explorerDock: "explorerDock",
         // The results layout (`grid` / `map`) last chosen, seeded into the search parameters on load
         resultsLayout: "resultsLayout",
+        // Whether Browse shows the triaged items, "true" or "false": the View settings dialog's "Show triaged items"
+        // as last flipped, seeded into the search parameters on load for an account that sees triaged items
+        // (js/stores/search-params.js); shown when nothing is kept
+        showTriaged: "showTriaged",
         // The theme (`light` / `dark`) last chosen, shown on every page with a nav (js/common/theme.js;
         // the boot script tag of includes/header_common names the same key in its `data-key`)
         theme: "theme",

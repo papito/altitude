@@ -10,6 +10,7 @@
    there. The right column is the scope: "Show triaged items" is the `triaged` search parameter of the
    repository view (the only view that offers it), so flipping it runs a search; the host of the ⚙ View
    control is `hx-preserve`d (includes/search_results), so this panel stays open over the new results.
+   It is on until it is turned off, and the browser remembers the choice (js/stores/search-params.js).
    A button is a labelable element, so the label's click flips its switch with no script. *@
 
 @switch(id: String, label: String, checked: String, flip: String) = {
