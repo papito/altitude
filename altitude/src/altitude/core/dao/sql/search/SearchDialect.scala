@@ -12,7 +12,7 @@ import scalasql.query.Select
 import altitude.core.dao.sql.Columns
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
-import altitude.core.models.SceneEmbedding
+import altitude.core.util.DescribeRanking
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchSort
 import altitude.core.util.SearchTerm
@@ -20,9 +20,9 @@ import altitude.core.util.SortDirection
 import altitude.core.util.SortValue
 
 /**
- * The ranked rows of a Describe search as an engine writes them ([[SearchDialect.rankedExactly]],
- * [[SearchDialect.rankedByIndex]]): `rows` is the select of each ranked asset's ID and its cosine distance from the description,
- * in that order, and `sources` the CTEs that select reads, which head the statement's own.
+ * The ranked rows of a Describe search as an engine writes them ([[SearchDialect.ranked]], and PostgreSQL's own
+ * `PostgresSearchDialect.rankedByIndex`): `rows` is the select of each ranked asset's ID and its cosine distance from the
+ * description, in that order, and `sources` the CTEs that select reads, which head the statement's own.
  */
 case class RankedRows(rows: SqlStr, sources: Seq[SqlStr] = Nil)
 
@@ -72,27 +72,13 @@ trait SearchDialect:
 
   /**
    * The ranked rows of a Describe search, read exactly: the assets of `matching`, the relation of the search's filters, that
-   * carry a SigLIP 2 Scene embedding no further than `maxDistance`, a cosine distance, from `embedding`, a description's, each
-   * with that distance, the nearest `limit` of them at most, by distance and then ID. Every matching embedding is read and
-   * compared, so the result is exact and its cost is the matching assets'.
+   * carry a SigLIP 2 Scene embedding no further than the ranking's `maxDistance`, a cosine distance, from its `embedding`, a
+   * description's, each with that distance, the nearest `limit` of them at most, by distance and then ID. Every matching
+   * embedding is read and compared, so the result is exact and its cost is the matching assets'. It is the one way of ranking
+   * every engine has; an engine with a vector index has a second of its own (`PostgresSearchDialect.rankedByIndex`), which its
+   * DAO chooses.
    */
-  def rankedExactly(
-      matching: Select[AssetRow[Expr], AssetRow[Sc]],
-      embedding: SceneEmbedding,
-      maxDistance: Double,
-      limit: Int): RankedRows
-
-  /**
-   * The same ranked rows read through the engine's vector index, for the searches whose filters leave too many assets to compare
-   * one by one: the index hands out the embeddings nearest `embedding` and the filters of `matching` are applied to each as it
-   * does, until `limit` of them pass. The result is approximate, as the index is. An engine with no vector index ranks exactly
-   * alone and throws `UnsupportedOperationException`.
-   */
-  def rankedByIndex(
-      matching: Select[AssetRow[Expr], AssetRow[Sc]],
-      embedding: SceneEmbedding,
-      maxDistance: Double,
-      limit: Int): RankedRows
+  def ranked(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows
 
   /** Whether the engine's schema lets this timestamp column be null */
   def isNullableTimestamp(field: String): Boolean

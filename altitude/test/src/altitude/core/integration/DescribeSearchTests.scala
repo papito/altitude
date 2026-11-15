@@ -17,6 +17,7 @@ import altitude.core.Altitude
 import altitude.core.Const
 import altitude.core.FieldConst
 import altitude.core.SearchCursorException
+import altitude.core.dao.sql.search.PostgresSearchDialect
 import altitude.core.dao.sql.search.SearchQueries
 import altitude.core.models.Asset
 import altitude.core.models.Folder
@@ -26,6 +27,7 @@ import altitude.core.models.SceneEmbeddings
 import altitude.core.models.SceneModel
 import altitude.core.models.Settings
 import altitude.core.util.DateRange
+import altitude.core.util.DescribeRanking
 import altitude.core.util.PeopleMatch
 import altitude.core.util.SearchCursor
 import altitude.core.util.SearchPage
@@ -190,7 +192,7 @@ object DescribeSearchTests {
       exactLimit: Int = Const.Search.DESCRIBE_EXACT_LIMIT): SearchPage =
     testApp.txManager.withVectorSearch(limit) {
       val query = testApp.service.search.withResolvedScope(filters.query(cursor, pageSize, exactLimit))
-      testApp.DAO.search.describe(query, embedding, minCosine, limit)
+      testApp.DAO.search.describe(query, DescribeRanking(embedding, minCosine, limit))
     }
 
   private def ids(result: SearchResult): List[String] = result.records.map(_.persistedId)
@@ -878,7 +880,7 @@ object DescribeSearchTests {
         // Before any search sets the transaction up, which lasts until it ends
         val notSetUp =
           testApp.DAO.search
-            .describe(Filters().query(pageSize = 700, exactLimit = 0), description, minCosine = -1, limit = 2000)
+            .describe(Filters().query(pageSize = 700, exactLimit = 0), DescribeRanking(description, minCosine = -1, limit = 2000))
         notSetUp.total.value should be < 100
         val scansBefore = describeIndexScans
 
@@ -1084,10 +1086,15 @@ object DescribeSearchTests {
       } {
         preferVectorIndex()
         val query = testApp.service.search.withResolvedScope(filters.query())
+        val ranking = DescribeRanking(description, minCosine = -1, limit = 1000)
         def planned(exactly: Boolean): String =
           planOf(
-            SearchQueries
-              .described(searchDialect, query, testContext.repository.persistedId, description, 2, limit = 1000, exactly))
+            SearchQueries.described(
+              searchDialect,
+              query,
+              testContext.repository.persistedId,
+              if (exactly) PostgresSearchDialect.ranked(_, ranking) else PostgresSearchDialect.rankedByIndex(_, ranking)
+            ))
 
         val exactPlan = planned(exactly = true)
         (exactPlan should not).include("asset_describe")

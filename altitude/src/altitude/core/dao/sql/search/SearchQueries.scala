@@ -31,7 +31,6 @@ import altitude.core.dao.sql.tables.MetadataParameterRow
 import altitude.core.dao.sql.tables.PersonRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.models.LocationKind
-import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneModel
 import altitude.core.util.BoundingBox
 import altitude.core.util.DateRange
@@ -717,11 +716,12 @@ object SearchQueries:
   /**
    * One page of a Describe search: the matches ranked by how much they look like a description, most alike first.
    *
-   * `ranked (id, distance)` is the engine's own, materialized once: the matches whose SigLIP 2 Scene embedding is no further than
-   * `maxDistance`, a cosine distance, from `embedding`, the description's, the nearest `limit` of them at most, read exactly
-   * (`SearchDialect.rankedExactly`) or, when not `exactly`, through the engine's vector index (`SearchDialect.rankedByIndex`).
-   * Either way it is the [[matching]] relation that is ranked, so a Describe search cannot disagree with the search of its
-   * filters about the assets they leave, and the filters decide nothing of the order.
+   * `ranked (id, distance)` is the engine's own, materialized once: what `ranked` makes of the [[matching]] relation, the matches
+   * whose SigLIP 2 Scene embedding is within a ranking's cutoff of a description's, the nearest of them up to its limit. It is
+   * one of an engine's ways of ranking, exactly (`SearchDialect.ranked`) or, on PostgreSQL, through the vector index
+   * (`PostgresSearchDialect.rankedByIndex`), which the engine's DAO chooses. Either way it is the relation of the search's
+   * matches that is ranked, so a Describe search cannot disagree with the search of its filters about the assets they leave, and
+   * the filters decide nothing of the order.
    *
    * Around it, the shell of every page: the rows after the cursor's position in the order of the ranking, their distance and then
    * their ID, one more than the page holds to tell whether another follows; those rows' assets
@@ -733,18 +733,12 @@ object SearchQueries:
       engine: SearchDialect,
       query: SearchQuery,
       repositoryId: String,
-      embedding: SceneEmbedding,
-      maxDistance: Double,
-      limit: Int,
-      exactly: Boolean): SqlStr =
+      ranked: Select[AssetRow[Expr], AssetRow[Sc]] => RankedRows): SqlStr =
     import engine.dialect.*
 
     if query.rpp < 1 then throw IllegalArgumentException("A page of a Describe search needs a page size")
 
-    val base = matching(engine, query, repositoryId)
-    val ranked =
-      if exactly then engine.rankedExactly(base, embedding, maxDistance, limit)
-      else engine.rankedByIndex(base, embedding, maxDistance, limit)
+    val rankedMatches = ranked(matching(engine, query, repositoryId))
 
     val after = query.cursor.fold(SqlStr.empty) {
       cursor =>
@@ -757,7 +751,7 @@ object SearchQueries:
     statement(
       engine,
       query,
-      ranked.sources :+ sql"ranked (id, distance) AS MATERIALIZED (${ranked.rows})",
+      rankedMatches.sources :+ sql"ranked (id, distance) AS MATERIALIZED (${rankedMatches.rows})",
       sql"""
       SELECT $assetColumnsWithoutBulkyMetadata, page.distance AS distance$total
         FROM (SELECT id, distance

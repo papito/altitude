@@ -22,6 +22,7 @@ import altitude.core.models.Settings
 import altitude.core.models.UserMetadataField
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.BoundingBox
+import altitude.core.util.DescribeRanking
 import altitude.core.util.GroupedSearchResult
 import altitude.core.util.NameKey
 import altitude.core.util.ResolvedSearchGroup
@@ -348,7 +349,7 @@ class SearchService(val app: Altitude):
       case None => SearchPage(Nil, Option.when(query.isTotalCounted)(0), hasMore = false)
       case Some(embedding) =>
         txManager.withVectorSearch(limit) {
-          searchDao.describe(withResolvedScope(query), embedding, minCosine, limit)
+          searchDao.describe(withResolvedScope(query), DescribeRanking(embedding, minCosine, limit))
         }
 
     val nextCursor = Option.when(page.hasMore) {

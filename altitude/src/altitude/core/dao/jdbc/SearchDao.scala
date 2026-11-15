@@ -7,13 +7,16 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import org.apache.commons.dbutils.QueryRunner
 import scalasql.Sc
+import scalasql.core.Expr
 import scalasql.core.Queryable
 import scalasql.core.SqlStr
 import scalasql.core.TypeMapper
+import scalasql.query.Select
 
 import altitude.core.FieldConst
 import altitude.core.RequestContext
 import altitude.core.dao.sql.Db
+import altitude.core.dao.sql.search.RankedRows
 import altitude.core.dao.sql.search.SearchDialect
 import altitude.core.dao.sql.search.SearchQueries
 import altitude.core.dao.sql.tables.AlbumRow
@@ -22,6 +25,7 @@ import altitude.core.dao.sql.tables.FolderRow
 import altitude.core.dao.sql.tables.LocationRow
 import altitude.core.models._
 import altitude.core.util.BoundingBox
+import altitude.core.util.DescribeRanking
 import altitude.core.util.GroupBy
 import altitude.core.util.GroupedSearchPage
 import altitude.core.util.GroupedSearchRow
@@ -68,31 +72,26 @@ abstract class SearchDao(override val config: Config) extends AssetDao(config) w
   protected def searchDialect: SearchDialect
 
   /**
-   * Whether a Describe search's ranked rows are read exactly, each matching asset's embedding compared with the description's
-   * (`SearchDialect.rankedExactly`), or through the engine's vector index (`SearchDialect.rankedByIndex`): the engine's choice,
-   * made for each page of the resolved `query`
+   * How the matches of a Describe search's page, the resolved `query`'s, are ranked: exactly, each matching asset's embedding
+   * compared with the description's (`SearchDialect.ranked`), which is the one way every engine has. An engine with a vector
+   * index chooses here, page by page, between that and its index.
    */
-  protected def ranksExactly(query: SearchQuery): Boolean
+  protected def rankedRows(query: SearchQuery, ranking: DescribeRanking): Select[AssetRow[Expr], AssetRow[Sc]] => RankedRows =
+    searchDialect.ranked(_, ranking)
 
   /**
    * One statement for both engines (`SearchQueries.described`) around the engine's ranked rows, which are the query's matches, so
    * the page is read as every other search's is: a Search text that the probe found no asset can match is answered with nothing,
    * and the rows come back as the asset, its distance and, on a page that counts it, the total.
    */
-  override def describe(query: SearchQuery, embedding: SceneEmbedding, minCosine: Double, limit: Int): SearchPage =
+  override def describe(query: SearchQuery, ranking: DescribeRanking): SearchPage =
     import dialect.*
 
     val isTotalCounted = query.isTotalCounted
     if matchesNothing(query) then return SearchPage(Nil, Option.when(isTotalCounted)(0), hasMore = false)
 
-    val statement = SearchQueries.described(
-      searchDialect,
-      query,
-      RequestContext.getRepository.persistedId,
-      embedding,
-      maxDistance = 1 - minCosine,
-      limit,
-      exactly = ranksExactly(query))
+    val statement =
+      SearchQueries.described(searchDialect, query, RequestContext.getRepository.persistedId, rankedRows(query, ranking))
     // One row past the page says whether another follows
     val candidates = readPage[(AssetRow[Sc], Double)](statement, isTotalCounted)
 

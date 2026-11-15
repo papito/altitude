@@ -3,6 +3,7 @@ package altitude.core.util
 import altitude.core.Api
 import altitude.core.Const
 import altitude.core.FieldConst
+import altitude.core.models.SceneEmbedding
 
 case class SearchSort(field: String, direction: SortDirection):
 
@@ -22,6 +23,16 @@ object SearchSort:
 
   /** By how much a still image looks like the description of a Describe search, most alike first */
   val Similarity: SearchSort = SearchSort(Const.Search.SORT_SIMILARITY, SortDirection.DESC)
+
+/**
+ * What a Describe search ranks the assets of its query by: the description's embedding; the least cosine an asset's SigLIP 2
+ * Scene embedding has to it to be ranked at all, the Describe match threshold as a cosine; and the most assets ranked, the
+ * Describe result limit
+ */
+case class DescribeRanking(embedding: SceneEmbedding, minCosine: Double, limit: Int):
+
+  /** The cutoff as a statement compares it: the furthest cosine distance from the description's embedding */
+  def maxDistance: Double = 1 - minCosine
 
 class SearchQuery(
     val text: Option[String] = None,

@@ -20,8 +20,8 @@ import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.dialects.AltitudePostgresDialect
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
-import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneModel
+import altitude.core.util.DescribeRanking
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchSort
 import altitude.core.util.SearchTerm
@@ -77,20 +77,21 @@ object PostgresSearchDialect extends SearchDialect:
    * `OFFSET 0` keeps it from flattening the inner select into the outer one, where each distance would be computed once for the
    * cutoff and again for the order.
    */
-  override def rankedExactly(
-      matching: Select[AssetRow[Expr], AssetRow[Sc]],
-      embedding: SceneEmbedding,
-      maxDistance: Double,
-      limit: Int): RankedRows =
-    val embedded = distances(SearchQueries.embedded(matching), PostgresOverrides.vectorLiteral(embedding.values))
+  override def ranked(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows =
+    val embedded = distances(SearchQueries.embedded(matching), PostgresOverrides.vectorLiteral(ranking.embedding.values))
     RankedRows(sql"""
       SELECT embedded.id, embedded.distance
         FROM (${Db.render(embedded, dialect).withCompleteQuery(false)} OFFSET 0) AS embedded (id, distance)
-       WHERE embedded.distance <= $maxDistance
+       WHERE embedded.distance <= ${ranking.maxDistance}
        ORDER BY embedded.distance, embedded.id
-       LIMIT ${SqlStr.raw(limit.toString)}""")
+       LIMIT ${SqlStr.raw(ranking.limit.toString)}""")
 
   /**
+   * The same ranked rows read through the vector index, PostgreSQL's alone, for the searches that leave too many assets to
+   * compare one by one (`postgres.SearchDao` chooses): the index hands out the embeddings nearest the description's and the
+   * filters of `matching` are applied to each as it does, until the ranking's `limit` of them pass. The result is approximate, as
+   * the index is.
+   *
    * The candidates come from `asset_describe`, the HNSW index over the SigLIP 2 Scene embeddings at half precision, which the
    * inner order is written to match. The filters of the search are in the inner select's `WHERE`, so they are applied as the
    * index is read: the transaction is set up for a vector search of `limit` rows (`TransactionManager.withVectorSearch`), so the
@@ -99,19 +100,16 @@ object PostgresSearchDialect extends SearchDialect:
    * looking for rows that are not there. An asset with no embedding is not in the index, and where the planner scans the table
    * instead, over a few rows, its distance is NULL, which the cutoff drops.
    */
-  override def rankedByIndex(
-      matching: Select[AssetRow[Expr], AssetRow[Sc]],
-      embedding: SceneEmbedding,
-      maxDistance: Double,
-      limit: Int): RankedRows =
-    val literal = PostgresOverrides.vectorLiteral(embedding.values)
+  def rankedByIndex(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows =
+    val literal = PostgresOverrides.vectorLiteral(ranking.embedding.values)
     val column = SearchQueries.assetColumn(matching, SceneModel.Siglip2.column)
     def byHalfPrecision(using Context): SqlStr = sql"$column::$HALF_PRECISION <=> $literal::$HALF_PRECISION"
-    val nearest = SearchQueries.sliced(this, distances(matching, literal), byHalfPrecision, SqlStr.raw(s" LIMIT $limit"))
+    val nearest =
+      SearchQueries.sliced(this, distances(matching, literal), byHalfPrecision, SqlStr.raw(s" LIMIT ${ranking.limit}"))
     RankedRows(sql"""
       SELECT nearest.id, nearest.distance
         FROM ($nearest) AS nearest (id, distance)
-       WHERE nearest.distance <= $maxDistance""")
+       WHERE nearest.distance <= ${ranking.maxDistance}""")
 
   // Capture time is the only nullable timestamp: it is unknown when no metadata rung succeeds.
   override def isNullableTimestamp(field: String): Boolean = field == FieldConst.Asset.ORIGINAL_CREATED_AT

@@ -18,8 +18,8 @@ import altitude.core.dao.sql.dialects.AltitudeSqliteDialect
 import altitude.core.dao.sql.tables.AssetRow
 import altitude.core.dao.sql.tables.SearchDocumentRow
 import altitude.core.dao.sqlite.SqliteOverrides
-import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneModel
+import altitude.core.util.DescribeRanking
 import altitude.core.util.SearchGrouping
 import altitude.core.util.SearchSort
 import altitude.core.util.SearchTerm
@@ -65,13 +65,10 @@ object SqliteSearchDialect extends SearchDialect:
    * CTE ([[ScannedRow]]), which the matching assets are joined to by their rowid, so the filters of the search, the cutoff, the
    * order and the limit are applied to what the scan hands out. The column is registered with the extension on every connection
    * as it is opened (`TransactionManager.setUpSqliteConnection`), and the description's vector is bound as the column stores one,
-   * its raw float32 values.
+   * its raw float32 values. SQLite has no vector index, so this is the one way it ranks, and the scan reads every embedding
+   * whatever the filters leave.
    */
-  override def rankedExactly(
-      matching: Select[AssetRow[Expr], AssetRow[Sc]],
-      embedding: SceneEmbedding,
-      maxDistance: Double,
-      limit: Int): RankedRows =
+  override def ranked(matching: Select[AssetRow[Expr], AssetRow[Sc]], ranking: DescribeRanking): RankedRows =
     val rowid = SearchQueries.assetColumn(matching, "rowid")
     val scannedAssets =
       matching.join(ScannedRow)((_, scanned) => Expr[Boolean](implicit ctx => sql"$rowid = ${scanned.assetRowid}"))
@@ -79,25 +76,17 @@ object SqliteSearchDialect extends SearchDialect:
     val nearest = SearchQueries.sliced(
       this,
       scannedAssets
-        .filter(_ => Expr[Boolean](implicit ctx => sql"${scanned.distance} <= $maxDistance"))
+        .filter(_ => Expr[Boolean](implicit ctx => sql"${scanned.distance} <= ${ranking.maxDistance}"))
         .map(_ => (asset.id, scanned.distance)),
       sql"${scanned.distance}, ${asset.id}",
-      SqlStr.raw(s" LIMIT $limit")
+      SqlStr.raw(s" LIMIT ${ranking.limit}")
     )
-    val vector = scalasql.Bytes(SqliteOverrides.vectorBytes(embedding))
+    val vector = scalasql.Bytes(SqliteOverrides.vectorBytes(ranking.embedding))
     RankedRows(
       rows = nearest,
       sources = Seq(sql"""scanned (asset_rowid, distance) AS (
         SELECT rowid, distance FROM vector_full_scan('asset', '${SqlStr.raw(SceneModel.Siglip2.column)}', $vector))""")
     )
-
-  // SQLite has no vector index: its one scan is exact, and reads every embedding whatever the filters leave
-  override def rankedByIndex(
-      matching: Select[AssetRow[Expr], AssetRow[Sc]],
-      embedding: SceneEmbedding,
-      maxDistance: Double,
-      limit: Int): RankedRows =
-    throw UnsupportedOperationException("SQLite ranks a description exactly: it has no vector index")
 
   // Capture time is null when no metadata rung succeeds; import time only on legacy rows, and only ever as a sort column
   override def isNullableTimestamp(field: String): Boolean =

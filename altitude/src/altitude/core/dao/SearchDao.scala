@@ -4,9 +4,9 @@ import altitude.core.models.Asset
 import altitude.core.models.MapBounds
 import altitude.core.models.MapCell
 import altitude.core.models.MapLocation
-import altitude.core.models.SceneEmbedding
 import altitude.core.models.UserMetadataField
 import altitude.core.util.BoundingBox
+import altitude.core.util.DescribeRanking
 import altitude.core.util.GroupedSearchPage
 import altitude.core.util.ResolvedSearchText
 import altitude.core.util.SearchName
@@ -23,15 +23,15 @@ trait SearchDao:
 
   /**
    * One page of a Describe search: the assets `query` matches, in the context repository, whose SigLIP 2 Scene embedding is at a
-   * cosine of at least `minCosine` to `embedding`, a description's, the nearest `limit` of them at most, nearest first and then
-   * by ID. The query is resolved as any search's is, and carries the page: the `rpp` rows after its cursor, whose position is a
-   * row's cosine distance and ID, or the first ones without it, each row standing at its distance (`SearchRow.sortValue`, a
-   * `SortValue.Real`); a page that counts the total (`SearchQuery.isTotalCounted`) carries the count of all the ranked rows. Its
-   * sort and grouping are not read. An asset with no embedding (a Video, an animated image, a still image the model could not
-   * embed) is in no page. The caller's transaction is set up for a vector search of `limit` rows
+   * cosine of at least the ranking's `minCosine` to its `embedding`, a description's, the nearest `limit` of them at most,
+   * nearest first and then by ID. The query is resolved as any search's is, and carries the page: the `rpp` rows after its
+   * cursor, whose position is a row's cosine distance and ID, or the first ones without it, each row standing at its distance
+   * (`SearchRow.sortValue`, a `SortValue.Real`); a page that counts the total (`SearchQuery.isTotalCounted`) carries the count of
+   * all the ranked rows. Its sort and grouping are not read. An asset with no embedding (a Video, an animated image, a still
+   * image the model could not embed) is in no page. The caller's transaction is set up for a vector search of that many rows
    * (`TransactionManager.withVectorSearch`).
    */
-  def describe(query: SearchQuery, embedding: SceneEmbedding, minCosine: Double, limit: Int): SearchPage
+  def describe(query: SearchQuery, ranking: DescribeRanking): SearchPage
 
   /** The number of assets a search matches, exact, without reading any of them */
   def count(query: SearchQuery): Int
