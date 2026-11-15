@@ -6,7 +6,6 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import scalasql.Sc
-import scalasql.Table
 import scalasql.core.Context
 import scalasql.core.Expr
 import scalasql.core.JoinNullable
@@ -24,6 +23,7 @@ import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.DynamicFilter
 import altitude.core.dao.sql.tables.AlbumAssetRow
 import altitude.core.dao.sql.tables.AssetRow
+import altitude.core.dao.sql.tables.BulkyMetadata
 import altitude.core.dao.sql.tables.FaceRow
 import altitude.core.dao.sql.tables.LocationAssetRow
 import altitude.core.dao.sql.tables.LocationRow
@@ -1156,23 +1156,14 @@ object SearchQueries:
   private val sequenceColumns: SqlStr = sql"($sequenceColumnList)"
 
   /** The asset columns the grouped statements select, in the order [[AssetRow]] declares them, so a row reads back positionally */
-  private val assetColumns: SqlStr =
-    SqlStr.raw(Table.labels(AssetRow).map(Db.config.columnNameMapper).map(name => s"asset.$name").mkString(", "))
+  private val assetColumns: SqlStr = SqlStr.raw(AssetRow.columnList())
 
   /**
    * The asset columns of a page whose cells show none of the bulky metadata JSON (a Describe search's): [[assetColumns]] with
    * `user_metadata` and `extracted_metadata` read as NULL in their places, so a row still reads back positionally and its model's
-   * two are empty. `public_metadata` stays, as it does where the hand-written reads leave the same two out
-   * (`AssetDao.assetWithoutBulkyMetadata`).
+   * two are empty
    */
-  private val assetColumnsWithoutBulkyMetadata: SqlStr =
-    val bulky = Set(FieldConst.Asset.USER_METADATA, FieldConst.Asset.EXTRACTED_METADATA)
-    SqlStr.raw(
-      Table
-        .labels(AssetRow)
-        .map(Db.config.columnNameMapper)
-        .map(name => if bulky(name) then s"NULL AS $name" else s"asset.$name")
-        .mkString(", "))
+  private val assetColumnsWithoutBulkyMetadata: SqlStr = SqlStr.raw(AssetRow.columnList(BulkyMetadata.AsNull))
 
   /**
    * One source of one alternative of one group of the Search text: where the term can match, with the IDs it resolved to there

@@ -11,8 +11,8 @@ import scalasql.Table
 import altitude.core.{ Const => C }
 import altitude.core.FieldConst
 import altitude.core.RequestContext
-import altitude.core.dao.sql.Db
 import altitude.core.dao.sql.tables.AssetRow
+import altitude.core.dao.sql.tables.BulkyMetadata
 import altitude.core.models.AccountSnapshot
 import altitude.core.models.Asset
 import altitude.core.models.AssetType
@@ -220,19 +220,10 @@ abstract class AssetDao(val config: Config) extends BaseDao[Asset] with altitude
 
   /**
    * The columns of the hand-written reads that need no bulky metadata JSON (the library operations' locking read, a Sequence's
-   * frames and its live members): `AssetRow`'s labels, `asset.`-prefixed as `SearchQueries.assetColumns` builds them, so the
-   * typed row stays the one list of what a general read selects (the Scene embeddings are not on it), without `user_metadata` and
-   * `extracted_metadata`, which [[makeModel]] reads as empty when absent; `public_metadata` stays, since the Sequence rule
-   * compares the device model. A Describe search's page, a typed read, leaves the same two out
-   * (`SearchQueries.assetColumnsWithoutBulkyMetadata`).
+   * frames and its live members): the asset row's own list (`AssetRow.columnList`, on which no Scene embedding is) without
+   * `user_metadata` and `extracted_metadata`, which [[makeModel]] reads as empty when absent
    */
-  protected val assetWithoutBulkyMetadata: String =
-    Table
-      .labels(AssetRow)
-      .map(Db.config.columnNameMapper)
-      .filterNot(Set(FieldConst.Asset.USER_METADATA, FieldConst.Asset.EXTRACTED_METADATA))
-      .map(name => s"asset.$name")
-      .mkString(", ")
+  private val assetWithoutBulkyMetadata: String = AssetRow.columnList(BulkyMetadata.Omitted)
 
   /**
    * The columns of the two reads that need a frame's Scene embeddings, [[sequenceCandidatesStatement]] and
