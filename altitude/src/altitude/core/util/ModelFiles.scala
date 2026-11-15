@@ -7,6 +7,7 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Path
@@ -337,8 +338,8 @@ final class ModelDownloader(
   private def write(spec: ModelFileSpec, body: InputStream, digest: Sha256.Digest, from: Long): Long =
     val part = partOf(spec)
     val out =
-      if from > 0 then Files.newOutputStream(part, StandardOpenOption.APPEND)
-      else Files.newOutputStream(part, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
+      if from > 0 then FileChannel.open(part, StandardOpenOption.WRITE, StandardOpenOption.APPEND)
+      else FileChannel.open(part, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
     val progress = Progress(spec, from)
     val watchdog = ModelDownloader.Watchdog(body, stallTimeout)
     var overlong = false
@@ -350,9 +351,12 @@ final class ModelDownloader(
         overlong = from + progress.transferred + read > spec.size
         if !overlong then
           digest.update(chunk, 0, read)
-          out.write(chunk, 0, read)
+          val buffer = ByteBuffer.wrap(chunk, 0, read)
+          while buffer.hasRemaining do out.write(buffer)
           progress.add(read)
           read = body.read(chunk)
+      // The whole body on the disk before the move gives the file its name, so a crash cannot leave a short file named whole
+      if !overlong then out.force(true)
     catch {
       // The read failed because the watchdog closed the stream: the stall is the cause, not the closed stream, which is left out
       case _: IOException if watchdog.fired => throw IOException(s"No byte of ${spec.name} came for $stallTimeout")
