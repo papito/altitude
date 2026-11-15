@@ -26,6 +26,9 @@ object Const:
     // Caps the `import.parallelism` Setting, for an operator who ships a config but never logs in. See `util.ImportParallelism`.
     val IMPORT_PARALLELISM_MAX = "import.parallelism.max"
 
+    // The root of the model files: empty is the per-user cache. See `util.ModelFiles`.
+    val MODELS_DIR = "models.dir"
+
     // DEV-only convenience: if both are defined, requests requiring auth will auto-login.
     val DEV_USER = "dev.user"
     val DEV_PASSWORD = "dev.password"

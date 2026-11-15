@@ -67,6 +67,12 @@ case class VideoException(msg: String) extends Exception(msg)
 /** An image no image reader can decode */
 case class ImageException(msg: String) extends Exception(msg)
 
+/**
+ * The model files could not be put in place (`ModelDownloader`): too little free space, a download that failed, or a file whose
+ * size or SHA-256 is not its pin. The message names the files missing, their URLs and the directory to put them in by hand.
+ */
+case class ModelFilesException(msg: String) extends Exception(msg)
+
 /** Work bounded to a few at once has no slot free now (auto-straighten): the request is answered 503, to be asked again */
 case class BusyException(msg: String) extends Exception(msg)
 

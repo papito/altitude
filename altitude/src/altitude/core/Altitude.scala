@@ -60,21 +60,22 @@ import altitude.core.transactions.SqlExplainer
 import altitude.core.transactions.TransactionManager
 import altitude.core.util.DescribeEmbedder
 import altitude.core.util.ImportParallelism
+import altitude.core.util.ModelFiles
 import altitude.core.util.OnnxDescribeEmbedder
 import altitude.core.util.OnnxSceneEmbedder
 import altitude.core.util.SceneEmbedder
 
 /**
  * @param newSceneEmbedder
- *   builds the instance's Scene embedder: the ONNX Runtime one, which production and the dev server use; the test instances build
- *   one they can switch off
+ *   builds the instance's Scene embedder from the model files in place: the ONNX Runtime one, which production and the dev server
+ *   use; the test instances build one they can switch off
  * @param newDescribeEmbedder
  *   builds the instance's Describe embedder, likewise: the ONNX Runtime one, or the test instances' switchable one
  */
 class Altitude(
     val dbEngineOverride: Option[String] = None,
-    newSceneEmbedder: () => SceneEmbedder = () => OnnxSceneEmbedder(),
-    newDescribeEmbedder: () => DescribeEmbedder = () => OnnxDescribeEmbedder()):
+    newSceneEmbedder: ModelFiles => SceneEmbedder = _ => OnnxSceneEmbedder(),
+    newDescribeEmbedder: ModelFiles => DescribeEmbedder = _ => OnnxDescribeEmbedder()):
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
   logger.debug(s"Environment is: ${Environment.CURRENT}")
 
@@ -198,10 +199,10 @@ class Altitude(
   if isPipelineRestartEnabled then logger.info("A pipeline queue whose stream fails restarts it after a backoff")
 
   // Startup order: settings service (empty) → transaction manager → DAOs → migration → settings load → importParallelism → actor
-  // system → Scene embedder → services. The transaction manager reads the Settings an Admin tunes on the Settings screen for the
-  // transactions it begins, so their service comes first; it is loaded once the schema is in place, and until then a transaction
-  // sets none. The import dispatcher's thread count starts from a Setting, so the database must be current and read before the
-  // actor system is built.
+  // system → model files → Scene embedder → services. The transaction manager reads the Settings an Admin tunes on the Settings
+  // screen for the transactions it begins, so their service comes first; it is loaded once the schema is in place, and until then
+  // a transaction sets none. The import dispatcher's thread count starts from a Setting, so the database must be current and read
+  // before the actor system is built. The model files are in place, downloaded if missing, before anything that reads them.
   final val settings: SettingsService = SettingsService(app)
 
   final val txManager: TransactionManager = TransactionManager(app.config, sqlExplainer, () => settings.currentIfLoaded)
@@ -422,17 +423,24 @@ class Altitude(
     actorSystem.scheduler.scheduleAtFixedRate(1.day, 1.day)(() => service.imports.pruneOrLog())(actorSystem.executionContext)
 
   /**
-   * The Scene models every imported still image is embedded with (`AssetService.measureImage`), built before the services, so a
-   * missing model file fails the start and never an import, as the ArcFace pool's file does. The import threads share it, and
-   * `cleanup` closes it.
+   * The model files of the pinned set, in its directory under `models.dir` (the per-user cache by default). The missing ones are
+   * downloaded here, once, and the start waits for them, so nothing after this runs without its model; a download that cannot
+   * finish fails the start with the files missing, their URLs and the directory to put them in by hand (`ModelFilesException`).
    */
-  final val sceneEmbedder: SceneEmbedder = newSceneEmbedder()
+  final val models: ModelFiles = ModelFiles.ensure(config)
+
+  /**
+   * The Scene models every imported still image is embedded with (`AssetService.measureImage`), built before the services, so a
+   * model that fails to open fails the start and never an import, as the ArcFace pool's file does. The import threads share it,
+   * and `cleanup` closes it.
+   */
+  final val sceneEmbedder: SceneEmbedder = newSceneEmbedder(models)
 
   /**
    * What embeds a description in the space of SigLIP 2's Scene embeddings. Building it loads nothing: the text tower is opened by
    * the first description and stays open until `cleanup` closes it, so an import, which embeds images alone, never loads it.
    */
-  final val describeEmbedder: DescribeEmbedder = newDescribeEmbedder()
+  final val describeEmbedder: DescribeEmbedder = newDescribeEmbedder(models)
 
   object service {
     val system: SystemService = SystemService(app)
