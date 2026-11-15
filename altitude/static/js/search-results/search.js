@@ -15,12 +15,13 @@ import { Const } from "../constants.js"
  *
  * `params`    are merged into the store, subject to its scope rules (see `stores/search-params.js`)
  * `transient` are serialized into this one request only and never stored (continuous scroll: the
- *             page number or the `after` cursor, and `isContinuousScroll`; the crowded-pin panel's
+ *             `after` cursor and `isContinuousScroll`; the crowded-pin panel's
  *             grid layout while the store says map)
- * `target`    / `swap` are the htmx swap for this caller. Results swap in without settling
- *             (`settle:0`): settling would lay each old element's attributes on the new one of the
- *             same ID and restore the server's afterwards, over what Alpine set meanwhile: Triage's
- *             Curate row (`x-show`) would return to the server's `display: none`
+ * `target`    / `swap` are the htmx swap for this caller. Results swap in without settling; the
+ *             `settle:0` restates the global `defaultSettleDelay: 0` (`includes/header_common`).
+ *             Settling would lay each old element's attributes on the new one of the same ID and
+ *             restore the server's afterwards, over what Alpine set meanwhile: Triage's Curate row
+ *             (`x-show`) would return to the server's `display: none`
  * `source`   is the element htmx issues the request from, for a caller that needs to recognise
  *             the response in the lifecycle events (the map panel, whose URL update is rewritten)
  *

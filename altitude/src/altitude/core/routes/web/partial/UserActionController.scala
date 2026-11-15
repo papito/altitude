@@ -45,7 +45,7 @@ object UserActionController:
         List(AccountType.User -> libraries.exists(_.users), AccountType.Guest -> libraries.exists(_.guests))
           .collect { case (accountType, true) => accountType }
 
-    /** The Permission columns of the matrix: those the creator may give a User in some Library, in the order of the Goals */
+    /** The Permission columns of the matrix: those the creator may give a User in some Library, in `Permission`'s order */
     def columns: List[Permission] =
       Permission.values.toList.filter(permission => libraries.exists(row => row.users && row.permissions.has(permission)))
 

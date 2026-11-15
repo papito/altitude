@@ -206,9 +206,7 @@ export function contextMenu() {
 
         /**
          * Remember the View settings load as the only response allowed to fill its dialog host, and
-         * empty the host first: a swap over a leftover fragment would match its element IDs, and
-         * htmx settles such elements back to their served attributes, stripping what Alpine's
-         * bindings set as the new fragment initialized (every switch would open unchecked).
+         * empty the host first (`clearDialog`), so the load never swaps over a leftover fragment.
          *
          * The load's request events are dispatched on the trigger, the element that issued it, and
          * reach the component on its root, as does the settle event dispatched on the dialog host.

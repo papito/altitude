@@ -19,7 +19,7 @@ import {
  * Gesture rules:
  * - A plain drag from empty grid space (padding, gaps, a cell's metadata) replaces the selection.
  * - A Shift-drag from anywhere in the grid, thumbnails included, adds to it. Shift is read when
- *   the button goes down; releasing it mid-drag changes nothing. `dragon-drop.js` declines to
+ *   the button goes down; releasing it mid-drag changes nothing. `dragdrop/assets.js` declines to
  *   start an asset drag while Shift is held, which is what leaves that gesture to the box.
  * - A thumbnail counts as soon as the rectangle touches any part of its image box.
  * - Release commits. Escape, the window losing focus, the page being hidden, or the grid being

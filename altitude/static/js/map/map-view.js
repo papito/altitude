@@ -351,8 +351,8 @@ export async function hydrateMapViewFragment({ fragmentEl }) {
 
 /**
  * Releases the map on screen, if any: its listeners, its pending request, and its registered view.
- * The results fragment hydrator calls it for every new results fragment, whether or not that one
- * holds a map. A removal that throws (the container may be gone already) is logged, not raised.
+ * The results fragment hydrator calls it for every new results fragment outside the crowded-pin
+ * panel, whether or not that one holds a map; the panel's fragments leave the map on screen. A removal that throws (the container may be gone already) is logged, not raised.
  */
 export function disposeMapView() {
     if (!current) {

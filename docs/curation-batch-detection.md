@@ -62,9 +62,10 @@ fitted scale. Face sharpness falls as a face fills more of the frame, so it only
 at a similar size, never across Persons and never as an absolute threshold.
 
 The two Scene embeddings are not measurements of the gray, fitted image: `OnnxSceneEmbedder` (`core/util`) takes the
-same upright decode in color, fits its short side to 224 (`INTER_AREA` when shrinking, `INTER_CUBIC` when enlarging an
-image under that size: a transform of this project's own, not the checkpoints' reference one, which the similarity
-thresholds are calibrated to), center-crops the square, converts it to RGB and runs it through each Scene model's ONNX
+same upright decode in color and fits it to each model's square (`SceneModel.fit`): DINOv2's short side to 224 and
+the center square cropped, SigLIP 2's whole frame squashed to 256 × 256 (`INTER_AREA` when shrinking, `INTER_CUBIC`
+when enlarging an image under that size: a transform of this project's own, not the checkpoints' reference one,
+which the similarity thresholds are calibrated to), converts it to RGB and runs it through each Scene model's ONNX
 Runtime session (one per model in the process, opened when `Altitude` builds its embedder, before the services, so a
 missing model file fails the start, never an import). Two embeddings of one model compare by cosine similarity, 1 for
 the same picture. They are selected by the two Sequence candidates' statements only (`AssetDao.candidateColumns`), and
@@ -342,13 +343,14 @@ group by its ID alone, since its first capture moves when the frame that set it 
 Curation lives in Triage. It has no page or URL of its own and adds no nav entry: it is a modal that fills the window
 over the nav, the explorer and the grid, so the nav keeps marking the view it opened from and a reload shows the grid.
 
-Three ways in, all opening the same modal:
+Four ways in, all opening the same modal:
 
 | Way in | Where | Opens on |
 |---|---|---|
 | **Curate all 3 sequences** | A centered row of its own under Triage's results toolbar. Hidden until the count is read, and gone at zero. | The whole queue, whatever the search shows. |
 | **Curate** on a group header | Each Sequence's header when the grid is grouped by Sequence and the Sequence has two frames or more. | That one Sequence: all its frames still out of the trash, even under a search showing only some. |
-| **Curate Selected** in the batch ops | The selection's action bar (toolbar and footer copies) while two or more images are selected. | The selection. Over 100 images the snackbar says so and nothing opens; the server refuses it too, but only the client says why. |
+| **Curate Selected** in the batch ops | The selection's action bar (toolbar and footer copies) while two or more assets are selected. | The selection. Over 100 assets the snackbar says so and nothing opens; the server refuses it too, but only the client says why. |
+| The **Curation** row of the Detail panel | Asset detail of a frame whose Sequence has a set to open. A plain click opens Curation over Asset detail, which comes back when it closes; any other click opens its link in a new tab. | That frame's Sequence. |
 
 The group header's Curate button goes away on the client when the group's count falls under two or when Curation
 clears that Sequence.
@@ -415,7 +417,7 @@ in the rail are preloaded; a held arrow key does not queue originals ahead of th
 
 Hover over a pane and the **Loupe** shows the spot under the pointer at the original's pixels, so sharpness, noise and
 eyes are judged on the file and not on a pane that shrinks it; it shows on the pane under the pointer alone. Its level
-is one value for every frame, from 100% to 400% in steps of 50%: the wheel over a pane
+is one value for every frame, from 50% to 400% in steps of 50% (50% by default): the wheel over a pane
 steps it, the only control it has, the browser remembers it for the next open, and a label in the lens's corner reads it. Above 1:1 the pixels are crisp blocks, so blur and noise are the file's and not the browser's
 smoothing. It works while the stage is zoomed to a Person, and shows nothing over the bars beside the image or while a
 frame loads.

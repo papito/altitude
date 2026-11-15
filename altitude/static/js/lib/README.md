@@ -23,7 +23,7 @@ this table whenever a file is replaced. `.prettierignore` excludes this director
 | `tokentweak-boot.js`  | tokentweak boot script            | 0.3.0                  | `dist/boot.js` in the same tarball, byte-identical, renamed                                                      |
 
 `tokentweak.js` and `tokentweak-boot.js` are dev only: `views/includes/header_common.scala.html` references them
-inside `@if(Environment.isDev)` and nothing else does. The boot file is a plain blocking script for the head, not
+inside `@if(Environment.isDev)` and nothing else does. Both tags are commented out for now, so no page loads them. The boot file is a plain blocking script for the head, not
 `defer`: it reads the storage key from the `data-key` of its own script tag and adopts the stored override
 stylesheet before the first paint, so a page never flashes the untweaked look. The module is imported by the
 adapter `js/design-tweaks.js`, which configures the panel for Altitude (see **Design tweaks** in `views/AGENTS.md`).

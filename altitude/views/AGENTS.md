@@ -4,523 +4,437 @@
 
 The rules of [altitude/AGENTS.md](../AGENTS.md) **Do** apply here too. For frontend work:
 
-* For UI work, prompt the developer to run "make db" and "make watch" if localhost:8080 is not accessible or if the repo is not initialized (setup form visible or no assets present).
-* A browser check on localhost:8080 needs the login out of the way: every page redirects to `/login` unless `dev.user` and `dev.password` are set in `application-dev.conf` (in the project root, gitignored), and a login through the form is lost each time the dev server restarts, which every CSS or Scala change under `make watch` causes. When the two lines are commented out, uncomment them yourself for the check, without asking, and comment them out again when the check is done. They are read once at startup and `make watch` does not watch that file, so the server has to restart before it sees them: a real change to a watched source brings a restart (a CSS or Scala edit; touching a file's timestamp does not), and the gate is gone once `/` redirects to `/r/<repoId>` instead of `/login`. Never repeat the two values anywhere: not in a doc, a log, a commit or a reply. If the file or the two lines are missing, ask the developer. See **Config & Environments** in `altitude/AGENTS.md`.
-* Use the fewest properties/tags and the least CSS/HTML standards to accomplish the task.
-* Do not assume aesthetic preferences such as color, spacing, or padding unless they are specified. The style guide (`views/style_guide.scala.html`, dev only, `/style-guide/r/:repoId`) records the design conventions: read its usage notes before choosing a color, spacing, or component, and keep it current in the same change (the list is under **Style guide** below).
-* Always prefer CSS Grid and Flexbox.
-* The application's CSS is one bundle: `static/css/app.css` lists `@import` lines in cascade order (`core.css`, `tabs.css`, then one file per template under `pages/`, `includes/` and `htmx/`, named after it), which the build inlines into one content-hashed file. Reuse `core.css`'s `:root` variables. A template's styles go in its own file, such as the folder tree and popover styles in `static/css/htmx/folders.css`, never in a `<style>` block. The bundle applies on every page, so scope a rule by an element only its template renders (usually an ID), and a page's own rule by its body class at zero specificity (`:where(body.setup) main`). A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`). Bundled CSS is served from `/assets/`, so its URLs are absolute or `data:`. A nested rule extends its parent by a pseudo-class or a pseudo-element only (`&:focus-visible`, `&::picker(select)`), and a descendant takes a rule of its own: the design tweaks panel's element picker matches a nested selector with `closest()`, which cannot match a descendant one (`& option`).
-* Strongly prefer CSS variables over hard-coded values, especially if duplicated.
-* Write no color literal, named colors included, in a stylesheet: a rule writes a theme color (`--theme-*`: the primary, secondary and accent colors, a step of the neutral scale or an on-color), a semantic color (`--success-color`, `--warning-color`, `--error-color`, `--info-color`) or `--shadow-color` by its token (`color: var(--theme-neutral-4)`), a shadow by its token, and an edge by a border token, which holds a width and a style but no color, followed by the edge's color in place (`border: var(--border-hairline) var(--theme-neutral-3)`), never restating a value a token holds. Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, so an editor shows a swatch on each line. The setup page's palette (`--setup-*`) is that page's own: `pages/setup.css` declares it on `body:where(.setup)`, as literals, and the style guide's scan leaves the file out (see **Setup background**). The only other color tokens of `core.css` are the veils (`--scrim-color`, `--asset-detail-backdrop-color`, `--dnd-dragging-background-color`, `--panel-border-color`, `--popover-background-color`, `--popover-border-color`, `--dashed-border-color`, `--search-panel-background-color`, `--field-background-color`), a theme color or `--shadow-color` at an alpha in relative color syntax, the color inside a shadow token is a theme color or one of those at an alpha too, the stops of a gradient token (the Edit panel's slider tracks, `--edit-track-*`) are theme and semantic colors and `--shadow-color`, and the four semantic fills (`--success-background-color`, `--warning-background-color`, `--error-background-color`, `--info-background-color`), each a `light-dark()` pair of two HSL relative-color recipes over its semantic color, the one derivation among the colors; no other token aliases a color under another name or mixes one. A color scoped to the elements it marks, rather than a token of `:root`, is declared by their rule from a theme or semantic color: a view's `--view-tint` and `--view-stripe` on its panes, and an account type's `--account-type-color` on `[data-account-type]` (an Admin's `--error-color`, a User's `--success-color`, a Guest's `--info-color`), and an Edit panel slider's `--edit-slider-track` on `.edit-slider` (the `--theme-primary` fill to the thumb, or, set inline by the component, one of the `--edit-track-*` gradient tokens). A new color is a theme color written in the rule, a new `--theme-*` role as a hex pair when no role fits, or a new veil token when it must be translucent. Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, which the `:focus-visible` rule of `core.css` draws on every control; no rule removes an outline, except for the fields that draw their own focus indicator in its place: a text-like field's accent edge and ring, the nav's quick search field's glow, and a field of the advanced search panel, whose box draws the field's edge and ring around its chips and its input. The detail is under **Themes** below.
-* Paddings, margins, gaps and insets use a step of the `--space-*` scale of `core.css`, or a role token over one (`--panel-padding`, `--viewport-gap`, `--list-row-gap`, …). The steps and the size tokens (widths, heights, radii) are in rem; a rectangular box or control rounds its corners with `--radius`, a button and a toggle group's track with `--radius-large` (a segment inside the track with `calc(var(--radius-large) - var(--space-1))`, the track's radius less its padding), a badge with `--radius-small`, a chip and a switch's track with the pill `--chip-border-radius` (a chosen filter's chip, in the advanced search panel and a filtered search's results title, is a rectangular box, `--radius`), the advanced search panel with `--radius-xl`, and only a circle, a switch's knob or an avatar writes a radius (a percentage) in a rule; border widths, shadow offsets and the sizes the server sets in pixels (`--face-box`, `--preview-box`) stay in px. A token that JS reads as a number of pixels is registered with `@property` as a `<length>`, so its computed value is in px (`--viewport-gap`). The only literals among them are 0 and auto, centering offsets (`50%` and a negative half size), offsets larger than the scale (the 100 px of the general modal host and of the unanchored popover dialog, the snackbar's top), the 1 px width and height of `.visually-hidden`, and the em offsets and padding of a category's +/− badge in the Locations list, which belong to its glyph.
-* A font size is a step of the type scale of `core.css` (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`, `-display`, in rem like the spacing steps; `--font-size-base` is the body's, and a control that would not inherit it, a button or a menu action, writes it), never a px or em literal, `smaller` or a size relative to a parent. A weight is `--font-weight-bold`, `--font-weight-semibold` (a button's) or `--font-weight-medium` (`normal` resets one), a tracking is `--letter-spacing-wide`, the brand's `--letter-spacing-medium` or the view band's `--letter-spacing-band`, and the leading of text that wraps is `--line-height-text`. The font is `--font`, which `body` sets, or `--font-nav`, the monospace stack of the brand (the nav's and the login page's), the nav's entries and its quick search field, which only their rules write. A glyph's own size and leading stay in its rule: the spinner's 3em, the merge arrow's 2em, the account info dialog's avatar's 2.5em, the 0.5em of a category's +/− badge, and the `line-height: 1` of the menu trigger, the location pin, the close button, the snackbar's dismiss button, the nav's filter button and the remove and clear controls of the advanced search panel; the Font Awesome solid weight 900 selects the icon face.
-* Folder, Album, and Location actions (including the Add controls and category actions, except Add location) open popover dialogs through `static/js/common/modal.js`, anchored below the row's ⋯ trigger or the Add button and centered on it; Add location opens a centered modal, with room for its map editor. Keep their context menus as action lists; two popover panels hold an inline dialog: View settings, in its menu's panel, and, the second, the advanced search panel under the nav's quick search (**Advanced search panel**). A control that picks one of several values (the grid toolbar's Group and Sort, and any dropdown added later) is a **choice menu**: the same native popover panel, built by `buildChoiceMenuCtrl` from a server-rendered host of option buttons, never a `<select>`, which stays a form's field. Every menu panel wears the popover dialog's frosted surface. The detail is under **Modals**, **Context menus** and **Explorer action dialogs** below.
+- For UI work, if localhost:8080 is unreachable or the repo is not initialized (setup form shown, or no assets), prompt
+  the developer to run `make db` and `make watch`.
+- A browser check needs the login out of the way: every page redirects to `/login` unless `dev.user` and `dev.password`
+  are set in `application-dev.conf` (project root, gitignored). A form login is lost on each dev server restart (every
+  CSS or Scala change under `make watch`).
+  - If the two lines are commented out, uncomment them for the check without asking, and comment them out after.
+  - They are read once at startup and `make watch` does not watch the file, so the server must restart: make a real
+    edit to a watched source (CSS or Scala; touching a timestamp does not count). The gate is gone once `/` redirects to
+    `/r/<repoId>`.
+  - Never repeat the two values anywhere: doc, log, commit or reply. If the file or the lines are missing, ask the
+    developer. See **Config & Environments** in `altitude/AGENTS.md`.
+- Use the fewest properties, tags and CSS/HTML features that do the job. Always prefer CSS Grid and Flexbox.
+- Do not assume aesthetic preferences (color, spacing, padding) unless specified. The style guide
+  (`views/style_guide.scala.html`, dev only, `/style-guide/r/:repoId`) records the design conventions: read its usage
+  notes before choosing a color, spacing or component, and keep it current in the same change (see **Style guide**).
+- CSS is one bundle: `static/css/app.css` `@import`s, in cascade order, `core.css`, `tabs.css`, then one file per
+  template under `pages/`, `includes/` and `htmx/`, named after it. The build inlines it into one content-hashed file
+  served from `/assets/`, so CSS URLs are absolute or `data:`.
+  - A template's styles go in its own file (the folder tree's in `htmx/folders.css`), never in a `<style>` block.
+  - The bundle applies on every page: scope a rule by an element only its template renders (usually an ID), and a
+    page's own rule by its body class at zero specificity (`:where(body.setup) main`).
+  - A Scala value reaches CSS as a custom property the template sets on the container (`style="--preview-box: ...px"`).
+  - A nested rule extends its parent only by a pseudo-class or pseudo-element (`&:focus-visible`, `&::picker(select)`);
+    a descendant gets its own rule, because the design tweaks panel's element picker matches with `closest()`, which
+    cannot match a nested descendant selector (`& option`).
+- Reuse `core.css`'s `:root` variables. Strongly prefer CSS variables over hard-coded values, especially repeated ones.
+- Colors (detail under **Themes**):
+  - No color literal in a stylesheet, named colors included. A rule writes a theme color (`--theme-*`: primary,
+    secondary, accent, a neutral step, an on-color), a semantic color (`--success-color`, `--warning-color`,
+    `--error-color`, `--info-color`) or `--shadow-color` by its token; a shadow by its token; an edge by a border token
+    (width and style, no color) plus the color (`border: var(--border-hairline) var(--theme-neutral-3)`). Never restate
+    a value a token holds.
+  - Every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values (a swatch per line in
+    an editor). The setup page's `--setup-*` palette is its own: literals with no `light-dark()` pair, so the page keeps
+    its look in either theme, on `body:where(.setup)` in `pages/setup.css`, which the style guide's scan skips (see
+    **Setup background**).
+  - `core.css`'s only other color tokens: the Histogram channels (`--histogram-red`, `-green`, `-blue`, literal pairs);
+    the veils (`--scrim-color`, `--popover-background-color`, `--panel-border-color`, …), each a theme color or
+    `--shadow-color` at an alpha in relative color syntax; shadow tokens, whose color is a theme color or one of those
+    at an alpha; the `--edit-track-*` gradients, whose stops are theme and semantic colors and `--shadow-color`; and the
+    four semantic fills (`--success-background-color` etc.), each a `light-dark()` pair of HSL relative-color recipes
+    over its semantic color, the only derived colors. No other token aliases a color or mixes one.
+  - A color scoped to the elements it marks is declared by their rule from a theme or semantic color: `--view-tint` and
+    `--view-stripe` on a view's panes, `--account-type-color` on `[data-account-type]` (Admin `--error-color`, User
+    `--success-color`, Guest `--info-color`), `--edit-slider-track` on `.edit-slider`.
+  - A new color is a theme color written in the rule; a new `--theme-*` hex pair when no role fits; a new veil token
+    when it must be translucent.
+  - Keyboard focus is one ring, `--border-heavy` in `--theme-primary`, drawn on every control by `core.css`'s
+    `:focus-visible` rule. No rule removes an outline, except fields that draw their own focus indicator instead: a
+    text-like field's accent edge and ring, the nav quick search field's glow, and an advanced search panel field, whose
+    box draws the edge and ring around its chips and input.
+- Spacing and sizes:
+  - Paddings, margins, gaps and insets use a `--space-*` step of `core.css` or a role token over one (`--panel-padding`,
+    `--viewport-gap`, `--list-row-gap`, …). Steps and size tokens (widths, heights, radii) are in rem; border widths,
+    shadow offsets and server-set pixel sizes (`--face-box`, `--preview-box`) stay in px. A token JS reads as pixels is
+    registered with `@property` as a `<length>`, so it computes to px (`--viewport-gap`).
+  - Radii: `--radius` for a rectangular box or control; `--radius-large` for a button and a toggle group's track (a
+    segment inside it `calc(var(--radius-large) - var(--space-1))`); `--radius-small` for a badge; the pill
+    `--chip-border-radius` for a chip and a switch's track, except a chosen filter's chip (advanced search panel,
+    filtered results title), a rectangular box with `--radius`; `--radius-xl` for the advanced search panel. Only a
+    circle, a switch's knob or an avatar writes a radius in a rule, as a percentage.
+  - The only literals: 0 and auto; centering offsets (`50%`, a negative half size); offsets beyond the scale (the 100 px
+    of the general modal host and the unanchored popover dialog, the snackbar's top); `.visually-hidden`'s 1 px; and
+    the em offsets and padding of a Locations category's +/− badge, which belong to its glyph.
+- Type:
+  - A font size is a step of `core.css`'s type scale (`--font-size-xs`, `-small`, `-base`, `-medium`, `-large`, `-xl`,
+    `-display`, in rem), never a px or em literal, `smaller` or a parent-relative size. `--font-size-base` is the
+    body's; a control that does not inherit it (a button, a menu action) writes it.
+  - Weight: `--font-weight-bold`, `--font-weight-semibold` (buttons) or `--font-weight-medium`; `normal` resets one.
+    Tracking: `--letter-spacing-wide`, `--letter-spacing-medium` (the brand) or `--letter-spacing-band` (the view band).
+    Wrapping text's leading: `--line-height-text`.
+  - Font: `--font`, set by `body`, or the monospace `--font-nav`, written only by the brand (nav and login page), the
+    nav's entries and quick search field, and text that reads as an identifier (a path, a username, an account type, an
+    Edit panel number field).
+  - A glyph's own size and leading stay in its rule: an em size for an icon glyph (spinner, merge arrow, account info
+    avatar, a category's +/− badge), `line-height: 1` for an icon-only control (menu trigger, close button, remove and
+    clear controls, toolbar toggles, …) and the vertical view band. Font Awesome's solid weight 900 selects its face.
+- Menus and dialogs (detail under **Modals**, **Context menus**, **Explorer action dialogs**):
+  - Folder, Album and Location actions, Add controls and category actions included, open popover dialogs through
+    `static/js/common/modal.js`, anchored below and centered on the row's ⋯ trigger or the Add button. Add location
+    instead opens a centered modal, with room for its map editor. Their context menus stay action lists.
+  - Two popover panels hold an inline dialog: View settings, in its menu's panel, and the advanced search panel under
+    the nav's quick search (**Advanced search panel**).
+  - A control that picks one of several values (the grid toolbar's Group and Sort, any dropdown added later) is a
+    **choice menu**: the same native popover panel, built by `buildChoiceMenuCtrl`
+    (`static/js/common/context-menu-markup.js`) from a server-rendered host of option buttons. Never a `<select>`,
+    which stays a form field.
+  - Every menu panel wears the popover dialog's frosted surface.
 
 ## Stack
 
 - **HTMX 4** — server-driven HTML fragments, no SPA routing
-- **Alpine.js** — reactive state and UI behavior (`x-data`, `x-show`, `$store`)
-- **No bundler** — all JS uses native ES modules (`<script type="module">`, `import`/`export`)
-- Libraries are checked into `static/js/lib/` (htmx, Alpine and its focus plugin, Split.js, interact.js, axios,
-  Viselect for box selection, Leaflet for the Location pin editor and the map, supercluster for the map's on-screen
-  clustering, media-chrome for the asset detail's video player, Flatpickr for the advanced search panel's date
-  ranges, tokentweak for the dev-only design tweaks panel); interact.js drives the asset, batch, folder, album,
-  Location and People drags and the Edit panel's Crop tool; versions
-  and sources are listed in `static/js/lib/README.md`,
-  whose **Adding a library** says how a new one is vendored, loaded and linted
-- No library blocks the first render except htmx: the pages' plain library scripts are `defer` (htmx is not, so it still
-  starts on DOMContentLoaded, after its extensions and the modules), and the libraries only some views need (Leaflet
-  and its stylesheet, supercluster, media-chrome, Flatpickr and its stylesheet) are loaded by the first view that asks, through
-  `js/common/vendor-loader.js`
+- **Alpine.js** — reactive state and UI behavior
+- **No bundler** — JS is native ES modules (`<script type="module">`, `import`/`export`), served as written
+- Libraries are vendored in `static/js/lib/`; its `README.md` lists versions, sources and patches, and how to add one
+  (**Adding a library**). They are htmx, Alpine and its focus plugin, axios, interact.js (drags, the Crop tool),
+  Split.js (People tab), Viselect (box selection), Leaflet (Location pin editor, map), supercluster (map clustering),
+  media-chrome (video player), Flatpickr (advanced search date ranges) and tokentweak (the dev-only design tweaks
+  panel, loaded on no page: **Design tweaks**)
+- Only htmx blocks the first render. Other plain library scripts are `defer`; htmx is not, so it starts on
+  DOMContentLoaded after its deferred extensions and the modules (deferred, it would start before them). Libraries
+  only some views need (Leaflet, supercluster, media-chrome, Flatpickr, with their stylesheets) are never linked by a
+  page: the first view that needs one loads it through `js/common/vendor-loader.js`
 
 ## Template Layout
 
 ```
 views/
-  *.scala.html          ← full pages (index, login, setup, pipeline, settings, users, style_guide)
-  includes/             ← reusable layout fragments (nav, the nav's Library menu, page title, header, batch ops, search results, results title, a filtered search's chips, an advanced search option, a person's cover on a search chip, a combobox field of chips, the Import page's upload sections, an Import's status and title in the Import history, the Watch folder dialog's deletion notice, Asset detail's Edit panel and the Edit's tools over its stage, the Histogram of Curation's stage and the Edit panel)
+  *.scala.html          ← full pages
+  includes/             ← fragments included into a page or another template
   htmx/                 ← HTMX partials returned by routes/web/partial/**
 ```
 
-Full pages include `@includes.html.html_common()` (provides the snackbar's two stacks and its announcers, the tooltip's host, and the four dialog hosts)
-and `@includes.html.header_common()` (loads HTMX, Alpine, the stylesheet bundle).
+Every page includes `@includes.html.header_common()` (HTMX, Alpine, the stylesheet bundle). The pages with a nav also
+include `@includes.html.html_common()`: the snackbar's stacks and announcers, the tooltip's host and the four dialog
+hosts. Login and setup have neither the nav nor `html_common`, and write their own `<title>`; every other page titles its
+tab with `@includes.html.page_title(page)`, which names the request's Library, so each tab names its own.
 
-A page of a Library titles its browser tab with `@includes.html.page_title(page)`: "<Library> · Altitude" on the main
-page (`index`, which passes no `page`), and "Import · <Library> · Altitude", "Settings · <Library> · Altitude" and
-"Style Guide · <Library> · Altitude" on the others. The Library is the request's (`RequestContext.getRepository.name`,
-escaped by Twirl), so each tab names its own; setup keeps its own title.
+Import (`pipeline.scala.html`), Settings and Users carry the nav outside the main app. Each loads `lib/json-enc.js`, since
+the nav's dialogs post JSON, and a page module that starts with `startNavPage()` of `js/nav-page.js`
+(**JS Directory ↔ Template Mapping**). How the nav's Library menu survives a nav reload there: **Nav refresh**.
 
-Import (`pipeline.scala.html`), Settings (`settings.scala.html`) and Users (`users.scala.html`) carry the nav outside the
-main app. Each includes `html_common`, for the snackbar and the popover dialog host the nav's New library and Change
-password dialogs open into, and `lib/json-enc.js`, since those dialogs post JSON, and its page module
-(`js/upload-form-page.js`, `js/settings-page.js`, `js/users-page.js`)
-starts with `startNavPage()` of `js/nav-page.js`: Alpine with what `html_common` binds and the `contextMenu` component,
-the htmx request rule and the dialog wiring (`js/listeners/dialogs.js`) over a minimal app, whose hydration is the
-`modal` fragments and the choice menus, and the nav's Library menu, built before Alpine starts. The import page's polling
-nav reload leaves that menu in place, and skips a tick while it or its dialog is open (**Nav refresh**).
+HTMX partials (`views/htmx/`):
 
-HTMX partial templates live in `views/htmx/`. They are returned by the `routes/web/partial/**`
-controllers as `"<!doctype html>" + template(...)`. They carry no `<style>`: a partial's styles are in
-`static/css/htmx/<template>.css` (an include's in `static/css/includes/`, a page's in `static/css/pages/`), part of
-the one bundle `header_common` links, so a swap carries markup only. Prefer declarative `data-app-*` attributes over inline
-`<script type="module">` blocks when the behavior can be hydrated centrally from
-`js/frontend-app.js`.
+- Their controllers return them through `BaseController.htmlResponse` (`"<!doctype html>" + template(...)`).
+- No `<style>`: a partial's styles are `static/css/htmx/<template>.css` (an include's in `css/includes/`, a page's in
+  `css/pages/`), part of the one bundle (**Do**), so a swap carries markup only.
+- No module scripts. Prefer declarative `data-app-*` attributes, hydrated centrally from `js/frontend-app.js`, over
+  inline `<script type="module">`. What a partial would script the page does once: `index.scala.html` sets the
+  repository ID, and `js/listeners/htmx-requests.js` marks the explorer tab that issued a load selected
+  (`htmx:after:request`).
+- The explorer tabs' partials are shells. `htmx/folders`, `albums` and `locations` hold action hosts and an empty list
+  host (`data-app-fragment="folder-tree"`, `"album-list"`, `"location-list"`) that `js/fragments/explorer.js` renders
+  client-side once the tab has settled; rows and their actions are in `js/common/folder-tree.js`, `album-list.js` and
+  `location-list.js`. `htmx/people`'s `peopleTab` component loads each pane's list itself. See
+  **Folder tree expansion and viewed scope**, **Albums**, **Locations** and **People tab**; Curation's partials are
+  under **Curation**, the Triage explorer's under **Triage summary** and **Scope dialog and Quick view**, and every
+  template under **Key Files**.
+- The styles the explorer's menus and rows share (`.menu-ctrl`, `.context-menu`, `.asset-count`) live in `core.css`.
 
-`htmx/folders.scala.html` (styled by `static/css/htmx/folders.css`) supplies the
-`#folderActions` host of the centered "Add folder" button and the empty
-`#rootFolderList` host, marked `data-app-fragment="folder-tree"` so `js/fragments/explorer.js`
-calls `reloadFolderTree(repoId)` once the tab has settled; edit `js/common/folder-tree.js` for
-folder rows and action markup. The tree's interaction contract (expansion gestures, viewed-folder
-highlighting) is under **Folder tree expansion and viewed scope** below. `htmx/albums.scala.html`
-is the same shape for the Albums tab (`static/css/htmx/albums.css`): the two add buttons, and the empty `#albumList` host
-(`data-app-fragment="album-list"`) that `js/common/album-list.js` renders (see **Albums** below), and
-`htmx/locations.scala.html` for the Locations tab (`static/css/htmx/locations.css`): the `#locationActions` / `#noLocations` hosts
-and the empty `#locationList` host (`data-app-fragment="location-list"`) that `js/common/location-list.js`
-renders (see **Locations** below); `htmx/people.scala.html` (`static/css/htmx/people.css`) is the People tab's shell, whose
-panes' lists the `peopleTab` Alpine component loads from the server (see **People tab** below); `htmx/curation.scala.html`
-(`static/css/htmx/curation.css`) is Curation's shell, `htmx/curation_set.scala.html` (`static/css/htmx/curation_set.css`) a
-Curation set's fragment, and `htmx/curation_queue.scala.html` (`static/css/htmx/curation_queue.css`) the rows of its Sequence
-rail (see **Curation** below); `htmx/triage_summary.scala.html` (`static/css/htmx/triage_summary.css`),
-`htmx/triage_scope_dialog.scala.html` (`static/css/htmx/triage_scope_dialog.css`) and `htmx/quick_view_modal.scala.html`
-(`static/css/htmx/quick_view_modal.css`) are the Triage explorer's (see **Triage summary** and **Scope dialog and Quick
-view** below). Partials carry no module scripts: the repository ID is set once by `index.scala.html`, and the
-explorer tab that issued a load is marked selected from `htmx:after:request`
-(`js/listeners/htmx-requests.js`). The styles the two menus share (`.menu-ctrl`, `.context-menu`,
-`.asset-count`) live in `core.css`.
+**Advanced search panel fragments** — `SearchPanelController` renders the panel's form and its comboboxes' options
+(`../AGENTS.md`, **Advanced search panel**); the browser side is **Advanced search panel** below, the styles
+`static/css/htmx/search_panel.css`.
 
-**Advanced search panel fragments** — `SearchPanelController` renders the panel's form and the options of its
-comboboxes (`../AGENTS.md`, **Advanced search panel**). The nav's panel loads the form on opening, and the form's
-comboboxes ask for their options as the user types; how the panel behaves is under **Advanced search panel** below, and
-its styles are `static/css/htmx/search_panel.css`.
+- `htmx/search_panel` (`GET /htmx/search/r/:repoId/panel`) is the form, filled in from a search's parameters. Every
+  filter is a field named after its search parameter (`Api.Field.Search`) holding the value a search takes, so the
+  form's entries are the search. Every ID opens with `idPrefix` (`searchPanel` in the nav); the style guide's specimen
+  passes its own, so both can be on one page. The "Search in" row and its `view` and `triaged` inputs are a member's
+  alone.
+- `includes/filter_combobox` is the one combobox field (`filterCombobox`): the panel's Folder, People and Locations, and
+  the Import page's destination folders (**Import page**). The typed input has no `name`; only the hidden input of
+  comma-separated IDs submits. Attributes configure the component: `data-options-url`; on a field of several
+  `data-multiple`, `data-max-chosen` (`SearchRequestParser.MAX_IDS`) and `data-max-chosen-message`; and
+  `data-options-params`, the form inputs an options request carries (a member's People field names `view` and
+  `triaged`, so its counts follow the pick). The People label's row is as tall as the people match switch, so nothing
+  moves when the switch appears.
+- `includes/search_chip` is the one chip, the panel's and a filtered search's results title's (**Results title**);
+  scripts find its parts by `data-option-name` and `data-chip-remove`. `includes/search_filter_icon` is the one place a
+  filter kind's icon is named. The server names the chips: an ID that names nothing in the Library has no chip and no
+  place in its input.
+- `htmx/search_options_folders`, `_people` and `_locations` (`…/options/folders|people|locations?q=`) are bare
+  `li[role="option"]` elements, at most `Const.Search.MAX_FILTER_OPTIONS`, matched and ordered by the server; the
+  combobox marks the matched word starts. An option has no element ID: the combobox gives it `<listbox ID>-<option ID>`,
+  so two comboboxes on a page offering the same folder never share one. A folder's and a Location's option is
+  `includes/search_path_option`. A Person's count is `ListedPerson.visibleCount` under the request's `view` and
+  `triaged`, and nobody a search finds nothing for is offered.
 
-- `htmx/search_panel.scala.html` (`GET /htmx/search/r/:repoId/panel`) is `form#searchPanelForm` (`role="search"`,
-  `x-data="searchPanel"`, its submit `search()`), filled in from a search's parameters. Every ID of the form opens with
-  the template's `idPrefix`, `searchPanel` in the nav's panel; the style guide's specimen passes its own, so the nav's
-  panel can open beside it with no ID on the page twice. Every filter is a field under
-  its search parameter's name, holding the value a search takes: the Describe field `describe`
-  (`textarea#searchPanelDescribe`, the form's first, `maxlength` `Const.Search.MAX_DESCRIPTION_LENGTH`, filled in from
-  the route's `description`), the Search text's field `q` (`#searchPanelText`, labelled "Keywords"), and hidden
-  inputs for `folderId`, `personId` and `locationId` (IDs separated by commas), `peopleMatch` (`all` or `any`) and
-  `takenFrom`, `takenTo`, `importedFrom` and `importedTo` (ISO dates). `.fields` holds one `.field` per filter, each
-  label above its `.box`, the two date ranges side by side in `.dates`, and `.actions` holds Clear and Search, the
-  form's submit (`.action-button.primary`). A member's form opens `.fields` with the "Search in" row,
-  `.toggle-group.search-in` (`role="group"`, `aria-label="Search in"`): the hidden inputs `view` and `triaged`, which
-  hold the pick, and three segments, Library, Triage and All, the one of the route's `view` and `triaged` pressed
-  (`aria-pressed`, bound to `searchesIn(view, triaged)`; a click is `searchIn(view, triaged)`). A Guest's form has
-  neither the row nor the inputs.
-- A combobox field (`.field` with `x-data="filterCombobox"`; its markup is `includes/filter_combobox`, which the Import
-  page's destination folders are too, the upload sections' and the Watch folder dialog's, **Import page**) follows the ARIA combobox pattern of the Change
-  combobox: a label, then `.box` with the field's icon, the hidden input of its IDs, the chips of what is chosen
-  (`ul.chips`) and the input typed into (`role="combobox"`, `aria-autocomplete="list"`, `aria-expanded`,
-  `aria-controls`, `aria-activedescendant`; it has no `name`, so it is never submitted), and after the box the
-  `<template>` a new chip is cloned from, the empty `role="listbox"` (`popover="manual"`) its options go into and a
-  visually hidden `role="status"`. `data-options-url` is the field's options route; `data-multiple` marks the two
-  fields that take several, with `data-max-chosen`, the most one search takes (`SearchRequestParser.MAX_IDS`), and
-  `data-max-chosen-message`, the line the listbox shows once the field holds them. `data-options-params` names the
-  inputs of the field's form whose values a request for its options carries: a member's People field names `view` and
-  `triaged`, so its options count what the search will find under the pick as it stands. The Folder field of a member's
-  form is shown by `x-show="!searchesTriage"`, and rendered hidden when the form opens on Triage. A chip is `includes/search_chip.scala.html`, the one chip of the panel and of a filtered search's title:
-  `li.chip` with its kind as a class (`folder`, `person`, `location`; the title's also `describe`, `search-text` and
-  `dates`),
-  carrying `data-option-id` and `data-option-label`, its label in `.name` (`data-option-name`: a folder's path, a
-  Location with its Category, a Person's name led by their cover Face, `.cover`, or the `.no-cover` placeholder, both
-  `data-option-cover`, `includes/search_person_cover`), and ending with its remove button (`data-chip-remove`), named
-  "Remove <label>" unless the caller names what it removes (`removes`: the title's Search text chip, "Remove Keywords
-  beach"). A field's icon, and a title chip's, is `includes/search_filter_icon.scala.html`, the one place a
-  kind's icon is named (`describe` is `fa-magic`). The server names the chips: an ID that names nothing in the Library has no chip and no place in
-  its input.
-- The people match is the `.switch` beside the People label, the two in `.label-row` (`#searchPanelPeopleMatch`,
-  in `.match` between the words Any and All, on for `all`), its value in the hidden `peopleMatch` input beside it;
-  `.match` is shown once two people are chosen (`x-show="hasSeveral"`, the server rendering it hidden with fewer). The
-  row is as tall as the switch with or without it (`min-height: var(--switch-height)`), so nothing below moves when the
-  second person is chosen.
-- A date range field (`.field` with `x-data="dateRange"`) is a label and a `.box` with a calendar icon, a read-only
-  text input showing the range (no `name`; `aria-haspopup="dialog"`, `aria-expanded` following the calendar, and the
-  range as its `title`, for one cut short), the two hidden inputs of its days and a clear button, shown while it holds
-  a range.
-- `htmx/search_options_folders.scala.html`, `search_options_people.scala.html` and
-  `search_options_locations.scala.html` (`GET /htmx/search/r/:repoId/options/folders`, `/people`, `/locations`,
-  each with the text typed so far as `q`) are the options of the three comboboxes: `li[role="option"]` elements
-  alone, at most 50, an empty fragment when nothing matches. An option carries what its chip needs,
-  `data-option-id` and `data-option-label`, and no element ID: the combobox gives each option one of its listbox's own as it
-  places it (`<listbox ID>-<option ID>`, which `aria-activedescendant` names), so the comboboxes of one page, the panel's
-  and the Import page's destination fields, never share an ID. A folder's and a Location's option is
-  `includes/search_path_option.scala.html`: `.name` (`data-option-name`), holding the names above its own in
-  `.ancestors` (`Trips › 2024 › `, a Location's Category) and then its own. A Person's is their cover
-  (`includes/search_person_cover`, loaded lazily: `img.cover`, or `.cover.no-cover`, `data-option-cover`), `.name`
-  (`data-option-name`) and `.count`, the number of assets a search of them finds (the People tab's number,
-  `ListedPerson.visibleCount`, grouped as `1,840`), which a `.visually-hidden` "assets" follows; the people route takes
-  `triaged=true` to count triaged assets, and offers nobody a search finds nothing for. The server matches the text and
-  orders the options, so the fragment is rendered as it comes; the combobox marks the matched starts of words in the
-  name and copies the cover onto the chip.
+The explorer tabs (`index.scala.html`, in `#explorerHeader`) are the links themselves (`<a role="tab">`, selected by
+`aria-selected="true"`). The initial tab is loaded through `htmx.ajax` with the tab as `source`, so it is selected as a
+click would select it. The URL fragment names the tab to open; none, or one naming no tab of the view (`#albums` in
+Triage), opens Folders. The server leaves the Albums tab out of Triage and puts the Triage summary's host above the tab
+list there (**Triage summary**). The Trash hides the explorer through CSS. Placement against the results:
+**Explorer dock**.
 
-The explorer tabs (`index.scala.html`) are the links themselves (`<a role="tab">` in a
-`role="tablist"`, styled by `tabs.css` on `aria-selected="true"`); the initial tab is loaded through
-`htmx.ajax` with the tab as `source`, so it is selected exactly as a click would select it. The tab list sits in
-`#explorerHeader`, the explorer's header row, in every view that has an explorer (the trash hides the whole explorer
-through CSS). Browse has four tabs, Folders, Albums, People and Locations; Triage has no Albums tab, which the server
-leaves out of the page (`current != Const.NavEntry.TRIAGE`), and has the Triage summary's host above the tab list in
-the same header (**Triage summary**). The URL fragment names the tab to open, Folders without
-one, and a fragment naming no tab of the view, `#albums` in Triage, opens the first tab, Folders. Where the explorer sits
-against the results, and the divider between them, is under **Explorer dock** below.
+**Triage's and the Trash's look** — Triage is marked by the accent (`--theme-accent`), the Trash by `--warning-color`,
+each at an alpha in relative color syntax, so it holds in either theme:
 
-**Triage's and the Trash's look** — Triage is set apart from Browse by the accent (`--theme-accent`, the token nearest
-teal), and the Trash by the warning color (`--warning-color`), each at an alpha in relative color syntax, so it holds
-in either theme:
-
-- The results pane (`#content:is(.triage, .trashbin)`, `core.css`) is diagonal stripes, a `repeating-linear-gradient`
-  at 135° of `--view-tint` and the weaker `--view-stripe`, each `--space-8` wide: the accent at 0.14 and 0.11 in
-  Triage, the warning color at 0.05 and 0.02 in the Trash. The background belongs to the scroll container, so the
-  stripes stay put while the results scroll. The bars that stick inside the pane (the results title, the toolbar, a
-  group's header, the map's surfaces) paint `--view-tint` alone over `--theme-neutral-2`.
-- Triage's explorer is the accent at 0.17, flat (`pages/index.css`, under `main:has(> #content.triage)`); the Trash
-  shows no explorer.
-- The **view band** names the view down the left edge of the results, from the toolbar's bottom edge to the pane's:
-  `main`'s `::after` under `main:has(> #content:is(.triage, .trashbin))`, each view setting its word and its
-  `--band-color` (the accent, the warning color) on the pseudo-element, absolutely positioned in the `content` grid
-  area (`main` is `position: relative` there), `--view-band-width` wide, so it follows the results on every Dock side and stays put
-  while they scroll. Its top is anchored to the toolbar (`anchor(--results-toolbar bottom, 0)`; `#searchControl`
-  carries the `anchor-name`), so it follows a results title above the toolbar and a toolbar that wraps with no
-  script. It is frosted glass (`--band-color` at 0.28 under `--popover-backdrop-filter`) with a `--border-heavy`
-  `--band-color` edge, at 0.8 opacity; its text is vertical (`writing-mode: vertical-rl`), uppercase,
-  `--font-size-large`, `--font-weight-bold`, tracked `--letter-spacing-band`. The word is the pseudo-element's
-  `content` with an empty alternative text (`"Triage" / ""`, `"Trash" / ""`), since the nav already names the current
-  view, and the band takes no pointer events. The striped pane pads its left by `--view-band-width`, the band's
-  gutter, so nothing that scrolls lies under the glass; the results title and the toolbar take a negative left margin of the same width, so they span the
-  pane above the band. It has no `z-index`: Asset detail, Curation and the dialogs paint over it.
+- The results pane (`#content:is(.triage, .trashbin)`, `core.css`) is diagonal stripes of `--view-tint` and
+  `--view-stripe`, painted by the scroll container so they stay put while the results scroll. Bars that stick inside the
+  pane (results title, toolbar, group headers, the map's surfaces) paint `--view-tint` alone over `--theme-neutral-2`.
+- Triage tints its explorer flat (`pages/index.css`).
+- The **view band** (`main::after`, `pages/index.css`) names the view down the left edge of the results. It sits in the
+  `content` grid area, so it follows the results on every Dock side, and its top is anchored to the toolbar
+  (`#searchControl`'s `--results-toolbar`), so it follows a results title and a wrapping toolbar with no script. Its
+  text has an empty alternative (`"Triage" / ""`), since the nav already names the view. The striped pane pads its left
+  by `--view-band-width` so nothing scrolls under the band, and the results title and toolbar take the same negative
+  margin to span above it. It has no `z-index`: Asset detail, Curation and the dialogs paint over it.
 - The nav's Triage entry stays `--success-color`, and its Trash entry `--warning-color`.
 
-**The explorer in Triage** — Triage manages what the explorer lists and finds only triaged assets (the glossary's
-**Triage**), so its tabs differ from Browse's in four ways, none of them in the tabs' markup or renderers:
+**The explorer in Triage** — In Triage the explorer still manages what it lists, but a search finds only triaged assets
+(the glossary's **Triage**). Its tabs differ from Browse's in four ways, none of them in the tabs' markup or renderers:
 
-- A click that searches in Browse goes where Triage sends it, decided by the search hydrator (`routeOf`, see **Search
-  parameters**) for the same triggers Browse has: a Person's face or name, or a Location's icon or name, searches Triage
-  scoped to it when it has triaged assets, and otherwise opens its scope dialog by the clicked control; a folder's name,
-  a leaf folder's icon and a folder crumb of the Results title open the folder's scope dialog, since a folder holds no
-  triaged asset; the root folder's name and icon do nothing (**Scope dialog and Quick view**). What never searched acts
-  as in Browse: a branch folder's expand control, a Category's row, the ⋯ menus, the add buttons, a Person's rename
-  pencil, and every drag and drop. A Person dropped on another merges and runs no search unless the results show one of
-  the two (**Event flow**).
-- No count is displayed: one rule of `static/css/pages/index.css`, under `main:has(> #content.triage)`, hides `.asset-count`
-  in the explorer and a People cell's `.count`. The cells stay in the page and the code that patches them runs as in
-  Browse. The Triage summary says what Triage holds instead.
-- Everything that acts keeps the cursor it has in Browse, the pointer or the move cursor of a draggable row, but for
-  the one click that does nothing: a rule of `pages/index.css` sets `cursor: default` on the root folder's name and icon
-  (`#rootFolderList .folder.root > .controls > :is(.folder-name, .folder-icon)`), over the pointer `folders.css` gives
-  them.
-- The **Triage summary** sits above the tabs, across `#explorerHeader`, on every tab (**Triage summary**).
+- `routeOf` (`js/search-results/search-triggers.js`) routes a search trigger naming a folder, a Person or a Location to
+  its scope dialog instead, unless the Person or Location has triaged assets; a folder (its name, a leaf's icon, a
+  Results title crumb) holds none, and the root folder does nothing (the rule: **Triggers** under **Search
+  parameters**; the dialog: **Scope dialog and Quick view**). What never searched acts as in Browse: a branch's expand
+  control, a Category's row, the ⋯ menus, the add buttons, a Person's rename pencil, every drag and drop. A Person
+  dropped on another merges and searches only if the results show one of the two (**Event Flow**).
+- No count is displayed: one rule of `pages/index.css` hides `.asset-count` in the explorer and a People cell's
+  `.count`. The cells stay and the code that patches them runs as in Browse; the Triage summary says what Triage holds.
+- Everything keeps its Browse cursor except the root folder's name and icon, which do nothing: `pages/index.css` sets
+  `cursor: default` over `folders.css`'s pointer.
+- The **Triage summary** sits above the tabs on every tab (the header's layout: **Explorer dock**).
 
 ## JS Directory ↔ Template Mapping
 
-| JS directory | Template(s) it serves |
-|---|---|
-| `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
-| `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), Curation's shell opening its host (`curation.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
-| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), the Triage summary's reload (`triage.js`), the Settings form's save (`settings.js`, the success snackbar), the Edit's keys in Asset detail (`edit.js`: Show original held, the Edit panel, its Crop tool, Done, Undo and Redo), and the account's (`account.js`: a changed own password, on every page with the nav, and the Users page's changes, which reload its cards); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring, a 204 to an open handed back to its search trigger, and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
-| `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`) and the advanced search panel beside it (`search-panel.js`: the load on opening, the focus in the Describe field, the filter button's count, the search its form asks for); a filtered search's results title (`filtered-title.js`: a chip's ×, the description's included, and Edit); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), a Person's results title read again after a rename or a correction (`person-title.js`), Asset detail's URL (`detail-url.js`: the address bar names the asset and the Detail panel's state, and Back closes it), Asset detail's fullscreen (`detail-fullscreen.js`: `f`, the toolbar's toggle and the player's button on the whole of Asset detail), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
-| `js/import/` | an upload of the Import page, with no DOM of its own: what a section sends, from its picker or a drop walked to its last file, less the ignored files, and under which paths (`chosen-files.js`), and the sending, from the Import's opening to its closing (`upload-run.js`); and the reads of the Watch folders' cards (`watch-folders.js`); see **Import page** |
-| `js/edit/` | Image editing in Asset detail (`htmx/view_image_detail_modal`, `includes/edit_panel`, `includes/edit_stage_tools`); see **Edit panel**. DOM-free, run under Node by `scripts/test-js/`: the Edit as the client holds it, its defaults, sliders, sections and the server's normalization (`recipe.js`), its geometry and the Crop tool's rules on it (`geometry.js`), its per-pixel math (`tone.js`), the Edit panel's changes to an Edit (`adjust.js`), and the server sync of one asset's Edit (`edit-session.js`). With the DOM: the WebGL2 renderer (`renderer.js`), Asset detail's stage for a still image, its sources and Show original (`edit-stage.js`), the wait for a render and the grid's Previews after it (`render-status.js`), the Edit panel's coordinator (`edit-panel.js`), the Crop tool on interact.js (`crop-tool.js`) and the Level tool's line (`level-tool.js`) |
-| `js/map/` | the map layout of `includes/search_results` and `htmx/map_view`: the `map-view` fragment hydrator (`map-view.js`, registered in `fragments/index.js` after the results hydrator), the crowded-pin panel (`map-panel.js`), and the view remembered per scope (`map-state.js`); see **Map view** |
-| `js/dragdrop/` | interact.js binding modules for assets (`assets.js`, thumbnails and the trash drop zone), batch ops, people, folder-tree, album and Location drag/drop, plus the helpers they share (`helpers.js`) |
-| `js/stores/` | Alpine store initialization modules shared by the app shell and feature coordinators, `sequences-to-curate.js` (the number of Sequences in Curation's queue), and `html-common.js`, whose `registerHtmlCommonBindings()` registers what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic and the focus plugin) on every page that includes it |
-| `js/frontend-app.js` | app-wide bootstrap/composition root, delegating into asset/dragdrop/fragment/listener/search modules |
-| `js/upload-form-page.js`, `js/settings-page.js`, `js/users-page.js`, `js/nav-page.js` | the page modules of `pipeline.scala.html`, `settings.scala.html` and `users.scala.html`, and what they share. Each starts with `startNavPage()` (`nav-page.js`): Alpine with what `html_common` binds (`registerHtmlCommonBindings()`, no other store), the `contextMenu` component and the advanced search panel's components and host (`bindSearchPanel`), the htmx request rule and the dialog wiring (`listeners/dialogs.js`) with a minimal app, whose hydration is the `modal` fragments and the choice menus, and the nav's Library menu built; that is the nav's menus and the dialogs they open (New library, Change password, whose outcome `listeners/account.js` confirms, connecting the page's WebSocket feeds again). The import page's registers its components first (`importUploads`, the upload sections', and `watchFolderForm`, the Watch folder dialog's) and, after, what keeps the Import history live (`js/import-status.js`: the status feed's messages, the history's reads, the feed's end) and the Watch folders' cards current (`js/import/watch-folders.js`), Settings' registers its own listeners, and Users' registers its components first (`usersPage`, `accountForm`, `passwordField`) and its listener after; see **Settings screen** and **Users page** |
-| `js/theme-boot.js` | a plain blocking script of `includes/header_common`'s head, on every page with a nav: declares the remembered theme on `<html>` before the first paint, from the key in its `data-key`; see **Themes** |
-| `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
-| `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
-| `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), edit-keys (the Edit panel's part in `global.js`'s keys, which the Edit panel's coordinator registers as the main page starts, so `global.js`, on every page, imports no edit module: whether its warning is open and its close, whether the Crop tool is open, whether changes are held, and the panel's Escape), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys: a text-like input, a textarea, a select or an editable element, never a slider, a checkbox, a radio, a color or file input or a button-like one, so the shortcuts keep working on the Edit panel's sliders), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of any image source, a loaded image or the Edit's canvas, blown, crushed or neither, read in the browser as the measurement reads them, with the fractions of each, a fully transparent pixel no pixel of the image, and the Clipping mask painted from the classes), histogram (a Histogram's bins as SVG paths, `channelPaths`, and a fraction's label, `percentLabel`: Curation's strip and the Edit panel's), content-urls (an asset's Preview, Display image and original URLs, a Preview by its revision, and an image repointed at a new Preview), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's, the Detail panel's and the Edit panel's docks are made from), stored-state (a remembered object under one localStorage key that modules share: `readStoredObject` and `writeStoredFields`, which sets some fields and keeps the rest; the Detail panel's view is read and written through it by `detail-panel.js` and `dock.js`), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font), name-key (the server's name fold, `nameKey` and `partialMatchKey`: the Change combobox's and the Users page filter's), request-failure (a failed htmx request in the snackbar: a 403 or 409 refusal in plain text as its text, a 401 nowhere, anything else by its path and status), session (a 401 sends the window to the login, back to the page: `goToLogin`) |
-| `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
-| `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
-| `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell), `face-combobox.js` (the Change combobox of a People row in the Detail panel), `edit-panel.js` (the Edit panel's controls, over the coordinator `js/edit/edit-panel.js`), and the advanced search panel's `search-panel.js` (its form: Search, Enter in the Describe field, Clear, the people match), `filter-combobox.js` (a combobox of names chosen as chips) and `date-range.js` (a date range picked on a Flatpickr calendar); `index.js` registers them, and `nav-page.js` the panel's three as well. The Users page's own, `users-page.js` (the tab and the filter), `account-form.js` (the account form's type and Permission matrix) and `password-field.js` (Generate and Show), are registered by its page module, as the Import page's `import-uploads.js` (the upload sections) and `watch-folder-form.js` (the Watch folder dialog's two switches and its deletion notice) are by its own |
+Paths are under `static/js/`. File names say what each module does; this list gives the owner of each concern, the
+templates it serves, and the contracts a directory listing does not show.
+
+- `app.js`, `frontend-app.js` — the main app. `index.scala.html` and `style_guide.scala.html` call `initApp()`
+  (`app.js`), which registers `alpine/components/index.js` and starts `FrontendApp`, the composition root that wires
+  the asset, dragdrop, fragment, listener and search modules. The style guide imports `style-guide.js` first, so its
+  `styleGuide` component exists before Alpine starts.
+- `global.js` — document-level keys and the nav's theme switch, on every page (`includes/header_common`).
+- `fragments/` — hydration of what a swap inserts, by `data-app-fragment="..."`, all from `hydrateAppFragments`
+  (`fragments/index.js`). Its order matters: `location-editor` after `modal` (the map is sized once its host shows),
+  `map-view` (`map/map-view.js`) after `search-results` (which disposes of the previous map). `dialog-operations.js`
+  owns the operation lifecycle every dialog shares.
+- `listeners/` — `document.body` event registration, one module per domain (`listeners/index.js`). Two are generic:
+  `htmx-requests.js` is the one rule for every htmx request's outcome (failures to the snackbar, declared success
+  events, tab selection, fragment hydration), and `dialogs.js` is the `document`-level dialog wiring (open requests, a
+  204 to an open handed back to its search trigger, the popover dialog host's dismissals). `account.js` runs on every
+  page with the nav.
+- `search-results/` — the search, the grid and Asset detail, one behaviour per module. `search.js` is the single entry
+  point for every search request: a caller passes only what it knows and the `searchParams` store supplies the rest.
+- `edit/` — Image editing in Asset detail (`htmx/view_image_detail_modal`, `includes/edit_panel`,
+  `includes/edit_stage_tools`); see **Edit panel**. `recipe.js`, `geometry.js`, `tone.js`, `adjust.js` and
+  `edit-session.js` are DOM-free and tested under Node (`scripts/test-js/`, `make test-js`), so they stay free of DOM
+  access. `edit-panel.js` is the Edit panel's coordinator.
+- `import/` — the Import page's upload (no DOM of its own) and the Watch folders' cards; see **Import page**.
+- `map/` — the map layout of `includes/search_results` and `htmx/map_view`; see **Map view**.
+- `dragdrop/` — interact.js bindings, one module per drag source (`dragdrop/index.js`), with shared `helpers.js`.
+- `stores/` — the Alpine stores (**Alpine.js Stores**). `html-common.js`'s
+  `registerHtmlCommonBindings()` registers everything `html_common` binds, the focus plugin included.
+- `common/` — modules shared across features. The ones with a contract:
+  - `modal.js` owns the four dialog hosts: the general modal, the popover dialog, Asset detail and Curation.
+  - `edit-keys.js` is the Edit panel's part in `global.js`'s keys, registered by `edit/edit-panel.js`
+    (`registerEditKeys`), so `global.js`, which every page loads, imports no edit module.
+  - `text-editing.js` decides whether focus is in a field that takes typed keys, for `global.js` and Curation's keys.
+    A slider, checkbox, radio, color or file input or a button-like input is not one, so the shortcuts keep working
+    on the Edit panel's sliders.
+  - `stored-state.js` is a remembered object under one localStorage key that several modules share:
+    `writeStoredFields` sets some fields and keeps the rest (`detail-panel.js` and `dock.js` both write Asset detail's
+    view).
+  - `dock.js` is the factory of every docked panel (the explorer's, the Detail panel's, the Edit panel's);
+    `explorer-dock.js` is the explorer's configuration of it.
+  - `clipping.js` classifies pixels in the browser the way the server's measurement does; `name-key.js` mirrors the
+    server's name fold (`nameKey`, `partialMatchKey`).
+  - `request-failure.js` is how a failed htmx request reads in the snackbar (a 401 nowhere); `session.js`'s
+    `goToLogin` handles the 401.
+- `models/folder.js` — DOM wrapper for folder tree elements and the owner of their expansion state.
+- `alpine/components/` — Alpine components, referenced by name from templates' `x-data`. `index.js` registers the
+  main app's; `nav-page.js` registers those the nav needs on other pages (`contextMenu`, `localTime`, `searchPanel`,
+  `filterCombobox`, `dateRange`); the Users and Import pages' own are registered by their page modules.
+- `upload-form-page.js`, `settings-page.js`, `users-page.js` — the page modules of `pipeline.scala.html`,
+  `settings.scala.html` and `users.scala.html`, pages with the nav outside the main app. Each calls `startNavPage()`
+  (`nav-page.js`): the `html_common` bindings, the nav's components, the htmx request rule, the dialog wiring and the
+  account listeners on a minimal app that hydrates only `modal` fragments and choice menus, then `Alpine.start()`. A
+  page module registers its own Alpine components before `startNavPage()` and its listeners after. The Import page
+  also starts `import-status.js` (the Import history's status feed) and `import/watch-folders.js`. See **Settings
+  screen** and **Users page**.
+- `setup-page.js`, `setup-background/` — `setup.scala.html` only starts the background scene; its form submits
+  through htmx and `json-enc.js`. The scene draws in a module Worker on an OffscreenCanvas; see **Setup background**.
+- `theme-boot.js`, `explorer-dock-boot.js` — plain blocking head scripts (`includes/header_common` on themed pages;
+  `index.scala.html`) that set the remembered theme, and the Dock side and explorer share, on `<html>` before the
+  first paint. Each reads its storage key from its `data-key`, which matches `Const.localStore`; `common/theme.js` and
+  `common/explorer-dock.js` own the key after that. See **Themes** and **Explorer dock**.
+- `design-tweaks.js` — the adapter of the dev-only design tweaks panel over the vendored `lib/tokentweak.js`, loaded on
+  no page (**Design tweaks**).
 
 ## Alpine.js Stores (initialized in `js/stores/app-stores.js` and `js/stores/html-common.js`)
 
-`initializeFrontendStores()` (`js/stores/app-stores.js`), which `js/frontend-app.js` runs before `Alpine.start()` on
-the main page and the style guide, registers every store below. The ones `html_common` binds, `modal`,
-`imageDetailLoading` and `snackbar`, it registers through `registerHtmlCommonBindings()` (`js/stores/html-common.js`),
-with the focus plugin for the modal hosts' `x-trap`; Settings calls that registrar alone. Each page calls it once,
-before Alpine starts.
+`initializeFrontendStores()` registers every store below on the main page and the style guide (`js/frontend-app.js`).
+What `html_common` binds (`modal`, `imageDetailLoading`, `snackbar`, the `$tooltip` magic, and the focus plugin for the
+modal hosts' `x-trap`) comes from `registerHtmlCommonBindings()`, which the nav pages (Import, Settings, Users) call
+alone through `startNavPage()` (`js/nav-page.js`). Each page registers exactly once, before `Alpine.start()`.
 
 | Store key | Purpose |
 |---|---|
-| `Const.state.selectedAssets` | Reactive `Set` of the selected asset IDs, and the one place a selection changes (see **Selection** below) |
-| `Const.state.searchParams` | The complete search parameter set — the single source of truth for what is being searched (see **Search parameters** below) |
-| `Const.state.currentView` | Current view: `repository`, `triage`, or `trashbin`. Derived from `searchParams.view` and written once at page load |
-| `Const.state.resultsTotal` | The toolbar's results total: `count` and `isCapped`, set from the results fragment's `data-results-total` and `data-results-total-capped` (`js/fragments/search-results.js`). `label` reads the count followed by "+" when the server counted only up to its cap (`js/common/total-label.js`, "10000+"); `decrement` lowers an uncapped total as assets leave the grid and leaves a capped one alone, since it says only that there are more than the cap |
-| `Const.state.sequencesToCurate` | The number of Sequences in Curation's queue (`js/stores/sequences-to-curate.js`): `count`, null until the first answer, which only the count endpoint sets, through `refresh`, so nothing adds or subtracts on the client, and an older answer never replaces a newer one. `hasAny` and `label` are Triage's Curate row's, `remaining` Curation's header (see **Curation**) |
-| `Const.state.modal` | The active dialog host, its title and the identity of the displayed open (`js/common/modal.js`, see **Modals**); bound by the modal hosts and the popover title of `html_common` |
-| `Const.state.imageDetailLoading` | `value`: whether asset detail is loading its asset, which shows its spinner (`js/search-results/detail-navigator.js`) |
-| `Const.state.snackbar` | The snackbar's messages (`js/common/snackbar.js`): `items` in arrival order, read as the two stacks `errors` and `notices`, which `html_common` renders. Producers call the module's three functions, never the store (see **Snackbar** below) |
-| `Const.context.repoId` | Active repo ID — set from Twirl via `window.ctx.setRepoId(...)` |
-| `Const.context.gridMetadataFields` | Reactive `Set` of metadata field names shown in the grid; persisted in `localStorage` as a JSON array |
+| `Const.state.selectedAssets` | Reactive `Set` of selected asset IDs; the one place a selection changes (see **Selection**) |
+| `Const.state.searchParams` | The complete search parameter set, the single source of truth for what is searched (see **Search parameters**) |
+| `Const.state.currentView` | `repository`, `triage` or `trashbin`. Derived from `searchParams.view` and written once at page load: the view changes only by navigating |
+| `Const.state.resultsTotal` | The toolbar total, set from the results fragment's `data-results-total` / `data-results-total-capped`. A capped total reads "10000+" and `decrement` leaves it alone, since it says only that there are more than the cap |
+| `Const.state.sequencesToCurate` | Sequences in Curation's queue (`js/stores/sequences-to-curate.js`). `count` is null until the first answer; only the count endpoint sets it (`refresh`), never client arithmetic, and an older answer never replaces a newer one (see **Curation**) |
+| `Const.state.modal` | The active dialog host, its title and the identity of the displayed open (`js/common/modal.js`, see **Modals**) |
+| `Const.state.imageDetailLoading` | `value`: whether asset detail is loading, which shows its spinner (`js/search-results/detail-navigator.js`) |
+| `Const.state.snackbar` | The snackbar's messages (`js/common/snackbar.js`). Producers call the module's three `show*SnackBar` functions, never the store (see **Snackbar**) |
+| `Const.context.repoId` | Active repo ID, set once from Twirl via `window.ctx.setRepoId(...)` |
+| `Const.context.gridMetadataFields` | Reactive `Set` of metadata field names shown in the grid, persisted in `localStorage` as a JSON array |
 
-Always access the repo ID via `window.ctx.getRepoId()`, not directly from the store.
+A JS module reaches a store only through `Alpine.store(Const.state.*)` / `Alpine.store(Const.context.*)` or the
+`window.ctx` helpers, never by its key string; only a `$watch` expression names one (`"$store.modal.activeHost"`), as a
+template binding does. Read the repo ID through `getRepoId()` of `js/context.js` (`window.ctx` on the page), never from
+the store directly.
 
-The People tab's state is no store: its `peopleTab` component holds the buckets of each pane, whether Split view is on
-and the panes' Split.js sizes on each axis as component data and remembers them in `localStorage` under
-`Const.localStore.peopleView`, which nothing else reads (see **People tab** below). Nor is the Loupe's level: Curation's
-`curation` component reads and remembers it in `localStorage` under `Const.localStore.loupeLevel` (`rememberedLoupeLevel`,
-`saveLoupeLevel`), which nothing else reads, and the Bundle kinds whose details its rail shows under
-`Const.localStore.curationDetails` (`rememberedDetailKinds`, `saveDetailKinds`), a JSON array, and whether its stage shows the
-Histogram strips under `Const.localStore.curationHistogram` (`rememberedHistogramShown`, `saveHistogramShown`), "true" or "false",
-and whether it shows the Sequence rail under `Const.localStore.curationSequenceRail` (`rememberedSequenceRailShown`,
-`saveSequenceRailShown`), "true" or "false" too (see **Curation** below). Asset detail's view is no store either: `js/search-results/detail-panel.js`
-remembers whether the Detail panel is open, whether the Face highlights are on, and the panel's dock under
-`Const.localStore.assetDetailView` (see **Detail panel** below), and `js/edit/edit-panel.js` whether the Edit panel is
-open (`editOpen`) and its share of each axis (`editDock`) under the same key, each writing its own fields (see **Edit
-panel** below).
+Some view state is deliberately **not** a store: one component or module owns it as its own data and remembers it in
+`localStorage` under a key nothing else reads.
+
+- The People tab (`peopleTab` component): each pane's buckets, Split view and the Split.js sizes, under
+  `Const.localStore.peopleView` (see **People tab**).
+- Curation (`curation` component, see **Curation**): the Loupe level (`Const.localStore.loupeLevel`), the Bundle kinds
+  whose details show (`curationDetails`), the Histogram strips (`curationHistogram`) and the Sequence rail
+  (`curationSequenceRail`).
+- Asset detail: `Const.localStore.assetDetailView` is shared by two writers, each writing only its own fields.
+  `js/search-results/detail-panel.js` writes the Detail panel's open state, Face highlights and dock (see **Detail
+  panel**); `js/edit/edit-panel.js` writes `editOpen` and `editDock` (see **Edit panel**).
 
 ## DOM Addressing Convention
 
-JS code reads element identity from `data-*` attributes — **never** positional or class-based
-selectors. All attribute names are defined in `Const.attributes` (`constants.js`), and are read
-through `element.dataset` by their camel-cased key:
+JS reads an element's identity from `data-*` attributes, **never** from positional or class-based selectors.
+`Const.attributes` (`constants.js`) names the identity and state attributes that templates, the client-side renderers
+and modules share, with a comment on each saying where it sits and what reads it; a new shared attribute goes there. JS
+reads one with `getAttribute(Const.attributes.x)` or through `dataset` by its camel-cased key. A module's own hooks and a
+fragment's configuration (`data-app-dialog-*`, `data-app-success-event`, `data-app-image-detail-*`) are read straight
+from `dataset`.
 
-```js
-Const.attributes.folderId             // "data-folder-id"        el.dataset.folderId
-Const.attributes.albumId              // "data-album-id"
-Const.attributes.locationId           // "data-location-id" (a Location row and its drop zone)
-Const.attributes.categoryId           // "data-category-id"   (a Location row under a category)
-Const.attributes.kind                 // "data-kind"        (`category` | `location` on a Location row)
-Const.attributes.assetId              // "data-asset-id"
-Const.attributes.numOfChildren        // "data-num-of-children"
-Const.attributes.expanded             // "data-expanded"
-Const.attributes.viewedScope          // "data-viewed-scope" (on the folder node whose results are displayed)
-Const.attributes.dataSrc              // "data-src"  (lazy-load image URL)
-Const.attributes.sequenceId           // "data-app-sequence-id" (a group header's Curate) el.dataset.appSequenceId
-Const.attributes.railSequenceId       // "data-rail-sequence-id" (a row of Curation's Sequence rail) el.dataset.railSequenceId
-Const.attributes.minFrames            // "data-min-frames"  (the fewest frames a group header's Curate stays for)
-Const.attributes.frameId              // "data-frame-id"  (a frame of a Curation set in the rail, in the rail's order)
-Const.attributes.columnFrameId        // "data-column-frame-id"  (a frame's column of the face strip)
-Const.attributes.bundleKind           // "data-bundle-kind"  (the Bundle a frame sits under; a Contender has none)
-Const.attributes.loupeLevel           // "data-level"  (the Loupe's level on a stage pane's lens, which its stylesheet shows)
-Const.attributes.clippedLevel         // "data-clipped-level"  (the gray level a pixel counts as blown at, on a Curation set's root)
-Const.attributes.crushedLevel         // "data-crushed-level"  (the gray level a pixel counts as crushed at)
-Const.attributes.measurementBox       // "data-measurement-box"  (the box the measurement fits an image into before it counts)
-Const.attributes.histogram            // "data-histogram"  (a frame's Histogram for the stage's strip: a byte per bin, in Base64)
-Const.attributes.crushedShadows       // "data-crushed-shadows"  (the fraction of a frame's pixels crushed, as the import measured it)
-Const.attributes.clippedHighlights    // "data-clipped-highlights"  (the fraction of a frame's pixels blown)
-Const.attributes.dockSide             // "data-app-dock-side"  (a pick of the explorer's Dock side: the options of its menu)
-Const.attributes.detailDockSide       // "data-app-detail-dock-side"  (a pick of the Detail panel's, its own since both docks listen on the body)
-Const.attributes.detailPanelToggle    // "data-app-detail-panel-toggle"  (the Detail panel's toggle in asset detail's toolbar)
-Const.attributes.faceHighlightsToggle // "data-app-face-highlights-toggle"  (the Face highlights' toggle beside it)
-Const.attributes.fullscreenKey        // "data-app-fullscreen-key"  (the key legend's fullscreen entry, removed with the toggle where fullscreen is not allowed)
-Const.attributes.faceRow              // "data-app-face-row"  (the button of a People row that selects its Face)
-Const.attributes.faceChange           // "data-app-face-change"  (a selected row's Change, which opens the combobox)
-Const.attributes.faceRemove           // "data-app-face-remove"  (a selected row's Remove, with its second label in `data-app-face-remove-label-last`)
-Const.attributes.readOnly             // "data-app-read-only"  (the People section of an asset in the trash: no correction)
-Const.attributes.resultMessage        // "data-app-result-message"  (a correction's result on the section it answers with; a deleted Person's ID and line in `data-app-deleted-person-id` and `-message`)
-Const.attributes.mergedPersonId       // "data-app-merged-person-id"  (on that root after a merge of a Face's Person: the merged Person)
-Const.attributes.mergedIntoId         // "data-app-merged-into-id"  (and the Person they were merged into)
-Const.attributes.faceId               // "data-face-id"  (a People row, a Face highlight and its badge)
-Const.attributes.personName           // "data-person-name"  (a People row's Person, with `data-person-hidden` when Hidden)
-Const.attributes.personNamed          // "data-person-named"  (a People row's Person, or an option's of the assignable people fragment, when named: the Change combobox's mode)
-Const.attributes.personAssetCount     // "data-person-asset-count"  (a People row's Person's number of assets, `numOfFaces`, which the Change combobox's labels show)
-Const.attributes.suggested            // "data-suggested"  (an option of the assignable people fragment in its Suggested group)
-Const.attributes.frameTimeMs          // "data-frame-time-ms"  (a People row of a Face in a Video)
-Const.attributes.detailDimensions     // "data-app-detail-dimensions"  (the Detail panel's dimensions row, which reads the shown element's size)
-Const.attributes.detailPanelOpen      // "data-app-detail-panel-open"  (the Asset detail fragment while the Detail panel is open; the stylesheet lays the grid out from it)
-Const.attributes.appAssetId           // "data-app-asset-id"  (the asset of the Detail panel's fragment and of its People section; not `data-asset-id`, which finds the grid's cells)
-Const.attributes.showOriginalToggle   // "data-app-show-original-toggle"  (Show original's toggle in Asset detail's toolbar, shown on an edited asset)
-Const.attributes.editBadge            // "data-app-edit-badge"  (the title's badge of an edited asset: "Edited", or "Original" while the original is shown)
-Const.attributes.showOriginalKey      // "data-app-show-original-key"  (the Detail panel's key legend's `\` entry, shown on an edited asset)
-Const.attributes.editPanelToggle      // "data-app-edit-panel-toggle"  (the Edit panel's toggle in Asset detail's toolbar, for a holder of Edit images)
-Const.attributes.editCanvasBehind     // "data-app-edit-canvas-behind"  (the stage's canvas while it draws the identity behind the original's color-managed `<img>`)
-Const.attributes.editPanelOpen        // "data-app-edit-panel-open"  (the Asset detail fragment while the Edit panel is open; the stylesheet lays the grid out from it)
-Const.attributes.cropToolOpen         // "data-app-crop-tool-open"  (the Asset detail fragment while the Crop tool is open)
-Const.attributes.cropGuide            // "data-app-crop-guide"  (the stage's bar in the Crop tool: the guide's button, its name in `data-app-crop-guide-name`)
-Const.attributes.cropSize             // "data-app-crop-size"  (the bar's crop size in the original's pixels)
-Const.attributes.editCancel           // "data-app-edit-cancel"  (the stage's bar's Cancel of the changes held, `data-app-edit-done` its Done, and `data-app-edit-held-count` how many edits are pending)
-Const.attributes.editLeave            // "data-app-edit-leave"  (a choice of the Edit panel's warning: `save`, `discard` or `stay`; `data-app-edit-leave-message` its message)
-Const.attributes.panelUrl             // "data-panel-url"  (the advanced search panel's host in the nav: the route of its form)
-Const.attributes.seesTriaged          // "data-app-sees-triaged"  (the same host, for a member: the account sees triaged items, `context.seesTriaged()`)
-Const.attributes.optionsUrl           // "data-options-url"  (a combobox field of the panel: the route of its options)
-Const.attributes.multiple             // "data-multiple"  (a combobox field that takes several names)
-Const.attributes.maxChosen            // "data-max-chosen"  (the most such a field takes, with the line that says so in `data-max-chosen-message`)
-Const.attributes.optionId             // "data-option-id"  (an option of a combobox field and the chip of a chosen one: the ID a search takes)
-Const.attributes.optionLabel          // "data-option-label"  (the label its chip shows)
-Const.attributes.optionName           // "data-option-name"  (the element that shows the name, in an option and in a chip)
-Const.attributes.optionCover          // "data-option-cover"  (a Person's cover Face in an option, which a new chip copies)
-Const.attributes.chipRemove           // "data-chip-remove"  (the remove button of a chosen filter's chip, in the panel and in a filtered search's results title)
-Const.attributes.filter               // "data-app-filter"  (a chip of a filtered search's results title, its parameters in `data-app-filter-<param>` literals)
-Const.attributes.editFilters          // "data-app-edit-filters"  (that title's Edit, which opens the advanced search panel)
-Const.attributes.filterCount          // "data-app-filter-count"  (the badge of the nav's filter button: the number of filters in force, or in the open panel's form)
-Const.attributes.importId             // "data-import-id"  (an Import's entry in the Import history)
-Const.attributes.importFiles          // "data-app-import-files"  (the `<details>` of an entry's Import files)
-Const.attributes.viewUrl              // "data-app-view-url"  (a part of the Import page that is read again, the history's list, an Import's files or the Watch folders' cards: the route of the view it shows)
-Const.attributes.view                 // "data-app-view"  (a control in such a part: the route of the view it asks for instead)
-```
+Traps:
 
-A Curation set's root carries `data-opening-pinned-id` and `data-opening-focused-id`, and the
-measurement's `data-clipped-level`, `data-crushed-level` and `data-measurement-box`, which the stage's Clipping blink reads; a frame
-`data-file-name`, `data-problems` and `data-in-album-or-location`, and, when it was measured, `data-histogram`, `data-crushed-shadows` and
-`data-clipped-highlights`, which the stage's Histogram strip shows; a crop `data-person-id` and `data-face-box`; and the batch ops' Curate
-`data-max-selection`; a group header's Curate `data-min-frames`. A frame in the rail carries `data-frame-id` and not `data-asset-id`, which finds the cells of the grid beneath
-(`js/search-results/cells.js`). Each stage pane's lens is addressed by its ID (`curationLoupePinned`, `curationLoupeFocused`) as the
-stage images are (`curationStagePinned`, `curationStageFocused`), and carries `data-level` (`Const.attributes.loupeLevel`), the level the Loupe writes for its label.
-Each pane's Histogram strip (`curationHistogramPinned`, `curationHistogramFocused`) and Clipping canvas (`curationClippingPinned`,
-`curationClippingFocused`) are addressed by ID as the images and lenses are.
+- A key need not match its attribute: `Const.attributes.loupeLevel` is `data-level`, and a `data-app-*` name reads as
+  `dataset.app…` (`Const.attributes.sequenceId` is `data-app-sequence-id`, `dataset.appSequenceId`).
+- `data-asset-id` belongs to the grid's thumbnail boxes: lookups by it find every cell of an asset
+  (`js/search-results/cells.js`, see **Group headers**). Anything else that names an asset uses its own attribute, so
+  those lookups never match it: a Curation frame in the rail carries `data-frame-id` (the grid sits beneath Curation),
+  and the Detail panel's fragment and its People section carry `data-app-asset-id`.
+- Near-twins stay distinct for the same reason: `data-rail-sequence-id` (a row of Curation's Sequence rail) against
+  `data-app-sequence-id` (a group header's Curate), and `data-app-detail-dock-side` against `data-app-dock-side`, since
+  both docks listen on the body.
+- The one attribute without the `data-` prefix is `alt-has-no-date` on a result cell; the controller tests assert on it,
+  so it keeps its name.
 
-Asset detail's fragment (`#imageDetailView`) carries, read through its dataset, the asset's Edit as JSON
-(`data-app-image-detail-edit`, absent for an asset never edited), whether the account may edit it
-(`data-app-image-detail-editable`) and, for a holder of Edit images, why not (`data-app-image-detail-edit-refusal`), and,
-as a Curation set's root does, the measurement's `data-clipped-level`, `data-crushed-level` and `data-measurement-box`,
-which the Edit panel's Clipping blink reads; the Edit panel's dock writes its side there as `data-edit-dock-side`.
-
-The one exception is `alt-has-no-date` on a result cell, which the controller tests assert on.
-
-The `Folder` class in `js/models/folder.js` is the canonical DOM abstraction for folder tree
-nodes. `Folder.find(id)` returns the folder rendered as `#folder-{id}` or `null` when the tree
-holds no such node (a rebuild removed it mid-interaction); it wraps `#children-{id}` and
-`#folderName-{id}` too. `parent()` is `null` for root, which carries no parent attribute. The folder tree, including each folder's ⋯ menu (`#folderMenuCtrl-{id}` opening
-the `#menu-{id}` popover), is rendered client-side by `js/common/folder-tree.js` from the JSON
-tree endpoint; those IDs are stable so tree rebuilds can restore focus and dialogs can return it.
-Each node of the tree JSON carries `numOfChildren` and `numOfAssets` (see **Folder asset counts**).
-
-`reloadFolderTree(repoId)` discards superseded responses and snapshots the expanded folder IDs and
-the focused control immediately before replacing the tree, so a gesture made or focus returned by a
-dialog while the request was in flight is not undone by an older snapshot. Expansion is restored top
-down through the folder model: a surviving branch is re-expanded only when its parent is expanded,
-so a folder moved beneath a collapsed parent is normalized to collapsed, and a folder that lost its
-last child gets a plain icon. The latest viewed scope is reapplied independently of that snapshot.
-It calls `htmx.process(container)` after insertion; Alpine's mutation observer initializes the new
-subtree. Do not also call `Alpine.initTree`, which duplicates initialization and listeners.
-
-Folder indentation comes from each non-root node's `--depth` and `--list-indent`, the indentation
-step of the explorer lists, which `core.css` declares and the Location list shares. The `.trace` grid
-cell (`static/css/htmx/folders.css`) indents the icon and name while `.menu-ctrl`
-stays flush left at every depth; the root row omits the trace cell. Keep renderer markup and
-these grid rules in sync.
+Curation's stage elements (each pane's image, lens, Histogram strip and Clipping canvas) are addressed by ID; see
+**Curation**. Asset detail's fragment (`#imageDetailView`) carries the asset's Edit as JSON (`data-app-image-detail-edit`,
+absent for an asset never edited), `data-app-image-detail-editable`, for a holder of Edit images the refusal
+(`data-app-image-detail-edit-refusal`), and the measurement's `data-clipped-level`, `data-crushed-level` and
+`data-measurement-box`, which the Edit panel's Clipping blink reads as Curation's reads them from a set's root (the
+header comment of `htmx/view_image_detail_modal`; see **Edit panel**). The folder tree's node IDs and `Folder` model are
+under **Folder tree expansion and viewed scope**.
 
 ## Event Flow
 
-Two-layer event bus, both on `document.body`:
+Two event layers, both on `document.body`. There is no router keyed on request URLs.
 
-1. **Custom DOM events** — string names in `Const.events`, dispatched via `new CustomEvent(...)`,
-   handled by the domain modules in `js/listeners/`. These are business-level actions (e.g.
-   `FOLDER_MOVED_EVENT`). A request element or a dialog announces its outcome declaratively:
-   `data-app-success-event="FOLDER_ADDED_EVENT"` (the name verbatim), `data-app-success-detail`
-   (JSON), and `data-app-success-detail-target-attr-<key>="<attribute>"` for a value read from the
-   element that issued the request (`readSuccessEvent` in `js/fragments/helpers.js`).
-2. **HTMX lifecycle events** — `htmx:before:request` / `htmx:after:request` / `htmx:after:settle` —
-   handled by `js/listeners/htmx-requests.js` (one rule for every request: a response of 400 or
-   above goes to the snackbar with its path and status, but for a refusal worded for the user, a 403 or a 409 in plain text
-   (`BaseController.answering`), which shows its text, a 409 as a warning (`js/common/request-failure.js`, which a dialog's
-   failed operation goes through too); a validation replacement, a 200 with
-   `HX-Retarget: this`, is swapped in and announces nothing; any other successful one dispatches the
-   declared success event and, for a tab, selects it; every swap hydrates the fragments it inserted) and by
-   `js/listeners/dialogs.js` for dialog opens and dialog operations. There is no router keyed on
-   request URLs.
+1. **Custom DOM events**: business-level actions (e.g. `FOLDER_MOVED_EVENT`), named in `Const.events` and handled by
+   the domain modules in `js/listeners/`. A request element or a dialog announces its outcome declaratively
+   (`readSuccessEvent` in `js/fragments/helpers.js`): `data-app-success-event="FOLDER_ADDED_EVENT"` (the event's string
+   verbatim, not its `Const.events` key), `data-app-success-detail` (JSON), and
+   `data-app-success-detail-target-attr-<key>="<attribute>"` for a value read from the element that issued the request.
+2. **HTMX lifecycle events**: `js/listeners/htmx-requests.js` applies one rule to every request: a 401 goes to the
+   login (**Requests and a refused session**); 400 and above goes to the snackbar (`reportRequestFailure`,
+   `js/common/request-failure.js`) with its path and status, except a plain-text 403 or 409 (`BaseController.answering`),
+   which shows its text, a 409 as a warning; a validation replacement (a 200 with `HX-Retarget: this`) is swapped in and
+   announces nothing; any other success dispatches the declared success event and selects a `role="tab"` source; every
+   swap hydrates the `data-app-fragment` roots it inserted. Modal opens and dialog operations are skipped there and
+   settled by `js/listeners/dialogs.js` on `document`, so a failure is reported once.
+
+Domain event chains:
+
+- `assetMoved` / `assetTrashed` (`js/listeners/assets.js`) escalate to `batchAssetsMoved` / `batchAssetsRecycled` when
+  the asset is among the selected ones. A recycle bin purge announces `trashPurged`, which refreshes the counts.
+- `peopleChanged` means a person's count or bucket may have changed. A merge, a hide, a show, a discard, a rename,
+  every Detail panel Face correction and every asset mutation through `refreshCounts()` (`js/assets/asset-actions.js`)
+  announce it, since a person's number follows their assets. Its listeners read no detail: the People tab reloads its
+  panes (**People tab**) and `js/listeners/triage.js` the Triage summary (**Triage summary**).
+- Person events live in `js/listeners/people.js`. A rename (`personNameEdited`, from the inline editor or a People
+  cell's rename dialog) patches no cell text: it can move the person from Unmatched to Matched, so it announces
+  `peopleChanged` and the server's list puts them in the right bucket; it also reads the results title again
+  (`reloadPersonTitle`) unless `titleShowsName` says the editor's own response shows the name. A cover-face change is
+  the only one that patches cells, every cell of the person under `#people`. A merge (`personMerged`) runs no search of
+  its own, in Browse and Triage alike, and results naming neither person stay. A search naming the source gets the
+  destination in its place (`replaceId`, every other filter kept) and runs again; one naming the destination runs again.
+- `confirmPersonMerge` sends its whole detail as the Merge people modal's request values. `keepDirection: true` (a
+  name-conflict offer) keeps the requested direction; without it (a drop) the person with fewer faces is the source.
+  The rename dialog's offer also sends `pane`, and the modal returns focus to `#personRenameCtrl-<pane>-<personId>`: it
+  replaces the rename dialog, whose button goes with it, so a cancelled merge would otherwise leave focus on the body.
+- A name or a merge of a Face's Person from the Detail panel's Change is a Face correction, neither `personNameEdited`
+  nor `personMerged` (**Detail panel**).
 
 ### HTMX 4 conventions
 
-- Lifecycle events carry the request context under `event.detail.ctx`. Read it through the helpers
-  in `js/common/htmx-events.js` (`getRequestPath`, `getResponseStatus`, `isRequestSuccessful`,
-  `getResponseText`, `getResponseHeader`, `getRequestSource`, `getResponseRetarget`) instead of touching the detail
-  directly.
-- `htmx:after:request` fires when the response has arrived but **before** it is swapped in.
-  Cancelling it (`preventDefault()`) drops the swap. Once the issuing element has left the DOM, htmx
-  dispatches lifecycle events on `document` instead, so listeners that must see such late responses
-  (dialog operations) go on `document`, not `document.body`.
-  `htmx:after:settle` fires on the swap target once per swap with `detail.newContent`, the list of
-  inserted nodes; `js/listeners/htmx-requests.js` hydrates `data-app-fragment` roots from there.
-- No swap settles: the `htmx-config` meta sets `defaultSettleDelay: 0`. htmx's settle copies each old element's attributes
-  onto the new element with the same ID and restores them afterwards, after Alpine has initialized the new content, so it
-  undoes what Alpine set (an `x-show` row with the server's `style="display: none"`, Triage's `#curateQueue`, hiding again
-  after a search; the Edit panel's tabs, whose IDs are the same from one asset's fragment to the next) and, skipping
-  `value` on the element with focus, leaves a form that swaps itself with its field focused showing the old value. The app
-  runs no CSS transition on a settle. Some swaps spell `settle:0` too (the dialogs' validation responses, the Settings
-  form, the person name editor, `runSearch`'s default `innerHTML settle:0`), which the meta already sets.
-- Attribute inheritance is explicit: every element that issues a request declares its own
-  `hx-target` / `hx-swap`. Do not rely on a parent's attributes (add `:inherited` if you ever must).
-- Extensions activate by script inclusion, there is no `hx-ext`. Forms that post JSON carry the
-  boolean `hx-json-enc` attribute (`json-enc.js`); the import status stream uses `hx-ws:connect`
-  (`hx-ws.js`), to the Library's socket, `/import/r/:repoId/status`, with no query string and no `hx-target`: every
-  message is JSON that names the element it replaces (`target`, `swap`, `content`: an Import's status in the Import
-  history, **Import page**), and one with no `content` (`{"connected": true}`, and `{"watchFolders": true}`, on which
-  the page reads the Watch folders' cards again) swaps nothing. The server takes the
-  account from the session cookie the handshake carries, refuses a handshake without a login with a 401, one from
-  another origin, a Guest's and that of an account without Import in the Library with a 403, and one for a Library the
-  account cannot see with a 404, and closes the account's sockets when the account changes (1013, which `hx-ws.js`
-  reconnects on, checking the login and the Permission again) or its sessions are revoked (1008, which it does not: a
-  password change, a deactivation). The page connects its feed again after the account changes its own password
-  (`js/listeners/account.js` swaps the `hx-ws:connect` element for a copy, which htmx cleans up and processes again;
-  the new cookie is set by then), and stops reconnecting after `MAX_RECONNECTS` (5) failed reconnects in a row, by
-  cancelling the next in `htmx:ws:before:connection` (`js/import-status.js`; the vendored library is not patched),
-  saying in the status area, `#importStatusLost`, to reload. `hx-ws` closes the socket while the tab is hidden and
-  opens it again when it shows; every opening after the first reads the history again. No Alpine
-  compatibility shim is loaded: Alpine's mutation observer initializes swapped-in markup, and
-  nothing calls `Alpine.initTree` on it.
-- Polling is declarative: the import page refreshes the nav with
-  `hx-trigger="every[document.visibilityState === 'visible' && !document.querySelector('nav .context-menu:popover-open, #searchPanel:popover-open, #popoverDialog:popover-open')] 5s"`
-  (its `hx-get` carries `current=import`, so the swap marks the page's entry again; see **Nav refresh**). htmx 4 reads a
-  trigger's filter only right after the event's name, with no space (`every[…] 5s`, `click[!event.shiftKey]`): the
+- Lifecycle events carry the request context under `event.detail.ctx`. Read it through the helpers in
+  `js/common/htmx-events.js`, not the detail directly.
+- `htmx:after:request` fires when the response has arrived but **before** it is swapped in; `preventDefault()` drops
+  the swap. Once the issuing element has left the DOM, htmx dispatches lifecycle events on `document`, so listeners
+  that must see such late responses (dialog operations) go on `document`, not `document.body`. `htmx:after:settle`
+  fires on the swap target once per swap, with the inserted nodes in `detail.newContent`.
+- No swap settles (`defaultSettleDelay: 0` in the `htmx-config` meta). htmx's settle copies each old element's
+  attributes onto the new one with the same ID and restores them after Alpine has initialized it, undoing what Alpine
+  set (an `x-show` element back to the server's `display: none`; the Edit panel's tabs, whose IDs repeat across
+  assets), and, skipping the focused element's `value`, shows the old value in a self-swapping form's focused field. An
+  explicit `settle:0` in a swap is redundant.
+- Attribute inheritance is explicit: every element that issues a request declares its own `hx-target` / `hx-swap`. Do
+  not rely on a parent's (add `:inherited` if you ever must).
+- Extensions activate by script inclusion; there is no `hx-ext`. JSON forms carry the boolean `hx-json-enc`.
+- No Alpine compatibility shim is loaded: Alpine's mutation observer initializes swapped-in markup; nothing calls
+  `Alpine.initTree` on it.
+- A trigger's filter goes right after the event's name, with no space: `every[document.visibilityState === 'visible'
+  && …] 5s` (the import page's nav poll, `views/pipeline.scala.html`; **Nav refresh**), `click[!event.shiftKey]`. The
   htmx 2 spelling `every 5s […]` parses, and its filter is silently dropped.
-- A request whose failure is not worth a report declares the boolean `data-app-silent-failure` on the element that
-  issues it: `js/listeners/htmx-requests.js` then shows no error snackbar for its 4xx/5xx and does nothing else with it.
-- **Requests and a refused session**: a 401 (no session, or one expired, revoked, or of an account deactivated or deleted
-  since) sends the window to the login, to come back to the page (`js/common/session.js`, `goToLogin`): from any htmx
-  request, a silent poll and a dialog's submit included, in `js/listeners/htmx-requests.js` before anything else, and from
-  any axios call, by the interceptor of `js/http/client.js`. Nothing is reported (`reportRequestFailure` ignores a 401), and a
-  dialog's submit answered 401 fires no success event. The server answers an htmx request with no login 401 with
-  `HX-Redirect` to the same login (`decorators.requireLogin`), never with a redirect that htmx's fetch would follow and swap
-  in.
-- A refusal the server words reaches the user as its words: an htmx request's plain-text 403 or 409 through
-  `reportRequestFailure` (a modal's open too, `js/listeners/dialogs.js`), an axios call's JSON `{"error": ...}` through
-  `getHttpErrorMessage` (`js/http/client.js`).
-  Only the import page's nav poll declares it: its next tick tries again, and a server answering 5xx while it restarts
-  would otherwise raise an error every 5 s. A request that gets no response at all reaches no `htmx:after:request`
-  listener (htmx fires `htmx:error`), so it is never reported there either way.
-- Global config (`defaultTimeout`, `noSwap`, `defaultSettleDelay`) is the `htmx-config` meta tag in
-  `views/includes/header_common.scala.html`; 4xx/5xx bodies are not swapped, listeners report them.
-- An upload (`js/import/upload-run.js`, run by the `importUploads` component) is **not** an HTMX request: it opens its
-  Import, sends each file and closes the Import through the shared axios client, whose `onUploadProgress` drives the
-  section's progress (see **Import page**).
-- A Curation set's fragment is **not** an HTMX request either (its shell is): the `curation` component reads it through the
-  axios client and puts it in `#curationSet` itself, since it has to see the answer before anything is swapped (a 204 passes
-  over a Sequence or leaves the too-few state, and a preload keeps only the opening frames) and reports a failure itself, in the
-  unread state (see **Curation**). The queue's rows, the Sequence rail's fragment, are read the same way, into the rail's host.
-- The advanced search panel's form and its comboboxes' options are **not** HTMX requests either: `search-panel.js` and the
-  `filterCombobox` component read them through the axios client and put them in place themselves, since only the answer
-  of the latest opening, or of the latest text typed, may be shown, and report a failure themselves (**Advanced search
-  panel**). Alpine's mutation observer initializes the form's components.
-
-Batch ops escalate a single-asset drag to a batch when the asset is among the selected ones: the
-`assetMoved`/`assetTrashed` handlers in `js/listeners/assets.js` re-dispatch
-`batchAssetsMoved`/`batchAssetsRecycled`. Person merge/name/cover-face events and the discard
-follow-up live in `js/listeners/people.js`: a merge, a hide, a show, a discard, a rename or a Face correction in the Detail panel
-(a name or a merge of a Face's Person among them) announces `peopleChanged`, as does every asset mutation that goes through `refreshCounts()` in `js/assets/asset-actions.js`
-(a move, a recycle, a purge, a restore, a Curation change), since a person's number follows their assets. It has
-two listeners, neither reading a detail: the People tab, which reloads each pane with its own buckets (see **People
-tab**), and `js/listeners/triage.js`, which reloads the Triage summary in Triage, since any of those changes can change
-what it counts: an asset leaving triage, a Person named or made Unknown (see **Triage summary**). A rename is
-`personNameEdited`, from the results title's inline name editor or from the rename dialog of a cell's pencil, carrying
-`personId` and, from the inline editor alone, `titleShowsName: true`. Its listener announces `peopleChanged` and patches
-no cell's text: a rename can move a person from Unmatched to Matched, and the list the server renders has them in the
-right bucket with the cell's number intact. When `#person` shows that person (`data-person-id`) it also reads the
-results title again (`reloadPersonTitle`, `js/search-results/person-title.js`: the title route,
-`GET /htmx/people/r/:repoId/p/:personId/title`, into `#person`, which the Detail panel's corrections use too), so the
-name and the Hide / Show link a name changes follow, unless `titleShowsName` says the editor's own response is about to
-show the name there. Only a cover-face
-change patches cells, every one of the person, found by `data-person-id` under `#people`; a purge of the recycle bin announces
-`trashPurged`, which refreshes the counts. `personMerged`'s listener announces `peopleChanged` and confirms in the
-snackbar, and runs no search of its own, in Browse and Triage alike: results that are neither person's stay as they
-are. It asks the `searchParams` store whether the search names either (`names("personId", id)`, alone or among
-several): the source, who is gone, gives their place in the search to the destination (`replaceId`, in the same view
-and with every other filter of a filtered search) and the results are read again (`runSearch()`), and results naming
-the destination are read again with the assets the merge gave it (`runSearch()` with no parameters). `confirmPersonMerge`'s listener sends the event's whole detail as the values of
-the Merge people modal's request, so a `keepDirection: true` reaches `showMergePeopleModal` as a query parameter: with it
-the modal keeps the requested source and destination, and without it, as for a drop, the person with fewer faces is the
-source. The rename dialog's offer also sends `pane`, its pencil's pane, and the modal then declares that pencil of the
-requested source, `#personRenameCtrl-<pane>-<personId>`, as its `data-app-dialog-return-focus` (a `pane` that is no pane
-is a 400): the modal replaces the rename dialog, and the button that asked for it goes with the dialog, so without the
-selector a cancelled merge would leave focus on the body. A merge that completes takes the source's pencil out of the
-list, and focus then goes nowhere. A drop and the inline editor's offer send no `pane`, and focus returns to the control
-that asked. A name or a merge of a Face's Person from the Detail panel's Change is a Face correction, neither
-`personNameEdited` nor `personMerged`: the panel announces `peopleChanged` as for every correction, and itself reads the
-results title again after a name of the viewed Person, or searches the destination on closing after a merge of the
-viewed Person or into them (see **Detail panel**).
+- The boolean `data-app-silent-failure` on an issuing element suppresses the snackbar for its 4xx/5xx. Only the nav
+  poll declares it: the next tick retries, and a restarting server would otherwise raise an error every 5 s. A request
+  with no response at all fires `htmx:error`, never `htmx:after:request`, so it is not reported either way.
+- **Requests and a refused session**: any 401 sends the window to the login, to come back to the page (`goToLogin`,
+  `js/common/session.js`): first thing in `htmx-requests.js` for every htmx request (a silent poll and a dialog's submit
+  included), and in the axios interceptor of `js/http/client.js`. Nothing is reported and no success event fires. The
+  server answers an htmx request with no login with a 401 plus `HX-Redirect` (`decorators.requireLogin`), never a
+  redirect, which htmx's fetch would follow and swap in.
+- A refusal the server words reaches the user as its words: an htmx plain-text 403 or 409 as **Event Flow** says
+  (modal opens too), an axios JSON `{"error": ...}` through `getHttpErrorMessage`.
+- Global config is the `htmx-config` meta in `views/includes/header_common.scala.html`. `noSwap` holds 204, 304, 4xx
+  and 5xx: error bodies are never swapped, listeners report them.
+- The Import page's status feed is `hx-ws:connect` to `/import/r/:repoId/status`, with no `hx-target`: each message is
+  JSON naming the element it replaces (`target`, `swap`, `content`); one with no `content` (`{"connected": true}`,
+  `{"watchFolders": true}`) swaps nothing (**Import page**; the handshake's refusals and the server side: **Request
+  Lifecycle** and **Import history and the status feed** in `altitude/AGENTS.md`).
+  - The server closes an account's sockets with 1013 when the account changes (`hx-ws` reconnects, and the handshake
+    checks the login and Permission again) and with 1008 when its sessions are revoked (no reconnect). After its own
+    password change the page reconnects itself: `js/listeners/account.js` swaps each `hx-ws:connect` element for a
+    copy, which htmx processes again.
+  - `hx-ws` retries a refused handshake forever, so `js/import-status.js` cancels `htmx:ws:before:connection` after
+    `MAX_RECONNECTS` failed reconnects in a row and shows `#importStatusLost` (the vendored library stays unpatched).
+  - `hx-ws` closes the socket while the tab is hidden and reopens it on show; every reopening reads the history again.
+- **Not** HTMX requests: these go through the axios client because the caller must see or track the answer first, and
+  each reports its own failure: an upload (`js/import/upload-run.js`, for `onUploadProgress`; **Import page**); a
+  Curation set's fragment and the Sequence rail's rows (`curation`; a 204 passes over a Sequence; **Curation**); the
+  advanced search panel's form and its comboboxes' options (`filterCombobox`; only the latest opening's or latest
+  text's answer may show; **Advanced search panel**); the Change combobox's options (`faceCombobox`), the Detail panel's
+  sections and the Face corrections (only the latest opening's, or the shown asset's, answer may show; **Detail
+  panel**); the Watch
+  folder dialog's deletion notice (`watchFolderForm`: an htmx request inside a dialog is a dialog operation, whose
+  success closes it; **Import page**). Those are the only Alpine components that read through axios; `peopleTab` loads
+  its panes with `htmx.ajax` (**People tab**).
 
 ### Full action flow (drag-and-drop example)
 
@@ -532,383 +446,240 @@ interact.js drag end / ondrop
           → on success: direct DOM mutation + snackbar + optional nav reload
 ```
 
-Folder expansion and the folder context menus involve no request at all: the tree renderer builds
-them. A failed folder or album request (a tab load, a dialog load) is reported like any other
-failed request, by `js/listeners/htmx-requests.js`; the only `htmx:before:request` listener is the
-dialog one on `document`. The person name editor's outcome is the one response the client has to
-inspect: the saved name and the re-rendered editor both arrive as HTTP 200 with no header, so
-`js/listeners/people.js` parses the response and dispatches `personNameEdited` only when it holds
-no editor. The Triage scope route's answer is the one open request a 204 answers: `settleModalOpenRequest` in
-`js/common/modal.js` takes it as an open of nothing, which stops being the pending open, and hands its context to
-`onNoContent`, with which `js/listeners/dialogs.js` runs the search the issuing trigger declares (`runTriggerSearch` of
-`search-triggers.js`; see **Scope dialog and Quick view**). The rename dialog of a People cell's pencil (`htmx/rename_person_dialog`, see **People tab**) needs no such
-inspection: it is a dialog operation, whose form declares `PERSON_NAME_EDITED_EVENT` as its success event with the
-person's ID as the detail, and whose refusals are validation replacements. A name another live person holds re-renders
-the editor, or the dialog's form, with `conflictingPerson`: the field's error row (`includes/person_name_taken`, which
-both render, each passing the row's ID as `errorId` for its field's `aria-describedby`) holds the
-message, naming the holder as stored and saying so if the holder is hidden, and a `Merge into X…` button dispatching
-`confirmPersonMerge` with `keepDirection: true`, and from the dialog its `pane` as well, so the renamed person merges
-into the holder, whose ID survives. The
-button is Alpine's, so the row is rendered inside an `x-data` scope: the results title block's (`#person`) for the editor, and a bare `x-data` on the
-dialog's form, since the popover host has none. The
-editor's response still holds the editor, so no rename is announced, and the editor stays open behind the modal; closing the modal
-leaves the editor and its error. The rename dialog is a popover dialog, and the dialog hosts hold one dialog at a time, so
-the Merge people modal takes its place, and returns focus to the dialog's pencil when it is cancelled. The editor's
-field is `#editPersonNameField`, not a dialog field's `#field-name`, which the rename dialog's field has: the dialog can
-be open over the editor, and two fields would share the ID.
+- The person name editor's response is the one the client inspects: a saved name and the re-rendered editor both
+  arrive as a 200 with no header, so `js/listeners/people.js` parses it and dispatches `personNameEdited` only when it
+  holds no editor. The rename dialog (**People tab**) needs none: it is a dialog operation declaring
+  `PERSON_NAME_EDITED_EVENT`, whose refusals are validation replacements.
+- The Triage scope route is the one modal open a 204 answers: an open of nothing, whose `onNoContent` runs the
+  trigger's search (**Modals**, **Scope dialog and Quick view**).
+- A name another live person holds re-renders the editor or the dialog's form with `conflictingPerson`: the error row
+  (`includes/person_name_taken`) offers `Merge into X…`, dispatching `confirmPersonMerge` with `keepDirection: true`, so
+  the renamed person merges into the holder, whose ID survives. The button is Alpine's, so the row needs an `x-data`
+  scope (`#person`'s for the editor; a bare `x-data` on the dialog's form, the popover host having none). The editor
+  stays open behind the modal and keeps its error after the modal closes.
+- The editor's field is `#editPersonNameField`, not the dialog's `#field-name`: the dialog can be open over the editor,
+  and two fields would share the ID.
 
 ## Alpine.js Integration
 
 Alpine serves four distinct roles in this codebase:
 
 ### 1. Global shared state (stores)
-Stores initialized in `js/stores/app-stores.js` (run by `js/frontend-app.js`) and, for what `html_common` binds,
-`js/stores/html-common.js` hold shared data — the active repo ID, current view, the set of selected assets, the active
-dialog host, and the snackbar's messages. All access goes through `window.ctx`
-helpers or `Alpine.store(Const.state.*)` calls; no module reads the store key strings directly.
+The stores and how a module reaches them: **Alpine.js Stores**.
 
 ### 2. Selection
-An asset cell has no Alpine component. What is selected is the reactive `Set` of asset IDs in the
-`selectedAssets` store (`js/search-results/selection.js`), and the store is the one place a
-selection changes: `select`, `deselect`, `toggle`, `reset`, and `setDragging` update the set and
-paint the cells they concern (`.selected` / `.masked` on every `.drag-drop[data-asset-id]` of the asset, found
-through `js/search-results/cells.js`: a Location grouping holds an asset once under each of its Locations). One delegated
-click listener per displayed grid toggles an asset from its checkmark or a Shift-click on its
-image; box selection commits through the same methods; drag handlers read `contains(id)` to
-decide whether a drop escalates to a batch and call `setDragging` to dim the selection while it
-moves. Cells entering or leaving the grid are announced with `noteGridChange()`, which bumps a
-reactive counter the group headers read (the DOM itself is not reactive). Both copies of the batch ops (see **Batch
-ops**) bind to the set (`x-show`, `x-text`), and `reset()` from their Deselect all (×) button clears it.
+An asset cell has no Alpine component. The `selectedAssets` store (`js/search-results/selection.js`) is the one place
+a selection changes: its methods update the ID set and paint every cell of the asset, found through
+`js/search-results/cells.js` (a Location grouping holds an asset once per Location). The grid's delegated click
+listener, box selection and drags all go through the store. The DOM is not reactive, so code that adds or removes
+cells calls `noteGridChange()`, the counter the group headers read.
 
 ### 3. Coordination around native UI
-`x-data="contextMenu"` (registered with `Alpine.data` in `alpine/components/index.js`, defined in
-`alpine/components/context-menu.js`) wraps each folder's, album's or Location row's ⋯ trigger and its native
-`popover="auto"` panel, the ⚙ View button and its panel, and each choice menu's trigger and panel. The browser owns the menu's visibility (`:popover-open`, `popovertarget`, light dismiss on
-outside clicks); the component only places the panel, moves focus into it and between its actions, closes it when focus leaves or when the page scrolls or the explorer
-resizes, and cleans up. Nothing binds `x-show` or an `open` flag to it. See **Folder context
-menus** below.
+The `contextMenu` component (`alpine/components/context-menu.js`) wraps the explorer rows' ⋯ menus, the ⚙ View panel
+and the choice menus. The browser owns visibility (`popovertarget`, light dismiss); the component only places, focuses,
+closes and cleans up. Nothing binds `x-show` or an `open` flag to a menu. See **Context menus**.
 
 ### 4. Rendering a page's own data
-A page that renders data it already holds may do so with `x-for` templates over one component, so its
-markup stays in the Twirl template instead of being built node by node in JavaScript. The style guide
-is the one such page: `x-data="styleGuide"` is on its `<main>`, so the contents column and the sections
-share it, and the component (`js/style-guide.js`,
-registered when the page's module script imports it, before `initApp()` starts Alpine) holds the data
-and the logic that needs the browser. Keep the expressions in such a template to property reads and
-single method calls: nothing lints them, so anything longer belongs in the component. A card or row
-repeated across sections is a Twirl reusable block (`@tokenCards(kinds, group)` in `style_guide.scala.html`),
-since Alpine has no template reuse of its own. Twirl reads `@` as its own, so Alpine's shorthand is
-written `@@click`. `html_common` renders the `snackbar` store the same way, on every page that includes it: each
-stack is an `x-for` over the store's `errors` or `notices`, its bindings property reads, single calls on the store
-(`classesOf`, `iconOf`, `isRepeated`, `countOf`, `dismiss`, `syncStack`, `onStackFocusOut`), its events written `x-on:`. The explorer lists (folder tree, albums, Locations) are still rendered by their JavaScript modules; the People tab's
-`peopleTab` component (`alpine/components/people-tab.js`) renders nothing itself: it holds the tab's remembered state, binds
-the bucket switches and the Duplicate pane's `x-if` to it, and has htmx load each pane's list (see **People tab** below).
-The `curation` component (`alpine/components/curation.js`) renders nothing either: the server renders a Curation set, and the
-fragment's bindings read the component's state (see **Curation** below).
+A page that renders data it already holds may use `x-for` over one component, so its markup stays in Twirl: the style
+guide (`styleGuide`, `js/style-guide.js`, registered by the page's module import before `initApp()`) and the snackbar's
+stacks in `html_common`.
 
-Alpine is intentionally **not** used for routing, server communication, or HTMX trigger logic —
-those responsibilities stay with HTMX and the custom event bus. The one exception is the `curation` component, whose reads and
-outcomes go through the axios client (see **HTMX 4 conventions**).
+- Keep template expressions to property reads and single method calls: nothing lints them.
+- Alpine has no template reuse: a repeated card or row is a Twirl block (`@tokenCards` in `style_guide.scala.html`).
+- Twirl owns `@`, so write `@@click`.
+
+The explorer lists are rendered by their JS modules. `peopleTab` and `curation` render nothing: the server renders the
+markup, and the component holds the state its bindings read.
+
+Alpine is **not** used for routing or HTMX trigger logic; those stay with HTMX and the event bus. A component that must
+check an answer before showing it reads through the axios client; which ones do is listed under **HTMX 4
+conventions**.
 
 ## UI Patterns
 
-**Modals** — Four dialog hosts live in `html_common.scala.html`, named by `ModalHost`: load into `#modalContent` for the
-general modal, into `#popoverContent` for the popover dialog, into `#imageDetailModalContent` for
-asset detail, and into `#curationModalContent` for Curation. `js/common/modal.js` is the single owner of all four: which host is active (one at a
-time — a new open replaces the active dialog, whatever its host), whether a close goes ahead (a host's close guard,
-`setCloseGuard`, may hold a `closeModal` and close it later, answering a promise of whether it did, which `takeHeldClose`
-hands the caller: Asset detail's, while the Edit panel has a change pending, **Edit panel**), the title,
-initial focus (the fragment's autofocus selector, else the close control, else the popover host itself, never a destructive action),
-focus restoration on close (the fragment's `data-app-dialog-return-focus` selector, else the
-control that opened it, or the control that stands for it when the open takes it away, `openerOf`: the visible ⋯ trigger
-for a menu action, and for a control of the open popover dialog, which the new dialog replaces, the control that popover
-dialog would have returned to, so closing Quick view, opened from a Triage scope dialog, returns focus to the explorer's
-trigger), and identity: every displayed open has an `openId`
-(`isModalOpenActive(openId)` guards asynchronous work; an open over another host counts as displayed while it waits the one
-Alpine tick for that host's release, `activatingOpenId`, so a load that finishes in that tick, a cached image, is still its
-own), and the latest "open request" (any HTMX
-request targeting a host) is tracked so a slow response for an earlier open is cancelled before it
-swaps once the user dismissed or replaced it. An open answered with no content (204, which htmx does not swap) opens
-nothing: `settleModalOpenRequest` clears it as the pending open and calls its `onNoContent` with the request's context,
-which `js/listeners/dialogs.js` uses to let a search trigger search (**Scope dialog and Quick view**). The three modal hosts' visibility is bound through the Alpine `modal` store
-(`x-show`; `x-trap.inert.noscroll` from the vendored `@alpinejs/focus` plugin, registered by
-`registerHtmlCommonBindings()` in `js/stores/html-common.js`, contains focus and hides the page from assistive tech; its documented local patches
-cancel delayed activation when a trap is released or removed, and count controls in open shadow
-roots, the video player's sliders, as inside the trap). Escape (`global.js`) closes one thing at a time and is consumed
-by it, which also keeps the browser's own Escape handling for the popover and the menus from running a second time, so
-a background inline edit survives: in fullscreen it is the browser's, which leaves fullscreen while Asset detail stays
-open (see **Detail navigation**); else the open listbox of a People row's Change combobox in the Detail panel closes
-alone (see **Detail panel**); else an open context menu closes alone, with focus back on its trigger, so the Detail
-panel's Dock side menu leaves Asset detail open (no other menu is open together with a dialog: opening a dialog closes
-the menus, and a menu's opening light-dismisses the popover dialog); else the advanced search panel closes, with focus
-back on its filter button (an open listbox or calendar inside it closes alone first, consuming the key itself:
-**Advanced search panel**); else, in Asset detail, the Edit panel's warning closes as Keep editing, then the panel's own
-(the Level tool off, the warning about changes held, the Crop tool closed), then the selected Face clears (see **Detail panel**, **Edit panel**); else the active dialog, whose
-close its guard may hold; else the map view's
-crowded-pin panel; and with none of those it is broadcast for such an edit to cancel. An open select picker's Escape
-is left to the picker, which closes itself and not the dialog holding it. General dialogs and Curation ignore backdrop clicks, asset detail closes on them. The general
-modal is centered, 100px from the top, `--modal-content-width` wide (the Location map editor's dialog and Quick view
-declare a wider one); asset detail is fitted by CSS from the size as shown, which `setAssetDetailSize()` sets on its box, in its own host, and fills the viewport while its Detail panel or its Edit panel is open (see **Detail panel**, **Edit panel**); Curation
-fills the window, over the nav, the explorer and the grid, with its title and Exit in its shell (see **Curation**).
-Switching hosts releases the active one in its own reactive flush before the next is activated, and hides the
-popover when it was the active one. Opening any dialog closes an open context menu first, so a
-dialog never appears over one. A host keeps its last fragment after it closes; opening the general modal or the
-popover dialog empties the other once it has faded out, so two dialogs never share a field ID (a `<label for>`, an
-autofocus selector). A validation replacement empties nothing. Curation's component empties its own host as it closes.
+**Modals** — `js/common/modal.js` is the single owner of the four dialog hosts in `includes/html_common.scala.html`,
+named by `ModalHost`: the general modal (`#modalContent`), the popover dialog (`#popoverContent`), Asset detail
+(`#imageDetailModalContent`) and Curation (`#curationModalContent`). A request opens a host by targeting its content
+element. `modal.js` owns:
 
-The popover dialog (`#popoverDialog`) is a native `<dialog popover="auto">`, a dialog by its element rather than an
-ARIA role, with no scrim and no focus trap, so the page stays live. The browser owns its visibility (`:popover-open`; `modal.js` changes it only through `showPopover()` and
-`hidePopover()`, and nothing binds `x-show` to it); the store names it as the active host while it is open, for the
-shared title and the one-active-host rule. CSS anchor positioning places it, and no JS measures anything: every
-trigger `js/common/context-menu-markup.js` builds carries `anchor-name: --<its id>` (as do a People cell's rename
-pencil and name link, which the server renders with it inline: **People tab**, and the Triage explorer's search
-triggers, a folder's name and a leaf's icon control, a Location's icon and name: **Scope dialog and Quick view**), a popover request names its
-trigger's ID in `data-app-dialog-anchor`, and `openModal` sets the host's `position-anchor` to `--<that id>`. The
-trigger IDs are stable, so a list rebuild that renders the trigger again re-anchors an open popover with no observer.
-`openModal` also passes the trigger as `showPopover({ source })`, which puts the popover next in the Tab order after
-it, so Tab out of the popover goes on from the trigger; the implicit anchor that `source` creates is a reference to
-that one element, which a rebuild would leave behind, so the named `position-anchor` overrides it.
-`position-area: bottom` puts the popover below its trigger and centered on it, slid back inside the viewport at a side
-edge, `--popover-anchor-gap` (`0rem`, flush) from the trigger and `--viewport-gap` (`0.625rem`, 10px at the default
-root) from the viewport's edges, and at most the viewport's width less a `--viewport-gap` each side, its content
-wrapping anywhere (`overflow-wrap: anywhere`, so a long unbroken name wraps). When it does not fit below,
-`position-try-fallbacks: flip-block, --popover-capped, --popover-capped-above` under `position-try-order: most-height`
-tries the roomier side's options first (the base placement below is always tried first, and the order sorts only the
-fallbacks): `flip-block` puts it above when that side is roomy enough, and `@position-try --popover-capped` (below)
-or `--popover-capped-above` caps its height on the roomier side, its content scrolling; the capped-above option
-swaps the block margins as `flip-block` does, so the anchor gap faces the trigger and `--viewport-gap` the viewport's
-top. It follows its trigger as the explorer panel (`#explorerPanelContent`, the explorer's scroll container) scrolls and the explorer's divider moves, and
-`position-visibility: anchors-visible` hides it while its row is clipped out of the explorer. An open whose trigger is gone or not displayed marks the host
-`data-unanchored`, placed like the general modal: 100px from the top, centered, its height capped at
-`--viewport-gap` from the bottom. A validation replacement re-hydrates into the open host and only refocuses: the
-popover is neither re-anchored, hidden nor shown again.
+- One active host at a time: a new open replaces the active dialog, whatever its host. Switching hosts releases the
+  old one in its own reactive flush first, so the new host's `x-trap.inert` marks are not undone; during that tick the
+  new open already counts as displayed (`activatingOpenId`), so a cached image that loads in it is still its own.
+  Opening any dialog closes an open context menu first.
+- Close guards: `setCloseGuard(host, guard)` lets a host hold a `closeModal()` and close later; `takeHeldClose()`
+  hands the caller the promise of whether it closed. Asset detail's guard holds while the Edit panel has a change
+  pending (**Edit panel**).
+- Initial focus: the fragment's autofocus selector, else the host's `.close-modal`, else the host; never a destructive
+  action.
+- Focus on close: the fragment's `data-app-dialog-return-focus` selector, else the control focused when the open was
+  requested. When the open takes that control away, `openerOf` substitutes the one that stands for it: a menu action's
+  visible ⋯ trigger, or, for a control inside the open popover dialog that the new dialog replaces, the control that
+  popover would have returned to (Quick view opened from a Triage scope dialog returns to the explorer's trigger).
+- Identity: each displayed open has an `openId`, and asynchronous work checks `isModalOpenActive(openId)` before
+  touching the modal. The latest open request (any htmx request targeting a host) is tracked, and a slower response
+  for an earlier open is cancelled before it swaps. An open answered 204 opens nothing: `settleModalOpenRequest` drops
+  it and calls `onNoContent`, which `js/listeners/dialogs.js` uses to let a search trigger search instead (**Scope
+  dialog and Quick view**).
+- One dialog fragment: a host keeps its last fragment after it closes, so opening the general modal or the popover
+  dialog empties the other once it has faded out; two dialogs never share a field ID (a `<label for>`, an autofocus
+  selector). A validation replacement empties nothing and keeps the original return-focus control. Curation's
+  component empties its own host as it closes.
+- Every close (`releaseActiveHost`) unloads the host's videos, clears the Media Session and leaves fullscreen.
 
-The browser dismisses the popover on an outside click (light dismiss), dropping what was typed. Its `beforetoggle`
-listener (`bindPopoverHost()`, called by `registerDialogListeners` in `js/listeners/dialogs.js`) runs the close
-bookkeeping synchronously, before the click that dismissed it can request another dialog, so it never cancels the
-open that click requests; focus is restored only when it was still inside the host, so a click elsewhere keeps the
-focus it gave, or the body. Its `focusout` listener closes it when Tab, or Shift+Tab from the first control, moves
-focus to a control outside it, leaving focus there; a focus change with no related target (a click, a validation swap
-removing the focused field) is left to light dismiss. Escape, the × and a completed operation close it through
-`closeModal()` and restore focus as for a modal, unless focus already sits on a control outside the host. The host
-carries `tabindex="-1"`, as a context menu panel does, so a click on its title, a label or its padding moves focus to
-the host rather than the body and never reads as focus leaving. Closing a dialog leaves the store's title in place,
-so the popover keeps its title while it fades out; the next open sets its own.
+The modal hosts bind visibility to the Alpine `modal` store (`x-show`) and trap focus with
+`x-trap.inert.noscroll.noreturn.noautofocus` (vendored `@alpinejs/focus`, registered by `registerHtmlCommonBindings()`
+in `js/stores/html-common.js`, local patches in `js/lib/README.md`); `noreturn` and `noautofocus` leave focus to
+`modal.js`. A general dialog that needs more room overrides `--modal-content-width` in its own CSS.
 
-The popover is a translucent, frosted surface: `--popover-background-color` under `--popover-backdrop-filter`, a
-hairline of `--popover-border-color`, `--radius-large`, and `--sheen-shadow` over `--float-shadow`. Its title and
-close control sit at the top with no divider (`.popover-toolbar`), and it fades in and out over 150 ms under
-`prefers-reduced-motion: no-preference`. A form inside fills `--popover-form-width` (20rem, at most the popover's
-width), and its inputs and selects the form; the form's own action (Move's button, `#popoverContent form > button`)
-sits `--space-5` below its fields, while a label and an error stay `--space-2` from their field. The Delete
-confirmation has no form and keeps its button's width.
+Escape (`global.js`, whose header documents the order) closes one thing per press and consumes the key, so the
+browser's own Escape handling of the popover and menus never runs a second time and a background inline edit
+survives. What sits on top closes first: a combobox listbox or a context menu before the dialog holding it (focus back
+on the menu's trigger), and in Asset detail the Edit panel's warning, its tools and the selected Face before the
+dialog (**Edit panel**, **Detail panel**). In fullscreen Escape is the browser's (**Detail navigation**). With nothing
+to close it broadcasts `Const.events.escapeKeyPressed` for an inline edit to cancel. An open select picker keeps its
+Escape and closes only itself.
 
-Every dialog host but Curation's, whose shell has Exit, uses `.close-modal` in `core.css`: the X keeps the text color (`--theme-neutral-4`)
-at rest, on hover, and on focus, with no focus outline (the modal may focus it on open). The popover's is quieter,
-`--font-size-large` in its text color at 0.6. Folder, album, Location, and category dialogs use the popover host and
-its close control; Add location uses the general modal host.
+The popover dialog (`#popoverDialog`) is a native `<dialog popover="auto">`: no scrim, no focus trap, the page stays
+live. The browser owns its visibility (`:popover-open`); `modal.js` changes it only through `showPopover()` and
+`hidePopover()`, never `x-show`. The store still names it as the active host, for the shared title and the
+one-active-host rule.
 
-A **dialog** is a server-rendered form that completes one user action, hydrated from its
-`data-app-fragment` kind; a **modal dialog** is one shown in a modal host, a **popover dialog** one
-shown in the popover host. Attributes that describe
-the dialog itself are `data-app-dialog-*` on the fragment root, whatever its presentation: autofocus
-selector / select-on-focus, return-focus selector (the control focus goes to on close, chosen to
-survive the page update the dialog triggers), and `kind`, naming wiring a dialog needs beyond its
-form (the Add to album and Add to location selections, hydrated from `js/fragments/modal.js` through `js/fragments/add-to-album.js` and `js/fragments/add-to-location.js`). Its success
-event is declared like any request element's, with `data-app-success-event` (+ `-detail`,
-`-detail-target-attr-*`) on the fragment root. An outcome only the server knows (how many assets a
-membership change applied) arrives as JSON in the `App-Success-Detail` response header
-(`BaseController.dialogSuccessResponse`, `Const.http.successDetailHeader`), which
-`dialog-operations.js` merges over the declared detail. The one attribute that describes the host is
-`data-app-modal-title`, the title either host shows. Folder, album, Location, and category actions, including the Add
-controls, are **popover dialogs**, and so are the Triage explorer's scope dialog, the Users page's Set password and
-Delete dialogs, the Import page's Remove dialog of a Watch folder, the account info dialog and its Change password; Add location, Add to location, the people dialogs, the purge
-confirmation, Quick view, the Users page's Add User and edit form and the Import page's Watch folder dialog are **modal dialogs**. Only View settings is an
-**inline dialog** fragment (`data-app-fragment="inline-dialog"`, see **Context menus**); its switches apply
-immediately without submitting an operation. The advanced search panel, the second inline dialog in a popover panel, is
-no fragment kind: its host loads its form and gives it focus (**Advanced search panel**).
+- CSS anchor positioning places it (`#popoverDialog` in `core.css`); no JS measures. A popover request names its
+  trigger's ID in `data-app-dialog-anchor`, the trigger carries `anchor-name: --<its id>`, and `openModal` sets the
+  host's `position-anchor` to `--<that id>`. `js/common/context-menu-markup.js` sets the anchor name on the triggers it
+  builds; server-rendered triggers set it inline (**People tab**, **Scope dialog and Quick view**). Trigger IDs are
+  stable, so a list rebuild re-anchors an open popover with no observer.
+- `openModal` also passes the trigger as `showPopover({ source })`, so Tab out of the popover continues from the
+  trigger. That implicit anchor references one element, which a rebuild leaves behind, so the named
+  `position-anchor` overrides it. With the trigger gone or hidden, the host is `data-unanchored`, placed like the
+  general modal.
+- An outside click light-dismisses it, dropping what was typed. The `beforetoggle` listener (`bindPopoverHost()`)
+  does the close bookkeeping synchronously, before that click can request another dialog, so it never cancels the
+  click's open; focus is restored only if it was still inside. The `focusout` listener closes it when Tab moves focus
+  to a control outside, leaving focus there; a focusout with no related target (a click, a validation swap removing
+  the focused field) is left to light dismiss. Escape, the × and a completed operation close it through
+  `closeModal()`, restoring focus unless it already sits on a control outside.
+- The host has `tabindex="-1"`, as a context menu panel does, so a click on its title, a label or its padding focuses
+  the host rather than the body and never reads as focus leaving.
+- A form inside fills `--popover-form-width`, with its action `--space-5` below its fields (`core.css`).
 
-A dialog the page already holds needs no request: a button with `data-app-open-dialog="#id"`
-names a `<template>` whose content is a `modal` fragment; `js/fragments/dialog-openers.js` copies
-it into the general modal host, runs `htmx.process` on it, and hydrates it like a fetched dialog, so it
-opens, submits, closes, and announces its success event through the same code. The purge
-confirmation in `htmx/trashbin_header.scala.html` is the one such dialog in the app (`hx-confirm` is not
-used); the style guide's labelled fields specimen is another.
+A **dialog** is a server-rendered form that completes one user action, hydrated from its `data-app-fragment` kind; a
+**modal dialog** is shown in a modal host, a **popover dialog** in the popover host. What describes the dialog is
+`data-app-dialog-*` on the fragment root, whatever the presentation: autofocus selector and select-on-focus,
+return-focus selector (a control that survives the page update the dialog triggers), and `kind`, for wiring beyond
+the form (Add to album, Add to location). The host's one attribute is `data-app-modal-title`. The success event is
+declared like any request element's (`data-app-success-event`, `-detail`, `-detail-target-attr-*`); an outcome only
+the server knows arrives as JSON in the `App-Success-Detail` header (`BaseController.dialogSuccessResponse`;
+`Const.http.successDetailHeader` is the client's copy of `Api.Field.SUCCESS_DETAIL_HEADER`), merged over the declared
+detail. Single-field actions and small confirmations tied to a control (folder, album, Location
+and category actions, People rename, password and delete dialogs) are popover dialogs; dialogs that need room (Add
+location's map, Add to album, merge, Quick view, the user and Watch folder forms) are modal. View settings is the one
+**inline dialog** fragment (**Inline dialogs**); the advanced search panel is no fragment kind (**Advanced search
+panel**).
 
-General HTMX modal fragments opt in with `data-app-fragment="modal"`; `js/fragments/modal.js` opens the
-host the fragment was swapped into on hydration (the popover host for `#popoverContent`, else the general modal), so
-a `modal` fragment's presentation follows the host its request targets and the template does not say which. It registers the modal presentation with `js/fragments/dialog-operations.js`, which
-tracks each operation any dialog submits from `htmx:before:request` (capturing a handle to the dialog
-it belongs to - for a modal or popover dialog, its open - and its success metadata while the fragment is still in the
-DOM; a repeated submission while one is pending is dropped). When the response arrives it dispatches
-the success event exactly once, lets normal page updates through even if the dialog was closed or
-replaced, and closes the initiating dialog if it is still active. Validation
-responses are recognised by their `HX-Retarget: this` / `HX-Reswap: outerHTML settle:0` headers
-(`BaseController.dialogFormValidationResponse`; the immediate settle keeps htmx's settle step from
-copying the old field's empty value attribute over the submitted value): they replace the active
-form in place (values and errors kept, no success event) or, once the dialog is gone, are reported
-through the snackbar.
-`htmx:finally:request` clears operations left pending when a network failure skips
-`htmx:after:request`, reports the failure through the snackbar, and allows another submission.
-`js/listeners/dialogs.js` registers this wiring on `document`, because htmx dispatches lifecycle events
-on the document when the issuing element has already left the DOM.
+A dialog the page already holds needs no request: a button with `data-app-open-dialog="#id"` names a `<template>`
+holding a `modal` fragment, which `js/fragments/dialog-openers.js` copies into the general modal and hydrates like a
+fetched dialog. The purge confirmation (`htmx/trashbin_header.scala.html`) is the app's one; `hx-confirm` is not used.
 
-Asset detail: `js/fragments/image-detail.js` opens the host with its spinner immediately and hands
-the image load to the detail coordinator, which gives each image request a token so only the latest
-request for the active open may change the image, box size, title, loading state, or current asset
-(rapid previous/next navigation, page fetches, and loads that finish after closing are ignored).
-The navigation origin is the cell whose thumbnail requested the detail (`modal.js` keeps the element
-that issued an open's request, `getModalOpenSource()`), set before the image loads, so previous/next
-already steps from the newly opened cell while the spinner is showing. A detail opened from no cell
-(a map pin) has no previous or next.
-Arrow-key navigation works only while asset detail is active and no text field is focused, or the video player's
-timeline or volume slider, which the arrows step, or the Detail panel's divider, which they move; Space plays or pauses
-the current Video, through media-chrome inside the player, and does nothing on an image, except on a control in the
-player or in the Detail panel, which it presses; `m` opens or closes the Detail panel, `p` shows or hides the Face
-highlights and `f` puts Asset detail in fullscreen or leaves it, wherever focus is, a held key or a modifier left to the
-browser (see **Detail panel**, and **Detail navigation** for fullscreen).
+`js/fragments/modal.js` hydrates a `data-app-fragment="modal"` fragment by opening the host it was swapped into, so
+presentation follows the request's target and the template does not say which. `js/fragments/dialog-operations.js`
+runs the operation lifecycle for every dialog kind (`registerDialogKind`):
 
-**Context menus** — Each folder's, album's or Location row's ⋯ button (its **trigger**, `.menu-trigger`) is a real
-`button` with `popovertarget` pointing at a `popover="auto"` panel (`.context-menu`; `#menu-{id}`
-for a folder, `#albumMenu-{id}` for an album), all built by `buildContextMenuCtrl` in
-`js/common/context-menu-markup.js` as the tree or list is rendered, so opening a menu sends no request.
-Each action requests its dialog into the popover host (`#popoverContent`), naming the menu's ⋯ trigger in
-`data-app-dialog-anchor`; the modal owner closes the menu when the response opens (the browser would close it too,
-since neither popover is the other's ancestor). An action may run a script instead (`run`), and an entry
-`{ separator: true }` is an `hr` between two groups of actions, drawn as a choice menu's separator. The one such action
-is a non-root folder's **Search here**, first in its menu and set apart from the folder's actions by a separator: it
-opens the advanced search panel with the folder chosen and every other field as the search in force has it
-(`openSearchPanel({ folderId })`, **Advanced search panel**), whose opening, an auto popover that is not the menu's
-descendant, closes the menu; nothing is searched until the panel's Search. Any account that can see the Library can
-search, so Search here follows no Permission: a Guest's non-root folder has a menu of Search here alone. The root
-folder is the whole repository and no filter, so its menu has none, and is the empty cell without Organize. Menu
-panels contain only their action buttons, with no inline form or dialog host. `buildModalTriggerCtrl` builds the Add folder, Add album, Add location, and Add category buttons
-(including empty-state controls) as direct requests: into the popover host, anchored to the button itself (`host`
-`ModalHost.popover`, the default), or into the general modal host with no anchor (`host` `ModalHost.general`, which
-Add location and "Add your first location" pass); any other host throws. Every trigger the module builds carries `anchor-name: --<its id>` (`_buildButton`),
-the View settings button too, which nothing anchors to.
+- `htmx:before:request` captures the dialog's handle (for a modal or popover dialog, its open) and success metadata
+  while the fragment is still in the DOM; a repeated submission while one is pending is dropped.
+- The response dispatches the success event exactly once and lets page updates through even if the dialog was closed
+  or replaced, but closes the initiating dialog only if it is still active.
+- A validation response (`HX-Retarget: this`, `HX-Reswap: outerHTML settle:0`,
+  `BaseController.dialogFormValidationResponse`) replaces the active form in place, values and errors kept, no success
+  event; once the dialog is gone it goes to the snackbar. Its `settle:0` restates the no-settle config (**HTMX 4
+  conventions**), which keeps the submitted value in the focused field.
+- `htmx:finally:request` clears an operation left pending by a network failure, reports it, and allows resubmission.
+- `js/listeners/dialogs.js` registers all of this on `document` (why: **HTMX 4 conventions**).
 
-The ⚙ View button above the results grid (`#viewSettingsBtn`, built by
-`js/search-results/view-settings-control.js` into `#viewSettingsActions`) uses
-`buildDialogTriggerCtrl`, a `.dialog-trigger-ctrl` with an inline dialog host. Its `dialog-only`
-panel stays invisible until the settings arrive and Alpine has bound their switches (the reveal waits a
-microtask behind the mutation observer's, so no switch slides from off into its state), opens below the
-button centered on it (`data-menu-align="center"`), and is cleared on close. The component records its load request and
-drops a response after the panel has closed or reopened; it listens on the component root, since htmx
-dispatches the request events on the button that issued the load, not on the panel beside it. The host
-is emptied again as a load starts, so the swap never meets a leftover fragment: htmx settles an element
-whose ID the old content also had back to its served attributes, which would strip the `aria-checked`
-Alpine set as the fragment initialized. Each switch applies immediately; View settings submits nothing.
+Asset detail (`js/fragments/image-detail.js`) opens its host at once and hands the load to the detail coordinator.
+Its navigation starts from the cell whose thumbnail issued the request (`getModalOpenSource()`), and an open from no
+cell (a map pin, an asset's URL) has no previous or next (**Detail navigation**). Its keys are `global.js`'s.
 
-A **choice menu** (the toolbar's Group `#groupMenuHost` and Sort `#sortMenuHost`, `includes/search_results.scala.html`)
-picks one of several values. The server renders a host, `data-choice-menu="<name>"` with `data-choice-menu-icon` and,
-for Group in the map layout, `data-choice-menu-disabled`,
-holding one `button` per option: a search trigger carrying
-its literals (`data-app-search="click"` with `data-app-search-sort`, or `data-app-search-group-by` and
-`data-app-search-group-direction`), the effective one `aria-checked="true"`. The Sort host of a search with a
-description opens with "Similarity" (`data-app-search-sort="similarity"`), the order such a search has while it names
-no other, and that of a search with Search text with "Relevance" after it; both are search triggers as the column
-sorts are. A disabled trigger is the `disabled` button of `buildChoiceMenuCtrl`, which
-opens nothing, and is dimmed as every disabled `.action-button` is (**Control states**). `ensureChoiceMenus` (`js/common/choice-menus.js`,
-called by `fragments/index.js` for every hydrated root) hands each host to `buildChoiceMenuCtrl`, which builds the
-control into it: a `.choice-menu-ctrl` root (`data-menu-kind="choice"`, centered under its trigger), the trigger
-(`action-button small`, `aria-haspopup="menu"`: the icon, the name dimmed, the checked option's text in `.choice`, a
-caret), and the panel (`role="menu"`, `aria-labelledby` the trigger) the option buttons move into as `menuitemradio`
-items; the trigger and panel IDs derive from the host's (`groupMenuHost` → `groupMenuBtn`, `groupMenu`). Picking an
-option closes the menu with focus on the trigger (`handleActionClick`) and runs the option's search; the results
-fragment comes back with a new control showing the choice, so nothing updates the label on the client, and a failed
-search leaves the previous choice shown. The search funnel knows nothing of the control: an option is a literal trigger
-like any other.
+**Context menus** — A folder's, album's or Location row's ⋯ button (its **trigger**, `.menu-trigger`) is a real
+`button` with `popovertarget` pointing at a `popover="auto"` panel (`.context-menu`), both built client-side by
+`buildContextMenuCtrl` in `js/common/context-menu-markup.js`, so opening a menu sends no request. Trigger and panel IDs
+(`folderMenuCtrl-<id>`, `menu-<id>`, and the album and Location equivalents) must stay stable across rebuilds:
+rebuilds restore focus by ID, and dialogs name the trigger as their return-focus control.
 
-A **compact choice menu** is a choice menu with no words on its trigger: the host carries `data-choice-menu-compact`
-and no icon, each option holds a `.glyph` (an inline `<svg><use href="#dockGlyph-…">` of a symbol sheet) before its
-label in a `span`, and `buildChoiceMenuCtrl` gives the trigger (`action-button small compact`, square) a clone of the
-checked option's glyph alone, and the menu's name and the choice, "Dock side: Left", as its `aria-label` and
-`title`, so the choice is read without opening it. The one such menu is the explorer header's Dock side menu
-(`#dockSideMenuHost`, `index.scala.html`), whose options are `[data-app-dock-side]` picks rather than search
-triggers, so no server re-render shows the choice: `js/common/explorer-dock.js` re-checks the options and replaces
-the trigger's glyph and name on every side change (see **Explorer dock**). The page's own hosts are built
-by the first hydration (`initApp` hydrates `document`), before `initExplorerDock` checks the current option, so a
-compact trigger starts on its first option's glyph and is corrected in the same task, before any paint. Until a host
-is built, `core.css` hides its options, separator and actions (`[data-choice-menu] > :is(button, a, hr)`: only an
-unbuilt host has them as direct children), so the page's Dock side menu shows nothing before the deferred modules run; a `.glyph` also carries
-`width`/`height="16"`, its symbols' `viewBox`, so an unstyled one never draws at the SVG default of 300×150.
+- An action requests its dialog into `#popoverContent`, naming the trigger in `data-app-dialog-anchor`; `openModal`
+  closes the menu. An action may `run` a script instead, and `{ separator: true }` is an `hr` between groups. Panels
+  hold only action buttons, never an inline form or dialog host.
+- The one script action is a non-root folder's **Search here**, first and set apart by a separator: it opens the
+  advanced search panel with the folder chosen (`openSearchPanel({ folderId })`) and searches nothing until the
+  panel's Search. Anyone who sees the Library can search, so it follows no Permission (a Guest's folder menu is Search
+  here alone). The root folder has none, so without Organize its cell is empty (`buildNoMenuCell`).
+- `buildModalTriggerCtrl` builds the Add buttons, empty-state ones included: into the popover host anchored to the
+  button (`ModalHost.popover`, the default), or into the general modal unanchored (`ModalHost.general`, Add
+  location); any other host throws.
 
-A choice menu's options may be links rather than search triggers, and the menu may end with actions: the nav's Library
-menu (`includes/library_menu`, see **Nav**) is the one such menu. A link option (`a[href]`) becomes a `menuitemradio` as a
-button does; picking it closes the menu and the browser follows the link. The trigger also takes the checked option's
-`title`, so a choice cut short is read whole on hover. A separator, an `hr` among the host's children, ends the
-options: it moves into the panel as it is, and each element after it is an action, a plain `menuitem` that is never
-checked and carries its own `hx-get` into `#popoverContent`; `buildChoiceMenuCtrl` gives it `data-app-dialog-anchor`
-naming the trigger, so its popover dialog opens below the trigger, centered on it, and focus returns to the trigger,
-as from a ⋯ menu's action (`openerOf`). `data-choice-menu-trigger-class` replaces the trigger's class, `action-button
-small` by default (the nav's is `nav-menu-trigger`, the look of a nav entry). A **choice-only** host
-(`data-choice-menu-choice-only`, the nav's Library menu, beside the Browse link that names its place) gets a trigger of
-the current choice and the caret alone, with no icon or name; its `aria-label` and `title` name the menu and the choice
-in full, "Library: Personal". The component's actions are the panel's
-`.actions` buttons and links, so the keys below move over the options and the actions alike, past the separator, and
-Space follows a focused link as Enter does. `core.css` draws a link option as it draws a button option
-(`.context-menu .actions :is(button, a)`, no underline), and the separator as a `--border-hairline` in
-`--popover-border-color`, `--space-2` above and below.
+The ⚙ View button (`js/search-results/view-settings-control.js`) uses `buildDialogTriggerCtrl`: a `dialog-only` panel
+holding an inline dialog host, cleared on close. It stays invisible until the settings arrive and Alpine has bound
+their switches (the reveal waits a microtask behind the mutation observer's, so no switch slides into its state). The
+component drops a load response that arrives after the panel closed or reopened, and listens on its root because htmx
+dispatches request events on the issuing button, not the panel. The host is emptied as a load starts and on close
+(`clearDialog`), so a load never swaps over a leftover fragment.
 
-A menu opens on its checked action, else its first (`focusInitialAction`, on `toggle`; View settings has no actions
-and keeps the focus its dialog hydrator sets); Down and Up move through the actions, wrapping, Home and End jump
-(`handleKeydown` on the panel), Enter and Space are the button's own, and no type-ahead exists.
-The browser owns popover visibility: it toggles the panel from its trigger, closes it on any click
-outside, and keeps one open because a panel is never a descendant of another entity's panel.
-The `contextMenu` component places the panel in the top layer against the trigger (below,
-flipping above when needed, clamped to the viewport, height-capped with internal scrolling when
-neither side fits; left-aligned with the trigger, or centered on it for a `data-menu-align="center"`
-root); it closes the panel when focus leaves and on scroll, window resize, or explorer resize;
-it never tracks a moving trigger. The panel carries `tabindex="-1"`, so a click on a dialog's
-label or padding moves focus to the panel rather than out of it.
-`closeContextMenu` / `closeOpenContextMenu`, exported by the component module, close a menu from
-outside the component: Escape in `global.js` (focus returns to the trigger unless a dialog was
-closed too), the folder model when an ancestor collapses, and `openModal`; the trigger is found as the
-`[popovertarget]` button in the panel's cell, not by an ID convention. Removing the tree or list removes the open panel and, through the component's
-`destroy`, its listeners. Styling lives in `core.css`: a panel wears the popover dialog's frosted surface
-(`--popover-background-color` under `--popover-backdrop-filter`, a `--popover-border-color` hairline, `--radius-large`,
-`--sheen-shadow` over `--float-shadow`, `--space-2` padding, as the select picker is drawn), and an action is a
-`--radius-small` row in a two-column grid whose leading column is the check mark's (`✓` by `::before` on
-`[aria-checked="true"]`, empty otherwise, so labels line up across every menu), tinted on hover as a picker option is
-(`--theme-neutral-4` at 0.08) and when checked as a checked option is (the accent at 0.2), with the hairline between
-rows. CSS sets `display` only under
-`:popover-open`, because the hidden state relies on the browser's `display: none`. During
-`beforetoggle`, the component briefly sets inline `display: grid` to measure and position the
-hidden panel, then clears it before opening; keep the CSS `margin: 0` and `inset: auto` resets so
-those viewport coordinates apply correctly. `.menu-ctrl` and the icon control `.expand-ctrl` are
-excluded from folder dragging (`ignoreFrom` in `js/dragdrop/folders.js`); the rest of the row drags. A panel lives inside whatever container holds
-its trigger, so no stylesheet may reach into one with a descendant selector: `#searchControl .controls > div:not(.toggle-group)`
-in `includes/search_results.css` is scoped to the controls' direct children for exactly that reason, since an ID
-selector outranks `.context-menu:popover-open` and would leave the closed panel displayed (the
-`:not` leaves `#layoutToggle` its `.toggle-group` row).
+A **choice menu** picks one of several values: the toolbar's Group and Sort (`includes/search_results.scala.html`).
+The server renders a `data-choice-menu="<name>"` host holding one button per option, each a literal search trigger,
+the effective one `aria-checked="true"`. Sort lists Similarity first for a described search and Relevance for one
+with Search text, and neither otherwise, since the server refuses them. `ensureChoiceMenus`
+(`js/common/choice-menus.js`, run on every hydrated root) hands each unbuilt host to `buildChoiceMenuCtrl`, which
+turns the options into the `menuitemradio` items of a `role="menu"` panel under a trigger showing the checked choice.
+Picking an option closes the menu (focus on the trigger) and runs its search; the results come back with a new
+control showing the choice, so the client never updates the label, a failed search leaves the old choice shown, and
+the search funnel knows nothing of the control. Host variants:
 
-**Folder tree expansion and viewed scope** — In a non-root row the icon and the name have separate
-jobs: the name (`#folderName-{id}`) navigates (a search for the folder's results; in Triage the click opens the
-folder's scope dialog instead, and in the trash it does nothing, see **Search parameters**; a folder drag arms
-`suppressClickAfterRelease()` at its start, so the click its release produces on the name is never taken for one),
-and the icon sits in a native `button` (`#expand-folder-children-{id}`, icon `#folder-icon-{id}`,
-class `.expand-ctrl`) built by `js/common/folder-tree.js`. A **branch** is a non-root folder with
-child folders; only branches carry expansion state, root is always expanded with no gestures, and a
-leaf keeps a plain `fa-folder` icon with no indicator even when it holds assets (its button is a search trigger for
-the folder itself, as the name is, and is named "Open folder *name*" in every view). The name and a leaf's button are
-each the anchor of the scope dialog their click opens in Triage (`_anchorDialogsTo`: `anchor-name: --<its id>` and
-that ID in `data-app-dialog-anchor`), and the IDs are stable, so a rebuild of the tree re-anchors an open dialog; the
-root's name and icon anchor nothing, since their click does nothing there. A branch's button carries an accessible name, `aria-controls` for its
-children container, and `aria-expanded`, which the model keeps in step with the
-`fa-folder-plus`/`fa-folder-minus` glyph; Enter and Space are single-click activations. Expansion
-sends no request.
+- **Compact choice menu** (`data-choice-menu-compact`): the trigger shows the checked option's `.glyph` alone, with
+  the name and choice in its `aria-label` and `title`. A `.glyph` carries `width`/`height="16"` so an unstyled one
+  never draws at 300×150. The one is the explorer's Dock side menu, whose options are dock-side picks rather than
+  search triggers, so `js/common/explorer-dock.js` re-checks the options and updates the trigger itself (**Explorer
+  dock**).
+- Links and actions (the nav's Library menu, **Nav**): options may be links (`a[href]`). An `hr` ends the options;
+  each element after it is a never-checked `menuitem` with its own `hx-get` into `#popoverContent`, anchored to the
+  trigger, so focus returns there as from a ⋯ action. `data-choice-menu-trigger-class` replaces the trigger's class,
+  and `data-choice-menu-choice-only` drops the icon and name, leaving the choice and caret.
 
-**Folder asset counts** — Every non-root row shows its folder's asset count in a `.asset-count`
-cell (`#folder-count-{id}`, built by `js/common/asset-count.js`) placed directly after the name, dimmed
-in parentheses: `NYC (47)`. The count is recursive:
-the folder's own sorted assets plus those of every folder beneath it. Triaged and recycled assets are
-excluded, and a zero renders as an empty cell, never `(0)`, so a row without assets ends at its name. The root row (labelled `/`) shows no count (the nav
-carries the repository total), though the tree JSON still reports `numOfAssets` for it. The row grid
-(`views/htmx/folders.scala.html`) gives the name a content-sized track that wraps when it must and the
-count the remaining width, so no column is reserved for counts, rows line up on the left, and a long
-name never pushes its count out of the panel. The count is not a search trigger.
-The server computes the counts on every tree fetch (`FolderService.getTree`); nothing is stored.
+Until a host is built, `core.css` hides its children (`[data-choice-menu] > :is(button, a, hr)`, which only an
+unbuilt host has). The page's hosts are built by the first hydration, before `initExplorerDock` checks the current
+side, so the compact trigger is corrected in the same task, before any paint.
+
+The `contextMenu` Alpine component (`js/alpine/components/context-menu.js`) runs every menu, View settings and the
+choice menus included:
+
+- The browser owns visibility: it toggles the panel from its trigger, closes it on any outside click, and keeps one
+  open, because the component root is the small menu cell and no panel is a descendant of another entity's panel.
+- A menu opens focused on its checked action, else its first; Down/Up wrap, Home/End jump. No type-ahead.
+- Unlike the popover dialog, a menu is placed by JS (`placeAnchoredPanel`, `js/common/anchored-panel.js`) and never
+  tracks a moving trigger: it closes when focus leaves and on scroll outside the panel, window resize or explorer
+  resize.
+- Placement briefly sets inline `display: grid` on the hidden panel to measure it. CSS sets `display` only under
+  `:popover-open`, because the hidden state relies on the browser's `display: none`; keep the `.context-menu`
+  `margin: 0` and `inset: auto` resets so the viewport coordinates apply.
+- `closeContextMenu` / `closeOpenContextMenu` close a menu from outside: Escape in `global.js`, the folder model when
+  an ancestor collapses, the Location list when a category collapses, and `openModal`. The trigger is found as the
+  `[popovertarget]` button in the panel's cell (`getContextMenuTrigger`), not by ID.
+- `.menu-ctrl` and `.expand-ctrl` are excluded from folder dragging (`ignoreFrom` in `js/dragdrop/folders.js`).
+- A panel lives inside whatever container holds its trigger, so no stylesheet may reach into one with a descendant
+  selector: an ID selector outranks `.context-menu:popover-open` and would leave a closed panel displayed. That is why
+  `#searchControl .controls > div:not(.toggle-group)` in `includes/search_results.css` targets direct children only.
+
+**Folder tree expansion and viewed scope** — `js/common/folder-tree.js` renders the tree from one JSON fetch that holds
+every folder, so expansion sends no request; `js/models/folder.js` is the single owner of expansion state. A **branch**
+is a non-root folder with child folders, and only branches carry expansion state. Root is always expanded, has no
+gestures, and its name and icon do nothing in Triage. In a non-root row the name and the icon have separate jobs:
+
+- The name (`#folderName-{id}`) is a search trigger for the folder; Triage and the trash reroute its click
+  (**Search parameters**, **The explorer in Triage**). A folder drag arms `suppressClickAfterRelease()` at its start,
+  so the click its release produces on the name never searches.
+- The icon sits in a native `button.expand-ctrl` (`#expand-folder-children-{id}`). A branch's button only toggles. A
+  leaf keeps a plain `fa-folder` icon even when it holds assets, and its button is a search trigger like the name.
+- The name and a leaf's button anchor the scope dialog their click opens in Triage (`_anchorDialogsTo`, the **Modals**
+  anchor convention).
 
 | Target and starting state | Single-click | Double-click |
 |---|---|---|
@@ -917,1906 +688,1231 @@ The server computes the counts on every tree fetch (`FolderService.getTree`); no
 | Folder name | Navigate to the folder (in Triage: its scope dialog, nothing for the root) | No expansion action |
 | Plain root or leaf icon (`fa-folder`) | Navigate to the folder (in Triage: its scope dialog, nothing for the root) | No expansion action |
 
-`js/models/folder.js` owns the state: `expand()` (one level), `expandAll()`, and `collapse()`, which
-also collapses every descendant branch (the **reset invariant**: a reopened branch shows one level;
-descendant expansion never lingers hidden). Collapsing closes an open descendant menu and, if focus
-was inside the hidden content, moves it to the collapsing branch's button. The renderer's gesture
-handler acts on the first click immediately, ignores the later clicks of a pointer multi-click
-sequence (`event.detail` above 1), and applies the double-click action from the state captured
-before the first click; the comment on `_bindBranchGestures` explains why. Initial rendering shows
-root and its direct children with every branch collapsed; nothing is persisted.
+Enter and Space are single-click activations. `collapse()` also collapses every descendant branch (the
+**reset invariant**: a reopened branch shows one level, and hidden descendant expansion never lingers), and moves focus
+that was inside to the branch's button. `_bindBranchGestures` ignores the later clicks of a pointer multi-click and
+applies the double-click from the state captured before the first click; its comment explains why. Branches start
+collapsed, and nothing is persisted.
 
-An expanded branch and its visible descendants form a **group**, set off from the rows around it:
-between any two consecutive visible rows the space is the row gap (`--list-row-gap`, `0.5rem`, declared in
-`core.css` and shared with the albums and the Locations) or twice
-that where a group starts or ends, never more, whether groups end together, one expanded branch directly
-follows another, or an expanded first child follows its parent's row. The tree's top and bottom get no
-extra space, and root is not a group. The CSS in `static/css/htmx/folders.css` implements it as a block
-margin on `.folder[data-expanded]` (grid items do not collapse margins), cancelled where an expanded
-sibling precedes or where the branch is its parent's last child; expansion already toggles the
-attribute, so the renderer plays no part.
+`Folder` (`js/models/folder.js`) is the one DOM abstraction for a folder-tree node (`#folder-{id}`, with
+`#children-{id}` and `#folderName-{id}`). `Folder.find(id)` returns `null` when a rebuild removed the node
+mid-interaction, so a caller handles `null`. The renderer reads the tree JSON's `numOfChildren` and `numOfAssets`
+(**Folder asset counts**) and builds each folder's ⋯ menu (`#folderMenuCtrl-{id}` opening `#menu-{id}`). The IDs are
+stable, so a rebuild restores focus and re-anchors an open dialog, and a dialog returns focus to its trigger.
+`reloadFolderTree(repoId)`:
 
-Green (`--success-color`) marks the **viewed scope**: the folder whose results are displayed
-and all its descendants, because the results cover that subtree. It has nothing to do with
-expansion. `js/common/viewed-folder-scope.js` keeps the scope of the displayed results and marks
-that one folder node with `data-viewed-scope`; the CSS in `static/css/htmx/folders.css` colors every
-`.folder-icon` under the node (leaves and hidden descendants included) and no icon in a
-menu or dialog. Root is never marked: viewing the root folder turns nothing green, root's icon
-included, because that scope is the whole repository. The search-results fragment carries `data-results-repo-id`, `data-results-view`,
-and `data-results-folder-id`, which `SearchResultsController` resolved from the parameters it was
-sent, and `js/fragments/search-results.js` sets the scope when the fragment is hydrated. It reads
-those attributes rather than the `searchParams` store on purpose: the highlight must follow what is
-displayed, so a superseded or failed navigation never moves it. So the highlight changes only for results actually displayed, survives sorting and
-pagination, is absent in triage and trash or without a folder in scope, and is reapplied by every
-tree rebuild; deleting the viewed folder removes it without selecting the parent.
+- Drops a superseded response, and snapshots the expanded folder IDs and the focused control only immediately before
+  replacing the DOM, so a gesture made, or focus a dialog returned, during the fetch is not undone.
+- Re-expands a surviving branch only under an expanded parent, so a folder moved beneath a collapsed parent comes back
+  collapsed. It reapplies the latest viewed scope independently of the snapshot.
+- Calls `htmx.process(container)`; Alpine's mutation observer initializes the new subtree. Never also call
+  `Alpine.initTree`: it initializes every component a second time and duplicates their listeners.
 
-**Albums** — The Albums tab (`views/htmx/albums.scala.html`) is a flat list rendered by
-`js/common/album-list.js` from the JSON list endpoint, one `.album` row (`#album-{id}`,
-`data-album-id`) per album: menu | icon | name | `.asset-count` (`#album-count-{id}`, directly after
-the name, laid out like the folder one), with icon and name as `data-app-search-album-id`
-triggers and the row's `.controls` a drop zone (`js/dragdrop/albums.js`) for a single asset or the
-batch mover. Albums hold pointers only: a drop adds memberships (`PUT /api/album/r/:repoId/assets`,
-`assetActions.addAssetsToAlbum`; assets already in the album are skipped and reported), the grid
-does not change, and the album counts are patched in place (`refreshAlbumCounts`, also called by
-`refreshCounts` after every asset mutation, because recycling drops an asset from its albums).
-While an album's results are displayed (`searchParams.albumId`, mirrored by `data-results-album-id`
-on the results fragment, which marks the row `data-viewed-scope` and colors its icon green) the batch
-ops offer "Remove from album", which deletes the memberships of the selected assets and removes
-their cells. Outside the trash they always offer "Add to album": it dispatches `batchAddToAlbumRequested`, the
-listener requests `add_to_album_dialog` (`AlbumActionController`) into the modal host, and
-`js/fragments/add-to-album.js` fills its hidden `assetIds` field from the selection (`fillSelectionField` in
-`js/fragments/selection-field.js`, which the Add to location dialog shares) and keeps the success detail naming the
-chosen album. The select lists the albums, then "New album…" (an empty value), which shows the name field below it:
-the server then creates that album and adds the selection in one transaction (`AlbumService.addAssetsToNewAlbum`; a
-taken name is the field's error and creates nothing). With no albums, "New album…" is the only option and the name
-field shows from the start, focused. The server's detail adds how many assets it `added`, the album's ID and name, and
-whether it `created` it; `assetsAddedToAlbum` reports that through `assetActions.reportAddedToAlbum`, the report a drop
-makes too ("Already in album" when nothing was new), resets the selection, and reloads the list for a created album
-(it needs its row) or refreshes the counts otherwise. Add is a popover dialog (`add_album_dialog.scala.html`, submitted with Return) opened by the top `#addAlbumBtn` (centered above the list) or, while
-there are no albums, by the centered `#addFirstAlbumBtn`; the renderer builds both controls into
-their hosts and shows one or the other. Rename and Delete open popover dialogs from the album's menu; deleting the viewed album runs a
-search back to the whole repository. `albumAdded` / `albumRenamed` / `albumDeleted` reload the
-list, which restores focus by ID, or to the visible add button when the dialog's return control
-was hidden by the change (`focusAddAlbumControlIfFocusLost`).
+An expanded branch and its visible descendants form a **group**: the space between two visible rows is the row gap
+(`--list-row-gap`, shared with the albums and the Locations), or twice that where a group starts or ends, never more.
+Root is not a group. `static/css/htmx/folders.css` implements it in CSS alone, from `data-expanded`. Indentation: each
+non-root node's `--depth` times `--list-indent` (`core.css`, shared with the Location list) sizes the `.trace` grid cell
+(`folders.css`), which indents the icon and name while `.menu-ctrl` stays flush left; the root row has no trace cell.
+Keep the renderer's markup and these grid rules in sync.
 
-**Locations** — The Locations tab (`views/htmx/locations.scala.html`) is rendered by
-`js/common/location-list.js` from the JSON list endpoint, which returns categories and Locations in path
-order (a category directly followed by its Locations, top-level Locations interleaved by name).
-Top-level Locations and categories are siblings of `#locationList` in that order; a category is a
-node (`.location.category`, `#location-{id}`, `data-location-id`, `data-kind`) holding its row and,
-when it has Locations, a children container (`#location-children-{id}`, `.children`) with their rows
-(`.child`: `data-category-id`, `--depth: 1` and a `.trace` cell that indents it like a folder); a
-top-level Location is a `.top-level` row. A category row is menu (Rename, Delete) | `fa-layer-group`
-icon | name; it holds no assets and no count, so it is neither a drop target nor a search trigger and
-never turns green. A category with Locations wraps its icon and name in one native button
-(`#location-expand-{id}`, `.expand-ctrl`, with an accessible name, `aria-controls` for the children
-container and `aria-expanded`): clicking the icon or the name, or Enter and Space, expands or
-collapses its Locations and nothing else; the later clicks of a pointer multi-click are ignored, so a
-double-click toggles once, and there is no recursive action because categories are one level deep.
-The CSS draws a +/− badge on the icon (`::after` in the Font Awesome font, positioned so it adds no
-width, so the icon lines up with top-level Location icons). A category with no Locations has a plain
-icon and name, no badge, and clicking it does nothing. Categories start collapsed when the tab loads;
-expansion is snapshotted immediately before every rebuild and restored afterwards (dropping categories
-that no longer exist or lost their Locations), and is not persisted across page loads. Collapsing
-closes an open menu among the hidden Locations and moves focus to the category's button if it was
-inside. Expanded categories get the folder tree's group spacing (twice the row gap where a group
-starts or ends, never more; an expanded category that is the list's first or last row gets no extra
-space at that end). A Location row is menu (Rename, Delete, Move to category) | `fa-map-marker-alt`
-icon | name | `.asset-count` (`#location-count-{id}`, directly after the name),
-with icon and name (`#locationIcon-{id}`, `#locationName-{id}`) as `data-app-search-location-id` triggers, each the
-anchor of the scope dialog its click may open in Triage (`anchor-name: --<its id>`, named in `data-app-dialog-anchor`:
-in Triage a Location with triaged assets is searched there and one without them is described by the dialog, while the
-add buttons, the menus and the drops work as in Browse: **The explorer in Triage**) and the row's `.controls` a drop zone
-(`js/dragdrop/locations.js`) for a single asset or the batch mover. Locations hold pointers only: a
-drop adds memberships (`PUT /api/location/r/:repoId/assets`, `assetActions.addAssetsToLocation`;
-assets already in the Location are skipped and reported), the grid does not change, and the counts
-are patched in place (`refreshLocationCounts`, also called by `refreshCounts` after every asset
-mutation, because recycling drops an asset from its Locations). While one Location's results are
-displayed (`searchParams.viewedLocationId()`, the store's `locationId` when it holds one ID, mirrored by `data-results-location-id`, which marks the row
-`data-viewed-scope` and colors its own icon green, top-level or inside a category, whose icon stays
-plain; inside a collapsed category the viewed Location stays hidden until it is expanded; an advanced search of several Locations marks no row and has no viewed Location) the batch ops offer "Remove from location", which
-deletes the memberships of the selected assets and removes their cells. They always offer "Add
-to location" outside the trash: it dispatches `batchAddToLocationRequested`, the listener requests
-`add_to_location_dialog` into the modal host, and `js/fragments/add-to-location.js` fills its hidden
-`assetIds` field from the selection (`fillSelectionField`) and keeps the fragment's success detail naming the chosen
-Location (its ID, and its bare name from the option's `data-name`, since the row is not rendered while
-another explorer tab is displayed). The server adds how many assets it `added`, and `assetsAddedToLocation`
-reports that through `assetActions.reportAddedToLocation`, the report a drop makes too ("Already in
-location" when nothing was new), then resets the selection and refreshes the counts.
+Green marks the **viewed scope**: the folder whose results are displayed and all its descendants, because the results
+cover that subtree. It has nothing to do with expansion. `js/common/viewed-folder-scope.js` marks that one node with
+`data-viewed-scope`, and one `folders.css` rule colors every `.folder-icon` beneath it. Root is never marked: its scope
+is the whole repository. The scope follows what is displayed, never the `searchParams` store: the results fragment
+carries the scope the server resolved (`data-results-repo-id`, `data-results-view`, `data-results-folder-id`), and
+`js/fragments/search-results.js` (`syncViewedScope`) applies it on hydration. So a superseded or failed navigation never
+moves the highlight, it is absent in Triage and the trash, and every tree rebuild reapplies it. Deleting the viewed
+folder removes it without selecting the parent.
 
-Add location is a modal dialog (`add_location_dialog.scala.html`, it holds the pin editor below) requested by the top `#addLocationBtn` or, while there are no rows, by the centered
-`#addFirstLocationBtn`, centered in the general modal host; Add category opens a popover dialog below `#addCategoryBtn`. The renderer builds all three into their hosts and shows one host or the
-other. Rename, Delete and Move to category open popover dialogs from the row's menu (`#locationMenuCtrl-{id}`
-is the trigger they return focus to; Delete returns focus to `#addLocationBtn`, since the row goes
-away); deleting a Location the search names drops it from the search (`replaceId("locationId", id, null)`) and searches
-again: back to the whole repository when it was the search's one place, and with the other filters kept in a filtered
-search; deleting a category leaves its Locations at the top level, a viewed one still green. `locationAdded` /
-`categoryAdded` / `locationRenamed` / `locationMoved` / `locationDeleted` reload the list (`locationDeleted` the Triage
-summary too, since the Location's assets may be in no Location now), which
-restores the expanded categories and focus by ID, or focus to the visible add control when the
-dialog's return control was hidden by the change (`focusAddLocationControlIfFocusLost`). Add
-completes with `dialogSuccessResponse` naming the new Location's `categoryId` (null at the top level),
-and the `locationAdded` listener expands that category (`expandLocationCategory`) after the reload; a
-move into a collapsed category leaves it collapsed, as moving a folder under a collapsed parent does. Add and Move share
-`includes/location_category_select`, which offers categories only and `(none)` for the top level (Move passes
-`labelled = false`: its title names the field); Add to
-location offers Locations only, labelled `Category - Location`. Rename, Delete, and Move titles
-come from `Const.UI`, chosen by kind in the controller.
+**Folder asset counts** — Every non-root row shows its folder's recursive asset count in an `.asset-count` cell
+(`#folder-count-{id}`, `js/common/asset-count.js`, shared with the albums and the Locations) directly after the name:
+`NYC (47)`. It counts the folder's own sorted assets plus those of every folder beneath it, without triaged or recycled
+assets. A zero is an empty cell, never `(0)`. The root row shows no count (the nav carries the repository total),
+though the tree JSON reports `numOfAssets` for it. The count is not a search trigger, and Triage hides it
+(**The explorer in Triage**). `FolderService.getTree` computes the counts on every fetch; nothing is stored.
+`refreshFolderCounts` re-fetches the tree JSON after an asset mutation (`refreshCounts`, **Nav refresh**) and patches
+each `#folder-count-{id}` in place, keeping expansion, focus and open menus; it falls back to a full render when the
+response holds a folder the DOM lacks, as after a restore un-recycles one.
 
-**Location pin editor** — A Location's pin is placed on a map, never typed. The Add location form
-nests a `data-app-fragment="location-editor"` root carrying the tile URL, the attribution and the
-geocoder flag; `js/fragments/location-editor.js` (hydrated after the modal hydrator) builds a
-Leaflet map in `#locationEditorMap` (`tabindex="-1"`, so Alpine's focus trap leaves Leaflet's keyboard
-handling alone): a click places the pin, a drag moves it, and every placement writes the form's
-hidden `latitude` / `longitude` inputs (six decimals) and the read-only `#locationPinReadout` under
-the map (four decimals; "No pin yet" before). The hidden inputs are all the server sees, and a
-validation replacement re-renders them with the submitted values, so the re-hydrated editor opens on
-that pin at zoom 12. Otherwise the editor opens where the results map is looking when one is displayed
-(`getDisplayedMapView()`, `js/map/map-state.js`), and on the world when not. One editor exists at a time: hydrating disposes of the
-previous map. Leaflet measures its container on creation, when the modal host is still hidden, so the
-hydrator sizes the map once the container is displayed and on every resize. A missing or
-out-of-range coordinate is one error, "Place the pin on the map", rendered once under the map. The
-pin is an `L.divIcon` (`.location-pin`), so Leaflet's marker images are not vendored. When the
-geocoder is enabled the fragment also renders `#locationGeocode` with a Search button: Enter or the
-button asks `/api/map/r/:repoId/geocode` through the shared client (the newest search wins), the
-results are buttons, and a click jumps the map to the place, places the pin, and fills the name when
-it is empty with the label's first segment; a failed search is a snackbar. Leaflet is a plain
-script (`window.L`), loaded with its stylesheet by the first editor or map (`js/common/vendor-loader.js`); the
-hydrator waits for it and skips a fragment removed meanwhile.
+**Albums** — The Albums tab (`views/htmx/albums.scala.html`) is a flat list rendered by `js/common/album-list.js` from
+the JSON list endpoint: one `.album` row (`#album-{id}`) per album, menu | icon | name | `.asset-count`. Icon and name
+are `data-app-search-album-id` triggers; the row's `.controls` is a drop zone (`js/dragdrop/albums.js`) for a single
+asset or the batch mover.
+
+- Albums hold pointers only (**Albums** in `altitude/AGENTS.md`). A drop adds memberships
+  (`assetActions.addAssetsToAlbum`) and the grid does not change. The counts are patched in place by
+  `refreshAlbumCounts`, which `refreshCounts` also calls after every asset mutation, because recycling drops an asset
+  from its albums.
+- The viewed album follows `data-results-album-id` on the results fragment, as the folder scope does, and colors its
+  row's icon green. Remove from album is in **Batch ops**.
+- Add to album (`batchAddToAlbumRequested` → `add_to_album_dialog` in the modal host): `js/fragments/add-to-album.js`
+  fills the hidden `assetIds` field (`fillSelectionField`, shared with Add to location) and keeps the success detail
+  naming the chosen album, whose row may not be rendered. "New album…", the last option, has an empty value: the server
+  then creates the album and adds the selection in one transaction (`AlbumService.addAssetsToNewAlbum`).
+- The server's detail adds `added` and `created`. The `assetsAddedToAlbum` listener reports through
+  `assetActions.reportAddedToAlbum`, the report a drop makes too ("Already in album" when nothing was new), and reloads
+  the list for a created album (it needs a row) or refreshes the counts otherwise.
+- Add album opens from `#addAlbumBtn`, or from `#addFirstAlbumBtn` while there are no albums; the renderer builds both
+  and shows one. Deleting the viewed album searches back to the whole repository. `albumAdded` / `albumRenamed` /
+  `albumDeleted` reload the list, which restores focus by ID, or focuses the visible add button when the change hid the
+  dialog's return control (`focusAddAlbumControlIfFocusLost`).
+
+**Locations** — The Locations tab (`views/htmx/locations.scala.html`) is rendered by `js/common/location-list.js` from
+the JSON list endpoint, in path order (**Locations** in `altitude/AGENTS.md`). It works like **Albums** (pointers only,
+drops, count patching by `refreshLocationCounts`, the viewed row, focus recovery by
+`focusAddLocationControlIfFocusLost`), with one level of nesting:
+
+- A category node (`.location.category`, `#location-{id}`) holds its row and its Locations' `.child` rows, indented by a
+  `.trace` cell like a folder. A category holds no assets: no count, no drop target, no search trigger, never green.
+- A category with Locations wraps its icon and name in one native button (`#location-expand-{id}`) that only expands or
+  collapses. A double-click toggles once (later clicks of a pointer multi-click are ignored), and there is no recursive
+  action. A category with no Locations is plain.
+- Categories start collapsed. Expansion survives every rebuild (snapshotted immediately before it) but not a page load.
+  Collapsing moves focus that was inside to the category's button. Expanded categories get the folder tree's
+  **group** spacing.
+- A Location's icon and name are search triggers, each the anchor of the scope dialog its click may open in Triage
+  (**The explorer in Triage**).
+- The viewed Location is `searchParams.viewedLocationId()`, the store's `locationId` when it holds exactly one ID, so an
+  advanced search of several marks no row. Only its own icon turns green, never its category's.
+- Add to location works like Add to album without creating. Its options read `Category › Location`, so the success
+  detail takes the bare name from the option's `data-name`.
+- Add location is a modal dialog in the general modal host, sized for the **Location pin editor**; the other Location
+  dialogs are popovers. Delete returns focus to `#addLocationBtn`, because the row goes away.
+- Every dialog event reloads the list; `locationDeleted` also reloads the Triage summary, since the Location's assets
+  may now be in no Location. After an add the listener expands the category the new Location went into
+  (`expandLocationCategory`, from the success detail's `categoryId`); a move into a collapsed category leaves it
+  collapsed, as moving a folder under a collapsed parent does.
+- Deleting a Location the search names drops it from the search (`replaceId("locationId", id, null)`) and searches
+  again, keeping the other filters. Deleting a category leaves its Locations at the top level.
+
+**Location pin editor** — A Location's pin is placed on a map, never typed. The Add location form nests a
+`data-app-fragment="location-editor"` root, and `js/fragments/location-editor.js` builds a Leaflet map in it.
+
+- The form's hidden `latitude` / `longitude` inputs are all the server sees. A validation replacement re-renders them
+  with the submitted values, so the re-hydrated editor opens on that pin; otherwise it opens on the displayed results
+  map's view (`getDisplayedMapView()`) or the world.
+- `#locationEditorMap` has `tabindex="-1"` so that Alpine's focus trap leaves Leaflet's keyboard handling alone.
+- One editor exists at a time: hydrating disposes of the previous map. It hydrates after the modal hydrator. Leaflet
+  measures its container on creation, while the modal host is still hidden, so the map is sized again once the
+  container is displayed and on every resize.
+- The pin is an `L.divIcon`, so Leaflet's marker images are not vendored. Leaflet is a plain script (`window.L`), loaded
+  with its stylesheet on first use (`loadLeaflet` in `js/common/vendor-loader.js`); the hydrator waits for it and skips
+  a fragment removed meanwhile.
+- The optional place search (geocoder flag) goes through `/api/map/r/:repoId/geocode`, and the newest search wins.
 
 **People tab** — The People tab (`views/htmx/people.scala.html`, `static/css/htmx/people.css`) is a shell the browser
-fills: `#people` (`x-data="peopleTab"`, `js/alpine/components/people-tab.js`; it carries `--face-box`, the face detection
-box size, for the cells) holds one or two panes, the **Main pane** and the **Duplicate pane** of the glossary,
-`section.pane[data-app-people-pane="main"|"duplicate"]` (`#peoplePane-main`, `#peoplePane-duplicate`, named to assistive
-tech "Main pane" and "Duplicate pane"), each a `.buckets` row (`role="group"`, "People
-buckets") of switches over an empty `.list` host. A switch is the View dialog's pattern,
-a `button[role="switch"]` and a `<label for>` whose click flips it with no script, its id carrying the pane name so the
-labels stay unique; a pane offers Matched, Hidden and Unmatched, the Main pane also Split view, labelled "Duplicate Split
-View" with a faint `small.legend` after the label, "(for quick drag-and-drop)", that the switch is `aria-describedby`. The switches are the
-**People buckets** (the glossary in `CONTEXT.md`: Matched person, Unmatched person, Hidden person), three disjoint sets,
-and a pane lists the union of the buckets switched on, Matched alone on a first visit; with no one listed it shows one `.empty`
-line and no grid: "No one in the buckets switched on" with none on or no one in them, and, when the buckets hold people and
-every one of them has only triaged assets with triaged items hidden (the server's `ListedPeople.leftOffByTriage`),
-"Everyone here is only in triaged items. Turn on Show triaged items to see them." The server renders no switch state, as with View settings: the component asks
-`GET /htmx/people/r/:repoId/list?pane=main&buckets=matched,hidden` (`pane` is the pane the list is for, `Const.PeoplePane`
-on the server, the Main pane when left out; comma-separated bucket names; a name that is no pane or no bucket is a 400),
-with `triaged=true` added only when the `searchParams` store's `triaged` is exactly `"true"`, read on every load (the
-null it holds for a Guest and outside Browse would go out as `triaged=null`, a 400), or when the view is Triage, whatever the store holds,
-through `htmx.ajax` into the pane's `.list`, on init, when a switch flips, when a person changes and when "Show triaged
-items" flips, through a `$watch` on the store's `triaged` set up in `init()` (the host's
-`hx-sync="replace"` aborts a load of the pane still in flight, so the latest bucket set lands), and the response is
-`htmx/people_list`: the `.grid` of `.cell.drag-drop.dropzone` cells, each with `data-person-id` and no id, since a person
-may be in both panes, a hidden person's with an `fa-eye-slash` `.hidden-badge` in the image's corner and a
-`.visually-hidden` ", hidden" at the end of its name link, an Unmatched person told apart by its orange "Unknown N" name.
-A person with no cover (no Face of theirs left to be one) shows the no-cover placeholder in the face's place: `.no-cover`
-(`core.css`), an `fa-user` in `--theme-neutral-3` at `--font-size-xl` on `--theme-secondary`, which each of its hosts sizes
-and rounds as it does the face: the cell, the results title's cover (where it opens the Choose cover face modal as the face
-does) and the Merge people modal (where it is an `img` role named as the face's `alt` is). The name link carries
-no `aria-label`: it is named by its content, the name, the number and then that text, "hidden". The face's link and the
-name link are both `data-app-search-person-id` triggers for the person. The name link is
-`#personLink-<pane>-<personId>`, with an inline `anchor-name: --<its id>`, and both links name it in
-`data-app-dialog-anchor`, so the scope dialog a click opens in Triage sits under the cell's name, whichever link was
-clicked; the pane is in the ID for the reason the pencil's is (below). A cell's number, the name link's `.count` span,
-is the `ListedPerson`'s `visibleCount`, what opening the person from the repository view finds, and a person
-with nothing to find with triaged items hidden is left off (**People** in `docs/faces.md`).
+fills. `#people` (`x-data="peopleTab"`, `js/alpine/components/people-tab.js`) holds the **Main pane** and, in
+**Split view**, the **Duplicate pane** (glossary terms), each a `section.pane[data-app-people-pane]` with bucket
+switches over an empty `.list` host. Nothing of the tab is server state.
 
-After the name link, a sibling and not inside it, so that it is no search trigger, each cell has a rename pencil:
-`button.rename` (`fa-edit`, named "Rename *name*"), at the end of the name row and out of its flow, `--space-8` wide at
-least (a 24 px pointer target), shown by `people.css` while the cell is hovered or holds keyboard focus
-(`.cell:has(:focus-visible)`: the pencil a dialog closed from the keyboard returns focus to shows, with the focus ring,
-while focus a click left in a cell shows no second pencil), and always where nothing hovers (`@media (hover: none)`).
-It requests
-`GET /htmx/people/r/:repoId/dialogs/rename-person` (`personId`, `pane`) into `#popoverContent` and is the dialog's
-anchor: its ID is `personRenameCtrl-<pane>-<personId>`, which it names in `data-app-dialog-anchor` and carries as an
-inline `anchor-name: --<its id>`, as the triggers `context-menu-markup.js` builds do (**Modals**). The pane is in the ID
-because a person can be in both panes, and two pencils with one ID would be one anchor; `loadPane` sends `pane` with
-every list request and `people_list` takes it as a parameter. The dialog is `htmx/rename_person_dialog`, a
-`data-app-fragment="modal"` form of one unlabelled field holding the current name, selected on focus, as the explorer
-action dialogs' Rename is (**Explorer action dialogs**). Its `data-app-dialog-return-focus` is `#personRenameCtrl-<pane>-<personId>`,
-a selector and not the element, so focus goes to the pencil the list renders again after the rename, and a hidden `pane`
-field sends the pane back so that the form replacing it on a refusal names the same pencil. A saved name
-(`PUT /htmx/people/r/:repoId/p/:personId/rename`), the name the person already has included, is an empty success that
-completes the dialog and announces `PERSON_NAME_EDITED_EVENT` with the person's ID; a name that cannot be saved is a
-validation replacement with its error under the field, and a name another person holds offers the merge, whose modal
-replaces the popover (**Event flow**).
+- Each pane's switches are the three disjoint **People buckets** (Matched, Hidden, Unmatched; `CONTEXT.md`), in the
+  View dialog's switch pattern with the pane name in their IDs. A pane lists the union of those switched on; a first
+  visit shows Matched alone.
+- `loadPane` asks `GET /htmx/people/r/:repoId/list` (`PeopleActionController.listPeople`) with `pane` and `buckets`,
+  through `htmx.ajax` into the pane's `.list`: on init, on a switch flip, on `peopleChanged`, and when "Show triaged
+  items" flips (a `$watch` on the store's `triaged`). The host's `hx-sync="replace"` aborts the pane's load still in
+  flight, so the latest bucket set lands.
+- `triaged=true` is added only when `searchParams.showsTriaged()` or the view is Triage. Never forward the store's value
+  as is: the `null` it holds for a Guest and outside Browse would go out as `triaged=null`, a 400.
+- In `htmx/people_list` a cell is found by `data-person-id` and has no id, since a person may be in both panes. Its
+  number is `ListedPerson.visibleCount`; a person with nothing to find is left off (**People** in `docs/faces.md`).
+- The face link and the name link are both search triggers, and both name the name link
+  (`#personLink-<pane>-<personId>`) in `data-app-dialog-anchor`, so the scope dialog a click opens in Triage sits under
+  the name whichever was clicked.
+- The rename pencil (Edit metadata's) is a sibling after the name link, not inside it, so it is no search trigger.
+  `people.css` shows it on hover and on `.cell:has(:focus-visible)`, not `:focus-within`, so focus a click left in a
+  cell shows no second pencil.
+- The pencil anchors its dialog (**Modals**), and its ID carries the pane (`personRenameCtrl-<pane>-<personId>`)
+  because a person can be in both panes and two pencils with one ID would be one anchor. That is why `loadPane` sends
+  `pane`. The dialog's return focus is a selector, so it finds the pencil the list renders again, and its hidden `pane`
+  field lets a refusal's replacement name the same pencil. A name another person holds offers the merge
+  (**Event Flow**).
+- In Triage the buckets and Split view are Browse's (**The explorer in Triage** for the hidden numbers and drops).
+- The component listens on `document.body` for `peopleChanged` (each displayed pane reloads with its own buckets) and
+  `dockSideChanged`, from `init()` to `destroy()`: the events are dispatched on the body, an ancestor of the shell, so a
+  listener on the shell never sees them. Lookups start from `this.$root`, because in a `@click` handler `$el` is the
+  button.
+- `localStorage` `Const.localStore.peopleView` holds the split, each pane's buckets and each axis's pane sizes, written
+  on every change and read once in `init()` (`rememberedView` validates it).
 
-In Triage the tab lists every Person of its buckets, those found only in triaged assets included (each load sends
-`triaged=true` there), so the "only in triaged items" line never shows; the buckets and Split view are the ones Browse
-remembers. The numbers are not displayed (`pages/index.css` hides `.count`; **The explorer in Triage**), which also
-leaves the number out of a hidden person's link name there: the name, then "hidden". A click on a face or a name
-searches Triage scoped to the person when they have triaged assets, and otherwise opens the scope dialog under the
-name, "This person has no assets assigned in Triage" (**Scope dialog and Quick view**); a merge reloads the tab and
-confirms, and searches only when the results show one of the two people (**Event flow**). The remembered state is
-`localStorage` `Const.localStore.peopleView`, `{ split, buckets: { main: [...], duplicate?: [...] }, paneSizes: { stacked,
-sideBySide } }`, written on every flip and drag and read once in `init()`, which falls back to the first visit's when it
-is missing or unreadable, keeps only the bucket names the tab knows, reads a pane's buckets remembered under the older
-names `top` and `bottom` as its own, and takes an axis's sizes only as two percentages. The component listens
-for `Const.events.peopleChanged` on `document.body` from `init()` to `destroy()` (the events are dispatched on the body,
-an ancestor of the shell, which a listener on the shell cannot see whatever their bubbling) and reloads each displayed
-pane with its own buckets; a merge, a
-hide, a show, a discard, a rename, a Face correction and an asset mutation through `refreshCounts()` announce it (**Event flow**). Lookups inside the component start from `this.$root`, the shell
-(in a `@click` handler `$el` is the button). **Split view** renders the Duplicate pane under `<template x-if="split">` and
-divides the two pane elements, found from `this.$root`, with a Split.js instance (`minSize` 120) along the axis the
-**Dock side** calls for (`effectiveSide()` of `js/common/explorer-dock.js`): stacked, `direction: "vertical"`, under a
-left or right dock, and side by side, `"horizontal"`, under a top or bottom one, each axis with its own sizes
-(`paneSizes.stacked` / `paneSizes.sideBySide`, default `[50, 50]`, written on `onDragEnd` under the axis dragged), made
-in `$nextTick` once the pane exists. A `Const.events.dockSideChanged` on `document.body`, listened for from `init()` to
-`destroy()` like `peopleChanged`, destroys the instance and makes it again on the new axis while Split view is on, the
-panes staying put (the gutter is built by the component as a `.divider` of `core.css` with its orientation class, next
-to Split.js's own); turning Split view off destroys the instance, which takes its gutter and the inline sizes along its
-axis with it, before `split` drops the pane, and `destroy()` does the same when another tab replaces the fragment. The
-Duplicate pane copies the Main pane's buckets the first time Split view is turned on, when it has none remembered; from
-then on the two are remembered apart, across split off and on. `js/dragdrop/people.js` binds `#people .drag-drop` and
-`#people .dropzone`, which match both panes, so a
-cell dropped on the other pane's cell dispatches `confirmPersonMerge` as any drop does; on drag start it arms
-`suppressClickAfterRelease()` (`click-suppression.js`), so the click the release produces on the person's link, moved
-under the pointer, neither searches nor opens a dialog (at the start rather than in `end`: with inertia a flick's `end` fires
-after the click), and the `autoScroll`
-container becomes the dragged cell's `.pane .list` (the scrolling element: the pane itself is `overflow: hidden`), falling
-back to `#explorerPanelContent` for the `#person` cover in the results title. The heights: `#explorerViews` is a grid of
-`auto 1fr` at `height: 100%` (`static/css/pages/index.css`), `#explorerPanelContent` (`min-height: 0; overflow-y: auto`)
-is the explorer's scroll container for every tab, `#people` is a flex container at `height: 100%`, a column under a left
-or right dock and a row (`html[data-dock-side="top"]`, `"bottom"`) under a top or bottom one, and a pane is a grid of
-`auto 1fr` with both minimums reset whose `.list` scrolls; alone (`.pane:only-of-type`) it is `flex: 1`, and with two
-Split.js sets each pane's size inline along its axis, the height stacked and the width side by side.
-Nothing of the tab is server state: switching to another tab and back restores the panes from `localStorage`.
+**Split view** renders the Duplicate pane under `<template x-if="split">`, and a Split.js instance made in `$nextTick`
+divides the panes along the axis the **Dock side** calls for (`effectiveSide()`, `js/common/explorer-dock.js`): stacked
+under a left or right dock, side by side under a top or bottom one, each axis with its own sizes. `dockSideChanged`
+remakes the instance on the new axis. Turning Split view off destroys the instance, removing its gutter and inline sizes,
+before `split` drops the pane, and `destroy()` does the same when another tab replaces the fragment. The Duplicate pane
+copies the Main pane's buckets the first time only; from then on the two are remembered apart.
 
-**Triage summary** — In Triage, `#explorerHeader` (`index.scala.html`) opens with `#triageSummary`, the host of the
-Triage summary (the glossary's term). The server renders it in Triage alone (`current == Const.NavEntry.TRIAGE`); it
-loads once with the page (`hx-get` of `GET /htmx/triage/r/:repoId/summary`, `hx-trigger="load"`, `hx-target="this"`,
-`hx-swap="innerHTML"`) and is kept across tab loads, since it belongs to no tab. It spans both columns of the header's
-grid (`grid-column: 1 / -1`, `pages/index.css`), above the tab list and the Dock side menu, inset by `--panel-padding`
-as the tab list is, so its icon lines up with the first tab's, with `--space-4` below it (**Explorer dock**).
+`js/dragdrop/people.js` binds cells in both panes, so a drop across panes merges like any drop. Drag start arms
+`suppressClickAfterRelease()` (`click-suppression.js` under **Key Files**), so the release's click on the link under the
+pointer does nothing, and points `autoScroll` at the cell's `.pane .list` (the pane is `overflow: hidden`).
 
-The fragment, `htmx/triage_summary` (`static/css/htmx/triage_summary.css`), is one paragraph, `p.triage-summary`, styled
-as an info notice (`.notice`, `core.css`, shared with Curation's notice): the `--info-background-color` fill, `--radius`,
-`--space-3` by `--space-5` of padding and `--line-height-text`, with an `fa-info-circle` in `--info-color` before the sentences, in a
-flex row aligned on the baseline, so the sentences wrap beside the icon. It reads "There are X items in triage. Y have
-unknown people. Z have no Locations.", in the singular for 1 ("There is 1 item in triage. 1 has unknown people. 1 has
-no Location."), "None have unknown people." or "All have a Location." for a count of zero, and "There are no items in
-triage." alone for an empty triage; the numbers are grouped (`%,d`). The counts are the server's (**Triage summary,
-scope dialogs and Quick view** in `altitude/AGENTS.md`). The total is plain text. Each of the other two counts above
-zero is a link, semibold in the text's own color, and a search trigger (`data-app-search="click"`) named for what it
-shows (an `aria-label` such as "Show the 12 items in triage with unknown people", since its text is a bare number),
-carrying `data-app-search-subset` (`unknownPeople`, `noLocation`), which searches that subset of Triage under its own
-Results title (**Results title**), whose × goes back to all of Triage. A zero is plain text. The links are bound as the swap is hydrated
-(`js/listeners/htmx-requests.js`), like any fragment's triggers. The paragraph is no live region: it reloads after
-every change it counts, which the snackbar has already reported, and a region would read the whole sentence again
-each time.
+The lists scroll only through a height chain across files: `#explorerViews` (`static/css/pages/index.css`) is an
+`auto 1fr` grid at full height, `#explorerPanelContent` scrolls every tab, `#people` is a full-height flex column or row
+by `html[data-dock-side]`, and a pane is an `auto 1fr` grid with both minimums reset whose `.list` scrolls.
 
-`js/listeners/triage.js` reloads it after every change it counts: `peopleChanged` (`registerTriageListeners`; announced
-by every asset mutation, every change to a Person and every Face correction, **Event flow**), every
-`FrontendApp.reloadNav()` and `reloadLocationCounts()` (a membership change can put a triaged asset in its first
-Location or take it out of its last), and the `locationDeleted` listener (**Locations**), each through
-`app.reloadTriageSummary()`. `reloadTriageSummary()` does nothing without the host, so outside Triage. One change asks
-several times in one task (`refreshCounts` reloads the nav and the Location counts and announces `peopleChanged`), so
-the request waits for a microtask and every ask made meanwhile joins it: one change, one request. The request is an
-`htmx.ajax` GET of the host's `hx-get`, issued from the host into it, and the host's requests take turns under htmx's
-default `hx-sync` (queue first): a reload asked for while one is in flight is issued once that one is swapped in, so it
-reads the counts as they are then, a further ask joins the queued one, and a response never lands after a newer one.
+**Triage summary** — `#triageSummary` in `#explorerHeader` (`index.scala.html`) hosts the Triage summary. The server
+renders the host in Triage alone; it loads once with the page and survives tab loads, since it belongs to no tab. The
+fragment's wording and counts are the server's (**Triage summary, scope dialogs and Quick view** in
+`altitude/AGENTS.md`). Each count above zero, other than the total, is a search trigger for its Triage subset
+(`data-app-search-subset`). Its `aria-label` names what it shows, since its text is a bare number, and it opens under its
+own Results title (**Results title**). The paragraph is deliberately not a live region: the snackbar has already
+reported each change it counts, and a region would read the whole sentence again on every reload.
 
-**Scope dialog and Quick view** — In Triage a click on a trigger naming a folder, a Person or a Location (other than
-the root folder, which does nothing) asks the Triage scope route instead of searching: `requestScopeDialog` in
-`search-triggers.js` issues `GET /htmx/triage/r/:repoId/dialogs/scope` with that one parameter from the trigger into
-`#popoverContent`, an open request of the popover host like any other (**Modals**). The dialog is anchored below the
-control the trigger names in `data-app-dialog-anchor` and centered on it (a folder's name or a leaf's icon control,
-a Location's icon or name, a Person's name link, **People tab**), or placed like the general modal (`data-unanchored`)
-for a trigger that names none, a folder crumb of the Results title; an open the user replaced or dismissed meanwhile
-neither shows its dialog nor searches. A Person or a Location with triaged assets is a 204, and `js/listeners/dialogs.js`
-runs the search the trigger declares (`runTriggerSearch`), Triage scoped to it, as a click outside Triage would.
-Anything else is `htmx/triage_scope_dialog` (`#triageScope`, `static/css/htmx/triage_scope_dialog.css`): a
-`data-app-fragment="modal"` popover dialog titled by the name of what it describes, its sentence over a row of action
-buttons that wraps in a narrow popover, `--space-5` below the sentence and `--space-3` apart:
+Every reload goes through `app.reloadTriageSummary()` (`js/listeners/triage.js`), which does nothing outside Triage. It
+runs on `peopleChanged`, every `FrontendApp.reloadNav()` and `reloadLocationCounts()`, and `locationDeleted`. One change
+asks several times in one task, so the asks join one request after a microtask. The request is issued from the host, so
+htmx's default `hx-sync` queue orders the reloads and a response never lands after a newer one.
 
-| Clicked | It says | Buttons |
-|---|---|---|
-| A folder | "This folder has X results in the library", X its Browse count: the folder and its subfolders, without triaged or recycled assets | Show in new tab, Quick view, Close |
-| An empty folder | "This folder has no assets" | Close |
-| A Person with no triaged assets | "This person has no assets assigned in Triage" | Show person in new tab, Close |
-| A Location with no triaged assets | "This Location has no assets in Triage" | Show Location in new tab, Close |
-| A Location with no assets at all | "This Location has no assets" | Close |
+**Scope dialog and Quick view** — In Triage, a trigger that names a folder, a Person or a Location asks the Triage scope
+route instead of searching (`requestScopeDialog` in `js/search-results/search-triggers.js`; which triggers, and the root
+folder's exception: **Triggers** under **Search parameters**). The request is an ordinary open of the popover host,
+anchored to the trigger's `data-app-dialog-anchor` or `data-unanchored` when the trigger names none (a Results title
+crumb, **Modals**). An open that the user replaced or dismissed in the meantime shows no dialog and runs no search. A
+204 means the Person or Location has triaged assets, and `js/listeners/dialogs.js` runs the trigger's own search
+(`runTriggerSearch`). Anything else is `htmx/triage_scope_dialog`. Its Close needs the bare `x-data`, because the
+popover host has no Alpine scope.
 
-"Show … in new tab" is an `<a target="_blank" rel="noopener">` to Browse scoped to it (`/r/:repoId?folderId=…`,
-`personId=…` or `locationId=…`), with Browse's defaults. Close calls `$store.modal.close()` under a bare `x-data`, the
-scope its Alpine handler needs, since the popover host has none.
+Quick view (`htmx/quick_view_modal`) loads into `#modalContent`, so the general modal takes the popover's place, and
+closing it returns focus to the explorer trigger (`openerOf`, **Modals**). It is read-only by its markup: no `.cell`,
+`.drag-drop`, `data-asset-id` or search trigger, so selection, drag, Asset detail and search never bind to it. Its images
+use the browser's `loading="lazy"`, because `js/search-results/lazy-images.js` watches only the results grid.
 
-Quick view is the folder dialog's `hx-get` of `GET /htmx/triage/r/:repoId/modals/quick-view` (`hx-vals` naming the
-folder) into `#modalContent`, so the general modal takes the popover's place, and closing it returns focus to the
-explorer's trigger, the control the popover would have returned to (`openerOf`, **Modals**). Its fragment,
-`htmx/quick_view_modal` (`#quickView`, `data-app-fragment="modal"`, titled "Quick view",
-`static/css/htmx/quick_view_modal.css`), is a grid of three rows `--space-6` apart:
+**Map view** — `layout` (`grid` | `map`) is a search parameter (**Search parameters**), set by `#layoutToggle`. A search
+with a description is laid out only on the grid, so its toggle has no Map segment. In map layout the server disables
+the Group choice menu (`data-choice-menu-disabled`) and renders `htmx/map_view` in place of `#assets`. `#map`'s
+`isolation: isolate` keeps Leaflet's panes under the modals. While the results carry a `bbox`, the `#bboxScope` "Map
+area ×" chip clears it, in either layout.
 
-- the folder's path, top-level first, as plain crumbs: `header.crumbs`, the Results title's `.crumbs` with `span.crumb`s
-  that are no search triggers and do not brighten under the pointer (`core.css` brightens a link crumb, `a.crumb`, alone),
-  and the folder itself the semibold `.leaf`;
-- the Previews of the first 100 assets (`Const.Search.QUICK_VIEW_SIZE`) Browse shows for the folder by default, newest
-  import first, in `ul.previews`: an `auto-fill` grid of `--quick-view-preview-size` (8rem) columns `--space-4` apart,
-  scrolling on its own past `--quick-view-previews-max-height` (32rem) so the path and the footer stay in view, each a
-  plain `<img loading="lazy" draggable="false">` with the file name as its text alternative, fitted whole in a square
-  (`object-fit: contain`, `--radius`); "This folder has no assets" for an empty folder;
-- with more assets than it shows, a footer in `--theme-neutral-3`: "Showing 100 of X" and a small "Show in new tab"
-  action button opening the folder in Browse.
+`js/map/map-view.js` hydrates `#map`. Only one map exists at a time: the results hydrator calls `disposeMapView()` for
+every main results fragment (not for the panel's). The browser never receives a result set. Each settled move requests
+`/api/map/r/:repoId/cells` with the store's query string plus `viewport` (in the server's form) and `zoom`, and a
+response older than the latest request is dropped. Supercluster merges the cells again on screen. Pins are drawn in the
+world copy nearest the map's center, so a view across the antimeridian shows both sides. A **crowded pin** (a cluster,
+or a cell of several points) flies in while zooming can still split it. Otherwise it opens the panel for the union of
+its cells' extents, which uses the server's cell rule (**Map** in `altitude/AGENTS.md`). Tiles that fail to load leave a
+blank canvas with the pins, and no notice.
 
-It is read-only by its markup: no `.cell`, `.drag-drop`, `data-asset-id`, checkmark or search trigger, so no selection,
-drag, Asset detail or search binds to it, and the browser loads its images itself, since
-`js/search-results/lazy-images.js` watches the results grid alone. `#modalContent:has(#quickView)` sets
-`--modal-content-width` to `--quick-view-width` (60rem), for this dialog alone.
+**Crowded-pin panel** — `openMapPanel({ bbox })` (`js/map/map-panel.js`) shows `#mapPanel` and runs `runSearch` with
+`params: { bbox }`, a transient plain grid (`layout: "grid"`, no grouping) and `#mapPanelContent` as the target, with the
+panel as `source`. `bbox` is a real store parameter, so the panel's grid is an ordinary search: infinite scroll, the page
+window, selection, the detail modal and drag all work in it unchanged. The URL is bookmarkable, because the map hydrator
+reopens the panel for the fragment's `data-results-bbox`. The map ignores `bbox` (**Map** in `altitude/AGENTS.md`), so
+the map behind the panel keeps plotting the whole search.
 
-**Map view** — `layout` (`grid` | `map`) is a search parameter (see **Search parameters**). The
-toolbar's `#layoutToggle` in `includes/search_results` (a `.toggle-group` of `core.css`) is two
-`data-app-search="click"` buttons with a literal `data-app-search-layout`, the current one `aria-pressed="true"`; a
-search with a description is laid out on the grid alone, so its toggle renders the Grid segment and no Map one. In map layout the server
-disables the Group `<select>`, gives the fragment root `class="map-layout"` (a flex column, so the map
-takes every pixel under the controls) and renders `htmx/map_view` in place of `#assets`: `#mapView`
-holds `#map` (`data-map-bounds="s,w,n,e"`, empty when nothing is plotted, `data-map-count`,
-`data-map-tile-url`, `data-map-attribution`; `isolation: isolate`, so Leaflet's panes stay under the
-modals) and the hidden `<aside id="mapPanel">`. The pin styles (`.asset-pin`, `.location-pin.on-map`)
-live in `static/css/htmx/map_view.css`; `.location-pin` itself is in `core.css`, shared with the pin editor. While the
-results carry a `bbox`, the `.total` cell shows the `#bboxScope` "Map area ×" chip (a `core.css` `.filter-chip`:
-the whole chip is the button), whose `data-app-search-bbox=""` clears it, in either layout.
+- `js/fragments/search-results.js` hydrates a fragment inside `#mapPanel` as the panel's grid. It writes the panel's
+  count and leaves the displayed map, the total store, the viewed scope and box selection alone.
+- The panel's continuations stay a plain grid (**Infinite scroll + lazy load**).
+- The server's `HX-Replace-Url` for a panel request says `layout=grid`. `js/listeners/map.js` puts `layout=map` back
+  in `htmx:before:history:update` for requests issued from the panel.
+- The panel's ×, Escape and the chip clear `bbox` through the funnel, which re-renders the map without a panel. "Show
+  only these in the grid" keeps the area, so the grid opens scoped to it, with the chip to clear it.
 
-`js/map/map-view.js` hydrates `#map` (`data-app-fragment="map-view"`, after the results hydrator). One
-map exists at a time: the results hydrator calls `disposeMapView()` for every new results fragment,
-which cancels the pending cells request, disconnects the `ResizeObserver` that tells Leaflet the column
-was resized (the divider's drag, the window), and removes the map. The initial view is the one last
-looked at in this scope (`map-state.js`), else `fitBounds` on `data-map-bounds` (padded, never past zoom
-15), else the world. Every `moveend`, debounced 150 ms, requests `/api/map/r/:repoId/cells` with the
-store's query string plus `viewport` and `zoom`, and a response older than the latest request is
-dropped. The viewport is sent in the server's form: latitudes clamped to ±90, longitudes wrapped into
--180..180 with `west > east` across the antimeridian, and the whole world once the view spans 360°.
-The browser never receives a result set: the cells go into a supercluster index (radius 60 px,
-`extent: 256` to match Leaflet's tiles; a cluster's count is the sum of its cells', and its largest
-cell's asset represents it), and every cluster or cell in view becomes an `L.divIcon` marker, placed
-in the world copy nearest the map's center so a view across the antimeridian shows both sides:
+`js/map/map-state.js` keeps the center and zoom in `sessionStorage`, keyed by a scope fingerprint (`SCOPE_PARAMS`: what
+is plotted, not the sort, layout, grouping, paging or `bbox`). So a re-render, a panel, a trip to the grid or a reload
+keeps the view, while a new scope, tab or window fits the server's bounds. Moves are written to storage only once they
+pause, or on `pagehide`, because Leaflet reports every frame of a resize as a move. The module also holds the displayed
+map's live view, where the pin editor opens.
 
-- a cell of one point is a thumbnail pin (`/content/r/:repoId/preview/:assetId`) carrying the same
-  asset-detail `hx-get` a grid image does, processed with `htmx.process`;
-- a **crowded pin** (a cluster, or a cell of several points) is the representative thumbnail with a
-  `.drag-count-badge` count. A cluster flies to its expansion zoom when that is within the maximum zoom
-  (19), and otherwise opens the panel for the union of its cells' extents; a cell of several points
-  flies two levels in, and at the maximum zoom opens the panel for its own extent (a cell is
-  `360 / 2^zoom / 4` degrees on a grid from the origin, the server's rule);
-- a Location pin is the `.location-pin` glyph and `Category › Name`, drawn for each Location in view
-  that holds a matching asset; a click runs `runSearch({ params: { locationId } })`.
+**Explorer action dialogs** — The folder, album, Location and category forms are `data-app-fragment="modal"` popover
+dialogs (Add location uses the general modal host). Add and Rename submit with Return, with `hx-target="this"`,
+`hx-swap="none"` and `hx-json-enc`, so a validation response replaces the form with the submitted values and errors.
+Each dialog holds one unlabelled field, since the title names it, with an `aria-label` (and a placeholder on Add's and
+Rename's input).
 
-Tiles that fail to load leave a blank canvas with the pins on it, and no notice.
+- Initial focus: the name field (selected for Rename), or the category select for Move. Delete leaves focus on the
+  close control (never a destructive action, **Modals**).
+- Return focus (`data-app-dialog-return-focus`): Rename and Move return to the row's ⋯ button. Delete names a
+  control that survives the mutation (the parent folder's ⋯, or the list's Add button). Add returns to its opener; for
+  a menu action the modal owner remembers the visible ⋯ trigger. A validation re-hydration keeps the original return
+  control and leaves the popover where it is. Dismissal follows the popover's rules (**Modals**).
+- A folder's Delete (`htmx/delete_folder_dialog`) warns when Watch folders sort files into the folder or one below it.
+  They pause until the folder is restored or an Admin gives them another destination (**Import page**).
 
-**Crowded-pin panel** — `openMapPanel({ bbox })` (`js/map/map-panel.js`) shows `#mapPanel`, a column
-laid over the map's right edge, and runs `runSearch` with `params: { bbox }`, `transient: { layout:
-"grid", groupBy: null, groupDirection: null }`, `target: "#mapPanelContent"` and the panel as `source`.
-`bbox` is a real store parameter, so the panel's grid is an ordinary search: infinite scroll, cursor
-continuation, the page window (scrolling in `#mapPanelContent`), selection, the detail modal and
-dragging to a Location row work in it unchanged, and the
-URL is bookmarkable, since the map hydrator reopens the panel for the `data-results-bbox` its fragment
-carries. The map endpoints and the map layout's total and bounds ignore `bbox`, so the map behind the
-panel keeps plotting the whole search. `js/fragments/search-results.js` hydrates a fragment inside
-`#mapPanel` as the panel's grid: it writes the count into `#mapPanelCount` ("n items here", "10000+ items here" when the total is capped, `setMapPanelCount`) and leaves
-the displayed map, the total store, the viewed scope and box selection alone; the fragment's own
-`#searchControl` is hidden there. The panel's continuations stay a plain grid (see **Infinite scroll +
-lazy load**). The server's `HX-Replace-Url` for a panel request says `layout=grid`, so
-`js/listeners/map.js` puts `layout=map` back in `htmx:before:history:update` for requests issued from
-the panel. The panel's ×, Escape and the chip clear `bbox` through the funnel, which re-renders the map
-without a panel; "Show only these in the grid" runs `runSearch({ params: { layout: "grid" } })`, which
-keeps the area, so the grid opens scoped to it with the chip to clear it.
+**New library dialog** — `htmx/new_library_dialog` is the Library menu's "New library…" action, for an Admin or an
+account with the Create Libraries flag, opened in the popover host below the nav's Browse trigger. It is a one-field
+`modal` fragment like the explorer's Add dialogs, posting JSON to the create route. The route, why the field sets no
+`minlength` or `maxlength` (every error is the server's), and the `HX-Redirect` a created Library answers are under
+**Libraries** in `altitude/AGENTS.md`. `postUrl` is the create route everywhere except the style guide's sample
+(**Style guide**).
 
-`js/map/map-state.js` keeps the center and zoom per scope fingerprint (the repository and the
-store's `view`, `folderId`, `personId`, `albumId`, `locationId`, `peopleMatch`, `takenFrom`, `takenTo`, `importedFrom`, `importedTo`, `subset` and `q`; not the sort, layout,
-grouping, paging or `bbox`) in `sessionStorage` (`Const.sessionStore.mapViews`, the 50 scopes looked
-at last), so a re-render for a sort change, a panel, a trip to the grid and back, or a reload of the
-tab keeps the view, while a new scope, or a new tab or window, fits the server's bounds. A move is
-written to storage only once moves pause, or on `pagehide`, since Leaflet reports every frame of a
-resize as a move. Storage that cannot be read or written leaves the views in memory only. It also holds the displayed map's live
-view, which the pin editor opens on.
+**Inline dialogs** — View settings is the only user of `js/fragments/inline-dialog.js`, which only places focus. The
+context menu component owns placement and dismissal (**Context menus**). The left column is the grid metadata switches
+(`js/alpine/components/view-settings.js`). The right column, "Show triaged items", is the `triaged` search parameter
+(where it shows and how it is remembered: **Search parameters**); it is not rendered for a Guest, and a flip runs
+`runSearch`. `#viewSettingsActions` is `hx-preserve`, so the results swap moves the control and its open panel into the
+new fragment (how a move keeps a popover open: **Nav refresh**), and `ensureViewSettingsControl` builds nothing. The
+dialog has no operation lifecycle.
 
-**Explorer action dialogs** — The folder, album, Location, and category forms declare
-`data-app-fragment="modal"` and `data-app-modal-title` and open as popover dialogs (Add location in the general
-modal host); the host supplies their heading and close control. Add and Rename submit with Return and retain
-`hx-target="this"`, `hx-swap="none"`, and `hx-json-enc`, so validation replaces the active form with its submitted
-values and errors. They hold one field with no label, since the title names it: a placeholder in Add's and Rename's input, which
-carries an `aria-label` ("Folder name", "Album name", "Category name", or "Location name" by kind for a Location
-row's Rename), and an `aria-label` alone on Move's and Add to location's select.
-The dialog focuses the name field (selecting it for Rename), or the category selector for Move.
-Delete leaves initial focus on the close control, so opening the confirmation cannot activate its
-destructive button. A folder's Delete (`htmx/delete_folder_dialog`) opens with a `.notice.warning` when Watch folders sort
-their files into the folder or a folder below it: it names them and says they pause until the folder is restored or an
-Admin gives them another destination (**Import page**). Rename and Move return focus to the row's ⋯ button; Delete names a control
-that survives the mutation (the parent folder's ⋯ or the list's Add button). Add returns to its
-opener; for a menu action the modal owner remembers the visible ⋯ trigger. Re-hydrating validation
-preserves that original return control and leaves the popover where it is. Escape, the host's ×, an outside click
-and Tab out of the popover dismiss the dialog; Escape and the × return focus as above, while an outside click and
-Tab leave it where they put it.
+**Forms** — The FORMS section of `core.css` gives every text-like field (inputs, textareas, selects) one field style on
+every page except the setup screen. On focus, the field shows the accent edge and ring instead of the focus ring
+(**Themes**).
 
-**New library dialog** — `htmx/new_library_dialog.scala.html` (`#newLibrary`, `static/css/htmx/new_library_dialog.css`) is
-the dialog of an Admin or an account with the Create Libraries flag, opened by the Library menu's "New library…" action (`Const.UI.NEW_LIBRARY_OPTION`) into the popover
-host, below the nav's Browse trigger and centered on it, and titled "New library" (`Const.UI.NEW_LIBRARY_DIALOG_TITLE`).
-Like the explorer's Add dialogs it declares `data-app-fragment="modal"`, holds one field with no label (the placeholder
-and `aria-label` "Library name"), which it focuses (`data-app-dialog-autofocus-selector`), and posts JSON with
-`hx-target="this"`, `hx-swap="none"` and `hx-json-enc`, to `POST /htmx/library/r/:repoId/new` (`LibraryActionController`,
-**Libraries** in `altitude/AGENTS.md`). Its actions are Create, the submit, so Return creates too, and Cancel
-(`$store.modal.close()`, through the form's bare `x-data`, since the popover host has none); Escape, the host's × and
-an outside click dismiss it as above, and focus returns to the trigger. The field sets no `minlength` or `maxlength`:
-the Library name rule counts the name normalized, its whitespace collapsed, which the browser cannot, so every error
-is the server's. A refused name comes back as the validation replacement, the form with the typed name and the error
-under the field, and a created Library answers with `HX-Redirect` to its Import page, a full page load. The form posts
-to `postUrl`, the create route everywhere but the style guide's sample (**Style guide**).
-
-**Inline dialogs** — Only View settings uses `js/fragments/inline-dialog.js`, which gives it initial
-focus. It is two columns (`htmx/view_settings_dialog.scala.html`, `static/css/htmx/view_settings_dialog.css`): on the
-left the switches bound to the grid metadata set by its own Alpine component
-(`x-data="viewSettings"`, `js/alpine/components/view-settings.js`), which the mutation observer
-initializes as the fragment arrives, and on the right, behind a hairline, the scope: "Show triaged items", the
-`triaged` search parameter read from the `searchParams` store (on when it is `true`), whose click runs `runSearch`
-with `triaged=true` or `triaged=false`, so the results re-render under the open panel. The switch is on until it is
-turned off, and a flip is remembered in `localStorage` (`Const.localStore.showTriaged`, written by the store's
-`merge`), so Browse opens with it as it was left, as the metadata switches do (**Search parameters**). The View
-control's host `#viewSettingsActions` is `hx-preserve` in `includes/search_results`, so the swap carries the built
-control and its open panel from the old fragment into the new one (htmx moves it with `moveBefore`, which keeps the
-popover showing), and `ensureViewSettingsControl` finds the host filled and builds nothing. The scope column is shown in
-the repository view alone (`x-show`); in Triage and Trash the dialog is the metadata switches and nothing else. The dialog has no operation lifecycle; dismissal follows the popover's rules and
-Escape returns focus to the trigger.
-
-**Forms** — Every text-like field on every page but the setup screen takes the one field style of the FORMS section
-of `core.css`: text, search, email, password and file inputs, textareas and selects. It is a sunken fill
-(`--field-background-color`) carrying the page's text (`--theme-neutral-4`), a hairline of `--theme-neutral-3` at
-0.25, `--radius-small`, `--space-4` × `--space-5` padding, `--font-size-medium` and an accent caret, and on focus the
-accent edge and ring in place of the focus ring (see **Themes**). Its selector sits inside `:where()`, so any page's
-own rule outranks it, and is written once: the focus rule is nested in the field rule (`&:focus-visible`), as the
-picker's rules are in the select's, while the options take a rule of their own. Checkboxes, radios, ranges, hidden and submit inputs take none of it, nor does the
-nav's quick search field, which keeps its own look, nor any field of the nav (`:not(nav *)`): a field of the advanced search panel is a `.box` that wears the field style around its icon, its chips and its bare input (**Advanced search panel**). A setting that applies as it is flipped, with nothing to submit, is a `.switch` of the SWITCH
-section: a `button[role="switch"]` before its `<label for>` (a button is labelable, so the label's click flips it with no script), whose `aria-checked` an
-Alpine binding keeps in step with the setting; the track, `--switch-width` by `--switch-height`, takes `--theme-primary` when on, and the knob, a
-pseudo-element, slides across it. The View settings dialog's switches, the People tab's bucket switches, the advanced search panel's people match and the Change combobox's "This face only"
-switch use it. The last is the one whose label does not flip it natively: focus has to stay in the combobox's input, so the switch's and the
-label's `mousedown` is prevented, and the label's click, prevented too, calls the component's `toggleFaceOnly` (see **Detail panel**). Every rule of the section starts at `body:not(.setup)`, so the setup form's fields and error box are
-`htmx/setup_form.css`'s alone; the login page's take the field style like any page's (**Login page**). A field keeps the width its page gives it,
-except in a popover dialog, whose form fills `--popover-form-width` with its action `--space-5` below its fields
-(see **Modals**). A field in error carries the `error` class: the error fill
-(`--error-background-color`) with `--theme-neutral-4` text and the `--error-color` edge, which it keeps on focus,
-with no ring. Its message is a `div.error` under the field, in `--font-size-small` and `--error-color` with no box:
-the dialogs and the person name editor (`htmx/edit_person_name`) render it directly after the field, the Settings form
-under the row of the field and its Reset button. An error with a way out carries it after the message, an
-`.action-button.small`, the two wrapping in one row under the field: the person name editor's offer to merge. A label above a field in a dialog of either host (Add location's fields) is in small caps: `--font-size-xs`, semibold, uppercase,
-`--letter-spacing-wide`, its text color at 0.6 (`:is(#popoverContent, #modalContent) label`); the Settings rows keep
-their own labels. A one-field dialog whose title names the field (Add, Rename and the style guide's sample dialog, with a
-placeholder in the input; Move to category and Add to location, with their select) shows no label, and its field
-carries an `aria-label`. A select is a customizable select (`appearance:
-base-select`, behind `@supports`, Chromium today), its picker drawn as the popover dialog's surface, an option tinted
-on hover (`--theme-neutral-4` at 0.08) and when checked (the accent at 0.2); a browser without it keeps the native
-select, styled as a field. The grid toolbar's Group and Sort are no selects but choice menus (see **Context menus**).
+- The selector is inside `:where()`, so any page's own rule outranks it. Checkboxes, radios, ranges, hidden and submit
+  inputs are excluded, and so is every field in the nav (`:not(nav *)`). The advanced search panel's fields are `.box`es
+  that wear the style around an icon, chips and a bare input (**Advanced search panel**).
+- The field and error rules exclude `body.setup`, so `htmx/setup_form.css` alone styles the setup form.
+- A field keeps the width its page gives it, except in a popover dialog (**Modals**).
+- A field in error carries the `error` class, and its message is a `div.error` under the field. An error with a way out
+  puts an `.action-button.small` after the message, as the person name editor's merge offer does.
+- A label in either dialog host or on the login form is small caps
+  (`:is(#popoverContent, #modalContent, #loginForm) label`). A one-field dialog whose title names the field shows no
+  label, and its field carries an `aria-label`.
+- A select is a customizable select (`appearance: base-select` behind `@supports`), with the native select as the
+  fallback. The toolbar's Group and Sort are choice menus, not selects (**Context menus**).
+- A setting that applies as it is flipped is a `.switch` (SWITCH section): a `button[role="switch"]` before its
+  `<label for>`. A button is labelable, so a click on the label flips it with no script, and Alpine keeps
+  `aria-checked` in step. The exception is the Change combobox's "This face only" switch: focus must stay in the
+  combobox's input, so `mousedown` is prevented on the switch and its label, and the label's click is prevented too and
+  calls `toggleFaceOnly` (**Detail panel**).
 
 **Snackbar** — Always use `showSuccessSnackBar` / `showWarningSnackBar` / `showErrorSnackBar` from
-`js/common/snackbar.js`. Messages render as plain text (`x-text`, which sets `textContent`); pass raw text, including
-user-supplied names and server errors, without HTML markup or pre-escaping. The messages live in the Alpine `snackbar`
-store, which `html_common` renders as two stacks: errors at top center (`#snackbarErrors`), kept until dismissed, and
-successes and warnings ("notices") at bottom left, over the footer (`#snackbarNotices`), dismissed after 3 s and 6 s.
-The notices' timers are held while the pointer is over their stack, focus is inside it or the document is hidden, and
-resume with the time they had left. Every message has a dismiss button and its type's icon. A stack holds three
-messages, a fourth dismissing the oldest; a message equal in type and text to one in its stack is counted on it
-(`×n`) and restarts its timer, and a dismissed message leaves no trace. A stack is at most `--snackbar-width` wide and
-keeps `--viewport-gap` from the viewport's edges, and a message wraps. Each stack is a `popover="manual"` element, open
-while it holds a message, so it is in the top layer: above the modal hosts and the map, above a popover dialog or menu
-opened before it (which it leaves open), below one opened after it. Clicking a message while the popover dialog is
-open is an outside click, so the browser closes the dialog (light dismiss); the modal hosts stay open. A keyboard user
-reaches a message's dismiss button by Tab, where the stacks sit in the DOM order (`html_common`'s place in the page);
-no key dismisses a message. Dismissing the message whose button has focus moves focus to the next message's button in
-its stack, or the previous one's when it was the last; with none left focus falls to `body`, and the notices' focus
-hold is released once focus is outside their stack (Firefox fires no `focusout` for a removed element). Screen readers
-hear a message through visually hidden live regions (`data-app-snackbar-announcer`), not the stacks. Each place holds
-two sibling regions, never nested: `role="status"` (`="polite"`) for successes and warnings, `role="alert"`
-(`="assertive"`) for errors. `x-trap.inert` hides everything outside the active trapped `.modal-box`, so each holds
-its own pair, and the top-level pair serves the page and the popover dialog; `modal.js` names the active trapped host
-(`getActiveTrapContainer`, `isInModalHost`). A message is appended to the fitting region heard now as a plain
-paragraph, a repeat's with its count, and removed after 5 s, so a burst is announced in full. A dismissed message
-fades out over `--snackbar-exit-duration`, which `snackbar.js` reads to remove it once the fade has run (a timer, not
-`transitionend`), or at once under reduced motion. A page without the store logs a message and drops it.
+`js/common/snackbar.js`. Messages render as plain text (`x-text`). Pass raw text, including user-supplied names and
+server errors, with no HTML markup or pre-escaping. The module comment covers the stacks, timers and de-duplication.
 
-**Tooltip** — A hint about a control, shown on a click, not an outcome (that is the snackbar's). `$tooltip('Message')`
-in a click handler (`@@click="$tooltip('…')"`; the Alpine UI tooltip's magic, `docs/reference/alpine-components/tooltip.md`,
-with neither tippy nor Popper) is `js/common/tooltip.js`, registered by `registerHtmlCommonBindings()` with everything
-else `html_common` binds. It writes the message as plain text into `#tooltip`, the one `popover="manual"` host of
-`html_common` (`role="tooltip"`, no `x-data`: the module owns it as `modal.js` owns the popover dialog), and shows it
-in the top layer. CSS anchor positioning places it (`#tooltip` in `core.css`): the magic sets an inline
-`anchor-name: --tooltip-anchor` on the clicked element, so any element can call it with no ID or rule of its own, and
-the host's `position-area: top` centers it above the element, slid inside the viewport at a side edge, `--space-2`
-from the element and flipped below (`flip-block`) when the top has no room; it wears the menus' frosted surface at
-`--font-size-small`, takes no pointer events and fades in over 150 ms under `prefers-reduced-motion: no-preference`,
-with no exit fade. One tooltip at a time: a new call hides the shown one first, and the inline name moves with it. It
-hides after 2 s, or at the next press or key anywhere (`pointerdown` and `keydown` at the document's capture phase),
-which comes a tick before the anchor may leave the tree (Deselect all hides the batch ops), so no tooltip is left
-anchorless at the viewport's corner. A screen reader hears the message through the snackbar's polite live region
-(`announcePolitely` in `snackbar.js`): the host is `display: none` until shown, so a live region of its own would not
-reliably be read. Click only, no hover or focus tooltip: a hover hint stays a native `title`. The one caller is the
-batch ops' Move button (`includes/batch_ops`, either copy), a drag handle, whose hint is "Drag to folder, location, or
-album"; its drag (`js/dragdrop/batch-ops.js`) arms `suppressClickAfterRelease()` at `start`, so the click the release produces on
-the button, moved under the pointer, never shows the hint (at `start` rather than `end`: with inertia a flick's `end`
-fires after the click), and a press that wobbles past interact's 1 px tolerance is a drag that snaps back, with no
-hint. The style guide's Feedback section holds a specimen.
+- Each stack is a `popover="manual"` element in the top layer: above the modal hosts and the map, and above a popover
+  dialog or menu opened before it. `raiseSnackbarStacks()` re-raises the stacks above a fullscreen element. A click on a
+  message while the popover dialog is open is an outside click, so it light-dismisses the dialog.
+- Screen readers hear messages through hidden live regions (`data-app-snackbar-announcer`), never through the stacks.
+  Each place holds a `role="status"` and a `role="alert"` region as siblings, never nested. `x-trap.inert` hides
+  everything outside the active trapped `.modal-box`, so each trapped host holds its own pair. `modal.js` names that
+  host (`getActiveTrapContainer`, `isInModalHost`).
+- The fade-out length is read from `--snackbar-exit-duration`. Removal uses a timer, not `transitionend`.
 
-**Infinite scroll + lazy load** — The last `.cell` (by position: a Location page can hold its last
-asset in an earlier cell too) gets class `last-cell` and carries how the next
-page is reached: the encoded cursor in `data-app-search-after`, in an ungrouped grid and a grouped
-one alike. An `IntersectionObserver` in
-`js/search-results/infinite-scroll.js` watches it, but only while nothing follows it in the grid (a
-reloaded page's last cell carries a cursor too, and the page it leads to is loaded already: see the
-window below), and calls `loadNextPage(lastCellEl)`, exported from the
-same module: it reads the continuation, deletes the attribute, requests the page through `runSearch`
-as `transient` parameters (`{ after }`, with `isContinuousScroll`), and appends the result
-after the cell. The request in flight is kept per cell with its cursor (`pendingCursorOf`), so a
-second caller gets the same promise and
-no page is requested twice; the detail modal is that second caller when it steps past the last
-loaded cell. A cell loses its attribute as it loads, so scrolling back over it loads nothing again.
-A page the server rejects is reported through the snackbar like every failed request
-(`js/listeners/htmx-requests.js`), which matters here because no visible control is behind it.
-Each page appended is announced to the selection store (`noteGridChange`) so the group headers
-recount. A continuation continues the grid as it was rendered: it also sends the layout and grouping
-of the results fragment the cell is in (`data-results-layout`, `data-results-group-by`,
-`data-results-group-direction`) as transient parameters. For the main grid those are the store's own
-values; for the crowded-pin panel's grid they are the plain grid it was requested as, while the store
-says map.
+**Tooltip** — A hint about a control, shown on a click; an outcome belongs to the snackbar. `$tooltip('…')` in a click
+handler is `js/common/tooltip.js`, the Alpine UI tooltip's magic without tippy or Popper
+(`docs/reference/alpine-components/tooltip.md`), and it writes into `html_common`'s `#tooltip` host. The magic sets an
+inline `anchor-name` on the clicked element, so any element can call it with no ID or rule of its own. It hides at the
+next `pointerdown` or `keydown`, caught at the capture phase so it hides a tick before the anchor can leave the tree. It
+is announced through the snackbar's polite region (`announcePolitely`). Click only: a hover hint stays a native `title`.
+The batch ops' Move button is a drag handle, so its drag (`js/dragdrop/batch-ops.js`) arms `suppressClickAfterRelease()`
+(`click-suppression.js` under **Key Files**) and the release never shows the hint.
 
-Every thumbnail names its preview URL in `data-src`, and a first page's (`isContinuousScroll` false in
-`htmx/result_cell.scala.html`) in `src` as well, so the first viewport paints before any script runs.
-`js/search-results/lazy-images.js` observes every `.cell img` with one `IntersectionObserver` whose
-`rootMargin` is `"100% 0px"`, one viewport above and below: an image gets its `src` as it comes within
-a viewport and the transparent 1x1 placeholder back once it is more than a viewport away, the first
-page's like any other, so the thumbnails held are bounded by the viewport and not by how far the
-session has scrolled. A released image that comes back is a browser cache hit: the content route
-answers a preview, a face and an original with `Cache-Control: private, max-age=31536000, immutable`.
+**Infinite scroll + lazy load** — Three modules under `js/search-results/` cooperate, and their module comments hold the
+mechanics: `infinite-scroll.js`, `page-window.js` and `lazy-images.js`, bound by the results hydrator in that order.
 
-The grid itself is a window of pages (`js/search-results/page-window.js`, bound by the results
-hydrator after infinite scroll and before lazy images, with `#mapPanelContent` as its scroll pane for
-the crowded-pin panel's grid and `#content` otherwise). A page is a record `{ after, nodes,
-keptHeader, spacer }`: the first page at hydration (the initial children of `#assets`), every later
-one from `htmx:after:settle` on `#assets`, keyed by the swap target, with the cursor read off infinite
-scroll's request in flight (`pendingCursorOf`; `page-window.js` imports `infinite-scroll.js`, never the
-reverse, as eslint forbids import cycles). From top to bottom `#assets` holds zero or more spacers,
-then the loaded pages, then nothing. Once a page is appended, while the loaded cells exceed
-`MAX_LOADED_CELLS` (600) and more than two pages are loaded, the topmost page is folded unless one of
-its cells is within a viewport (`window.innerHeight` above or below, the observers' own margin, so a
-folded page is not reloaded at once): its nodes make way for one
-`<div class="page-spacer" data-app-search-after="<cursor>">` (`""` for the first page; `grid-column:
-1 / -1` in `static/css/includes/search_results.css`) as tall as the top of its first cell to the bottom of
-its last (headers left out: a header above the pane sticks to the pane's top, so its box says nothing
-of where the page is), which keeps the scrollbar proportional. A top page none of whose cells is in
-the grid any more (an action removed them) is discarded rather than folded. Spacers are observed with
-one `IntersectionObserver` (`rootMargin: "100% 0px"`), and `reloadSpacer` requests the page as a
-continuation (transient `after`, omitted for the first page, `isContinuousScroll` and the fragment's
-layout and grouping), swapped `afterend` of the spacer, one reload in flight per spacer; on settle the
-nodes are recorded, the server-rendered `data-app-search-after` is stripped from the page's last cell
-(the page it leads to is loaded already), and the kept header and the spacer are removed. A 204 swaps
-nothing and settles nothing, so it is caught on `htmx:after:request`: the spacer is removed and the
-kept header stays for the group's cells on the next page. A reload that pushes the loaded cells over
-the maximum drops the bottom page unless it is within a viewport (the drop would bring it straight
-back, and the fold after that would take the page the modal stepped into): its nodes are removed and
-the grid's last cell gets the dropped page's cursor back and is observed again
-(`observeContinuationCell`), unless a spacer follows that cell, whose own reload brings the cursor
-back on its page's last cell. A scrollbar jump can reload a page out of order and leave spacers
-between loaded pages, which is allowed. Cursors are keyset positions, so after assets were removed
-from a folded page's range a reloaded page can overlap the loaded page below it. `#assets` has
-`overflow-anchor: none`, and every fold, reload and drop notes the viewport offset of the first cell
-on screen (`htmx:before:swap` for a swap, `keepingViewport` otherwise) and restores
-`scrollElement.scrollTop` after; a fold and a drop call `noteGridChange` themselves (a reload's cells
-are announced by infinite scroll's own settle listener). A spacer is no `.cell` or `.result-group`
-and carries no `data-asset-id`, `img` or `.metadata`, so selection, box selection, drag and drop,
-lazy loading and metadata visibility never see it; the detail modal's walk reloads it (**Detail
-navigation**). `pagesOf`, `foldPagesIfNeeded`, `reloadSpacer`, `isSpacer` and `MAX_LOADED_CELLS` are
-exported for tooling.
+- The last `.cell` by position gets `last-cell` and the cursor in `data-app-search-after` (by position, because a
+  Location page can hold its last asset in an earlier cell too). It is observed only while nothing follows it in the
+  grid. `loadNextPage(lastCellEl)` keeps the request in flight per cell (`pendingCursorOf`), so the detail modal,
+  stepping past the last loaded cell, shares it.
+- A continuation sends its fragment's `data-results-layout`, `data-results-group-by` and `data-results-group-direction`
+  as transient parameters, so the crowded-pin panel's grid stays a plain grid while the store says map.
+- A rejected page shows in the snackbar like any failed request (`js/listeners/htmx-requests.js`). This matters here
+  because no visible control is behind the request.
+- Only a first page's thumbnails (`isContinuousScroll` false in `htmx/result_cell`) carry `src` as well as `data-src`,
+  so the first viewport paints before any script runs. Lazy images release an image more than a viewport away. Coming
+  back is a cache hit, because the content route sends `immutable` caching.
+- The page window folds the top page into a `.page-spacer` past `MAX_LOADED_CELLS`, reloads a spacer as a continuation,
+  and drops the bottom page. Its scroll pane is `#mapPanelContent` for the panel's grid, else `#content`.
+  `page-window.js` imports `infinite-scroll.js`, never the reverse (eslint forbids import cycles). A scrollbar jump can
+  leave spacers between loaded pages, and since cursors are keyset positions a reloaded page can overlap the one below;
+  both are allowed. `pagesOf`, `foldPagesIfNeeded` and `isSpacer` are exported for tooling.
+- A spacer is not a `.cell` or `.result-group` and has no `data-asset-id`, `img` or `.metadata`, so selection, drag,
+  lazy loading and metadata visibility never see it. The detail modal's walk reloads it (**Detail navigation**).
 
-**Results title** — The results fragment opens with the scope of the results, when it has one, as one block
-every scope renders the same way: `includes/results_title.scala.html` (styled by `static/css/includes/results_title.css`)
-wraps `includes/results_title_inner`, which lays out the kind's Font Awesome icon (`fa-user`, `fa-folder`, `fa-images`,
-`fa-map-marker-alt`, `fa-user-secret`, `fa-map-marker-alt slashed`, `fa-search`, `fa-sliders-h`), the title the caller renders and the way back, then a subtitle when the scope has one, or a filtered search's filters, with what a description that found nothing says after them. The results total stays in
-the toolbar. The title is `--font-size-display`, `--font-weight-semibold`, `--theme-primary-text`, and
-truncates with an ellipsis; the block has no fill of its own, only a hairline below in `--panel-border-color`, and is
-padded `--space-8` by `--space-6` (it paints the pane's background, `--theme-neutral-2` under the pane's tint, so the grid
-does not show through it while it sticks). The scopes:
-- a **person** through `htmx/person.scala.html`: `#person`, the block itself, is the face merge's drop zone (`.dropzone`,
-  `js/dragdrop/people.js`) and the swap target of the Hide / Show / Discard links, whose responses are
-  `htmx/person_inner`, the whole inside of the block. The Hide / Show links declare
-  `data-app-success-event="PEOPLE_CHANGED_EVENT"` (the person id as the detail) as the Discard link declares
-  `PERSON_MARKED_AS_BAD_MATCH_EVENT`, so `js/listeners/htmx-requests.js` announces a successful one and the People tab
-  moves the person between its panes. The cover face (`.cover.drag-drop`, a `--person-avatar-size` circle
-  that opens the Choose cover face modal, or the no-cover placeholder for a person with none, which opens it too) comes
-  before the text and the Hide / Show / Discard link (`.actions`) after it.
-  Which link shows depends on the person's whole count (`num_of_faces`), which is why the Detail panel reads the block's
-  inside again after a Face correction (`GET /htmx/people/r/:repoId/p/:personId/title`). A person has no subtitle: the
-  toolbar's Total says how many results there are. The title is `#personName`, the inline name editor's host: `htmx/view_person_name`
-  (the name, whose click swaps in `htmx/edit_person_name` at the title's size, `field-sizing: content`, its form swapping
-  `outerHTML settle:0` and its error row the one part of the title that wraps) with its pencil,
-  shown by `static/css/htmx/person.css` only while the title is hovered or the name has focus
-- a **folder** as the path's breadcrumb (`.crumbs`, a shared primitive of `core.css` the Detail panel's Folder row wears too, in its own link color):
-  every ancestor short of the repository root, top-level first, each a search trigger for its folder
-  (`data-app-search-folder-id`, a dimmed `a.crumb` that brightens to `--theme-neutral-4` under the pointer; a trigger like any other, so in Triage a crumb opens its folder's
-  scope dialog, unanchored since it names no anchor, and in the trash it does nothing, see **Search parameters**), separated by a dimmed `fa-chevron-right` (`.sep`), and the folder itself as
-  the `.leaf` in the title style. The path wraps rather than truncating. The
-  controller builds it from `FolderService.getAncestors` (root first) and the folder; the root folder is the whole
-  repository and renders no block
-- an **album** by name, with "Created *day*" (`Util.humanReadableDate` of `Album.createdAt`) as the subtitle
-- a **Location** by name, with its category's name as the subtitle, when it has one
-- a **Triage subset** (`subset`, the assets one of the Triage summary's counts shows) by its name: "Unknown people" under `fa-user-secret`
-  (Font Awesome 5 Free has no person with a question mark: the incognito user stands for a person with no name), and
-  "No Location" under `fa-map-marker-alt slashed`, the marker struck through: `.results-title .kind-icon.slashed` is
-  `position: relative`, and its `::after` lays Font Awesome's own slash glyph (`fa-slash`, `\f715`, made to be laid over
-  another icon) centered over it, since the free set has no slashed marker; no subtitle
-- the **Search text** (`.query`, in curly quotes drawn by CSS) with "in this library" as the subtitle, or "in Triage" in the Triage view
-- a **filtered search** (the glossary's: a description, whatever else the search holds, a date range, two people or
-  more, two Locations or more, or more than one of the Search text, a folder, a person and a Location; the root folder
-  counts as no folder) as "Search results" under the
-  advanced search panel's sliders icon, over its filters in place of a subtitle: `includes/search_filter_chips`, a
-  wrapping row (`.filters`) of `ul.chips`, one chip per filter in the order of the panel's fields, then **Edit**. The
-  chips are the panel's (`includes/search_chip`, the chosen filter's chip of `core.css`, **Advanced search panel**), each
-  led by its kind's icon, dimmed (`includes/search_filter_icon`: `fa-magic`, `fa-search`, `fa-folder`,
-  `fa-map-marker-alt`, `fa-calendar-alt`), or a Person's cover Face: the description first, as `Describe: “woman in a
-  park”` (`.chip.describe`, the label and its curly quotes the chip's own text, cut with an ellipsis when it is longer
-  than the row), the Search
-  text in curly quotes (`.chip.search-text`), the folder's path (`Trips › 2024 › Lisbon`), each person by name, each Location
-  with its Category (`Portugal › Lisbon`), and each date range as "Taken" or "Imported" and its days, as the panel's
-  date field reads them (`DateRange.label`, the server's copy of `rangeLabel`, each naming a month by its first three
-  letters in English, September `Sep`, from its own fixed source: `Util.humanReadableShortDate`, and `MONTHS` in
-  `date-range.js`): `Taken 1 Jun – 30 Jun 2024`, `Imported 28 Dec 2023 – 3 Jan 2024`, `Taken 8 Jun 2024` for one day,
-  `Taken from 8 Jun 2024` and `Imported until 21 Jun 2024` for an open end. With two people or more, "all of" or "any of" (`.match`, dimmed) comes
-  before their chips, the people match. `SearchResultsController.isFiltered` decides it, and the names are
-  `SearchService.filterNames`', so an ID that names nothing in the Library has no chip and matches nothing. A chip is
-  `data-app-filter` and carries its parameters as `data-app-filter-<param>` literals (the description, line breaks
-  included, the text, the folder, its own person's or Location's ID, both days of a range). A chip's remove control is
-  named "Remove" and the chip's label, but the Search text's, "Remove Keywords beach", as the panel labels the field.
-  Its × (`data-chip-remove`) takes the chip off the page at once and
-  searches again by what the chips left on the page name, the search's people match kept
-  (`js/search-results/filtered-title.js`, through the panel's `searchByFilters` with no pick, so `replaceFilters` and
-  `runSearch` in the view the search is in, Browse or Triage, with its triage filter), so a second × before the first search has
-  answered searches without both: an ID with no chip goes with the first removal, as with a search from the panel, and
-  the last chip of a kind left alone turns the search into one of a single scope, titled as that scope. The
-  description's × leaves the search of the other filters, with the sort, the grouping and the layout the store kept
-  for it (**Search parameters**), or the whole view, Browse or Triage, when it was the only chip, where the triage
-  filter is the remembered choice again; while the description stays, the search stays a
-  filtered one, down to its chip alone. Edit
-  (`.action-button.small` with the sliders icon, `data-app-edit-filters`) opens the panel on the search in force, its
-  description included (`openSearchPanel()`). A search with a description that found nothing says so after Edit, in
-  the row (`.filters .empty`, the subtitle's `--font-size-small` and `--theme-neutral-3`): "Nothing within these
-  filters looks like that." when another filter has a chip (`SearchFilters.narrowsDescription`), and "Nothing in this
-  Library looks like that." when the description's is the only one, or "Nothing in Triage looks like that." in the
-  Triage view (`inTriage`). `includes/search_results` hands the chips whether
-  the total is 0 (`foundNothing`); a search with no description says nothing of an empty result. A filtered search has no `#person` block, so the person title's reloads (`reloadPersonTitle`)
-  find nothing to read again in it: a chip shows a person's name and cover as the search found them, so when a Person
-  with a chip is renamed the search runs again (`searchAgainForPersonChip`: at once on `personNameEdited`, the rename
-  from a People cell's pencil, and on closing Asset detail after a Face correction in the Detail panel named them)
+**Results title** — The glossary's Results title: one block every scope renders the same way, `includes/results_title`
+around `includes/results_title_inner` (the kind's icon, the title, the way back, then a subtitle or a filtered search's
+filters; `static/css/includes/results_title.css`). The total stays in the toolbar. `includes/search_results` renders the
+filtered search's title when `filters` is set, otherwise the first of person, folder, album, Location, subset and text;
+the store's scope rules keep these exclusive except for the advanced search panel, which combines them. The scopes:
+- a **person** through `htmx/person`: `#person` is the block itself, the face merge's drop zone (`js/dragdrop/people.js`)
+  and the swap target of Hide / Show / Discard, which answer with `htmx/person_inner`. Their `data-app-success-event`
+  (`PEOPLE_CHANGED_EVENT`, `PERSON_MARKED_AS_BAD_MATCH_EVENT`) lets the People tab update. Which link shows depends on the
+  person's face count, so a Face correction or a rename from a People cell re-reads the inside (`reloadPersonTitle`,
+  `js/search-results/person-title.js`, `GET /htmx/people/r/:repoId/p/:personId/title`; a no-op unless `#person` shows that
+  person). `#personName` hosts the inline name editor; only its error row wraps
+- a **folder** as its breadcrumb (`.crumbs` of `core.css`): each ancestor short of the root is a search trigger for its
+  folder (routed in Triage and the trash like any trigger, **Search parameters**), then the folder as `.leaf`. The path
+  wraps instead of truncating. Built from `FolderService.getAncestors` plus the folder; the root folder renders no block
+- an **album** (subtitle "Created *day*"), a **Location** (subtitle its category, if any)
+- a **Triage subset**: "Unknown people" (`fa-user-secret`: Font Awesome 5 Free has no person with a question mark) or "No
+  Location" (`fa-map-marker-alt slashed`: no slashed marker in the free set, so `.kind-icon.slashed::after` lays
+  `fa-slash`'s glyph over it)
+- the **Search text**, subtitle "in this library", or "in Triage" in the Triage view
+- a **filtered search** (glossary; `SearchResultsController.isFiltered`, the root folder counting as no folder) as "Search
+  results" over `includes/search_filter_chips`: the panel's chips (**Advanced search panel**) in its field order, then
+  Edit. Names come from `SearchService.filterNames`, so an ID that names nothing in the Library has no chip and
+  matches nothing. A date chip's label is `DateRange.label`, the server's copy of `rangeLabel`
+  (`js/alpine/components/date-range.js`); both use fixed English month abbreviations and must agree.
+  - The chips are the state. Each is `data-app-filter` with its parameters as `data-app-filter-<param>` literals; its
+    × removes the chip at once and searches by what the remaining chips name, keeping the people match
+    (`js/search-results/filtered-title.js`, through the panel's `searchByFilters`, in the search's view with its triage
+    filter). So a second × before the first search answers drops both, an ID with no chip goes with the first removal,
+    and a lone remaining scope chip (text, folder, person, Location) turns it into that scope's search and title. While
+    a description remains, the search stays filtered, down to its chip alone. Removing the description leaves the other
+    filters' search with the sort, grouping and layout the store kept (**Search parameters**), or the whole view when it
+    was the only chip, the triage filter back to the remembered choice.
+  - Edit (`data-app-edit-filters`) opens the panel on the search in force (`openSearchPanel()`).
+  - A description that found nothing (`foundNothing`) is said after Edit: "Nothing within these filters looks like that."
+    when another filter has a chip (`SearchFilters.narrowsDescription`), else "Nothing in this Library…" or, in Triage,
+    "Nothing in Triage…" (`inTriage`). A search with no description says nothing of an empty result.
+  - No `#person` block, so a chip shows a Person's name and cover as the search found them: renaming a Person with a chip
+    re-runs the search (`searchAgainForPersonChip` on `personNameEdited`; after a Face correction named them, on closing
+    Asset detail, **Detail panel**)
 
-The way back is the `.clear-scope` × after the title: a search trigger carrying an empty `personId`, which the store's scope
-rules (see **Search parameters**) widen to clearing every place, a folder, an album, a Location or a Triage subset alike,
-the advanced search panel's filters, the map area and the Search text while the view, the sort, the grouping and the layout stay, so a Triage URL scoped to a
-person or a subset goes back to all of Triage (an empty value names nothing, so the search hydrator searches it in
-Triage as anywhere). The block and the toolbar
-(`#searchControl`) are both `position: sticky` at the top of `#content` (`z-index: 2`, above the group headers), the toolbar
-under the title: `js/search-results/sticky-offsets.js`, run by the results hydrator, writes the title's rendered height to
-`--results-title-height` on the fragment (the toolbar's `top`; 0 without a title) and the two heights together to
-`--results-sticky-height` (the group headers' `top`, **Group headers**) through one `ResizeObserver`. The toolbar's former
-margin is padding, painted with the pane's background, so nothing scrolls through between the two. The toolbar is a wrapping flex row of three groups, `--space-9` apart: the lead (the total, then the batch ops while assets are selected, see **Batch ops**), the controls (the layout toggle and the View, Group and Sort menus; for a search with a description the toggle has its Grid segment alone and the Sort menu opens with "Similarity", see **Context menus** and **Search parameters**) and the trail, empty but in the trash view, where the Purge button (`htmx/trashbin_header`, rendered into the toolbar) holds its right edge. The lead and the trail grow from the same zero basis, so they split what the controls leave evenly and the controls sit on the bar's center whatever the sides measure; neither side shrinks below its content, so the batch ops push the controls right, and once the lead and the controls no longer fit on one row the controls and the trail wrap to a second one, `--space-6` below, which the sticky offsets follow. The total's "Total:" label is an eyebrow (`--font-size-xs`, uppercase, `--letter-spacing-wide`, `--theme-neutral-3`) before the count, which is `--font-size-large`, `--font-weight-medium` and tabular, so its width holds as `decrement` lowers it. The scopes are exclusive by the store's rules, but for the
-advanced search panel's, which combines them into a filtered search; the template renders the filtered search's title
-when `filters` is set, and otherwise the first of person, folder, album, Location, subset and text that is set. The crowded-pin panel hides
-the fragment's title with its controls (`static/css/htmx/map_view.css`).
+The way back is the `.clear-scope` ×: a search trigger with an empty `personId`, which the store's scope rules widen to
+clearing every place, the panel's filters, the map area and the Search text, keeping view, sort, grouping and layout. An
+empty value names nothing, so `routeOf` (`search-triggers.js`) searches it in Triage too, back to all of Triage.
 
-In the Triage view `#curateQueue` follows the toolbar, a centered row holding `#curateSequences`, the small action button that
-opens Curation on the whole queue, whatever the search shows, in the `.curate.lit` look (see **Style guide** and the Buttons
-section of the page). It has the `fa-check-double` icon of the batch ops' Curate at the same `--space-5` gap, then the
-`sequencesToCurate` store's `label` ("Curate all 3 sequences", "Curate 1 sequence"), and `--space-9` of side padding. The row's top
-border is a hairline of `--theme-neutral-3` at 0.3, inset by the toolbar's side padding (`--space-8`). The toolbar's bottom
-padding is the `--space-6` above the line, and the row's block padding the `--space-6` from the line to the button and from the
-button to the grid. It sits outside `#searchControl`, so it is not sticky and scrolls away with the grid, and the sticky offsets
-do not count it. The row, line included, is hidden until the count arrives and while it is zero. The crowded-pin panel hides
-it with the toolbar.
+The block and the toolbar (`#searchControl`) both stick at the top of `#content` (`z-index: 2`, above the group headers),
+the toolbar under the title. Their heights vary (the path wraps, the name editor swaps in, the toolbar wraps), so
+`js/search-results/sticky-offsets.js` writes them through one `ResizeObserver`: `--results-title-height` (the toolbar's
+`top`, 0 without a title) and `--results-sticky-height` (both together, the group headers' `top`). Both paint the pane's
+background (`--view-tint` over `--theme-neutral-2`) and use padding, not margin, so the grid never shows through.
 
-**Batch ops** — What the selection can do (`includes/batch_ops`): Move (a drag handle, see **Tooltip**), Recycle, Add to
-album, Remove from album while an album's results are displayed, Add to location, Remove from location while one Location's
-are (`searchParams.viewedLocationId()`, none for an advanced search of several), Curate Selected while two images or more are selected, and Deselect all (×, an icon button with an accessible name); in the trash
-view Purge, Restore and Deselect all. The
-count shows once ("3 selected"), after the actions and directly before Deselect all, which the views share; the buttons carry no count of their own, and they are the small action
-button (`--space-4` × `--space-5` padding, `--font-size-small`, as the trash view's Purge button) and sit `--space-6`
-apart. Curate is `.action-button.curate` (see the style guide's Buttons section), which the rule that turns the batch ops'
-borders `--warning-background-color` on hover leaves out. The include is rendered twice, shown together while assets are selected (`x-show`): in the toolbar's lead and in
-the footer. Both copies are drawn alike, their sizes set in `static/css/includes/batch_ops.css` rather than inherited, and
-the footer's is placed by CSS anchor positioning: the toolbar copy is `anchor-name: --batch-ops`, and the footer copy is
-`position: fixed` over the footer's row (`--footer-height`, its buttons centered in it) with `left: anchor(--batch-ops left,
-var(--space-8))`, so each button sits directly below its twin wherever the explorer's size and dock side and the
-toolbar's wrapping put the toolbar copy, with no script; only the left edge is read, so the results pane's scrolling does
-not move it, and the crowded-pin panel's toolbar is `display: none`, so it is never the anchor. Move drags from either
-copy (`js/dragdrop/batch-ops.js`): `setFixedPositionWhileDragging` lifts the button out of the scrolling results pane, as
-a dragged thumbnail is, and the drop zones recognize it by its `batch-mover` class (`isBatchMoverElement` in
-`js/dragdrop/helpers.js`). Curate dispatches `Const.events.batchCurateRequested`, and `js/listeners/curation.js` opens
-**Curation** on the selected IDs, or, above the cap the button carries (`data-max-selection`, `Const.Curation.MAX_SELECTION`),
-reports it through the snackbar and stays on the grid. The server refuses such a selection too, but only this tells the user why.
+The toolbar is the lead (the total, then **Batch ops**), the controls (a search with a description has no Map segment and
+offers "Similarity" first, **Context menus**) and the trail (the trash's Purge, `htmx/trashbin_header`); the layout is in
+`static/css/includes/search_results.css`. The crowded-pin panel hides the title, the toolbar and `#curateQueue`
+(`static/css/htmx/map_view.css`).
 
-**Group headers** — A grouped grid (`htmx/results_grid_grouped.scala.html`) opens each group, a day,
-a Location or a Sequence, with a `.result-group` header: a checkbox over the group; its name - a
-`<time datetime="yyyy-MM-dd">` with the server-formatted day (**Saturday, January 2, 2025**), "No date",
-`<span class="category">Italy</span> › Rome` (the category dimmed), "No location", a Sequence's first capture as a
-`<time>` with its day and time (**Sunday, September 6, 2026, 10:00:05 AM**, `Util.humanReadableDayAndTime`: a Sequence has no
-name, and the seconds tell apart the bursts of one minute), or "No sequence"; `data-group-key`
-naming it; and the group's full match count across every page in `.count` — as text (**(3 items)**,
-**(1 item)**) with the number itself in `data-count`, which is what the client reads and decrements. A Sequence's header with
-two frames or more also has a small "Curate" action button (`data-app-sequence-id`), opening **Curation** on that one Sequence:
-all its frames still out of the trash, even under a search showing only some of them. The header spans
-the row and is `position: sticky` at the top of `#content`, below the toolbar and the results title when there is one (its
-`top` is `--results-sticky-height`, which `js/search-results/sticky-offsets.js` keeps at their rendered heights together;
-otherwise CSS only, in `static/css/includes/search_results.css`; `#assets` is an isolation root so the drag stand-in still
-paints above it, and the background carries `--view-tint` so it matches the triage and trash panes).
-A continuation of a group already on screen repeats no header, so the new cells read as the same
-group. When the page window folds a page (**Infinite scroll + lazy load**), the header of the group
-still open at the page's end stays in place before the spacer, as the page record's `keptHeader`, but
-only when the next page continues the group with no header of its own; a group closed with the page
-keeps nothing. The kept header keeps sticking over the group's loaded cells and its checkbox keeps
-counting them (a spacer is not a header, so the walk below passes it), and it is removed when the
-page reloads with its own headers, or stays for the group's cells on the next page when the reload is
-a 204. The client changes a header in `js/search-results/date-groups.js` alone, and only its count and its Curate button:
-`removeAssetsFromGrid` (`js/assets/asset-actions.js`) calls `decrementDateGroupOf(cellEl)` before a cell leaves, which walks
-back to the nearest header, takes one off, removes the Curate button under the number it carries (`data-min-frames`, `Const.Curation.MIN_FRAMES`),
-and removes the header at zero; a header whose loaded cells are all gone but whose
-count is positive stays, since the group has matches on pages not loaded yet. `removeCurateButtons(sequenceIds)` takes the
-button off a Sequence Curation cleared, whose kept frames stay under the header until the next search; it takes every copy,
-since a Sequence overtaken on a later page has a second header (**Group by Sequence** in `altitude/AGENTS.md`). Under Group by Location
-an asset in two Locations has a cell in each group (`asset-<id>-in-<locationId>`; elsewhere a cell is
-`asset-<id>`), so every per-asset change goes through `js/search-results/cells.js`, which finds all of
-an asset's cells by `data-asset-id`: removal takes every cell out, decrementing each header a cell
-leaves, while the footer total, which counts assets, drops once per asset (unless it is capped: see `resultsTotal` under **Alpine.js Stores**).
+In Triage, for a Curate Permission holder, `#curateQueue` follows the toolbar: `#curateSequences` opens Curation on the
+whole queue whatever the search shows (`.curate.lit`, **Style guide**), labelled by the `sequencesToCurate` store. It is
+outside `#searchControl`, so it scrolls away and the sticky offsets ignore it; it stays hidden until the count arrives and
+while it is zero.
 
-A Describe search's weaker matches open under a header of their own (`includes/weaker_matches_header.scala.html`, rendered by both grid partials), "Weaker matches", on the one page that holds the first of them (`SearchResult.weaker`, `GroupedSearchResult.weaker`; **Weaker matches** and **Sorted or grouped** in `altitude/AGENTS.md`), with their count across every page in `.count` as any header's. It is a `.result-group`, marked `weaker-matches`, so everything above holds for it with next to no code of its own: it sticks as a header does, the page window treats it as one, and the detail modal's walk passes it. It has no checkbox and no `data-group-key`: the weaker matches are no group to select. On the ungrouped grid it stands before the first weaker match's cell and the weaker matches are every cell after it, so it sticks over them as they scroll, the page window keeps it before its page's spacer and takes it away when the page reloads with its own, and `decrementDateGroupOf` finds it as the nearest header of a weaker match's cell. On a grouped grid it stands before the first group of the weaker matches, whose groups follow it each under its own header, a day or a Location that also has matches above the line being a second group here; the first of those headers follows it with no gap (`.weaker-matches + .result-group`), each later header paints over it as it sticks, and a cell of one of those groups leaves two counts, its group's and the weaker matches', which `decrementDateGroupOf` finds by walking back from the group's header to the nearest `.weaker-matches`, when its page is still loaded. The cells above the header are counted by their own group's header on a grouped grid and by none on the ungrouped one.
+**Batch ops** — What the selection can do (`includes/batch_ops`): Move (a drag handle, **Tooltip**), Recycle, Add to
+album, Remove from album while an album is shown, Add to location, Remove from location while one Location is
+(`searchParams.viewedLocationId()`, none for a search of several), Curate Selected for two assets or more, and Deselect
+all; in the trash, Purge, Restore and Deselect all. Each button shows only where the account holds its Permission in the
+page's view (the template comment; **Controls follow Permissions**). The count shows once, before Deselect all.
 
-The header's checkbox is `x-data="initDateGroupSelectable()"`
-(`js/alpine/components/date-group-selectable.js`). Its set is the group's cells *in the grid*, read off
-the DOM as the header's following siblings up to the next header — a group owns no element of its
-own, which is what lets a continued group append cells with no header of its own. Clicking it selects
-or deselects them through the `selectedAssets` store, the same path a click on a thumbnail's
-checkmark takes; it never fetches the group's unloaded pages. It shows checked only when the whole group is both loaded and selected, and the
-indeterminate dash otherwise, so a group still scrolling in never reads as fully selected. `paint()`
-writes that state into the box: it is the box's `x-effect`, and the box's `change` handler calls it
-again after `toggle()`, since a click that changes neither count re-runs no effect. The click is not
-cancelled on purpose: the browser restores a cancelled checkbox's `checked` and `indeterminate` once
-the click is dispatched, after the microtask Alpine runs effects in, so a `@click.prevent` box would
-show its pre-click state. Its counts are
-reactive: they read the store's set (so a Shift-click, a box selection and Deselect All all repaint
-it) and its grid version, bumped by `removeAssetsFromGrid` when cells leave and by the infinite
-scroll when a page is appended into a group already on screen. Alpine batches effects per microtask,
-so a box selection over hundreds of cells repaints each header once. Headers are never
-selectable (box selection targets `[data-asset-id]`), never draggable, and carry no `img` or
-`.metadata`, so lazy loading and metadata visibility skip them. Images carry `data-src`, a first page's `src` too; the same centralized
-search-results fragment hydrator (`js/fragments/search-results.js`) binds selection, infinite scroll, the page window, lazy image loading, metadata visibility, and
-box selection for `data-app-fragment="search-results"`, and sets the viewed folder scope from the
-fragment's `data-results-*` metadata. When a loaded image is more than a viewport away and is swapped for the
-transparent 1x1 placeholder, its rendered size is kept as inline `width`/`height`, so the thumbnail
-box a box selection hit-tests against stays where the image was (the cell's row is fixed, so the
-layout is the same either way). The size stays once the image is back, so a thumbnail drag
-(`js/dragdrop/assets.js`), which shrinks the image under the pointer, sets both its dimensions and restores the inline
-size as it was: with the height left standing the ghost would be a sliver as tall as the thumbnail, too tall for a
-folder row to cover a drop zone's share of it.
+The include renders twice, in the toolbar's lead and in the footer. The footer copy sits below its twin by CSS anchor
+positioning alone (`static/css/includes/batch_ops.css`: the toolbar copy is `anchor-name: --batch-ops`, the footer copy is
+fixed at its left edge), which is why both copies set their own sizes rather than inherit them. The crowded-pin panel's
+toolbar is `display: none`, so it is never the anchor.
+
+Move drags from either copy (`js/dragdrop/batch-ops.js`): `setFixedPositionWhileDragging` lifts it out of the scrolling
+pane, and drop zones recognize it by `batch-mover` (`isBatchMoverElement`, `js/dragdrop/helpers.js`). Curate dispatches
+`Const.events.batchCurateRequested`; `js/listeners/curation.js` opens **Curation** on the selected IDs, or, above
+`data-max-selection` (`Const.Curation.MAX_SELECTION`), reports it in the snackbar. The server refuses too, but only the
+client says why.
+
+**Group headers** — A grouped grid (`htmx/results_grid_grouped.scala.html`) opens each group (a day, a Location or a
+Sequence) with a `.result-group` header: a checkbox, the name, `data-group-key`, and the group's match count across
+every page in `.count`, the number in `data-count`, which the client reads and decrements. A Sequence has no name, so
+its header is its first capture's day and time (`Util.humanReadableDayAndTime`; seconds tell bursts of one minute
+apart). With two frames or more it has a Curate button (`data-app-sequence-id`) opening **Curation** on all the
+Sequence's frames out of the trash, even under a search showing some. Headers stick at `--results-sticky-height`
+(**Results title**); `#assets` is an isolation root so the drag stand-in paints above them.
+
+A continued group repeats no header. When the page window folds a page, the header of the group still open at its end
+stays before the spacer as `keptHeader` (**Infinite scroll + lazy load**), still sticking and counting the loaded cells:
+a spacer is not a header, so the walks below pass it.
+
+`js/search-results/date-groups.js` is the one place a header changes on the client (only its count and Curate button).
+`removeAssetsFromGrid` (`js/assets/asset-actions.js`) calls `decrementDateGroupOf(cellEl)` before a cell leaves: it
+walks back to the nearest header, takes one off, drops the Curate button under `data-min-frames`, and removes the header
+at zero. A header with no loaded cells but a positive count stays: the group has matches on unloaded pages. The client's
+count text (`itemCountText`) must match `Util.humanReadableItemCount`. `removeCurateButtons(sequenceIds)` removes the
+buttons of Sequences Curation cleared, every copy, since an overtaken Sequence has a second header (**Group by
+Sequence** in `altitude/AGENTS.md`). Under Group by Location an asset has a cell per Location
+(`asset-<id>-in-<locationId>`, else `asset-<id>`), so every per-asset change goes through `js/search-results/cells.js`
+(by `data-asset-id`): each cell that leaves decrements its header, while the footer total, which counts assets, drops
+once per asset (`resultsTotal`, **Alpine.js Stores**).
+
+A Describe search's weaker matches open under their own header (`includes/weaker_matches_header`, both grid partials;
+**Weaker matches** and **Sorted or grouped** in `altitude/AGENTS.md`). It is a `.result-group` marked `weaker-matches`, so
+it sticks, the page window keeps it and the detail walk passes it with no code of its own; it has no checkbox and no
+`data-group-key`. On the ungrouped grid it counts every cell after it, and cells above it have no header. On a grouped
+grid the weaker groups follow it, each under its own header (a day or Location with matches above the line gets a second
+group), so a weaker cell leaves two counts: `decrementDateGroupOf` also walks back from the group's header to the nearest
+`.weaker-matches`.
+
+The checkbox (`initDateGroupSelectable()`, `js/alpine/components/date-group-selectable.js`):
+- Its set is the group's loaded cells, read off the DOM as the header's following siblings up to the next header. A group
+  owns no element, which is what lets a continued group append cells without a header.
+- It selects through the `selectedAssets` store and never fetches unloaded pages. It is checked only when the whole group
+  is loaded and selected, indeterminate otherwise, so a group still scrolling in never reads as fully selected.
+- `paint()` is the box's `x-effect`, and `change` calls it again after `toggle()`, since a click that changes neither
+  count re-runs no effect. Do not cancel the click: the browser restores a cancelled checkbox's state after Alpine's
+  effect microtask, so a `@click.prevent` box would show its pre-click state.
+- Its counts read the store's set and `gridVersion`, which every cell arrival or removal bumps (`noteGridChange()`), so it
+  repaints with no listener; Alpine batches effects, so a box selection repaints each header once.
+
+Headers are never selectable (box selection targets `[data-asset-id]`) or draggable and carry no `img` or `.metadata`, so
+lazy loading and metadata visibility skip them. The results hydrator (`js/fragments/search-results.js`) binds every grid
+behaviour. A thumbnail lazy loading released keeps its rendered size as inline `width`/`height`, also once it is back, so
+box selection hit-tests where the image was. A thumbnail drag (`js/dragdrop/assets.js`) therefore sets both dimensions on
+the ghost and restores the inline size after: with the height left standing the ghost is too tall for a folder row to
+cover a drop zone's share of it.
 
 **Box selection** — Dragging a rectangle over the grid selects the thumbnails it touches
-(`js/search-results/box-selection.js`, one controller per displayed grid, created and replaced by the
-search-results hydrator). The vendored Viselect (`lib/viselect.esm.js`) owns the gesture: it draws
-the rectangle inside its own fixed, clipped container on `<body>` (styled by `.selection-area` in
-`static/css/includes/search_results.css`), autoscrolls `#content` within 32px of its top and bottom
-edges, and keeps the list of thumbnails inside the rectangle; it adds no classes and changes no
-state. Nothing visible changes during the drag. On release the box goes through the
-`selectedAssets` store only: `reset()` for a replacement box, then `select()` for each thumbnail
-it touched. The hit target is the `.drag-drop` div, whose box is exactly the
-rendered thumbnail, and any overlap counts (`intersect: "touch"`). Rules: a plain drag from empty grid
-space (padding, gaps, a cell's metadata) replaces the selection; a Shift-drag from anywhere in the
-grid, thumbnails included, adds to it, with Shift read when the button goes down (`dragdrop/assets.js`
-declines to start an asset drag while Shift is held, via interact's `actionChecker`); a plain drag
-over a thumbnail is still an asset drag; a press without movement past 10px is a click and does
-nothing. Escape, the window losing focus, the page being hidden, or the grid being replaced discard
-the box without touching the selection. The click the browser fires on release, or on the release
-after a cancellation, is swallowed through `click-suppression.js`, the same helper asset drags use.
-Viselect only re-evaluates the rectangle, and starts its scroll loop, from a `mousemove`; the
-controller therefore replays the last pointer position as a synthetic `mousemove` when a page is
-appended, an image loads, the panel resizes, or a frame finds the pointer resting in an edge band
-with room left to scroll. The position replayed is the pointer's, read from the document's own `mousemove`: Viselect's
-`move` event is not the source, since while its scroll loop runs it repeats, on every frame, the event that started the
-loop, and a replay of that stale position would keep the pane scrolling with the mouse resting mid-pane. That adapter is
-version-bound (3.9.0) and commented in place; the library file stays unchanged. Candidates are snapshotted on release, so a page arriving afterwards changes
-nothing; a failed page is reported by the snackbar and what was loaded remains selectable. Viselect
-decides once, when the drag starts, whether the container can scroll, so a box begun while the first
-page fits without a scrollbar does not autoscroll in that gesture.
+(`js/search-results/box-selection.js`, one controller per grid, replaced by the results hydrator; none for the crowded-pin
+panel). The vendored Viselect (`lib/viselect.esm.js`) owns the gesture: the rectangle (`.selection-area`), autoscrolling
+`#content` near its edges, and the list of thumbnails inside. It changes no state, and nothing visible changes during the
+drag. On release the box goes through the `selectedAssets` store only: `reset()` for a replacing box, then `select()` per
+thumbnail. The hit target is the `.drag-drop` div, and any overlap counts. Rules:
+- A plain drag from empty grid space (padding, gaps, a cell's metadata) replaces the selection; over a thumbnail it is
+  an asset drag. A Shift-drag from anywhere adds; Shift is read on button down, and `dragdrop/assets.js` declines an
+  asset drag while Shift is held (interact's `actionChecker`). A press under 10px of movement is a click.
+- Escape (consumed, so `global.js` closes nothing), window blur, a hidden page or a replaced grid discard the box
+  without touching the selection. The click after release or cancellation is swallowed (`click-suppression.js`, as asset
+  drags do).
+- Candidates are snapshotted on release, so a page arriving afterwards changes nothing.
 
-**Detail navigation** — Next/previous navigation and modal asset-detail loading are coordinated
-from `js/search-results/detail-navigator.js`. The detail fragment (`views/htmx/view_image_detail_modal.scala.html`)
-holds an `<img>` and a media-chrome player (`<media-controller>` around a `<video preload="metadata">` and its
-control bar), and its dataset carries the media type; `showMedia` hides the player while any asset loads, so an emptied
-player never shows in the previous frame, shows the image or the player as the type calls for, unloads the other
-(`hidden`, `src` cleared), waits for `load` or `loadedmetadata`, and hands the shown element's size (`naturalWidth`,
-`videoWidth`; the stored size when the element reports none) to the box, which CSS fits into the viewport below the
-toolbar and refits on resize: the stored size is the file header's, while a browser turns an image upright by its EXIF
-orientation. A still image is shown by the Edit's stage (`js/edit/edit-stage.js`, **Edit panel**), which picks the source by
-the asset's Edit (the original, the Display image, or the Edit drawn on the canvas), fits the box and hands the Detail panel
-the size; `showMedia` awaits its `showImage`. The asset's Edit, whether the account may edit it and why not come with the
-fragment on opening and with the asset's JSON (`edit`, `editable`, `editRefusal`) on a step, and the Edit panel is told of
-each asset as its load starts, before the stage, and again once a still image is shown. It names the asset shown to the
-Detail panel under the same request token, and the shown size too. `showMedia` starts a shown Video with `play()`,
-falling back to muted playback where the browser refuses sound, and interrupted plays (`AbortError`) are ignored; a clip
-shorter than ten seconds loops (`LOOP_MAX_DURATION_SECONDS`). Volume and mute are media-chrome's preferences
-(`localStorage` keys `media-chrome-pref-volume` and `media-chrome-pref-muted`), applied once per open and never written
-by the muted fallback, which sets `muted` on the element. A shown Video is described to the Media Session
-(`js/common/video-playback.js`: title, Preview, play/pause/seek, previous/next when there is a cell), cleared when
-another asset loads and on close. Stepping to another asset pauses a playing video, and `closeModal` unloads the videos
-of the host it closes instead of pausing them, so no OS media control can resume one behind a closed modal; the video
-streams from the same `/content/.../file/` URL by byte ranges. The results grid is the modal's source of truth:
-the coordinator remembers the cell it shows (not the asset: a Location grouping holds an asset in a
-cell under each of its Locations, and stepping from the cell keeps the walk in the group the user was
-looking at), and next/previous move to the nearest `.cell` sibling of that cell in document order,
-skipping `.result-group` headers (`handleShowNext` and `handleShowPrevious` share `step({ direction,
-loadBeyond })`, whose `siblingStopOf` stops at a cell or a page spacer). A detail opened from no cell,
-such as a map pin, has nowhere to step. A spacer met in either direction is reloaded (`reloadSpacer`
-from `js/search-results/page-window.js`, shared with the scroll if already in flight) and the walk
-looks again, since a 204 brings no cell and may leave the next spacer in its place. At the end of the
-loaded grid, next calls `loadNextPage` on the last cell - the same page load the scroll observer
-makes, shared if already in flight - and continues into the cells it appended; at the true end, and
-at the true first cell, nothing happens. There is no shadow list and no JSON: a cell
-removed from the grid drops out of navigation with it, and the search route is HTML only.
+Viselect 3.9.0 re-evaluates the rectangle, and starts its scroll loop, only on `mousemove`, so the controller replays
+the last pointer position as a synthetic `mousemove` when a page is appended, an image loads, the panel resizes, or the
+pointer rests in an edge band with room to scroll. The position comes from the document's own `mousemove`, never
+Viselect's `move` event, which during its scroll loop repeats the loop's starting event every frame and would keep the
+pane scrolling with the mouse mid-pane. This adapter is version-bound and commented in place; the library file stays
+unchanged. Viselect decides at drag start whether the container can scroll, so a box begun while the first page has no
+scrollbar does not autoscroll.
 
-Asset detail's URL (`js/search-results/detail-url.js`, `app.detailUrl`) is `/r/:repoId/asset/:assetId`, with `?panel=open`
-while the Detail panel is open and no parameter while it is closed. It carries no search. `IndexController.assetView` answers
-it with the main page (a 404 for an asset the repository does not hold, read through the scoped `AssetService.getById`, and for a Guest's triaged asset or one in the trash, `decorators.visibleOnly`), and
-`index.scala.html` opens the asset through `openAssetInLocation` after the page's first search, so it shows over the default
-results and, having no cell, with no previous or next. The panel goes by that URL for an open that starts on one, and by what
-this browser remembers otherwise (`attach`); only a toggle writes the remembered state. The URL follows from the panel, which
-knows the asset and its own state: `showAsset`, once the asset's metadata is in, and `toggle` both call `show`. Opening from the
-results adds one history entry; stepping and the panel's toggle replace it once the asset has stayed for `URL_DEBOUNCE_MS` (a held arrow key costs no history calls, and closing or a traversal drops a replacement still waiting), Back closes Asset detail, closing by any other path
-(an `Alpine.effect` on the active host) goes back over the entry, and Forward opens the asset again. A page loaded on an asset's
-URL added no entry: closing replaces the URL with the results', and a Back to an entry an earlier load of the page added loads
-that URL for real, since the results on screen are not its search. A failed open goes back to the results' URL too (`openFailed`).
-While the URL names an asset the module holds the `HX-Replace-Url` of any search (`htmx:before:history:update`, cancelled) and
-applies it on closing. It also cancels `htmx:before:history:restore`, htmx's own answer to a traversal within the page, which
-would fetch the URL into the body: nothing pushes history through htmx, so every such traversal is this module's.
+**Detail navigation** — `js/search-results/detail-navigator.js` (`createSearchDetailCoordinator`) runs next/previous and
+loading in Asset detail. The fragment (`htmx/view_image_detail_modal.scala.html`) holds an `<img>` and a media-chrome
+player. Loading (`showMedia`):
+- Each load gets a request token; only the latest for the still-active open may change anything, so a superseded
+  completion never shows a stale asset or reopens a modal.
+- The player is hidden while any asset loads, so an emptied player never shows in the previous frame.
+- The box is fitted from the shown element's size (`naturalWidth`, `videoWidth`), not the stored one, which is the file
+  header's: a browser turns an image upright by its EXIF orientation.
+- A still image is shown by the Edit's stage (`js/edit/edit-stage.js`, **Edit panel**): `showMedia` awaits
+  `showImage`, which picks the source by the asset's Edit and hands the Detail panel the size. The Edit, `editable` and
+  the refusal come with the fragment on opening and with the asset's JSON on a step. A step first awaits the Edit
+  panel's `beforeLeave()`, which may keep the asset (**The warning** under **Edit panel**); the panel is told of each
+  asset as its load starts and again once a still image is shown.
+- A Video plays at once, falling back to muted where sound is refused, by setting `muted` on the element so media-chrome
+  does not store it as the user's mute preference (volume and mute are media-chrome's `localStorage` preferences);
+  `AbortError` is ignored, and a clip under `LOOP_MAX_DURATION_SECONDS` loops. It is described to the Media Session
+  (`js/common/video-playback.js`). Every close unloads the host's videos rather than pausing them (**Modals**), so no OS
+  media control can resume one behind a closed modal.
 
-Fullscreen (`js/search-results/detail-fullscreen.js`, `app.detailFullscreen`) is the whole of Asset detail, on an image
-as on a Video: `f` (`global.js`, dispatching `Const.events.toggleFullscreen`, wherever focus is except in a text field, a
-held key or a modifier left to the browser), the toolbar's toggle after the Face highlights' (`.toolbar-toggle`,
-`data-app-fullscreen-toggle`, its key in its title, `aria-pressed` following `document.fullscreenElement` on
-`fullscreenchange`; removed where `document.fullscreenEnabled` is false, as the player leaves its own button out) and
-the player's fullscreen button all put the host, `#imageDetailModalContainer`, in fullscreen through `requestFullscreen`,
-so the Detail panel, the Edit panel, the Face highlights' layer and the player's control bar come along: `attach` gives each fragment's
-`<media-controller>` the host as its `fullscreenElement`, once media-chrome has defined the element (a property set
-before an element is upgraded would shadow the class's accessor), so the player's button requests fullscreen on the host
-and shows the host's state, and its `hotkeys` carries `nof`, so its own `f` is off. Under `:fullscreen` (`core.css`, by
-the box's rules) the toolbar is hidden and the box is the whole screen, panel open or not, so the stage fits the media to
-it, enlarged when it is smaller, and the panel keeps its share. Fullscreen is never remembered. Stepping stays in it;
-Escape is the browser's, which leaves fullscreen (Chrome consumes the key, and `global.js` leaves it alone while
-`document.fullscreenElement` is set), and a second Escape closes Asset detail; closing Asset detail by any path leaves
-fullscreen first (`releaseActiveHost` in `common/modal.js`, for a host containing the fullscreen element). The top layer
-stacks in order of entry, so a popover shown before fullscreen begins sits under the fullscreen element: the snackbar's
-stacks, outside the host, are shown again on entering (`raiseSnackbarStacks`, `common/snackbar.js`), which puts them, and
-the messages that join them, above it; the Dock side menu and the combobox's listbox are inside the host and open after,
-and the tooltip's one caller is outside Asset detail, so nothing else moves.
+The results grid is the source of truth: the coordinator remembers the *cell* it shows, not the asset, so under Group by
+Location stepping stays in the group the user was looking at. `step({ direction, loadBeyond })` moves to the nearest
+`.cell` sibling in document order, past headers (`siblingStopOf` stops at a cell or a page spacer). A spacer in either
+direction is reloaded (`reloadSpacer`, `page-window.js`) and the walk looks again, since a 204 brings no cell. Past the
+last loaded cell, next calls `loadNextPage` (shared with the scroll observer if in flight) and continues into it. A
+detail opened from no cell (a map pin, an asset's URL) cannot step. There is no shadow list or JSON: a cell removed from
+the grid leaves navigation with it, and the search route stays HTML only.
 
-**Detail panel** — The docked panel of Asset detail (the glossary's term) holding the asset's People and its Details. The fragment `htmx/view_image_detail_modal` (`#imageDetailView`, styled by `static/css/htmx/view_image_detail_modal.css`)
-is a grid of three areas as the main page is: the media stage (`#imageDetailStage`, a size container the media fit from the
-asset's ratio in container units, so the player and the image resize with the panel), the divider (`#detailPanelDivider`, a
-`.divider` with its orientation class) and the panel (`aside#detailPanel`: a header holding the Dock side menu at its end,
-`#detailPanelContent`, which scrolls, and under it the key legend, a `footer.panel-keys` of two lines that stays in view
-while the content scrolls: ← → Previous/Next, F Fullscreen, M Open/Close this panel; P Face highlights, Space Play/Pause,
-and on an edited asset alone \ Original (hold), `data-app-show-original-key`.
-Its fullscreen entry carries `data-app-fullscreen-key` and goes with the toolbar's toggle where `document.fullscreenEnabled`
-is false; Escape is not listed, since what it does depends on what is open). For a holder of Edit images the grid has two
-areas more, the Edit panel (`aside#editPanel`, area `edit`) and its divider (`#editPanelDivider`, area `egutter`), on the
-side opposite the Detail panel (**Edit panel**): `view_image_detail_modal.css` has one rule per Detail panel side for the
-Detail panel alone, one for the Edit panel alone and one for both open, the stage between them. Its shape is the panel's **Dock side**, `data-detail-dock-side` on the fragment with the
-share as `--detail-panel-share`, one rule per side bounded by `--detail-panel-min-*` and `--detail-stage-min-*` of `core.css`;
-closed (no `data-app-detail-panel-open`), the stage is the whole grid, the panel and the divider take no room and the box is
-fitted to the media as before, unless the Edit panel is open; while open the box fills the viewport (`core.css`, as it
-does while the Edit panel is open) and the panel takes its share: 30 % of the
-width for a left or right dock, 35 % of the height for top or bottom, until a drag. The panel docks right by default in every
-viewport and never follows the orientation; its picks are the options of `#detailDockSideMenuHost`, a compact choice menu whose
-options carry `data-app-detail-dock-side`, the panel's own attribute, since the explorer's dock takes its picks on the same body.
-The dock itself (the side and share written on the fragment, the divider's drag, arrow keys, Home, End and Enter, the menu's
-upkeep, the state remembered) is `js/common/dock.js`, the factory the explorer's dock is made from too (see **Explorer dock**),
-configured by `js/search-results/detail-panel.js`, which the composition root creates (`app.detailPanel`) and `fragments/image-detail.js`
-attaches to each fragment (`attach`: the menu's control built first, so the dock finds its trigger, then the layout and the divider).
-The Edit panel, docked opposite, reads the side (`dockSide`) and hears of every side change and every open or close
-(`onLayoutChange`); each panel's bounds leave room for the other and its divider while it is
-open, and the Detail panel is laid out again (`layOut`) when the Edit panel opens or closes.
+Asset detail's URL (`js/search-results/detail-url.js`, `app.detailUrl`) is `/r/:repoId/asset/:assetId`, plus `?panel=open`
+while the Detail panel is open; it carries no search.
+- `IndexController.assetView` answers with the main page, or a 404 for an asset outside the repository or invisible to the
+  account (`decorators.visibleOnly`). `index.scala.html` calls `openAssetInLocation` after starting the first search, so
+  the asset shows over the default results with no previous or next.
+- The Detail panel follows the URL for an open that starts on one, else what this browser remembers (`attach`); only a
+  toggle writes the remembered state. The panel drives the URL: `showAsset` and `toggle` call `show`.
+- Opening from the results pushes one entry; stepping and the toggle replace it after `URL_DEBOUNCE_MS` (browsers
+  limit history calls). Back closes Asset detail, any other close goes back over the entry, Forward reopens the asset.
+  If the Edit panel holds Back's close for its unsaved-changes warning and the user stays, the entry is pushed again.
+- A page loaded on an asset's URL owns no entry: closing replaces the URL with the results', and Back to an earlier load's
+  entry reloads it for real, since the results on screen are not its search. A failed open restores the results' URL
+  (`openFailed`).
+- While the URL names an asset, a search's `HX-Replace-Url` is held (`htmx:before:history:update` cancelled) and
+  applied on closing, or the first search of a page loaded on an asset's URL would overwrite it.
+  `htmx:before:history:restore` is always cancelled: nothing pushes history through htmx, so every in-page traversal is
+  this module's.
 
-The panel opens and closes with `m` (`global.js`, dispatching `Const.events.toggleDetailPanel`, wherever focus is except in a text
-field, ignoring a held key or any modifier) and with the toolbar's toggle before the × (`.toolbar-toggle`, `includes/html_common`,
-`data-app-detail-panel-toggle`, its key in its title, `aria-pressed` kept by the module); the Face highlights with `p`
-(`Const.events.toggleFaceHighlights`, the same rules) and the toggle beside it (`data-app-face-highlights-toggle`). The player's
-`hotkeys` carries `nof nom`, so `f` and `m` are Asset detail's (fullscreen is under **Detail navigation**). While the panel is open or the highlights are on (`wantsFragment`, the one place that
-says so), the sections load as `htmx/detail_panel` (`GET /htmx/asset/r/:repoId/detail-panel/:assetId`, `AssetActionController`) through
-the axios client, on open, on each step and when either is switched on with the asset's details not loaded yet: the coordinator names
-the asset shown (`showAsset`) with its request's `isCurrent`, so an answer that arrives after a step or a close is dropped, as a
-superseded media load is, and the host is emptied as another asset starts loading, so no asset's details read as another's. A step
-names it twice: as it starts, with `load: false`, which empties the host and the layer and loads nothing, and from `showMedia` once the
-asset's metadata is in, which loads the fragment, so a failed asset fetch is one error snackbar and no request for the panel. The sections
-(`static/css/htmx/detail_panel.css`, by class so the style guide shows them): People is `htmx/detail_panel_people` (one row per Face,
-a button (`.face-row`, `data-app-face-row`) holding the cover then the name, tighter than the explorer's list rows, Hidden marked,
-`aria-pressed` while its Face is selected; read-only in the trash, where no correction is offered),
-Details a `dl.detail-rows` of the file name, the MIME type, the File Type (the extractor's detected name, when it has one), dimensions, duration, size, Date Taken with its source (`CaptureDateSource.label`),
-Date Imported, the Folder as shared `.crumbs` in the link color, the albums and the Locations (`Category › Name`) each a link to its search
-(`/r/:repoId?folderId=…`, `albumId`, `locationId`) in a new tab, so Asset detail stays open, the GPS position, the camera rows,
-and, right under the file name, the Curation row of a frame with a set to open ("set of 5", `CurationService.setSizeOf`: its Sequence's frames out of the trash, at least `Const.Curation.MIN_FRAMES`, and the frame not in the trash itself), a link to Curation on that Sequence: a plain click opens it over Asset detail, and closing it comes back (see **Curation**); a click with a modifier or a middle click opens it in a new tab. The dimensions row (`data-app-detail-dimensions`) is written from the shown element's size, which the
-coordinator hands over, so a rotated phone photo reads as shown; for a still image it is the upright original's size, which
-the Edit's stage hands over (`setShownSize`) with the Edit it shows, if that changes a pixel, and the row then reads
-"W × H px · edited w × h", the original's size alone while Show original is on. What is remembered per browser, under `Const.localStore.assetDetailView`
-as `{ panelOpen, highlightsOn, dock: { side?, widthShare, heightShare } }`: whether the panel is open (closed by default),
-whether the Face highlights are on (written for `p`) and the dock (its part, written by the dock itself); a selection is never remembered. Space on a control in the panel presses
-it and the arrows on the divider move it, which `global.js` leaves to them.
+Fullscreen (`js/search-results/detail-fullscreen.js`, `app.detailFullscreen`) is the whole host,
+`#imageDetailModalContainer`, image or Video, so the Detail panel, Edit panel, Face highlights and player controls come
+along. `f` (`global.js`), the toolbar's toggle (`data-app-fullscreen-toggle`, removed where `document.fullscreenEnabled`
+is false) and the player's button all go through it.
+- `attach` sets each `<media-controller>`'s `fullscreenElement` to the host only after `customElements.whenDefined`: a
+  property set before upgrade would shadow the class's accessor. The player's `hotkeys` turn off its own arrows, `f` and
+  `m`.
+- Fullscreen is never remembered and survives stepping. Escape is the browser's and leaves fullscreen (`global.js` ignores
+  it while `document.fullscreenElement` is set; the rest of the order: **Modals**); a second Escape closes Asset detail.
+  Every close path leaves fullscreen first (`releaseActiveHost`).
+- The top layer stacks in order of entry, so a popover shown before fullscreen sits under the host: the snackbar's stacks,
+  outside the host, are re-shown on entering (`raiseSnackbarStacks`); Asset detail's own popovers live inside the host.
 
-The **Face highlights** (the glossary's term) are drawn from the People rows' data attributes (`data-face-id`, `data-person-name`,
-`data-person-hidden`, `data-face-box` as `x,y,w,h` in the detector's pixels, `data-frame-time-ms` for a Face in a Video) into
-`#faceHighlights`, a layer in the stage that shares the media's cell and box (`view_image_detail_modal.css` gives the three the same
-width, ratio and `grid-area`), so a highlight is placed by fractions of the shown element's natural size (`--face-x`, `--face-y`,
-`--face-width`, `--face-height`), the size the coordinator hands the panel: the detector decodes an image upright by its EXIF
-orientation as a browser does, and a Video's frames are turned as its player turns them, so the two spaces are one. While the
-stage shows an Edit, a box is pushed through the Edit's geometry (`geometry.mapBox`: its four corners through the turn, the
-warp and the crop, their bounding box cut to the edited image, as fractions of it), and a Face whose center the crop leaves
-out is not drawn; while the Crop tool draws the whole frame none is drawn (`setShownSize`'s `highlights` false), and while Show original
-is on they are unmapped. The layer takes
-no pointer events and paints above the player, so the control bar stays usable; a highlight (`.face-highlight`, built by
-`js/search-results/face-highlights.js`) is a `button` with `aria-pressed`, a `--border-hairline` outline in `--theme-neutral-1` with
-`--face-highlight-radius` corners (`core.css`) over a transparent box, `--border-heavy` while selected, and its badge
-(`.face-highlight-badge`, the Person's name as text at `--font-size-base`, light on `--scrim-color`, Hidden marked, semibold for the
-selected one) is anchored to it by an inline `anchor-name` per index and placed `position-area: bottom`, centered under the box, with
-`flip-block` above it when there is no room below and `@position-try --face-highlight-badge-inside` at the box's bottom edge when
-there is none above either, so a badge never leaves the media; it is cut with an ellipsis at the layer's width (an inline-size
-container) and takes no pointer events, so the player's control bar under it stays usable. The layer is emptied as soon as another asset starts loading
-(`showAsset`) and drawn again when the media is shown, when the rows arrive, on `p`, on a selection and, for a Video, on its `pause`,
-`play` and `seeked`: with `p` on every Face shows, the selected one emphasised; off, the selected one alone; on a Video a Face shows
-only while the player is paused within `FRAME_TIME_TOLERANCE_MS` (100 ms) of its Frame time, none during playback. The selection is
-one Face at most, held in `detail-panel.js` and never exported, the state the corrections act on: a click on a row's button
-or on a highlight's box (which carries `data-face-id`; the badge takes no clicks) selects the Face, a click on the selected one clears it, and a
-step, each open and `p` clear it; on a Video a row's click seeks to the Face's Frame time and pauses, and playing or scrubbing away
-takes the highlight off while the row stays selected. A highlight's click also opens the panel when it is closed, as `m` would, and
-scrolls the row into view. The style guide's Panels & layout section holds a specimen of a highlight with its badge, a selected and a
-Hidden one.
+**Detail panel** — Asset detail's docked panel holding the asset's People and its Details. The fragment
+`htmx/view_image_detail_modal` (`#imageDetailView`, `static/css/htmx/view_image_detail_modal.css`) is a grid like the
+main page: the media stage (`#imageDetailStage`, a size container, so the media resize with the panel), the divider and
+`aside#detailPanel` (header with the Dock side menu, the scrolling `#detailPanelContent`, and the key legend
+`footer.panel-keys`, which stays in view). The legend's `\` entry shows on an edited asset alone, its fullscreen entry
+(`data-app-fullscreen-key`) goes with the toolbar's toggle where `document.fullscreenEnabled` is false, and Escape is
+not listed, since what it does depends on what is open.
 
-The **Face corrections** (`docs/faces.md` **Corrections**) act on the selected Face: under the selected row sit Search, Change and
-Remove (`.face-actions`, shown by the row's `aria-pressed` in `detail_panel.css`, so no script toggles them) at the panel's full
-width, Search and Change on the left and Remove apart on the right; a panel too narrow for the three on one line (a container query
-on `.face-actions`) stacks them, each as wide as the panel. Search is a link to the Person's results (`/r/:repoId?personId=…`, with `triaged=true` for an image in triage, so that it
-is among them) in a new tab, so Asset detail stays open, like the Details' links. Change and Remove are rendered for a
-live asset only: the section of an asset in the trash carries `data-app-read-only` and offers Search alone, and the server
-refuses the corrections too. `js/search-results/face-corrections.js` owns the two clicks and the requests: Remove's first click arms the
-button and shows the label it carries ("Remove (last click)", `data-app-face-remove-label-last`), the second click on the
-same Face sends `DELETE /htmx/asset/r/:repoId/face/:faceId`, and a change of the selection disarms it; Change is the
-**Change combobox**, `x-data="faceCombobox"` on the row's `.face-actions` (`js/alpine/components/face-combobox.js`,
-hand-built with core Alpine on the ARIA combobox pattern of `docs/reference/alpine-components/headless-combobox.md`): an
-input with `role="combobox"` (`aria-expanded`, `aria-controls`, `aria-activedescendant`) that takes the buttons' place, an X
-beside it, and a `role="listbox"` manual popover (`.face-listbox`, in the top layer so the panel's scrolling never clips it)
-anchored under the input by CSS anchor positioning with an anchor name per Face, as wide as the input, flipped above when
-there is no room below, capped at `--listbox-max-height`, the cap of every combobox's listbox, and scrolling. Opening loads the options once per opening
-from `GET /htmx/people/r/:repoId/assignable?faceId=…` (`assignablePeopleUrl`, the one place the URL is built), parses the
-fragment's `role="option"` rows wherever they sit (`parseAssignablePeople`: each Person's ID, name, whether named, whether
-Hidden, cover and Suggested mark), and focuses the input once the combobox is drawn. The focus waits for the draw
-(`untilShown`): Alpine's `x-show` shows the combobox on the next animation frame (a timeout in a hidden tab), so options
-that loaded sooner would focus a hidden input, the focus would not take, the hidden Change button would lose it to the
-body, and that `focusout` would close the listbox. The options are filtered on the client as the user types, the first `MAX_SHOWN_OPTIONS` (50) matches rendered with lazy covers, Hidden marked. An option matches when its name holds the query under the server's fold (`nameKey`, which mirrors `NameKey.of`) with every final sigma read as a plain one (`partialMatchKey`), on both sides: the fold ends a word with "ς", so "σοφοσ", typed on the way to "Σοφοσάκης", would otherwise be no part of it; the exact name is told by the name key itself, and `parseAssignablePeople` computes both forms of each option's name once; the server leaves the Face's own Person
-out of the options (`PersonService.assignablePeople`, one read for the group and the list).
-The fragment opens with the **Suggested** group (`docs/faces.md` **Corrections**: the people whose Faces are nearest the
-Face's vector, closest first, at most 3, each option marked `data-suggested` and left out of the list after it): while
-nothing is typed the component renders them (`suggested`) as the ARIA listbox group pattern above the list (`matches`, the
-rest), `li[role=presentation].suggested` holding the heading (`.group-heading`, an ID per Face) and a `ul[role=group]`
-labelled by it, so the listbox announces the heading with its options (the "No one matches" line is `role="presentation"`
-too, so the listbox holds options alone); from the first character the group is left out
-and the suggested people are filtered with the rest, ahead of them. The server is the one source of the options and the
-component their one renderer; the group is absent when nobody is near enough, and the list works as before. A name no
-option has, within the server's name length rules (`Const.people.nameLength`), is offered as the Create row ("Create
-'Alice'"); an existing name in any case or Unicode form picks that Person instead. The Face's own Person is no option, so
-their name is offered as a Create row too, and the server refuses it, as already theirs for a named Person and as a
-reserved name for a Person with no name (a 400 in the error snackbar). Down and Up move the active option,
-wrapping, through the group, the list and the Create row in that order, and reopen a closed listbox; Enter picks the
-active one, which before the arrows move it is the Person of the exact name, else the first match, else the Create row,
-and nothing while the input is empty; the pointer over an option makes it active;
-focus leaving the combobox's root closes the listbox and leaves the input (`onFocusOut`).
+- Dock: the **Dock side** and share are written on the fragment (`data-detail-dock-side`, `--detail-panel-share`), from
+  which the stylesheet lays out the grid; closed (no `data-app-detail-panel-open`) the stage is the whole grid.
+  `js/common/dock.js` (the explorer's factory too, **Explorer dock**) owns side, share, divider and remembered state;
+  `js/search-results/detail-panel.js` (`app.detailPanel`) configures it. The panel docks right by default and, unlike
+  the explorer, never follows the viewport's orientation. Its menu's picks carry `data-app-detail-dock-side`, the
+  panel's own attribute, because the explorer's dock listens for its picks on the same body. `fragments/image-detail.js`
+  calls `attach` per fragment, which builds the menu's control first so the dock finds its trigger.
+- For a holder of Edit images the Edit panel docks opposite (how it follows: **The dock** under **Edit panel**), and
+  `view_image_detail_modal.css` has a rule per side for each panel alone and both open. The Detail panel lays out
+  again (`layOut`) when the Edit panel opens or closes, and each panel's bounds leave room for the other and its
+  divider (`panelMinimums`).
 
-The combobox has two modes, by the row's Person, which it reads from the row (`rowPerson`: `data-person-id`,
-`data-person-name`, `data-person-named`, and `data-person-asset-count`, the Person's `numOfFaces`). For a Face of a named
-Person every pick moves this Face only, and no switch is rendered. For a Face of a Person with no name, Hidden or not, a
-pick acts on the Person as a whole (`wholePerson`) unless the "This face only" switch is on (`faceOnly`, off at every
-opening and on `reset`, never remembered): a named option's suffix (`optionSuffix`, a `.suffix` after the name in
-`--theme-neutral-3`) reads "· merge Unknown 7 (5 assets)" and its pick merges the Person into that one; the Create row
-(`createLabel`) reads "Name Unknown 7 'Alice' (5 assets)" and names the Person, with no confirmation, since another name
-undoes it; and a nameless option reads "· this face" and still moves this Face only, since two nameless people are never
-merged from here. A count of one reads "1 asset". With the switch on every pick moves this Face only, as for a named
-Person's Face, and the labels are the plain ones. The switch (`.face-only`: a `.switch`, `button[role="switch"]` with
-`aria-checked` bound to `faceOnly`, and its `<label for>`, at `--font-size-small`, rendered for a nameless row alone) sits
-after the input and before the X; on a row narrower than 20rem (a container query) it takes a line of its own above
-them, so the listbox under the input, as wide as the input either way, never covers it. Both are inside the
-component's root, so Tab from the input reaches the switch with the listbox still open and Space flips it; a pointer press
-on either leaves focus in the input, so Enter still picks after a click: `mousedown` is prevented on both, and the label's
-click, prevented too, calls `toggleFaceOnly` in place of the label's native toggle (the `.switch` exception under
-**Forms**).
+`m` toggles the panel and `p` the Face highlights (`global.js`, `Const.events.toggleDetailPanel` and
+`toggleFaceHighlights`, wherever focus is except in a text field, ignoring a held key or any modifier), as do the
+toolbar's toggles (`data-app-detail-panel-toggle`, `data-app-face-highlights-toggle`), whose `aria-pressed` the module
+keeps. The player leaves `f` and `m` to Asset detail (its `hotkeys`, **Detail navigation**).
 
-A merge cannot be undone from the panel, so it takes two picks, as Remove takes two clicks: the first pick of a merge (a
-click on, or Enter over, a named option in whole-Person mode) makes the option active and arms it (`armedKey`), and its
-label (`optionLabel`, `armedLabel`) becomes "Merge Unknown 7 into Alice? Pick again" (`.armed`, in Remove's
-`--warning-color`) in place of the name and the suffix; a second pick of the armed option merges, and Asset detail stays
-open. Another active option (`setActive`, from the arrows or the pointer), typing, the switch, the listbox closing and
-`reset` disarm it. The active option's text changing under `aria-activedescendant` is not announced reliably, so a
-visually hidden `role="status"` in the component says `armedLabel`.
+Loading: the sections (`htmx/detail_panel`, `GET /htmx/asset/r/:repoId/detail-panel/:assetId`) load only while the panel
+is open or the highlights are on (`wantsFragment`, the one place that says so), on open, on each step, and when either
+is switched on with the details not loaded. The coordinator (`detail-navigator.js`) names the asset through `showAsset`
+with its request's `isCurrent`, so a late answer after a step or close is dropped, and the host empties as another asset
+starts loading, so no asset's details read as another's. A step calls `showAsset` twice: at its start with `load: false`
+(empties, loads nothing), and once the asset's metadata is in, which loads; a failed asset fetch is one error snackbar
+and no panel request.
 
-A pick is announced as `Const.events.facePersonPicked` with `faceId` and an `action`: `"move"` with `personId` or `name`,
-`"name"` with `sourcePersonId` (the row's Person) and `name`, or `"merge"` with `sourcePersonId` and `destPersonId`. The
-corrections module answers a move with `PUT /htmx/asset/r/:repoId/face/:faceId/person`, a name with `PUT …/person/name`
-(`{ personId, name }`) and a merge with `PUT …/person/merge` (`{ personId, destPersonId }`), `personId` being the
-`sourcePersonId`, which the server checks since the Face may have moved since the section was rendered; all three go
-through one `send`, one request per Face, with the same refusal and stale handling. The X announces
-`Const.events.faceChangeCancelled`, and the panel clears the selection and returns focus to the row. Escape with the listbox open closes it alone: `global.js` calls
-`closeOpenFaceCombobox` before `closeModal`. The next Escape, once the Edit panel's warning, its Level and Crop tools and its changes held are dealt with
-(each of which an Escape closes or leaves first, **Edit panel**), clears the selected Face (`clearSelectedFaceRow`, whatever the selection's source, focus to its row), so the row's actions and its highlight go, and only then does Escape close Asset detail. `m` and `p` in the input are the
-field's, as in every text field.
+Sections (`static/css/htmx/detail_panel.css`, styled by class so the style guide shows them):
 
-A correction answers the People section (`htmx/detail_panel_people`, 200), which `detail-panel.js` (`afterEdit`) swaps in
-whole for the shown one: the selection clears, the rows and the Face highlights are drawn again from the new rows (with
-`p` off nothing shows, with it on the remaining Faces), the result message from the root's `data-app-result-message` is a
-success snackbar, with the line of a Person the correction deleted (`data-app-deleted-person-message`) after it,
-`peopleChanged` reloads the People tab (and in Triage the Triage summary) at once, and focus goes to the first row. A name's result
-reads "Unknown 7 is now Alice" and a merge's "Unknown 7 merged into Alice"; a merge's root also carries the merged
-Person's ID (`data-app-merged-person-id`) and the destination's (`data-app-merged-into-id`), which `parsePeopleSection`
-reads, while who was named comes from the request (`send`'s `outcome`, `namedPersonId`), since the section does not say.
-A 400 (a reserved name, a name another Person took meanwhile) is the server's message in the error snackbar and nothing
-changes; a 404 or 409 (the Face gone or moved meanwhile, a merge's destination no longer live, the asset recycled, the
-Person named meanwhile) means the section is stale: the message is shown and the panel loads the asset's details again
-(`reloadSection`), so a row whose Person was named elsewhere comes back as a named Person's, with no switch. One
-correction at a time per Face. While viewing a Person (the one Person the search names, `searchParams.viewedPersonId()`; a search of several people has none, and its grid waits for the next search), an asset they have no Face left on after
-a correction stays in Asset detail and is noted as leaving (`noteViewedPerson`; a later correction that gives them a Face
-back keeps it, unless they were deleted): on stepping away, once the step has picked its target (`showAsset` for another
-asset), or on closing (an `Alpine.effect` over the `modal` store), its cells leave the grid through
-`assetActions.removeAssetsFromGrid`, so the walk continues from the cells around them, and the results title is
-read again, as its Hide and Discard links depend on the count (`reloadPersonTitle`: `GET /htmx/people/r/:repoId/p/:personId/title` into `#person`), or, when the viewed Person was deleted, the
-search goes on without them (`replaceId("personId", viewed, null)` and `runSearch()`): back to the whole repository
-for a search of that Person alone, and with every other filter kept in a filtered search. A detail opened from
-no cell (a map pin) has no cell to remove and still refreshes the title; a Search text result stays until the next search.
-After a name or a merge of a Face's Person, the grid follows only when the viewed Person is the one changed or the
-merge's destination; naming or merging another Person changes nothing in it. The viewed Person named (`namedPersonId`)
-has the results title read again at once (`reloadPersonTitle`), which shows the name. The viewed Person merged away
-(`mergedPersonId`) leaves every cell of the grid the destination's, so the cells stay, the destination
-(`mergedInto`) stands in for the viewed Person in later corrections' `noteViewedPerson`, and on closing Asset detail, not
-on a step, the destination takes the viewed Person's place in the search, every other filter kept, and the results are
-read again (`flushLeaving({ closing: true })`, through `replaceId`), at once if Asset detail closed while the request was out; until
-then the title, still the merged Person's, is not read again, and that search replaces it. A merge into the viewed Person
-(`mergedIntoId`, as the People tab's merge into them) takes the same path: `mergedInto` is the viewed Person, and the
-search on closing reads their results again, so the grid gains the merged Person's assets, and the total and the
-title's count-dependent Hide and Discard links follow;
-a step leaves the grid and the title alone until then. A later correction that deletes the destination sends the
-results back to the whole repository, as for a deleted viewed Person.
-The style guide's Panels & layout section holds a specimen of the actions under a selected row, of the combobox with
-its listbox, and of a nameless Person's combobox with the "This face only" switch, an armed option, a merge option and a
-"· this face" one.
+- People (`htmx/detail_panel_people`): one row per Face, its button `aria-pressed` while selected; the row's data
+  attributes are what the highlights and the corrections read. Read-only (`data-app-read-only`) for an asset in the
+  trash and for an account without Edit metadata.
+- Details: every link (Folder, album, Location) opens its search in a new tab, so Asset detail stays open. The Curation
+  row (Curate Permission, a set to open by `CurationService.setSizeOf`) is the exception: a plain click opens Curation
+  over Asset detail, which comes back when it closes (**Curation**).
+- The dimensions row is the shown element's size, which the coordinator hands over, not the stored one, so a rotated
+  phone photo reads as shown. For a still image the Edit's stage hands over the upright size and the Edit it shows, if
+  that changes a pixel (`setShownSize`), and the row adds "· edited w × h".
 
-**Edit panel** — Asset detail's other docked panel (the glossary's Edit panel, Edit, Crop tool, Display image and Show
-original; the server's side is **Image edits** in `altitude/AGENTS.md`, and the Edit's geometry, math and two renderers
-[docs/image-edits.md](../../docs/image-edits.md)), in which a holder of Edit images changes a still
-image's Edit. `includes/edit_panel` (`aside#editPanel`, `x-data="editPanel"`, styled by `static/css/includes/edit_panel.css`)
-and its divider, `#editPanelDivider`, are in Asset detail's fragment for a holder of Edit images alone, as are the Edit's
-tools over the stage, `includes/edit_stage_tools` (`#editSplit`, Before/after, `#cropLayer`, the Crop tool and the Level
-tool, and `#editBar`, the bar of the changes held), and the
-Clipping blink's `canvas#editClipping`; the stage's `canvas#editCanvas` is there for every viewer. `js/edit/edit-panel.js` is
-the coordinator (`createEditPanel`, `app.editPanel`, which `fragments/image-detail.js` attaches to each fragment): open or
-closed, the dock, the stage while the panel draws, each asset's session and its changes held, the Crop and Level tools,
-the stage's bar and the keys' handlers. The `editPanel`
-Alpine component (`js/alpine/components/edit-panel.js`) holds the controls and connects to it as it starts
-(`connectEditPanelView`): the coordinator syncs a snapshot into it on every change (`sync`), and the component asks it for
-every change, worked out from the Edit shown by `js/edit/adjust.js` (pure functions of an Edit and the upright size); the
-Edit, its session and the renderer stay in the coordinator's closure, out of the reactive object, as Curation keeps its heavy
-data.
+Remembered per browser under `Const.localStore.assetDetailView` as `{ panelOpen, highlightsOn, dock }`: closed and off
+by default, written only by a toggle (an asset's URL overrides for its open, **Detail navigation**). The selection is
+never remembered.
 
-- **Open or closed.** `e` (`Const.events.toggleEditPanel`) and the toolbar's toggle open and close it
-  (`.toolbar-toggle[data-app-edit-panel-toggle]`, `fa-sliders-h`, "Edit (E)", first of the toolbar's toggles, rendered by
-  `includes/html_common` for a holder of Edit images alone). Whether it is open is remembered per browser
-  (`Const.localStore.assetDetailView`'s `editOpen`) and written on the fragment as `data-app-edit-panel-open`, from which the
-  stylesheet lays the grid out. On an asset no Edit may change (a Video, an animated image or an asset in the trash, the
-  server's `editRefusal`; an original the browser cannot decode, or turns a quarter turn from the server's upright size; a
-  browser without WebGL2) the toggle is `aria-disabled`
-  with the reason as its title, so a keyboard or a screen reader still reaches it, and its press does nothing, while `e`
-  says the reason in the snackbar; open on such an asset (remembered open, or a step to it), the panel says why
-  (`.edit-refusal`) and draws nothing. Closing it with a change pending asks first (**The warning**); closing it with focus
-  inside hands focus to the toggle.
-- **The dock.** A third dock of `common/dock.js` (**Explorer dock**), with no Dock side of its own: `followSide` gives it the
-  side opposite the Detail panel's, read on every layout, and the Detail panel's `onLayoutChange` lays it out again when that
-  one moves, opens or closes; it writes `data-edit-dock-side` and `--edit-panel-share` on the fragment. It takes 28 % of the
-  width docked left or right and 42 % of the height docked top or bottom until a drag (`DEFAULT_WIDTH_SHARE`,
-  `DEFAULT_HEIGHT_SHARE`), bounded by `--edit-panel-min-width` and `--edit-panel-min-height` (registered as lengths) and by
-  what the stage, the Detail panel and its divider need, and remembers its shares as `editDock`; its divider drags and steps
-  as every dock's does.
-- **Layout.** A header (Edit, Undo, Redo, Before/after, Reset all), a body that scrolls (the Histogram, the four
-  tabs and the shown section), the commit row (the save status and Revert to original) and the key legend
-  (`footer.panel-keys`: E Close, C Crop, \ Original (hold), Ctrl+Z Undo). Docked
-  top or bottom, the commit row joins the header, the Histogram sits at the left of the tabs (`--edit-column-width`), the
-  section's controls flow into CSS columns as tall as the panel that scroll sideways, a heading kept with what follows it,
-  and the keys are left out.
-- **Tabs and sections.** Crop & rotate, Light, Color and Effects (`recipe.js`'s `SECTIONS`), an ARIA tablist (the arrows,
-  Home and End move between the tabs), the tab shown kept for the page's life; a section that changes the picture has a dot
-  in its tab (`.edit-dot`) and a Reset beside its heading. Crop & rotate: Crop, Level (draw line) and Auto-level, rotate left
-  and right, flip horizontally and vertically, the aspect chips with the orientation's swap, the crop's size in the
-  original's pixels, Straighten and "Keep the crop inside the image". Light: Exposure, Contrast,
-  Highlights, Shadows, Whites, Blacks, Gamma and the tone curve. Color: Temperature, Tint, Vibrance and Saturation. Effects:
-  Sharpen, Clarity, Vignette and Grain.
-- **Sliders.** `.edit-slider` (**Forms**), rendered from `recipe.js`'s `SLIDERS` (each slider's range, step, label, the
-  decimals its value is written with, by `formatSlider`, the panel's one formatter of a slider's value, and its track): the label row with the value's
-  `input[type=number]` at its end over a native range. The track is filled from its left end to the thumb
-  (`--edit-slider-fill`, which the component writes on the element), or, for a slider whose `SLIDERS` entry names a
-  `track` (Exposure, Temperature, Tint, Vibrance, Saturation), is that slider's gradient, the component setting
-  `--edit-slider-track` on the element to its `--edit-track-*` token; a changed slider's label is bold (`.changed`). A drag is shown at
-  once and is one change on release; the range's keys and a click on its track are one once they rest (`commitSoon`:
-  400 ms for keys, so a held key is one change, and 300 ms for a click, so a double-click's reset makes no step between);
-  Enter in the number field sets it as one change, and Escape or leaving the field puts its value back; a double-click on the
-  label or the track resets it. A drag applies each value to the Edit it started from (`adjust.sliderDrag`), so a crop that
-  shrank on the way grows back as Straighten returns.
-- **The crop's rules** (`adjust.js` over `geometry.js`, written out under **The crop's rules** in
-  [docs/image-edits.md](../../docs/image-edits.md)): while the Edit keeps the crop inside, its corners stay inside the
-  image's outline and a gesture stops there; a fitted crop re-fits to the geometry and one the user set shrinks only as
-  much as it must; a quarter turn and a flip carry the crop into the new frame. The aspect chips are a `.toggle-group`
-  (`.edit-aspects`): Original, Free, 1:1, 5:4, 7:5, 3:2 and 16:9, each labelled in the lock's orientation (2:3 while it
-  is portrait), with the swap button (X) beside the subhead.
-- **The tone curve.** A canvas (`.edit-curve`, `role="application"`, square, at most `--edit-curve-max-size`) on the field's
-  sunken fill, the luminance Histogram drawn behind the curve, in the colors its rule gives it (the curve and its points
-  `color`, the grid `border-color`, the Histogram `outline-color`), so the script writes none. A click adds a point (one
-  nearer than `CURVE_ADD_DISTANCE` in x takes that point instead), a drag moves one within its neighbours, a drag well off
-  the box (`CURVE_REMOVE_MARGIN`) or a double-click removes an inner one, and the release is one change. With the keys the
-  arrows move the point by 0.01 (Shift, 0.05), one change once they rest; [ and ] pick the point before or after; + or Insert
-  adds one halfway to the next, on the curve; Delete or Backspace removes an inner one. Its subhead has a Reset.
-- **The Histogram and the Clipping blink.** The edited image's Histogram as drawn, in Curation's markup and drawing
-  (`includes/histogram` and its `static/css/includes/histogram.css`, see **Curation**'s stage; `common/histogram.js`'s
-  `channelPaths` over the bins `renderer.readHistogram` reads from each drawing at 256 px on its long edge, the component's
-  `histogram` holding the paths, `NO_PATHS` until there is a drawing): red, green and blue shapes and a luminance line on a
-  backdrop dark in either theme, `--histogram-height` tall, with the crushed and blown fractions in its top corners
-  (`crushedLabel`, `blownLabel`, `percentLabel`). The whole Histogram is a button,
-  the Clipping blink's switch (`aria-pressed`, the success edge while on, off on each new fragment): a moment after the
-  drawings rest (150 ms) the canvas's clipping is read (`common/clipping.js`'s `readClipping` over the canvas, at the levels
-  and box of the fragment's `data-clipped-level`, `data-crushed-level` and `data-measurement-box`), the fractions always and,
-  while the blink is on, the mask on `#editClipping`, painted in the colors its rule gives it (`color` the blown highlights,
-  `border-color` the crushed shadows) and blinking at 1 Hz in steps, steady under reduced motion. Nothing is read while
-  Before/after, the Crop tool or the Level tool puts more than the Edit's result on the canvas, and the mask goes with the
-  canvas.
-- **The header.** Undo and Redo, disabled with nothing to undo or redo (**The session**); Before/after (`fa-columns`, off
-  while the Crop tool or the Level tool is up), which shows `#editSplit` over the canvas: Before, the geometry
-  alone (`renderer.renderBefore`), left of its divider and After right, labelled in the top corners, the divider
-  (`#editSplitHandle`, a separator) dragged with the pointer or stepped 5 % with the arrows; and Reset all, one change.
-- **The session** (`edit-session.js`, one per asset, DOM-free: the requests are the coordinator's). The server keeps the
-  asset's one Edit (**Image edits** in `altitude/AGENTS.md`). **Every change is held**: shown at once and saved by nothing
-  (`commit`), whatever the tab, the Crop tool's gestures and the Level tool's line included; the session's changes are
-  pending while the Edit shown is not the one saved (`pending`, the snapshot's `saved`), and so are the coordinator's while a
-  change waits out its delay (`held`). **Done** (`done`: the stage's bar, Enter) saves the Edit shown as one change
-  (`PUT …/asset/:id`) behind the save on its way, carrying as its `base` the edit version (`editVersion`) the write before it
-  answered, and the Dones waiting behind it are one save, of the latest; **Cancel** (`cancel`: the bar, Escape through **The
-  warning**) shows the saved Edit again. **Undo and Redo** are the session's and step through the changes held: each change
-  puts the Edit shown before it on Undo's stack and empties Redo's, Undo shows the Edit before and puts the one shown on
-  Redo's, Redo the reverse, each held as any change, so Revert to original is undone the same way. Done folds the changes it
-  saves into one step, so the next Undo takes the whole Done back (held until the next Done), and Cancel puts Undo back
-  where it was at the last Done. The stacks last while the panel is open on the asset: closing the panel, closing Asset detail
-  or stepping to another asset forgets them (`clearUndo`), and a conflict or a failure does too, since the Edits they hold
-  are this session's. The answer of the last write is adopted whole: the edit version and the Edit at it, the one shown
-  unless changes are held over it. A 409 drops the save waiting and the changes held, adopts the state it carries and says
-  "This photo was changed elsewhere; showing its latest Edit"; a failed save drops them too, reads the state again and says
-  "Could not save the Edit" ("Could not read the
-  Edit" for the read, which changes nothing shown). The commit row's status (`SaveStatus`, a `role="status"`): "Saving…",
-  "Saved · the original is untouched", "Could not save", "Changed elsewhere · showing its latest Edit"; while changes are
-  held a notice takes its place (`.notice.edit-held`, `fa-info-circle` in `--info-color`, also `role="status"`): "Not saved
-  · Enter or Done saves, Esc cancels". A session still saving when Asset detail
-  steps away finishes in the background, and stepping back picks it up; an idle one is forgotten, so the next visit reads
-  the Edit afresh. Every state of the server's a session adopts (`onAdopted`: a save's answer, a read's, a 409's, the read
-  after a failure, the reads of a page shown again) is the asset's latest Edit (`latestEdit`, unless an as new one is known),
-  which the stage takes at once (its badge and Show original's toggle, and what it shows when the panel does not draw the
-  asset), so a closed panel never leaves the stage on an Edit or a revision the server has moved on from. A state rendered at
-  its edit version points the grid's cells at its Preview now; one not rendered has its render waited for, once per edit
-  version (`render-status.js`: the status route every second, for up to a minute, until the edit version is rendered, giving
-  up after three failed reads in a row), after which every grid cell of the asset points at the new Preview
-  (`swapGridPreviews`: its `data-src`, and its `src` while it shows its image) and the stage, once the panel is closed, shows
-  the Display image. An Edit Asset detail brings for the asset (its fragment, a step's JSON) as new as the latest one
-  replaces it, and one the latest is newer than (a session answered after Asset detail read the asset) is replaced by it on
-  the stage once shown (`isNewerEditState`: a later edit version, or the same one rendered).
-- **The stage's bar** (`#editBar` in `includes/edit_stage_tools`, `role="toolbar"`, on the menus' frosted surface, at the
-  foot of the stage above the Crop tool's layer). Shown while changes are held or the Crop tool is open (`syncBar`, on
-  every push of the coordinator's snapshot): the Crop tool's guide and crop size while it is open (`data-crop`, `.crop-only`),
-  Cancel (Esc), how many edits are pending ("1 edit pending", "3 edits pending": `.edit-held-count`, a `role="status"`, shown
-  while any are held) and Done (Enter, `.primary`, disabled while nothing is held). The count is the steps of Undo between
-  the Edit shown and the last Done (the session's `heldCount`, an Undo past the Done counting as one), and one more for a
-  change on its way (a drag, a key waiting out its delay). The coordinator binds Cancel and Done
-  (`Const.attributes.editCancel`, `editDone`), the Crop tool the guide.
-- **The warning** (`js/edit/leave-dialog.js`, `dialog#editLeaveDialog` after the panel in `includes/edit_panel`). A change
-  is pending while changes are held or a save is waiting or on its way (`hasUnsaved`). Then closing Asset detail (the close guard the coordinator registers with
-  `modal.js`'s `setCloseGuard`, which every close through `closeModal` asks: Escape, the ×, the backdrop, Back; it answers a
-  promise of whether Asset detail closed, `takeHeldClose`, and Back answered by staying has `detail-url.js` push the asset's
-  entry again and follow it), stepping to
-  another asset (`beforeLeave`, which `detail-navigator.js` awaits before a step) and closing the panel (`e`, its toggle)
-  ask first, as does Escape with changes held. A save on its way alone is waited for up to a
-  second (`SAVE_SETTLE_MS`) and asks nothing once answered. The warning is a native modal `<dialog>` inside Asset detail's
-  fragment, so it stacks over Asset detail, the one active host, rather than replacing it as an open of another host would:
-  the browser keeps focus in it, makes the rest inert and gives focus back as it closes. It says "Changes not saved" with the
-  pending change ("The changes to this photo are not saved yet." or, a save on its way alone, "The last change to this photo
-  is not saved yet.") and offers, while a change waiting out its delay waits on undecided (its delay starts again on Keep
-  editing), Save (`.primary`, the initial focus, never the destructive choice), which is Done and leaves a save on its way to
-  finish, then goes on; Discard (`.error`), which, asked about changes held, is Cancel (a save on its way, which the warning
-  did not mention, finishes), and otherwise has the session `discard` (the save waiting is not sent, and a save on its way is
-  followed by one of the Edit the server last confirmed), then goes on; and Keep editing, which stays. Escape is
-  Keep editing (`closeLeaveDialog`, first in `global.js`'s Asset detail chain, and the dialog's own `cancel`), and Asset
-  detail's other keys do nothing while it is open. A leave asked for while one is asked about stays. A close nothing asks
-  (another dialog's open replacing Asset detail) saves the changes held as Done. Reloading the page, closing the tab or
-  navigating away with a change pending, of the asset shown or a save another asset's session has on its way, has the
-  browser ask (`beforeunload`), and leaving anyway saves nothing: Done is the only way changes are saved. A page shown again
-  from the browser's cache (`pageshow`, `persisted`) has every session read the Edit again.
-- **The stage** (`js/edit/edit-stage.js`, `createEditStage`, `app.editStage`). A still image's media box holds in one grid
-  cell the `<img>`, `#editCanvas`, `#editClipping`, `#faceHighlights` and the Edit's tools. The source: the original in the
-  `<img>` for an asset that is not edited; the Display image (`displayUrl` of `common/content-urls.js`,
-  `/content/r/:repoId/display/:id?v=<rev>`) in the `<img>` for an edited asset whose edit version is rendered at a revision, its
-  natural size the edited aspect; the canvas, drawn by the WebGL2 renderer (`renderer.js`) from the original, fetched once
-  per asset and decoded upright (`createImageBitmap` with `imageOrientation: "from-image"` and `colorSpaceConversion:
-  "none"`), for an edited asset whose render is pending or that the server could not render, and for every asset while the
-  panel is open (`setEditing`, then `setLive` with the panel's Edit and the renderer's options: `wholeFrame` for the Crop
-  tool, `split` for Before/after, `changing` while the Edit shown is a change not saved yet). The canvas, like the server's
-  renderer, takes the original's values as sRGB, while the browser manages an `<img>`'s colors, so a wide-gamut (Display
-  P3) photo looks less saturated on the canvas: while the panel's Edit is the identity and no change is on its way, outside
-  the Crop tool and Before/after, the canvas draws behind the original's `<img>` (`isBehindImage`;
-  `data-app-edit-canvas-behind` on the canvas, which the stylesheet hides, keeping its box), so an asset the panel has not
-  changed looks as it does with the panel closed and Show original shows no shift the Edit never made, while the Histogram
-  and the Clipping blink still read the canvas; the first change shows the canvas, and a change back to the identity
-  (a release at 0, Reset all, Revert, an Undo) the `<img>` again. A canvas that cannot draw (no WebGL2, an original the browser cannot decode) falls back to
-  the original, and a Display image that does not load to the canvas. So does a decoded original a quarter turn from the
-  server's upright size (`uprightWidth`, `uprightHeight`: the browser applied, or skipped, an EXIF turn the server did not),
-  checked before every draw and once more when the first Edit carrying that size arrives (the Edit panel's read of an asset
-  never edited), with a console warning: every Edit's geometry is in the server's upright original, so the canvas would draw
-  it on the wrong frame, and the Edit panel cannot edit such an asset ("This browser turns this photo otherwise than the
-  server, so it cannot draw its Edit"). The canvas is drawn at the device pixels of the box it
-  is shown in, at most the size of what it shows, from a source fitted to that size, drawn again and refitted once the
-  stage's size settles (150 ms), and shown once drawn, so no earlier drawing shows in a new box; a lost WebGL context is
-  rebuilt on `webglcontextrestored` and the last drawing made again. Whatever is shown, the box is fitted to it
-  (`setAssetDetailSize`) and the Detail panel handed the upright size with the Edit shown (`setShownSize`, **Detail
-  panel**): the decoded original's, or, for the Display image, the server's (`uprightWidth`, `uprightHeight`), since the
-  stored size is the file header's. Every presentation has a token, so one overtaken changes nothing, and `settled` waits
-  for the latest.
-- **Show original**, on an edited asset, for every viewer, Guests included. `\` held shows the original while it is held:
-  `global.js` announces its press (its repeats swallowed) and its release, wherever focus has gone and whatever modifier is
-  held by then (`Const.events.showOriginalHeld`), and the window losing focus releases it too; the press is the key that
-  types `\` on any layout, with Shift, Option or AltGr where it needs one, never with Cmd or a plain Ctrl. The toolbar's
-  toggle (`data-app-show-original-toggle`, `fa-clone`, "Show original (hold \)", after the Edit toggle) shows it until it is
-  pressed again, Asset detail steps to another asset, the Edit panel opens or a change is drawn from it. While it is on, the
-  `<img>` holds the original at the upright size, the Face highlights are unmapped, the Dimensions row has the original's
-  size alone and the title's badge (`.edit-badge`, `data-app-edit-badge`) reads "Original" in place of "Edited". The
-  toggle, the badge and the key legend's `\` entry are shown on an edited asset alone.
-- **The Crop tool** (`js/edit/crop-tool.js`), a view of the changes held. C (`Const.events.toggleCropTool`, with the panel
-  open) or the Crop button opens it on the Edit shown and closes it again, saving nothing and ending nothing, and the
-  fragment carries `data-app-crop-tool-open` while it is open: the canvas draws the whole warped frame
-  (its effects, the vignette, Clarity, Sharpen and Grain, sized from and laid over the crop in it, and the Histogram read
-  over the crop, `geometry.effectRegion`, so nothing jumps as it closes),
-  with a gutter around it (`--edit-crop-gutter`) where a drag turns the image, `#cropFrame` lies over it at the canvas's box
-  and `#cropRect` is the crop in it, placed by fractions of the frame, dimming the rest of the stage (`--crop-dim-shadow`),
-  with its guide (an SVG: Thirds, Grid, Golden ratio, Diagonals and None, cycled by O or the bar's button, Thirds until
-  another is picked) and eight handles (`.crop-handle` with the classes of the edges it moves). The gestures are
-  interact.js's, as vendored: `draggable` on `#cropRect` moves the crop; `resizable` on it, by its handles, resizes it, with
-  the `aspectRatio` modifier at the lock's ratio (none for Free) and `restrictSize` at the narrowest crop; `draggable` on
-  `#cropLayer`, which covers the stage, outside the crop, turns the image by the change of the pointer's angle
-  around the crop's center (Straighten), under a rotate cursor. interact.js restricts to upright rectangles alone, so each
-  listener turns the rectangle it proposes into frame fractions and, while the Edit keeps the crop inside, stops it at the
-  outline (`geometry.limitTransition`) before the Edit takes it; `styleCursor(false)` leaves the cursors to the stylesheet,
-  and the layer, the crop and the handles are `touch-action: none`. Each gesture is shown as it goes and is one change at its
-  end. `#cropRect` is focusable, and the arrows nudge it by a pixel of the frame (ten with Shift), one change once they
-  rest; X swaps the aspect's orientation. Undo and Redo work in it; Before/after is off.
-- **The Level tool** (the Level (draw line) button, `fa-ruler-horizontal`, pressed while it is on). On, a drag on
-  `#cropLayer` draws a line (`#levelLine`, `level-tool.js`) under a crosshair, and the release sets Straighten so the line
-  becomes level or plumb, whichever is nearer (`adjust.levelStraighten`), as one change, and turns the tool off; a line under
-  `LEVEL_MIN_LENGTH` (12 px) is a click and sets nothing. With the Crop tool open it works in it, the crop taking no pointer;
-  with it closed the layer covers the stage alone (`data-level-only`, no frame and no crop) over the edited image as the
-  canvas draws it, and the Crop button stays unpressed. Escape, the button again or Done and Cancel turn it off.
-- **Auto-level** (the button beside Level (draw line), `fa-magic`, disabled while it asks) asks the server
-  (`GET …/auto-straighten?recipe=`, the Edit shown) and sets Straighten to its angle as one change; when no lines agree on one
-  (`angle` null) Straighten stays and the snackbar says "No straight lines to level the image by"; a refusal the server
-  explains (a 503 while every auto-straighten slot is taken, a 400 for an original it cannot read) shows its error, and any
-  other failure "Could not level the image".
+The **Face highlights** (`js/search-results/face-highlights.js`, which `detail-panel.js` tells what to draw) are placed
+in `#faceHighlights`, a layer sharing the media's cell and box, by fractions of the shown element's natural size. That
+works because the detector decodes an image upright by its EXIF orientation as a browser does, and a Video's frames are
+turned as its player turns them: box space and shown space are one. While the stage shows an Edit, boxes go through
+`geometry.mapBox`, and a Face whose center the crop leaves out is not drawn; under the Crop tool's whole frame none is
+(`setShownSize`'s `highlights` false). The layer and the badges take no pointer events, so the player's control bar
+under them stays usable; a badge never leaves the media (`@position-try`). With `p` on every Face shows, the selected
+one emphasised; off, the selected one alone. On a Video a Face shows only while the player is paused within
+`FRAME_TIME_TOLERANCE_MS` of its Frame time, so the layer redraws on `pause`, `play` and `seeked`.
+
+The selection is one Face at most, held in `detail-panel.js` and never exported: the state the corrections act on. A
+click on a row's button or a highlight's box selects its Face, a click on the selected one clears it, and a step, each
+open and `p` clear it. On a Video a row's click seeks to the Frame time and pauses. A highlight's click also opens a
+closed panel and scrolls the row into view.
+
+The **Face corrections** (`docs/faces.md` **Corrections**) sit under the selected row (`.face-actions`, shown by the
+row's `aria-pressed` in CSS, no script): Search, a new-tab link to the Person's results (with `triaged=true` for an
+image in triage, so it is among them), then Change and Remove, which the server refuses too where the section is
+read-only. `js/search-results/face-corrections.js` owns the clicks and all requests; `detail-panel.js` owns the
+selection and what the answer changes on screen. Remove takes two clicks on the same Face, and a selection change
+disarms it.
+
+Change is the **Change combobox** (`x-data="faceCombobox"` on `.face-actions`, `js/alpine/components/face-combobox.js`,
+core Alpine on the pattern of `docs/reference/alpine-components/headless-combobox.md`). Its listbox is a manual popover
+in the top layer, so the panel's scrolling never clips it, anchored under the input by an anchor name per Face.
+
+- Options load once per opening from `GET /htmx/people/r/:repoId/assignable?faceId=…`, built only by
+  `assignablePeopleUrl`. The server (`PersonService.assignablePeople`) is their one source, leaving the Face's own
+  Person out; the component is their one renderer and filters them on the client.
+- Focus waits for the draw (`untilShown`): `x-show` shows the combobox a frame later (a timeout in a hidden tab), and
+  focusing the still-hidden input fails, the hidden Change button loses focus to the body, and that `focusout` closes
+  the listbox.
+- Matching is by substring under `partialMatchKey` (the server's fold, `nameKey` mirroring `NameKey.of`, with ς read as
+  σ) on both sides: the fold ends a word with ς, so "σοφοσ", typed on the way to "Σοφοσάκης", would otherwise miss.
+  Exact-name equality is `nameKey`'s.
+- The **Suggested** group (up to 3 people nearest the Face's vector) shows as a labelled ARIA group above the list while
+  nothing is typed, its people absent from the list; from the first character they are filtered with the rest, ahead of
+  them. Non-option lines are `role="presentation"`, so the listbox holds options alone.
+- A name no option has, within `Const.people.nameLength`, is the Create row; an existing name in any case or Unicode
+  form picks that Person. The Face's own Person is no option, so their name is offered as Create too and the server
+  refuses it (400).
+
+Two modes, by the row's Person (`rowPerson`). A named Person's Face: every pick moves this Face only. A nameless
+Person's Face (Hidden or not): a pick acts on the whole Person (`wholePerson`) unless the "This face only" switch is on
+(`faceOnly`, off at every opening, never remembered). In that mode a named option merges the Person into it, the Create
+row names the Person (no confirmation: another name undoes it), and a nameless option still moves this Face only, since
+two nameless people are never merged from here; each option's suffix says which. Merging takes Organize (`mergesInto`):
+without it a named option moves this Face only. The switch sits inside the component's root, so Tab reaches it with the
+listbox open, and a pointer press on it or its label keeps focus in the input so Enter still picks (the `.switch`
+exception under **Forms**).
+
+A merge cannot be undone from the panel, so it takes two picks, as Remove takes two clicks: the first arms the option
+(`armedKey`, its label the `armedLabel` question), the second merges. Another active option, typing, the switch, the
+listbox closing and `reset` disarm it. A text change under `aria-activedescendant` is not announced reliably, so a
+visually hidden `role="status"` says `armedLabel`.
+
+A pick is `Const.events.facePersonPicked` with `faceId` and an `action` (`move`, `name` or `merge`), which the
+corrections module sends to `PUT /htmx/asset/r/:repoId/face/:faceId/person`, `…/person/name` or `…/person/merge`. The
+last two carry the row's Person as `personId`, which the server checks, since the Face may have moved since the section
+was rendered. All go through one `send`: one request at a time per Face. The X announces
+`Const.events.faceChangeCancelled`, and the panel clears the selection, focus to the row.
+
+Escape (the order: **Modals**): an open listbox closes alone (`closeOpenFaceCombobox`), and a later Escape clears the
+selected Face (`clearSelectedFaceRow`). `m` and `p` in the input are the field's.
+
+The answer: a correction returns the People section (200), which `afterEdit` swaps in whole: the selection clears, the
+highlights redraw, the root's result message is a success snackbar, `peopleChanged` reloads the People tab and the
+Triage summary, and focus goes to the first row. A merge's root names both Persons (`parsePeopleSection`), while who was
+named comes from the request (`send`'s `outcome`), since the section does not say. A 400 is the server's message and
+changes nothing; a 404 or 409 (the Face gone or moved, the destination not live, the asset recycled, the Person named
+meanwhile) means the section is stale, and `reloadSection` loads it again. An answer for an asset no longer shown leaves
+the panel alone but still acts on the grid.
+
+The viewed Person (`searchParams.viewedPersonId()`: the one Person the search names; a search of several people has
+none, and its grid waits for the next search). The grid follows a correction only when it concerns them, and never under
+the open asset: `noteViewedPerson` marks the asset leaving when they have no Face left on it (a later correction giving
+one back keeps it, unless they were deleted), and `flushLeaving` acts once a step has picked another asset or on closing
+(an `Alpine.effect` over the active modal host). Then the asset's cells leave through
+`assetActions.removeAssetsFromGrid` and the title is read again (`reloadPersonTitle`, **Results title**); a deleted
+viewed Person drops out of the search instead (`replaceId`, other filters kept). The viewed
+Person named has the title read at once; a Person named whose chip is in a filtered search's title (`showsPersonChip`)
+has the search run again on closing. The viewed Person merged away leaves every cell the destination's, so the cells
+stay, the destination (`mergedInto`) stands in for them in later corrections, and on closing alone (not on a step) it
+takes their place in the search; a merge into the viewed Person takes the same path, so the grid gains the merged
+Person's assets. Naming or merging any other Person changes nothing in the grid.
+
+The style guide's Panels & layout section holds specimens to keep in sync: a highlight with its badge (selected,
+Hidden), the actions under a selected row, the combobox with its listbox, and a nameless Person's combobox with the
+switch, an armed option, a merge option and a "· this face" one.
+
+**Edit panel** — Asset detail's second docked panel, where a holder of Edit images changes a still image's Edit
+(glossary: Edit panel, Edit, Crop tool, Level tool, Display image, Show original). The server's side is **Image edits**
+in `altitude/AGENTS.md`; the Edit's geometry and math, the two renderers, their parity and the crop's rules are
+[docs/image-edits.md](../../docs/image-edits.md). The panel (`includes/edit_panel`), its divider, the tools over the
+stage (`includes/edit_stage_tools`) and `#editClipping` are in the fragment for a holder of Edit images alone;
+`#editCanvas` is there for every viewer, since the stage draws an edited asset whose render is pending.
+`js/edit/edit-panel.js` (`createEditPanel`, `app.editPanel`) is the coordinator, the single owner of the Edit shown,
+each asset's session, the panel's state and dock, the stage while the panel draws, the Crop and Level tools, the stage's
+bar and the keys' handlers. The `editPanel` Alpine component (`js/alpine/components/edit-panel.js`) holds the controls
+alone: it connects as it starts (`connectEditPanelView`), the coordinator pushes a snapshot into it on every change
+(`sync`), and it asks the coordinator for every change, computed from the Edit shown by `js/edit/adjust.js` (pure
+functions of an Edit and the upright size). The Edit and the sessions stay in the coordinator's closure, out of the
+reactive object, as Curation keeps its heavy data; the tools over the stage, outside the component, are the
+coordinator's and `crop-tool.js`'s.
+
+- **Open or closed.** `e` and the toolbar's toggle (`data-app-edit-panel-toggle`, `includes/html_common`) open and close
+  it; the state is remembered per browser (`editOpen` in `Const.localStore.assetDetailView`) and written as
+  `data-app-edit-panel-open`, from which the stylesheet lays out the grid. On an asset no Edit may change (the server's
+  `editRefusal`, an original the canvas cannot draw, no WebGL2) the toggle is `aria-disabled`, not `disabled`, so a
+  keyboard or a screen reader still reaches the reason in its title; `toggle` ignores its press, and `e` shows the
+  reason in the snackbar. Open on such an asset, the panel says why and draws nothing, and the toggle still closes it.
+  Closing with a change pending asks first (**The warning**); closing with focus inside moves focus to the toggle.
+- **The dock.** A third `common/dock.js` dock (**Explorer dock**) with no Dock side of its own: `followSide` puts it
+  opposite the Detail panel on every layout, and the Detail panel's `onLayoutChange` lays it out again when that panel
+  moves, opens or closes. It remembers its shares as `editDock`. Its bounds (`panelMinimums`) are
+  `--edit-panel-min-width` and `-height` plus what the stage, the Detail panel and its divider need; both tokens are
+  `@property` lengths in `core.css`, so their computed value reads as px.
+- **Layout.** Header, a scrolling body (the Histogram, the tabs, the shown section), the commit row and the key legend;
+  docked top or bottom, `edit_panel.css` rearranges it into columns and drops the legend.
+- **Tabs and sections.** `recipe.js`'s `SECTIONS`, an ARIA tablist. The tab shown is module state kept for the page's
+  life, so each asset opens on the last one.
+- **Sliders.** `.edit-slider` (**Forms**), rendered from `recipe.js`'s `SLIDERS`; `formatSlider` is the one formatter of
+  a slider's value, and the component writes the fill and a gradient track inline (`sliderStyle`). When a change counts:
+  - a drag is shown at once and is one change on release; each of its values applies to the Edit the drag started from
+    (`adjust.sliderDrag`), so a crop that shrank on the way grows back as Straighten returns;
+  - the range's keys and a click on its track are one change once they rest (`commitSoon`: 400 ms for keys, so a held
+    key is one change; 300 ms for a click, so a double-click's reset makes no step between);
+  - Enter in the number field is one change, and Escape or leaving the field puts its value back; a double-click on the
+    label or the track resets the slider.
+- **The crop's rules** (`adjust.js` over `geometry.js`) are under **The crop's rules** in
+  [docs/image-edits.md](../../docs/image-edits.md). The aspect chips (`.toggle-group.edit-aspects`) are labelled in the
+  lock's orientation (2:3 while it is portrait).
+- **The tone curve.** A canvas (`.edit-curve`, `role="application"`) with the luminance Histogram behind it. It takes
+  its colors from its CSS rule (`color`, `border-color`, `outline-color`), so the script writes none. A pointer gesture
+  is one change on release, the keys one once they rest; the gestures and keys are the component's, their distances
+  `adjust.js`'s.
+- **The Histogram and the Clipping blink.** Curation's markup and drawing (`includes/histogram`, `common/histogram.js`'s
+  `channelPaths`, see **Curation**) over the bins `renderer.readHistogram` reads from each drawing. The whole Histogram
+  is the Clipping blink's switch (`aria-pressed`, off on each new fragment). 150 ms after the drawings rest,
+  `common/clipping.js`'s `readClipping` reads the canvas at the import measurement's levels and box, which the fragment
+  carries as `data-*`: the crushed and blown fractions always, and while the blink is on the mask on `#editClipping`,
+  colored from its CSS rule (`color` blown, `border-color` crushed), blinking at 1 Hz, steady under reduced motion.
+  Nothing is read while Before/after or the Crop tool puts more than the Edit's result on the canvas.
+- **The header.** Undo, Redo, Before/after and Reset all (one change). Before/after (`#editSplit`: Before, the geometry
+  alone, `renderer.renderBefore`, left of `#editSplitHandle`) is off while the Crop or Level tool is up.
+- **The session** (`edit-session.js`, one per asset, DOM-free: the coordinator supplies the requests; its header is the
+  full contract).
+  - **Every change is held**: shown at once and saved by nothing (`commit`), the Crop tool's gestures and the Level
+    tool's line included. Changes are held while the Edit shown is not the one saved (`pending`) or a change waits out
+    its delay (the coordinator's `held`).
+  - **Done** (the stage's bar, Enter) saves the Edit shown as one change (`PUT /api/edit/r/:repo/asset/:id`), queued
+    behind the save on its way, its `base` the edit version the previous write answered; Dones waiting behind are one
+    save, of the latest. **Cancel** (the bar, Escape through **The warning**) shows the saved Edit again.
+  - **Undo and Redo** step through the changes held, each step itself held, so Revert to original is undone the same
+    way. Done folds what it saves into one step; Cancel puts Undo back where it was at the last Done. The stacks are
+    forgotten (`clearUndo`) when the panel closes, Asset detail closes or steps away, and on a conflict or a failure.
+  - The last write's answer is adopted whole, its Edit shown unless changes are held over it. A 409 drops the save
+    waiting and the changes held and adopts the state it carries; a failed save drops them too and reads the state
+    again; a failed read changes nothing shown. The commit row's status is `SaveStatus`, replaced by the
+    `.notice.edit-held` notice while changes are held.
+  - A session still saving when Asset detail steps away finishes in the background, and stepping back picks it up. An
+    idle one is dropped (`forgetWhenIdle`) unless it still follows a render, so the next visit reads the Edit afresh.
+  - Every state a session adopts (`onAdopted`, the coordinator's `adopted`) becomes the asset's `latestEdit` unless a
+    newer one is known, and the stage takes it at once (the badge, Show original's toggle, the source while the panel
+    does not draw the asset), so a closed panel never leaves the stage on an Edit the server has moved on from. An
+    unrendered state's render is followed once per edit version (`render-status.js`); then the grid's cells get the new
+    Preview and, with the panel closed, the stage the Display image. An Edit Asset detail brings (its fragment, a step's
+    JSON) replaces `latestEdit` when as new, and an older one gives way to it once shown (`isNewerEditState`).
+- **The stage's bar** (`#editBar`, `syncBar`). Shown while changes are held or the Crop tool is open: the Crop tool's
+  guide and crop size while it is open, Cancel, the count of edits pending and Done. The count is the session's
+  `heldCount` (the steps of Undo since the last Done, an Undo past the Done counting as one) plus one for a change on
+  its way (a drag, a key waiting out its delay).
+- **The warning** (`js/edit/leave-dialog.js`, `dialog#editLeaveDialog`). A change is pending while changes are held or a
+  save is waiting or on its way (`hasPending`). Then closing Asset detail, stepping to another asset (`beforeLeave`,
+  which `detail-navigator.js` awaits), closing the panel, and Escape with changes held ask first.
+  - Asset detail's close goes through the guard the coordinator registers with `modal.js`'s `setCloseGuard`, which every
+    `closeModal` asks (Escape, the ×, the backdrop, Back). The guard answers a promise of whether Asset detail closed
+    (`takeHeldClose`; a Back answered by staying: **Detail navigation**).
+  - A save on its way alone is waited for up to `SAVE_SETTLE_MS` and asks nothing once answered.
+  - It is a native modal `<dialog>` inside Asset detail's fragment, so it stacks over Asset detail, the one active host,
+    rather than replacing it as an open of another host would.
+  - Save (the initial focus: never the destructive choice) is Done. Discard is Cancel when asked about changes held (a
+    save on its way, unmentioned, still finishes), and otherwise the session's `discard`, which takes back a save on its
+    way. Keep editing and Escape stay. A change waiting out its delay stays undecided while the warning is open. A leave
+    asked for while one is asked about stays (`beforeLeave`, `decideLeave`).
+  - A close nothing asks about (another dialog's open replacing Asset detail) saves the changes held as Done.
+  - Leaving the page with a change pending, or a save another asset's session has on its way, has the browser ask
+    (`beforeunload`); leaving anyway saves nothing: Done is the only way changes are saved. A page shown again from the
+    browser's cache (`pageshow`, `persisted`) has every session read the Edit again.
+- **The stage** (`js/edit/edit-stage.js`, `app.editStage`; its header lists the sources: the original, the Display
+  image, or the canvas drawn by `renderer.js`, which every asset gets while the panel is open). The `<img>`, both
+  canvases, `#faceHighlights` and the Edit's tools share the media box's one grid cell.
+  - The canvas behind the `<img>`: the canvas, like the server's renderer, takes the original's values as sRGB, while
+    the browser color-manages an `<img>`, so a wide-gamut photo looks less saturated on the canvas. So while the panel's
+    Edit is the identity and no change is on its way, outside the Crop tool and Before/after, the canvas draws hidden
+    behind the original's `<img>` (`isBehindImage`, `data-app-edit-canvas-behind`, `visibility: hidden` so it keeps its
+    box): an unchanged asset looks as it does with the panel closed, and the Histogram and the Clipping blink still read
+    the canvas.
+  - A decoded original a quarter turn from the server's upright size (`uprightWidth`, `uprightHeight`: the browser
+    applied, or skipped, an EXIF turn the server did not) falls back to the original with a console warning, and the
+    Edit panel refuses it: every Edit's geometry is in the server's upright original. It is checked before every draw,
+    and again when the first Edit carrying that size arrives (the panel's read of an asset never edited).
+  - Whatever is shown, the box is fitted to it (`setAssetDetailSize`) and the Detail panel is handed the upright size
+    with the Edit shown (`setShownSize`, **Detail panel**): the decoded original's, or, for the Display image, the
+    server's upright size, since the stored size is the file header's. Every presentation has a token, so one overtaken
+    changes nothing, and `settled` waits for the latest.
+- **Show original** (`edit-stage.js`'s header), on an edited asset, for every viewer, Guests included: `\` held, or the
+  toolbar's toggle. `global.js` announces the key's press and release (`Const.events.showOriginalHeld`); the release
+  counts wherever focus has gone and whatever modifier is held by then, and the window's `blur` releases it too, so it
+  never sticks. The press is whichever key types `\` on the layout (with Shift, Option or AltGr where needed), never
+  with Cmd or a plain Ctrl.
+- **The Crop tool** (`js/edit/crop-tool.js`; its header covers the gestures), a view of the changes held: `c` or the
+  Crop button opens and closes it, saving and ending nothing, and the fragment carries `data-app-crop-tool-open`
+  meanwhile. The canvas draws the whole warped frame, with the effects and the Histogram sized from and read over the
+  crop (`geometry.effectRegion`), so nothing jumps as it closes. The gestures are vendored interact.js, which restricts
+  to upright rectangles alone, so each listener turns the rectangle it proposes into frame fractions and, while the Edit
+  keeps the crop inside, stops it at the outline (`geometry.limitTransition`) before the Edit takes it. Each gesture is
+  one change at its end, the arrows' nudges one once they rest. Undo and Redo work in it.
+- **The Level tool** (the Level (draw line) button). A drag on `#cropLayer` draws `#levelLine`; the release sets
+  Straighten (`adjust.levelStraighten`) as one change and turns the tool off, and a line under `LEVEL_MIN_LENGTH` is a
+  click. With the Crop tool open it works in it; with it closed the layer covers the stage alone (`data-level-only`).
+  Escape, the button, Done, Cancel or closing the Crop tool turn it off.
+- **Auto-level** asks the server (`GET …/auto-straighten?recipe=` with the Edit shown) and sets Straighten to its angle
+  as one change; a null `angle` leaves Straighten and says so in the snackbar, and a 503 (every auto-straighten slot
+  taken) or a 400 (an original it cannot read) shows the server's error.
 - **Keys.** In Asset detail and never in a text field (`isTextEditingTarget`, which counts no slider, checkbox or
-  button-like input, so the keys work on the panel's controls): `e`, `c`, Ctrl/Cmd+Z, and Ctrl/Cmd+Shift+Z or Ctrl+Y, each
-  read by `global.js`, which dispatches its `Const.events` event (`toggleEditPanel`, `toggleCropTool`, `undoEdit`,
-  `redoEdit`) that `listeners/edit.js` hands to the coordinator; `global.js` reads the warning, the Crop tool and the changes
-  held (whether the warning is open and its close, whether the Crop tool is open, whether changes are held, and the panel's
-  Escape) through `common/edit-keys.js`, which the coordinator registers into as it starts, so the pages without Asset detail
-  load no edit module; Undo and Redo act while the panel is open. In the Crop tool `o` and `x` (`cycleCropGuide`,
-  `swapCropAspect`); while changes are held Enter is Done (`editDone`; Enter on a button or a link presses that instead).
-  Escape, in Asset detail, closes the warning alone (Keep editing), then the panel's own (`escapeEdit`): the Level tool off,
-  else the warning about the changes held, else the Crop tool closed, ahead of a selected Face and of closing Asset detail,
-  which the warning may hold. The arrows and Space are left to focus in `#editPanel`, on `#editPanelDivider`, on
-  `#editSplitHandle`, in `#cropLayer` and on `#editBar`, as in the Detail panel, so a slider steps and the crop nudges where
-  Asset detail would step.
+  button-like input, so the keys work on the panel's controls). `global.js` reads them (its header lists them) and
+  dispatches a `Const.events` event that `listeners/edit.js` hands to the coordinator. It reaches the warning, the Crop
+  tool and the changes held only through `common/edit-keys.js`, whose hooks the coordinator registers as it starts, so a
+  page without Asset detail loads no edit module. Enter is Done while changes are held, unless focus is on a button, a
+  link or a `summary`, which Enter presses.
+  - Escape in Asset detail closes the warning alone (Keep editing), then the panel's own (`escapeEdit`): the Level tool
+    off, else the warning about the changes held, else the Crop tool closed; all of it ahead of a selected Face and of
+    closing Asset detail.
+  - The arrows and Space are left to focus in `#editPanel`, `#editPanelDivider`, `#editSplitHandle`, `#cropLayer` and
+    `#editBar` (`isInEditTools`), as in the Detail panel, so a slider steps and the crop nudges where Asset detail would
+    step.
 
-The style guide holds `.edit-slider`, plain and with a gradient, in Forms, and in Panels & layout an Edit panel strip (the
-header's tools, the Histogram, the tab row, the aspect chips and the key legend), the warning of changes not saved, open in
-place, the Edit and Show original toggles and the "Edited" badge.
+The style guide's specimens of the Edit panel are listed under **Style guide**.
 
-**Curation** — The modal where the user keeps the best frames of a Curation set and recycles the rest. What sorts a set and
-what its outcome writes are under **Sequences and Image quality** in `altitude/AGENTS.md`, and the terms are the glossary's. It
-has no page of its own and adds no nav entry, so the nav keeps marking the view it opened from, and a reload shows the grid.
-Four ways in open the same modal, each dispatching `Const.events.curateRequested` with its entry: the Detail panel's Curation row (`{ sequenceId }`; see **Detail panel**), whose plain click (`data-app-curate-sequence`) adds `resumeDetail`, Asset detail's asset and cell, so that closing Curation by any path reopens Asset detail on that asset through its cell, or, when Curation recycled it, on the nearest cell left, the next before the previous, and stepping goes on from there; its link, opened in a new tab, is the Triage view with `?curate=<sequenceId>`, which `openCurationInLocation` (`js/listeners/curation.js`) answers after the page's first search, whose replaced URL drops the parameter; Triage's
-`#curateSequences` on the queue (no detail; see **Results title**), a Sequence's group header on that Sequence (`{ sequenceId }`;
-see **Group headers**) and the batch ops' Curate on a selection (`{ assetIds }`, which the component posts, so they never sit in
-a URL; see **Batch ops**). `js/listeners/curation.js` names the entry (`requestCuration`) and loads the shell through `htmx.ajax`
-into the host, a new shell for every open, so each starts with every row open and no undo entry; `js/fragments/curation.js` hydrates it
-by opening `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"` means the keys press no control by accident.
+**Curation** — The modal where the user keeps the best frames of a Curation set and recycles the rest. Part 2 of
+`docs/curation-batch-detection.md` is the UX narrative (layout, copy, the key table, the walk's moves, Undo, the grid
+after closing). What sorts a set and what its outcome writes are under **Sequences and Image quality** in
+`altitude/AGENTS.md`; the terms are the glossary's. This topic holds the client's contracts and traps. Curation has no
+page or nav entry, so the nav keeps marking the view it opened from, and a reload shows the grid.
 
-- **The shell** (`htmx/curation.scala.html`) is a header over both columns with the title, `remaining` from the `sequencesToCurate`
-  store, the Sequence rail's switch (`Sequences Q`, the queue alone, `aria-pressed` while the rail shows, wearing the stage's
-  pressed rule), Undo while there is one and Exit; the main column, `#curationMain`, holding `#curationSet`, which each set's
-  fragment goes in, and the four states with no set, `.curation-no-set`: too few frames left (the words of `curation_set(None)`,
-  for a selection's answer and a Sequence's 204 alike), the report of a resolve, the unread state, and the queue's end; and
-  beside it the Sequence rail. The first three states offer Exit, and Undo when there is one, beside what they say.
-- **The Sequence rail** (`aside#curationSequenceRail`, the glossary's term) is a column of `--curation-sequence-rail-width` at the
-  right of the shell, on the queue alone (`x-show="isQueue && showsSequenceRail"`), outside `#curationSet`, so it outlives each
-  set's fragment and stays through the states with no set. Its header reads "Sequences" and the walk's position among the rows
-  (`railPosition`, "4 of 12"; in the end state, where no row is current, the count alone, "12 of 12"; nothing with no rows), and
-  under it `#curationQueueHost` holds the
-  queue's rows, `htmx/curation_queue.scala.html`, which `startQueue` reads through the axios client (`readQueueRows`) and takes
-  `queueIds` from, each row's `data-rail-sequence-id` (`Const.attributes.railSequenceId`; not `data-app-sequence-id`, which finds a
-  group header's Curate) in document order. A row (`li.curation-queue-row`) is the Sequence's cover Preview (its first frame in
-  capture order, in `.curation-preview`, the Bundle rail's), its frame count ("8 frames") and its first capture's day ("12 Mar
-  2026", `Util.humanReadableShortDate`, or "No date" for an undated Sequence). No binding is on a row: `paintRail`, run by a
-  `$watch` on `position` and after the rows are read, toggles `.current` with `aria-current="true"` on the row at the position,
-  scrolling it into view (`block: "nearest"`), and `.done` on the rows of `doneIds`, the closure set of the Sequences dealt with,
-  so a long queue costs nothing per move; a done row is dimmed and wears the Preview's check (`fa-check-circle`, "Dealt with"),
-  which no other row shows. One delegated click listener on the host (`onQueueRowClick`) moves the walk to an open row (`move`,
-  see **The walk**); the current row and a done row do nothing. `toggleSequenceRail` (the Q key and the header's button) shows or
-  hides it and remembers the choice under `Const.localStore.curationSequenceRail`, as the Histogram's is; hidden, it changes
-  nothing about the walk. A selection or a single Sequence has none, and Q does nothing there.
-- **The state** is `x-data="curation"` on the shell's root (`alpine/components/curation.js`), so it outlives each fragment: the
-  focused frame, the pinned frame, the Picks, the Bundle kinds whose details show, the queue's IDs, its position, its done rows
-  (`doneIds`) and the Sequence of the set on show (`shownSequenceId`, which the position runs ahead of while a move reads), the one
-  Sequence or the selection's IDs, and the undo entry. It reads a set's frames from their `data-*` and the fragment's bindings read
-  its state back.
-  A set's fragment replaces the one before it in `#curationSet` after that one's Alpine tree is destroyed (`replaceSetHost`, which
-  also empties the host with no set), so no loop of the old fragment runs once more on the new set's state.
-  Exit and Esc close Curation through `closeModal`, and a backdrop click does not. The component notices the host going
-  (`$watch` on the `modal` store), announces `Const.events.curationClosed` and empties the host, so the originals stop loading;
-  an action still running announces when it finishes. Actions run one at a time (`exclusively`), so a key pressed during one does
-  nothing. A failed write goes to the snackbar and leaves the set on show, since nothing was saved. Every action is saved as it
-  happens, so closing loses only the undo entry.
-- **A failed read** of a set or of the queue (`reading`), whether it opens Curation or follows an outcome, goes to the snackbar too
-  and shows the unread state ("This set could not be read") with Try again, which runs that read again, Undo when there is one and
-  Exit. No set stays on show past it, so a set whose outcome was saved cannot be acted on again: with no frames on show the keys
-  of the set do nothing. The walk's position and the undo entry stay as they were, so no Sequence is passed over, and on the
-  queue the Sequence rail and the moves still work there, so a Sequence that will not read cannot block the rest.
-- **The Bundle rail** (`#curationRail`, `htmx/curation_set.scala.html`) is a column of its own that scrolls by itself: the notices
-  (`.notice`, `core.css`, "Showing the first 100 of 2,000 frames" with what that means for the queue when a Sequence is over the window a
-  set reads, "Too close to call" or, in the warning fill, "Every frame: 8% blown highlights"), the Contenders, then
-  each Bundle in the rule's order, each frame a Preview that focuses it, with its reasons and its chips (`.curation-chip`). A
-  frame's `data-problems` holds what the stage's tag says is wrong with it, its Bundle first and then its chips; a Contender has
-  none. The Preview carries the frame's marks: `fa-thumbtack`, labelled "Pinned", on the pinned frame, and `fa-check-circle`,
-  labelled "Keep", on a Pick. A Bundle's header gives its name, its count, the details switch, Recycle and its reason (the
-  first frame's first, "and 2 more"), and shows the same check while the Bundle holds a Pick, which its Recycle leaves in place. A sole Contender
-  is marked (`.curation-chip.sole`), and an unmeasured frame says "Not measured". Every Bundle lists its frames, whatever the
-  set's size: there is nothing to collapse or open.
+Every way in dispatches `Const.events.curateRequested` with its entry. `js/listeners/curation.js` names the entry
+(`requestCuration`) and loads a new shell through `htmx.ajax` on every open, so each open starts with every row open and
+no undo entry. `js/fragments/curation.js` opens `ModalHost.curation` with focus on `#curation`, whose `tabindex="-1"`
+keeps the keys from pressing a control by accident.
 
-  A Bundle's details, its header's reason line and the reasons under each of its frames, are hidden until its details switch is
-  pressed: an `action-button small` before Recycle holding `fa-info-circle` alone, so its `aria-label` is "Details" and its title
-  "Show or hide what is wrong with each frame", `aria-pressed` while they show (the stage's pressed rule, which the Bundle
-  header shares, gives it the success edge and icon). The file names, the marks and the chips always show. The switch is one per
-  Bundle kind and not per set: `detailKinds` on the component lists the kinds whose details show (`showsDetails`,
-  `toggleDetails`), so Poor faces opened in one set is open in the next, and it is remembered in `localStorage` under
-  `Const.localStore.curationDetails` (`rememberedDetailKinds`, `saveDetailKinds`), as the Loupe's level is. It has no key.
-- **The stage** (`#curationStage`) is two panes side by side, from the original (`/content/.../file/`): the pinned frame on the
-  left and the focused frame on the right (`leftFrameId`, `rightFrameId`), or one pane, the focused frame, when nothing is pinned
-  or the pinned frame is focused; that one frame counts as the left frame. Pinning keeps nothing: Resolve keeps the Picks, or with none the one frame on the stage.
-  A set opens on `openingFrames`, the rail's first two frames, the first pinned and the second focused: two Contenders when it has
-  them, a sole Contender beside the first frame of a Bundle, or the first two frames of its Bundles, so every set opens on two
-  frames and Enter keeps nothing until one is a Pick. A set read again after a Bundle's recycling or its Undo keeps what the user had pinned,
-  the focused frame, the Picks and the zoom (`currentView`), as far as its frames are still in
-  it; after a frame's recycling the next frame takes its place on the stage (`viewWithout`, below). A pane reuses its image, and the browser paints the old picture until the new
-  one is available, so a pane never shows a frame under another's name: from the moment its frame changes until its image's `load` or
-  `error` (`isPaneLoading`, `settledSrcs`) the image is hidden and asset detail's spinner (`.media-spinner`, `core.css`) shows after a
-  moment, so a frame already in the browser's cache does not flash it. The zoom is applied on `load`, before the image shows. A Pick
-  on a frame still loading is allowed, the caption naming the frame beside the spinner. The focused frame's neighbours in the rail's
-  order, the frames the arrows go to, are preloaded, and a preload no longer needed stops, so a held arrow does not queue originals
-  ahead of the frame on show (`preloadOnly`).
+- The queue: Triage's `#curateSequences`, with no detail (see **Results title**).
+- One Sequence, `{ sequenceId }`: a Sequence's group header (see **Group headers**) or the Detail panel's Curation row
+  (see **Detail panel**). A plain click on the row's link (`data-app-curate-sequence`) adds `resumeDetail`, Asset
+  detail's asset and cell. On close, unless another modal has taken over, Asset detail reopens through that cell, or,
+  when Curation recycled the asset, through the nearest cell left (`detailAfterCuration`), so stepping goes on from
+  there. A modifier or middle click opens the link's new tab, Triage with `?curate=<sequenceId>`:
+  `openCurationInLocation` answers it on load, after `runSearch()` starts, only for a user with a Curate Permission, and
+  the first search's replaced URL drops the parameter.
+- A selection, `{ assetIds }`: the batch ops' Curate, through `Const.events.batchCurateRequested` and its cap (see
+  **Batch ops**). The component posts the IDs, so they never sit in a URL.
 
-  A pane's tag (`.pane-tag`), over its top left corner, says what the rail says of the frame: a success-colored "Keep" (`.curation-chip.keep`) on a Pick, and the frame's problems
-  as chips (`problemsOf`, from `data-problems`). It is in `.pane` and not on the image, so a zoom's transform leaves it in place, and
-  it stays while the frame loads. The focused frame's pane has a thin accent line along its bottom, the same `--theme-accent` as the
-  rail's edge on that frame, with one frame on the stage too. It is `border-bottom: var(--border-hairline)`, transparent on the
-  pane that is not focused: both panes carry the border, so the two images stay the same height as the line moves.
+- **The shell** (`htmx/curation.scala.html`) is a header over `#curationMain` and the Sequence rail. `#curationMain`
+  holds `#curationSet`, which each set's fragment goes in, and the four states with no set (`.curation-no-set`): too few
+  frames left (`curation_set(None)`'s words, for a selection's answer and a Sequence's 204 alike), the report of a
+  resolve, the unread state, and the queue's end.
+- **The Sequence rail** (`aside#curationSequenceRail`, the queue alone) is outside `#curationSet`, so it outlives each
+  set's fragment and stays through the states with no set.
+  - `loadQueueRows` reads `htmx/curation_queue.scala.html` through the axios client into `#curationQueueHost` and takes
+    `queueIds` from each row's `data-rail-sequence-id` (`Const.attributes.railSequenceId`) in document order. Never key
+    the rail on `data-app-sequence-id`: that marks a group header's Curate button, which `removeCurateButtons` removes.
+  - A row has no Alpine binding. `paintRail` (a `$watch` on `position`, and after the rows load) writes `.current` with
+    `aria-current` and `.done` (from `doneIds`) directly, so a long queue costs nothing per move. One delegated listener
+    on the host (`onQueueRowClick`) moves the walk to an open row.
+  - `toggleSequenceRail` (Q and the header's button, remembered) does nothing off the queue, and hiding the rail
+    changes nothing about the walk. Showing it repaints on `$nextTick`, since a hidden row cannot be scrolled into view.
+- **The state** is `x-data="curation"` on the shell's root (`alpine/components/curation.js`), so it outlives each
+  fragment.
+  - The component renders nothing: `showSet` reads a set's frames from the rail items' `data-*`, and the fragment's
+    bindings read the state back. What no binding reads (the Clipping reads, the Histogram paths, the Loupe, the
+    remembered views, the move token) is closure state, not component data.
+  - `replaceSetHost` destroys the old fragment's Alpine trees (`Alpine.destroyTree`) before it swaps or empties the
+    host, so no loop of the old fragment runs on the new set's state. Keep that order.
+  - Exit and Esc close Curation through `closeModal` (Esc is `global.js`'s); a backdrop click does not. The component
+    watches `$store.modal.activeHost`, announces `Const.events.curationClosed` and empties the host, so the originals
+    stop loading. An action still running announces when it finishes (`exclusively`'s `finally`).
+  - Actions run one at a time (`exclusively`), so a key pressed during one does nothing. A failed write goes to the
+    snackbar and leaves the set on show, since nothing was saved. Every action is saved as it happens, so closing loses
+    only the undo entry.
+- **A failed read** of a set or of the queue (`reading`), on open or after an outcome, goes to the snackbar and shows
+  the unread state, whose Try again runs that read again (`retryRead`). No set stays on show past a failed read, so a
+  set whose outcome was saved cannot be acted on twice. The walk's position and the undo entry stay, and on the queue
+  the rail and the moves still work, so a Sequence that will not read cannot block the rest.
+- **The Bundle rail** (`#curationRail`, `htmx/curation_set.scala.html`) lists the notices, the Contenders, then each
+  Bundle in the rule's order. A frame's `data-problems` is what the stage's tag shows, its Bundle first and then its
+  chips; a Contender has neither `data-bundle-kind` nor `data-problems`. A Bundle's Recycle (`recycleBundle`, R) leaves
+  its Picks in place. The details switch is per Bundle kind, not per set (`detailKinds`, remembered; the keys are under
+  **Alpine.js Stores**), so a kind opened in one set is open in the next.
+- **The stage** (`#curationStage`) is the pinned frame on the left and the focused frame on the right (`leftFrameId`,
+  `rightFrameId`). With nothing pinned, or the pinned frame focused, it is one pane, the focused frame, which counts as
+  the left frame. Pinning keeps nothing: Resolve keeps the Picks, or with none the one frame on the stage.
+  - The server chooses the opening pair (`CurationSet.openingFrames`, on the set root's `data-opening-pinned-id` and
+    `data-opening-focused-id`), so every set opens on two frames and Enter keeps nothing until there is a Pick. A set
+    read again after a recycling or its Undo gets a `view` (`currentView`: pinned, focused, Picks, zoom), which
+    `showSet` keeps as far as its frames are still in the set.
+  - A pane reuses its `<img>`, and the browser paints the old picture until the new one is in. So from a frame change
+    until `load` or `error` (`isPaneLoading`, `settledSrcs`) the image is hidden behind `.media-spinner`, and a pane
+    never shows a frame under another's name. The zoom is applied on `load`, before the image shows. `preloadOnly`
+    preloads the focused frame's neighbours and stops stale preloads, so a held arrow does not queue originals ahead of
+    the frame on show.
+  - The pane's tag (`.pane-tag`) is in `.pane`, not on the image, so a zoom's transform leaves it in place. Both panes
+    carry the bottom hairline, transparent on the unfocused one, so the images keep the same height as focus moves.
+  - Pinning (`pinFocused`) replaces the pinned frame and moves focus to the next frame in the rail's order, or the
+    previous at the end, so two frames stay on the stage. There is no unpinning by design: it would lose the comparison
+    with no way back. Focusing the pinned frame shows it alone.
+  - A pane's Recycle (`recycleFrame`) goes through `recycleFrames`, as a Bundle's does: the grid's own endpoint, then a
+    read of the set again in `viewWithout(frameId)`. Focus moves to the next frame, never to the pinned one, and of two
+    frames on the stage the one left becomes the pinned frame, so the frame coming in is on the right. Undo puts the
+    frame back beside the one it was recycled from (the undo entry's `stage`).
+  - The Loupe is `js/common/loupe.js` (`attachLoupe`, answering `{ refresh, detach }`), which knows nothing of Curation.
+    It maps the pointer through the image's bounding rect, which includes the zoom's transform, so it works on a zoomed
+    stage, and draws with the image's `currentSrc` as the lens's background, so nothing is fetched. It writes only the
+    lens's `data-level`, inline styles and `hidden`; `curation_set.css` has the rest. `watchStage` attaches it with the
+    stage's `ResizeObserver`, `applyZoom` and `onImageSettled` (on `$nextTick`) refresh it, and `detachLoupe` detaches
+    it on the next set and on close. The level is one value for every frame (`loupeLevel`, a rung of `LOUPE_LEVELS`, 0.5
+    to 4 by halves, the first rung by default), remembered; the wheel over a pane is its only control.
+  - The Histogram strip is `includes/histogram` (styled by `static/css/includes/histogram.css`), the one markup the Edit
+    panel and the style guide's specimen render too. Its parameters are Alpine expressions of the host component. The
+    include binds `clippingBlink` and `toggleClippingBlink()` itself, so every component that renders it must provide
+    both. No color is in the script: the strip draws from `--histogram-*` tokens.
+  - The strip's data is the frame's, measured at import (`ImageMeasurement`), so it shows while the image loads. The
+    rail item carries `data-histogram`, the Base64 of `Histogram.relativeBytes`: a byte per bin, 64 bins a channel in
+    `HISTOGRAM_CHANNELS` order (luminance, red, green, blue), each bin over the tallest of all four channels
+    (`HISTOGRAM_TALLEST`, 255), so they share one scale. It also carries `data-crushed-shadows` and
+    `data-clipped-highlights`, the corners' stored fractions. A frame not measured carries none of the three and gets
+    `NO_PATHS`. `histogramOf` decodes a frame's paths through `common/histogram.js`'s `channelPaths` (shared with the
+    Edit panel) the first time it is on the stage, cached by frame ID and cleared with the set.
+  - H (`toggleHistogram`, `showsHistogram`, remembered) does nothing with no set on show. Hiding the strips turns the
+    Clipping blink off, since the strip is its only switch, and hands focus to the shell when a strip held it.
+  - The Clipping blink (`clippingBlink`) is one switch for the stage, off on every open and whenever the strips hide,
+    and never stored. Its mask is read in the browser only while it is on, by `js/common/clipping.js`'s `readClipping`
+    (shared with the Edit panel), after `$nextTick` so the decode never holds up the pane's paint. The image is resized
+    to the measurement box and grayed as OpenCV's `BGR2GRAY` does, so the marks are close to what the stored fractions
+    counted, not the same to the pixel. The levels and the box come from the set root's `data-clipped-level`,
+    `data-crushed-level` and `data-measurement-box` (`ImageMeasurement`'s constants), so the client restates none.
+  - Reads are cached by `currentSrc` in `clippingReads` (the promise while in flight, so a second draw awaits it), a new
+    map for each set, so a read that finishes after its set has gone fills only a dead cache. `drawClipping` paints only
+    if the set, the pane's source and the blink still hold when the read is in. The canvas is laid out as the image is,
+    and `applyZoom` writes the image's transform to both. Its colors are the canvas's computed `color` (blown) and
+    `border-color` (crushed), read at each draw (`clippingColors`), so they follow the theme.
+- **The face strip** (`#curationFaces`) is the main decision aid. A click on a crop zooms both panes to that Person's
+  box, or back out (`zoomToPerson`, `applyZoom`, which runs again when an image loads or a pane resizes). A Face's box
+  is in upright pixels while `asset.width` and `height` come from the file's header, so `zoomTransform` uses the
+  displayed image's `naturalWidth` and `naturalHeight`.
+- **The footer** and the pane captions are grids of `minmax(0, 1fr) auto minmax(max-content, 1fr)`, so the center stays
+  at the true center and the right column never shrinks below its unwrapped buttons.
+  - The center holds what `keepIds` answers: the Picks; with none and one frame on the stage, that frame; with none and
+    two on the stage, nothing, so a frame on the stage is never recycled on a guess. With nothing to keep, the keep hint
+    replaces Resolve, and Enter does nothing (`settle` refuses an empty list).
+  - The album-or-Location note (`recycledInAlbumOrLocationNote`) is empty while nothing is to be kept, or it would count
+    every frame. Its row shows whenever any frame of the set is in one (`hasFrameInAlbumOrLocation`) and holds one line
+    while empty (`min-height: 1lh`), so a Pick does not shrink the panes mid-comparison; `contain: inline-size` keeps
+    its text from widening the right column and moving the center.
+- **The keys** are a `document` listener (`handleKey`) while Curation is the active host, so they keep working when the
+  focused control leaves with a fragment. The key table is in Part 2 of `docs/curation-batch-detection.md` and in
+  `handleKey`'s comment.
+  - They are ignored in a text field (`isTextEditingTarget`) or with Ctrl, Cmd or Alt held.
+  - Shift+1 and Shift+2 are told by `event.code` (`recycleKeyOf`), since the symbol Shift types differs by layout. On
+    AZERTY, where the digits are on the shifted level, that press types the digit and stays the Pick's key; only the
+    button recycles there.
+  - Only the arrows repeat when held, so a held key cannot resolve set after set or run through the queue. `handleKey`
+    calls `preventDefault` on the arrows even while a set is resolved or read, so ↑ and ↓ never scroll the rail.
+  - Enter or Space on a focused button or link presses that control. A pointer click hands focus back to the shell
+    (`refocusAfterPointer`), so Enter resolves next.
 
-  A pane's caption holds the frame's file name, the Pin button or the pinned label, the Keep button and the Recycle button. The Keep button reads "Keep left 1" and
-  "Keep right 2", or "Keep 1" with one frame on the stage, the number a `<kbd>` (`keepLabel`, `keepKey`). Pressed, it wears the success
-  color (`aria-pressed`) and its label stays, since the tag says the frame is kept. The pinned frame's caption reads a pin icon and "Pinned"
-  (`.pinned-label`), centered below the image: the caption is a grid of `minmax(0, 1fr) auto minmax(max-content, 1fr)`, as the footer is. The Pin button, "Pin Space", is on every other frame, so it is always on the focused frame, which is what Space acts on.
-  Pinning the focused frame (`pinFocused`), by its button or Space, replaces the pinned frame and moves focus to the next frame in the rail's order, or the previous one at
-  the end, so two frames stay on the stage. There is no unpinning, since a way out with no way back to the same two frames only loses the comparison. Focusing
-  the pinned frame, by an arrow or a click, shows it alone, Space does nothing there, and moving away brings the two back.
+- **The walk.** On the queue, opening reads the rows into the Sequence rail (`startQueue`) and requests one set's
+  fragment at a time. A row is **open** or **done** (code and guide words, never shown). A row is done (`markDone`) once
+  its set is resolved or kept, a Keep all that changed nothing included, or once its Sequence answers 204 when reached.
+  A done row stays in place and the walk passes over it. Undo of an outcome opens its row again, and Start again opens
+  every row (`doneIds` cleared), so a Sequence over the window, done for this walk, is offered again.
+  - Every move goes to an open row (`openRowFrom`, `readQueueFrom`). A row that answers 204 becomes done and the move
+    goes on in its direction. Only the move after an outcome (`nextSet`, `readSet`) wraps to the top; an N, P or click
+    that finds nothing further stays on the set on show and its row.
+  - The end state comes only when every row is done: the count is read again and no row is current (`position` -1).
+    `preloadNextSet` preloads the opening frames of the next open row in the direction of the last move.
 
-  The Recycle button (`action-button small warning`, "Recycle Shift+1" on the left frame or the only one, "Recycle Shift+2" on the
-  right, `recycleKey`) sends its pane's frame to the trash at once, a Pick or not (`recycleFrame`), for a frame that is plainly
-  no keeper: the grid's own recycle and a read of the set again, as a Bundle's recycling is (`recycleFrames`, which both go
-  through). The set is read again in `viewWithout`: focus moves on from the focused frame to the next frame, or the previous
-  one at the end, never to the pinned frame, and of two frames on the stage the one left is the pinned frame, as after a Pin, so
-  the frame coming in is on the right and two stay on the stage: recycling the left frame of A and B leaves B pinned beside C,
-  and recycling the right one leaves A pinned beside C. A frame alone on the stage hands that neighbour its place. With too few
-  frames left the walk goes on as after a Bundle's recycling. Its Undo puts the frame back on the stage beside the frame it was
-  recycled from (the undo entry's `stage`), whatever the stage shows by then.
+  **Latest move wins.** N, P and a row click are moves (`move`): the walk stands on the target row at once, so the
+  rail's highlight moves before the read answers. Each queue read takes a token (`moveToken`), and `nextMoveToken`
+  aborts the previous read (`AbortController`). An overtaken read drops its answer, shows nothing and reports nothing,
+  so the last move is the set that opens, and no dead read holds a write up. The writes (Resolve, Keep all, Recycle,
+  Undo, Try again, Start again) run through `exclusively`, which refuses to start while a move reads (`movesInFlight`);
+  no move starts while a write runs (`isBusy`).
 
-  The Loupe is a lens in each pane (`.loupe`, `#curationLoupePinned` and `#curationLoupeFocused`, beside the images'
-  `curationStagePinned` and `curationStageFocused`), last in the pane so it paints above the image, the spinner and the tag. The
-  pointer over a pane's image shows it: the spot under the pointer at the original's pixels (1:1), on that pane alone. The level is
-  one value for every frame, `loupeLevel` on the component, a rung of `LOUPE_LEVELS` (1 to 4 by halves): the wheel over a pane
-  steps it, the only control it has, and the module hands the new rung back (`saveLevel`), which the component keeps and
-  remembers under `Const.localStore.loupeLevel` (`rememberedLoupeLevel`, `saveLoupeLevel`), so it holds across sets and opens.
-  The lens's label is the only place the level reads. A small original, or a zoomed one, that the pane already shows at or above the
-  chosen level is shown at the first level above its fit, and the wheel steps from the level shown, so every step changes what the
-  lens shows. A wheel with a modifier held is left to the browser (Ctrl zooms the page), and one with nothing under the pointer to
-  magnify steps nothing. `js/common/loupe.js` places and draws it (`attachLoupe`, answering `refresh` and
-  `detach`) and knows nothing of Curation: it maps the pointer through the image's bounding rect, which includes the zoom's
-  transform, so the Loupe works unchanged while the stage is zoomed to a face, and draws with the image's `currentSrc` as the lens's
-  background, so nothing is fetched. `watchStage` attaches it with the stage observer, `applyZoom` refreshes it, as does
-  `onImageSettled` on `$nextTick`, once Alpine has shown the image, and `detachLoupe` detaches it with the observer, on the next set
-  and on close. The module reads whether the image is laid out and its computed visibility, so the hidden pinned figure and a
-  loading pane show no lens, and over the letterbox bars no lens shows. It writes the lens's `data-level` ("200%", the label via
-  `content: attr(data-level)`),
-  its inline styles, `image-rendering: pixelated` above 1:1 among them, and `hidden`, and nothing else; `curation_set.css` has the
-  rest: a square a third of the pane wide, capped by `--curation-loupe-max-size` (`core.css`), the hairline edge in the pane's dark
-  side, and `cursor: none` on the image of a pane whose lens shows (`.pane:has(> .loupe:not([hidden])) img`).
+  **Remembered views.** Leaving a set by a move, or by an Undo that reads another set, saves `currentView()` under its
+  Sequence (`rememberShownView`, `rememberedViews`): once as the move starts, so a failed read loses nothing, and again
+  as the new set replaces it. The walk restores it on return, while Curation stays open. A done row's set is never
+  remembered, a row going done forgets its view, and Start again forgets them all once the rows are in.
 
-  The Histogram is a strip under each pane (`.histogram`, `#curationHistogramPinned` and `#curationHistogramFocused`, beside the
-  images' IDs). Its markup is one include, `includes/histogram`, styled by `static/css/includes/histogram.css`, which the Edit
-  panel and the style guide's specimen render too: a button, here the figure's row between the image and the caption
-  (`grid-template-rows: minmax(0, 1fr)`, the pane's row alone, the strip's and the caption's being implicit, so a hidden strip
-  leaves no empty row or gap and the pane takes its room), `--histogram-height` tall, holding the Histogram in an inline
-  `<svg viewBox="0 0 64 16">`: a `<path>` a channel, `.red`, `.green` and `.blue` filled and `.luminance` a line over them. The
-  include's parameters are Alpine expressions of the component it is rendered under: `paths`, the paths by channel (here
-  `histogramOf(frameId)`), `crushed` and `blown`, the labels of its corners, and, where there is one, `shows`, `disabled` and the
-  button's `id`; the button is the Clipping blink's switch, so the include binds the component's `clippingBlink` and
-  `toggleClippingBlink()` itself, which every component that renders it gives. The data is the frame's,
-  measured at import (`ImageMeasurement`, see **Sequences and Image quality** in `altitude/AGENTS.md`): its rail item carries
-  `data-histogram`, the Base64 of `Histogram.relativeBytes`, a byte per bin, 64 bins a channel in the order luminance, red, green,
-  blue (`HISTOGRAM_CHANNELS`), each bin over the tallest bin of the four, so the channels share one scale and the tallest reaches
-  the strip's top (`HISTOGRAM_TALLEST`). `showSet` keeps the string on the frame (`frames[].histogram`), and `histogramPaths`
-  decodes it (`atob`) into the four paths the first time the frame is on the stage (`histogramPathsOf`, closure state by frame ID,
-  cleared with the set) through `common/histogram.js`, which the Edit panel's Histogram shares (`channelPaths`): `pointsOf`
-  gives a channel's bins as a point a bin, joined by straight lines, the first bin on the box's left edge and the last on its
-  right, `areaPath` closes them down to the baseline for a color and `linePath` leaves them open for the luminance; `NO_PATHS`
-  is the empty paths of a pane with no frame and of a frame not measured. The svg is `isolation: isolate` and the three colors are
-  `mix-blend-mode: screen` at `fill-opacity: 0.6`, filled with `--histogram-red`, `--histogram-green` and `--histogram-blue`
-  (`core.css`, a soft red, green and blue), so where two overlap the strip reads yellow, cyan or magenta and where the three do a neutral;
-  the luminance line is `fill: none` with a 1px stroke of the strip's color at full alpha (`stroke: hsl(from currentColor h s l /
-  1)`, `vector-effect: non-scaling-stroke`), the strip's color a theme neutral at an alpha over its backdrop, `--theme-neutral-2` of
-  the dark side (`color-scheme: dark`: the strip is dark in either theme, since the channels are drawn as light), so no color
-  is written in the script. In the strip's top corners two spans (`.crushed` left, `.blown` right, `crushedLabel`,
-  `blownLabel`) read the fractions of the frame's pixels crushed and blown to one decimal ("14.2%", `percentLabel`), the stored
-  `crushed_shadows` and `clipped_highlights` its rail item carries as `data-crushed-shadows` and `data-clipped-highlights`,
-  at `--font-size-small` in `--theme-neutral-4`, each with a triangle that points to its end of the range (a pseudo-element
-  clipped to the shape, `.crushed::before` and `.blown::after`); while the blink is on they take `--info-color` and
-  `--error-color`, the colors the Clipping blink marks each side with, and the strip the success edge and a success-colored
-  line. An empty span shows nothing. The strip is its frame's and reads no pixel, so it shows while the
-  frame's image loads; a frame not measured carries none of the three attributes and its strip is empty. A failed image disables
-  the button (`isImageUnreadable`, `unreadableSrcs`).
+  A selection or a Sequence opened alone (`!isQueue`) has no rows and no next set: a Keep all that changes nothing
+  closes Curation, a Resolve or a Keep all that changes something stays open on the report, and a recycling that leaves
+  too few frames shows the too-few state.
+- **The outcomes.** Resolve and Keep all post to `/api/curation/r/:repoId/resolve` (`settle`). Recycling a Bundle or a
+  frame is the grid's own `DELETE /api/asset/r/:repoId/move`, then a read of the set again.
+  - Undo holds one entry: the last mutation, with the Sequence of the set it was made on (`shownSequenceId`). It reads
+    that set again by its own ID wherever the walk has gone (`returnToSequence`), and the walk goes back to its row.
+    When Start again has replaced the rows and the Sequence is in none, `loadQueueRows` reads them afresh, keeping the
+    done marks of the rows still listed. The return and the read are one `reading`, so a failure in either shows the
+    unread state and Try again runs both.
+  - A Resolve or a Keep all is undone through `/api/curation/r/:repoId/reopen`, with what `resolve` answered
+    (`sequenceOf`), and its set opens as a new one. A recycled Bundle or frame is undone through the grid's own `PUT
+    /api/asset/r/:repoId/restore`, and its set keeps the view. `reportRestore` (`assets/asset-actions.js`) reports
+    either answer. A Keep all that changed nothing leaves the undo entry as it was.
+- **The grid beneath** keeps its scroll position, and its selection is reset on every close, resolved or not, since a
+  selection left standing would make the next one additive. `Const.events.curationClosed` carries what the session left
+  changed, net of its undos (`recycledIds`, `clearedSequenceIds`); with nothing changed, nothing else moves. Otherwise
+  `js/listeners/curation.js` takes the frames still recycled out through `removeAssetsFromGrid`, as the grid's own
+  Recycle does, and calls `removeCurateButtons` on the cleared Sequences. The map layout has no cells, so closing there
+  runs the search again (the store's `showsMap()`, false for any search with a description, whatever layout the store
+  keeps).
+- **The counts.** `Const.events.curationChanged` follows each Resolve, Keep all, recycling and Undo, and runs
+  `refreshCounts` (see **Nav refresh**), which includes the `sequencesToCurate` store. A move of the walk announces
+  nothing. The store is also refreshed when the Triage results render (`js/fragments/search-results.js`), when Curation
+  opens and when its queue runs out.
+- **The styles** are `static/css/htmx/curation.css` (the host, which fills the window, the shell's columns and the
+  Sequence rail's frame), `curation_set.css` (the set) and `curation_queue.css` (the rail's rows); their size tokens
+  (`--curation-*`, `--histogram-height`) are in `core.css`. The style guide's Badges & states section holds the notice,
+  the chip, a Bundle's row with its marks and the rail's rows, and its usage note covers the pane's tag and the keep
+  hint, whose rules apply only inside the set (see **Style guide**).
 
-  The H key shows or hides both panes' strips: `showsHistogram` on the component, one switch for the stage, which the button's
-  `x-show` reads, shown until hidden and remembered under `Const.localStore.curationHistogram` (`rememberedHistogramShown`,
-  `saveHistogramShown`), so it holds across sets and opens, as the Loupe's level does. `toggleHistogram` flips and saves it, and
-  does nothing with no set on show, where the change would not be seen. Hiding the strips turns the Clipping blink off, since the
-  strip is its only switch, and hands focus to the shell when a strip held it; showing them again leaves the blink off. The key
-  has no button: the footer's keys hint names it.
+**Metadata field visibility** — Fields default to `display:none`. Use `window.ctx.addGridMetadataField(name)` /
+`removeGridMetadataField(name)`, which change the reactive `gridMetadataFields` set and persist it to `localStorage`. One
+reactive effect per displayed grid (`js/search-results/metadata-visibility.js`) keeps one `show-<field>` class per
+visible field on `#assets`, and `static/css/includes/search_results.css` shows the matching `.metadata > .<field>` rows:
+no per-cell work, nothing to re-apply for appended pages. A new field needs its class added to both lists of rules there.
 
-  The button is the Clipping blink's switch: `clippingBlink` on the component, one switch for the stage, false on every open and
-  whenever the strips are hidden, and not stored, `aria-pressed` while on (the stage's pressed rule gives it the success edge and luminance line; the channels keep their colors), with the `aria-label`
-  "Clipping blink" and the title "Blink the blown highlights and crushed shadows", since it holds no text. `toggleClippingBlink`
-  flips it and, on, draws both panes' masks (`drawClipping`, async: a canvas that holds its image's mask is left alone; any other
-  is blanked and, for an image with pixels, painted when the read is in, if the set, the pane's source and the blink still hold;
-  the mask is painted from the read's classes, `clippingMask`, and put at the sampled size; a frame settling while the blink is on
-  draws its mask from `onImageSettled`). The read is `js/common/clipping.js`'s (`readClipping`, async), made only while the blink
-  is on and once Alpine has shown the image (`$nextTick`), so its decode never holds up the pane's paint: the image is resized by
-  `createImageBitmap` to the measurement's box, off the main thread, and each pixel's gray is taken as OpenCV's `BGR2GRAY` does, so
-  the marks are close to the pixels the stored fractions counted, not the same to the pixel. A read answers a class map, a byte
-  per pixel (blown, crushed or neither), and is cached by the image's `currentSrc` for the set on show (`clippingOf`,
-  `clippingReads`, closure state, since the classes are a million bytes no binding reads): the promise while it is in flight, so
-  a second draw of the same source awaits the same read, then the read itself. The cache is a new map for each set (`showSet`,
-  `showNoSet`), so an arrow back and forth costs nothing and a read finishing after its set has gone fills only the cache it was
-  started for; a read that fails leaves the canvas blank. The canvas (`.clipping`,
-  `#curationClippingPinned` and `#curationClippingFocused`, right after the image, under the spinner, the tag and the lens) is laid
-  out as the image is (`position: absolute; inset: 0`, `object-fit: contain`, `transform-origin: 0 0`, `pointer-events: none`), so
-  the mask lies over the picture pixel for pixel and `applyZoom` writes the image's transform to it; it is `hidden` unless the blink
-  is on and the pane's image shows (`showsClippingBlink`). The blink is `curation-clipping-blink`, a `steps(1)` opacity animation at
-  1 Hz, so the marks flash rather than fade, held steady under `prefers-reduced-motion: reduce`. The two colors come from the
-  canvas's computed `color` (`--error-color`, the blown highlights) and `border-color` (`--info-color`, the crushed shadows), read at
-  each draw (`clippingColors`), so no literal is in the script and they follow the theme; the levels and the box come from the set's
-  root (`data-clipped-level`, `data-crushed-level`, `data-measurement-box`, from `ImageMeasurement`'s constants, read in `showSet`),
-  so the client restates none.
-- **The face strip** (`#curationFaces`), directly below the stage, is the main decision aid: eyes and expression are judged here.
-  One row per Person, the Persons in the most frames first, and one column per frame in the rail's order, from the stored crops
-  (`/content/.../face/`), with a dash where a frame has none. A column's
-  head is the frame's Preview, which focuses it and carries the same "Keep" mark on a Pick as the rail's does. A click on a crop
-  zooms both panes to that Person's box, or back out, with a transform (`applyZoom`, again when an image loads or a pane resizes); a
-  frame with no Face of the Person shows whole. A box is in upright pixels while `asset.width` and `height` come from
-  the file's header, so the zoom uses the displayed image's `naturalWidth` and `naturalHeight`.
-- **The footer** is a grid of three columns, `minmax(0, 1fr) auto minmax(max-content, 1fr)`, so its center stays at the true center
-  while the right column fits its share. That column is never smaller than its buttons, whose labels do not wrap, so in a narrow
-  window it takes what they need, the center moves left, and the keys' hint stays on one line, clipped to the room that remains. At the left is that hint
-  ("← → ↑ ↓ move, R recycle the frame's Bundle, H Histogram", `.keys`: the keys with no button of their own, at `--font-size-xl`, twice the
-  footer's other small text, its key caps at `--font-size-large` with twice the shell's padding), and at the right edge Keep all and, on the queue alone (`x-show="isQueue"`), Previous and Next, the walk's moves (`movePrevious`, `moveNext`), each disabled while no open row is left on its side (`hasPreviousSequence`, `hasNextSequence`). A selection or a Sequence opened alone has no rows to move between and is left by Exit.
-  The center holds what `keepIds` answers: the Picks; with none and one frame on the stage, that frame; and with none and two on the
-  stage, nothing, so a frame on the stage is never recycled on a guess. With nothing to keep it holds the hint "Press 1 or 2 to keep a
-  frame" (`.keep-hint`, in `--theme-neutral-3`) and no button, and Enter does nothing, since `settle` refuses an empty list. Otherwise
-  it holds Resolve, reading what it will do: "Keep IMG_0042.jpg, recycle 3" with one frame kept, the name truncated with an ellipsis
-  (`.kept`) and the button's title giving the label whole, and "Keep 2, recycle 3" with several. The keys are bound on `document`, so they go on working if Resolve held focus when
-  it left. The note of frames to recycle that are in an album or a Location (`inAlbumOrLocation`, `.note`) takes a row of its own
-  above the three columns, and is empty while nothing is to be kept, because it would otherwise count every frame. The row is there
-  whenever any frame of the set is in one (`hasFrameInAlbumOrLocation`), holding one line while the note is empty (`min-height: 1lh`),
-  so a frame's Pick does not shrink the panes mid-comparison, and its text sizes no column (`contain: inline-size`), or it would widen
-  the right one and move the center.
-- **The keys** are a `document` listener while Curation is the active host, ignored while a text field has focus
-  (`isTextEditingTarget`, `common/text-editing.js`) or with Ctrl, Cmd or Alt held. Shift with 1 or 2 is told by the key's
-  position (`event.code`, `recycleKeyOf`), since the symbol it types differs by layout; on a layout whose digits are on the
-  shifted level (AZERTY) that press types the digit and stays the Pick's key, and Recycle is the button's alone. Only the arrows repeat when held, so a held key
-  cannot resolve set after set or run through the queue, and `handleKey`'s `preventDefault` keeps ↑ and ↓ from scrolling the rail as well, also while a set is
-  being resolved or read, when they move nothing. Enter or Space on a focused control presses that control, and a pointer's click hands focus back to the shell
-  (`refocusAfterPointer`), so Enter resolves next.
+**Login page** — `login.scala.html` (`GET /login` and a refused `POST /login`, `SessionController`) is a plain form
+post: no htmx, no page module, no nav; `header_common` gives it the remembered theme, `static/css/pages/login.css` its
+look. "Email or username" takes either. A refused login answers 401 with the page again: one error, `LOGIN_FAILED`,
+whatever refused it, so it never reveals whether the account exists or is deactivated; the login as typed, focus on the
+password, the `redirect` kept, never the password. Server side: altitude/AGENTS.md **Login and the token**.
 
-  | Key | Action |
-  |---|---|
-  | ← ↑ | Move the focused frame back through the rail's order |
-  | → ↓ | Move the focused frame on through the rail's order |
-  | 1 | Toggle the left frame as a Pick, or the only frame when one is on the stage |
-  | 2 | Toggle the right frame as a Pick; nothing when one frame is on the stage |
-  | Shift+1 | Recycle the left frame at once, or the only frame when one is on the stage |
-  | Shift+2 | Recycle the right frame at once; nothing when one frame is on the stage |
-  | Space | Pin the focused frame and move on; nothing on the pinned frame |
-  | Enter | Resolve with the Picks; with none, the frame on the stage when there is one, and otherwise nothing |
-  | A | Keep all |
-  | R | Recycle the focused frame's Bundle, leaving a Pick in it; a Contender has none |
-  | H | Show or hide the Histogram strips, turning the Clipping blink off as they hide; nothing with no set on show |
-  | Q | Show or hide the Sequence rail (nothing on a selection or a single Sequence) |
-  | N | Move to the nearest open row below in the Sequence rail; nothing with none, and nothing on a selection or a single Sequence |
-  | P | Move to the nearest open row above; the same limits |
-  | Z | Undo the last action |
-  | Esc | Close Curation (`global.js`) |
+**Settings screen** — `settings.scala.html` (`/settings/r/:repoId`, Admin only) is a nav page as **Template Layout**
+describes (`current` is `Const.NavEntry.SETTINGS`). Its module `js/settings-page.js` calls `startNavPage()`, registers
+the save listener (`js/listeners/settings.js`: "Settings saved" on `SETTINGS_SAVED_EVENT`) and owns Reset. The routes,
+the JSON parsing, validation, what a save writes, the restart notice and the `import.parallelism` note are the server's:
+altitude/AGENTS.md **Settings**.
 
-- **The walk.** On the queue, opening reads the queue's rows into the Sequence rail (`startQueue`) and requests one set's
-  fragment at a time. A row is **open** or **done** (code and guide words, never shown): done once its set is resolved or kept
-  (`settle` marks it, a Keep all that changed nothing included), or once its Sequence answers with no content when reached, a
-  Sequence gone under two frames meanwhile or one a Bundle's or a frame's recycling left too few of (`markDone`); a done row stays
-  in place, dimmed with its check, and the walk passes over it. Undo of an outcome opens its row again, and Start again opens every
-  row (`doneIds` cleared), so a Sequence over the window, done for this walk, is offered again. Every move goes to an open row
-  (`openRowFrom`, `readQueueFrom`): N (`moveNext`) to the nearest open row below and P (`movePrevious`) to the nearest above, each
-  doing nothing with none (`hasNextSequence`, `hasPreviousSequence`, which the footer's buttons are disabled by); a click on an open
-  row to that row; and after a Resolve, a Keep all or a recycling that left too few frames (`nextSet`, `readSet`) to the nearest
-  open row at or below the position, else the first open row from the top, else the end state. A row that answers with no content
-  when reached becomes done and the move goes on in its direction, the move after an outcome wrapping to the top before it ends; a
-  move of N, P or a click that finds nothing further stays on the set on show and its row. The end state comes only when every row
-  is done, the count read again and no row current (`position` -1, the rail's header reading the count alone): with Sequences
-  left (over the window, or imported meanwhile) it shows them with Start again, which reads the rows afresh, and with none it reads
-  "All done". The next set's opening frames are preloaded, the next open row in the
-  direction of the last move (`preloadNextSet`).
+- `main` holds one form, `htmx/settings_form.scala.html` (`#settingsForm`), the page's and its save's answer alike. It
+  swaps itself (`hx-target="this"`, `hx-swap="outerHTML settle:0"`), posts JSON (`hx-json-enc`) and declares
+  `SETTINGS_SAVED_EVENT`. A failed validation is a validation replacement (**Event Flow**), so no success event fires.
+- One section per Setting group. An input's `name` is the Setting's name, its `id` is `field-<name>`; a Flag is a
+  checkbox with `value="true"`, anything else a text input.
+- Reset (`data-app-reset-setting`) is one delegated click listener, so it survives the form's swap. It fills the field
+  from the row's `data-setting-default` (`Const.attributes.settingDefault`), checks or unchecks a checkbox, and clears a
+  text input's `error` class. Nothing is written until Save.
+- CSS is `static/css/htmx/settings_form.css` alone (`.setting` is `display: contents`, so a section's labels align).
 
-  **Latest move wins.** N, P and a row click are moves (`move`): the walk stands on the target row at once, so the rail's highlight
-  moves before the read answers, and each read of the queue takes a token (`moveToken`); a read a later move has overtaken finds its
-  token stale when its answer comes and drops it, shows nothing and reports nothing, so the last move is the set that opens. The
-  writes, Resolve, Keep all, Recycle, Undo, Try again and Start again, run one at a time through `exclusively`, which also refuses
-  to start while a move is reading (`movesInFlight`), and no move starts while one runs (`isBusy`). N and P do not repeat while
-  held, and an overtaken read is aborted (`AbortController`, `nextMoveToken`), so no dead read holds a write up. **Remembered
-  views.** Leaving a set by a move, or by an Undo that reads another set, saves `currentView()` under its Sequence
-  (`rememberShownView`, `rememberedViews`): once as the move starts, so a failed read loses nothing, and again as the set read
-  replaces it, with what the user did meanwhile; restored when the walk returns to it, for as long as Curation stays open. A done
-  row's set is never remembered, a row going done forgets it, and Start again forgets them all once the rows are in.
+**Import page** — `pipeline.scala.html` (`/pipeline/r/:repoId`, for a holder of Import) is a nav page as **Template
+Layout** describes. Its module `js/upload-form-page.js` registers `importUploads` and `watchFolderForm` before
+`startNavPage()`, then the history's live updates and the Watch folders' re-reads. Server side: altitude/AGENTS.md
+**Uploads**, **Import history and the status feed** and **Watch folders**.
 
-  A selection or a Sequence opened from its header has no rows, no next set and no Previous or Next: a Keep all that changes
-  nothing closes Curation, Exit leaves it with no outcome; a Resolve, or a Keep all that changes something, stays
-  open on a report of what was kept and recycled; and a Bundle's or a frame's recycling that leaves too few frames shows the
-  too-few state.
-- **The outcomes.** Resolve and Keep all post to `/api/curation/.../resolve`. Recycling a Bundle or a frame is the grid's own
-  `DELETE /api/asset/.../move`, and reads the set again. Undo holds one entry, the last mutation with the Sequence of the set it was
-  made on (`shownSequenceId`), and reads that set again by its own ID wherever the walk has gone (`returnToSequence`): its row is
-  open again and the walk goes back to it, or, when Start again has replaced the rows and it is in none, the rows are read afresh
-  (`loadQueueRows`), which lists the undone Sequence with its cover, count and date, the done marks of the rows still listed stay,
-  and the walk stands on it. The return and the set's read are one read (`reading`), so a failure in either shows the unread state
-  and Try again runs both. A
-  Resolve or a Keep all goes through `/reopen`, with what `resolve` answered, and its set opens as a new one; a recycled Bundle or
-  frame, which has no Pick, goes through the grid's own `PUT /api/asset/.../restore`, and its set keeps the view: as it is if the set is still on
-  show, else as it was left, a recycled frame back on the stage either way. Either answers as a restore does, and `reportRestore`
-  (`assets/asset-actions.js`) reports it. A Keep all that changed nothing leaves the entry as it was.
-- **The grid beneath** keeps its scroll position, and its selection is reset on every close, resolved or not: a set opened on a
-  selection is done with, and a selection left standing would make the next one additive. `Const.events.curationClosed` carries
-  what the session left changed, net of its undos (`recycledIds`, `clearedSequenceIds`). With nothing changed, nothing else moves.
-  Otherwise `js/listeners/curation.js` takes the frames still recycled out through `removeAssetsFromGrid`, as the grid's own Recycle
-  does, with the group counts and the total, and takes the Curate buttons off the Sequences cleared; kept frames stay under their
-  old header until the next search. The map layout has no cells, so closing there runs the search again (the store's
-  `showsMap()`, which a search with a description never is, whatever layout the store keeps).
-- **The counts.** `Const.events.curationChanged`, announced after each Resolve, Keep all, Recycle of a Bundle or a frame, and Undo, runs
-  `refreshCounts` (see **Nav refresh**), so the nav, folder, album and Location counts and the number of Sequences to curate are
-  true. A move of the walk changes nothing and announces nothing. The store is also read when the Triage results render
-  (`js/fragments/search-results.js`), when Curation opens and when its queue runs out.
-- **The styles** are `static/css/htmx/curation.css` (the host, which fills the window, the shell's columns and the Sequence rail's
-  frame), `curation_set.css` (the set) and `curation_queue.css` (the Sequence rail's rows), with the sizes `--curation-rail-width`,
-  `--curation-sequence-rail-width` (the Sequence rail's column), `--curation-preview-size`, `--curation-crop-size`, `--curation-strip-max-height`,
-  `--curation-loupe-max-size` (the most a lens takes, a third of the pane's width under it), `--histogram-height` (the
-  Histogram strip under each pane, and the Edit panel's) and `--curation-kept-name-max-width` of
-  `core.css`. The last is the most width the file name on Resolve takes: `.kept` holds it to the
-  smaller of the token and `20vw`, since the footer's center column takes its full width before the keys' hint gets any, so in a
-  narrow window the name's share leaves that hint room. The style guide's Badges & states section holds the notice, the chip, a Bundle's row
-  with its marks and the Sequence rail's rows, a current and a done one, and its usage note describes the pane's tag and the keep hint,
-  whose rules apply only inside the set (see **Style guide**).
-
-**Metadata field visibility** — Fields default to `display:none`. Use
-`window.ctx.addGridMetadataField(name)` / `removeGridMetadataField(name)`, which mutate the
-reactive `gridMetadataFields` set and persist it to `localStorage`. A reactive effect per displayed
-grid (`js/search-results/metadata-visibility.js`) keeps one `show-<field>` class per visible field
-on `#assets`, and the CSS in `static/css/includes/search_results.css` shows the matching
-`.metadata > .<field>` rows: no per-cell work, nothing to re-apply for appended pages.
-
-**Login page** — `login.scala.html` (`GET /login`, and a refused `POST /login`, `SessionController`) is a page of the app's
-look in the theme the nav remembers (`header_common`), with no nav: `body.login`, styled by `static/css/pages/login.css`, centers
-the brand (`.brand`, the nav's chevron and gradient wordmark, whose rules in `core.css` are the brand's wherever it is, here at
-`--font-size-display`) above one card, `#loginForm`, `--login-form-width` wide on the dialogs' surface
-(`--popover-background-color`, a hairline of `--popover-border-color`, `--radius-large`, `--sheen-shadow` over
-`--float-shadow`, `--modal-content-padding` inside), its labels in the dialogs' small caps. Its fields: "Email or username"
-(`autocomplete="username"`, either logs in) and "Password", then Log in (`.action-button.primary`) at the right. A refused
-login answers 401 with the page again: one error above the fields, the same whatever refused it (`LOGIN_FAILED`, which never
-says whether the account exists or is deactivated), the login as typed, focus on the password, and the page to come back to;
-never the password.
-
-**Settings screen** — `settings.scala.html` (`/settings/r/:repoId`, an Admin's page, `SettingsController`) is shaped like
-the import page: `header_common`, the shared nav, one `main`, `html_common` for the snackbar, `json-enc.js`, and the page
-module `js/settings-page.js`, which starts as the import page does (`startNavPage()` of `js/nav-page.js`: Alpine for
-`html_common`'s bindings and the nav's Library menu, the htmx request rule and the dialog wiring with a minimal app; the form
-carries no bindings) and registers the
-save listener (`js/listeners/settings.js`); the template passes `Const.NavEntry.SETTINGS` as the nav's `current`. `main` holds the one form, `htmx/settings_form.scala.html`
-(`#settingsForm`), rendered by `SettingsFormController.form` for the page and again by its save, `POST
-/htmx/settings/r/:repoId`: `hx-target="this"`, `hx-swap="outerHTML settle:0"`, `hx-json-enc`,
-`data-app-success-event="SETTINGS_SAVED_EVENT"`. Its sections are the Setting groups, each a grid of label and control
-rows (`.setting` is `display: contents`, so the labels of a section line up); a field is a text input or a checkbox with
-`value="true"` for a flag, named after its Setting (`field-<name>`), followed by its Reset button, its error, a restart
-notice ("Saved X, running Y until the server restarts") for a Restart setting whose saved value is not the running one,
-its note, plain information always shown for a Setting the controller gives one (`.note`, one today: "Running N threads:
-<reason>" on `import.parallelism`, from `Altitude.importParallelismResolution`), and its help text ending in `Default: …`.
-The Settings of the other engine are not rendered (PostgreSQL only:
-`face.recognition.hnsw_ef_search`, `db.postgres.read_statement_timeout`). Reset is `data-app-reset-setting`, handled by one
-delegated click listener in the page module that fills the field from the row's `data-setting-default`
-(`Const.attributes.settingDefault`), a checkbox by checking it, and clears its `error` class; nothing is written until Save. A failed validation comes
-back as a validation replacement (`HX-Retarget: this`, see above) with the submitted values kept and each error beside its
-field, so no success event fires; a save answers the saved form and `SETTINGS_SAVED_EVENT` shows "Settings saved". The CSS
-is the partial's own file, `static/css/htmx/settings_form.css`, over `core.css` variables (`--section-vertical-space`, `--control-*-space`,
-`--theme-neutral-3`, `--warning-color`); its one rule for the control's grid lets the field, an input or a select, share
-the first row with its Reset and spans everything after them, and `core.css`'s error mark (`form :is(input, select).error`)
-covers a select as it does an input; the page adds none. `includes/nav` shows the Settings link (`.menu.settings`)
-to an Admin only (`RequestContext.account`), so `NavController` requires login and both nav loads happen behind one.
-
-**Import page** — `pipeline.scala.html` (`/pipeline/r/:repoId`, for a holder of Import) is two columns, five parts to
-seven (`pages/pipeline.css`): what delivers files (`#importSources`: the upload sections, `#importUploads`,
-`includes/upload_sections`, and under them the Watch folders, `#watchFolders`) and the Import history (`#importHistory`:
-the status feed's element and `htmx/import_history`), each described below. `main` is a wrapping flex row whose columns grow from a
-least width each (`--import-uploads-min-width`, `--import-history-min-width`), so they stack, the sources first, once the
-page is narrower than the two together; it is as wide as the window at the most (`min(100%, 100vw)`, within
-`--import-page-max-width`) and centered in it, also under a nav wider than the window, when the body's one column is as
-wide as the nav.
+Layout (`pages/pipeline.css`, scoped to `body.pipeline`): two columns, 5 : 7, `#importSources` (the upload sections,
+`includes/upload_sections`, then `#watchFolders`) and `#importHistory`, wrapping sources first. `main` is
+`min(100%, 100vw)` wide, so the columns stack by the window's width even under a nav wider than the window.
 
 The upload sections are the `importUploads` component (`js/alpine/components/import-uploads.js`) on their root: File
-upload and Folder upload, each a form holding a dashed drop zone (`--border-dashed` in `--dashed-border-color`, as the
-boxes of the empty Import history and of the empty Watch folder list are edged; the accent's edge and a tint of it
-while files are dragged over it), with its button inside, which opens the hidden file picker or folder picker
-(`webkitdirectory`), and under it, for a holder of Organize, its option, a two-way `.toggle-group`: "To Triage", or
-"Skip Triage" / "Keep folder structure", which shows the destination folder. That field is the advanced search panel's
-Folder field, `includes/filter_combobox` with the panel's folder options, in an element of the panel's class
-(`.search-panel.destination`, which draws no box: `display: contents`), so the panel's rules style it; the component
-reads the chosen folder off the field's `change`. Under Folder upload's destination is the mapping example, one line: a
-path of an uploaded tree and where it lands under the folder chosen, which it follows. Asking for an upload with the
-option on and no folder chosen says so under the field (`div.error`) and uploads nothing.
+upload and Folder upload, each a drop zone holding its picker button (the folder picker is `webkitdirectory`).
 
-Each section applies its own option to what is chosen in it or dropped on it (`js/import/chosen-files.js`). File upload
-sends every file under its bare name, the files of a dropped folder too, so with Skip Triage they all land in the
-destination itself. Folder upload sends each file under its path in the tree: a single folder, chosen or dropped, is the
-top, so its name is the Import's and no part of the paths, and its contents map onto the destination; a drop of several
-items is its own top, each dropped folder a folder of its name under the destination, and the Import is named "N
-folders". Dropped directories are walked with `webkitGetAsEntry`, their entries read in batches until a batch is empty.
-The names imports ignore are the server's list, on the root as `data-app-ignored-files`: a file or a directory under one
-is left out before anything is sent, a directory with everything in it, and so is an empty file. The one folder chosen
-in the folder picker, or dropped alone, is taken whatever its name (`.archive`, `Scans.tmp`): it is the folder the user
-named, as a Watch folder's directory is on the server, and its own name is no part of a path that is sent; of several
-dropped items each is held to the list, a folder among them being sent under its name. The root takes every
-`dragover` and `drop` of the window, so a file dropped beside a zone does not open in the tab.
+- For a holder of Organize, each section has a two-way `.toggle-group`: "To Triage", or "Skip Triage" / "Keep folder
+  structure", which shows a destination folder field. That field is the advanced search panel's Folder field
+  (`filterCombobox`, **Advanced search panel**) inside `.search-panel.destination` (`display: contents`); the component
+  reads the folder from the field's `change`. The option on with no folder chosen shows an error under the
+  field and uploads nothing. Without Organize there is no option and every upload goes to Triage.
+- What is sent, under which path, is `js/import/chosen-files.js`. File upload sends every file under its bare name, the
+  files of a dropped folder too. Folder upload sends each file under its path: a single folder, chosen or dropped, is
+  the top, so its name is the Import's and no part of the paths; a drop of several items is its own top (each folder a
+  folder of its name under the destination, the Import named "N folders"). Dropped directories are walked with
+  `webkitGetAsEntry`, their entries read in batches until a batch is empty.
+- The ignored names are the server's list (`IgnoredFiles`, on the root as `data-app-ignored-files`). A file or a
+  directory under such a name, and an empty file, are left out before anything is sent. The one folder chosen, or
+  dropped alone, is taken whatever its name: it is the folder the user named, as a Watch folder's directory is on the
+  server. Of several dropped items each is held to the list.
+- The root takes every `dragover` and `drop` of the window, so a file dropped beside a zone does not open in the tab.
 
-One upload runs at a time (`js/import/upload-run.js`): the Import is opened (the root's `data-app-imports-url`) with
-the number of files about to be sent (`expectedFiles`, the ignored ones left out already), the
-files are sent one request each, three at a time, each with its relative path, and the Import is closed. A request that
-fails with no answer or a 5xx is sent again twice, after 1 s and 3 s; then the page has the server record the file as
-failed and goes on. A file the server answers as failed (one it could not hand to the pipeline, and every file of an
-upload whose destination folder was recycled meanwhile), or refuses with a 400, is not sent again; any other refusal
-ends the upload. Cancel stops the sending and closes the Import, and so does leaving the page, by a beacon. While it
-runs, the section that started it shows a `<progress>` of the bytes sent, the files and bytes done ("3 of 8 files · 1.6
-of 3.3 MB", with the failed ones) and Cancel, and both sections take nothing: their buttons and options are disabled,
-the destination fields inert and the zones dimmed (`.waiting`). When it ends the section says what it came to in a
-`.notice` (`.warning` when files failed or were not sent); a failure to start, and a refusal that ended it, go to the
-snackbar in the server's words.
+One upload runs at a time (`js/import/upload-run.js`, the axios client, no htmx). It opens the Import
+(`data-app-imports-url`) with `expectedFiles` (the ignored files already left out; the history counts these as
+remaining), sends one request per file, three at a time, and closes the Import.
 
-The **Import history** (`htmx/import_history`, `static/css/htmx/import_history.css`; the page renders it, and
-`GET /htmx/import/r/:repoId/history?shown=` reads it again) is a vertical timeline, one node per Import
-(`li.import[data-import-id]`, the node its `::before` on the list's left edge), the Imports in progress under "In
-progress" above "Earlier", the newest first in each; a Library with no Import says so (`.empty`). The node of an Import
-in progress is the accent's, in a halo of it. An entry is a header (the kind's icon, a folder upload's, an upload of
-files' or, by the Import's `source`, a Watch folder scan's, named for a screen reader; the title,
-`includes/import_title`: an uploaded folder's name, "3 folders" for a drop of several, a Watch folder's name, or for an
-upload of files the number of its files; then who delivered it, an account's name or "Watch folder", when, a `<time>` the `localTime`
-component shows in the viewer's zone, where it went, "into Triage" or the destination's path, and "interrupted by a
-restart" when a restart failed files of it), the status (`includes/import_status`, `static/css/includes/import_status.css`),
-and a `<details>` ("Files") holding the host of its Import files. The status is a bar segmented by outcome, each
-segment's share its number of files (`--files`, a flex factor), the files remaining the bare track, under diagonal stripes
-while the Import is in progress, which move unless the system asks for reduced motion; and the counts as chips, a zero
-count left out, with the files remaining while it is in progress. The files remaining (`Import.remaining`) are the ones
-given to the Import that are still pending and, while it takes files, the ones it expects and has not been given: an
-upload says how many files it is about to send and a scan how many it is about to offer, so the bar fills as files
-settle rather than as they arrive. An Import that takes no more files shows what was recorded alone. An
-outcome's color is declared once, by its class, on whatever it marks (`pages/pipeline.css`: `--outcome-color`, the
-success, info, warning and error colors and the muted neutral for `imported`, `duplicate`, `unsupported`, `failed` and
-`pending`, and `--outcome-fill`, a tint of it); the bar's imported segment alone is the accent. The outcome `duplicate`
-reads "already in the Library" (`ImportOutcome.label`). The history shows a step of Imports and offers the earlier ones
-("Show earlier Imports"), up to the most it shows (`Const.ImportHistory`).
+- No answer or a 5xx: two retries, after 1 s and 3 s, then the page has the server record the file as failed and goes
+  on. A file answered as failed, or refused with a 400, is not sent again. Any other refusal ends the upload.
+- Cancel stops the sending and closes the Import; leaving the page closes it by a `pagehide` beacon.
+- While it runs, both sections take nothing (controls disabled, destination fields inert, zones `.waiting`). Its
+  outcome is a `.notice` in its section (`.warning` when files failed or were not sent); a failure to start, and a
+  refusal that ended it, go to the snackbar in the server's words.
 
-An expanded Import's files (`htmx/import_files`, `static/css/htmx/import_files.css`,
-`GET /htmx/import/r/:repoId/imports/:importId/files?outcome=&shown=`) are the outcome filter (a chip for every file
-and one per outcome that has files, each with its number, `aria-pressed` on the one shown), the first files of the
-filter in path order, each with its path, its outcome and its reason on a second line (a duplicate's reads "Already in
-the Library: " and the place), and "Showing 50 of 4,812 files" with "Show more". An imported file links to its asset's
-page while the asset exists, in a new tab, since leaving the page ends an upload.
+The **Import history** (`htmx/import_history`, `static/css/htmx/import_history.css`; read again from
+`GET /htmx/import/r/:repoId/history?shown=`) is a timeline of `li.import[data-import-id]`, "In progress" above
+"Earlier". An entry is its header (title `includes/import_title`), its status (`includes/import_status`,
+`static/css/includes/import_status.css`) and a `<details>` ("Files") hosting its files. Both includes take the Import as
+a parameter and read no request context, since the status feed's actor renders them too.
 
-`js/import-status.js` keeps it live, with no Alpine component (the `<time>`s aside). The feed's message for an Import
-replaces its status, and its title out of band (an upload of files is titled by the number it said it would send while
-it runs, or the files it has when it said none or sent more, and by the files it has once it takes no more). A
-status of an Import the page does not show (one just opened, by anyone) is dropped and the history read again; so it
-is after a status that says the Import closed, which moves it to "Earlier", and when the feed opens again after it was
-lost. An Import whose files are shown has them read again with each of its statuses. Each part of the page that is read again, the history's
-list, each Import's files and the Watch folders' cards, carries the route of the view it shows (`data-app-view-url`) and is read through one
-sequence of requests (`htmx.ajax`, replacing the part): one at a time, and what is asked for meanwhile, a re-read or
-the view a control names (`data-app-view`: a filter chip, "Show more", "Show earlier Imports"), is read once the one on
-its way has answered, so a view the user picked is never undone by a read that began before the click. The `<details>`
-of an Import is `hx-preserve`, so reading the history again leaves an expanded Import open with its filter and its
-files (it is moved, not rebuilt: its scroll state survives where the browser has `moveBefore`), and the script scrolls
-the page by as much as the expanded Import in view moved, so it stays where it was on the screen. The upload sections
-announce nothing to the history: the uploader's page learns of its own Import from the feed, as every other page does.
+- The status bar has one segment per outcome, its flex factor (`--files`) the outcome's file count; the remaining files
+  are the bare track, striped while in progress. The remaining count (`Import.remaining`) includes the files an upload
+  or a scan said it would deliver and has not yet, so the bar fills as files settle, not as they arrive.
+- An outcome's color is declared once, by its class (`pages/pipeline.css`, under `#importHistory`: `--outcome-color` and
+  its tint `--outcome-fill`), on whatever it marks; the bar's imported segment alone is the accent. `duplicate` reads
+  "already in the Library" (`ImportOutcome.label`).
+- "Show earlier Imports" and the files' "Show more" step up to `Const.ImportHistory`'s limits.
+- An Import's files (`htmx/import_files`, `GET /htmx/import/r/:repoId/imports/:importId/files?outcome=&shown=`): an
+  imported file links to its asset in a new tab, since leaving the page ends an upload.
 
-The **Watch folders** (`#watchFolders` in the page, its heading with "Add Watch folder" at its right for an Admin; the
-cards are `htmx/watch_folders`, `static/css/htmx/watch_folders.css`, which the page renders and
-`GET /htmx/watch-folders/r/:repoId/list` reads again) are cards in a grid (`.watch-folder-grid`, as many of about
-`--watch-folder-card-width` as fill the row), one per Watch folder of the Library, by name; a Library with none says so
-(`.empty`), offering an Admin to add one. A card (`article.watch-folder-card[data-watch-folder-id]`) is the name, the
-path on the server in the monospace stack (`--font-nav`, as in the dialogs), wrapped rather than cut, where its files go ("into Triage" or the destination
-folder's path) and when it was last scanned (a `<time>` of `localTime`, "scanning now" in the accent while a scan runs,
-"not scanned yet"), the status, and the counts: the imported and, when there are any, the failed files of its Imports in
-the history, in those outcomes' colors, and "deletes imported files" when it does. The status is a chip tinted by what it
-says (`.status-chip` with `.watching`, `.paused` or `.unavailable`: `--status-color`, the success, warning and error
-colors, under a tint of it) with the reason beside it. An Admin's card carries its actions: "Scan now", an inline small
-button, disabled for a paused Watch folder, and a ⋯ menu (`includes/menu_ctrl`, the server-rendered menu an account card of the Users page has) of Pause or
-Resume, Retry failed, Edit… and Remove…. Scan now, Pause, Resume and Retry failed are direct requests (a `PUT` naming
-the Watch folder in JSON, `hx-swap="none"`) that declare `WATCH_FOLDERS_CHANGED_EVENT` with what the snackbar says; a
-scan refused for a paused Watch folder or a destination in the Trash is a 409, shown in the server's words. Anyone else
-reads the cards alone.
+`js/import-status.js` keeps the history live with no Alpine component (its module header has the detail):
 
-`js/import/watch-folders.js` reads the cards again (`readAgain` of `js/import-status.js`, the history's sequence of
-requests) whenever `Const.events.watchFoldersChanged` is announced, showing its `detail.message`, when it has one, in
-the snackbar: by an Admin's action on the page (the direct requests, the dialogs' saves and the Remove), and, with no
-message, by the status feed's `{"watchFolders": true}`, sent when the Library's Watch folders changed for any page:
-another Admin's action, a scan started or ended, a Watch folder found unavailable or available again, an Import of one
-opened or closed. The read replaces the cards, an open ⋯ menu and the trigger an open popover dialog is anchored to with
-them, so it waits while a card's menu or the popover dialog is open and looks again every second.
+- A feed message replaces an Import's status, and its title out of band. A status of an Import the page does not show
+  is dropped and the history read again; so is the history after a status that says the Import closed (it moves to
+  "Earlier") and when the feed opens again after it was lost. An Import whose files are shown has them read again with
+  each of its statuses.
+- Every re-readable part (the history's list, each Import's files, the Watch folders' cards) carries its route in
+  `data-app-view-url` and is read through one request sequence per part (`readAgain` and `request`, `htmx.ajax`
+  replacing the part): one request at a time. A control's `data-app-view` (filter chip, "Show more", "Show earlier
+  Imports") names the view it asks for. What is asked for meanwhile is read once the request on its way has answered,
+  so a view the user picked is never undone by a read that began before the click. A new reader of these parts goes
+  through `readAgain`.
+- The `<details>` are `hx-preserve`, so a re-read leaves an expanded Import open with its filter and files (moved, not
+  rebuilt: its scroll state survives where the browser has `moveBefore`). The script scrolls the page by as much as the
+  expanded Import in view moved, so it stays put on screen.
+- The upload sections announce nothing to the history: the uploader's page learns of its own Import from the feed, as
+  every other page does.
 
-The **Watch folder dialog** (`htmx/watch_folder_form`, `static/css/htmx/watch_folder_form.css`; Add Watch folder and a
-card's Edit…, in the general modal host, widened to `--watch-folder-form-width`) is one form of three fieldsets. Source:
-the name and the path on the server, whose help names the scan interval. Destination: the "Keep folder structure"
-switch; off, "Files land in Triage"; on, the destination folder, the advanced search panel's Folder field as in the
-upload sections (`.search-panel.destination`), under which the directory's tree is mirrored. After import: the "Delete
-imported files" switch; on, a red notice (`.notice.deletion`, `includes/watch_folder_deletion_notice`: the error fill on
-the error's edge) names the number of files in the folder now and what is deleted, and the submit reads "Save and delete
-imported files". Under the fieldsets it says that the Watch folder imports as the Admin who saves it. The
-`watchFolderForm` component (`js/alpine/components/watch-folder-form.js`) holds the two switches, each a
-`button[role="switch"]` beside a hidden input of its name, starting from what the form was rendered with
-(`data-app-keeps-structure`, `data-app-deletes-imported`), and asks the server for the notice
-(`data-app-notice-url`, with the path typed and, for an edit, the Watch folder's ID) when the deletion is switched on
-and when the path changes while it is on, through the axios client, since a request htmx issues from inside a dialog is
-one of the dialog's operations, whose success closes it; the answer to the latest asking alone is shown. Nothing is
-saved by a switch. The form posts JSON (`hx-json-enc`; `POST …/add`, or `PUT …/edit` with the Watch folder's ID in a
-hidden input), a refused field comes back as the form with the values submitted and the error under its field, an edit's
-title names the Watch folder as stored, and a save declares `WATCH_FOLDERS_CHANGED_EVENT`. Remove… opens a popover dialog
-below the card's ⋯ (`htmx/remove_watch_folder_dialog`), which says what stays: the files on the server, and what was
-imported, in the Library and in the Import history; as every confirmation of a removal it leaves initial focus on the
-close control. Both dialogs return focus to `#addWatchFolderBtn`, which survives the read of the cards.
+The **Watch folders** (`#watchFolders`; the cards are `htmx/watch_folders`, `static/css/htmx/watch_folders.css`, read
+again from `GET /htmx/watch-folders/r/:repoId/list`) are a grid of cards, one per Watch folder. An Admin gets "Add Watch
+folder" (`#addWatchFolderBtn`) and each card's actions; anyone else reads the cards alone.
 
-**Users page** — `users.scala.html` (`/users/r/:repoId`, `UsersController`, for an Admin or a holder of Create Users or
-Create Guests in any Library, `requireAccountCreator`, so it opens from every Library the account sees) is shaped like Settings: `header_common`, the nav (`current` `Const.NavEntry.USERS`), one
-`main`, `html_common`, `json-enc.js` and the page module `js/users-page.js`, which registers the page's components and
-starts as Settings does (`startNavPage()`). Its layout, cards and dialogs are styled by `static/css/pages/users.css`.
-`main` (`#users`) is capped at `--users-page-max-width` and centered, and is the `usersPage` component
-(`js/alpine/components/users-page.js`): the tab shown and the filter's text. The header holds the title, the filter box
-(`x-model="filter"`, a `type="search"` field taking the rest of the row) and one Add User button (`#addUserBtn`,
-`.action-button.primary`) at the right, which requests the Add User modal into the general modal host. Under it,
-`htmx/user_accounts` (`#accounts`, also `GET /htmx/users/r/:repoId/accounts`): a `.toggle-group` of three buttons, Admins,
-Users and Guests, each with its count (`.tab-count`), `aria-pressed` bound to the tab (at first the one the server writes in `#accounts`' `data-app-start-tab`: the first holding a
-card, else Users, or Guests for a creator of Guests alone, in whichever Library), then one section per
-tab, a grid of cards auto-filling the row at about `--account-card-width`, shown by `x-show`; a tab with no card reads
-"No Admins", "No Users" or "No Guests". The filter narrows the cards
-with no request: each card carries its name, username and email address in `data-app-filter-text`, which `shows($el)`
-compares under the server's name fold (`common/name-key.js`, `partialMatchKey`). The cards are read again after every change
-the page makes: the dialogs and the menu entries declare `ACCOUNTS_CHANGED_EVENT`, whose listener (`listeners/account.js`)
-shows the message the server put in the success detail and swaps `#accounts` from the route named in `main`'s
-`data-app-accounts-url`; the tab and the filter live above, so they stay.
+- An Admin's card has "Scan now" (disabled when paused) and a ⋯ menu (`includes/menu_ctrl`, as on the Users page's
+  account cards): Pause or Resume, Retry failed, Edit…, Remove…. Scan now, Pause, Resume and Retry failed are direct
+  `PUT`s naming the Watch folder in JSON, `hx-swap="none"`, declaring `WATCH_FOLDERS_CHANGED_EVENT` with the snackbar's
+  message. A refused scan (paused, destination in the Trash) is a 409, shown in the server's words.
+- `js/import/watch-folders.js` reads the cards again, through `readAgain`, on `Const.events.watchFoldersChanged`, and
+  shows its `detail.message` when there is one. An Admin's action on the page announces it with a message; the status
+  feed's `{"watchFolders": true}` announces it with none, for any change the server tells of. The read replaces the
+  cards, and with them an open ⋯ menu and the trigger an open popover dialog is anchored to, so it waits while either
+  is open and looks again every second.
 
-A card (`.account-card`, padded `--space-6`, the panel's border and the box shadow) opens with an initials avatar
-(`--account-avatar-size`, the first character of the first two words of the name), the name, and `@username` under it in
-`--font-nav`, dimmed, then a definition list: Email, Status ("Active" or "Deactivated", plain text; a deactivated card is
-dimmed by `.deactivated`), Libraries, New Libraries and Created (the date of `created_at`). Libraries
-(`includes/account_libraries`, which the account info dialog shares, styled by `includes/account_libraries.css`) reads "All
-Libraries" for an Admin; for anyone else a `<details>` whose summary counts the Libraries, and for a User the Permissions
-("2 Libraries · 7 Permissions"), listing each Library with its Permissions' labels ("Access only" for none; a Guest's carry
-none). New
-Libraries is "All" for an Admin, "Off", or "On" with the Permissions of the new-Library grant. An Admin's cards carry a ⋯
-menu (`includes/menu_ctrl`, `#accountMenuBtn-<id>` opening `#accountMenu-<id>`): Edit…, which requests the edit form into the
-general modal host; Set password…, a popover dialog below the trigger (`htmx/set_password_dialog`: the new password with
-Generate and Show); Deactivate or Reactivate, a direct `PUT` (`hx-json-enc`, the account's ID in `hx-vals`; a refusal, a
-409, shows the server's reason) that declares
-the success event itself and closes the menu (`handleActionClick`); and Delete…, a popover dialog below the trigger
-(`htmx/delete_account_dialog`) naming how many assets of the account, in every Library, move to the Admin, its Delete a
-destructive `.action-button.error` and its initial focus the close control. Neither Deactivate nor Delete is on the Admin's
-own card. Anyone else's cards have no menu.
+The **Watch folder dialog** (`htmx/watch_folder_form`, `static/css/htmx/watch_folder_form.css`; Add Watch folder and
+Edit…, in the general modal host) has three fieldsets: Source, Destination (the "Keep folder structure" switch, then the
+same destination field as the upload sections) and After import (the "Delete imported files" switch, then a red
+`.notice.deletion`, `includes/watch_folder_deletion_notice`, naming the files in the folder now). The Watch folder
+imports as the Admin who saves it.
 
-The **Add User modal** (`htmx/account_form`, `#accountForm`; also the edit form, titled "Edit <name>" by the name as stored
-whatever a refused save typed, with the account's ID and the state it was opened over hidden, and no password) is a `modal` fragment of the general host, `--account-form-width` wide (`#modalContent:has(#accountForm)`),
-one column whose body (`.account-form-body`) scrolls within `--account-form-body-max-height` while the actions, the submit
-(Add User, or Save) and Cancel, stay in view. Its fields: Name, Username and Email one per row, then to add a Password field
-with Generate (a random password of 20 characters from `crypto.getRandomValues`, shown) and Show (`includes/password_field`),
-and Confirm password under it, both in one `passwordField` component's element (`.password-fields`, `display: contents`, so
-each stays a row of the identity's grid), so Generate fills both and Show shows both; the Set password dialog's form is that
-component's element itself. A confirmation that differs from the password comes back under its field
-(`PASSWORDS_DO_NOT_MATCH`, `Api.Field.User.PASSWORD2`), refused by the route before the service, beside every other field's
-error, both passwords kept. The account type is a row of cards (`.type-card`, a radio and a one-line description, the
-chosen one in the accent), only the types the creator may create. For an Admin creator, the Create Libraries switch (a User's)
-and the new-Library grant's switch, then its Permission chips (a User's; a Guest's grant is access alone), each switch a
-`.switch` button with a hidden input bound to it, which is disabled where the type may not have it; the section
-(`.admin-only`) is boxed as a type card is (`--border-hairline` in `--panel-border-color`, `--radius`, `--space-5` inside).
-Then the **Permission
-matrix**: a table under a sticky header, one row per Library the creator may give access to, the access checkbox before its
-name (`libraryIds`), an All button, and one column per Permission in the order of the Goals, `--permission-column-width` wide,
-its header a button spelling the Permission out, wrapped; a cell is a checkbox (`permissions`, "<Library ID>:<Permission>")
-where the creator holds that Permission there, and empty elsewhere: a Library or a Permission above a creator's ceiling is
-not rendered at all. The `accountForm` component (`js/alpine/components/account-form.js`) starts from the JSON in
-`data-app-account-form` (the values, the ceiling, and `preset`, the Permissions a User given a Library starts with; with the
-new-Library switch off, the chips start from the preset too) and runs the toggles with no request: checking access, for a User,
-checks the preset, Import and Curate own, where the ceiling holds them, and unchecking it clears its Permissions; checking a Permission
-checks access; All checks every Permission of the row, or clears them once all are; a column's header checks its Permission
-in every Library chosen, or clears it once all hold it. The inputs follow the state through bindings, and what may not be
-sent is disabled, so the browser leaves it out of the form: a Guest's Permissions (the table's `.guest` class hides the
-columns: a Guest gets the access column alone), an Admin's whole matrix (an Admin gets a notice in its place), a row the type
-may not be given there (and hidden), and an unchecked Library once as many are checked as an account may hold, with a note
-naming the bound. The form posts JSON (`hx-json-enc`) to `POST /htmx/users/r/:repoId/add` or `PUT .../edit`; a refused field
-comes back as the validation replacement, the values submitted kept and the error under its field (the type's under the
-cards, the Libraries' under the matrix), an edit saved over a change made since it was opened (another Admin's, a new
-Library's grant) comes back with `ACCOUNT_CHANGED` above the actions, and a saved one answers the success detail's message.
+- `watchFolderForm` (`js/alpine/components/watch-folder-form.js`) holds the two switches (`button[role="switch"]`
+  beside a hidden input), starting from `data-app-keeps-structure` and `data-app-deletes-imported`. It asks
+  `data-app-notice-url` for the notice when deletion is switched on and when the path changes while it is on, through
+  the axios client, not htmx: an htmx request from inside a dialog is a dialog operation, whose success closes it. Only
+  the latest asking's answer is shown. No switch saves.
+- The form posts JSON (`POST …/add`, or `PUT …/edit` with the ID in a hidden input). A refused field comes back as the
+  form with the values submitted; an edit's title names the Watch folder as stored. A save declares
+  `WATCH_FOLDERS_CHANGED_EVENT`.
+- Remove… is a popover dialog below the card's ⋯ (`htmx/remove_watch_folder_dialog`) saying what stays (the files on
+  the server, what was imported); initial focus on the close control (**Modals**).
+- Both dialogs return focus to `#addWatchFolderBtn`, which is outside the cards and survives their re-read.
+
+**Users page** — `users.scala.html` (`/users/r/:repoId`, `UsersController`, `requireAccountCreator`, so it opens from
+every Library the account sees) is a nav page as **Template Layout** describes (`current` is `Const.NavEntry.USERS`).
+Its module `js/users-page.js` registers `usersPage`, `accountForm` and `passwordField` before `startNavPage()`. Styles:
+`static/css/pages/users.css`. Routes, the ceiling, the start tab and every server rule: altitude/AGENTS.md
+**The Users page**.
+
+- `main#users` is the `usersPage` component (`js/alpine/components/users-page.js`): the tab and the filter text. Both
+  live above `#accounts`, so a reload of the cards keeps them. Add User (`#addUserBtn`) requests the Add User modal into
+  the general modal host.
+- `htmx/user_accounts` (`#accounts`, `GET /htmx/users/r/:repoId/accounts`) is a `.toggle-group` of Admins, Users and
+  Guests, then one section per tab (`x-show`). The first tab comes from `#accounts`' `data-app-start-tab`.
+- The filter makes no request. Each card carries its name, username and email in `data-app-filter-text`, and
+  `shows($el)` compares it under the server's name fold (`partialMatchKey`, `common/name-key.js`).
+- After every change the page makes, the dialogs and menu entries declare `ACCOUNTS_CHANGED_EVENT`.
+  `listeners/account.js` shows the server's message and swaps `#accounts` from `main`'s `data-app-accounts-url`.
+- A card's Libraries are `includes/account_libraries`, shared with the account info dialog.
+- An Admin sees a ⋯ menu per card (`includes/menu_ctrl`, `#accountMenuBtn-<id>` opening `#accountMenu-<id>`): Edit…
+  (the general modal host); Set password… (a popover dialog, `htmx/set_password_dialog`); Deactivate or Reactivate, a
+  direct `PUT` (`hx-json-enc`, the ID in `hx-vals`; a refusal is a 409 with the server's reason) that declares the
+  success event itself and closes the menu (`handleActionClick`); Delete… (a popover dialog,
+  `htmx/delete_account_dialog`, naming how many assets move to the Admin; a destructive `.action-button.error`, initial
+  focus on the close control, **Modals**). The Admin's own card has neither Deactivate nor Delete. Anyone else's cards
+  have no menu.
+
+The **Add User modal** (`htmx/account_form`, `#accountForm`, also the edit form) is a `modal` fragment of the general
+host (`#modalContent:has(#accountForm)` sets its width). Its body (`.account-form-body`) scrolls while the actions stay
+in view.
+
+- The edit form is titled by the name as stored, whatever a refused save typed, carries the account's ID and the state
+  it was opened over in hidden inputs, and has no password. A save over a change made since it opened comes back with
+  `ACCOUNT_CHANGED` above the actions.
+- To add, Password (with Generate, 20 characters from `crypto.getRandomValues`, and Show; `includes/password_field`)
+  and Confirm password sit in one `passwordField` element (`.password-fields`, `display: contents`, so each stays a row
+  of the form's grid): Generate fills both and Show shows both. The Set password dialog's form is that component's
+  element itself. A mismatch comes back under Confirm (`PASSWORDS_DO_NOT_MATCH`, `Api.Field.User.PASSWORD2`), refused by
+  the route before the service, beside every other field's error, with both passwords kept.
+- The account type is a row of `.type-card` radios, only the types the creator may create. For an Admin creator, the
+  Create Libraries switch (a User's) and the new-Library grant's switch and Permission chips (a User's; a Guest's grant
+  is access alone) follow, each a `.switch` with a bound hidden input, disabled where the type may not have it.
+
+The **Permission matrix** is a table under a sticky header: one row per Library the creator may give access to (the
+access checkbox, `libraryIds`, its name, an All button), one column per Permission in `Permission`'s order (its header
+a button). A cell is a checkbox (`permissions`, "<Library ID>:<Permission>") where the creator holds that Permission
+there, and empty elsewhere; a Library or Permission above the creator's ceiling is not rendered at all.
+
+- `accountForm` (`js/alpine/components/account-form.js`) starts from the JSON in `data-app-account-form` (the values,
+  the ceiling, and `preset`, `AccountForm.PRESET`: Import and Curate own, which a User given a Library starts with, and
+  which the new-Library chips start from while that switch is off). It runs the matrix's toggles with no request; its
+  module header lists them.
+- The inputs follow the state through bindings, and what may not be sent is disabled, so the browser leaves it out of
+  the form: a Guest's Permissions (the `.guest` class hides the columns), an Admin's whole matrix (a notice in its
+  place), a row the type may not be given (also hidden), and an unchecked Library once `maxLibraries` are checked (a
+  note names the bound). The server holds every rule again.
+- The form posts JSON to `POST /htmx/users/r/:repoId/add` or `PUT …/edit`. A refused field is a validation replacement
+  with the values kept (the type's error under the cards, the Libraries' under the matrix); a save answers the success
+  detail's message.
 
 **Setup background** — `setup.scala.html` (`/setup`, `SetupController`; the index redirects here until the repository
-exists) runs a full-screen animated scene behind the page, a top-down view of a jet over clouds and farmland. Its canvas,
-`<canvas id="setupBackground">`, is the first element of the body; `static/css/pages/setup.css` fixes it over the whole
-viewport at `z-index: -1` (above the root's background, below every element of the page, so the markup is otherwise
-untouched), `pointer-events: none`, and `opacity: 0` with a 600 ms transition to `.ready`, so the form never sits on a
-flash of blank canvas. The form's container (`:where(body.setup) main > div`) is centered vertically in `main`, which
-fills the viewport above the footer and pads its top and bottom alike. It is a frosted card: a
-radial gradient from `--setup-form-base`, opaque at the center, to `--setup-form-card-edge-color`, the same color at
-zero alpha, at the corners, over `backdrop-filter: blur(12px)`, so the center is solid and the edges frost into the scene;
-`--setup-form-card-border`, the outline in the form's accent; a 6px `border-radius` (a radius, not a spacing, so a
-literal, as is the blur's); `--section-vertical-space` padding. Its first row, above the form, is the page's title, `#setupTitle` ("Altitude",
-uppercase, centered, in `--setup-form-accent`, the outline's color). The card and the form on it are a carve-out from the
-theme: the form asks for the Library name, then the Administrator's name, username (3 to 32 ASCII letters, digits, `.`, `_` and `-`,
-`User.validUsername`, whose error shows under the field), email and password twice; `static/css/htmx/setup_form.css` styles the fields, their placeholder, hover, focus and error
-states, the labels, the database type line and the full-width submit button from the `--setup-form-*` tokens alone, so the form keeps its
-palette whatever the theme colors become. The page's palette, the scene's `--setup-background-*` tokens and the form's
-`--setup-form-*` tokens, is declared at the top of `pages/setup.css` on `body:where(.setup)`: the page's own, not
-`:root` tokens of `core.css`, literals with no `light-dark()` pair (the form's edge, border, focus and field tokens
-follow its three colors, base, muted and accent), inherited by the canvas and the form. The style guide's scan
-leaves `setup.css` out (`StyleGuideController.excludedFiles`), so the palette is on no card and in no audit; its
-uses of core tokens are the spacing steps, `--text-shadow`, and the error box's `--theme-neutral-2`, `--error-color`
-and `--theme-neutral-4`. The page has no top bar; the footer loses its
-background and takes the chrome's text shadow (`--text-shadow`), so the scenery runs under it. The page module,
-`js/setup-page.js`,
-only calls `startSetupBackground(canvas)` of `js/setup-background/setup-background.js`: the form submits through htmx
-and `json-enc.js`, which the page loads as plain scripts, so there is nothing else to register. The page side returns at
-once where `canvas.transferControlToOffscreen` is not a function: no fallback, the canvas stays empty and the page looks
-as it does without a scene. Otherwise it resolves the palette, since a Worker has no stylesheet: each token is probed by
-setting `canvas.style.color = "var(--token)"` and reading `getComputedStyle(canvas).color`, which resolves
-whatever the token holds, a literal, a relative color or a `light-dark()` pair, against the page; the computed string (`rgb()`, `color(srgb …)` or
-`oklab(…)`, by recipe and browser) is painted into a 1 × 1 scratch 2D context and read back with `getImageData`, so
-every color reaches the Worker as sRGB channels `[r, g, b]` (integers 0–255), to which the Worker applies alphas of its
-own (gradient stops, shadows). The palette's keys are `fields` (six, `--setup-background-field-1` … `-6`, in order),
-`fieldEdge` (`--setup-background-field-edge`), `road`, `cloud`, `cloudShadow`, `jet`, `jetOutline` (the
-`--setup-background-*` tokens of those names), `lightLeft`
-(`--error-color`, the red navigation light on the left wingtip), `lightRight` (`--success-color`, the green one on
-the right) and `strobe` (`--theme-neutral-4`, the white strobe). It then reads the canvas's CSS size from
-`getBoundingClientRect()` and `devicePixelRatio`, starts the module Worker,
-`new Worker(new URL("./setup-background-worker.js", import.meta.url), { type: "module" })`, and posts `init` with the
-canvas transferred (`transferControlToOffscreen()`, in the transfer list). Every message is a plain object with a
-`type`:
+exists) runs a full-screen animated scene, a top-down jet over clouds and farmland, behind the setup form.
+
+Page and CSS (`static/css/pages/setup.css`):
+
+- `<canvas id="setupBackground">` is the body's first element, fixed over the viewport at `z-index: -1` (below every
+  element, so the rest of the markup is untouched), `pointer-events: none`, and `opacity: 0` fading in on `.ready`
+  (`transition: none` under reduced motion), so the form never sits on a blank canvas.
+- The form's container (`:where(body.setup) main > div`) is a frosted card: a radial gradient of `--setup-form-base`,
+  opaque at the center, transparent at the corners, over `backdrop-filter`. Its 6px radius and the blur are literals (a
+  radius and a blur, not spacings). No top bar; the footer drops its background, so the scenery runs under it.
+- The palette is the page's own (the carve-out in **Do**): the scene's `--setup-background-*` and the form's
+  `--setup-form-*` tokens, declared at the top of `pages/setup.css`. `static/css/htmx/setup_form.css` styles the form
+  from the `--setup-form-*` tokens alone. Left out of the style guide's scan, the palette is on no card and in no audit.
+  Its only core tokens are the spacing steps, `--text-shadow`, and the error box's `--theme-neutral-2`, `--error-color`
+  and `--theme-neutral-4`.
+
+Page side: `js/setup-page.js` only calls `startSetupBackground(canvas)` of `js/setup-background/setup-background.js`;
+the form submits through htmx and `json-enc.js`, loaded as plain scripts.
+
+- Without `canvas.transferControlToOffscreen` it returns at once. There is no fallback: the canvas stays empty.
+- It resolves the palette on the page, since a Worker has no stylesheet (`resolvePalette`: the `--setup-background-*`
+  tokens, and `--error-color`, `--success-color` and `--theme-neutral-4` for the lights). Each token is set as the
+  canvas's inline `color`, read back computed, painted into a 1 × 1 scratch context and read with `getImageData`, so it
+  reaches the Worker as sRGB `[r, g, b]` (0–255) whatever form the browser computes; the Worker applies its own alphas.
+- It starts the module Worker (`new URL("./setup-background-worker.js", import.meta.url)`, `{ type: "module" }`) and
+  posts `init` with the canvas transferred. A Worker that does not load (file missing, no module Workers) or throws
+  fires `error`: the page logs one line naming the feature and does nothing else, so the canvas stays transparent.
+
+Every message is a plain object with a `type`:
 
 | Direction | Message | Fields | When |
 |---|---|---|---|
@@ -2826,1008 +1922,539 @@ canvas transferred (`transferControlToOffscreen()`, in the transfer list). Every
 | page → Worker | `motion` | `reduced` | the `(prefers-reduced-motion: reduce)` query's `change` |
 | Worker → page | `ready` | none | after the Worker's first frame is drawn; the page adds `.ready` to the canvas, which fades it in |
 
-Reduced motion is watched live, so switching it on or off while the page is open stops or starts the scene; under it the
-fade transition is dropped (`transition: none`), so the still frame appears at once. A Worker that does not load (the
-file missing, a browser without module Workers) or throws fires the Worker's `error` event: the page logs one line
-naming the feature and does nothing else, so the canvas stays transparent. The scene itself, the clock, the ground, the
-clouds, the jet and the draw order, is the Worker's, `js/setup-background/setup-background-worker.js`.
+The scene is the Worker's, `js/setup-background/setup-background-worker.js` (the fields' textures are
+`setup-background-textures.js`; sizes, speeds and timings are the constants at the Worker's top). What keeps it cheap
+and correct:
 
-The Worker draws in CSS px: the bitmap is `width × dpr` by `height × dpr` with `dpr` capped at 2 and the context
-scaled to match, so a 3× phone does not triple the fill rate; the context is opaque (`alpha: false`), as the
-field-edge fill covers it every frame. The clock is `requestAnimationFrame` (a Worker owning an OffscreenCanvas has it): a frame
-advances the scene by `min(timestamp − last, 100 ms)`, so a resumed tab or a stalled frame moves it one short step,
-and the scene keeps a running time `t` in seconds, which the lights read. One frame handle is pending at
-most: a start requests a frame only when none is pending, a stop cancels it. On `init` the Worker sizes the bitmap,
-generates the scene, draws the first frame synchronously (the page's fade-in waits on `ready`, and a hidden document
-gets no frame callbacks), posts `ready`, then starts the loop unless `reduced` or `hidden`. `visible { hidden: true }`
-cancels the pending frame; `visible { hidden: false }` resets the clock (the next frame's `last` is its own timestamp,
-so nothing jumps) and starts the loop unless `reduced`; `motion` does the same for `reduced`, and `reduced: true`
-leaves the frame drawn last as the still. A `resize` equal to the current size and ratio is a no-op (the observer's
-first notification is one); a new ratio alone resizes the bitmap; a new size also refits the scene; either draws one
-frame at once, since sizing the bitmap clears it and the blank would reach the page before the next frame, and a still
-would otherwise stay stretched or blank.
-
-The ground scrolls down at 50 px/s (the view flies up). It is a list of blocks, topmost first, each the ground from one
-road across to the next: a road 10 px wide along the block's top, the width of the viewport, and under it 2–5 bands,
-each 60–220 px tall, cut into cells between the block's roads down, which run from the road across to the block's
-bottom, where the next block's road across is, so the roads down one block end at a road across and the next block's
-start past it at positions of its own (T-junctions, not a grid). The roads down a block stand 2–5 fields apart: each
-span between two is the sum of that many field widths of 60–320 px, the first span starting up to 320 px left of the
-edge and the last running past the right edge, and every band cuts each span into 2–5 cells (as many as the field
-widths let it), each 60 px plus a random share of the rest. The whole canvas is painted `fieldEdge`, then each block in
-a frame at its top: its cells, each 3 px short on the right and at the bottom, so a field edge runs between cells and
-between bands and along each side of a road as its verges (the first band starts a road and an edge below the block's
-top, and a span's last cell ends an edge short of the road); then its roads in `road` over them; then its vehicles. A
-cell's color is one of the six field colors and never its left neighbour's (a pick among the other five, across a
-road too), and one of ten textures at random, painted over its color in translucent dark and light ink from the cell's
-corner so it scrolls with the cell (`js/setup-background/setup-background-textures.js`: furrows across, down and on the
-diagonal, crop rows, tramlines, strip crops inside a headland, an orchard, mottled pasture, contour strips and a centre
-pivot; most are 128 px tiles repeated by a `CanvasPattern`, the headland and the pivot are drawn to the cell); a band
-or a cell wholly outside the viewport is skipped. The block list holds every block that overlaps the viewport (the
-topmost covers the top edge); a block whose top passes the bottom edge is dropped with its vehicles, and new ones are
-generated above the topmost, so nothing repeats. On resize the blocks are regenerated when the width grows (the roads
-and the cells are cut for the width) and kept otherwise: blocks are dropped or added above as the height asks, and
-added below the lowest when a taller viewport uncovers ground under it.
-
-The vehicles are 3 × 5 px rectangles the long way along their road, half of them in the cloud white at alpha 0.9 and
-half in the shadow ink at 0.7, keeping to the right of the road (eastbound on the south side, southbound on the west),
-each at a speed of its own of 15–35 px/s over the ground, so a northbound one still scrolls down the screen, slower
-than the fields. A block starts with 0–2 on its road across at random x and, by a chance of 0.5 per road, one on
-each road down it; they belong to the block (a vehicle's road is the block's road across or the index of one down it,
-and its position an x on the road across or an offset from the block's top on a road down, so the ground's scrolling
-moves it for nothing). A vehicle reaching the end of a road down turns onto the road across there, either way at
-random: this block's at the top, the block below's at the bottom, where it moves to that block's list, or leaves the
-scene when there is no block below, that junction being past the bottom edge. One on a road across turns, by a chance
-of 0.35 at each junction it passes, down this block's road or up the block above's, and past either side of the
-viewport comes round the other, the road running on past both. The vehicles are stepped after the blocks are recycled,
-and a vehicle that changed block is moved once every block has been stepped, so none is stepped twice in a frame.
-
-Cloud shadows come next, on the ground: each cloud's
-circles as one path, filled with `cloudShadow` at alpha 0.28 and offset (−40, +40) px from the cloud, so the light
-comes from the upper right. The clouds scroll at 80 px/s, 1.6 × the ground. A cloud is 4–8 circles of radius 30–90 px whose centres fall
-within an ellipse of 220 × 120 px around its centre (a uniform angle and a square-rooted distance spread them over its
-area), the radii and the ellipse at a scale of 1 or 2 picked per cloud, each circle a radial gradient of `cloud` from alpha 0.6 at the centre to 0 at the rim, built once at the origin when
-the cloud is made and drawn under a translate, so no frame builds a gradient (and no `ctx.filter`, slow in Safari).
-There are 4–8 clouds, the count picked once at init; a cloud whose top edge passes the bottom edge is replaced by one
-spawned above the top at a random x, its top edge 0–400 px above the viewport, so the sky is never evenly spaced. A
-resize leaves the clouds where they are: one now past the right edge scrolls off and is replaced as usual.
-
-The jet is the nearest thing in the scene: 420 px long, nose up, anchored at 18 % of the width and rising out of the
-bottom edge, which cuts it 28 % of its length behind its centre, so the nose, the wings and the engines show and the
-tailplane and the fin stay below the edge; on a viewport narrower than 600 px it is 270 px long at 14 % of the width,
-where its right wing may show through the frosted card. Its parts are `Path2D`s built once, in units of the length
-(centreline x = 0, nose at −0.5, tail at 0.5) and drawn under a scale of the length, so one builder serves both
-sizes, in the proportions of a twin-engine wide-body seen from above: a fuselage a tenth of the length wide with an
-ogive nose and a tapered tail cone, wings spanning the length tip to tip and swept 32° with the trailing edge kinked
-inboard, two pods ahead of the leading edge on pylons that widen back over the wing, a tailplane, and the fin as a thin
-centreline strip near the tail. The skin is `jet` with a soft `jetOutline` at 1 px (the line width divided by the
-scale), part over part so each covers what is under it, and it is shaded by linear gradients built in the same units,
-dark along the sides and light along the crown, so the fuselage and the pods read as tubes and the wings lighten
-toward the root. The markings are translucent cloud and shadow ink over the skin: slats along the leading edge, flaps
-along the trailing edge with four fairings a wing, the rear spar's line, the pylons, and each pod's intake lip, mouth
-and exhaust (clipped to the pod); the cockpit glazing, the cabin windows and four doors a side are the outline ink.
-The jet casts no shadow. It is drawn under a transform, translated to the anchor and scaled to the length, and holds
-still: the scenery moves under it. The lights are drawn
-last, in the same frame. Each wingtip carries its lamp at all times, a dot 2 % of the length in the light's color
-halfway to the outline ink, outlined as the skin is, so the tips keep their shape between blinks; a lit lamp glows
-over it with a radial gradient cached at the origin per color, solid in the full color out to the dot's radius, then
-a halo fading to nothing at three times it: red `lightLeft` on the left wingtip and green `lightRight` on the right,
-on for 0.5 s of every 1 s, and a white `strobe` at each wingtip, two 60 ms flashes starting 120 ms apart every
-1.2 s. A frame's draw order is field-edge fill → each block's cells, roads and vehicles → cloud shadows → clouds →
-jet → lights.
+- It draws in CSS px. The bitmap is `width × dpr` by `height × dpr` with `dpr` capped at 2, so a 3× phone does not
+  triple the fill rate. The context is opaque (`alpha: false`), as the field-edge fill covers it every frame.
+- The clock is `requestAnimationFrame` (a Worker owning an OffscreenCanvas has it). A frame advances the scene by
+  `min(timestamp − last, 100 ms)`, so a resumed tab or a stalled frame moves it one short step. At most one frame
+  handle is pending: a start requests one only when none is, a stop cancels it.
+- On `init` it sizes the bitmap, generates the scene, draws the first frame synchronously (the fade-in waits on
+  `ready`, and a hidden document gets no frame callbacks), posts `ready`, then starts the loop unless `reduced` or
+  `hidden`.
+- `visible { hidden: true }` cancels the pending frame; `hidden: false` resets the clock, so nothing jumps, and starts
+  the loop unless `reduced`. `motion` does the same for `reduced`; `reduced: true` leaves the last frame as the still.
+- A `resize` equal to the current size and ratio is a no-op (the observer's first notification is one). A new ratio
+  alone resizes the bitmap; a new size also refits the scene. Either draws one frame at once, since sizing the bitmap
+  clears it and the blank would reach the page before the next frame.
+- The scene is random and never repeats: ground blocks and clouds that pass the bottom edge are dropped, and new ones
+  are generated above the top. On resize the ground is regenerated only when the width grows (its roads and cells are
+  cut for the width); otherwise blocks are dropped or added as the height asks. A resize leaves the clouds in place.
+- A vehicle belongs to a block, its position relative to the block, so the ground's scroll moves it for nothing.
+  Vehicles are stepped after the blocks are recycled, and one that changed block moves to its new block once every
+  block has been stepped, so none is stepped twice in a frame.
+- No frame builds a gradient: a cloud circle's gradient and a lamp's glow are built once at the origin and drawn under
+  a translate. No `ctx.filter` (slow in Safari). The jet's `Path2D`s are built once in units of its length and drawn
+  under a scale, so one builder serves both its sizes.
+- Draw order: field-edge fill → each block's cells, roads, vehicles → cloud shadows → clouds → jet → lights.
 
 **Explorer dock** — The main page (`index.scala.html`, `static/css/pages/index.css`) is a grid of three areas,
-`explorer`, `gutter` and `content`, whose shape is the **Dock side**: where the explorer sits against the results,
-`left`, `right`, `top` or `bottom`, written on `<html>` as `data-dock-side`. One rule per side sets the tracks and
-the areas: the explorer's track is `minmax(<its minimum>, var(--explorer-share))`, its share of the width (left,
-right) or of the height (top, bottom), the gutter's is `auto`, as thick as the divider, and the results take the
-rest, with their own minimum (`--explorer-min-width`, `--explorer-min-height`, `--content-min-width`,
-`--content-min-height` of `core.css`, registered as lengths so the script reads them in px). Across the width the
-explorer's minimum is `min-content`: its header's natural width, the tabs and the Dock side control in full (the
-Triage summary above them in Triage wraps its sentences, so it adds nothing to that width), since the
-panel (`#explorerPanelContent`, `contain: inline-size`) contributes no width of its own, floored by
-`--explorer-min-width` as the explorer's `min-width`; the script measures the header at its min-content for the
-divider's bounds (`headerMinContentWidth`). Each area draws the
-hairline on the edge facing the divider, one rule per side. The trash bin shows the results alone
-(`main:has(> #content.trashbin)`: one area, the explorer and the divider not displayed). Until this browser has a
-pick, the side follows the viewport's proportions, a portrait viewport docking the explorer at the bottom and any
-other on the left, and a rotation re-docks it; a pick holds from then on. The state is per browser, under
-`Const.localStore.explorerDock` as `{ side?, widthShare, heightShare }`: the width share serves left and right, the
-height share top and bottom (defaults 25 and 35 %), so a switch within an axis keeps the size.
+`explorer`, `gutter` and `content`. Its shape is the **Dock side**: where the explorer sits against the results
+(`left`, `right`, `top`, `bottom`), written on `<html>` as `data-dock-side`, with the explorer's share of the axis in
+`--explorer-share`. `index.css` has one grid rule per side.
 
-`static/js/explorer-dock-boot.js`, a plain blocking script in the page's head with the key in its `data-key`, writes
-the side and `--explorer-share` on `<html>` before the first paint, so nothing moves under the user. From
-`initExplorerDock(view)` (`js/common/explorer-dock.js`, called by the page script; it returns at once in the trash
-bin, where `hasExplorerDock()` is false) the module owns both. The mechanics are `js/common/dock.js`'s, a factory
-(`createDock`) taking the storage key, the pick attribute, the layout attribute and share property, the container, the
-size reference, the divider, the defaults (the side and the two shares), the minimums and whether the default side follows
-the orientation; the explorer's module is its configuration (`data-dock-side` and `--explorer-share` on `<html>`, the side
-by the viewport, 25 % and 35 %, the header's min-content as the width's floor), the Detail panel's is another (see
-**Detail panel**), and the Edit panel's the third, which takes no pick: in place of a pick attribute it gives `followSide`,
-the side it sits on, read whenever it is laid out, so nothing of a side is remembered and no Dock side menu is kept (see
-**Edit panel**). The explorer's dock: it re-docks on the orientation query's `change` while
-nothing is picked, takes a pick from any `[data-app-dock-side]` click on the page (`setDockSide`), and dispatches
-`Const.events.dockSideChanged` on `document.body` after every side change, with the side in `detail.side`, for
-whatever lays itself out by the side: the People tab's Split view stacks its panes under a left or right dock and sets
-them side by side under a top or bottom one, remaking its Split.js instance on the event (see **People tab**).
-`effectiveSide()` reads the attribute.
+- **Minimums.** `--explorer-min-width`, `--explorer-min-height`, `--content-min-width` and `--content-min-height`
+  (`core.css`) are registered with `@property` as lengths, so the script reads them in px. Across the width the
+  explorer's minimum is its header's `min-content` (the tabs and the Dock side menu in full), floored by
+  `--explorer-min-width`. This holds only because `#explorerPanelContent` has `contain: inline-size` and the Triage
+  summary's sentences wrap, so neither adds width. The script measures the same width for the divider's bounds
+  (`headerMinContentWidth`).
+- **Trash bin.** The results alone: `main:has(> #content.trashbin)` hides the explorer and the divider, and
+  `initExplorerDock(view)` returns at once.
+- **Default and state.** Until this browser has a pick, the side follows the viewport (portrait: bottom, else left) and
+  a rotation re-docks it; a pick holds from then on. The state is per browser under `Const.localStore.explorerDock`,
+  `{ side?, widthShare, heightShare }`: one share per axis (defaults 25 % and 35 %), so a switch within an axis keeps
+  the size.
+- **No layout shift.** `static/js/explorer-dock-boot.js`, a plain blocking script in the head (key in `data-key`),
+  writes the side and the share on `<html>` before the first paint. It cannot import, so it repeats the sides and the
+  default shares of `js/common/explorer-dock.js`: change them in both.
+- **Ownership.** `js/common/explorer-dock.js` (`initExplorerDock(view)`, called by the page script) owns the side and
+  the share after the first paint. The mechanics are `js/common/dock.js`'s `createDock`, whose header documents every
+  option, the divider's drag and keys included. Three docks are made from it: the explorer's, the Detail panel's
+  (**Detail panel**) and the Edit panel's, which passes `followSide` in place of a pick attribute, so it remembers no
+  side and has no Dock side menu (**Edit panel**).
+- **Side changes.** A click on any `[data-app-dock-side]` on the page is a pick. Every side change, by a pick or by the
+  viewport, dispatches `Const.events.dockSideChanged` on `document.body` with `detail.side`. Whatever lays itself out
+  by the side listens to it: the People tab's Split view rebuilds its Split.js instance on the new axis
+  (**People tab**).
 
-The pick is the **Dock side menu** at the end of the explorer's header (`#explorerHeader`, a grid of two columns
-aligned at their end: the tab list in the growing `1fr` one, then the menu in the `auto` one, centered on the row and
-inset by `--panel-padding`; Triage has the same row with one tab fewer, under the Triage summary, which spans both
-columns (**Triage summary**), and in the trash bin the menu is hidden with the explorer). `#dockSideMenuHost` is a compact choice
-menu (see **Context menus**): four options, Left, Right, Top and Bottom, each `data-app-dock-side="<side>"` with the
-side's glyph, a `<use>` of `includes/dock_glyphs.scala.html`, the hidden `<svg class="svg-sprite">` of four symbols
-(a frame with the docked band filled, in `currentColor`) that `index.scala.html` and the style guide include. The
-module checks the option of the effective side (`aria-checked`) and gives the trigger a clone of its glyph and the
-side's name in `applyEffectiveSide`, on init and every change, so the trigger shows and reads the current side
-without opening the menu; picking the side already picked changes nothing, and picking an option closes the menu
-with focus back on the trigger, as any choice menu does.
+The pick is the **Dock side menu**, `#dockSideMenuHost`, at the end of `#explorerHeader` (a grid: the tab list in the
+`1fr` column, the menu in the `auto` one; in Triage the Triage summary spans both above them, **Triage summary**). It is
+a compact choice menu (**Context menus**) whose options carry `data-app-dock-side` and a glyph from the sprite
+`includes/dock_glyphs` (included by `index.scala.html` and the style guide). `dock.js` (`syncDockControl`) checks the
+effective side's option and gives the trigger its glyph and label on init and on every change.
 
-The divider, `#explorerDivider` (`role="separator"`, `aria-controls="explorer"`, `tabindex="0"`), sits in the
-gutter area. It is a `.divider` of `core.css`, the one drawing of a draggable divider, which the People panes'
-Split.js gutter wears too: `--space-3` thick along its axis, a transparent band with a short dotted grip centered on
-it, drawn in `currentColor` by a `radial-gradient` tile repeated along the divider, so hover and `[data-dragging]`
-tint it `--theme-primary` with one color change; the cursor is `col-resize` or `row-resize`. Its orientation is its
-class, `.vertical` (a column) or `.horizontal` (a row), and a divider with neither, the explorer's, runs across the
-Dock side's axis (`html[data-dock-side]`), so it is laid out before any script runs. A pointer drag
-(`setPointerCapture`, `touch-action: none`; `main` is `user-select: none` meanwhile; the pointer's own focus on the separator, which draws no ring, makes the arrow keys work right after the drag)
-sets the share from the pointer's distance from the explorer's edge of `main`, within the bounds taken as the drag
-starts (the explorer's minimum, and all but the results' minimum and the divider, as percentages of `main`'s size),
-and remembers it on release; the arrow keys along the axis move the divider the way they point, 1 % (Shift, 5 %),
-Home and End take it to the bounds; Enter and a double-click reset the axis's default. The remembered share is the
-user's own, bounded when the user sets it; the share the page is laid out with is bounded again on every write and
-on `resize`, so a visit in a small window never narrows what a wide one remembered. The separator's
-`aria-orientation` is the divider's own (`vertical` for a left or right dock), and `aria-valuenow`, `-valuemin` and
-`-valuemax` are the laid-out share and its bounds, rounded. Everything that reacts to the explorer's size reacts to
-the divider as it did to Split.js: the context menus close through their `ResizeObserver` on `#explorer`, the map
-resizes through its own, the sticky offsets through theirs. The style guide's Panels & layout section shows the
-divider in both orientations.
+The divider, `#explorerDivider` (`role="separator"`), is a `.divider` of `core.css`, the one drawing of a draggable
+divider, which the People panes' Split.js gutter wears too. Its orientation is its class, `.vertical` or `.horizontal`;
+a divider with neither (the explorer's) follows `html[data-dock-side]`, so it is laid out before any script runs.
+
+- The remembered share is the user's own, bounded only when the user sets it. The laid-out share is bounded again on
+  every write and on `resize`, so a visit in a small window never narrows what a wide one remembered.
+- The dock fires no resize event. Whatever reacts to the explorer's size observes it itself: the context menus close
+  through their `ResizeObserver` on `#explorer`, and the map and the sticky offsets have their own.
+
+The style guide's Panels & layout section shows the divider in both orientations.
 
 **Advanced search panel** — The panel that combines the filters of one search: a description, the Search text, one
-folder, people, Locations, and the Date Taken and Date Imported ranges (`../AGENTS.md`, **Advanced search panel**, for
-the routes and what a search takes, and **Describe search** for a description). It is the second inline dialog in a
-popover panel after View settings: a form that stays in its panel until Search or a dismissal. Its fields, in order, as they are labelled:
-Describe, Keywords, Folder, People, Locations, Date Taken and Date Imported. **Keywords** is the label of the Search
-text's field here, and of the remove control of the Search text's chip in a filtered search's title (**Results
-title**), and of nothing else: the parameter is `q`, the field's ID and placeholder are the Search text's, and the term
-in the code, its comments, the guides and the server's messages is Search text (`CONTEXT.md`).
+folder, people, Locations, and the Date Taken and Date Imported ranges. For the routes and what a search takes see
+`../AGENTS.md`, **Advanced search panel**, and **Describe search** for a description. It is the second inline dialog in
+a popover panel after View settings: a form that stays in its panel until Search or a dismissal. Its fields, in order:
+Describe, Keywords, Folder, People, Locations, Date Taken, Date Imported. **Keywords** labels the Search text's field
+here and the remove control of the Search text's chip in a filtered search's title (**Results title**), and nothing
+else: the parameter is `q`, and the code, its comments, the guides and the server's messages say Search text
+(`CONTEXT.md`).
 
-- **Host.** `includes/nav` renders it on every page, in the `.search` cell beside the quick search form: `#searchPanel`,
-  a native `<dialog popover="auto">` (`.search-panel`), empty until it opens, and the filter button inside the form
-  (`.filters`, `popovertarget="searchPanel"`, the sliders icon), which opens it. The browser owns its visibility; CSS
-  anchor positioning places it under the form (`anchor-name: --search-form`, scoped to the cell by `anchor-scope`,
-  since the style guide holds a second nav), centered on it (`position-area: bottom`, `justify-self: anchor-center`),
-  `--space-3` below it and `--search-panel-width` (26rem) wide. Both are `hx-preserve`, so a nav reload keeps the
-  open panel and its listeners (**Nav refresh**). `bindSearchPanel()` (`js/search-results/search-panel.js`) binds the
-  host once, from `FrontendApp.start()` and from `startNavPage()`, so the panel works on every page with the nav.
-- **Load on open.** Each opening (`beforetoggle`, which fires for every one) empties the panel and reads its form from
-  the host's `data-panel-url` (`GET /htmx/search/r/:repoId/panel`) with the filters of the search in force
-  (`searchParams.filters()`; none on a page with no search of its own), so the server names the chips, and with the
-  view and the triage filter (`view`, `triaged`) of the search the panel will run, which the form's "Search in" row
-  opens on and its People options count by (`pickOfPanelSearch`): in Triage the Triage view; in Browse the repository
-  view with the triage filter in force, the "Show triaged items" choice or the pick of the search in force; and
-  anywhere else, where the search opens Browse and the store holds no filter or there is no store, the repository view
-  with the choice remembered in the browser (`rememberedTriaged`), for a member alone (`context.seesTriaged()`), since
-  a Guest is refused the filter. A folder's Search here is Browse's from Triage too, since a folder holds no triaged
-  asset. The
-  read goes
-  through the axios client and only the latest opening's answer is put in the panel; a failure is an error snackbar and
-  the panel closes. The panel is invisible while empty (`.search-panel:empty`), takes focus in its first field, Describe
-  (`#searchPanelDescribe`, the caret after its text, so that typing adds to a description in force: `focusAtEnd`, since
-  a field filled in by its markup would take the caret before it), once the form is
-  in, and is emptied again as it closes (`toggle`), which removes its components
-  with their listeners and calendars. `openSearchPanel(filters)` opens it from a script with `filters`, each under its
-  search parameter's name, laid over the ones in force, and loads an already open panel again: a folder's Search here
-  passes `{ folderId }` (**Context menus**), and a filtered search's Edit nothing (**Results title**). A closing panel
-  hands focus back to what had it as the panel opened: the filter button, or Edit. An entry of a menu is gone by then,
-  the panel's opening having closed its menu, so `openSearchPanel` called with focus inside another popover moves the
-  focus to the filter button first, and Search here returns there.
-- **Search in.** The form's first row, a member's alone: a toggle group across the form (`.search-in`, its three
-  segments of equal width) that picks the assets the search covers. A pick adds no parameter. It is the search's view
-  and its triage filter, in the row's hidden inputs: **Library**, the repository view with `triaged=false`, the sorted
-  assets; **All**, the repository view with `triaged=true`; **Triage**, the Triage view, which holds no filter. Library
-  is this row's label for the sorted assets alone; the glossary's Library is the whole of it (`CONTEXT.md`). The row
-  opens on the search the panel will run (**Load on open**): in Browse on All while triaged items are shown and on
-  Library while they are not, in Triage on Triage. The form's component mirrors the two inputs (`view`, `triaged`;
-  `searchIn`, `searchesIn`). While Triage is picked the Folder field is hidden (`searchesTriage`) and its folder is in
-  neither the search nor the filter button's count (`searchOfForm`), and comes back with another pick. The People
-  field asks for its options with the two inputs as they stand (`data-options-params`). The filter button's badge does
-  not count the pick, and Clear leaves it. A pick lasts for the search it is submitted with and is not remembered
-  (**Search parameters**).
-- **Describe.** The first field, a `textarea` in the field's `.box` under the Describe icon (`fa-magic`), labelled
-  "Describe", its placeholder "What's in the photo? e.g. woman in a park". It is as tall as its text
-  (`field-sizing: content`, no resize handle), one line while it is empty, and takes at most 300 characters
-  (`maxlength`, the server's bound, which counts the description without the white space around it). Enter searches
-  from it as from a one-line field and Shift+Enter breaks the line (`searchOnEnter` of the form's component, on
-  `keydown.enter`: it submits the form with `requestSubmit()`, and leaves the key alone with Shift held or while an
-  input method is composing). The panel opens with the description of the search in force (the store's `describe`,
-  which `searchParams.filters()` holds with the other filters). The nav's quick search input has no part in it: a
-  quick search searches by its text alone and drops the description, as it drops the panel's other filters (**Search
-  parameters**).
-- **Text.** The panel's field for the Search text and the nav's quick search input hold one value: the input's text, searched or
-  only typed, is the `q` the form is asked for as the panel opens, and a search from the panel writes its text into the
-  input.
-- **Search and Clear** are the form's (`x-data="searchPanel"`, `js/alpine/components/search-panel.js`). Search, the
-  submit, so Enter in the Search text's field, and in the Describe field through `searchOnEnter`, reads the form's entries
-  (`searchOfForm`, over `FormData`: every filter is a field under its parameter's name, and the pick is `view` and
-  `triaged`) and hands them to `searchByFilters`: the text
-  trimmed, the description as typed, which the store keeps without the white space around it, and `peopleMatch` only
-  as `any` with two people or more. Where the page shows the view the search is of, Browse or Triage, the store takes
-  them (`searchParams.replaceFilters`, see **Search parameters**), the panel
-  closes and `runSearch()` reads the results again; otherwise (Triage picked in Browse, Library or All picked in
-  Triage, whose pages are laid out for their view, and any other page or the Trash) the window goes to that view, the
-  quick search form's `action` with the search as its query string. Clear empties every field and searches nothing:
-  the description, the text, the
-  people match back to all, and each field through a `search-panel-clear` event dispatched on its component's root,
-  and leaves the pick as it is and the caret in the Describe field. Escape and a click
-  outside close the panel without searching; what was changed in it is dropped, and the next opening shows the search
-  in force.
-- **Combobox** (`x-data="filterCombobox"`, `js/alpine/components/filter-combobox.js`), one component for the folder,
-  the people and the Locations, on the ARIA combobox pattern of `docs/reference/alpine-components/headless-combobox.md`
-  as the Change combobox is; `faceCombobox` stays the Face correction's own. The three differ only in their markup: the
-  options route, whether several can be chosen and how many, and the chip's `<template>`. Typing asks the route for the
-  options of the text, 150 ms after the last key, and only the latest answer is shown; Down, Up and a click on the box
-  open the listbox on every name. The server's `role="option"` elements go into the listbox as they come, less the ones
-  already chosen, and the component marks in each name (`data-option-name`) the start of every word a typed word matches
-  (`<mark>`, by the server's rule: lower case, no diacritics, a word starting at a letter run, a digit run or a
-  camelCase hump). Down and Up move the active option (`aria-selected`, `aria-activedescendant`), wrapping; Enter picks
-  it, the first option once something is typed, and never submits the form; a click picks; Escape closes the listbox
-  alone, consumed by the input's handler. While the options of what was just typed are on their way (`isLoading`), the
-  ones shown are of the text before: typing clears the active option, Enter asks for the new options at once and picks
-  the first of them when they arrive, never one of the old, and Escape drops the request and is consumed, as it is with
-  the listbox open. Whether the listbox is open (`expanded`, the input's `aria-expanded`) is written as it is shown and
-  hidden, not from the popover's `toggle` event, which comes later: a second Escape straight after the first finds the
-  listbox closed and closes the panel. A pick appends a chip cloned from the field's template (`includes/search_chip`),
-  carrying the option's `data-option-id` and `data-option-label`, its label and a copy of its cover
-  (`data-option-cover`), clears the text and closes the listbox; a field of one (the folder) replaces its chip. A
-  chip's × (`data-chip-remove`) and Backspace in an empty input remove a chip. The chips are the state: their IDs, in
-  order and separated by commas, are the hidden input's value (`syncChosen`). The empty input's placeholder says what
-  the field means with nothing chosen ("anyone"), then "add…" in a field of several that takes more, and nothing in a
-  field of one or a full one. A field of several takes at most `data-max-chosen` names, the server's 10: at that number
-  it asks for no options, and its listbox holds one line, `data-max-chosen-message` ("At most 10 people in one
-  search"), as it holds "No matches" when nothing matches. A visually hidden `role="status"` says what the listbox
-  shows each time its options arrive ("12 options", or the line in their place) and each chip added or removed.
-  The listbox is a manual popover in the top layer, anchored under the field's `.box` (`--search-field-box`, scoped to
-  the field by `anchor-scope`) and as wide as it; a click in it is inside the panel, so the panel stays open.
-- **People match.** The `.switch` beside the People label is the form's state (`matchesAll`, on for all), shown by the
-  People field once it holds two people (`hasSeveral`); its value is the hidden `peopleMatch` input's.
-- **Date range** (`x-data="dateRange"`, `js/alpine/components/date-range.js`): Flatpickr in range mode (`mode: "range"`,
-  `dateFormat: "Y-m-d"`, two months), loaded with its stylesheet by the first field (`loadFlatpickr` of
-  `js/common/vendor-loader.js`). The component holds the range as its `from` and `to` ISO days, the values of the
-  field's two hidden inputs; the read-only input shows it as `8 Jun – 21 Jun 2024` (`rangeLabel`: each end with its
-  year when they differ, a single day once, `from …` or `until …` for the open-ended range a URL can hold, a month by
-  its first three letters from the module's own table, `MONTHS`, as the server's `DateRange.label` names it), written
-  again after every pick, since Flatpickr writes its own text there, and the input's `title` too. The input is empty
-  while the calendar is made: Flatpickr reads the days to mark from the input's text when it is given none, so an
-  open-ended range, which the calendar marks no day for, would otherwise mark the day it read out of the label. Both
-  ends are picked on one calendar; from the
-  field Down moves into the days, the arrows move through them and Enter picks. One day picked alone is that day as
-  both ends: closing the calendar after one pick completes the range with the same day (`onCalendarClosed`), where
-  Flatpickr alone would drop it. The × and Clear empty the range; the ×, which goes with the range it cleared, hands
-  focus to the field (`clearFromButton`), whose focus opens the calendar, so it is closed again at once (`focusField`,
-  as Escape does). The week starts on the day the browser's language starts it on. The calendar is appended to the field (`appendTo`), so it is inside the panel: appended to `body` it
-  would be drawn beneath the panel, which is in the top layer, and a click on it would light-dismiss the panel. It is
-  a manual popover of its own, shown and hidden with Flatpickr's open state, and CSS anchor positioning places it
-  under the field's box, starting at the box's left edge, flipped to end at its right edge or to sit above where the
-  viewport has no room; Flatpickr's own placement is switched off (`position`). To a screen reader the calendar is a
-  dialog named after its field (`role="dialog"`, `aria-label="Date Taken calendar"`), which the input says it opens
-  (`aria-haspopup="dialog"`) and whether it is open (`aria-expanded`, the component's `open`). The two fields share a
-  row in equal halves (`.dates`, a wrapping flex row): a range wider than its half, one across two years, takes the
-  room it needs from the other field (the input is `field-sizing: content`, so the field is never narrower than its
-  range), and when the two do not fit one row the second goes under the first; a range that still does not fit is cut
-  with an ellipsis and said whole by the input's `title`. Escape with the calendar open closes
-  it alone: the field's root takes the key on its way down (`keydown.escape.capture`), before Flatpickr or `global.js`
-  sees it. Enter in the field opens the calendar and submits nothing.
-- **Flatpickr's look.** `static/css/flatpickr.css` is the release's file, loaded by `loadFlatpickr` as
-  `@import … layer(flatpickr)` in a `<style>` element, so it sits in a cascade layer of its own and every rule of the
-  bundle, which is in no layer, outranks every rule of it whatever the selectors and the load order.
-  `htmx/search_panel.css` restates its colors, radii and spacing in the theme's tokens under `.search-panel`: the
-  floating surface, a month `--search-panel-month-width` of days, a day a pill under the pointer, the range a band of
-  the accent at 0.2 between two ends in the accent, so the calendar follows the light and the dark theme. The focus
-  ring on a day is the app's.
-- **Filter button.** Its badge (`data-app-filter-count`) shows how many of the panel's fields are filled (the
-  description, the text, the folder, the people, the Locations and each date range count once, `countSearchFilters`),
-  from one up, with the
-  button's accessible name ("Advanced search: 3 filters"). While the panel is closed they are the fields the search in
-  force fills (`searchParams.filterCount()`, written by an `Alpine.effect`; a page with no search store shows none).
-  While it is open they are the fields its form fills (`showFormFilterCount`): the form counts as it loads and on
-  every `input` and `change` that reaches it, which the Describe field and the Search text's fire as they are typed in and `filterCombobox` and
-  `dateRange` fire on a hidden input as they write it, so a chip removed, a range cleared or Clear shows on the button
-  before anything is searched. A panel closed without a search goes back to the count of the search in force.
-- **Look.** `static/css/htmx/search_panel.css`, scoped by `.search-panel`: frosted glass of its own, clearer and more
-  blurred than the popover dialog's (`--search-panel-background-color`, `--theme-neutral-2` at 0.81, under
-  `--search-panel-backdrop-filter`, `blur(15px) saturate(200%)`), the popover's hairline and `--float-shadow`,
-  `--radius-xl` corners, `--space-5` of padding and `--space-7` between fields; one column, each label above its field
-  in sentence case but for the glossary's Date Taken and Date Imported, the two date ranges side by side. A `.box`
-  wears the field style in place of its input, or of the Describe field's textarea (the sunken fill, the hairline, the
-  accent edge and ring with focus anywhere in it); the textarea takes the input's rules (`.box :is(input, textarea)`)
-  and three of its own: `field-sizing: content`, `resize: none` and the `--line-height-text` of text that wraps, which
-  leaves its box a few pixels taller than a one-line field's. A chip is the chosen filter's chip that `core.css` draws for the panel and a filtered search's results
-  title alike (`:is(.search-panel, .results-title) .chip`, in its CHIPS section): a rounded rectangle (`--radius`) on
-  the chips' fill (`--chip-fill`, which `core.css` declares for it and the filter chip), a Person's led by the cover Face
-  as a circle of `--search-panel-chip-cover-size` (20px); an option shows the cover at `--search-panel-option-cover-size` (28px),
-  the name, the names above a folder's or a Location's own set back, the number of assets a search of a Person finds,
-  and the active one the accent at 0.2. The listbox and the calendar wear the floating surface of every popover. Clear, a plain
-  `.action-button`, is at the left and Search, `.action-button.primary`, at the right. The style guide's Menus &
-  dialogs section holds the form over a sample description and sample names and a static listbox, and its navigation
-  specimen the filter button with a badge.
+- **Host.** `includes/nav` renders, in the `.search` cell, `#searchPanel` (a native `<dialog popover="auto">`, empty
+  until it opens) and the filter button in the quick search form (`.filters`, `popovertarget="searchPanel"`). The
+  browser owns its visibility; CSS anchor positioning places it under the form (`--search-form`, scoped to the cell by
+  `anchor-scope` because the style guide holds a second nav). Both are `hx-preserve`, so a nav reload keeps the open
+  panel (**Nav refresh**). `bindSearchPanel()` (`js/search-results/search-panel.js`) binds the host once, from
+  `FrontendApp.start()` and from `startNavPage()`.
+- **Load on open.** Every opening empties the panel and reads its form from `data-panel-url`
+  (`GET /htmx/search/r/:repoId/panel`). It listens to `beforetoggle`, which fires for each opening, where `toggle`
+  coalesces a fast close and reopen. The request carries the filters in force (`searchParams.filters()`; none without a
+  store), so the server names the chips, the quick search input's text as `q`, and the `view` and `triaged` of the
+  search the panel will run (`pickOfPanelSearch`): in Triage the Triage view; in Browse the repository view with the
+  triage filter in force; anywhere else the repository view with the choice remembered in the browser
+  (`rememberedTriaged`), for a member alone (`context.seesTriaged()`), since a Guest is refused the filter. A folder's
+  Search here is Browse's even from Triage, since a folder holds no triaged asset.
+
+  The read goes through the axios client, not htmx, so only the latest opening's answer is put in; a failure is an
+  error snackbar and closes the panel. The panel is invisible while empty (`.search-panel:empty`). Focus goes to
+  Describe with the caret after its text (`focusAtEnd`), so typing adds to a description in force. Closing empties the
+  panel, which removes its components with their listeners and calendars, and drops what was changed and not searched.
+
+  `openSearchPanel(filters)` opens it from a script with `filters` laid over the ones in force, or reloads an open
+  panel: a folder's Search here passes `{ folderId }` (**Context menus**), a filtered search's Edit nothing (**Results
+  title**). A closing panel returns focus to what had it at opening. A menu entry is gone by then (the opening closed
+  its menu), so with focus inside another popover `openSearchPanel` first moves it to the filter button.
+- **Search in.** The form's first row, a member's alone: a toggle group picking the assets the search covers. It adds no
+  parameter: a pick is the search's `view` and `triaged`, in the row's hidden inputs. **Library** is the repository
+  view with `triaged=false` (the sorted assets), **All** the repository view with `triaged=true`, **Triage** the Triage
+  view, which holds no filter. Library here means the sorted assets alone; the glossary's Library is the whole
+  (`CONTEXT.md`). While Triage is picked the Folder field is hidden (`searchesTriage`) and its folder is in neither the
+  search nor the badge's count (`searchOfForm`). The People field requests its options with the two inputs as they
+  stand (`data-options-params`), so its counts match the search. The badge does not count the pick, Clear leaves it,
+  and it lasts for the search it is submitted with (**Search parameters**).
+- **Describe.** A `textarea` with `maxlength` from `Const.Search.MAX_DESCRIPTION_LENGTH`, the server's bound (which
+  counts the description trimmed). Enter searches and Shift+Enter breaks the line (`searchOnEnter`). It opens with the
+  store's `describe`. A quick search from the nav searches by its text alone and drops the description and the other
+  filters (**Search parameters**).
+- **Text.** The panel's Search text field and the nav's quick search input hold one value: the input's text, searched
+  or only typed, is the `q` the form is requested with, and a search from the panel writes its text back into the input.
+- **Search and Clear** are the form's (`x-data="searchPanel"`, `js/alpine/components/search-panel.js`). Search reads the
+  form with `searchOfForm` over `FormData`: every filter is a field under its parameter's name, so the form's entries
+  are the search. It trims the text, sends `peopleMatch` only as `any` with two people or more, and calls
+  `searchByFilters`. Where the page shows the view the search is of (Browse or Triage), the store takes the filters
+  (`searchParams.replaceFilters`) and `runSearch()` reloads in place. Otherwise (the other of the two views, whose page
+  is laid out for its own, and any other page or the Trash) the window goes to the quick search form's `action` with
+  the search as its query string. Clear empties every field without searching, each component through a
+  `search-panel-clear` event on its root, and leaves the pick.
+- **Combobox** (`filterCombobox`, `js/alpine/components/filter-combobox.js`, markup `includes/filter_combobox`): one
+  component for the folder, the people and the Locations, on the ARIA combobox pattern of
+  `docs/reference/alpine-components/headless-combobox.md`; `faceCombobox` stays the Face correction's own. The Import
+  page's upload sections and the Watch folder form use it for a destination folder. Its rules are scoped by
+  `.search-panel`, so any host wears that class. The fields differ only in markup: the options route, single or
+  multiple, the most chosen (`data-max-chosen`, `SearchRequestParser.MAX_IDS`) and the chip's `<template>`
+  (`includes/search_chip`). Its header documents the keys and the loading states. Across files:
+  - The server renders the `role="option"` elements; the client only drops the chosen ones and marks matched word
+    starts by the server's rule (`SearchWords`: lower case, no diacritics, letter and digit runs, camelCase humps).
+  - The chips are the state: their IDs, comma-separated, are the hidden input's value, and writing it fires `change`
+    (`syncChosen`), which the filter button counts.
+  - Escape with the listbox open, or options loading, is consumed by the input. `expanded` is written as the listbox is
+    shown and hidden, not on the popover's later `toggle`, so a second Escape reaches `global.js` and closes the panel.
+  - The listbox is a manual popover in the top layer, anchored under the field's `.box`; a click in it counts as inside
+    the panel, so the panel stays open.
+- **People match.** The `.switch` beside the People label is the form's state (`matchesAll`, on for all), shown once
+  the field holds two people (`hasSeveral`); its value is the hidden `peopleMatch` input's.
+- **Date range** (`dateRange`, `js/alpine/components/date-range.js`): Flatpickr in range mode, loaded with its
+  stylesheet by the first field (`loadFlatpickr`, `js/common/vendor-loader.js`). The ISO days are the two hidden
+  inputs; the read-only input shows `rangeLabel`. Its header documents the rest. Across files:
+  - `rangeLabel` uses its own English `MONTHS` table, matching the server's `DateRange.label`, so the field and a
+    filtered search's chip read one range alike in every browser.
+  - The calendar is appended to the field (`appendTo`), inside the panel: appended to `body` it would be drawn beneath
+    the panel, which is in the top layer, and a click on it would light-dismiss the panel. It is a manual popover,
+    placed by CSS anchor positioning (`htmx/search_panel.css`); Flatpickr's `position` is switched off.
+  - Escape with the calendar open closes it alone: the field's root takes the key on the way down
+    (`keydown.escape.capture`), before Flatpickr or `global.js`.
+- **Flatpickr's look.** `static/css/flatpickr.css` is the release's file, loaded as `@import … layer(flatpickr)`, so
+  every rule of the bundle, which is in no layer, outranks it whatever the selectors and the load order.
+  `htmx/search_panel.css` restates its colors, radii and spacing in theme tokens under `.search-panel`, so the calendar
+  follows both themes.
+- **Filter button.** Its badge (`data-app-filter-count`) and accessible name ("Advanced search: 3 filters") count the
+  filled fields (`countSearchFilters`: each date range counts once), from one up. With the panel closed it counts the
+  search in force (`searchParams.filterCount()` in an `Alpine.effect`; none without a store). With it open it counts
+  the form (`showFormFilterCount`, on load and on every `input` and `change` reaching the form). This is why
+  `filterCombobox` and `dateRange` fire `change` on their hidden inputs as they write them: a removed chip, a cleared
+  range or Clear shows on the button before anything is searched. Closing without a search returns to the count in
+  force.
+- **Look.** `static/css/htmx/search_panel.css`, scoped by `.search-panel`. A `.box` wears the field style around its
+  icon, chips and input (or the Describe textarea, which shares the input's rules through `.box :is(input, textarea)`),
+  so the input itself sets `outline: none` (**Themes**). A chip is drawn by `core.css` (CHIPS,
+  `:is(.search-panel, .results-title) .chip`) for the panel and a filtered search's title alike. The style guide's
+  Menus & dialogs section holds the form with a static listbox, and its navigation specimen the filter button with a
+  badge.
 
 **Nav** — `includes/nav` is the bar of every page behind a login, inside the page's `<nav>`, styled by the NAVIGATION
-block of `core.css`: the `.brand` (the `fa-chevron-up` mark in `--theme-accent` and the name, lowercase, in `--font-nav`
-at `--font-size-xl`, on a `--theme-primary` to `--theme-accent` gradient clipped to the text, which glows in the primary
-on hover) in a `--nav-brand-width` slot, then one `.menu` per entry, all of one width but Browse's, which is at least `--nav-browse-min-width` (lowercase `--font-nav` at `--font-size-medium`,
-`--font-weight-medium`, `--theme-neutral-3`; Triage in `--success-color` and Trash in `--warning-color`, each with its
-count as a `.count` pill inside the label, `--theme-secondary` on the chip tokens; an entry with nothing behind it is
-`.empty`, `--theme-neutral-3`, "(0)" in its label and not a link; a linked entry's link glows in the entry's own
-color, `currentColor`, while the entry is hovered, so an empty one does not react). Between Browse and Triage sits the
-`.search` cell, as wide as an entry, holding the quick search form (**Search input**) centred in it at
-`--nav-search-width`: the form is `--font-nav` at `--font-size-base` in
-`--theme-neutral-4`, centred text, with no border or fill, a `fa-search` mark and the placeholder ("quick search", or "search triage" in Triage) at 0.6 alpha, a
-`.clear` (`fa-times`) control shown while there is text, and the filter button (`.filters`, `fa-sliders-h` in a circle
-of the accent at 0.2), which opens the advanced search panel and carries the number of filters in force, or of those in the open panel, as a badge on
-its corner, a pill of the accent in `--font-size-xs`, shown from one up (**Advanced search panel**). The form's rules
-are the cell's own form's (`nav .search > form`), since the panel beside it holds a form too. While the field has focus the form widens to
-`--nav-search-focus-width` and glows in `--theme-accent` (a 1px ring and a 14px halo at 0.55 alpha); that glow is the
-field's focus indicator, one of the places a rule sets `outline: none` (see **Themes**); focus on the filter button,
-where a closing panel returns it, is no focus in the field, and the button draws the focus ring. The bar is
-`--theme-primary` at 0.1 alpha over the page. The entry of the page shown carries `aria-current="page"`, which the
-server renders from the include's `current` parameter, a `Const.NavEntry` key: the main page's three views
-(`IndexController` passes the `view` query parameter, `repository` by default, the same value the client seeds its
-search from), and `import`, `settings` and `style-guide`, which those templates pass as constants. The marked entry is
-`--theme-accent` text, bold, on the accent at 0.16 alpha. Nothing marks an entry client-side, so a reload of the nav
-passes `current` again (below); the style guide's navigation section holds the specimen. The last cell, at the right edge after
-Style Guide, or after Settings where that entry is not shown, then the account cell, is the theme switch: a `button.menu.theme-switch`, as wide as an entry and
-its whole cell the target, icon only with the accessible name "Toggle light and dark theme". It shows `fa-sun` in the dark theme and
-`fa-moon` in the light one, the theme a press goes to, in `--theme-neutral-3`, glowing in its own color on hover. CSS picks the
-icon from `data-theme` on `<html>`, so a nav reload needs no client step, and the one delegated click in `global.js` (`[data-app-theme-switch]`)
-works on every page, those without Alpine included. See **Themes**.
+block of `core.css`. In order: the `.brand`, the Browse cell (below), the `.search` cell (the quick search form,
+**Search input**, then the advanced search panel's host), one `.menu` per entry (Triage, Import, Users, Settings, Trash,
+Style Guide), the account cell, and the theme switch, always last. An entry with nothing behind it is `.empty`, "(0)" in
+its label and not a link. Which entries show follows the Permissions (**Controls follow Permissions**); Users shows for
+an Admin and the holder of Create Users or Create Guests in any Library (`RequestContext.createsAccounts`, **Users
+page**).
 
-The **account cell** (`.menu.account`, `includes/account_menu`, which the style guide's specimen renders too), every
-account's, sits before the theme switch and says who is logged in. The cell carries the account's type in
-`data-account-type`, which sets `--account-type-color` (`core.css`): an Admin's `--error-color`, a User's
-`--success-color`, a Guest's `--info-color`. Its one target, the cell's padding its own, is a `.nav-menu-trigger`
-(`#accountMenuBtn`, `aria-haspopup="dialog"`) showing the `fa-user-circle` icon at `--font-size-large` in the type's color,
-then `@username` in the entry's lettering (`--font-nav`, lowercase), cut with an ellipsis at
-`--account-username-max-width`, named "Account: <username> (<type>)" and titled so, since the color alone does not say the
-type. It glows on hover and requests the **account info dialog** (`htmx/account_info_dialog`, `GET /htmx/account/r/<the
-Library>/dialogs/info`) into the popover host below itself. That dialog is right-aligned with the trigger
-(`position-area: bottom span-left` on `#popoverDialog:has(#accountInfo)`), `--account-info-width` wide, a `--border-band`
-of the type's color across its top (the host takes the type of the account it shows); it is titled "Your account" and
-reads, in one label column (a subgrid): the account's `fa-user-circle` in the type's color at the glyph's 2.5em, its name
-and `@username`, its email address and type (a chip in the type's color, then the type's description,
-`AccountType.description`, which the Add User form's type cards show too), then under Access its Permissions in this
-Library (chips as the Add User form's checked ones; "Every Permission" for an Admin, "Access only" for none) and its
-Libraries (`includes/account_libraries`, as an account card shows them, this Library marked), under Abilities Create
-Libraries, and under Account Member since, Last login and Session expires. Each time is a `<time datetime>` holding its UTC
-text (`Util.utcText`), which the `localTime` component (`js/alpine/components/local-time.js`, registered by
-`alpine/components/index.js` and `nav-page.js`) shows in the viewer's zone and locale. Its actions, at the right under the
-lists, are the account's: "Change password…", which requests the Change password dialog (`htmx/own_password_dialog`, `GET
-/htmx/account/dialogs/password`), replacing it in the popover host below the trigger, and "Log out", a submit button of the
-empty `#logoutForm` (`POST /logout`) beside the trigger, which a rule of the account cell hides (the quick search's `nav
-form` rule would draw it). The Change password dialog asks for the current password and the new one twice, and posts
-JSON to `PUT /htmx/account/password`; a refusal comes back as the form with the error under its field and nothing typed
-kept, and a change answers with the session's new cookie and `PASSWORD_CHANGED_EVENT`, which `listeners/account.js`
-confirms in the snackbar. The style guide's navigation section holds its specimen, which opens the real dialog.
-A Users entry (`.menu.users`, `fa-users`) follows Import for an Admin and the holder of Create Users or Create Guests in
-any Library, linking to the Users page of the current Library (**Users page**).
+- **Current entry.** `aria-current="page"` is rendered by the server from the include's `current` parameter, a
+  `Const.NavEntry` key: the main page's view (`IndexController` passes the `view` query parameter, `repository` by
+  default), or `import`, `settings`, `users`, `style-guide`, passed as constants by those templates. Nothing marks an
+  entry client-side, so a nav reload passes `current` again (**Nav refresh**).
+- **Quick search form.** Its rules are `nav .search > form`, never `nav form`, since the panel beside it holds a form
+  too. The form's accent glow on focus is the field's focus indicator, one of the places a rule sets `outline: none`
+  (**Themes**). Focus on the filter button, where a closing panel returns it, is not focus in the field
+  (`:focus-within:not(:has(.filters:focus))`), and the button draws the focus ring.
+- **Theme switch.** `button.menu.theme-switch` shows the theme a press goes to. CSS picks the icon from `data-theme` on
+  `<html>`, so a nav reload needs no client step, and one delegated click in `global.js` (`[data-app-theme-switch]`)
+  serves every page, those without Alpine included (**Themes**).
 
-The Browse cell (`.menu.repository`, marked while Browse is shown) holds two targets side by side: **Browse**, a link
-like every entry's (the database icon and "Browse") to the current Library's main page with no search, `/r/<id>`, and
-the trigger of the **Library menu**, the choice menu of the Libraries the account can see, which the current Library's
-name alone opens. `includes/nav` renders both through `includes/library_menu`: the link, then a host
-`data-choice-menu="Library"` (`#libraryMenuHost`) with `data-choice-menu-choice-only`,
-`data-choice-menu-trigger-class="nav-menu-trigger"` and `hx-preserve`. Its options are the Libraries
-`RepositoryService.getAccessibleTo` lists (every one for an Admin, those it holds a grant in for anyone else; by name,
-case-insensitively and naturally), each a link to its main page, `/r/<id>`, Browse with its defaults, holding the name in a `span` and titled
-with it in full, the current Library `aria-checked`. For an Admin, or an account with the Create Libraries flag
-(`decorators.mayCreateLibraries`), a separator and the "New library…" action follow, requesting the **New library dialog**
-of the current Library. The trigger (`.nav-menu-trigger`, a nav entry's look)
-reads the current Library's name after a dot (`·`, drawn by `::before` at 0.6 alpha) in the name's own case, cut with
-an ellipsis at `--library-name-max-width`, and the caret; its accessible name and title are "Library: <the full name>".
-A name in the panel is cut at the same width. Browse and the trigger each glow on their own hover, and each reaches the
-cell's top and bottom edge, the cell's padding being theirs. The cell is at least `--nav-browse-min-width`, a share of
-the viewport capped at 16rem, so the trigger shows some of the name, and a panel in the nav takes the page's text rather
-than its entry's (`nav .context-menu`: `--font` at `--font-size-base`, `--theme-neutral-4`, no transform). The main
-page builds the host with its first hydration, and Import and Settings with `startNavPage()` (**Template Layout**); the
-list is the page load's, since a nav reload keeps the built host (**Nav refresh**), so a Library created in another tab
-is listed at the next full page load. A name is a flex item in the trigger and a grid item in its entry, a bidi
-paragraph of its own, so a right-to-left name never reorders the dot or the caret; the browser tab title, which holds no
-markup, isolates it with U+2068 … U+2069
-(`includes/page_title`). The style guide's navigation section holds the specimen.
+The **account cell** (`.menu.account`, `includes/account_menu`) shows who is logged in. `data-account-type` sets
+`--account-type-color` (`core.css`). The trigger, `#accountMenuBtn`, is named and titled "Account: <username>
+(<type>)", since the color alone does not say the type. It requests the **account info dialog**
+(`htmx/account_info_dialog`, `AccountInfoController`, `GET /htmx/account/r/<the Library>/dialogs/info`) into the
+popover host, right-aligned below the trigger (`htmx/account_info_dialog.css`). The dialog shows the type's
+`AccountType.description` (shared with the Add User form's type cards) and the account's Libraries through
+`includes/account_libraries` (shared with the Users page's cards).
+
+- Each time is a `<time datetime>` holding UTC text (`Util.utcText`), shown in the viewer's zone and locale by the
+  `localTime` component (`js/alpine/components/local-time.js`), registered in both `alpine/components/index.js` (the
+  main app) and `nav-page.js` (the nav pages).
+- "Change password…" requests `htmx/own_password_dialog` (`GET /htmx/account/dialogs/password`) into the same host;
+  it sends JSON to `PUT /htmx/account/password` (`OwnPasswordController`). A refusal returns the form with the error
+  under its field and nothing typed kept. A change answers with the session's new cookie and `PASSWORD_CHANGED_EVENT`,
+  which `listeners/account.js` confirms in the snackbar.
+- "Log out" submits the empty `#logoutForm` (`POST /logout`) beside the trigger, hidden by `nav .menu.account form`.
+
+The Browse cell (`.menu.repository`, `includes/library_menu`) holds two targets: the **Browse** link to the current
+Library's main page with no search (`/r/<id>`), and the trigger of the **Library menu**, a choice menu of the Libraries
+the account can see, opened by the current Library's name. Its host, `#libraryMenuHost`, carries
+`data-choice-menu="Library"`, `data-choice-menu-choice-only`, `data-choice-menu-trigger-class="nav-menu-trigger"` and
+`hx-preserve`.
+
+- The options are `RepositoryService.getAccessibleTo` (every Library for an Admin, those with a grant for anyone else;
+  natural order by name), each a link to `/r/<id>`, the current one `aria-checked`. For an Admin or the holder of the
+  Create Libraries flag (`decorators.mayCreateLibraries`), "New library…" follows a separator and requests the **New
+  library dialog**.
+- The trigger and the panel cut a name with an ellipsis at `--library-name-max-width`; the full name is in the title
+  and the trigger's accessible name ("Library: <name>"). A panel in the nav takes the page's text, not its entry's
+  (`nav .context-menu`).
+- The main page builds the host with its first hydration; Import, Settings and Users with `startNavPage()`
+  (**Template Layout**). A nav reload keeps the built host (**Nav refresh**), so a Library created in another tab
+  appears at the next full page load.
+- A name is a flex item in the trigger and a grid item in its entry, a bidi paragraph of its own, so a right-to-left
+  name never reorders the dot or the caret. The browser tab title holds no markup, so `includes/page_title` isolates
+  the name with U+2068 … U+2069.
 
 **Controls follow Permissions** — An action control is rendered, or bound, only where the account holds what its request
-needs, so no control answers 403 (`altitude/AGENTS.md`, **Permissions on routes**). A template reads the token's bitmask in
-the request's Library through `RequestContext.holds(p, ...)` (any one of them), `RequestContext.isMember` (no Guest),
-`RequestContext.recyclesIn(view)` (Recycle in Browse, a Curate Permission in Triage, nothing in the Trash) and
-`RequestContext.restores` (Recycle or a Curate Permission), the same values the route decorators and the services read; the
-main page (`index`) lists the Permissions held on its body, `data-app-permissions="Import CurateOwn ..."` (the `Permission`
-names), and marks `data-app-recycles` when the account may recycle what its view shows, and a script asks
-`context.holds(...)` or `context.recyclesHere()` (`js/context.js`, with `Const.permission` naming the Permissions) before it
-builds or binds a control. The nav says one thing more, on every page that has it: the advanced search panel's host
-(`#searchPanel`) carries `data-app-sees-triaged` for a member (`RequestContext.isMember`), which `context.seesTriaged()`
-reads, so the scripts ask for the triage filter for a member alone (**Search parameters**). Where each control follows:
+needs, so no control answers 403 (`altitude/AGENTS.md`, **Permissions on routes**). Templates and scripts read the same
+values the route decorators and the services read:
 
-- The nav (`includes/nav`): Triage and Trash for a member, Import for Import, Users for Create Users or Create Guests in any
-  Library (`RequestContext.createsAccounts`, from the token's grants), New library for an Admin or the Create Libraries
-  flag, Settings for an Admin. A Guest's nav is Browse, the search, the Library menu, the account cell and the theme switch.
-- The batch operations (`includes/batch_ops`, given the page's `view`): Move, Add to album, Remove from album, Add to
-  location and Remove from location for Organize; Recycle by `recyclesIn(view)`; the Trash's Restore by `restores`, since the
-  Trash holds assets recycled from a folder and from Triage alike, the server checking each (Curate own reaching only the
-  account's own); Curate Selected for a Curate Permission, and outside Triage for Recycle too, since the frames not picked
-  are recycled and a sorted one takes Recycle; the Trash's Purge, and the toolbar's Purge recycle bin
-  (`htmx/trashbin_header`), for Purge.
-- The explorer: the ⋯ menus' actions and add buttons of the folder tree, the album list and the Location list
-  (`js/common/folder-tree.js`, `album-list.js`, `location-list.js`) for Organize, but a folder's Search here, which is
-  every account's (**Context menus**); a row's menu with no action left is the empty `buildNoMenuCell`
-  (`js/common/context-menu-markup.js`), so the row's other cells keep their grid columns, and the add hosts stay empty; in their place each tab opens with a warning saying why (`includes/cannot_organize`, a
-  `.notice.warning` as far above the list as the add controls are): "You cannot create folders as you do not have the
-  Permission to organize this Library", and the same for albums and Locations (`Const.UI.CANNOT_ORGANIZE`), a Guest's tabs
-  included. A folder's Delete is offered with Recycle too, unless the folder holds no asset (its recursive
-  `numOfAssets` as the tree read it), since deleting recycles what it holds; the server refuses a delete the count went stale
-  for. A Person's rename pencil (`htmx/people_list`) and the results title's name, the inline editor's trigger
-  (`htmx/view_person_name`, plain text without it), for Edit metadata; the results title's cover choice and Hide / Show /
-  Discard (`includes/results_title_inner`), and a taken name's "Merge into …" offer (`includes/person_name_taken`), for
-  Organize. The View settings dialog's "Show triaged items" for a member, and with it the triage filter the scripts
-  send (`context.seesTriaged()`).
-- Drag and drop (`js/dragdrop/index.js`): every move, membership, folder and People drag for Organize; the thumbnails drag,
-  and `#trash` is a drop zone, where the account may recycle what the view shows (`context.recyclesHere`) too.
-- The Detail panel: its People section (`htmx/detail_panel_people`) is read-only, Search alone, without Edit metadata, as
-  for an asset in the trash; the Change combobox (`js/alpine/components/face-combobox.js`) merges a nameless Person into a
-  named one only for a holder of Organize, and otherwise moves this Face alone ("· this face"); its Curation row
-  (`htmx/detail_panel`) for a Curate Permission.
-- Asset detail: the Edit toggle (`includes/html_common`), the Edit panel, its divider and the Edit's tools over the stage
-  (`htmx/view_image_detail_modal`) for Edit images; Show original's toggle and the "Edited" badge are every viewer's, a
-  Guest's included, on an edited asset.
-- Curation is a Curate Permission's, as its routes are: every way in (Triage's Curate button in `includes/search_results`,
-  a Sequence header's in `htmx/results_grid_grouped`, which with Curate own alone needs two frames the account owns,
-  `CurationService.curatableFrameCounts`, Curate Selected (in Browse with Recycle too), the Detail panel's row, the `?curate=` address,
-  which `js/listeners/curation.js` leaves alone without one) and the queue's count (`js/stores/sequences-to-curate.js`,
-  which asks nothing without one). Inside, every control is offered: a set holds only the frames the account may curate,
-  its own alone with Curate own (`AssetRules.curatedOwner`).
+- Templates: `RequestContext` over the token's bitmask in the request's Library: `holds(p, ...)` (any one of them),
+  `isMember` (not a Guest), `recyclesIn(view)` (Recycle in Browse, a Curate Permission in Triage, nothing in the Trash),
+  `restores` (Recycle or a Curate Permission) and `createsAccounts` (Create Users or Create Guests in any Library).
+- Scripts (`js/context.js`, `Const.permission` naming the Permissions): `context.holds(...)` reads the main page's
+  `data-app-permissions` on `<body>` (`index`); `context.recyclesHere()` its `data-app-recycles`;
+  `context.seesTriaged()` the `data-app-sees-triaged` that `#searchPanel` carries for a member on every page with the
+  nav, so the scripts send the triage filter for a member alone (**Search parameters**).
 
-- The Import page (**Import page**): each upload section's option, with its destination folder, for Organize; without it the sections upload to Triage, and the server refuses a destination all the same. Add Watch folder, and each Watch folder card's Scan now and ⋯ menu, for an Admin; anyone else with Import reads the cards alone.
-- The Users page (**Users page**): Add User for a holder of Create Users or Create Guests in any Library, as the page itself; each card's ⋯
-  menu for an Admin alone, without Deactivate and Delete on its own card; the Add User form renders nothing above the
-  creator's ceiling.
+Where each control follows (each template's comment carries the detail):
 
-**Nav refresh** — After any successful asset mutation, reload the nav to update counts.
-Folder deletion also recycles assets throughout its subtree, so the `folderDeleted` listener
-calls `app.reloadNav()` before awaiting the folder-tree refresh. Reuse `FrontendApp.reloadNav()`
-from event listeners; it loads the nav fragment with the view shown, read from the search parameter store:
-```js
-htmx.ajax("GET", `/htmx/nav/r/${this.context.getRepoId()}?current=${view}`, { swap: "innerHTML", target: "nav" })
-```
+- Nav (`includes/nav`): Triage and Trash for a member, Import for Import, Users for `createsAccounts`, New library for an
+  Admin or the Create Libraries flag, Settings for an Admin.
+- Batch ops (`includes/batch_ops`, given the page's `view`): Move and the album and Location buttons for Organize;
+  Recycle by `recyclesIn(view)`; Restore by `restores`, since the Trash holds assets recycled from a folder and from
+  Triage alike and the server checks each; Curate Selected for a Curate Permission, and outside Triage for Recycle too,
+  since the frames not picked are recycled; Purge and Purge recycle bin (`htmx/trashbin_header`) for Purge.
+- Explorer (`js/common/folder-tree.js`, `album-list.js`, `location-list.js`): the ⋯ menus' actions and the add buttons
+  for Organize, but a folder's Search here, every account's (**Context menus**). A menu with no action left is
+  `buildNoMenuCell` (`js/common/context-menu-markup.js`), so the row keeps its grid columns; without Organize each tab
+  opens with `includes/cannot_organize` instead of its add controls. A folder's Delete needs Recycle too unless the
+  folder holds no asset (its recursive `numOfAssets` as the tree read it), since a delete recycles what it holds; the
+  server refuses a delete whose count went stale.
+- People: the rename pencil (`htmx/people_list`) and the results title's name editor (`htmx/view_person_name`) for Edit
+  metadata; the cover choice, Hide / Show / Discard (`includes/results_title_inner`) and "Merge into …"
+  (`includes/person_name_taken`) for Organize. The Detail panel's People section (`htmx/detail_panel_people`) is
+  read-only without Edit metadata; its Change combobox (`js/alpine/components/face-combobox.js`) merges into a named
+  Person only for Organize and otherwise moves this Face alone ("· this face").
+- The View settings dialog's "Show triaged items" for a member.
+- Drag and drop (`js/dragdrop/index.js`): every move, membership, folder and People drag for Organize; the thumbnails
+  drag, and `#trash` takes a drop, where `context.recyclesHere()` holds too.
+- Asset detail: the Edit toggle (`includes/html_common`), the Edit panel and its stage tools
+  (`htmx/view_image_detail_modal`) for Edit images; Show original and the "Edited" badge are every viewer's.
+- Curation is a Curate Permission's, as its routes are: every way in (Triage's Curate button, a Sequence header's in
+  `htmx/results_grid_grouped`, which with Curate own alone needs two frames the account owns,
+  `CurationService.curatableFrameCounts`; Curate Selected; the Detail panel's row; the `?curate=` address, which
+  `js/listeners/curation.js` ignores without one) and the queue's count (`js/stores/sequences-to-curate.js`). Inside,
+  every control is offered, since a set holds only the frames the account may curate (`AssetRules.curatedOwner`).
+- Import page (**Import page**): each upload section's destination option for Organize; without it the sections upload
+  to Triage, and the server refuses a destination all the same. The Watch folder controls are an Admin's.
+- Users page (**Users page**): Add User as the page itself (`createsAccounts`); each card's ⋯ menu an Admin's; the Add
+  User form renders nothing above the creator's ceiling.
 
-What changes the nav's counts can change the Triage summary's, so `reloadNav()` also calls
-`app.reloadTriageSummary()`, as `reloadLocationCounts()` does; in Triage the asks of one change make one request, and
-outside it they do nothing (**Triage summary**).
+**Nav refresh** — After any successful asset mutation, reload the nav for fresh counts with `FrontendApp.reloadNav()`
+(`app.reloadNav()` from a listener). It loads `/htmx/nav/r/<repoId>?current=<view>` into `nav`, the view read from the
+search parameter store, since nothing marks the current entry client-side, and reloads the Triage summary
+(**Triage summary**). A folder delete recycles its whole subtree, so the `folderDeleted`
+listener (`js/listeners/folders.js`) reloads the nav before awaiting the folder-tree refresh.
 
-`includes/nav` renders the Search input on every page (the import page's polling reload passes `current=import`).
-The form is `hx-preserve`, so a swap keeps the element itself, with its listeners and the text being typed. So is the
-Library menu's host (`includes/library_menu`): a reload keeps the built control, so its Library list is the page load's,
-and the reload (`NavController`, `includes/nav`'s `reload`) renders the host empty, by its ID and `hx-preserve`, since
-htmx drops the one it carries: htmx 4 parks each element of the page that a `hx-preserve` element of the response names
-by ID, swaps, then moves the parked element in place of the new one and removes the new one. The move is
-`Element.moveBefore` where the browser has it, which keeps an open popover open, and `insertBefore` elsewhere, which
-takes the element out of the document and closes its open panel. The advanced search panel (`#searchPanel`) is `hx-preserve` in the same way: it is rendered empty, a reload keeps the
-page's own with its form and what is typed in it, and its filter button is inside the preserved form. So the import page's poll skips a tick while the
-nav's menu panel, the advanced search panel or the popover dialog (the New library dialog) is open (**HTMX 4 conventions**), so the poll never
-reloads the nav under any of them, in any browser.
+A reload must keep three `hx-preserve` elements: the quick search form (its listeners and the text being typed), the
+Library menu's host (`includes/library_menu`) and the advanced search panel (`#searchPanel`). The reload (`NavController`,
+`includes/nav`'s `reload`) renders the host and the panel empty, by ID, because htmx 4 keeps the page's element: it
+parks each page element a response's `hx-preserve` element names by ID, swaps, and moves the parked one into place. So
+the Library list is the page load's. The move is `Element.moveBefore` where the browser has it, which keeps an open
+popover open, and `insertBefore` elsewhere, which closes it; so the Import page's nav poll (`pipeline.scala.html`,
+`current=import`) skips a tick while the nav's menu panel, `#searchPanel` or `#popoverDialog` is open, in any browser.
 
-Asset mutations (move, recycle, purge, restore, sorting from triage) also call
-`app.reloadFolderCounts()`, which runs `refreshFolderCounts(repoId)` from `js/common/folder-tree.js`:
-it re-fetches the tree JSON and patches each `#folder-count-{id}` in place, leaving expansion, focus,
-and open menus alone. If the response holds a folder the DOM lacks (restoring assets can un-recycle
-their folders), it falls back to a full render. Folder operations (add, rename, move, delete) keep
-using `reloadFolderTree`, which renders fresh counts as part of the rebuild. `app.reloadAlbumCounts()`
-and `app.reloadLocationCounts()` do the same for the album and Location lists (`refreshAlbumCounts`,
-`refreshLocationCounts`), and fetch nothing while another explorer tab is active. `refreshCounts` in
-`js/assets/asset-actions.js`, which runs after every asset mutation, makes these reloads and reads the number of Sequences to
-curate again (`Const.state.sequencesToCurate`, see **Curation**).
+`refreshCounts` in `js/assets/asset-actions.js` runs after every asset mutation and makes every count reload: the nav;
+`app.reloadFolderCounts()` (**Folder asset counts**); `app.reloadAlbumCounts()` and
+`app.reloadLocationCounts()` (the same for their lists, fetching nothing while another explorer tab is active); the
+Sequences to curate (`Const.state.sequencesToCurate`, **Curation**); and `peopleChanged`. Folder operations (add,
+rename, move, delete) use `reloadFolderTree`, which rebuilds with fresh counts.
 
-Asset move/recycle/purge/restore and album and Location membership UI flows are implemented in `js/assets/asset-actions.js`.
-A restore answers `{restored, duplicates}`: an asset whose content was imported again after it was recycled stays in
-the trash, so only the `restored` cells leave the grid and the snackbar warns about the rest.
-Drag/drop interact.js bindings live in `js/dragdrop/`. Event-listener modules call these
-coordinators directly via `app.assetActions` / `app.searchDetailCoordinator`, while
-`FrontendApp` remains the composition root that wires them together.
+`js/assets/asset-actions.js` owns the move, recycle, purge, restore and membership flows, and `js/dragdrop/` the
+interact.js bindings; listeners reach them through `app.assetActions` / `app.searchDetailCoordinator`, and `FrontendApp`
+is the composition root that wires them. A restore answers `{restored, duplicates}`: an asset whose content was imported
+again after it was recycled stays in the Trash, so only the `restored` cells leave the grid and the snackbar warns about
+the rest.
 
-**Control states** — The action buttons, a toggle group's segments, the filter chip, the menu trigger and a context
-menu's actions share one transition rule in the DEFAULT CORE section of `core.css` (background, border color, color,
-shadow, translate and scale over 160 ms, ease-out; a menu action's own rule shortens it to 120 ms, ease). A hovered
-`.action-button` lifts 1px, and a pressed one, toggle segment or filter chip scales to 0.97: both live in one
-`@media (prefers-reduced-motion: no-preference)` block, so nothing moves when the system asks for reduced motion while
-the colors and shadows still change. A disabled button takes neither the hover nor the press look
+**Control states** — The action buttons, a toggle group's segments, the filter chip, the menu trigger, a context menu's
+actions and the switch share one transition rule in the DEFAULT CORE section of `core.css`. The hover lift and the press
+scale live in one `@media (prefers-reduced-motion: no-preference)` block, so nothing moves under reduced motion while
+colors and shadows still change. A disabled button takes neither the hover nor the press look
 (`:hover:not(:disabled)`, `:active:not(:disabled)`) and is dimmed whole, whatever its variant
-(`.action-button:disabled`: `opacity: 0.5` under the default cursor, what the account form's Permission chip
-wears while its input is disabled, `pages/users.css`). The buttons that can be disabled: a choice menu's trigger (Group
-on the map), the upload sections' Choose files and Choose folder
-and their Cancel, the Edit panel's Revert to original, the Add to location dialog's Add with no Location to add to,
-Curation's Previous and Next, a paused Watch folder's Scan now, and a Face's Change and Remove while its correction
-is out. The upload sections' Choose buttons are disabled only while their zone waits, which dims the zone whole, so
-they take no dimming of their own (`includes/upload_sections.css`). `.action-button.primary`, the accent call to action, is a
-dialog's or a form's main action: Add in the Add location and Add to location dialogs, Move, Merge, the Settings
-Save, the upload sections' Choose files and Choose folder, the Watch folder dialog's Save, and the empty lists' "Add your first album" and "Add your first location"; a destructive
-confirmation stays `.error`. The batch ops' buttons (`.batch-ops .action-button`) keep a normal weight, the small button size, and draw the
-variants' own edges.
+(`.action-button:disabled`). A button inside a container that already dims is not dimmed twice (the upload sections'
+Choose buttons, `includes/upload_sections.css`). `.action-button.primary`, the accent call to action, is a dialog's or a
+form's main action (Add, Move, Merge, Save, the upload sections' Choose buttons, the empty lists' "Add your first …"); a
+destructive confirmation stays `.error`.
 
-**Themes** — The app has a light and a dark theme and ships in the dark one: `:root` in `core.css` declares
-`color-scheme: dark`, as does the `color-scheme` meta tag of `includes/header_common`. The nav's theme switch (see **Nav**), the
-style guide's theme switcher and the design tweaks panel's toggle declare another scheme inline on the root element. The first two go
-through `chooseTheme` of `js/common/theme.js`: it declares `color-scheme` and `data-theme` on `<html>`, remembers the theme in
-`localStorage` (`Const.localStore.theme`) and announces `Const.events.themeChanged`. `js/theme-boot.js`, a plain blocking script of
-`includes/header_common`'s with the key in its `data-key`, declares the two before the first paint on every page with a nav; the setup
-page passes `themed = false`, since it has no nav and a palette of its own. Nothing remembered leaves the stylesheet's dark theme. Curation's `.pane-tag` and `.loupe`
-declare `color-scheme: dark` on themselves, because the pane beneath them is dark in either theme, so the tag's chips and the
-lens's edge and label take the dark side of every token whichever theme is shown. Every color is a `:root` token
-of `core.css`, and every theme and semantic color is a literal `light-dark(light, dark)` pair of two hex values, one per
-scheme, so the browser resolves the pair by the scheme in force, no rule is written once per theme, and an editor shows
-a swatch on each line. `:root` opens with the theme colors, in three groups. The brand colors: `--theme-primary` (the
-one hue, indigo: the selected tab, the focus ring, selection, drop targets, chips and pins, the start of the brand's
-gradient and the tint of the nav bar), with
-`--theme-primary-text` (the primary as text or a thin edge on a surface, 4.5:1 where the primary itself is not: the
-filter chip) and `--theme-on-primary` (text and glyphs on the primary fill: a pin's path, a drop target's row, the
-checkmark of a selected cell; dark in the dark theme, since the primary cannot carry light text); `--theme-secondary`
-(the supporting surface, lifted off the page: a button, a hovered tab, row or menu action, a count pill in the
-nav, and at 0.5 the track of a toggle group); and `--theme-accent` (teal: where you are and what to do next. The current nav entry's text and
-its tint, Triage's stripes, explorer tint and view band, the brand's mark and the end of its gradient, and the call to action: the fill of `.action-button.primary`,
-a dialog's or a form's main action) with `--theme-on-accent` (text on the accent fill, an ink tinted with its hue).
-The neutral scale, `--theme-neutral-1` to `--theme-neutral-4`, ordered from the lightest surface to the darkest text in
-the light theme: `-1` the lightest color in either theme, which no rule draws as a surface: at a low alpha it is the
-light of a sheen or a hover veil; `-2` the page surface, a small button's fill, the pressed segment of a toggle group
-and, at 0.84, a floating surface (the popover dialog, an open select's picker); `-3` lines and secondary text (the edge of a cell, a menu, a field, a
-button or a quiet control, a tab at rest, a disabled entry, a muted label; 4.5:1 on the page and on the secondary
-surface); `-4` text on the app's own surfaces, the text typed into a field included. The dark side of the scale is not
-in lightness order, since `-1` stays light there, and `-1` and `-4` hold one value in the dark theme by design; the
-style guide compares both sides and flags neither. One role stands outside the groups: `--theme-magenta`, the magenta end
-of the Edit panel's Tint track, its one use, which no other role could be. A rule writes a theme color by its token
-(`color: var(--theme-neutral-4)`, `border: var(--border-hairline) var(--theme-neutral-3)`); no token aliases a theme color under
-another name or mixes one at a percentage outside `:root`. Three kinds of color stand apart, with literal pairs of their
-own: the channel colors of the Histogram, Curation's and the Edit panel's (`--histogram-red`, `--histogram-green`,
-`--histogram-blue`, a soft red, green and blue, which each strip draws as light so that their overlaps read yellow, cyan, magenta and neutral; each strip is dark
-in either theme, so each pair holds one color); the four semantic colors (`--success-color`, `--warning-color`, `--error-color`, `--info-color`: green, amber,
-red, and a blue cooler than the primary so a notice does not read as a selection), the text, icon and edge of a
-status, each at least 4.5:1 on the page surface, which a rule writes directly too (an unnamed person's name and the
-trash entry of the nav are `--warning-color`; the Triage summary's icon and Curation's crushed-shadows marks are
-`--info-color`), each with its fill
-(`--success-background-color`, `--warning-background-color`, `--error-background-color`,
-`--info-background-color`), the chrome's one recipe over its color in HSL, per scheme
-(`light-dark(hsl(from var(--success-color) h calc(s * 0.7) 90%), hsl(from var(--success-color) h calc(s * 0.6) 35%))`:
-the hue kept, the saturation at 70% or 60%, and the lightness set to 90% in the light theme and 35% in the dark one, so
-the four fills sit at one lightness; a fill carries `--theme-neutral-4` in either theme and its semantic color only as
-an edge, since the color on its own fill reads about 3:1; a success, warning or error button takes no fill token but its
-color at 0.16 as its fill, with the color itself as its text and edge); and `--shadow-color`, the ink of the shadows and scrims, each at the alpha it needs
-(`--scrim-color: hsl(from var(--shadow-color) h s l / 0.45)`). The only other color tokens are the veils, a theme
-color or `--shadow-color` at an alpha in relative color syntax, tokens because a translucent color cannot be written
-as a theme color: `--scrim-color` and `--asset-detail-backdrop-color` (`--shadow-color` at 0.45 and 0.9),
-`--dnd-dragging-background-color` (`--theme-neutral-3` at 0.48), `--panel-border-color` (`--shadow-color` at
-0.18, the edge of a chrome panel and the divider inside one), `--popover-background-color` and
-`--popover-border-color` (`--theme-neutral-2` at 0.84 and `--theme-neutral-3` at 0.3, the surface and the edge of a
-floating surface: the popover dialog and an open select's picker), `--dashed-border-color` (`--theme-neutral-3` at
-0.45, the dashed edge of a drop zone and of the box of a list with nothing in it, a token since three stylesheets draw
-it), `--search-panel-background-color`
-(`--theme-neutral-2` at 0.81, the advanced search panel's surface, a little clearer than a popover's), and `--field-background-color` (`--shadow-color`
-at 0.23, a field's sunken fill); a veil follows the pair of the color it reads. The frost behind a floating surface is
-a token too, `--popover-backdrop-filter` (`blur(10px) saturate(200%)`), since the popover dialog and the picker both
-draw it, and the advanced search panel's is its own, `--search-panel-backdrop-filter` (`blur(15px) saturate(200%)`),
-more blurred. A border
-token holds a width and a style and no color: `--border-hairline` (`1px solid`), `--border-heavy` (`2px solid`, its
-width also `--border-heavy-width` for a size that clears the edge), `--border-double` (`2px double`) and `--border-dashed` (the heavy width, dashed: a drop zone's edge). A rule writes
-the edge's color after it, in place (`border: var(--border-hairline) var(--theme-neutral-3)`): `--theme-neutral-3`
-on a hairline around a cell, a menu or a quiet control and on a heavy edge around a modal dialog; at 0.3 on the
-hairline dividing a context menu's actions; at 0.45 on a
-hairline around a button (a semantic or the accent button's edge is its own color); at 0.25 on a hairline around a
-field (`--theme-accent` while it has focus, `--error-color` in error); `--popover-border-color` on a hairline around a
-floating surface; `--dashed-border-color` on a dashed edge; `--theme-primary-text` at 0.4 on
-a hairline around a chip; `--panel-border-color` on a hairline around a chrome panel or dividing one; `--theme-secondary` on the double trace of
-a list; `--theme-primary` on the heavy focus ring. A token holding a shadow keeps its offsets with its color, which is
-a theme color or `--shadow-color` at an alpha: `--drop-shadow`, the one shadow under a modal dialog, a panel, a pin or
-the checkmark; `--float-shadow`, the ink at 0.45 at 12px/32px, the one shadow under a floating surface;
-`--field-focus-shadow`, a 2px spread of `--theme-accent` at 0.15, a focused field's ring; `--crop-dim-shadow`, a 200vmax
-spread of the ink at 0.6 around the Crop tool's crop, which dims the stage outside it; `--text-shadow`, whose light
-side is the ink at alpha 0 since a dark halo has no place under dark text; and `--box-shadow`, `--theme-neutral-4` at 0.07, the light line under a panel's edge. Three more draw the buttons:
-`--sheen-shadow`, an inset 1px line of `--theme-neutral-1` at 0.08 along a button's top edge, on every button and
-over `--float-shadow` on a floating surface;
-`--soft-shadow`, two layers of the ink (0.25 at 1px/2px, 0.15 at 2px/6px), under a button at rest, a small button on
-hover and the pressed segment of a toggle group; and `--lift-shadow`, the ink at 0.3 at 4px/12px, under a hovered
-button. A rule lists the ones it draws (`box-shadow: var(--sheen-shadow), var(--soft-shadow)`). No two
-border or shadow tokens hold one value: a rule that needs an edge or a shadow writes the token that has it, and a new
-one is a new look, described here. What is drawn on a semantic fill or over an image (the label of a marker, the
-snackbar's text, a pin's frame) reads `--theme-neutral-4`; what is drawn on the primary fill reads
-`--theme-on-primary`, and on the accent fill `--theme-on-accent`. A light theme is therefore the light side of every
-pair; both sides are real, and the style guide's switch shows either. Keyboard focus is one ring: `:focus-visible { outline: var(--border-heavy) var(--theme-primary); outline-offset: 2px }` in
-`core.css`, on every element, inset (`outline-offset: -2px`) where a panel clips its rows; the browser withholds it
-after a pointer, including the focus a closing dialog returns to its trigger, so no rule removes an outline, with three
-exceptions, each a field that draws its own focus indicator in place of the ring: a text-like field (see **Forms**)
-sets `outline: none` on `:focus-visible`, which it matches after a pointer too, and turns its edge `--theme-accent`
-with `--field-focus-shadow` around it, while a field in error keeps its `--error-color` edge with no ring; the
-nav's quick search input sets `outline: none` because its form's accent glow on `:focus-within` is that field's focus
-indicator (see **Nav**); and an input of the advanced search panel sets it because its `.box`, which holds the chips
-beside it, takes the field's accent edge and `--field-focus-shadow` on `:focus-within` (see **Advanced search panel**). The setup
-page's palette is no `:root` token: `pages/setup.css` declares the `--setup-*` tokens on `body:where(.setup)`, as
-literals with no pairs, since the page is an illustration and a form in a look of its own, which it keeps in either
-theme (see **Setup background**), and recolors the focus ring there to the form's accent
-(`body:where(.setup) :focus-visible { outline-color: var(--setup-form-accent) }`).
+**Themes** — The app has a light and a dark theme and ships in the dark one (`color-scheme: dark` on `:root` in
+`core.css` and in the meta tag of `includes/header_common`); with nothing remembered it stays dark.
 
-Stylesheets reference the tokens and write no color literal, named colors included. A new color is a theme color
-written in the rule, or a new veil token, described here, when it must be translucent. The rule that a new
-value is a new token with a meaning, or an existing token whose meaning fits rather than one that merely holds the same
-value, is for lengths: the `--space-*` steps and the role tokens over them. A color a rule takes from a token at an
-alpha is written in relative color syntax too, so it follows the token's pair: the tints of the triage and trash views
-are `hsl(from var(--theme-accent) h s l / 0.24)` and `rgb(from var(--warning-color) r g b / 0.05)` (Triage's look is
-under **Triage's look** above), the
-nav bar is the primary at 0.1, the current nav entry the accent at 0.16, the brand's hover glow the primary at 0.8, a
-toggle group's track the secondary at 0.5, and an entry's hover glow its own text color at 0.8, written over
-`currentColor` in the same syntax, as are the hover tints of a toggle segment (0.06) and the menu trigger (0.12). A
-hovered button lightens its own fill by 0.04 in OKLCH, `oklch(from var(--button-fill) calc(l + 0.04) c h)`, one rule
-for every variant: `.action-button` and each variant declare the fill as `--button-fill` on their own rule (as the
-triage and trash views declare `--view-tint`), and `background` reads it. The filter chip's fill is a gradient,
-`--chip-fill` (`linear-gradient(in oklch 180deg, …)`, the primary at 0.12 down to `--theme-neutral-2`), declared by one
-rule of `core.css` for the filter chip and for a chosen name's chip in the advanced search panel,
-and the filter chip's hover lays `--theme-neutral-1` at 0.08 over it as a one-color gradient (`linear-gradient(<color> 0 0)`).
-The Edit panel's gradient tracks are `:root` tokens of stops (`--edit-track-exposure`, `-temperature`, `-tint`,
-`-vibrance`, `-saturation`, which a slider draws when the component sets `--edit-slider-track` on its element to one): what each end of the slider does to the picture, drawn from
-the palette (the ink to `--theme-neutral-1` for Exposure, `--info-color` to `--warning-color` for Temperature,
-`--success-color` to `--theme-magenta` for Tint, the semantic colors for Vibrance and Saturation), `--theme-neutral-3` where
-the slider is 0. The SVG data URIs of `static/css/includes/search_results.css` (the check of a selected asset) and of
-`static/css/htmx/view_image_detail_modal.css` (the Crop tool's rotate cursor, its light and dark strokes) carry their colors
-as literals, because a data URI cannot read a token.
+- `chooseTheme` of `js/common/theme.js` owns the switch, for the nav's theme switch (**Nav**) and the style guide's
+  switcher: it declares `color-scheme` and `data-theme` on `<html>`, remembers the theme (`Const.localStore.theme`) and
+  announces `Const.events.themeChanged`. `js/theme-boot.js`, a blocking script of `includes/header_common` keyed by its
+  `data-key`, declares both before the first paint; the setup page passes `themed = false` (no nav, a palette of its
+  own). The design tweaks panel sets the scheme by itself (**Design tweaks**).
+- An element over a pane that is dark in either theme declares `color-scheme: dark` on itself, so its tokens take their
+  dark side: Curation's `.pane-tag`, `.loupe` and clipping overlay (`htmx/curation_set.css`) and the Histogram strip
+  (`includes/histogram.css`).
+- The color rules are in **Do**; what each token is for is documented here, not in `core.css`.
 
-**Style guide** — `views/style_guide.scala.html` is a dev-only page (`/style-guide/r/:repoId`,
-`StyleGuideController`; the nav shows its button only in dev) with a section per foundation (colors, typography, spacing, borders and shadows, panels, icons)
-and per shared primitive of `core.css` and `tabs.css` (buttons, forms, navigation and tabs, menus and dialogs,
-feedback, badges and states), plus a token audit. It is the main page's chrome without the explorer and the grid, and
-starts the whole app (`initApp()`), so it loads `lib/interact.min.js` and `lib/json-enc.js` itself.
+The theme colors:
 
-- **Discovered, nothing to maintain:** the tokens and the icons. The server's source scan is embedded as JSON
-  (`#styleGuideScan`); the `styleGuide` Alpine component (`js/style-guide.js`) reads it, and the page's `x-for`
-  templates render what the component holds (see **Rendering a page's own data** above): each `:root` token resolved
-  against the loaded stylesheets and placed by the kind of its value and its group (`@tokenCards("border shadow")` asks
-  the component for those kinds, one after another, so borders and shadows share one grid;
-  `@tokenCards("color", "theme")` asks for the colors of one group), with its note (the comment directly above its
-  declaration), reference count, an "Unused" flag, an "Off palette" flag, and the tokens sharing its value ("Same
-  value as"); a click copies its `var()` reference. The token audit lists the tokens declared outside `:root` (an override names the `:root` value it
-  replaces), the ones only set from JavaScript, the color literals grouped by resolved color, each naming the
-  token that already holds that color in the theme shown, and the length literals (the px, rem and em values of a
-  font size, a width or height, a bound, a grid's tracks or an inset), each with its property and locations. The
-  kinds and the groups (`TOKEN_KINDS`, `kindOf`, `groupOf`) are `js/common/token-kinds.js`'s; the design tweaks panel's
-  adapter configures the same sections, so the two place a token alike.
-- **Token cards:** a token whose declaration references other tokens, a recipe, shows the declaration as written (or
-  the one the alpha slider declared inline) and a "From --a, --b" line naming them; any other shows the value it
-  resolves to. A token's group comes from its name, and a length's also from what it references. The colors are
-  **Theme colors** (`--theme-*`: the brand colors, the neutral scale and the on-colors, each a literal hex pair),
-  **Status, shadow and channels** (the four semantic colors, their fills, `--shadow-color` and the three channel colors of the
-  Histogram, Curation's and the Edit panel's) and **Derived**
-  (the veils, such as `--scrim-color`, `--asset-detail-backdrop-color`, `--popover-background-color` and
-  `--field-background-color`, each a theme color or `--shadow-color` at an alpha). The lengths are
-  **Scale** (`--space-*`), **Roles** (a length referencing a step, which its From line names) and **Sizes** (any other
-  length, such as a width or the radii, `--radius`, `--radius-small`, `--radius-large`, `--radius-xl` and the pill `--chip-border-radius`); a value of space-separated lengths, such as a padding shorthand, is a length,
-  drawn as a padded "Padding" sample. The typography tokens (`--font-size-*`, `--font-weight-*`, `--letter-spacing-*`,
-  `--line-height-*`) are a kind by name rather than by value, since a font size is a length and a weight a bare
-  number, each drawn on sample text in the Typography section (`@tokenCards("typography")`). "Off palette" marks a color, border or shadow token outside the Theme colors
-  and Status, shadow and channels groups whose declaration writes a color literal (a hex color, a color
-  function with its channels written out, or a named color), which keeps the palette in the theme and semantic tokens; a relative-color recipe is no literal. "Same value as"
-  names the tokens of the same kind (color, border, shadow or font) that resolve to the same value (a color to the
-  same color in both themes). Two tokens that take their color from the same tokens are not flagged, since two
-  tokens reading one color share it by design, while two recipes computing one color are, as they should be one token; a
-  token without a color is compared by its value alone.
+- `--theme-primary`, the one hue (indigo): the selected tab, the focus ring, selection, drop targets, chips and pins, the
+  brand gradient's start, the nav bar's tint. `--theme-primary-text`: the primary as text or a thin edge where the
+  primary misses 4.5:1 (the filter chip). `--theme-on-primary`: text and glyphs on the primary fill, dark in the dark
+  theme.
+- `--theme-secondary`: the supporting surface lifted off the page (a button, a hovered tab, row or menu action, a count
+  pill; at 0.5 a toggle group's track).
+- `--theme-accent` (teal): where you are and what to do next: the current nav entry, Triage's stripes, tint and view
+  band, the brand's mark, the fill of `.action-button.primary`. `--theme-on-accent`: text on that fill.
+- The neutral scale, `-1` lightest to `-4` darkest in the light theme: `-1` is never a surface, only a sheen or hover veil
+  at a low alpha; `-2` the page surface, a small button's fill, the pressed toggle segment and, at 0.84, a floating
+  surface; `-3` lines and secondary text (4.5:1 on the page and the secondary surface); `-4` text. The dark side is out
+  of lightness order and `-1` and `-4` hold one value there by design; the style guide flags neither.
+- `--theme-magenta`: the Tint track's magenta end, its one use.
+- Text on a semantic fill or over an image reads `--theme-neutral-4`; on the primary fill `--theme-on-primary`; on the
+  accent fill `--theme-on-accent`.
+
+The other colors:
+
+- The channel colors (`--histogram-red`, `-green`, `-blue`): drawn as light on a strip dark in either theme, so each pair
+  holds one color.
+- The semantic colors are a status's text, icon and edge, each at least 4.5:1 on the page surface; `--info-color` is a
+  blue cooler than the primary so a notice does not read as a selection. A fill (`--*-background-color`, one HSL recipe
+  per scheme, so the four sit at one lightness) carries `--theme-neutral-4` text and its color only as an edge, since the
+  color on its own fill reads about 3:1. A success, warning or error button takes its color at 0.16 as its fill and the
+  color itself as text and edge.
+- `--shadow-color` is the ink of shadows and scrims. A veil (listed in **Do**) follows the pair of the color it reads;
+  `--popover-backdrop-filter` and the more blurred `--search-panel-backdrop-filter` are the frosts.
+
+Borders and shadows:
+
+- A border token holds a width and a style (`--border-hairline`, `--border-heavy` with its width `--border-heavy-width`,
+  `--border-double`, `--border-band`, `--border-dashed`); the rule writes the color after it, by convention:
+  `--theme-neutral-3` around a cell, a menu, a quiet control and on a modal's heavy edge; at 0.3 between a context menu's
+  actions; at 0.45 around a button (a semantic or accent button's edge is its own color); at 0.25 around a field
+  (`--theme-accent` focused, `--error-color` in error); `--popover-border-color` around a floating surface;
+  `--theme-primary-text` at 0.4 around a chip; `--panel-border-color` around or inside a chrome panel;
+  `--theme-secondary` on a list's double trace.
+- The shadow tokens: `--drop-shadow` (a modal, a panel, a pin, the checkmark), `--float-shadow` (a floating surface),
+  `--field-focus-shadow`, `--crop-dim-shadow` (dims the stage outside the crop), `--text-shadow` (transparent on the light
+  side), `--box-shadow` (the light line under a panel's edge), and for buttons `--sheen-shadow` (every button's top
+  line), `--soft-shadow` (at rest) and `--lift-shadow` (hovered). A rule lists the ones it draws
+  (`box-shadow: var(--sheen-shadow), var(--soft-shadow)`).
+- No two border or shadow tokens hold one value: a rule writes the token that has the look, and a new value is a new
+  look, described here.
+
+Colors derived in a rule:
+
+- A color taken from a token at an alpha is written in relative color syntax, so it follows the pair: the view tints
+  (**Triage's and the Trash's look**), the nav bar (primary at 0.1), the current nav entry (accent at 0.16), hover glows
+  and tints over `currentColor`.
+- A hovered button lightens its fill with one rule for every variant,
+  `oklch(from var(--button-fill) calc(l + 0.04) c h)`: each variant declares `--button-fill` and `background` reads it.
+- The filter chip and a chosen name's chip in the advanced search panel share `--chip-fill`, declared by one rule.
+- The Edit panel's slider tracks are `:root` gradient tokens (`--edit-track-*`): each end shows what it does to the
+  picture, `--theme-neutral-3` at 0; the component sets `--edit-slider-track` on a slider to one.
+- Literals stay only in the SVG data URIs of `includes/search_results.css` and `htmx/view_image_detail_modal.css`,
+  since a data URI cannot read a token.
+
+Keyboard focus is the `:focus-visible` ring of `core.css`, inset (`outline-offset: -2px`) where a panel clips its rows.
+The browser withholds it after a pointer, including the focus a closing dialog returns, so no rule removes an outline
+to hide it after a click. The three fields that draw their own indicator (**Do**) are a text-like field (**Forms**),
+which matches `:focus-visible` after a pointer too and keeps its `--error-color` edge with no ring in error; the nav's
+quick search (**Nav**); and an advanced search panel input, whose `.box` draws the edge on `:focus-within`
+(**Advanced search panel**). The setup page recolors the ring to `--setup-form-accent` (**Setup background**).
+
+**Style guide** — `views/style_guide.scala.html` is a dev-only page (`/style-guide/r/:repoId`, `StyleGuideController`,
+whose routes `App` registers in dev alone; the nav shows its button only in dev) with a section per foundation and per
+shared primitive of `core.css` and `tabs.css`, plus a token audit. It starts the whole app (`initApp()`), so it loads
+`lib/interact.min.js` and `lib/json-enc.js` itself.
+
+- **Discovered, nothing to maintain:** the tokens and the icons. The server scans the sources on every request
+  (`StyleGuideScan`) and embeds the result as JSON (`#styleGuideScan`); the `styleGuide` Alpine component
+  (`js/style-guide.js`) resolves each `:root` token against the loaded stylesheets, and `x-for` templates render the
+  cards (**Rendering a page's own data**), each section asking for its own with `@tokenCards(kinds, group)`.
+  A card's note is the comment directly above the token's declaration. The token audit lists tokens declared outside
+  `:root`, tokens set only from JavaScript, and the color and length literals with their locations, each color naming
+  the token that already holds it. The kinds and groups are `js/common/token-kinds.js`'s (`TOKEN_KINDS`, `kindOf`,
+  `groupOf`); the design tweaks adapter configures the same sections.
+- **Token cards:** a token's group follows from its name (a length's also from what it references): the colors
+  **Theme colors** (`--theme-*`), **Status, shadow and channels** and **Derived** (the veils); the lengths **Scale**
+  (`--space-*`), **Roles** (a length referencing a step) and **Sizes**. The typography tokens are a kind by name, since a
+  font size is a length and a weight a bare number. "Off palette" marks a color, border or shadow token outside the
+  first two color groups whose declaration writes a color literal (a relative-color recipe is none), which keeps the
+  palette in the theme and semantic tokens. "Same value as" flags tokens of one kind that resolve alike (a color in both
+  themes), except two that read their color from the same tokens, which share it by design; two recipes computing one
+  color are flagged, since they should be one token.
 - **Hand-written, keep in sync:** the specimens. **A new or changed shared primitive in `core.css` or `tabs.css` (a
   class meant for reuse) adds or updates its specimen in `style_guide.scala.html` in the same change.** A feature's own
-  design conventions can have one too: Curation's notice (the shared `.notice` of `core.css`), chip and Bundle row
-  (`htmx/curation_set.css`) and the Sequence rail's
-  rows (`htmx/curation_queue.css`), a done one and a current one side by side in `.sg-curation-queue`, are in Badges & states,
-  where `.sg-curation-bundle` gives the row the rail's width, and the Detail panel's sections (`htmx/detail_panel.css`: a People
-  row, selected and not, Change and Remove under a selected row, the Change combobox with its listbox and its Suggested group, and a nameless Person's combobox with its "This face only" switch and an armed, a merge and a "· this face" option,
-  Details rows with the crumbs), the toolbar toggles (the Detail panel's and the Face highlights', the Edit toggle pressed and
-  `aria-disabled`, Show original's) with the "Edited" badge (`.edit-badge`, `core.css`), and the Face highlights
-  (`htmx/view_image_detail_modal.css`: a highlight and its badge over a stand-in for a photo, `.sg-face-highlights`) are in Panels &
-  layout, in `.sg-detail-panel`, as are the Edit panel's strip (`includes/edit_panel.css`: the header's tools, the Histogram on
-  its button, the tab row with a section's dot, a section's heading with its Reset, the aspect chips with the crop's size, the
-  commit row and the key legend), hand-written to `includes/edit_panel`'s markup inside an element with the panel's ID,
-  `#editPanel`, which its rules are scoped by, with no `x-data`, so nothing binds, in `.sg-edit-panel`, a box that is no grid so
-  the panel's `grid-area` names nothing; its Histogram alone is the real markup, `includes/histogram`, bound to the
-  `styleGuide` component: its paths a sample the component draws with the real `channelPaths` (`editHistogram`), and its click
-  switching the component's `clippingBlink` (`toggleClippingBlink`), so the pressed look shows; and the People tab's cells (`htmx/people.css`: a named person's and a hidden Unmatched
-  person's, each with its rename pencil, which hover or focus reveals), hand-written to `htmx/people_list`'s markup
-  inside an element with the tab's ID, `#people`, which the rules are scoped by, with `--face-box` set on it as the tab's
-  shell sets it; the cells carry no `drag-drop` or `dropzone` class and no search trigger, so nothing binds to them, and
-  `.sg-cover` stands in for the cover face. The Results title's specimens in Panels & layout show a folder's path, a
-  Triage subset's struck-through marker (`.kind-icon.slashed`) and a filtered search's title over the real
-  `includes/search_filter_chips` with a sample description and sample names, then a second one of a description
-  within a folder that found nothing (`foundNothing`), with its line after Edit; their remove buttons and Edit
-  nothing binds, since only the results hydrator binds them. The Triage summary (`.notice` with `htmx/triage_summary.css`) is in
-  Feedback, in `.sg-triage-summary`, which gives it about an explorer's width and its text color there, its links no
-  search triggers; Quick view (`htmx/quick_view_modal.css`) is in Menus & dialogs, its content hand-written to
-  `htmx/quick_view_modal`'s markup inside an element with its ID, `#quickView`, which its rules are scoped by, with no
-  `data-app-fragment`, so nothing opens it, `.sg-quick-view` giving it the modal's width for it and `.sg-preview`
-  standing in for each Preview; the advanced search panel (`htmx/search_panel.css`) follows it there: the panel's real
-  form, `htmx/search_panel` rendered over a sample description and sample names inside an element of the panel's class,
-  `.search-panel`, which its rules are scoped by, its comboboxes and calendars live over this Library's names and its
-  Search, Enter in the Describe field included, stopped by the wrapper, which takes the form's submit on its way down, and beside it a static listbox with a marked match, the
-  active option, a path and the line of a full field; the navigation specimen's quick search holds the filter button
-  with a badge. Forms ends with `.edit-slider` (`core.css`): a changed plain slider and one slider per gradient track,
-  each with `--edit-slider-track` set inline to its `--edit-track-*` token as the component sets it, each a column of a
-  section wide (`.sg-edit-sliders`); a gradient is no kind a token card draws a sample of (the five are listed, as
-  text, under the Token audit's Other tokens), so the specimen is where the tracks are seen. Specimens
-  use the real classes; the page's own styles (`static/css/pages/style_guide.css`: `sg-` classes, and its bare elements
-  under `body.style-guide`) only lay the page out, from the `:root` variables.
+  conventions can have one too (Curation, the Detail panel, the Edit panel, the People tab, the Results title, Quick view,
+  the advanced search panel and more). Specimens use the real classes; `static/css/pages/style_guide.css` (`sg-`
+  classes, bare elements under `body.style-guide`) only lays the page out, from the `:root` variables. A specimen of a
+  scoped feature stays inert:
+  - It is the template's markup, hand-written inside an element carrying the ID or class the feature's rules are scoped
+    by (`#editPanel`, `#people` with `--face-box` set, `#quickView`, `.search-panel`), with no `x-data`,
+    `data-app-fragment`, `drag-drop` or `dropzone` class or search trigger, so nothing binds.
+  - A real include is bound to the `styleGuide` component or to nothing: the Edit panel's Histogram draws a sample with
+    the real `channelPaths`; the advanced search panel's real form has its submit stopped by the wrapper; the Results
+    title's real filter chips are bound only by the results hydrator, which the page does not run.
+  - The Edit panel's warning (`dialog#editLeaveDialog`) is hand-written to `includes/edit_panel`'s markup and shown
+    open in place (`open`), not modal.
+  - The gradient tracks are seen only in the `.edit-slider` specimen, since a token card draws no gradient.
+
   Three more things keep the page current:
   - A changed size, font, or icon set updates the values the specimens state in text.
-  - `core.css` comments its boxed section headings (`/* NAVIGATION */` and the like) and, in a line or two, a rule
-    whose selector or values need a reason (the quick search form, the field and its focus rule, the popover dialog's
-    placement), pointing to this guide for the detail. A `:root` token may carry a short note in a comment directly
-    above it, which its card in the style guide shows as its note (the Edit panel's sizes, the view band's width, the
-    gradient tracks); what a token is for in full, and what a rule draws, is documented in this guide and in the style
-    guide's prose.
-  - A new section also needs its `#styleGuideToc` link and its ID in `StyleGuideControllerTests`.
-- **Live specimens:** an Add button and a ⋯ menu built with `buildModalTriggerCtrl` / `buildContextMenuCtrl`
-  (`initStyleGuide()`, after the app has started: no template, so they are the explorer's own markup); the menu has a
-  folder's shape, Search here, which opens the nav's advanced search panel on the search in force, a separator, then
-  Rename and Delete. The Add button and the menu's two dialog actions open
-  `htmx/style_guide_sample_dialog.scala.html` as a popover dialog below the control, a one-field popover with
-  no label (its input's `aria-label` is "Sample name"). A blank name returns the validation replacement, its error
-  under the field; a name completes and dispatches `Const.events.styleGuideSampleSubmitted`, which the page answers with
-  a snackbar. Nothing is persisted. The Forms section's Labelled fields button (`data-app-open-dialog`, see
-  **Modals**) opens a page-held `<template>` dialog in the general modal host, a labelled input and a labelled select,
-  so its labels take the dialog's small caps; it requests and submits nothing, and the × or Escape closes it.
-- **Library menu and New library:** the navigation section's Browse cell is `includes/library_menu` as the nav renders
-  it, the Browse link and the menu (`#styleGuideLibraryMenuHost`), over the page's Library under a long name and a second Library, "Client 2"; its
-  links lead to the section, and its New library action opens the real `htmx/new_library_dialog` as a taken name
-  leaves it ("client  smith" typed, its error under the field) from the dev-only `GET
-  /htmx/style-guide/r/:repoId/dialogs/new-library`. The sample's form posts to `POST
-  /htmx/style-guide/r/:repoId/new-library`, which applies the Library name rule alone: a refused name returns the
-  validation replacement, a valid one an empty 200, and nothing is created.
-- **Theme switcher:** the Light / Dark `.toggle-group` at the top of the contents column (`#styleGuideTheme`), which
-  stays on screen. `setTheme` calls `chooseTheme` (see **Themes**), so the choice is the whole app's, and the component answers
-  `Const.events.themeChanged`, which the nav's switch announces too, by following the theme and resolving the tokens again:
-  the color a token holds and its alpha are those of the theme shown, while the tokens sharing its value are compared
-  in both themes. The page opens in the remembered theme, else in the stylesheet's.
-- **Font tester:** the Typography section's right half (its left half holds the `--font` card, the type scale's
-  cards, the sizes on the real components and the text colors). The typed value becomes the lorem specimen's `font-family`, and the status says whether the browser
-  has that font, decided by measuring the text with the value in front of each generic family against the generic
-  family alone (`isFontAvailable` in `js/common/font-availability.js`). The input is the component's `fontInput`
-  (`x-model`), which the specimen's style and the status
-  derive from. Nothing is requested from the server.
-- **Alpha slider:** the `--scrim-color` card (`ALPHA_SLIDER_TOKEN` in `js/style-guide.js`) has a slider under its
-  copy button. Dragging it replaces the alpha of the token's relative color (`hsl(from var(--shadow-color) h s l / 0.6)`
-  after a drag) and declares the whole value inline on the root element, so the page repaints with it until it is
-  reloaded; nothing is stored. It works on the declaration as written, which keeps the color as declared, and should a
-  token hold a `light-dark()` pair, only the color of the theme shown changes and the other is left alone; the card
-  shows the value, and Copy value copies it for pasting into `core.css`. The slider starts at the alpha the token's
-  color has in the theme shown, and a color that already is such a replacement has its alpha replaced rather than
-  wrapped again. The dragged alpha and the value it gives live on the token, so a card follows
-  its token alone. A drag made in one theme survives a switch to the other: the tokens are resolved again from the
-  inline declaration, and the cards re-render from the new tokens. A token card is therefore a `div` holding the copy
-  button and, for that token, the slider row: an input cannot sit inside a button.
+  - `core.css` comments its boxed section headings (`/* NAVIGATION */`) and, in a line or two, a rule whose selector or
+    values need a reason, pointing to this guide for the detail. A `:root` token may carry a short note in the comment
+    directly above it, which its card shows; what a token is for in full, and what a rule draws, is documented in this
+    guide and in the style guide's prose.
+  - A new section also needs its `#styleGuideToc` link and its ID in `StyleGuideControllerTests` (`sectionIds`).
+- **Live specimens:** `initStyleGuide()` builds an Add button and a folder-shaped ⋯ menu with `buildModalTriggerCtrl` /
+  `buildContextMenuCtrl`, the explorer's own markup. Their dialogs open `htmx/style_guide_sample_dialog`, whose dev-only
+  route validates the name and persists nothing (`Const.events.styleGuideSampleSubmitted` on success). The Forms
+  section's Labelled fields button opens a page-held `<template>` dialog (`data-app-open-dialog`, **Modals**).
+- **Library menu and New library:** the navigation section renders the real `includes/library_menu`
+  (`#styleGuideLibraryMenuHost`); its New library opens the real `htmx/new_library_dialog` in its taken-name error state
+  (`GET /htmx/style-guide/r/:repoId/dialogs/new-library`), and its form posts to
+  `POST /htmx/style-guide/r/:repoId/new-library`, which applies the Library name rule alone and creates nothing.
+- **Theme switcher:** `#styleGuideTheme`. `setTheme` calls `chooseTheme` (**Themes**), so the choice is the whole app's;
+  on `Const.events.themeChanged` the component resolves the tokens again, cards showing the theme shown while "Same
+  value as" compares both themes.
+- **Font tester:** in Typography, the typed value becomes the specimen's `font-family`, and `isFontAvailable`
+  (`js/common/font-availability.js`) reports whether the browser has the font, by measuring text against each generic
+  family alone.
+- **Alpha slider:** on the `--scrim-color` card (`ALPHA_SLIDER_TOKEN`), it replaces the alpha of the token's relative
+  color and declares the value inline on the root element until reload, so Copy value gives a value to paste into
+  `core.css`; of a `light-dark()` pair only the theme shown's side changes. A card is a `div`, not a button, because it
+  holds the slider's input.
 
-The scan leaves the guide's own files out, so a specimen never counts as a use of the token it demonstrates, and the
-vendored stylesheets of `static/css` (`font-awesome.min.css`, `leaflet.css`, `flatpickr.css`), whose literals are not the app's to
-tokenize, `pages/setup.css`, whose `--setup-*` palette is the setup page's own, and the design tweaks panel's adapter
-(`js/design-tweaks.js`), which names tokens to configure the panel, not to use them; all are listed in
-`StyleGuideController.excludedFiles` (the panel itself is under `lib/`, which the scan skips). The same scan is served
-as JSON by `GET /style-guide/scan.json` (dev only) as the panel's sources.
+The scan (`StyleGuideController.excludedFiles`) leaves out the guide's own files, so a specimen never counts as a use of
+its token; the vendored stylesheets (`font-awesome.min.css`, `leaflet.css`, `flatpickr.css`); `pages/setup.css`, whose
+`--setup-*` palette is the setup page's own (**Do**); and `js/design-tweaks.js`, which names tokens to configure the
+panel, not to use them. It skips every `lib/` directory. `GET /style-guide/scan.json` (dev only) serves the same scan to
+the panel.
 
-**Design tweaks** — A dev-only panel (`includes/header_common` loads it inside `@if(Environment.isDev)`, like the nav's
-Style Guide button; `Ctrl+Alt+T` toggles it, there is no nav entry) that changes the value of any `:root` token of the bundle live, on the real markup and data of the
-running app, so the look of every page, dialog and htmx fragment can be explored without touching a rule. The panel is
-the vendored **tokentweak** package (`lib/tokentweak.js`, 0.3.0, `lib/README.md`), a framework-free token editor:
-sections of cards with a control per kind of value (a color written as a recipe over another token gets the recipe
-view: a swatch of the resolved color, a select for the source token, a mode select per channel and a slider in the
-modes that write a number, the alpha slider, a detach that writes the resolved hex, and the text field as the escape
-hatch), a Light / Dark toggle, Inspect (pick an element, filter to the tokens its rules reference), snapshots (save,
-load, rename, duplicate, A/B, import and export as JSON) and the exports (a prompt of the changes, the CSS before/after
-lines, the snapshot JSON). The package's README documents every option; this entry covers what Altitude passes it.
-`js/design-tweaks.js`, the adapter, is the only Altitude code of the panel.
+**Design tweaks** — A dev-only panel that changes any `:root` token of the bundle live, on the real markup and data of
+the running app, so the look of every page, dialog and htmx fragment can be explored without touching a rule. It is
+**currently disabled**: both of its script tags in `includes/header_common` (`lib/tokentweak-boot.js` and
+`js/design-tweaks.js`, inside `@if(Environment.isDev)`) are Twirl-commented (`@* … *@`), so it loads on no page, dev
+included. To
+enable it, uncomment both tags; `Ctrl+Alt+T` then toggles it (there is no nav entry). The rest describes the panel once
+enabled.
 
-- **What the adapter configures:** `storageKey: Const.localStore.designTweaks` and `hostId: "designTweaks"`; the
-  stylesheet to read, `"/assets/"` (the bundle, by href substring); no `trigger` (the panel has no nav entry) and the
-  shortcut `Ctrl+Alt+T`, the only way to toggle it; `sources: "/style-guide/scan.json"`, the
-  server's scan (locations and notes for the CSS export, the literals for the Not reachable tab); the sections in the
-  style guide's order (Theme colors `--theme-*`; Status, shadow and channels, the semantic colors, fills, `--shadow-color`
-  and the Histogram's channel colors;
-  Derived, the other colors; Typography, the fonts and the typography kinds; Scale, the steps; Roles, the lengths that
-  reference a step; Sizes, the other lengths; Borders and shadows; Panels; what none claims goes to the automatic
-  Other); the spacing scale `--space-<n>`; the type scale, `--font-size-{xs,small,base,medium,large,xl,display}` from
-  `--font-size-base`; no `seed`: the package's seed is a formula-driven control (a configuration names the hue and
-  lightness tokens its sliders start from and, per target token, a formula from the seed), which Altitude does not
-  configure, since every theme and semantic color is a literal pair with the full sliders; the recipe view serves the
-  veils, the borders and the shadows, whose colors are written over a token; the two tokens
-  the server sets inline on their containers as scoped tokens, `--preview-box` on `#assets` (200px, labeled
-  `Const.AssetView.PREVIEW_BOX_PIXELS` in the exports) and `--face-box` on `#people` (80px,
-  `FaceDetectionService.faceDetectionBoxPx`), 40..600 by 10, in Panels; the explorer size as an extra control in
-  Panels (no token of the panel's own: `explorerShare`, `setExplorerShare` and `hasExplorerDock` of
-  `js/common/explorer-dock.js`, the explorer's share of its Dock side's axis, 10..70 %, default 25, the width's, since
-  the package takes one number, "Set on the main page, where the explorer is" elsewhere); and
-  `exports: { fileName: "core.css" }`.
-- **How an override applies:** one `CSSStyleSheet` in `document.adoptedStyleSheets`, rewritten on every change: a
-  marker rule first, `:root { --tokentweak: designTweaks }` (the storage key), then one `:root` rule with every tweaked
-  token, then one `!important` rule per scoped token on its container. Adopted sheets cascade after the document's, so
-  they win over the bundle at equal specificity, with no `!important` on the root tokens and no `@layer`. The explorer
-  size is applied through `setExplorerShare`, at `load` when the page has a dock.
-- **No flash on load:** the package keeps the sheet's text (`css`) and the theme in its `localStorage` key, and
-  `lib/tokentweak-boot.js`, a plain blocking script in the head whose tag names the key in `data-key="designTweaks"`,
-  adopts that text and declares the theme before the first paint. The adapter's module, deferred as every module is,
-  finds the boot sheet by its marker rule (`cssRules[0]` holds `--tokentweak` equal to the key), takes it over and
-  builds the panel; without one it appends a new sheet. No `window` global is involved.
-- **The panel itself:** a `popover="manual"` host (`#designTweaks`) in the top layer, above the asset detail and
-  every dialog without a z-index, holding a shadow root with the package's own sheet (`--tt-*` palette and pinned
-  inherited text properties on the host, so tweaking the app's tokens never restyles the panel). It docks left, right
-  or bottom and collapses to a strip; dock, open and collapsed state are remembered. The modal's focus trap marks the
-  host inert like everything outside the dialog; the package's inert guard (a `MutationObserver`, `inertGuard`, on by
-  default) removes the attribute, so the panel stays usable while a dialog is open, though the trap still returns
-  focus to the dialog from the panel's text fields.
-- **Themes:** the toggle sets `document.documentElement.style.colorScheme`, as the style guide's switcher does,
-  remembered with the tweaks. Editing a color edits the side of its `light-dark()` pair for the theme shown; the
-  export writes the full pair. `js/common/theme.js` is not involved: the two keep separate copies of the pair logic.
-- **Dev only:** nothing of the panel ships outside dev. The boot script and the adapter are behind
-  `Environment.isDev` in `header_common`, and the panel's stylesheet is constructed in the
-  shadow root, not part of the bundle. The vendored files are served under `/static/` like every lib but referenced
-  nowhere else. `StyleGuideControllerTests` asserts the index and the nav of a non-dev app carry none of
-  `design-tweaks`, `designTweaks` and `tokentweak`.
+The panel is the vendored **tokentweak** package (`lib/tokentweak.js`, `lib/tokentweak-boot.js`, 0.3.0, refreshed by
+`make vendor-tokentweak`; `lib/README.md`), whose README documents every option. `js/design-tweaks.js`, the adapter, is
+the only Altitude code of the panel and passes only what the package cannot infer.
+
+- **What the adapter configures:** the storage key `Const.localStore.designTweaks`, the bundle (`"/assets/"`), the
+  shortcut, the server's scan as `sources`, the style guide's sections and the spacing and type scales. The two tokens
+  the server sets inline on their containers (`--preview-box` on `#assets`, `--face-box` on `#people`) are scoped tokens,
+  and the explorer size is an extra control over `js/common/explorer-dock.js`, which owns that share. It passes no
+  `seed`: every theme and semantic color is a literal pair, edited with the full sliders.
+- **How an override applies:** one adopted `CSSStyleSheet`, rewritten on every change: a marker rule
+  (`:root { --tokentweak: designTweaks }`), one `:root` rule with every tweaked token, and one `!important` rule per
+  scoped token on its container, since an inline value beats any normal rule. Adopted sheets cascade after the document's,
+  so the root tokens win at equal specificity, with no `!important` and no `@layer`.
+- **No flash on load:** the package stores the sheet's text and the theme under its key; `lib/tokentweak-boot.js`, a
+  blocking head script naming the key in `data-key="designTweaks"`, adopts them before the first paint, and the
+  adapter's deferred module finds that sheet by its marker rule and takes it over. No `window` global is involved.
+- **The panel itself:** a `popover="manual"` host (`#designTweaks`) in the top layer, with a shadow root holding the
+  package's own sheet, so tweaking the app's tokens never restyles the panel. A modal's focus trap marks the host inert;
+  the package's `inertGuard` (a `MutationObserver`, on by default) removes the attribute, so the panel stays usable under
+  a dialog, though the trap still pulls focus back from the panel's text fields.
+- **Themes:** the panel's Light / Dark toggle sets `document.documentElement.style.colorScheme` alone, remembered with
+  the tweaks; it bypasses `js/common/theme.js` (the two keep separate copies of the pair logic) and sets no
+  `data-theme`. Editing a color edits the side of its pair for the theme shown; the export writes the full pair.
+- **Dev only:** nothing of the panel ships outside dev: its tags sit inside `@if(Environment.isDev)`, its stylesheet is
+  built in the shadow root rather than the bundle, and nothing else references the vendored files.
+  `StyleGuideControllerTests` asserts the index and the nav of a non-dev app carry none of `design-tweaks`,
+  `designTweaks` and `tokentweak`.
 
 ## Key Files
 
+Only files whose name hides what they hold or a contract they share with another file. Paths are under `altitude/`.
+A feature's files are named in its topic under **UI Patterns**, the image-edit modules in `docs/image-edits.md`, and
+what each JS directory owns in **JS Directory ↔ Template Mapping**.
+
 | File | Purpose |
 |---|---|
-| `static/js/constants.js` | All string constants: events, attributes, store keys, view names |
-| `static/js/app.js` | thin bootstrap that exposes `initApp()` and starts `FrontendApp` |
-| `static/js/context.js` | `window.ctx` — repo ID (set once by `index.scala.html`) and metadata field settings |
-| `static/js/http/client.js` | shared axios client for non-HTMX requests (a 401 sends the window to the login; `getHttpErrorMessage` says a JSON refusal's reason); use per-request `validateStatus` overrides only where the UI intentionally handles a non-2xx response |
-| `static/js/models/folder.js` | DOM wrapper around folder tree nodes (`Folder.find(id)`); owns branch expansion (`expand`, `expandAll`, `collapse` with descendant reset) |
-| `static/js/common/viewed-folder-scope.js` | tracks the folder scope of the displayed results and marks it in the tree |
-| `static/js/common/modal.js` | owner of the four dialog hosts: `openModal`, `closeModal`, open identity (`isModalOpenActive`, an open waiting for its host counted), the element that requested an open (`getModalOpenSource`), the control focus returns to (`openerOf`), an open answered 204 (`settleModalOpenRequest`'s `onNoContent`), the popover dialog's anchor and its own dismissals (`bindPopoverHost`), `setAssetDetailSize` (the size as shown, which the box is fitted from); a closing host leaves fullscreen |
-| `static/js/common/video-playback.js` | the asset-detail Video beyond its element: `unloadVideo`, and the Media Session (`describeInMediaSession`, `clearMediaSession`) |
-| `static/js/common/anchored-panel.js` | viewport placement of the popover menus and View settings (the popover dialog is placed by CSS anchor positioning) |
-| `static/js/fragments/dialog-operations.js` | lifecycle of the operations every dialog submits; fragment kinds register their `isActive`/`close` |
-| `static/js/fragments/inline-dialog.js` | View settings fragment shown in its popover |
-| `static/js/common/snackbar.js` | `showSuccessSnackBar`, `showWarningSnackBar`, `showErrorSnackBar`; the `snackbar` store (`createSnackbarStore`: the two stacks, the cap and merge, the notices' timers, focus on dismiss), the announcer (two regions per place; `announcePolitely` lends the polite one to the tooltip) and `raiseSnackbarStacks` (the open stacks shown again, above an element that went fullscreen after them) |
-| `static/js/common/tooltip.js` | the `$tooltip` magic (`tooltipMagic`), `showTooltip` and `hideTooltip`: the hint above a clicked element, in the `#tooltip` host, placed by CSS anchor positioning (see **Tooltip**) |
-| `static/js/stores/html-common.js` | `registerHtmlCommonBindings()`: what `html_common` binds (the `modal`, `imageDetailLoading` and `snackbar` stores, the `$tooltip` magic, the focus plugin), called once per page before Alpine starts: from `initializeFrontendStores()` and `nav-page.js` |
-| `static/js/search-results/selection.js` | the `selectedAssets` store (reactive set of IDs, paints the cells) and the grid's delegated click listener |
-| `static/js/alpine/components/date-group-selectable.js` | Alpine component for a group header's checkbox: selects its group's loaded cells (a day, a Location or a Sequence) as a set |
-| `static/js/search-results/box-selection.js` | box selection: Viselect gesture on the grid, committed through the store on release |
-| `static/js/search-results/infinite-scroll.js` | `loadNextPage` and the observer on the last cell, watched only while nothing follows it; `pendingCursorOf` and `observeContinuationCell` for the page window |
-| `static/js/search-results/page-window.js` | the window of loaded pages: folds pages a viewport above into `.page-spacer`s, reloads a spacer as a continuation when it nears (`reloadSpacer`), drops pages a viewport below, keeps the group header still open at a fold, and corrects the scroll position itself |
-| `static/js/search-results/lazy-images.js` | loads thumbnails within a viewport, placeholders them once more than a viewport away, the first page's included |
-| `static/js/search-results/metadata-visibility.js` | keeps the `show-<field>` classes on `#assets` in step with the metadata fields set |
-| `static/js/listeners/htmx-requests.js` | the outcome of every htmx request: failures, validation replacements (no event), declared success events, tab selection, fragment hydration |
-| `static/js/settings-page.js` | the Settings page module: `startNavPage()` (`nav-page.js`), the save listener, the Reset buttons |
-| `static/js/nav-page.js` | `startNavPage()`: the start of the pages with the nav outside the main app (Import, Settings, Users): Alpine with what `html_common` binds, the `contextMenu` component and the advanced search panel's components, the request rule and the dialog wiring, the nav's Library menu built, the advanced search panel bound |
-| `static/js/listeners/settings.js` | `SETTINGS_SAVED_EVENT` → the success snackbar |
-| `views/settings.scala.html` | The Settings page: nav, `main` with the form, `html_common` |
-| `views/users.scala.html`, `views/htmx/user_accounts.scala.html` | The Users page: nav, the header (title, filter box, Add User) on the `usersPage` component, and the account cards under their three tabs, each with its ⋯ menu for an Admin; styled by `static/css/pages/users.css` |
-| `views/htmx/account_form.scala.html` | The Add User modal and the edit form: identity, account type cards, the Admin's switches, the Permission matrix of the creator's ceiling, on the `accountForm` component |
-| `views/htmx/set_password_dialog.scala.html`, `delete_account_dialog.scala.html`, `own_password_dialog.scala.html` | The Users page's Set password and Delete popover dialogs, and the account info dialog's Change password dialog (`static/css/htmx/own_password_dialog.css`) |
-| `views/includes/menu_ctrl.scala.html`, `password_field.scala.html` | A ⋯ menu rendered by the server (an account card's and a Watch folder card's), and a new password's field with Generate and Show |
-| `views/includes/account_menu.scala.html`, `views/htmx/account_info_dialog.scala.html`, `views/includes/account_libraries.scala.html` | The nav's account cell (the type's color, the username) and the account info dialog it opens, with Change password and Log out; an account's Libraries, which the dialog and an account card share |
-| `static/js/users-page.js`, `static/js/alpine/components/users-page.js`, `account-form.js`, `password-field.js` | The Users page's module and components: the tab and filter, the account form's type and matrix toggles, a password's Generate and Show |
-| `static/js/listeners/account.js` | `PASSWORD_CHANGED_EVENT` on every page with the nav, `ACCOUNTS_CHANGED_EVENT` on the Users page (the snackbar, then the cards read again) |
-| `static/js/common/name-key.js` | `nameKey` and `partialMatchKey`, the server's name fold in the browser: the Change combobox's and the Users page filter's |
-| `views/htmx/settings_form.scala.html` | The one Settings form: sections per group, a field per applicable Setting with Reset, error, restart notice and help |
-| `static/js/setup-page.js` | the setup page module: starts the background scene on `#setupBackground`, nothing else |
-| `static/js/setup-background/setup-background.js` | the page side of the setup background: `startSetupBackground` (feature detection with no fallback, the palette probed to `[r, g, b]` channels, the module Worker and the transferred canvas, `resize`, `visible` and `motion` posted as they change, `.ready` on the Worker's first frame) |
-| `static/js/setup-background/setup-background-worker.js` | the Worker of the setup background: the scene on the OffscreenCanvas (the ground's bands and cells, the clouds and their shadows, the jet and its lights), the clamped clock with one pending frame, the first frame drawn before `ready`, the still under reduced motion and the pause of a hidden tab, the refit on `resize` |
-| `static/js/setup-background/setup-background-textures.js` | the ten textures of the fields, each painting a cell from its corner: tiles repeated by a pattern (furrows, crop rows, tramlines, strip crops, an orchard, pasture, contours) and the headland and the centre pivot drawn to the cell |
-| `views/setup.scala.html` | The setup page: the scene's canvas first in the body, the message hosts, `main` with the title and the setup form (`htmx/setup_form`) on the frosted card, the footer; its layout, the canvas's placement and fade-in, the card, the title and the footer are `static/css/pages/setup.css` |
-| `static/js/fragments/dialog-openers.js` | `data-app-open-dialog` buttons opening a page-held `<template>` dialog in the general modal host |
-| `static/js/search-results/click-suppression.js` | swallows the click the browser fires after a pointer gesture: an asset drag or a box gesture (`suppressNextClick()`), and a Person drag, a folder drag or a drag of the batch mover, which arm `suppressClickAfterRelease()` at drag start |
-| `static/js/alpine/components/context-menu.js` | Alpine component coordinating a folder's, album's or Location row's native popover menu; closes a menu from outside (Escape, ancestor collapse, dialog open) |
-| `static/js/alpine/components/people-tab.js` | Alpine component of the People tab: the remembered buckets of the Main and Duplicate panes, Split view and the panes' sizes on each axis (`Const.localStore.peopleView`), the pane loads through `htmx.ajax`, the Split.js instance along the Dock side's axis and its remake on `dockSideChanged`, the reload on `peopleChanged` and when the `searchParams` store's `triaged` changes, which each load reads; each load names its pane, and in Triage asks for triaged items whatever the store holds |
-| `views/htmx/people.scala.html`, `people_list.scala.html` | The People tab's shell (the panes and their bucket switches, no list) and one pane's list for the buckets asked for, each cell with its name link and rename pencil, whose IDs carry the pane (`pane`); styled by `static/css/htmx/people.css` |
-| `views/htmx/rename_person_dialog.scala.html` | The popover dialog of a People cell's rename pencil: one field holding the name, focus returned to the pencil of its pane, `PERSON_NAME_EDITED_EVENT` on success, the error row or the offer to merge on a refusal |
-| `views/includes/person_name_taken.scala.html` | The error row of a rename to a name another live person holds, with its "Merge into X…" button; rendered by the inline name editor and the rename dialog, each naming the row (`errorId`) and supplying the `x-data` scope its button needs; the dialog also passes its `pane`, which the offer sends to the Merge people modal |
-| `views/htmx/detail_panel.scala.html`, `detail_panel_people.scala.html`, `assignable_people.scala.html` | The Detail panel's three sections (People, Details, Metadata; styled by `static/css/htmx/detail_panel.css`), its People section on its own (one row per Face, a button selecting it, with the Face, Person, box, Frame time and Hidden data attributes the Face highlights read, and whether the Person is named and their number of assets, which the combobox reads; under each row, for a live asset, Change and Remove and the Change combobox's markup, with the "This face only" switch for a Person with no name, its listbox rendering the Suggested group and then the list from one option block, each option with its armed label and suffix; a correction's response, its root carrying the result message, any deleted Person and, after a merge, the merged Person and the destination) and the Change combobox's options, the Suggested group of the Face first, which the combobox parses (`docs/faces.md`, **Corrections**) |
-| `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the Edit's canvas, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu, and for a holder of Edit images the Edit panel, its divider and the Edit's tools over the stage; the asset's Edit, whether it may be edited and why not, and the measurement's clipping levels as data attributes; its grid, the highlights', the Crop tool's and Before/after's look are `static/css/htmx/view_image_detail_modal.css` |
-| `views/includes/edit_panel.scala.html`, `static/css/includes/edit_panel.css`, `static/js/alpine/components/edit-panel.js` | The Edit panel (**Edit panel**): its header, Histogram, tabs and sections (each slider a `.edit-slider` from `recipe.js`'s specs), commit row and keys, and after it the warning of changes not saved (`dialog#editLeaveDialog`); their look, the panel docked on the side or top and bottom; and the `editPanel` component over the coordinator (the tabs, the sliders, the aspect chips, the curve editor, Undo and Redo) |
-| `views/includes/histogram.scala.html`, `static/css/includes/histogram.css` | The Histogram's one markup and look, Curation's strip under each stage pane and the Edit panel's: a button switching the Clipping blink, the channels' paths and the two corner labels given as Alpine expressions of the component it is rendered under |
-| `views/includes/edit_stage_tools.scala.html` | The Edit's tools over Asset detail's stage: Before/after's divider (`#editSplit`), the Crop tool (`#cropLayer`: the frame, the crop with its guide and handles, the Level line, which the layer also draws alone) and the bar of the changes held (`#editBar`: the Crop tool's guide and size, Cancel and Done) |
-| `static/js/edit/edit-panel.js` | `createEditPanel`: the Edit panel's coordinator (open or closed, `toggle({ fromKey })`, the dock opposite the Detail panel, the stage while it draws, each asset's session and the wait for its render, the commits, `commitSoon` and `flushCommit`, the changes held with `done`, `cancel` and the stage's bar, the Crop and Level tools, `escapeEdit`, the warning's triggers, `beforeLeave` for a step and the close guard, `beforeunload`, Before/after, the Histogram and the Clipping blink of the canvas, Auto-level) and `connectEditPanelView` for its component |
-| `static/js/edit/edit-stage.js` | `createEditStage`: Asset detail's stage for a still image (the original, the Display image or the canvas, `showImage`, `setEditing`, `setLive`, `adoptEdit`, `settled`, `current`), Show original (the toggle, `holdOriginal`, `releaseShowOriginal`, the badge and the key legend's entry) and the size handed to the Detail panel |
-| `static/js/edit/edit-session.js`, `render-status.js`, `leave-dialog.js` | One asset's Edit synced with the server (the changes held, `done` and `cancel`, the serial queue of saves on `base`, the edit version, the save waiting replaced by a later Done, Undo and Redo of the session, a conflict, a failure, `discard`, `settled`, `SaveStatus`, `onAdopted`, `isNewerEditState`), the wait for the render that follows (`waitForRender`, `swapGridPreviews`), and the warning of changes not saved (`askToLeave`, `closeLeaveDialog` for Escape, `isLeaveDialogOpen` for the keys, which `global.js` reaches through `common/edit-keys.js`) |
-| `static/js/edit/crop-tool.js`, `level-tool.js`, `adjust.js` | The Crop tool on interact.js and the Level tool (`createCropTool`, `isCropToolOpen` for its keys), the Level tool's line, and the Edit panel's changes to an Edit as pure functions (a slider, an aspect, a turn, a flip, a reset, the crop kept inside, a drag's Straighten, the curve's points) |
-| `static/js/edit/recipe.js`, `geometry.js`, `tone.js`, `renderer.js` | The Edit as the client holds it (defaults, sliders, sections, the server's normalization), its geometry with the crop's rules and `mapBox`, its per-pixel math, all three DOM-free and checked against the shared vectors; and the WebGL2 renderer that draws it (`createRenderer`: `render`, `renderBefore`, `readHistogram`) |
-| `static/js/listeners/edit.js` | The Edit's events in Asset detail: Show original held, the Edit panel's toggle, the Crop tool's keys, Done, Undo and Redo |
-| `static/js/common/content-urls.js`, `histogram.js` | An asset's content URLs (`previewUrl` by revision, `displayUrl`, `originalUrl`) and an image repointed at a new Preview (`repointImage`); a Histogram's SVG paths (`channelPaths`) and a fraction's label (`percentLabel`), Curation's and the Edit panel's |
-| `static/js/stores/search-params.js` | the search parameter set, its defaults, the scope rules that decide what a change clears, and the advanced search panel's filters set together (`replaceFilters`, `filters`, `filterCount`, `viewedPersonId`, `viewedLocationId`; `applySearchFilters`, `idsOf`, `ID_LISTS`), a searched Person's or Location's ID replaced or dropped (`names`, `replaceId`), and a Describe search's description: what it clears, the Similarity sort a new one takes, what a search with one is sent without (`DESCRIBED_UNSENT`) and whether the results are on the map (`showsMap`), and the triage filter as a remembered choice (`seedSearchParams`' `seesTriaged`, `rememberedTriaged`, `showsTriaged`); its rules for a description are tested by `scripts/test-js/search-params.test.mjs` and those for the triage filter by `scripts/test-js/triage-filter.test.mjs` (`make test-js`) |
-| `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |
-| `static/js/search-results/search-triggers.js` | binds `data-app-search` elements to `runSearch`, and routes a trigger's click by the view (`routeOf`: in Triage a folder, Person or Location trigger asks the scope route, `requestScopeDialog`, and the root folder's does nothing; in the trash a folder trigger does nothing); `runTriggerSearch`, the search a trigger declares, which a 204 from the scope route runs |
-| `static/js/listeners/triage.js` | the Triage summary's reload: `registerTriageListeners` (on `peopleChanged`) and `reloadTriageSummary`, one request per change, issued from the host so the reloads take turns |
-| `views/htmx/triage_summary.scala.html`, `triage_scope_dialog.scala.html`, `quick_view_modal.scala.html` | The Triage explorer's fragments (`TriageController`): the Triage summary above its tabs, the scope dialog of a folder, Person or Location, and Quick view of a folder; styled by `static/css/htmx/triage_summary.css`, `triage_scope_dialog.css` and `quick_view_modal.css` |
-| `static/js/search-results/search-input.js` | `bindSearchInput`: the nav's Search input (`#searchForm`), submitting and clearing `q` and following the store |
-| `static/js/search-results/search-panel.js` | the nav's advanced search panel (`#searchPanel`): `bindSearchPanel` (the form loaded on every opening, the panel emptied on closing, the filter button's count), `openSearchPanel(filters)`, `closeOpenSearchPanel` for Escape, and `searchByFilters`, the search its form asks for, in place in Browse and by navigating to Browse elsewhere (**Advanced search panel**) |
-| `static/js/alpine/components/search-panel.js` | the `searchPanel` Alpine component of the panel's form: Search (the form's entries as the filters), Enter in the Describe field (`searchOnEnter`), Clear, and the people match switch |
-| `static/js/alpine/components/filter-combobox.js` | the `filterCombobox` Alpine component of the panel's Folder, People and Locations fields: the options asked for as typed (the latest answer alone shown), the matched starts of words marked (`markMatches`), the keys, Enter and Escape while an answer is on its way, the anchored listbox popover, the status a screen reader is told, the chips and the hidden input of their IDs, a field of one or of several up to its most |
-| `static/js/alpine/components/date-range.js` | the `dateRange` Alpine component of the panel's Date Taken and Date Imported fields: Flatpickr in range mode in a popover of its own inside the field, the range as two ISO days in hidden inputs, its label (`rangeLabel`, months from `MONTHS`), one day picked alone, clear and where focus goes after it, the calendar as a named dialog, and Escape closing the calendar alone |
-| `views/htmx/search_panel.scala.html`, `search_options_folders.scala.html`, `search_options_people.scala.html`, `search_options_locations.scala.html`, `views/includes/search_path_option.scala.html` | The advanced search panel's fragments (`SearchPanelController`): its form filled in from a search's parameters, each filter a field under its parameter's name, the description's textarea first, and the folder, people and Locations as chips, its IDs under a prefix the caller can change, and the `role="option"` elements of its three comboboxes, a folder's and a Location's sharing the include (**Advanced search panel fragments**); styled by `static/css/htmx/search_panel.css`, Flatpickr's calendar included |
-| `views/includes/filter_combobox.scala.html` | A combobox field of chips, the `filterCombobox` component's markup: the panel's Folder, People and Locations fields and the destination folder of the Import page's upload sections and of its Watch folder dialog |
-| `views/includes/upload_sections.scala.html`, `static/css/includes/upload_sections.css`, `static/js/alpine/components/import-uploads.js`, `static/js/import/chosen-files.js`, `upload-run.js` | The Import page's File upload and Folder upload sections: the markup, the styles, the `importUploads` component, what a section sends and under which paths, and the sending (**Import page**) |
-| `views/htmx/import_history.scala.html`, `import_files.scala.html`, `views/includes/import_status.scala.html`, `import_title.scala.html`, their stylesheets, `static/js/import-status.js` | The Import page's Import history: the timeline of Imports, an Import's files by outcome, the status and title the status feed replaces, and the script that keeps them live |
-| `views/htmx/watch_folders.scala.html`, `watch_folder_form.scala.html`, `remove_watch_folder_dialog.scala.html`, `views/includes/watch_folder_deletion_notice.scala.html`, `static/css/htmx/watch_folders.css`, `watch_folder_form.css`, `static/js/import/watch-folders.js`, `static/js/alpine/components/watch-folder-form.js` | The Import page's Watch folders: the cards, the Watch folder dialog with its deletion notice, the Remove dialog, their styles, the reads of the cards and the `watchFolderForm` component (**Import page**) |
-| `views/includes/search_chip.scala.html`, `search_filter_icon.scala.html`, `search_person_cover.scala.html` | The parts the panel and a filtered search's results title share: a chosen filter's chip (its kind, label, lead, carried attributes and remove button), the icon of a kind of filter, and a person's cover Face or its placeholder, on a chip and, loaded lazily, in a People option |
-| `static/js/search-results/detail-navigator.js` | next/previous over the grid's cells, reloading a folded page met on the way, media loading in the asset-detail modal (a still image through the Edit's stage, a Video here; the box fitted from the shown element's size, the Detail panel and the Edit panel told of each asset and size shown), and a shown Video's playback (autoplay with a muted fallback, Space's play/pause) |
-| `static/js/search-results/detail-panel.js` | `createDetailPanel`: the Detail panel's open state, its dock (through `common/dock.js`), the load of `htmx/detail_panel` under the coordinator's request, the dimensions as shown (with the edited size while the stage shows an Edit), the Face highlights' setting (`p`) and which Faces they show, the Face selection (a row's or a highlight's click, a Video's seek to the Frame time; held in the module, never exported), the toolbar toggles, the remembered view (`Const.localStore.assetDetailView`), the layout the Edit panel follows (`dockSide`, `onLayoutChange`, `layOut`), and a correction's outcome (the section swapped in, the snackbar, `peopleChanged`, the asset the viewed Person left leaving the grid on stepping away or closing, the results title read again when the viewed Person is named, and the destination's results on closing when the viewed Person is merged away or merged into) |
-| `static/js/search-results/detail-url.js` | `createDetailUrl`: Asset detail's URL, its history entry and Back and Forward over it, the opening of the asset a URL names (`openAssetInLocation`), and the search URL held while it is open (see **Detail navigation**) |
-| `static/js/search-results/detail-fullscreen.js` | `createDetailFullscreen`: Asset detail in fullscreen (`toggle`, on `f` and the toolbar's toggle, which it removes where `document.fullscreenEnabled` is false), the player's `fullscreenElement` set to the host on each fragment (`attach`), the toggle's pressed state and the snackbar's stacks raised on `fullscreenchange` |
-| `static/js/search-results/filtered-title.js` | `bindFilteredTitle`: a filtered search's results title, each chip's ×, the description's included, taking the chip off the page and searching by what the chips left name (through `searchByFilters`) and Edit opening the advanced search panel; `showsPersonChip` and `searchAgainForPersonChip`, the search run again when a Person with a chip is renamed |
-| `views/includes/search_filter_chips.scala.html` | A filtered search's filters under its results title, a chip each carrying the parameters it stands for, the description's first, and Edit, then what a description that found nothing says (`foundNothing`) |
-| `static/js/search-results/person-title.js` | `reloadPersonTitle`: a Person's results title (`#person`) read again from the title route when it shows that Person, after a rename from a People cell's pencil and after a Detail panel correction; a filtered search's chip of them is `filtered-title.js`'s |
-| `static/js/search-results/face-corrections.js` | `createFaceCorrections`: Remove's two clicks and their reset, the Change pick's request by its `action` (a move, or a name or a merge of the Face's Person), and what each answer means (the section to swap in, a message, a stale section to reload); `parsePeopleSection` |
-| `static/js/alpine/components/face-combobox.js` | the `faceCombobox` Alpine component of a People row's Change: the options loaded once per opening for the Face (`assignablePeopleUrl`, `parseAssignablePeople`), the Suggested group while nothing is typed, the rest filtered as typed, the Create row, the keys, the anchored listbox popover, the two modes by the row's Person with the "This face only" switch, the two-step merge (`armedKey`), the pick (with its `action`) and the X announced as events; `closeOpenFaceCombobox` for Escape |
-| `static/js/search-results/face-highlights.js` | `createFaceHighlights`: draws the Face highlights into `#faceHighlights` (`show`: a toggle button per Face placed by fractions of the shown size, mapped through an Edit by `detail-panel.js`, its badge anchored to it; `clear`), and `FRAME_TIME_TOLERANCE_MS`, how far from its Frame time a Video's Face counts as current |
-| `static/js/common/dock.js` | `createDock`: a docked panel's side, share, divider (drag and keys), Dock side menu upkeep and remembered state, configured by the explorer's and the Detail panel's docks, and by the Edit panel's, which follows another's side (`followSide`); `isVerticalAxis` |
-| `static/js/search-results/date-groups.js` | keeps a group header's count current as cells leave the grid, and its Curate button (`removeCurateButtons`) |
-| `static/js/search-results/cells.js` | every cell of an asset (`cellsOf`, `thumbnailsOf`) and the asset of a cell (`assetIdOf`): a Location grouping holds an asset once per Location |
-| `static/js/common/folder-tree.js` | renders the folder tree, its recursive asset counts (`numOfAssets` in the tree JSON, after each name), and each folder's menu from the JSON tree endpoint (Search here, then the folder's actions); patches the counts in place after asset mutations |
-| `static/js/common/context-menu-markup.js` | builds the ⋯ menu cell of a folder, album or Location row (dialog actions, script actions such as Search here, separators), the dialog-trigger buttons and a choice menu from its host (`buildChoiceMenuCtrl`, with the compact, glyph-only variant of the Dock side menu, and the link options and the actions after a separator of the nav's Library menu) |
-| `views/includes/library_menu.scala.html` | The nav's Browse cell: the Browse link to the current Library's main page, then the Library menu host: the account's Libraries as link options, the current one checked, and for an Admin or the Create Libraries flag a separator and New library…; `hx-preserve` (**Nav**) |
-| `views/htmx/new_library_dialog.scala.html` | The New library dialog: one name field, Create and Cancel, the Library name rule's errors under the field (**New library dialog**) |
-| `views/includes/page_title.scala.html` | The browser tab title of a page of a Library: "<page> · <Library> · Altitude", or "<Library> · Altitude" on the main page |
-| `views/includes/dock_glyphs.scala.html` | The hidden SVG symbol sheet of the four Dock side glyphs, drawn by the Dock side menu's options and trigger through `<use>`; included by `index.scala.html` and the style guide |
-| `static/js/common/album-list.js` | renders the album list, its counts (after each name), and each album's menu from the JSON list endpoint; patches the counts in place; marks the viewed album |
-| `static/js/common/location-list.js` | renders the categories (expandable nodes holding their Locations) and top-level Locations, the counts after each name, and each row's menu from the JSON list endpoint; restores expansion across rebuilds; patches the counts in place; marks the viewed Location |
-| `static/js/fragments/selection-field.js` | `fillSelectionField`: fills a batch dialog's hidden `assetIds` field from the selection, shared by the Add to album and Add to location dialogs |
-| `static/js/fragments/add-to-album.js` | the Add to album dialog: its selection field, the new album's name field shown while "New album…" is chosen, and the success detail naming the chosen album |
-| `static/js/fragments/add-to-location.js` | fills the Add to location dialog's hidden selection field and keeps its success detail naming the chosen Location (ID and label) |
-| `static/js/fragments/location-editor.js` | the Location pin editor: Leaflet map in the Add location modal, click and drag to place the pin, hidden coordinate inputs, readout, place-name search |
-| `static/js/common/asset-count.js` | the `(n)` asset count cell placed after a row's name, shared by the folder tree, the album list and the Location list |
-| `views/includes/html_common.scala.html` | The snackbar's two stacks (manual popovers over the `snackbar` store) and its announcers + the four dialog hosts: the three Alpine-bound modal hosts and the popover dialog; Asset detail's toolbar with the title's "Edited" badge and its toggles (the Edit panel's for Edit images, Show original's, the Detail panel's, the Face highlights', fullscreen's) |
-| `views/style_guide.scala.html` | The dev-only style guide: static specimens of the shared primitives, and the Alpine templates of the tokens, the icons and the token audit; its own layout is `static/css/pages/style_guide.css` |
-| `static/js/style-guide.js` | the `styleGuide` Alpine component (the source scan resolved in the browser: tokens, icons, token audit; the theme switcher's and the font tester's state) and the style guide's live menu and dialog specimens |
-| `static/js/common/token-kinds.js` | the kinds of token (`TOKEN_KINDS`, `kindOf`) and their groups (`groupOf`, `paletteGroupOf`), the token references of a declaration (`referencedNamesOf`), for the style guide |
-| `static/js/common/theme.js` | the two themes: `applyTheme`, `chooseTheme`, `toggleTheme`, `rememberedTheme`, `inTheme`, `resolveColor`, and the two colors of a `light-dark()` pair (`themeColorsOf`, `withThemeColor`) |
-| `static/js/common/font-availability.js` | `isFontAvailable` and `asFontFamily`, the font tester's check |
-| `static/js/common/explorer-dock.js` | the main page's Dock side, the explorer's configuration of `common/dock.js`: `initExplorerDock(view)`, `setDockSide(side)`, `effectiveSide()`, `isVerticalAxis`, the explorer's remembered share per axis, `explorerShare()` / `setExplorerShare(percent)`, which the design tweaks adapter passes as an extra control, and the `dockSideChanged` event |
-| `static/js/theme-boot.js` | the blocking boot script of `includes/header_common`: the remembered theme on `<html>` before the first paint |
-| `static/js/explorer-dock-boot.js` | the blocking boot script of the main page's head: the Dock side and the share on `<html>` before the first paint |
-| `static/js/design-tweaks.js` | the design tweaks panel's adapter: `createTokenTweaks` of the vendored tokentweak package with Altitude's storage key, host id, stylesheet, trigger, shortcut, sources URL, sections, scales, the two scoped tokens, the explorer control and the export file name |
-| `static/js/lib/tokentweak.js` | the tokentweak package (vendored, dev only): the panel, its store and adopted sheet, the controls per kind, Inspect, the exports; its options are its README's |
-| `static/js/lib/tokentweak-boot.js` | tokentweak's boot script (vendored, dev only): adopts the stored override sheet and theme before the first paint, keyed by its tag's `data-key` |
-| `views/includes/search_results.scala.html` | Search grid wrapper with the results title (**Results title**), the Group and Sort controls, the grid / map layout toggle and the "Map area ×" chip, the controls of a search with a description (the Sort menu opening with "Similarity", no Map segment); the controller passes in the rendered grid partial, or the map shell, and the scope the title names (the person, the folder's path, the album, the Location, the Triage subset), or a filtered search's filters (`includes/search_filter_chips`). Its CSS (`static/css/includes/search_results.css`) gives `#assets` `overflow-anchor: none` and the page spacer its full row; `#assets` carries the preview size as `--preview-box` for the cell size |
-| `views/includes/results_title.scala.html`, `results_title_inner.scala.html` | The results title block and its inside (icon, title, the way back, subtitle or a filtered search's filters; a person's cover face and actions); styled by `static/css/includes/results_title.css` |
-| `views/htmx/person.scala.html`, `person_inner.scala.html`, `view_person_name.scala.html`, `edit_person_name.scala.html` | The person scope's results title: the block that is the merge drop zone and the person actions' swap target, its inside, and the inline name editor's two states; the person's own styles are `static/css/htmx/person.css` |
-| `static/js/search-results/sticky-offsets.js` | `bindStickyOffsets`: writes the results title's rendered height to `--results-title-height` (the toolbar's sticky offset) and the title's and toolbar's together to `--results-sticky-height` (the group headers') on the fragment |
-| `views/htmx/result_cell.scala.html` | One asset cell, shared by both grids, with no Alpine of its own; a page's last cell carries the cursor of the next page, and the thumbnail its preview URL in `data-src`, a first page's in `src` too. `data-media-type` names what the asset is; the cell of an asset with a duration, a Video or an animated GIF, wears a play badge over its Preview and a `duration` metadata row (`Util.humanReadableDuration`, `m:ss` or `h:mm:ss`), shown by the View control's Duration switch like every other field |
-| `views/htmx/results_grid.scala.html` | The ungrouped grid: the page's cells, infinite-scroll trigger by cursor; a Describe search's weaker matches' header before the first weaker match's cell |
-| `views/htmx/results_grid_grouped.scala.html` | The grouped grid: a group header per day, Location or Sequence, infinite-scroll trigger by cursor; a Describe search's weaker matches' header before their first group |
-| `views/includes/weaker_matches_header.scala.html` | The header that opens a Describe search's weaker matches in either grid: a group header with their count and no checkbox |
-| `views/htmx/map_view.scala.html` | The map layout's shell: `#map` with the bounds and tile settings, and the crowded-pin panel `#mapPanel`; its CSS, the pin styles included, is `static/css/htmx/map_view.css` |
-| `static/js/common/vendor-loader.js` | loads Leaflet (with its stylesheet), supercluster, media-chrome and Flatpickr (with its stylesheet, in a cascade layer of its own) once, when a view first needs them |
-| `static/js/map/map-view.js` | the map view: Leaflet map, viewport cells requests, supercluster pins and their clicks, one map at a time (`disposeMapView`) |
-| `static/js/map/map-panel.js` | the crowded-pin panel: `openMapPanel` runs the `bbox` search into `#mapPanelContent`; close, "Show only these in the grid" |
-| `static/js/map/map-state.js` | the map view remembered per search scope in `sessionStorage`, and the displayed map's live view for the pin editor |
-| `static/js/listeners/map.js` | puts `layout=map` back into the URL the server pushes for a panel request |
-| `views/htmx/curation.scala.html`, `curation_set.scala.html` | Curation's shell (its header, the host of a set's fragment and the states with no set) and a Curation set's fragment (the Bundle rail, the stage, the face strip and the footer); styled by `static/css/htmx/curation.css` and `curation_set.css` |
-| `static/js/alpine/components/curation.js` | Alpine component on Curation's shell: its state, reading the sets, the walk of the queue, the stage's zoom and its Loupe (attached, refreshed and detached with the stage), the outcomes, Undo and the keys; `requestCuration` names what the next shell opens on |
-| `static/js/listeners/curation.js` | Curation's events: opening it, the batch ops' cap, the counts after each mutation, the grid beneath when it closes |
-| `static/js/fragments/curation.js` | `hydrateCurationFragment`: opens the Curation host on its shell |
-| `static/js/stores/sequences-to-curate.js` | the `sequencesToCurate` store: the number of Sequences in Curation's queue, set only by the count endpoint |
-| `static/js/common/text-editing.js` | `isTextEditingTarget`: whether focus is in a field that takes the keys typed (no slider, checkbox, radio or button-like input), so a page's keyboard shortcuts leave them to it |
-| `static/js/common/loupe.js` | the Loupe: `attachLoupe({ panes, levels, readLevel, saveLevel })` over panes of `{ paneEl, imageEl, lensEl }`, answering `refresh`, `setLevel` and `detach`; the pointer-to-pixel mapping under `object-fit: contain` and the wheel through the ladder, with no knowledge of the page it is on |
-| `static/js/common/clipping.js` | `readClipping(source, { fitBox, clippedLevel, crushedLevel })`, async: the class of every pixel (a `Uint8Array` at the sampled size: blown, crushed or neither) and the fractions of each (`blown`, `crushed`; a fully transparent pixel is none) of a same-origin `CanvasImageSource`, a loaded image or the Edit's canvas, resized to the box off the main thread and grayed as the import's measurement does; `clippingMask(read, { blownColor, crushedColor })`: the Clipping mask of a read, an `ImageData` at its size; with no knowledge of the page it is on |
+| `static/js/context.js` | `context`, which `app.js` also exposes as `window.ctx` for the templates' inline scripts: the Library ID (set once by `index.scala.html`, read through `getRepoId()`), what the body says the account holds (`holds`, `recyclesHere`, `seesTriaged`; see **Controls follow Permissions**), the viewed folder, album and Location (read from the `searchParams` store), and the grid's metadata fields (**Metadata field visibility**) |
+| `static/js/http/client.js` | The axios client (`http`) that every non-htmx request to a route goes through, never raw `fetch()` (the one `fetch()` reads an original's bytes in `edit/edit-stage.js`). A 401 sends the window to the login (`common/session.js`); `getHttpErrorMessage` gives a JSON refusal's reason. Override `validateStatus` with `allowHttpStatuses(...)` only on a call that handles a non-2xx answer itself (for example a `409`) |
+| `static/js/common/vendor-loader.js` | Loads Leaflet, supercluster, media-chrome and Flatpickr, with their stylesheets, when a view first needs one: one request per page that every caller awaits, and a failed load is retried by the next caller. Flatpickr's stylesheet goes into a cascade layer of its own, so every rule of the app's bundle outranks it. A library with an ES module build is a dynamic `import()` instead |
+| `static/js/common/anchored-panel.js` | `placeAnchoredPanel`: the viewport placement (flip, shrink, `--viewport-gap`) of the `contextMenu` component's panels, that is the ⋯ menus, the choice menus and View settings, which close on scroll instead of following their trigger. The popover dialog, the tooltip, the Face highlights' badges and the comboboxes' listboxes use CSS anchor positioning instead |
+| `static/js/common/context-menu-markup.js`, `views/includes/menu_ctrl.scala.html` | The two builders of the same ⋯ menu markup, kept in step: `buildContextMenuCtrl` for the rows the client renders (folder, album, Location), `menu_ctrl` for the cards the server renders (an account card, a Watch folder card). The JS module also builds the Add and dialog triggers, and every choice menu from its server-rendered host (`buildChoiceMenuCtrl`); see **Context menus** |
+| `static/js/search-results/click-suppression.js` | The one way a drag swallows the click its release fires: `suppressNextClick()` (an asset drag, a box gesture) or `suppressClickAfterRelease()`, armed at drag start (a Person, a folder, the batch mover), not in `end`, because with inertia a flick's `end` fires after the click. A new drag source uses it |
+| `static/js/common/content-urls.js` | The one place the client builds an asset's content URLs (`previewUrl`, `displayUrl`, `originalUrl`; the server's twin is `Util.previewUrl`) and repoints an image at a new Preview (`repointImage`). An edited image's URL carries its revision (`?v=<rev>`) as its cache key (**Edited images and caching** in `altitude/AGENTS.md`) |
+| `views/includes/html_common.scala.html` | Besides the snackbar, the tooltip host and the four dialog hosts (**Modals**), Asset detail's toolbar: the title with its "Edited" badge and the toggles (Edit for a holder of Edit images, Show original, Detail panel, Face highlights, fullscreen). The fragment swaps in below it |
+| `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment for every media type, a Video included (**Detail navigation**); its data attributes are under **DOM Addressing Convention** |
 
 ## Search parameters
 
-Every search in the app — the initial load, folder and person navigation, the Search input, the Sort
-and Group choice menus, continuous scroll, the page the detail modal loads at the end of the grid — goes through
-**one** function, `runSearch` in `js/search-results/search.js`. A caller supplies only the parameter
-it knows about; the `searchParams` store supplies the rest. Nothing else builds a URL for
-`/htmx/search/r/:repoId`.
+Every search request goes through **one** function, `runSearch` in `js/search-results/search.js`: the initial load,
+the explorer, the Search input, the Sort, Group and layout menus, continuous scroll, the detail modal's page at the
+end of the grid. A caller passes only the parameter it knows; the `searchParams` store supplies the rest. Nothing else
+builds a URL for `/htmx/search/r/:repoId`; other URLs built from the store (the map's cells in `map-view.js`, a
+navigation to Browse) use its `toQueryString`, so they carry the same parameters.
 
-`js/stores/search-params.js` owns the parameters (`view`, `folderId`, `personId`, `albumId`,
-`locationId`, `peopleMatch`, `takenFrom`, `takenTo`, `importedFrom`, `importedTo`, `subset`, `q`, `describe`, `bbox`, `triaged`, `layout`, `sort`, `groupBy`, `groupDirection`, `rpp`, serialized in that order) and the rules for combining them:
-the five **places** (`PLACES`) are a folder, a person, an album, a Location and a Triage subset (`subset`, the assets one
-of the Triage summary's counts shows: `unknownPeople`, the assets with a Face of an Unknown person, or `noLocation`, those in no
-Location); choosing one clears the other four, and a view clears all five. A place set to nothing still clears the
-others, so a trigger with one empty literal (the Results title's ×, the Triage summary's total) goes back to the whole
-view from any place, and an empty value is never sent. Only the Triage summary offers a subset, but the server takes
-one in every view. The store
-holds no position: a search starts at its first page, and a later page is one request's `after` cursor. The map area (`bbox`, the crowded-pin panel's scope) belongs to the search it was
-drawn on, so a view, a place or a new `q` clears it too. Search text
-(`q`) is one more place to look, the whole of the view it is typed in, Browse or Triage: a change of `q` clears the
-five places and keeps `view`, but for the trash, which text does not search and so leaves for the repository view
-(`withoutRefusedCombinations`), and each of the five,
-and a view, clears `q`. The whole `CLEARS` table:
+`js/stores/search-params.js` owns the parameters (`DEFAULTS`, in serialization order) and every rule for combining
+them; its comments are the detailed spec. The store holds no position: a search starts at its first page, and a later
+page is one request's `after` cursor.
+
+**Places and `CLEARS`.** The five places (`PLACES`) are a folder, a person, an album, a Location and a Triage subset.
+Choosing one clears the other four, and a view clears all five. Search text (`q`) is one more place, the whole of the
+view it is typed in, so it clears the five and keeps the view. The map area (`bbox`) belongs to the search it was drawn
+on. "The panel's six" are `PANEL_FILTERS` (below).
 
 | Changed | Cleared (back to its default) |
 |---|---|
@@ -3835,163 +2462,104 @@ and a view, clears `q`. The whole `CLEARS` table:
 | `folderId`, `personId`, `albumId`, `locationId` or `subset` | the other four, the panel's six, `bbox`, `q` |
 | `q` | `folderId`, `personId`, `albumId`, `locationId`, `subset`, the panel's six, `bbox` |
 
-The **advanced search panel** is the one widget that combines them (**Advanced search panel**). `personId` and
-`locationId` then hold several IDs, separated by commas (`idsOf`; `ID_LISTS`), each once and at most
-`Const.search.maxIds` (10, the client's copy of `SearchRequestParser.MAX_IDS`): `normalize` drops the empty segments, the
-repeats and the IDs past the tenth of a hand-edited URL, which the server would refuse the whole search for. Six
-parameters are the panel's alone
-(`PANEL_FILTERS`): `describe` (a Describe search's description, below), `peopleMatch` (`all` or `any`, how several
-people combine; only `any` is ever stored, with two
-people or more, since all is the server's rule with none given) and the two date ranges, `takenFrom` and `takenTo`,
-`importedFrom` and `importedTo` (ISO days). A search from the panel goes around the table, through the store's
-`replaceFilters(filters)` (`applySearchFilters`): it sets `q`, `folderId`, `personId`, `locationId` and the panel's
-six as given, one left out being no filter, and returns `albumId`, `subset` and `bbox` to their defaults, so
-the search is its view's by the panel's filters alone; the layout, the grouping, the sort and `rpp`
-survive, under the rules below. Filters that name a `view` carry the panel's pick of the assets to search, its
-"Search in" row's (**Advanced search panel**): `view` and `triaged` are set together, the repository view with
-`triaged` false (Library) or true (All), or the Triage view, which holds no filter. Filters that name none, a Guest's
-panel and a chip's ×, keep the view and the triage filter, but for the trash, which a search from the panel never
-searches. A filtered search's results title removes one filter through the same
-funnel, with the filters its other chips name (**Results title**).
+A place set to nothing still clears the others, so a trigger with one empty literal (the Results title's ×, the Triage
+summary's total) returns to the whole view; an empty value is never sent. Layout, grouping, `rpp` and sort only
+narrow or reorder, so they survive every change; with no sort chosen the server's default applies (Relevance with
+text, newest import without).
 
-**A pick lasts one search.** `replaceFilters` writes nothing to `localStorage`, so a pick of Library or All is the
-search's and not the remembered choice. It ends with the search: a change that looks somewhere else (a place, a view
-or new `q`, the names of `CLEARS`) and the removal of a filtered search's last filter put the remembered choice back
-(`withRememberedTriaged`), while the sort, the grouping, the layout, `rpp` and paging keep it. A `triaged` named by
-the URL is its search's in the same way. The "Show triaged items" switch reads the store, so it shows the search's
-value while the search is in force, and turning it changes the search and is remembered, as any turn of it is. `names(param, id)` says whether the search names a
-Person or a Location (`personId`, `locationId`), alone or among several, and `replaceId(param, fromId, toId)` puts
-`toId` in its place, or drops it for a null `toId`, keeping the view and every other filter and clearing the map area:
-a merge or a deletion of a searched Person, and a deletion of a searched Location, go through it (**Event flow**,
-**Detail panel**, **Locations**). The other direction is the table's: the panel's six are among what looking somewhere
-else clears, so a folder, a person, an album, a Location, a subset or a view chosen in the explorer drops the panel's
-filters, the description among them, and with its single ID the several the panel chose, and the quick search, which
-sets `q` alone, drops them
-too. `filterCount()` is how many of the panel's fields the search fills, the description counting as one (the nav's filter button's badge),
-`viewedPersonId()` the one Person a search names, none for several (**Detail panel**), and `viewedLocationId()` the one
-Location, which the batch ops' Remove from location is offered for and `context.getCurrentLocationId()` answers. Every request built from the
-store carries the panel's parameters, since all are serialized from it: the results and their continuations
-(`runSearch`), the map's cells (`map-view.js`) and a navigation to Browse.
+**Combined filters.** The advanced search panel is the one widget that combines parameters (**Advanced search panel**).
 
-The layout, the grouping, `rpp` and the sort narrow or reorder what is already in scope and survive
-all of those: a chosen sort is kept from one place to the next, and with no sort chosen the server's
-default applies (Relevance with text, newest import without). The triage filter (`triaged`)
-survives a place or `q`, but it is the repository view's: the View
-settings dialog's "Show triaged items" switch (see **Inline dialogs**) is shown in that view alone, and a
-change of view clears it. It is a choice remembered in the browser, like the layout, and on until it is turned off:
-the server's rule is unchanged, a search with no `triaged` leaves the triaged assets out, so the store of a member
-holds `true` or `false` in the repository view, never null, and every request and the bookmarkable URL say which.
-Seeding (`seedSearchParams(search, { seesTriaged })`) takes it from the URL first, when the URL names one of the two
-values, and otherwise from `localStorage` (`Const.localStore.showTriaged`, `rememberedTriaged()`), where nothing kept,
-or anything but the two values, is `true`; the store's `merge` writes a `triaged` there when the change names it,
-which only the switch's flip does, so a URL that names the filter, and a pick of the advanced search panel, win for
-their search and are not remembered. `seesTriaged` is
-`context.seesTriaged()`, which `index.scala.html` passes: a Guest sees no triaged item and is refused `triaged=true`
-(a 403), so its store is seeded none and reads nothing remembered, and a `triaged=false` in its URL is kept as written.
-A search that leaves the Trash for Browse (the quick search, the advanced search panel from a Guest's or with no
-pick) is sent without the filter, which Browse then seeds; one that the panel sends to Browse from Triage carries its
-pick's. The People tab reads it too, on every load of a pane, and reloads its panes when it changes, so each
-Person's number follows the switch (see **People tab**), and the advanced search panel sends it with the request for
-its form, so the People options count what the search will find (**Advanced search panel**). The combinations the server refuses
-are settled by the store itself (`withoutRefusedCombinations`, on seeding from the URL and after every
-change): `q` with the trash view becomes the repository view, as a date range and several people or Locations do,
-a date range whose first day is after its last is dropped, `peopleMatch` goes with the second person, what only the
-panel combines (a description, a date range, several people or Locations, or more than one of `q`, a folder, a person
-and a Location: `combinesFilters`, the server's rule) drops an album and a subset, a description leaves the trash
-for the repository view as they do, stays in the Triage view, and drops the map area, `sort=relevance`
-(`Const.search.sortRelevance`) without `q` drops the sort, as `sort=similarity` (`Const.search.sortSimilarity`)
-without a description does, so each of the two sorts ends with what it ranked by, and `triaged` in any view but the repository view is dropped, the remembered choice included (the triage view
-refuses it). The server also refuses a page size outside 1 to 500; the store keeps only whole numbers
-in that range (`normalize`, with
-`Const.search.maxRpp` the client's copy of `Const.Search.MAX_RPP`) and turns anything else into its
-default, so a hand-edited `?rpp=1000` falls back to the server's page size instead of failing every
-search. A word the server reads is held to the values it accepts in the same way (`ALLOWED_VALUES`): a `subset` that
-is neither `unknownPeople` nor `noLocation` is no subset, a `peopleMatch` that is neither `all` nor `any` no match, and a `triaged` that is neither `true` nor `false` no filter (for a member the remembered choice then applies); a day that is no ISO date
-(`DATE_PARAMS`) is no day; and a description is kept without the white space around it and is none when nothing is left
-of it or it is longer than `Const.search.maxDescriptionLength` (300, the client's copy of
-`Const.Search.MAX_DESCRIPTION_LENGTH`; `TEXT_LENGTHS`). A parameter still at
-its default is left out of the request, so a default is never spelled out on both sides — except
-`view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
+- `personId` and `locationId` may hold several comma-separated IDs (`idsOf`, `ID_LISTS`), at most `Const.search.maxIds`,
+  the client's copy of `SearchRequestParser.MAX_IDS`. `PANEL_FILTERS` (`describe`, `peopleMatch`, the two date ranges)
+  are set by the panel alone; it sends `peopleMatch` only as `any`, since `all` is the server's default.
+- A panel search bypasses `CLEARS`: `replaceFilters(filters)` (`applySearchFilters`) sets every filter as given (one
+  left out is no filter) and resets `albumId`, `subset` and `bbox`. Filters that name a `view` carry the "Search in"
+  pick, setting `view` and `triaged` together; filters without one (a Guest's panel, a chip's × in the
+  **Results title**) keep both, except that a panel search never searches the trash.
+- `replaceId(param, fromId, toId)` swaps or drops a searched Person or Location, keeping every other filter: a merge or
+  deletion of a Person and a deletion of a Location use it (**Event Flow**, **Detail panel**, **Locations**).
+  `viewedPersonId()` and `viewedLocationId()` are none when a search names several.
 
-The Search input is `#searchForm` in `includes/nav` (`role="search"`: an `<input type="search" name="q">`
-labelled by its placeholder, "search triage" in Triage, the triaged assets a search typed there covers, and "quick search" anywhere else, a `.clear` button and the `.filters` button; no submit button), rendered in every page's nav
-(see **Nav refresh**) and bound once by `bindSearchInput()` (`js/search-results/search-input.js`) from
-`FrontendApp.start()` on the pages that run it (the main page and the style guide); on the others (import, settings)
-the form's own `action`, a GET of `/r/:repoId`, opens Browse with the text as `q`, which seeds the search there.
-The form's last control is the filter button of the advanced search panel, which `search-panel.js` binds
-(**Advanced search panel**). On the main page Enter submits the form, which runs `runSearch({ params: { q } })` with the trimmed value; the
-clear control (which empties the input and submits), the input's native clear (Escape: the `search` event with an
-empty value; the stylesheet hides the native button) and an empty submit clear `q` the same way, and an
-empty submit with no `q` in the store does nothing, so it never leaves the folder or view being looked
-at. The input holds no state: an Alpine effect writes `searchParams.q` into it, so a URL with `q` fills
-it on load and choosing a place or a view empties it. The text searches the view it is typed in, in place: Browse,
-or Triage, among the triaged assets alone, under the Search text's title, which says "in Triage" there. Text does
-not search the Trash, and the page is laid out for
-the view it was loaded with, so from the Trash a text search is not a swap: the store is merged
-and the browser navigates to `/r/<repoId>?<the store's query string>`, a full load of Browse that
-seeds the store from that URL, layout and grouping included.
+**A pick lasts one search.** `replaceFilters` writes nothing to `localStorage`, so a pick of Library or All, like a
+`triaged` named by the URL, belongs to its search. A change that looks elsewhere (a name in `CLEARS`), or removing a
+Filtered search's last filter, restores the remembered choice (`withRememberedTriaged`); sort, grouping, layout, `rpp`
+and paging keep the pick. The "Show triaged items" switch reads the store, so it shows the search's value, and turning
+it is remembered as always.
 
-`includes/search_results` takes the Search text the results were matched by (`text`, set when `q` had a
-usable term) and puts it on the fragment as `data-results-q`. The Sort menu offers "Relevance"
-only then, checked when it is the effective sort, since the server
-refuses it without text.
+**The triage filter** (`triaged`) belongs to the repository view: the View settings switch is shown only there
+(**Inline dialogs**), a change of view clears it, and the store drops it from any other view.
 
-A Describe search's description (the words the results were ranked by; **Describe search** in
-`altitude/AGENTS.md`) is not a parameter of the template and is not on the fragment's root: it is the first of the
-filters the template is handed, where its chip carries it (`data-app-filter-describe`), and the template reads off
-those filters whether the search has one (`isDescribed`). Its Sort menu then offers "Similarity" before the other
-sorts, checked while it is the effective sort, since the server refuses it without a description, and its layout
-toggle has no Map segment, so the toolbar offers nothing the server refuses beside a description (**Context menus**,
-**Map view**). Sorted otherwise, or grouped, the grid shows the search's matches in two parts, the weaker matches
-last under their header (**Group headers**).
+- With no `triaged` the server leaves triaged assets out, while the switch is on until turned off. So a member's store
+  always holds `true` or `false` in the repository view, and every request and the bookmarkable URL say which.
+- Seeding takes it from the URL when that names a valid value, else from `localStorage` (`rememberedTriaged()`, `true`
+  when nothing valid is kept). `merge` writes it only when the change names `triaged`, which only the switch does.
+- `seesTriaged` (`context.seesTriaged()`, passed by `index.scala.html`) is false for a Guest, who is refused
+  `triaged=true` (a 403): its store is seeded none, reads nothing remembered, and keeps a `triaged=false` from its URL.
+- A search that leaves the Trash for Browse is sent without the filter, which Browse then seeds; a panel search sent to
+  Browse from Triage carries its pick.
+- The People tab and the panel's form request read it, so their counts follow it (**People tab**,
+  **Advanced search panel**).
 
-**A description in the store.** `describe` is a parameter like the others: seeded from the URL, so a reload keeps
-it, serialized after `q`, as the server's `HX-Replace-Url` orders them, and sent by every request built from the
-store, a continuation's included (infinite scroll adds its cursor to the same parameters). It is one of the panel's
-filters (`PANEL_FILTERS`, `FILTERS`): a search from the panel sets it with the others, a chip's × in a filtered
-search's title sets what the other chips name, and a place, a view or new quick search text clears it. What the
-server refuses beside a description is settled in two ways. What no later search wants back is dropped from the
-store (`withoutRefusedCombinations`): an album, a Triage subset, the map area and the trash. A description searches
-Browse or Triage, whichever view the search is of.
-The layout the user chose for every search (`DESCRIBED_UNSENT`) stays in the store and is left out of the request
-instead (`serializeSearchParams`, whatever the store and the request's overrides hold of it), as the server's URL
-for a described search leaves it out: it is in force again as soon as the description goes, and is remembered in
-`localStorage` as always. While a description is in force the store's `layout` may say map over a grid: `showsMap()`
-is the question to ask of the store (Curation's closing asks it), and the fragment's `data-results-layout` says how
-the results on the page were rendered.
+**Refused combinations and hand-edited URLs.** The store settles what the server would refuse, so no stored state
+produces a 400.
 
-The sort and the grouping apply to a described search as to any, and go out with it. Its own order is likeness, so
-a search from the panel that sets a description the search did not hold, a new one or a changed one, takes the
-Similarity sort (`applySearchFilters` sets `sort=similarity`, `Const.search.sortSimilarity`), whatever sort was in
-force, which it replaces as a pick from the Sort menu would: a new description always opens most alike first, and
-the filters around an unchanged description leave its sort as it is. Any sort picked from the menu after that stays
-for the description, and the grouping in force groups its results from the start. The Similarity sort goes with the
-description as Relevance goes with the text: `withoutRefusedCombinations` drops it once no description is left, so
-the server's default applies, while a column sort stays.
+- `withoutRefusedCombinations` runs on seeding and after every change: `q` or a panel filter leaves the trash for the
+  repository view; a reversed date range is dropped; a Filtered search (`combinesFilters`, the server's rule) drops an
+  album and a subset; `sort=relevance` without `q` and `sort=similarity` without a description drop the sort, while a
+  column sort stays.
+- `normalize` turns any value the server would refuse into the default: `rpp` outside 1 to `Const.search.maxRpp`, an
+  unknown `subset`, `peopleMatch` or `triaged` (`ALLOWED_VALUES`), a non-ISO day, an empty or overlong description,
+  repeated or excess IDs. The `Const.search` limits are the client's copies of the server's (`Const.Search.MAX_RPP`,
+  `MAX_DESCRIPTION_LENGTH`, `SearchRequestParser.MAX_IDS`); change them together.
+- A parameter at its default is left out of the request, so a default is never spelled out on both sides. The
+  exception is `view`, always sent, whose values match `Const.Search.View.*` verbatim.
 
-`groupBy` (`dateTaken`) with `groupDirection` (`asc`/`desc`) groups the grid by
-day, and `location` and `sequence`, whose order is fixed, by Location and by Sequence with an empty direction; each option of the
-Group menu in `search_results.scala.html` carries both, and "No
-grouping" sets both to empty, which the store normalizes to `null`. The menu offers Sequence in the Triage view alone. Outside
-it the server groups nothing for `sequence`, the menu marks the grouping the server used, and the store keeps what was asked
-for, as the URL does, so a return to Triage groups by Sequence again. A search has no page
-number, grouped or not: the grid is continued by the transient `after` cursor its last cell carries. Grouping is not
-remembered in `localStorage`; like every other parameter it lives in the store and the bookmarkable
-URL. The layout and the triage filter are the two exceptions: the store's `merge` writes a changed `layout` to
-`localStorage` (`Const.localStore.resultsLayout`), and seeding takes the layout from the URL first and
-from `localStorage` when the URL has none, so a map user opens on the map (`Const.search.layout`
-names the two values); the triage filter is remembered the same way (above).
+**Search input.** `#searchForm` in `includes/nav` is in every page's nav (**Nav refresh**). `bindSearchInput()`
+(`js/search-results/search-input.js`) binds it on the pages that run `FrontendApp.start()`; elsewhere (import,
+settings) the form's native GET of `/r/:repoId` opens Browse with the text as `q`. The input holds no state: an
+Alpine effect writes `searchParams.q` into it. An empty submit with no `q` in the store does nothing, so it never
+leaves the folder or view being looked at. Text searches Browse or Triage in place; the Trash page is laid out for
+its own view, so from there the store is merged and the browser navigates to `/r/<repoId>?<the store's query string>`.
 
-The browser URL is authoritative exactly once, at page load: `index.scala.html` seeds the store from
-`window.location.search`, so a bookmarked or shared search still opens. After that the store is the
-source of truth and the friendly URL the server pushes back (`HX-Replace-Url`) is only a projection
-of it — never read back. The server correspondingly reads nothing but its own query parameters; it
-does not merge with `HX-Current-URL`, and there is no "new search" flag. While Asset detail is open the address bar names
-its asset instead, and the pushed URL is held for its closing (see **Detail navigation**).
+**What the toolbar offers.** The toolbar offers nothing the server refuses. `includes/search_results` puts the matched
+Search text on the fragment (`data-results-q`), and the Sort menu offers "Relevance" only then. A description
+(**Describe search** in `altitude/AGENTS.md`) is not a template parameter: it rides on the first filter chip
+(`data-app-filter-describe`), and the template reads `isDescribed` off the filters. A described search's Sort menu
+offers "Similarity" first and its layout toggle has no Map segment (**Context menus**, **Map view**); sorted otherwise
+or grouped, its grid shows the weaker matches last under their header (**Group headers**).
 
-Triggers are declarative and hydrated centrally by `bindSearchTriggers`, called from
-`js/fragments/index.js` (and from `reloadFolderTree`, which builds its rows after the folders tab
-has settled):
+**A description in the store.** `describe` is an ordinary panel filter: seeded from the URL, sent with every request
+built from the store (continuations included), and cleared by a place, a view or new quick search text.
+
+- It drops an album, a subset, the map area and the trash from the store, and searches Browse or Triage.
+- The layout stays in the store but is left out of the request (`DESCRIBED_UNSENT` in `serializeSearchParams`), as
+  the server's URL leaves it out, and applies again once the description goes. So the store's `layout` may say map
+  over a grid: ask `showsMap()` (as Curation's closing does), and read the fragment's `data-results-layout` for how
+  the page was rendered.
+- A panel search with a new or changed description takes the Similarity sort (`applySearchFilters`) whatever sort was
+  in force, so it opens most alike first. An unchanged description keeps its sort, and a sort picked later stays. With
+  no description left, the Similarity sort is dropped.
+
+**Grouping.** Each Group menu option carries both `groupBy` and `groupDirection`; `location` and `sequence` have a
+fixed order and an empty direction, and "No grouping" sets both empty (`null` in the store). The menu offers Sequence
+only in Triage. Elsewhere the server groups nothing for `sequence`, while the store and URL keep it, so a return to
+Triage groups by Sequence again. There is no page number, grouped or not: the grid continues by its last cell's
+`after` cursor.
+
+**What is remembered.** Every parameter lives in the store and the bookmarkable URL. Only the layout
+(`Const.localStore.resultsLayout`) and the triage filter (`Const.localStore.showTriaged`) are also remembered in
+`localStorage`: `merge` writes a change, and seeding takes the URL first and `localStorage` second, so a map user opens
+on the map. Grouping is not remembered.
+
+**The URL.** The browser URL is authoritative once, at page load: `index.scala.html` seeds the store from
+`window.location.search`, so a bookmarked or shared search opens. After that the store is the source of truth, and
+the URL the server pushes back (`HX-Replace-Url`) is a projection of it, never read back. The server reads only its own
+query parameters: it takes nothing from `HX-Current-URL` but the `#tab` fragment (`UrlService.getBrowserViewUrl`), and
+there is no "new search" flag. While Asset detail is open the pushed URL waits for the closing (**Detail navigation**).
+
+**Triggers** are declarative and hydrated centrally by `bindSearchTriggers` (`search-triggers.js`), called from
+`js/fragments/index.js` and from the explorer lists that build their rows after their tab has settled
+(`reloadFolderTree`, `reloadAlbumList`, `reloadLocationList`):
 
 ```html
 <a data-app-search="click" data-app-search-person-id="abc">          <!-- literal parameter -->
@@ -4000,32 +2568,20 @@ has settled):
 <button data-app-search="click" data-app-search-bbox="">             <!-- an empty literal clears the parameter -->
 ```
 
-The hydrator also owns the one rule on where a trigger's click goes in the current view (`routeOf` in
-`search-triggers.js`: `Route.search`, `Route.nothing`, or the one explorer scope to ask the Triage scope route about),
-so that rule lives in one place rather than in markup, and holds for every trigger: the explorer's rows, the Results
-title's folder crumbs and the Triage summary's links alike.
+The hydrator is the single owner of where a trigger's click goes in the current view (`routeOf`), so the rule is not
+in markup and holds for every trigger:
 
-- **Trash** spans every folder and has no explorer: a trigger carrying `folderId` does nothing there, silently.
-- **Triage** finds only triaged assets: a trigger whose `folderId`, `personId` or `locationId` names one asks the
-  Triage scope route instead of searching (`requestScopeDialog`). A folder holds no triaged asset, so it is always
-  described by the popover dialog the route answers, except the root folder, the whole repository, whose trigger does
-  nothing (`isRootFolder`: the tree's node marked `data-is-root`; the Results title has no crumb for the root). A
-  Person or a Location with triaged assets is a 204, and the trigger then searches as anywhere else
-  (`runTriggerSearch`, called by `js/listeners/dialogs.js`); one without them is its dialog (**Scope dialog and Quick
-  view**). An empty value names nothing and searches, so the Results title's × and the Triage summary's total still
-  clear a scope there, and so does every other trigger (a subset, a sort, a grouping, a layout).
+- **Trash** has no explorer: a trigger carrying `folderId` silently does nothing.
+- **Triage** finds only triaged assets: a trigger naming a folder, Person or Location asks the Triage scope route
+  instead (`requestScopeDialog`). A folder always gets the dialog, except the root folder, which does nothing
+  (`isRootFolder`). A Person or Location with triaged assets is a 204 and then searches (`runTriggerSearch`, from
+  `js/listeners/dialogs.js`); one without them gets its dialog (**Scope dialog and Quick view**). An empty value
+  searches, so the Results title's × and the Triage summary's total still clear a scope there.
 - Everything else searches.
 
-The rule is on triggers alone. `runSearch` called directly is not routed, so a caller decides for itself, as the
-`personMerged` listener does: in Browse and Triage alike it searches only when the results show one of the merged
-people (**Event flow**).
-
-Per-request flags that must not be remembered (`isContinuousScroll`, a continuation's
-`after`, and the grid layout and no grouping of the crowded-pin panel's request while the store says
-map) are passed as `transient` and are serialized into that one request only. `runSearch` also takes
-a `target` and `swap` (the panel searches into `#mapPanelContent`) and a `source`, the element htmx
-issues the request from, for a caller that recognises its responses in the lifecycle events
-(`js/listeners/map.js`). A server-side action that should change what is
-displayed reports it as a custom event and lets JS run the search — as the people merge does with
-`personMerged` — rather than redirecting to a search URL of its own.
-
+`runSearch` called directly is not routed, so the caller decides, as the `personMerged` listener does by searching only
+when the search names one of the merged people (**Event Flow**). Its `transient` option holds per-request values that
+must never reach the store (`isContinuousScroll`, a continuation's `after` with the layout and grouping its fragment was
+rendered with, the crowded-pin panel's grid layout); `target`, `swap` and `source` are documented in `search.js`. A
+server-side action that should change what is displayed reports a custom event and lets JS run the search, as the
+people merge does with `personMerged`, rather than redirecting to a search URL of its own.

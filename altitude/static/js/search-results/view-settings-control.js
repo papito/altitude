@@ -6,8 +6,9 @@ import { buildDialogTriggerCtrl } from "../common/context-menu-markup.js"
  * into that panel. Built here rather than in the template because it is a context menu component,
  * like the folder and album menus; the template only supplies the host.
  *
- * The whole results fragment is re-swapped on every search, so the host arrives empty and the
- * control is built again; the guard keeps a re-hydration of the same DOM from building a second one.
+ * The host is `hx-preserve` (`includes/search_results`): each results swap carries it, the built
+ * control and its open panel included, into the new fragment, so the control is built once, into the
+ * empty host of the first fragment; the guard keeps every later hydration from building a second one.
  */
 export function ensureViewSettingsControl(fragmentEl) {
     const hostEl = fragmentEl.querySelector("#viewSettingsActions")

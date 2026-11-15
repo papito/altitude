@@ -29,7 +29,8 @@
    the stylesheet of the stored tweaks before the first paint, so a page never flashes the untweaked look, and shows the page
    in the remembered theme; the adapter's module, deferred as every module is, finds that sheet by its marker rule, takes it
    over and builds the panel. The boot script reads the storage key from its `data-key`, the same key as
-   `Const.localStore.designTweaks`. *@
+   `Const.localStore.designTweaks`. Disabled for now: both tags are commented out, so no page loads the panel; uncomment
+   them to enable it. *@
 @if(Environment.isDev) {
 @*<script src="/static/js/lib/tokentweak-boot.js" data-key="designTweaks"></script>*@
 @*<script type="module" src="/static/js/design-tweaks.js"></script>*@

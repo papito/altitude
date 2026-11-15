@@ -17,7 +17,7 @@
 @organizes = @{ RequestContext.holds(Permission.Organize) }
 <div class="batch-ops" x-show="!$store.selectedAssets.isEmpty">
     @* Default view: Move, Recycle, Add to album, Remove from album (in an album), Add to location, Remove from location
-       (in a Location), Curate Selected (two images or more) *@
+       (in a Location), Curate Selected (two assets or more) *@
     <template x-if="!$store.currentView.isTrashBinView()">
         <div class="actions">
             @if(organizes) {

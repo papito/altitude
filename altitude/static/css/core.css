@@ -1016,9 +1016,9 @@ footer {
 /*        */
 
 /* An on/off setting that applies as it is flipped: a `button[role="switch"]` whose `aria-checked` an Alpine binding
-   keeps in step with the setting, labelled by a `<label for>`, whose click flips it natively. Three uses: the View
-   settings dialog's switches, the People tab's bucket switches and the Change combobox's "This face only" switch
-   (htmx/detail_panel_people). The last is the exception: focus has to stay in the combobox's input, so the switch's and
+   keeps in step with the setting, labelled by a `<label for>`, whose click flips it natively. Used by the View
+   settings dialog, the People tab's buckets, the Advanced search panel, the Watch folder and account forms, and the
+   Change combobox's "This face only" switch (htmx/detail_panel_people). The last is the exception: focus has to stay in the combobox's input, so the switch's and
    the label's pointer `mousedown` is prevented, and the label's click, prevented too, is routed to the component's
    `toggleFaceOnly` (views/AGENTS.md, **Forms** and **Detail panel**). The knob is a
    pseudo-element that slides across the track by the track's width less its height. The track off is a veil of

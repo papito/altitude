@@ -72,7 +72,7 @@ returns a `(Face, FaceImages)` per face it keeps.
 4. **Quality** is that norm (`Face.quality`). For a net trained with the ArcFace loss the norm tracks how
    recognizable a face was: it drops with blur and occlusion, and it costs nothing extra. It does not respond to low
    resolution, and sharp faces differ by identity. On the test portraits sharp faces measure 18.8 to 22.4, the same faces
-   blurred at 5% of their width 15 to 19.6, eyes covered 16 to 19.5. Blur only counts relative to the face: the
+   blurred at 5% of their width 15.1 to 19.6, eyes covered 15.9 to 19.5. Blur only counts relative to the face: the
    112 px alignment hides any blur small against a large face.
 5. **Tier**: `Face.isEnrolled` is `quality >= face.quality.enroll_threshold` (18.0). A detection under
    `face.quality.keep_threshold` (15.0) is dropped here, after the debug dump, with an INFO log. Both thresholds are read

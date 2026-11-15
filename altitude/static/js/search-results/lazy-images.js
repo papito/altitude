@@ -8,7 +8,7 @@ import { Const } from "../constants.js"
  * the page displays, loads an image as it comes within a viewport and swaps the transparent
  * placeholder back in once it is more than a viewport away, so the thumbnails held are bounded by
  * the viewport, not by how far the session has scrolled. A released image that scrolls back in is
- * a browser cache hit: the content route sends Cache-Control for an hour.
+ * a browser cache hit: the content route sends `Cache-Control` for a year, `immutable`.
  */
 
 const placeholderImageData =

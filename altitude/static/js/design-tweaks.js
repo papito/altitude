@@ -1,5 +1,6 @@
 /**
- * The design tweaks panel (dev only, loaded by `includes/header_common` on every page): the vendored
+ * The design tweaks panel (dev only; `includes/header_common` loads it on every page once its two
+ * script tags are uncommented, and they are commented out for now): the vendored
  * tokentweak package (`lib/tokentweak.js`) configured for Altitude. The package reads every `:root`
  * token of the bundle (the stylesheet served under `/assets/`), builds the panel in a shadow root on a
  * `popover="manual"` host and applies every change through one adopted stylesheet, whose text it

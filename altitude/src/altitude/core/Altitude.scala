@@ -93,7 +93,7 @@ class Altitude(
    * ENV var overrides are a Typesafe Config feature:
    * https://github.com/lightbend/config?tab=readme-ov-file#optional-system-or-env-variable-overrides
    *
-   * In short: FORCE_CONFIG_db_engine=postgres will override db.engine=sqlite in the config. This is only for tests,
+   * In short: CONFIG_FORCE_db_engine=postgres will override db.engine=sqlite in the config. This is only for tests,
    *
    * Default reference configs are in altitude/resources/reference.conf and test/resources/reference.conf
    *
@@ -520,7 +520,7 @@ class Altitude(
 object Altitude:
 
   /**
-   * The test environment's config, before the SQLite URL is added: the reference config with the `FORCE_CONFIG_` environment
+   * The test environment's config, before the SQLite URL is added: the reference config with the `CONFIG_FORCE_` environment
    * overrides, the data directory under the test directory, the test Postgres database, and the engine if one is given. What a
    * test needs of the config without an instance (the model files) reads it here, so it reads what an instance does.
    */
