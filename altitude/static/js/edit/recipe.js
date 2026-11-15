@@ -42,20 +42,6 @@ export const SLIDERS = Object.freeze(
                 stepsPerUnit: 10,
                 decimals: 1,
             }),
-            slider(
-                "perspectiveV",
-                "Vertical perspective",
-                -100,
-                100,
-                "cropRotate",
-            ),
-            slider(
-                "perspectiveH",
-                "Horizontal perspective",
-                -100,
-                100,
-                "cropRotate",
-            ),
             slider("exposure", "Exposure", -5, 5, "light", {
                 stepsPerUnit: 20,
                 decimals: 2,
@@ -119,8 +105,6 @@ export const SECTIONS = Object.freeze([
             "flipH",
             "flipV",
             "straighten",
-            "perspectiveV",
-            "perspectiveH",
             "crop",
             "aspect",
             "portrait",
@@ -175,8 +159,6 @@ export function defaults() {
         flipH: false,
         flipV: false,
         straighten: 0,
-        perspectiveV: 0,
-        perspectiveH: 0,
         crop: null,
         aspect: "original",
         portrait: null,
@@ -343,7 +325,7 @@ export function isIdentityCurve(curve) {
 }
 
 /**
- * Whether the Edit changes no pixel: no turn, flip, Straighten, perspective or crop, every slider
+ * Whether the Edit changes no pixel: no turn, flip, Straighten or crop, every slider
  * at 0 and the curve the diagonal. The Crop tool's settings do not count (`EditRecipe.isIdentity`).
  */
 export function isIdentity(recipe) {

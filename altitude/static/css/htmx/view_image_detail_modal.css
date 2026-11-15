@@ -372,7 +372,8 @@
    crop turns the image (a rotate cursor, an SVG data URI, which cannot read a token, so its light and dark strokes are
    literals, the same exception as the selected cell's check in includes/search_results.css), the
    frame at the canvas's box, and the crop in it, which dims the rest of the stage, its guide and its handles; with the
-   Level tool on, the layer draws a line and the crop takes no pointer. interact.js leaves the cursors to these rules */
+   Level tool on, the layer draws a line and the crop takes no pointer, and with the tool closed (`data-level-only`) the
+   layer holds no frame. interact.js leaves the cursors to these rules */
 #cropLayer {
     grid-area: 1 / 1;
     place-self: stretch;
@@ -390,6 +391,10 @@
 
 #cropLayer[data-level] {
     cursor: crosshair;
+}
+
+#cropLayer[data-level-only] #cropFrame {
+    display: none;
 }
 
 #cropFrame {
@@ -464,12 +469,13 @@
     vector-effect: non-scaling-stroke;
 }
 
-/* The floating bar at the bottom of the stage, on the menus' frosted surface: the guide, the crop's size, Cancel and Done */
-#cropBar {
-    position: absolute;
-    bottom: var(--space-3);
-    left: 50%;
-    translate: -50% 0;
+/* The floating bar at the bottom of the stage, above the Crop tool's layer, on the menus' frosted surface: the Crop tool's
+   guide and crop size while it is open, Cancel, how many edits are pending and Done */
+#editBar {
+    grid-area: 1 / 1;
+    place-self: end center;
+    z-index: 3;
+    margin-bottom: var(--space-3);
     display: flex;
     align-items: center;
     gap: var(--space-3);
@@ -483,14 +489,19 @@
     cursor: default;
 }
 
-#cropBar .crop-size {
+#editBar[hidden],
+#editBar:not([data-crop]) .crop-only {
+    display: none;
+}
+
+#editBar :is(.crop-size, .edit-held-count) {
     padding: 0 var(--space-3);
     color: var(--theme-neutral-3);
     font-family: var(--font-nav);
     font-size: var(--font-size-xs);
 }
 
-#cropBar kbd {
+#editBar kbd {
     padding: 0 var(--space-2);
     border: var(--border-hairline) currentColor;
     border-radius: var(--radius-small);
@@ -499,6 +510,6 @@
 }
 
 /* Done is the bar's call to action: the accent fill, which a small button's own fill would replace */
-#cropBar .action-button.primary {
+#editBar .action-button.primary {
     --button-fill: var(--theme-accent);
 }

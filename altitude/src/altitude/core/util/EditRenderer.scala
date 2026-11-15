@@ -33,12 +33,6 @@ object EditRenderer:
   /** The output long edge at which the sizes of Sharpen's blur and of Grain's cells are given; they scale with the output */
   val REFERENCE_LONG_EDGE = 3840.0
 
-  // The keystone of a perspective slider at ±100
-  private val PERSPECTIVE_AT_FULL = 0.55
-
-  /** The inverse warp has no source where its denominator is this or less: beyond the horizon of the perspective's plane */
-  val MIN_DENOMINATOR = 0.001
-
   // Auto-straighten: the long edge it reads the frame at, and the share of it a line must be as long as to count
   private val STRAIGHTEN_LONG_EDGE = 1280
   private val STRAIGHTEN_MIN_LINE = 0.08
@@ -69,59 +63,41 @@ object EditRenderer:
     val (width, height) = frameSize(uprightWidth, uprightHeight, recipe)
     (if recipe.flipH then width - tx else tx, if recipe.flipV then height - ty else ty)
 
-  /** The keystones (a, b) of the horizontal and vertical perspective */
-  private def keystones(recipe: EditRecipe): (Double, Double) =
-    (PERSPECTIVE_AT_FULL * recipe.perspectiveH / 100, PERSPECTIVE_AT_FULL * recipe.perspectiveV / 100)
-
   /**
-   * Step 2 on the W × H frame, its constants worked out once: in normalized coordinates around the center (q = (p − c) / s, s
-   * half the long side), the image point u goes to u / (1 + a·uₓ + b·u_y), which is turned by Straighten and scaled back
+   * Step 2 on the W × H frame, its constants worked out once: in normalized coordinates around the center (u = (p − c) / s, s
+   * half the long side), the point is turned by Straighten, R(θ)·u, and scaled back
    */
   final class Warp(width: Double, height: Double, recipe: EditRecipe):
     private val s = Math.max(width, height) / 2
-    private val (a, b) = keystones(recipe)
     private val theta = Math.toRadians(recipe.straighten)
     private val (cos, sin) = (Math.cos(theta), Math.sin(theta))
 
-    /** Whether the warp moves any point: Straighten or a perspective */
-    val moves: Boolean = recipe.straighten != 0 || recipe.perspectiveH != 0 || recipe.perspectiveV != 0
+    /** Whether the warp moves any point: Straighten */
+    val moves: Boolean = recipe.straighten != 0
 
     def forward(x: Double, y: Double): (Double, Double) =
       val (ux, uy) = ((x - width / 2) / s, (y - height / 2) / s)
-      val d = 1 + a * ux + b * uy
-      val (px, py) = (ux / d, uy / d)
-      ((cos * px - sin * py) * s + width / 2, (sin * px + cos * py) * s + height / 2)
+      ((cos * ux - sin * uy) * s + width / 2, (sin * ux + cos * uy) * s + height / 2)
 
-    /** The denominator w of [[inverse]] at the point */
-    private def denominator(qx: Double, qy: Double): Double = 1 - a * (cos * qx + sin * qy) - b * (-sin * qx + cos * qy)
-
-    def inverse(x: Double, y: Double): Option[(Double, Double)] =
+    /** The point's source in the frame, which sampling reads: R(−θ)·q, q = (p − c) / s, scaled back */
+    def inverse(x: Double, y: Double): (Double, Double) =
       val (qx, qy) = ((x - width / 2) / s, (y - height / 2) / s)
-      val w = denominator(qx, qy)
-      Option.when(w > MIN_DENOMINATOR)(((cos * qx + sin * qy) / w * s + width / 2, (-sin * qx + cos * qy) / w * s + height / 2))
+      ((cos * qx + sin * qy) * s + width / 2, (-sin * qx + cos * qy) * s + height / 2)
 
     /**
-     * Whether the point of the warped frame shows the image: its source ([[inverse]]) exists and lies within the frame, edges
-     * included. The rendered image is opaque exactly there, with no partial coverage at the edge.
+     * Whether the point of the warped frame shows the image: its source ([[inverse]]) lies within the frame, edges included. The
+     * rendered image is opaque exactly there, with no partial coverage at the edge.
      */
     def covers(x: Double, y: Double): Boolean =
-      val (qx, qy) = ((x - width / 2) / s, (y - height / 2) / s)
-      val w = denominator(qx, qy)
-      w > MIN_DENOMINATOR && {
-        val px = (cos * qx + sin * qy) / w * s + width / 2
-        val py = (-sin * qx + cos * qy) / w * s + height / 2
-        px >= 0 && px <= width && py >= 0 && py <= height
-      }
+      val (px, py) = inverse(x, y)
+      px >= 0 && px <= width && py >= 0 && py <= height
 
   /** Step 2 for a point of the W × H frame ([[Warp.forward]]) */
   def warp(x: Double, y: Double, width: Double, height: Double, recipe: EditRecipe): (Double, Double) =
     Warp(width, height, recipe).forward(x, y)
 
-  /**
-   * The inverse of [[warp]], which sampling reads: u = R(−θ)·q, w = 1 − a·uₓ − b·u_y, and the source is u / w; None where w is
-   * [[MIN_DENOMINATOR]] or less
-   */
-  def unwarp(x: Double, y: Double, width: Double, height: Double, recipe: EditRecipe): Option[(Double, Double)] =
+  /** The inverse of [[warp]], which sampling reads ([[Warp.inverse]]) */
+  def unwarp(x: Double, y: Double, width: Double, height: Double, recipe: EditRecipe): (Double, Double) =
     Warp(width, height, recipe).inverse(x, y)
 
   /**
@@ -501,28 +477,23 @@ object EditRenderer:
 
   /**
    * Steps 2 and 3 on `source`, the frame (which may be a reduction of the `frameWidth` × `frameHeight` frame): warped and cropped
-   * by one `warpPerspective` of the composed homography (frame → warp → crop offset → output scale) into `width` × `height`, in
-   * the source's own depth and channels. Sampling is bilinear, the edge pixels repeated beyond the frame's last pixel centers
-   * (`BORDER_REPLICATE`, as a texture's `CLAMP_TO_EDGE`), so no color is mixed with a border; where the image ends, the toning
-   * step makes the output transparent.
+   * by one `warpAffine` of the composed transform (frame → Straighten's turn about its center → crop offset → output scale) into
+   * `width` × `height`, in the source's own depth and channels. Sampling is bilinear, the edge pixels repeated beyond the frame's
+   * last pixel centers (`BORDER_REPLICATE`, as a texture's `CLAMP_TO_EDGE`), so no color is mixed with a border; where the image
+   * ends, the toning step makes the output transparent.
    */
   private def warped(source: Mat, frameWidth: Double, frameHeight: Double, recipe: EditRecipe, width: Int, height: Int): Mat =
     val crop = recipe.crop.getOrElse(EditCrop(0, 0, 1, 1))
     val (scaleX, scaleY) = (width / (crop.w * frameWidth), height / (crop.h * frameHeight))
-    val s = Math.max(frameWidth, frameHeight) / 2
     val theta = Math.toRadians(recipe.straighten)
     val (cos, sin) = (Math.cos(theta), Math.sin(theta))
-    val (a, b) = keystones(recipe)
     // OpenCV's pixel coordinates have the pixel's center at 0, the spec's at 0.5
-    val homography = List(
+    val transform = List(
       translation(-0.5, -0.5),
       scaling(scaleX, scaleY),
       translation(-crop.x * frameWidth, -crop.y * frameHeight),
       translation(frameWidth / 2, frameHeight / 2),
-      scaling(s, s),
       Array(cos, -sin, 0, sin, cos, 0, 0, 0, 1),
-      Array(1, 0, 0, 0, 1, 0, a, b, 1),
-      scaling(1 / s, 1 / s),
       translation(-frameWidth / 2, -frameHeight / 2),
       scaling(frameWidth / source.width, frameHeight / source.height),
       translation(0.5, 0.5)
@@ -530,10 +501,11 @@ object EditRenderer:
 
     val output = new Mat()
     filled(output) {
-      val matrix = new Mat(3, 3, CvType.CV_64F)
+      // The transform is affine, its last row (0, 0, 1): `warpAffine` takes the two above it
+      val matrix = new Mat(2, 3, CvType.CV_64F)
       try
-        matrix.put(0, 0, homography*)
-        Imgproc.warpPerspective(source, output, matrix, new Size(width, height), Imgproc.INTER_LINEAR, Core.BORDER_REPLICATE)
+        matrix.put(0, 0, transform.take(6)*)
+        Imgproc.warpAffine(source, output, matrix, new Size(width, height), Imgproc.INTER_LINEAR, Core.BORDER_REPLICATE)
       finally matrix.release()
     }
 

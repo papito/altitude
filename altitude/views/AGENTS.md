@@ -216,7 +216,7 @@ in either theme:
 |---|---|
 | `js/assets/` | asset mutation/action flows such as move, recycle, purge, and restore, plus related grid/snackbar follow-up |
 | `js/fragments/` | centralized hydration for declarative HTMX fragments (`data-app-fragment="..."`): modal, inline-dialog, image-detail, the person name editor, search results, the explorer list hosts (`explorer.js`), buttons opening a page-held dialog (`dialog-openers.js`), the batch dialogs' selection field (`selection-field.js`) and their wiring (`add-to-album.js`, `add-to-location.js`), Curation's shell opening its host (`curation.js`), plus the operation lifecycle shared by every dialog (`dialog-operations.js`) |
-| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), the Triage summary's reload (`triage.js`), the Settings form's save (`settings.js`, the success snackbar), the Edit's keys in Asset detail (`edit.js`: Show original held, the Edit panel, its Crop tool, Undo and Redo), and the account's (`account.js`: a changed own password, on every page with the nav, and the Users page's changes, which reload its cards); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring, a 204 to an open handed back to its search trigger, and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
+| `js/listeners/` | domain-focused `document.body` event registration for folders, albums, Locations, people, assets, search keys, Curation (`curation.js`: opening it, the counts after each mutation in it, the grid beneath when it closes), the Triage summary's reload (`triage.js`), the Settings form's save (`settings.js`, the success snackbar), the Edit's keys in Asset detail (`edit.js`: Show original held, the Edit panel, its Crop tool, Done, Undo and Redo), and the account's (`account.js`: a changed own password, on every page with the nav, and the Users page's changes, which reload its cards); the generic htmx request outcome (`htmx-requests.js`: failures to the snackbar, declared success events, tab selection, fragment hydration); the `document`-level dialog request wiring, a 204 to an open handed back to its search trigger, and the popover dialog host's own dismissals (`dialogs.js`); and the map panel's URL correction (`map.js`) |
 | `js/search-results/` | the search funnel (`search.js`) and its declarative triggers (`search-triggers.js`); the Search input of `includes/nav` (`search-input.js`) and the advanced search panel beside it (`search-panel.js`: the load on opening, the focus in the Describe field, the filter button's count, the search its form asks for); a filtered search's results title (`filtered-title.js`: a chip's ×, the description's included, and Edit); the sticky offsets of the results title, the toolbar and the group headers (`sticky-offsets.js`); the grid's behaviours, one module each: selection (`selection.js`), infinite scroll (`infinite-scroll.js`), the window of loaded pages (`page-window.js`), lazy images (`lazy-images.js`), metadata visibility (`metadata-visibility.js`), the ⚙ View control (`view-settings-control.js`), box selection (`box-selection.js`), the group headers' counts (`date-groups.js`), detail navigation over the grid and image loading (`detail-navigator.js`), the Detail panel of asset detail (`detail-panel.js`: open or closed, its dock, its fragment's loads, the Face selection, the Face highlights' setting and its remembered state, and what a Face correction changes on screen), the Face highlights' layer it draws (`face-highlights.js`), the Face corrections' requests (`face-corrections.js`: Remove's two clicks, Change's pick, their answers), a Person's results title read again after a rename or a correction (`person-title.js`), Asset detail's URL (`detail-url.js`: the address bar names the asset and the Detail panel's state, and Back closes it), Asset detail's fullscreen (`detail-fullscreen.js`: `f`, the toolbar's toggle and the player's button on the whole of Asset detail), every cell of an asset (`cells.js`), and the post-gesture click swallow (`click-suppression.js`) |
 | `js/import/` | an upload of the Import page, with no DOM of its own: what a section sends, from its picker or a drop walked to its last file, less the ignored files, and under which paths (`chosen-files.js`), and the sending, from the Import's opening to its closing (`upload-run.js`); and the reads of the Watch folders' cards (`watch-folders.js`); see **Import page** |
 | `js/edit/` | Image editing in Asset detail (`htmx/view_image_detail_modal`, `includes/edit_panel`, `includes/edit_stage_tools`); see **Edit panel**. DOM-free, run under Node by `scripts/test-js/`: the Edit as the client holds it, its defaults, sliders, sections and the server's normalization (`recipe.js`), its geometry and the Crop tool's rules on it (`geometry.js`), its per-pixel math (`tone.js`), the Edit panel's changes to an Edit (`adjust.js`), and the server sync of one asset's Edit (`edit-session.js`). With the DOM: the WebGL2 renderer (`renderer.js`), Asset detail's stage for a still image, its sources and Show original (`edit-stage.js`), the wait for a render and the grid's Previews after it (`render-status.js`), the Edit panel's coordinator (`edit-panel.js`), the Crop tool on interact.js (`crop-tool.js`) and the Level tool's line (`level-tool.js`) |
@@ -229,7 +229,7 @@ in either theme:
 | `js/explorer-dock-boot.js` | a plain blocking script of `index.scala.html`'s head: writes the remembered Dock side and explorer share on `<html>` before the first paint, from the key in its `data-key`; see **Explorer dock** |
 | `js/setup-page.js` | the page module of `setup.scala.html`: it only starts the background scene (`startSetupBackground` on `#setupBackground`); the setup form submits through htmx and `json-enc.js`, which the page loads as plain scripts, so nothing else is registered; see **Setup background** |
 | `js/setup-background/` | the background scene of `setup.scala.html`: the page side (`setup-background.js`: feature detection, the palette probe, the Worker's start with the transferred canvas, the `resize`, `visible` and `motion` messages, the fade-in on `ready`), the module Worker that draws the scene on the OffscreenCanvas (`setup-background-worker.js`) and the fields' textures it paints (`setup-background-textures.js`); see **Setup background** |
-| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), edit-keys (the Edit panel's part in `global.js`'s keys, which the Edit panel's coordinator registers as the main page starts, so `global.js`, on every page, imports no edit module: whether its warning is open and its close, whether the Crop tool is open and its Escape), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys: a text-like input, a textarea, a select or an editable element, never a slider, a checkbox, a radio, a color or file input or a button-like one, so the shortcuts keep working on the Edit panel's sliders), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of any image source, a loaded image or the Edit's canvas, blown, crushed or neither, read in the browser as the measurement reads them, with the fractions of each, a fully transparent pixel no pixel of the image, and the Clipping mask painted from the classes), histogram (a Histogram's bins as SVG paths, `channelPaths`, and a fraction's label, `percentLabel`: Curation's strip and the Edit panel's), content-urls (an asset's Preview, Display image and original URLs, a Preview by its revision, and an image repointed at a new Preview), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's, the Detail panel's and the Edit panel's docks are made from), stored-state (a remembered object under one localStorage key that modules share: `readStoredObject` and `writeStoredFields`, which sets some fields and keeps the rest; the Detail panel's view is read and written through it by `detail-panel.js` and `dock.js`), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font), name-key (the server's name fold, `nameKey` and `partialMatchKey`: the Change combobox's and the Users page filter's), request-failure (a failed htmx request in the snackbar: a 403 or 409 refusal in plain text as its text, a 401 nowhere, anything else by its path and status), session (a 401 sends the window to the login, back to the page: `goToLogin`) |
+| `js/common/` | shared: modal (the owner of the four dialog hosts: the general modal, the popover dialog, asset detail and Curation), snackbar, tooltip (the `$tooltip` magic over the `#tooltip` host), navigation, folder-tree (renders the tree), album-list (renders the albums), location-list (renders the categories and Locations), context-menu-markup (builds the ⋯ menu of a folder, album or Location, the dialog-trigger buttons and a choice menu), choice-menus (builds the choice menus of a fragment from their hosts), asset-count (the `(n)` cell after a row's name), edit-keys (the Edit panel's part in `global.js`'s keys, which the Edit panel's coordinator registers as the main page starts, so `global.js`, on every page, imports no edit module: whether its warning is open and its close, whether the Crop tool is open, whether changes are held, and the panel's Escape), viewed-folder-scope (highlights the folder whose results are displayed), htmx-events (accessors for the htmx 4 request context), text-editing (whether focus is in a field that takes the keys typed, for `global.js` and Curation's keys: a text-like input, a textarea, a select or an editable element, never a slider, a checkbox, a radio, a color or file input or a button-like one, so the shortcuts keep working on the Edit panel's sliders), loupe (the Loupe over Curation's stage panes: the pointer-to-pixel mapping and the level ladder), clipping (the class of every pixel of any image source, a loaded image or the Edit's canvas, blown, crushed or neither, read in the browser as the measurement reads them, with the fractions of each, a fully transparent pixel no pixel of the image, and the Clipping mask painted from the classes), histogram (a Histogram's bins as SVG paths, `channelPaths`, and a fraction's label, `percentLabel`: Curation's strip and the Edit panel's), content-urls (an asset's Preview, Display image and original URLs, a Preview by its revision, and an image repointed at a new Preview), video-playback (unloading the detail's video and the Media Session), dock (a docked panel: its Dock side, its share, its divider's drag and keys, its Dock side menu's upkeep and its remembered state, the factory the explorer's, the Detail panel's and the Edit panel's docks are made from), stored-state (a remembered object under one localStorage key that modules share: `readStoredObject` and `writeStoredFields`, which sets some fields and keeps the rest; the Detail panel's view is read and written through it by `detail-panel.js` and `dock.js`), explorer-dock (the main page's Dock side, the explorer's share and the divider: the explorer's configuration of `dock`), token-kinds (the kinds and groups of the tokens, for the style guide), theme (the theme shown and remembered, for the nav's switch and the style guide, and the two colors of a `light-dark()` pair), font-availability (whether the browser has a font), name-key (the server's name fold, `nameKey` and `partialMatchKey`: the Change combobox's and the Users page filter's), request-failure (a failed htmx request in the snackbar: a 403 or 409 refusal in plain text as its text, a 401 nowhere, anything else by its path and status), session (a 401 sends the window to the login, back to the page: `goToLogin`) |
 | `js/design-tweaks.js` | the adapter of the dev-only design tweaks panel, which `includes/header_common` loads on every page: it configures the vendored tokentweak package (`lib/tokentweak.js`, with `lib/tokentweak-boot.js` for the pre-paint adoption) for Altitude; see **Design tweaks** |
 | `js/models/folder.js` | DOM wrapper for folder tree elements and the owner of their expansion state |
 | `js/alpine/components/` | Alpine components: `date-group-selectable.js` (a group header's checkbox over its group's cells, a day, a Location or a Sequence), `context-menu.js` (native popover menus of folders, albums and Locations, View settings and the choice menus, and the functions that close one from outside), `view-settings.js` (the View settings dialog's switches over the grid metadata set) `people-tab.js` (the People tab's buckets, Split view and pane loads), `curation.js` (Curation's state, on its shell), `face-combobox.js` (the Change combobox of a People row in the Detail panel), `edit-panel.js` (the Edit panel's controls, over the coordinator `js/edit/edit-panel.js`), and the advanced search panel's `search-panel.js` (its form: Search, Enter in the Describe field, Clear, the people match), `filter-combobox.js` (a combobox of names chosen as chips) and `date-range.js` (a date range picked on a Flatpickr calendar); `index.js` registers them, and `nav-page.js` the panel's three as well. The Users page's own, `users-page.js` (the tab and the filter), `account-form.js` (the account form's type and Permission matrix) and `password-field.js` (Generate and Show), are registered by its page module, as the Import page's `import-uploads.js` (the upload sections) and `watch-folder-form.js` (the Watch folder dialog's two switches and its deletion notice) are by its own |
@@ -329,9 +329,9 @@ Const.attributes.editPanelToggle      // "data-app-edit-panel-toggle"  (the Edit
 Const.attributes.editCanvasBehind     // "data-app-edit-canvas-behind"  (the stage's canvas while it draws the identity behind the original's color-managed `<img>`)
 Const.attributes.editPanelOpen        // "data-app-edit-panel-open"  (the Asset detail fragment while the Edit panel is open; the stylesheet lays the grid out from it)
 Const.attributes.cropToolOpen         // "data-app-crop-tool-open"  (the Asset detail fragment while the Crop tool is open)
-Const.attributes.cropGuide            // "data-app-crop-guide"  (the Crop tool's bar: the guide's button, its name in `data-app-crop-guide-name`)
+Const.attributes.cropGuide            // "data-app-crop-guide"  (the stage's bar in the Crop tool: the guide's button, its name in `data-app-crop-guide-name`)
 Const.attributes.cropSize             // "data-app-crop-size"  (the bar's crop size in the original's pixels)
-Const.attributes.cropCancel           // "data-app-crop-cancel"  (the bar's Cancel, and `data-app-crop-done` its Done)
+Const.attributes.editCancel           // "data-app-edit-cancel"  (the stage's bar's Cancel of the changes held, `data-app-edit-done` its Done, and `data-app-edit-held-count` how many edits are pending)
 Const.attributes.editLeave            // "data-app-edit-leave"  (a choice of the Edit panel's warning: `save`, `discard` or `stay`; `data-app-edit-leave-message` its message)
 Const.attributes.panelUrl             // "data-panel-url"  (the advanced search panel's host in the nav: the route of its form)
 Const.attributes.seesTriaged          // "data-app-sees-triaged"  (the same host, for a member: the account sees triaged items, `context.seesTriaged()`)
@@ -642,8 +642,8 @@ alone (see **Detail panel**); else an open context menu closes alone, with focus
 panel's Dock side menu leaves Asset detail open (no other menu is open together with a dialog: opening a dialog closes
 the menus, and a menu's opening light-dismisses the popover dialog); else the advanced search panel closes, with focus
 back on its filter button (an open listbox or calendar inside it closes alone first, consuming the key itself:
-**Advanced search panel**); else, in Asset detail, the Edit panel's warning closes as Keep editing, then the Crop tool is left
-(Cancel, or the warning), then the selected Face clears (see **Detail panel**, **Edit panel**); else the active dialog, whose
+**Advanced search panel**); else, in Asset detail, the Edit panel's warning closes as Keep editing, then the panel's own
+(the Level tool off, the warning about changes held, the Crop tool closed), then the selected Face clears (see **Detail panel**, **Edit panel**); else the active dialog, whose
 close its guard may hold; else the map view's
 crowded-pin panel; and with none of those it is broadcast for such an edit to cancel. An open select picker's Escape
 is left to the picker, which closes itself and not the dialog holding it. General dialogs and Curation ignore backdrop clicks, asset detail closes on them. The general
@@ -1938,7 +1938,7 @@ corrections module answers a move with `PUT /htmx/asset/r/:repoId/face/:faceId/p
 `sourcePersonId`, which the server checks since the Face may have moved since the section was rendered; all three go
 through one `send`, one request per Face, with the same refusal and stale handling. The X announces
 `Const.events.faceChangeCancelled`, and the panel clears the selection and returns focus to the row. Escape with the listbox open closes it alone: `global.js` calls
-`closeOpenFaceCombobox` before `closeModal`. The next Escape, once the Edit panel's warning and its Crop tool are closed
+`closeOpenFaceCombobox` before `closeModal`. The next Escape, once the Edit panel's warning, its Level and Crop tools and its changes held are dealt with
 (each of which an Escape closes or leaves first, **Edit panel**), clears the selected Face (`clearSelectedFaceRow`, whatever the selection's source, focus to its row), so the row's actions and its highlight go, and only then does Escape close Asset detail. `m` and `p` in the input are the
 field's, as in every text field.
 
@@ -1985,10 +1985,12 @@ original; the server's side is **Image edits** in `altitude/AGENTS.md`, and the 
 [docs/image-edits.md](../../docs/image-edits.md)), in which a holder of Edit images changes a still
 image's Edit. `includes/edit_panel` (`aside#editPanel`, `x-data="editPanel"`, styled by `static/css/includes/edit_panel.css`)
 and its divider, `#editPanelDivider`, are in Asset detail's fragment for a holder of Edit images alone, as are the Edit's
-tools over the stage, `includes/edit_stage_tools` (`#editSplit`, Before/after, and `#cropLayer`, the Crop tool), and the
+tools over the stage, `includes/edit_stage_tools` (`#editSplit`, Before/after, `#cropLayer`, the Crop tool and the Level
+tool, and `#editBar`, the bar of the changes held), and the
 Clipping blink's `canvas#editClipping`; the stage's `canvas#editCanvas` is there for every viewer. `js/edit/edit-panel.js` is
 the coordinator (`createEditPanel`, `app.editPanel`, which `fragments/image-detail.js` attaches to each fragment): open or
-closed, the dock, the stage while the panel draws, each asset's session, the Crop tool and the keys' handlers. The `editPanel`
+closed, the dock, the stage while the panel draws, each asset's session and its changes held, the Crop and Level tools,
+the stage's bar and the keys' handlers. The `editPanel`
 Alpine component (`js/alpine/components/edit-panel.js`) holds the controls and connects to it as it starts
 (`connectEditPanelView`): the coordinator syncs a snapshot into it on every change (`sync`), and the component asks it for
 every change, worked out from the Edit shown by `js/edit/adjust.js` (pure functions of an Edit and the upright size); the
@@ -2015,15 +2017,15 @@ data.
   as every dock's does.
 - **Layout.** A header (Edit, Undo, Redo, Before/after, Reset all), a body that scrolls (the Histogram, the four
   tabs and the shown section), the commit row (the save status and Revert to original) and the key legend
-  (`footer.panel-keys`: E Close, C Crop, \ Original (hold), Ctrl+Z Undo, and "Double-click a slider to reset it"). Docked
+  (`footer.panel-keys`: E Close, C Crop, \ Original (hold), Ctrl+Z Undo). Docked
   top or bottom, the commit row joins the header, the Histogram sits at the left of the tabs (`--edit-column-width`), the
   section's controls flow into CSS columns as tall as the panel that scroll sideways, a heading kept with what follows it,
   and the keys are left out.
 - **Tabs and sections.** Crop & rotate, Light, Color and Effects (`recipe.js`'s `SECTIONS`), an ARIA tablist (the arrows,
   Home and End move between the tabs), the tab shown kept for the page's life; a section that changes the picture has a dot
-  in its tab (`.edit-dot`) and a Reset beside its heading. Crop & rotate: Crop and Level, rotate left and right, flip
-  horizontally and vertically, the aspect chips with the orientation's swap, the crop's size in the original's pixels,
-  Straighten with its Auto, the two Perspective sliders and "Keep the crop inside the image". Light: Exposure, Contrast,
+  in its tab (`.edit-dot`) and a Reset beside its heading. Crop & rotate: Crop, Level (draw line) and Auto-level, rotate left
+  and right, flip horizontally and vertically, the aspect chips with the orientation's swap, the crop's size in the
+  original's pixels, Straighten and "Keep the crop inside the image". Light: Exposure, Contrast,
   Highlights, Shadows, Whites, Blacks, Gamma and the tone curve. Color: Temperature, Tint, Vibrance and Saturation. Effects:
   Sharpen, Clarity, Vignette and Grain.
 - **Sliders.** `.edit-slider` (**Forms**), rendered from `recipe.js`'s `SLIDERS` (each slider's range, step, label, the
@@ -2032,8 +2034,8 @@ data.
   (`--edit-slider-fill`, which the component writes on the element), or, for a slider whose `SLIDERS` entry names a
   `track` (Exposure, Temperature, Tint, Vibrance, Saturation), is that slider's gradient, the component setting
   `--edit-slider-track` on the element to its `--edit-track-*` token; a changed slider's label is bold (`.changed`). A drag is shown at
-  once and saved as one change on release; the range's keys and a click on its track are saved once they rest (`commitSoon`:
-  400 ms for keys, so a held key is one change, and 300 ms for a click, so a double-click's reset saves nothing in between);
+  once and is one change on release; the range's keys and a click on its track are one once they rest (`commitSoon`:
+  400 ms for keys, so a held key is one change, and 300 ms for a click, so a double-click's reset makes no step between);
   Enter in the number field sets it as one change, and Escape or leaving the field puts its value back; a double-click on the
   label or the track resets it. A drag applies each value to the Edit it started from (`adjust.sliderDrag`), so a crop that
   shrank on the way grows back as Straighten returns.
@@ -2048,7 +2050,7 @@ data.
   `color`, the grid `border-color`, the Histogram `outline-color`), so the script writes none. A click adds a point (one
   nearer than `CURVE_ADD_DISTANCE` in x takes that point instead), a drag moves one within its neighbours, a drag well off
   the box (`CURVE_REMOVE_MARGIN`) or a double-click removes an inner one, and the release is one change. With the keys the
-  arrows move the point by 0.01 (Shift, 0.05), saved once they rest; [ and ] pick the point before or after; + or Insert
+  arrows move the point by 0.01 (Shift, 0.05), one change once they rest; [ and ] pick the point before or after; + or Insert
   adds one halfway to the next, on the curve; Delete or Backspace removes an inner one. Its subhead has a Reset.
 - **The Histogram and the Clipping blink.** The edited image's Histogram as drawn, in Curation's markup and drawing
   (`includes/histogram` and its `static/css/includes/histogram.css`, see **Curation**'s stage; `common/histogram.js`'s
@@ -2061,22 +2063,33 @@ data.
   and box of the fragment's `data-clipped-level`, `data-crushed-level` and `data-measurement-box`), the fractions always and,
   while the blink is on, the mask on `#editClipping`, painted in the colors its rule gives it (`color` the blown highlights,
   `border-color` the crushed shadows) and blinking at 1 Hz in steps, steady under reduced motion. Nothing is read while
-  Before/after or the Crop tool puts more than the Edit's result on the canvas, and the mask goes with the canvas.
-- **The header.** Undo and Redo, disabled with nothing to undo or redo (**The session**); Before/after (`fa-columns`), which shows `#editSplit` over the canvas: Before, the geometry
+  Before/after, the Crop tool or the Level tool puts more than the Edit's result on the canvas, and the mask goes with the
+  canvas.
+- **The header.** Undo and Redo, disabled with nothing to undo or redo (**The session**); Before/after (`fa-columns`, off
+  while the Crop tool or the Level tool is up), which shows `#editSplit` over the canvas: Before, the geometry
   alone (`renderer.renderBefore`), left of its divider and After right, labelled in the top corners, the divider
   (`#editSplitHandle`, a separator) dragged with the pointer or stepped 5 % with the arrows; and Reset all, one change.
 - **The session** (`edit-session.js`, one per asset, DOM-free: the requests are the coordinator's). The server keeps the
-  asset's one Edit (**Image edits** in `altitude/AGENTS.md`); a change is shown at once and saved (`PUT …/asset/:id`) behind
-  the save on its way, carrying as its `base` the edit version (`editVersion`) the write before it answered, and the changes waiting behind it
-  are one save, of the latest. **Undo and Redo** are the session's: each change puts the Edit shown before it on Undo's
-  stack and empties Redo's, Undo shows the Edit before and puts the one shown on Redo's, Redo the reverse, and each is saved
-  as any change, so Revert to original is undone the same way. The stacks last while the panel is open on the asset: closing
-  the panel, closing Asset detail or stepping to another asset forgets them (`clearUndo`), and a conflict or a failure does
-  too, since the Edits they hold are this session's. The answer of the last write is adopted whole: the edit version and the
-  Edit at it. A 409 drops the save waiting, adopts the state it carries and says "This photo was changed elsewhere; showing
-  its latest Edit"; a failure drops it too, reads the state again and says "Could not save the Edit" ("Could not read the
-  Edit" for the read). The commit row's status (`SaveStatus`, a `role="status"`): "Saving…", "Saved · the original is
-  untouched", "Could not save", "Changed elsewhere · showing its latest Edit". A session still saving when Asset detail
+  asset's one Edit (**Image edits** in `altitude/AGENTS.md`). **Every change is held**: shown at once and saved by nothing
+  (`commit`), whatever the tab, the Crop tool's gestures and the Level tool's line included; the session's changes are
+  pending while the Edit shown is not the one saved (`pending`, the snapshot's `saved`), and so are the coordinator's while a
+  change waits out its delay (`held`). **Done** (`done`: the stage's bar, Enter) saves the Edit shown as one change
+  (`PUT …/asset/:id`) behind the save on its way, carrying as its `base` the edit version (`editVersion`) the write before it
+  answered, and the Dones waiting behind it are one save, of the latest; **Cancel** (`cancel`: the bar, Escape through **The
+  warning**) shows the saved Edit again. **Undo and Redo** are the session's and step through the changes held: each change
+  puts the Edit shown before it on Undo's stack and empties Redo's, Undo shows the Edit before and puts the one shown on
+  Redo's, Redo the reverse, each held as any change, so Revert to original is undone the same way. Done folds the changes it
+  saves into one step, so the next Undo takes the whole Done back (held until the next Done), and Cancel puts Undo back
+  where it was at the last Done. The stacks last while the panel is open on the asset: closing the panel, closing Asset detail
+  or stepping to another asset forgets them (`clearUndo`), and a conflict or a failure does too, since the Edits they hold
+  are this session's. The answer of the last write is adopted whole: the edit version and the Edit at it, the one shown
+  unless changes are held over it. A 409 drops the save waiting and the changes held, adopts the state it carries and says
+  "This photo was changed elsewhere; showing its latest Edit"; a failed save drops them too, reads the state again and says
+  "Could not save the Edit" ("Could not read the
+  Edit" for the read, which changes nothing shown). The commit row's status (`SaveStatus`, a `role="status"`): "Saving…",
+  "Saved · the original is untouched", "Could not save", "Changed elsewhere · showing its latest Edit"; while changes are
+  held a notice takes its place (`.notice.edit-held`, `fa-info-circle` in `--info-color`, also `role="status"`): "Not saved
+  · Enter or Done saves, Esc cancels". A session still saving when Asset detail
   steps away finishes in the background, and stepping back picks it up; an idle one is forgotten, so the next visit reads
   the Edit afresh. Every state of the server's a session adopts (`onAdopted`: a save's answer, a read's, a 409's, the read
   after a failure, the reads of a page shown again) is the asset's latest Edit (`latestEdit`, unless an as new one is known),
@@ -2089,34 +2102,36 @@ data.
   the Display image. An Edit Asset detail brings for the asset (its fragment, a step's JSON) as new as the latest one
   replaces it, and one the latest is newer than (a session answered after Asset detail read the asset) is replaced by it on
   the stage once shown (`isNewerEditState`: a later edit version, or the same one rendered).
+- **The stage's bar** (`#editBar` in `includes/edit_stage_tools`, `role="toolbar"`, on the menus' frosted surface, at the
+  foot of the stage above the Crop tool's layer). Shown while changes are held or the Crop tool is open (`syncBar`, on
+  every push of the coordinator's snapshot): the Crop tool's guide and crop size while it is open (`data-crop`, `.crop-only`),
+  Cancel (Esc), how many edits are pending ("1 edit pending", "3 edits pending": `.edit-held-count`, a `role="status"`, shown
+  while any are held) and Done (Enter, `.primary`, disabled while nothing is held). The count is the steps of Undo between
+  the Edit shown and the last Done (the session's `heldCount`, an Undo past the Done counting as one), and one more for a
+  change on its way (a drag, a key waiting out its delay). The coordinator binds Cancel and Done
+  (`Const.attributes.editCancel`, `editDone`), the Crop tool the guide.
 - **The warning** (`js/edit/leave-dialog.js`, `dialog#editLeaveDialog` after the panel in `includes/edit_panel`). A change
-  is pending while the Crop tool's session has changed the Edit it opened on, a change waits out its delay (`commitSoon`) or
-  a save is waiting or on its way (`hasUnsaved`). Then closing Asset detail (the close guard the coordinator registers with
+  is pending while changes are held or a save is waiting or on its way (`hasUnsaved`). Then closing Asset detail (the close guard the coordinator registers with
   `modal.js`'s `setCloseGuard`, which every close through `closeModal` asks: Escape, the ×, the backdrop, Back; it answers a
   promise of whether Asset detail closed, `takeHeldClose`, and Back answered by staying has `detail-url.js` push the asset's
   entry again and follow it), stepping to
   another asset (`beforeLeave`, which `detail-navigator.js` awaits before a step) and closing the panel (`e`, its toggle)
-  ask first, as does Escape on a Crop tool session that changed the Edit. A save on its way alone is waited for up to a
+  ask first, as does Escape with changes held. A save on its way alone is waited for up to a
   second (`SAVE_SETTLE_MS`) and asks nothing once answered. The warning is a native modal `<dialog>` inside Asset detail's
   fragment, so it stacks over Asset detail, the one active host, rather than replacing it as an open of another host would:
   the browser keeps focus in it, makes the rest inert and gives focus back as it closes. It says "Changes not saved" with the
-  pending change ("The Crop tool's changes are not applied yet." or "The last change to this photo is not saved yet.") and
-  offers, while a change waiting out its delay waits on undecided (its delay starts again on Keep editing), Save
-  (`.primary`, the initial focus, never the destructive choice), which applies the Crop tool's session as Done,
-  saves a change waiting now and leaves a save on its way to finish, then goes on; Discard (`.error`), which, asked about
-  the Crop tool, cancels its session alone (Cancel drops a change of it waiting out its delay too, and a save on its way,
-  which the warning did not mention, finishes), and otherwise drops the change waiting and has the session `discard` (the
-  save waiting is not sent, and a save on its way is followed by one of the Edit the server last confirmed), then goes on;
-  and Keep editing, which stays. Escape is
+  pending change ("The changes to this photo are not saved yet." or, a save on its way alone, "The last change to this photo
+  is not saved yet.") and offers, while a change waiting out its delay waits on undecided (its delay starts again on Keep
+  editing), Save (`.primary`, the initial focus, never the destructive choice), which is Done and leaves a save on its way to
+  finish, then goes on; Discard (`.error`), which, asked about changes held, is Cancel (a save on its way, which the warning
+  did not mention, finishes), and otherwise has the session `discard` (the save waiting is not sent, and a save on its way is
+  followed by one of the Edit the server last confirmed), then goes on; and Keep editing, which stays. Escape is
   Keep editing (`closeLeaveDialog`, first in `global.js`'s Asset detail chain, and the dialog's own `cancel`), and Asset
   detail's other keys do nothing while it is open. A leave asked for while one is asked about stays. A close nothing asks
-  (another dialog's open replacing Asset detail) saves what is pending, the Crop tool's session as Done. Reloading the page,
-  closing the tab or navigating away with a change pending, of the asset shown or a save another asset's session has on its
-  way, has the browser ask (`beforeunload`). As the page goes (`pagehide`), what is not saved is sent so that it outlives the
-  page (the session's `saveOnHide`, a `fetch` with `keepalive`): the shown asset's change waiting out its delay, else any
-  session's save waiting, built on the edit version last answered or, behind a save on its way, on the one that save will
-  answer (should it fail, the server refuses this one as a conflict); not a Crop tool session, nor while a session recovers.
-  A page shown again from the browser's cache (`pageshow`, `persisted`) has every session read the Edit again.
+  (another dialog's open replacing Asset detail) saves the changes held as Done. Reloading the page, closing the tab or
+  navigating away with a change pending, of the asset shown or a save another asset's session has on its way, has the
+  browser ask (`beforeunload`), and leaving anyway saves nothing: Done is the only way changes are saved. A page shown again
+  from the browser's cache (`pageshow`, `persisted`) has every session read the Edit again.
 - **The stage** (`js/edit/edit-stage.js`, `createEditStage`, `app.editStage`). A still image's media box holds in one grid
   cell the `<img>`, `#editCanvas`, `#editClipping`, `#faceHighlights` and the Edit's tools. The source: the original in the
   `<img>` for an asset that is not edited; the Display image (`displayUrl` of `common/content-urls.js`,
@@ -2131,7 +2146,7 @@ data.
   the Crop tool and Before/after, the canvas draws behind the original's `<img>` (`isBehindImage`;
   `data-app-edit-canvas-behind` on the canvas, which the stylesheet hides, keeping its box), so an asset the panel has not
   changed looks as it does with the panel closed and Show original shows no shift the Edit never made, while the Histogram
-  and the Clipping blink still read the canvas; the first change shows the canvas, and a change saved back to the identity
+  and the Clipping blink still read the canvas; the first change shows the canvas, and a change back to the identity
   (a release at 0, Reset all, Revert, an Undo) the `<img>` again. A canvas that cannot draw (no WebGL2, an original the browser cannot decode) falls back to
   the original, and a Display image that does not load to the canvas. So does a decoded original a quarter turn from the
   server's upright size (`uprightWidth`, `uprightHeight`: the browser applied, or skipped, an EXIF turn the server did not),
@@ -2155,46 +2170,48 @@ data.
   `<img>` holds the original at the upright size, the Face highlights are unmapped, the Dimensions row has the original's
   size alone and the title's badge (`.edit-badge`, `data-app-edit-badge`) reads "Original" in place of "Edited". The
   toggle, the badge and the key legend's `\` entry are shown on an edited asset alone.
-- **The Crop tool** (`js/edit/crop-tool.js`). C (`Const.events.toggleCropTool`, with the panel open) or the Crop button
-  opens it on the Edit shown, and the fragment carries `data-app-crop-tool-open`: the canvas draws the whole warped frame
+- **The Crop tool** (`js/edit/crop-tool.js`), a view of the changes held. C (`Const.events.toggleCropTool`, with the panel
+  open) or the Crop button opens it on the Edit shown and closes it again, saving nothing and ending nothing, and the
+  fragment carries `data-app-crop-tool-open` while it is open: the canvas draws the whole warped frame
   (its effects, the vignette, Clarity, Sharpen and Grain, sized from and laid over the crop in it, and the Histogram read
-  over the crop, `geometry.effectRegion`, so nothing jumps on Done),
+  over the crop, `geometry.effectRegion`, so nothing jumps as it closes),
   with a gutter around it (`--edit-crop-gutter`) where a drag turns the image, `#cropFrame` lies over it at the canvas's box
   and `#cropRect` is the crop in it, placed by fractions of the frame, dimming the rest of the stage (`--crop-dim-shadow`),
   with its guide (an SVG: Thirds, Grid, Golden ratio, Diagonals and None, cycled by O or the bar's button, Thirds until
   another is picked) and eight handles (`.crop-handle` with the classes of the edges it moves). The gestures are
   interact.js's, as vendored: `draggable` on `#cropRect` moves the crop; `resizable` on it, by its handles, resizes it, with
   the `aspectRatio` modifier at the lock's ratio (none for Free) and `restrictSize` at the narrowest crop; `draggable` on
-  `#cropLayer`, which covers the stage, outside the crop and the bar, turns the image by the change of the pointer's angle
+  `#cropLayer`, which covers the stage, outside the crop, turns the image by the change of the pointer's angle
   around the crop's center (Straighten), under a rotate cursor. interact.js restricts to upright rectangles alone, so each
   listener turns the rectangle it proposes into frame fractions and, while the Edit keeps the crop inside, stops it at the
   outline (`geometry.limitTransition`) before the Edit takes it; `styleCursor(false)` leaves the cursors to the stylesheet,
-  and the layer, the crop and the handles are `touch-action: none`. `#cropRect` is focusable, and the arrows nudge it by a
-  pixel of the frame (ten with Shift); X swaps the aspect's orientation. The **Level tool** (the Level button, which opens
-  the Crop tool if it is closed): while it is on, a drag on the layer draws a line (`#levelLine`, `level-tool.js`) and the
-  crop takes no pointer, and the release sets Straighten so the line becomes level or plumb, whichever is nearer
-  (`adjust.levelStraighten`); a line under `LEVEL_MIN_LENGTH` (12 px) is a click and sets nothing. The floating bar
-  (`#cropBar`, `role="toolbar"`, on the menus' frosted surface) holds the guide, the crop's size, Cancel (Escape) and Done
-  (Enter, or C). Every change made while the tool is open (its gestures, a slider, a button) joins its session, shown and
-  not saved, and Undo, Redo and Before/after are off; Done saves the session as one change and Cancel shows the Edit the tool
-  opened on again. Escape is Cancel while the session has changed nothing, and asks first once it has (**The warning**), as
-  stepping to another asset, closing the panel or closing Asset detail with such a session open do. An Edit the session
-  adopts meanwhile (Undo's, a conflict's) closes the tool.
-- **Auto.** Straighten's Auto asks the server (`GET …/auto-straighten?recipe=`, the Edit shown) and sets Straighten to its
-  angle as one change; when no lines agree on one (`angle` null) Straighten stays and the snackbar says "No straight lines to
-  level the image by"; a refusal the server explains (a 503 while every auto-straighten slot is taken, a 400 for an original
-  it cannot read) shows its error, and any other failure "Could not level the image".
+  and the layer, the crop and the handles are `touch-action: none`. Each gesture is shown as it goes and is one change at its
+  end. `#cropRect` is focusable, and the arrows nudge it by a pixel of the frame (ten with Shift), one change once they
+  rest; X swaps the aspect's orientation. Undo and Redo work in it; Before/after is off.
+- **The Level tool** (the Level (draw line) button, `fa-ruler-horizontal`, pressed while it is on). On, a drag on
+  `#cropLayer` draws a line (`#levelLine`, `level-tool.js`) under a crosshair, and the release sets Straighten so the line
+  becomes level or plumb, whichever is nearer (`adjust.levelStraighten`), as one change, and turns the tool off; a line under
+  `LEVEL_MIN_LENGTH` (12 px) is a click and sets nothing. With the Crop tool open it works in it, the crop taking no pointer;
+  with it closed the layer covers the stage alone (`data-level-only`, no frame and no crop) over the edited image as the
+  canvas draws it, and the Crop button stays unpressed. Escape, the button again or Done and Cancel turn it off.
+- **Auto-level** (the button beside Level (draw line), `fa-magic`, disabled while it asks) asks the server
+  (`GET …/auto-straighten?recipe=`, the Edit shown) and sets Straighten to its angle as one change; when no lines agree on one
+  (`angle` null) Straighten stays and the snackbar says "No straight lines to level the image by"; a refusal the server
+  explains (a 503 while every auto-straighten slot is taken, a 400 for an original it cannot read) shows its error, and any
+  other failure "Could not level the image".
 - **Keys.** In Asset detail and never in a text field (`isTextEditingTarget`, which counts no slider, checkbox or
   button-like input, so the keys work on the panel's controls): `e`, `c`, Ctrl/Cmd+Z, and Ctrl/Cmd+Shift+Z or Ctrl+Y, each
   read by `global.js`, which dispatches its `Const.events` event (`toggleEditPanel`, `toggleCropTool`, `undoEdit`,
-  `redoEdit`) that `listeners/edit.js` hands to the coordinator; `global.js` reads the warning and the Crop tool (whether
-  each is open, the warning's close and the tool's Escape) through `common/edit-keys.js`, which the coordinator registers
-  into as it starts, so the pages without Asset detail load no edit module; Undo and Redo act while the panel is open and not in the
-  Crop tool. In the Crop tool `o`, `x` and Enter (`cycleCropGuide`, `swapCropAspect`, `cropDone`; Enter on a button or a link
-  presses that instead). Escape, in Asset detail, closes the warning alone (Keep editing), then leaves the Crop tool (Cancel,
-  or the warning), ahead of a selected Face and of closing Asset detail, which the warning may hold. The arrows and Space are left to focus in `#editPanel`, on `#editPanelDivider`,
-  on `#editSplitHandle` and in `#cropLayer`, as in the Detail panel, so a slider steps and the crop nudges where Asset
-  detail would step.
+  `redoEdit`) that `listeners/edit.js` hands to the coordinator; `global.js` reads the warning, the Crop tool and the changes
+  held (whether the warning is open and its close, whether the Crop tool is open, whether changes are held, and the panel's
+  Escape) through `common/edit-keys.js`, which the coordinator registers into as it starts, so the pages without Asset detail
+  load no edit module; Undo and Redo act while the panel is open. In the Crop tool `o` and `x` (`cycleCropGuide`,
+  `swapCropAspect`); while changes are held Enter is Done (`editDone`; Enter on a button or a link presses that instead).
+  Escape, in Asset detail, closes the warning alone (Keep editing), then the panel's own (`escapeEdit`): the Level tool off,
+  else the warning about the changes held, else the Crop tool closed, ahead of a selected Face and of closing Asset detail,
+  which the warning may hold. The arrows and Space are left to focus in `#editPanel`, on `#editPanelDivider`, on
+  `#editSplitHandle`, in `#cropLayer` and on `#editBar`, as in the Detail panel, so a slider steps and the crop nudges where
+  Asset detail would step.
 
 The style guide holds `.edit-slider`, plain and with a gradient, in Forms, and in Panels & layout an Edit panel strip (the
 header's tools, the Histogram, the tab row, the aspect chips and the key legend), the warning of changes not saved, open in
@@ -3704,13 +3721,13 @@ lines, the snapshot JSON). The package's README documents every option; this ent
 | `views/htmx/view_image_detail_modal.scala.html` | Asset detail's fragment: the media stage with the `<img>`, the Edit's canvas, the player and the Face highlights' layer over them, the divider and the Detail panel's shell with its Dock side menu, and for a holder of Edit images the Edit panel, its divider and the Edit's tools over the stage; the asset's Edit, whether it may be edited and why not, and the measurement's clipping levels as data attributes; its grid, the highlights', the Crop tool's and Before/after's look are `static/css/htmx/view_image_detail_modal.css` |
 | `views/includes/edit_panel.scala.html`, `static/css/includes/edit_panel.css`, `static/js/alpine/components/edit-panel.js` | The Edit panel (**Edit panel**): its header, Histogram, tabs and sections (each slider a `.edit-slider` from `recipe.js`'s specs), commit row and keys, and after it the warning of changes not saved (`dialog#editLeaveDialog`); their look, the panel docked on the side or top and bottom; and the `editPanel` component over the coordinator (the tabs, the sliders, the aspect chips, the curve editor, Undo and Redo) |
 | `views/includes/histogram.scala.html`, `static/css/includes/histogram.css` | The Histogram's one markup and look, Curation's strip under each stage pane and the Edit panel's: a button switching the Clipping blink, the channels' paths and the two corner labels given as Alpine expressions of the component it is rendered under |
-| `views/includes/edit_stage_tools.scala.html` | The Edit's tools over Asset detail's stage: Before/after's divider (`#editSplit`) and the Crop tool (`#cropLayer`: the frame, the crop with its guide and handles, the Level line, the floating bar) |
-| `static/js/edit/edit-panel.js` | `createEditPanel`: the Edit panel's coordinator (open or closed, `toggle({ fromKey })`, the dock opposite the Detail panel, the stage while it draws, each asset's session and the wait for its render, the commits, `commitSoon` and `flushCommit`, the Crop tool's session, the warning's triggers, `beforeLeave` for a step and the close guard, `beforeunload` and `pagehide`, Before/after, the Histogram and the Clipping blink of the canvas, Auto) and `connectEditPanelView` for its component |
+| `views/includes/edit_stage_tools.scala.html` | The Edit's tools over Asset detail's stage: Before/after's divider (`#editSplit`), the Crop tool (`#cropLayer`: the frame, the crop with its guide and handles, the Level line, which the layer also draws alone) and the bar of the changes held (`#editBar`: the Crop tool's guide and size, Cancel and Done) |
+| `static/js/edit/edit-panel.js` | `createEditPanel`: the Edit panel's coordinator (open or closed, `toggle({ fromKey })`, the dock opposite the Detail panel, the stage while it draws, each asset's session and the wait for its render, the commits, `commitSoon` and `flushCommit`, the changes held with `done`, `cancel` and the stage's bar, the Crop and Level tools, `escapeEdit`, the warning's triggers, `beforeLeave` for a step and the close guard, `beforeunload`, Before/after, the Histogram and the Clipping blink of the canvas, Auto-level) and `connectEditPanelView` for its component |
 | `static/js/edit/edit-stage.js` | `createEditStage`: Asset detail's stage for a still image (the original, the Display image or the canvas, `showImage`, `setEditing`, `setLive`, `adoptEdit`, `settled`, `current`), Show original (the toggle, `holdOriginal`, `releaseShowOriginal`, the badge and the key legend's entry) and the size handed to the Detail panel |
-| `static/js/edit/edit-session.js`, `render-status.js`, `leave-dialog.js` | One asset's Edit synced with the server (the serial queue of saves on `base`, the edit version, the save waiting replaced by a later change, Undo and Redo of the session, a conflict, a failure, `discard`, `settled`, `saveOnHide`, `SaveStatus`, `onAdopted`, `isNewerEditState`), the wait for the render that follows (`waitForRender`, `swapGridPreviews`), and the warning of changes not saved (`askToLeave`, `closeLeaveDialog` for Escape, `isLeaveDialogOpen` for the keys, which `global.js` reaches through `common/edit-keys.js`) |
-| `static/js/edit/crop-tool.js`, `level-tool.js`, `adjust.js` | The Crop tool on interact.js (`createCropTool`, `escapeOpenCropTool` for Escape, `isCropToolOpen` for its keys), the Level tool's line, and the Edit panel's changes to an Edit as pure functions (a slider, an aspect, a turn, a flip, a reset, the crop kept inside, a drag's Straighten, the curve's points) |
+| `static/js/edit/edit-session.js`, `render-status.js`, `leave-dialog.js` | One asset's Edit synced with the server (the changes held, `done` and `cancel`, the serial queue of saves on `base`, the edit version, the save waiting replaced by a later Done, Undo and Redo of the session, a conflict, a failure, `discard`, `settled`, `SaveStatus`, `onAdopted`, `isNewerEditState`), the wait for the render that follows (`waitForRender`, `swapGridPreviews`), and the warning of changes not saved (`askToLeave`, `closeLeaveDialog` for Escape, `isLeaveDialogOpen` for the keys, which `global.js` reaches through `common/edit-keys.js`) |
+| `static/js/edit/crop-tool.js`, `level-tool.js`, `adjust.js` | The Crop tool on interact.js and the Level tool (`createCropTool`, `isCropToolOpen` for its keys), the Level tool's line, and the Edit panel's changes to an Edit as pure functions (a slider, an aspect, a turn, a flip, a reset, the crop kept inside, a drag's Straighten, the curve's points) |
 | `static/js/edit/recipe.js`, `geometry.js`, `tone.js`, `renderer.js` | The Edit as the client holds it (defaults, sliders, sections, the server's normalization), its geometry with the crop's rules and `mapBox`, its per-pixel math, all three DOM-free and checked against the shared vectors; and the WebGL2 renderer that draws it (`createRenderer`: `render`, `renderBefore`, `readHistogram`) |
-| `static/js/listeners/edit.js` | The Edit's events in Asset detail: Show original held, the Edit panel's toggle, the Crop tool's keys, Undo and Redo |
+| `static/js/listeners/edit.js` | The Edit's events in Asset detail: Show original held, the Edit panel's toggle, the Crop tool's keys, Done, Undo and Redo |
 | `static/js/common/content-urls.js`, `histogram.js` | An asset's content URLs (`previewUrl` by revision, `displayUrl`, `originalUrl`) and an image repointed at a new Preview (`repointImage`); a Histogram's SVG paths (`channelPaths`) and a fraction's label (`percentLabel`), Curation's and the Edit panel's |
 | `static/js/stores/search-params.js` | the search parameter set, its defaults, the scope rules that decide what a change clears, and the advanced search panel's filters set together (`replaceFilters`, `filters`, `filterCount`, `viewedPersonId`, `viewedLocationId`; `applySearchFilters`, `idsOf`, `ID_LISTS`), a searched Person's or Location's ID replaced or dropped (`names`, `replaceId`), and a Describe search's description: what it clears, the Similarity sort a new one takes, what a search with one is sent without (`DESCRIBED_UNSENT`) and whether the results are on the map (`showsMap`), and the triage filter as a remembered choice (`seedSearchParams`' `seesTriaged`, `rememberedTriaged`, `showsTriaged`); its rules for a description are tested by `scripts/test-js/search-params.test.mjs` and those for the triage filter by `scripts/test-js/triage-filter.test.mjs` (`make test-js`) |
 | `static/js/search-results/search.js` | `runSearch` — the single entry point for every search request |

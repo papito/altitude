@@ -10,8 +10,8 @@
  *    (`geometry.frameToUpright`), which is sampled from a mipmapped texture with its edges repeated
  *    (CLAMP_TO_EDGE, the server's BORDER_REPLICATE). Its channels go through the tables of steps 1 to
  *    6 (`tone.tableTexels`, the 4096 entries as a 64 × 64 RGBA32F texture, read by two texel fetches
- *    and a mix, so no float filtering is needed), then step 7. A pixel whose source lies outside the frame, or beyond
- *    the horizon, is transparent: a hard edge, as the server's.
+ *    and a mix, so no float filtering is needed), then step 7. A pixel whose source lies outside the frame is
+ *    transparent: a hard edge, as the server's.
  * 2. **Blur:** Clarity's and Sharpen's Gaussian blurs of the luminance L, separable, a horizontal and
  *    a vertical pass computing both at once, with OpenCV's kernels (`tone.gaussianHalfKernel`) and
  *    its default border (BORDER_REFLECT_101). Skipped when both are 0.
@@ -83,9 +83,8 @@ uniform sampler2D uTables;
 uniform vec2 uFrame;
 uniform vec4 uCrop;
 uniform vec2 uOut;
-// cos θ, sin θ and the keystones a and b; uHalf is half the frame's long side
-uniform vec4 uWarp;
-uniform float uHalf;
+// Straighten's cos θ and sin θ
+uniform vec2 uWarp;
 uniform bool uMoves;
 uniform mat3 uToUpright;
 uniform bool uTone;
@@ -117,15 +116,11 @@ void main() {
     vec2 source = point;
     bool covered = true;
     if (uMoves) {
+        // Turned back about the frame's center, R(−θ)
         vec2 center = uFrame * 0.5;
-        vec2 q = (point - center) / uHalf;
-        vec2 u = vec2(uWarp.x * q.x + uWarp.y * q.y, -uWarp.y * q.x + uWarp.x * q.y);
-        float w = 1.0 - uWarp.z * u.x - uWarp.w * u.y;
-        // Past the horizon (w <= 0.001) the pixel is not covered: its color, sampled at the projected point as OpenCV's
-        // warpPerspective samples it, never shows; w is only held away from 0, so the division stays finite
-        float divisor = abs(w) < 1e-6 ? 1e-6 : w;
-        source = u / divisor * uHalf + center;
-        covered = w > ${0.001} && all(greaterThanEqual(source, vec2(0.0))) && all(lessThanEqual(source, uFrame));
+        vec2 q = point - center;
+        source = vec2(uWarp.x * q.x + uWarp.y * q.y, -uWarp.y * q.x + uWarp.x * q.y) + center;
+        covered = all(greaterThanEqual(source, vec2(0.0))) && all(lessThanEqual(source, uFrame));
     }
 
     vec4 color = texture(uSource, (uToUpright * vec3(source, 1.0)).xy);
@@ -598,14 +593,7 @@ export function createRenderer(canvas, { onRestored = null } = {}) {
         gl.uniform2f(p.at("uFrame"), frame.width, frame.height)
         gl.uniform4f(p.at("uCrop"), crop.x, crop.y, crop.w, crop.h)
         gl.uniform2f(p.at("uOut"), width, height)
-        gl.uniform4f(
-            p.at("uWarp"),
-            warpOf.cos,
-            warpOf.sin,
-            warpOf.keystones.a,
-            warpOf.keystones.b,
-        )
-        gl.uniform1f(p.at("uHalf"), warpOf.halfLong)
+        gl.uniform2f(p.at("uWarp"), warpOf.cos, warpOf.sin)
         gl.uniform1i(p.at("uMoves"), warpOf.moves ? 1 : 0)
         // Column-major: the columns of the affine map
         gl.uniformMatrix3fv(p.at("uToUpright"), false, [

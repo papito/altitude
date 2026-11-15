@@ -7,18 +7,12 @@
  * Coordinates are continuous pixels: the top-left corner at (0, 0), y down, a pixel's center at
  * +0.5; angles are positive clockwise. Everything starts from the **upright original**, the original
  * turned by its EXIF orientation as a browser shows it, W₀ × H₀. Step 1 turns it clockwise by
- * `rotate` and mirrors it into the **frame**, W × H; step 2 warps the frame (perspective, then
- * Straighten) in normalized coordinates around its center, keeping its size; step 3 crops a
+ * `rotate` and mirrors it into the **frame**, W × H; step 2 turns the frame by Straighten about
+ * its center, keeping its size; step 3 crops a
  * fraction of the frame, giving the **edited size**. A crop rectangle is `{x, y, w, h}` in
  * fractions of the frame; the image's outline in the frame is a quadrilateral of fractions, top
  * left, top right, bottom right, bottom left.
  */
-
-// The keystone of a perspective slider at ±100
-const PERSPECTIVE_AT_FULL = 0.55
-
-/** The inverse warp has no source where its denominator is this or less: beyond the horizon of the perspective's plane */
-export const MIN_DENOMINATOR = 0.001
 
 /** The narrowest and shortest crop, as a fraction of the frame (`EditRecipe.MIN_CROP`) */
 export const MIN_CROP = 0.01
@@ -120,25 +114,15 @@ export function frameToUpright(uprightWidth, uprightHeight, recipe) {
     ]
 }
 
-/** The keystones (a, b) of the horizontal and vertical perspective */
-export function keystones(recipe) {
-    return {
-        a: (PERSPECTIVE_AT_FULL * recipe.perspectiveH) / 100,
-        b: (PERSPECTIVE_AT_FULL * recipe.perspectiveV) / 100,
-    }
-}
-
 /**
  * Step 2 on the W × H frame, its constants worked out once: in normalized coordinates around the
- * center (q = (p − c) / s, s half the long side), the image point u goes to u / (1 + a·uₓ + b·u_y),
- * which is turned by Straighten and scaled back. `inverse` is what sampling reads: u = R(−θ)·q,
- * w = 1 − a·uₓ − b·u_y, the source u / w, or null where w is `MIN_DENOMINATOR` or less. `covers`
- * says whether a point of the warped frame shows the image: its source exists and lies within the
- * frame, edges included; the rendered image is opaque exactly there.
+ * center (u = (p − c) / s, s half the long side), the point is turned by Straighten, R(θ)·u, and
+ * scaled back. `inverse` is what sampling reads: R(−θ)·q, scaled back. `covers` says whether a
+ * point of the warped frame shows the image: its source lies within the frame, edges included; the
+ * rendered image is opaque exactly there.
  */
 export function createWarp(width, height, recipe) {
     const s = Math.max(width, height) / 2
-    const { a, b } = keystones(recipe)
     const theta = (recipe.straighten * Math.PI) / 180
     const cos = Math.cos(theta)
     const sin = Math.sin(theta)
@@ -146,56 +130,34 @@ export function createWarp(width, height, recipe) {
     function forward(x, y) {
         const ux = (x - width / 2) / s
         const uy = (y - height / 2) / s
-        const d = 1 + a * ux + b * uy
-        const px = ux / d
-        const py = uy / d
         return [
-            (cos * px - sin * py) * s + width / 2,
-            (sin * px + cos * py) * s + height / 2,
-        ]
-    }
-
-    /** The source, before the guard on the denominator: [x, y, w] */
-    function source(x, y) {
-        const qx = (x - width / 2) / s
-        const qy = (y - height / 2) / s
-        const w = 1 - a * (cos * qx + sin * qy) - b * (-sin * qx + cos * qy)
-        return [
-            ((cos * qx + sin * qy) / w) * s + width / 2,
-            ((-sin * qx + cos * qy) / w) * s + height / 2,
-            w,
+            (cos * ux - sin * uy) * s + width / 2,
+            (sin * ux + cos * uy) * s + height / 2,
         ]
     }
 
     function inverse(x, y) {
-        const [sx, sy, w] = source(x, y)
-        return w > MIN_DENOMINATOR ? [sx, sy] : null
+        const qx = (x - width / 2) / s
+        const qy = (y - height / 2) / s
+        return [
+            (cos * qx + sin * qy) * s + width / 2,
+            (-sin * qx + cos * qy) * s + height / 2,
+        ]
     }
 
     function covers(x, y) {
-        const [sx, sy, w] = source(x, y)
-        return (
-            w > MIN_DENOMINATOR &&
-            sx >= 0 &&
-            sx <= width &&
-            sy >= 0 &&
-            sy <= height
-        )
+        const [sx, sy] = inverse(x, y)
+        return sx >= 0 && sx <= width && sy >= 0 && sy <= height
     }
 
     return {
-        // Whether the warp moves any point: Straighten or a perspective
-        moves:
-            recipe.straighten !== 0 ||
-            recipe.perspectiveH !== 0 ||
-            recipe.perspectiveV !== 0,
+        // Whether the warp moves any point: Straighten
+        moves: recipe.straighten !== 0,
         forward,
         inverse,
         covers,
-        keystones: { a, b },
         cos,
         sin,
-        halfLong: s,
     }
 }
 
@@ -204,7 +166,7 @@ export function warp(x, y, width, height, recipe) {
     return createWarp(width, height, recipe).forward(x, y)
 }
 
-/** The inverse of `warp`, which sampling reads; null where the source lies beyond the horizon */
+/** The inverse of `warp`, which sampling reads */
 export function unwarp(x, y, width, height, recipe) {
     return createWarp(width, height, recipe).inverse(x, y)
 }
@@ -462,35 +424,22 @@ export function outputSize(editedWidth, editedHeight, longEdge = null) {
  * A box of the upright original (`{x, y, width, height}` in its pixels: a Face's) as the edited
  * image shows it: its four corners and its center turned, mirrored and warped into the frame, and
  * taken into the crop. Answers the corners' bounding box as fractions of the edited image, cut to
- * it, or null when the box's center falls outside the crop (or beyond the perspective's horizon),
- * where its Face highlight is not drawn.
+ * it, or null when the box's center falls outside the crop, where its Face highlight is not drawn.
  */
 export function mapBox(box, recipe, uprightWidth, uprightHeight) {
     const { width, height } = frameSize(uprightWidth, uprightHeight, recipe)
     const { forward } = createWarp(width, height, recipe)
     const crop = cropOf(recipe)
-    const { a, b } = keystones(recipe)
-    const s = Math.max(width, height) / 2
 
-    // A point of the upright original in fractions of the edited image, or null beyond the horizon
+    // A point of the upright original in fractions of the edited image
     function toEdited(x, y) {
         const [tx, ty] = turn(x, y, uprightWidth, uprightHeight, recipe)
-        const d = 1 + (a * (tx - width / 2)) / s + (b * (ty - height / 2)) / s
-        if (d <= MIN_DENOMINATOR) {
-            return null
-        }
         const [wx, wy] = forward(tx, ty)
         return [(wx / width - crop.x) / crop.w, (wy / height - crop.y) / crop.h]
     }
 
     const center = toEdited(box.x + box.width / 2, box.y + box.height / 2)
-    if (
-        !center ||
-        center[0] < 0 ||
-        center[0] > 1 ||
-        center[1] < 0 ||
-        center[1] > 1
-    ) {
+    if (center[0] < 0 || center[0] > 1 || center[1] < 0 || center[1] > 1) {
         return null
     }
 
@@ -499,7 +448,7 @@ export function mapBox(box, recipe, uprightWidth, uprightHeight) {
         toEdited(box.x + box.width, box.y),
         toEdited(box.x + box.width, box.y + box.height),
         toEdited(box.x, box.y + box.height),
-    ].filter(Boolean)
+    ]
     const xs = corners.map(([x]) => clamp(x, 0, 1))
     const ys = corners.map(([, y]) => clamp(y, 0, 1))
     const left = Math.min(...xs)

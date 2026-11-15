@@ -1,25 +1,28 @@
 /**
- * The Crop tool (`CONTEXT.md`) over Asset detail's stage (`includes/edit_stage_tools`): while it is open the canvas draws
- * the whole warped frame (`edit-stage.js`, `wholeFrame`), `#cropFrame` lies over it, and `#cropRect` is the crop in it,
- * placed by fractions of the frame. Its gestures are interact.js's, as vendored (`lib/interact.min.js`, a plain script):
+ * The Crop tool (`CONTEXT.md`) over Asset detail's stage (`includes/edit_stage_tools`), a view of the Edit panel's held
+ * changes: while it is open the canvas draws the whole warped frame (`edit-stage.js`, `wholeFrame`), `#cropFrame` lies over
+ * it, and `#cropRect` is the crop in it, placed by fractions of the frame. Opening and closing it saves nothing. Its
+ * gestures are interact.js's, as vendored (`lib/interact.min.js`, a plain script):
  *
  * - `draggable` on `#cropRect` moves the crop;
  * - `resizable` on it, by its eight handles (`.crop-handle` with the classes of the edges it moves), resizes it, with the
  *   `aspectRatio` modifier at the lock's ratio (none when it is Free) and `restrictSize` at the narrowest crop;
- * - `draggable` on `#cropLayer`, which covers the stage, outside the crop and the bar, turns the image (Straighten) by the
- *   change of the pointer's angle around the crop's center, or, with the Level tool on, draws the Level line
- *   (`level-tool.js`), which sets Straighten so it becomes level or plumb, whichever is nearer.
+ * - `draggable` on `#cropLayer`, which covers the stage, outside the crop, turns the image (Straighten) by the change of
+ *   the pointer's angle around the crop's center, or, with the Level tool on, draws the Level line (`level-tool.js`),
+ *   which sets Straighten so it becomes level or plumb, whichever is nearer.
+ *
+ * **The Level tool** works with the tool closed too: `#cropLayer` then covers the stage alone (`data-level-only`, no frame
+ * and no crop), over the edited image as the canvas draws it, and the line's release ends it.
  *
  * interact.js restricts to upright rectangles alone, so each listener turns the rectangle it proposes into frame
  * fractions and, when the Edit keeps the crop inside, stops it at the image's outline (`geometry.limitTransition`)
  * before the Edit takes it. `styleCursor(false)` leaves the cursors to the stylesheet. `#cropRect` is focusable, and the
  * arrows nudge it by a pixel of the frame (ten with Shift).
  *
- * The tool changes the Edit through its host (`edit-panel.js`): `preview` shows a change on the stage without saving it,
- * and the host saves the whole session as one change on Done (`done`) or puts back the Edit the tool opened on
- * (`cancel`). The floating bar holds the guide (O cycles it: Thirds, Grid, Golden ratio, Diagonals, None), the crop's
- * size in the original's pixels, Cancel and Done (Enter or C). Escape (`escapeOpenCropTool`, ahead of closing Asset
- * detail) is the host's `escape`: Cancel, or the warning when the session changed the Edit.
+ * The tool changes the Edit through its host (`edit-panel.js`): `preview` shows a change on the stage during a gesture,
+ * and `commit` makes it one held change of the panel's at the gesture's end (an arrow's nudge, `commitSoon`, once the keys
+ * rest). The stage's bar (`#editBar`, the host's) holds the guide while the tool is open (O cycles it: Thirds, Grid,
+ * Golden ratio, Diagonals, None) and the crop's size in the original's pixels.
  */
 import { Const } from "../constants.js"
 import {
@@ -57,19 +60,10 @@ export const GUIDES = Object.freeze([
 const NUDGE = 1
 const NUDGE_LARGE = 10
 
-// The tool of the page, which Escape leaves (`global.js`)
+// The tool of the page, whose keys `global.js` reads
 let activeTool = null
 
-/** Escape on the open Crop tool, ahead of closing Asset detail: its host's `escape`; answers whether one was open */
-export function escapeOpenCropTool() {
-    if (!activeTool?.isOpen()) {
-        return false
-    }
-    activeTool.escape()
-    return true
-}
-
-/** Whether the Crop tool is open: O, X and Enter are its keys then (`global.js`) */
+/** Whether the Crop tool is open: O and X are its keys then (`global.js`) */
 export function isCropToolOpen() {
     return Boolean(activeTool?.isOpen())
 }
@@ -95,11 +89,11 @@ function guideLines(id) {
 
 /**
  * The Crop tool, driven by `host`: `recipe()` the Edit shown, `upright()` the upright original's size, `preview(recipe)`
- * a change shown and not saved, `done()` and `cancel()` the session's end, `escape()` Escape's, and `changed()` after the
- * tool's own state (the Level tool, the guide) changes
+ * a change shown during a gesture, `commit(recipe)` a change made, `commitSoon(recipe)` one made with the keys, and
+ * `changed()` after the tool's own state (the Level tool, the guide) changes
  */
 export function createCropTool(host) {
-    // The open session: the Edit it opened on, and the element focus returns to
+    // While the tool is open: the element focus returns to as it closes
     let session = null
     let guide = 0
     let level = false
@@ -125,19 +119,16 @@ export function createCropTool(host) {
         return document.getElementById("cropRect")
     }
 
-    /** Binds the bar's buttons, once */
+    /** Binds the bar's guide button, once */
     function start() {
         activeTool = api
         document.addEventListener("click", (event) => {
             const target = event.target
-            if (!(target instanceof Element) || !session) {
-                return
-            }
-            if (target.closest(`[${Const.attributes.cropDone}]`)) {
-                host.done()
-            } else if (target.closest(`[${Const.attributes.cropCancel}]`)) {
-                host.cancel()
-            } else if (target.closest(`[${Const.attributes.cropGuide}]`)) {
+            if (
+                target instanceof Element &&
+                session &&
+                target.closest(`[${Const.attributes.cropGuide}]`)
+            ) {
                 cycleGuide()
             }
         })
@@ -176,7 +167,7 @@ export function createCropTool(host) {
             .interact(layer)
             .styleCursor(false)
             .draggable({
-                ignoreFrom: "#cropRect, #cropBar",
+                ignoreFrom: "#cropRect",
                 listeners: { start: turnStart, move: turnOn, end: turnEnd },
             })
         rect.addEventListener("keydown", nudge)
@@ -231,16 +222,21 @@ export function createCropTool(host) {
 
     /**
      * The crop moved or resized to `proposed` (frame fractions), stopped at the image's outline when the Edit keeps it
-     * inside, and shown
+     * inside: shown, or with `soon` (the arrows' nudge) a change made once the keys rest
      */
-    function propose(proposed) {
+    function propose(proposed, { soon = false } = {}) {
         const recipe = host.recipe()
         const next = limitTransition(
             cropRect(recipe),
             proposed,
             outlineIfKept(recipe, host.upright()),
         )
-        host.preview(withCrop(recipe, next, host.upright()))
+        const changed = withCrop(recipe, next, host.upright())
+        if (soon) {
+            host.commitSoon(changed)
+        } else {
+            host.preview(changed)
+        }
     }
 
     function markDragging(on) {
@@ -304,23 +300,28 @@ export function createCropTool(host) {
         })
     }
 
+    /** A move, a resize or a turn ends: what it showed is one change */
     function gestureEnd() {
+        const ended = gesture
         gesture = null
         markDragging(false)
         configureResize()
+        if (ended && ended.kind !== "level") {
+            host.commit(host.recipe())
+        }
     }
 
     /** A drag outside the crop: turns the image around the crop's center, or draws the Level line */
     function turnStart(event) {
-        if (!session) {
-            return
-        }
         if (level) {
             gesture = {
                 kind: "level",
                 from: { x: event.clientX, y: event.clientY },
             }
             drawLevelLine(gesture.from, gesture.from)
+            return
+        }
+        if (!session) {
             return
         }
         const box = rectEl().getBoundingClientRect()
@@ -363,9 +364,11 @@ export function createCropTool(host) {
                 { x: event.clientX, y: event.clientY },
             )
             hideLevelLine()
+            gesture = null
             if (straighten !== null) {
                 level = false
-                host.preview(
+                showLayer()
+                host.commit(
                     withSlider(
                         host.recipe(),
                         "straighten",
@@ -376,6 +379,7 @@ export function createCropTool(host) {
                 sync()
                 host.changed()
             }
+            return
         }
         gestureEnd()
     }
@@ -402,48 +406,66 @@ export function createCropTool(host) {
         const { width, height } = frame(recipe)
         const pixels = event.shiftKey ? NUDGE_LARGE : NUDGE
         const start = cropRect(recipe)
-        propose({
-            ...start,
-            x: clamp(start.x + (steps[0] * pixels) / width, 0, 1 - start.w),
-            y: clamp(start.y + (steps[1] * pixels) / height, 0, 1 - start.h),
-        })
+        propose(
+            {
+                ...start,
+                x: clamp(start.x + (steps[0] * pixels) / width, 0, 1 - start.w),
+                y: clamp(
+                    start.y + (steps[1] * pixels) / height,
+                    0,
+                    1 - start.h,
+                ),
+            },
+            { soon: true },
+        )
     }
 
-    /** Opens the tool on the Edit shown: Thirds or the guide last picked, the crop focused so the arrows nudge it */
-    function open() {
+    /**
+     * `#cropLayer` shown while the tool is open or the Level tool is on, over the stage alone (`data-level-only`, no frame
+     * and no crop) for the Level tool with the tool closed
+     */
+    function showLayer() {
         const layer = layerEl()
-        if (!layer || session) {
+        if (!layer) {
             return
         }
-        session = {
-            start: host.recipe(),
-            returnFocus: document.activeElement,
+        layer.hidden = !session && !level
+        layer.toggleAttribute("data-level", level)
+        layer.toggleAttribute("data-level-only", level && !session)
+    }
+
+    /**
+     * Opens the tool on the Edit shown: Thirds or the guide last picked, the crop focused so the arrows nudge it; a Level
+     * tool on stays on, now in the tool
+     */
+    function open() {
+        if (!layerEl() || session) {
+            return
         }
-        level = false
-        layer.hidden = false
+        session = { returnFocus: document.activeElement }
+        showLayer()
         viewEl()?.setAttribute(Const.attributes.cropToolOpen, "")
         sync()
         rectEl()?.focus({ preventScroll: true })
     }
 
-    /** Closes the tool, focus back where it was when it opened, if focus is still in the tool */
+    /**
+     * Closes the tool and the Level tool, focus back where it was when the tool opened, if focus is still in it; a gesture
+     * in progress goes, its change shown
+     */
     function close() {
-        if (!session) {
-            return
-        }
-        const { returnFocus } = session
+        const returnFocus = session?.returnFocus
+        const layer = layerEl()
+        const hadFocus = layer?.contains(document.activeElement)
+        const wasOpen = Boolean(session)
         session = null
         level = false
         gesture = null
         hideLevelLine()
         markDragging(false)
-        const layer = layerEl()
-        const hadFocus = layer?.contains(document.activeElement)
-        if (layer) {
-            layer.hidden = true
-        }
+        showLayer()
         viewEl()?.removeAttribute(Const.attributes.cropToolOpen)
-        if (hadFocus && returnFocus?.isConnected) {
+        if (wasOpen && hadFocus && returnFocus?.isConnected) {
             returnFocus.focus({ preventScroll: true })
         }
     }
@@ -451,7 +473,7 @@ export function createCropTool(host) {
     /** The crop's place, the guide, the size and the lock follow the Edit shown */
     function sync() {
         const rect = rectEl()
-        if (!session || !rect) {
+        if (!session || !rect || !host.recipe()) {
             return
         }
         const recipe = host.recipe()
@@ -460,7 +482,6 @@ export function createCropTool(host) {
         rect.style.top = `${crop.y * 100}%`
         rect.style.width = `${crop.w * 100}%`
         rect.style.height = `${crop.h * 100}%`
-        bound.layer?.toggleAttribute("data-level", level)
 
         const { id, label } = GUIDES[guide]
         const guideEl = rect.querySelector(".crop-guide")
@@ -487,9 +508,17 @@ export function createCropTool(host) {
         sync()
     }
 
-    /** The Level tool on or off: on, a drag over the stage draws its line and the crop takes no pointer */
+    /**
+     * The Level tool on or off: on, a drag over the stage draws its line, and in the tool the crop takes no pointer; off, a
+     * line being drawn goes
+     */
     function setLevel(on) {
-        level = Boolean(session) && on
+        level = Boolean(on) && Boolean(layerEl())
+        if (!level && gesture?.kind === "level") {
+            gesture = null
+            hideLevelLine()
+        }
+        showLayer()
         sync()
         host.changed()
     }
@@ -504,10 +533,6 @@ export function createCropTool(host) {
         setLevel,
         isOpen: () => session !== null,
         levelOn: () => level,
-        /** The Edit the open session started from, which Cancel puts back */
-        startRecipe: () => session?.start ?? null,
-        cancel: () => host.cancel(),
-        escape: () => host.escape(),
     }
     return api
 }

@@ -397,8 +397,8 @@
              armed reads "Merge Unknown 7 into Alice? Pick again" (<code>.armed</code>) in <code>--warning-color</code>, as Remove's
              button does; the last specimen shows them with nothing typed. Under the panel's scrolling content the
              key legend (<code>.panel-keys</code>) keeps Asset detail's keys in view: two lines of key caps, Curation's hairline
-             box, and their meanings in the footnote's color. The
-             toolbar's toggles
+             box at <code>--font-size-small</code>, and their meanings in the footnote's color at
+             <code>--font-size-base</code>. The toolbar's toggles
              (<code>.toolbar-toggle</code>, before a modal's ×) are an icon in <code>--theme-neutral-3</code> that takes
              <code>--theme-accent</code> while pressed, as the current nav entry does: in Asset detail the Edit panel's
              (<code>fa-sliders-h</code>), Show original's (<code>fa-clone</code>, on an edited asset), the Detail panel's,
@@ -504,28 +504,35 @@
             <button type="button" class="face-highlight" aria-pressed="false" aria-label="Unknown 4, hidden" style="--face-x: 0.6; --face-y: 0.54; --face-width: 0.18; --face-height: 0.42; anchor-name: --sg-face-highlight-2"></button><span class="face-highlight-badge" style="position-anchor: --sg-face-highlight-2">Unknown 4 <span class="hidden-mark">Hidden</span></span>
           </div>
           <p>The Edit panel (<code>includes/edit_panel</code>, <code>#editPanel</code>, its rules in
-             <code>includes/edit_panel.css</code>) is Asset detail's other docked panel, on <code>--theme-neutral-2</code>, its
-             header and its commit row parted from the body by hairlines in <code>--panel-border-color</code>. The header's
-             tools (<code>.edit-tool</code>: Undo, Redo, Before/after, Reset all) are an icon alone in
-             <code>--theme-neutral-3</code>, tinted on hover, <code>--theme-accent</code> while pressed and dimmed while
-             disabled, as the toolbar's toggles are. The Histogram of the edited image (<code>includes/histogram</code>,
-             <code>.histogram</code>, <code>--histogram-height</code> tall, its rules in <code>includes/histogram.css</code>) is
-             Curation's strip, on a button over <code>--theme-neutral-2</code> of the dark side, dark in either theme: the
-             red, green and blue channels as light in the channel colors, the luminance a line, and the crushed and blown
-             fractions in its top corners in <code>--theme-neutral-4</code> at <code>--font-size-small</code>, each with a
-             triangle that points to its end of the range; while the Clipping blink is on it wears the success edge and line,
-             and the fractions <code>--info-color</code> and <code>--error-color</code>. The sections' tabs wear <code>tabs.css</code>'s look at
-             <code>--font-size-small</code>, a section with changes marked by an accent dot (<code>.edit-dot</code>); a
-             section's heading carries its Reset, a link in <code>--theme-primary-text</code>, and a subhead
-             (<code>.edit-subhead</code>) is small caps in <code>--theme-neutral-3</code>, <code>--font-size-xs</code>,
-             semibold, tracked <code>--letter-spacing-wide</code>. The aspect chips (<code>.edit-aspects</code>) are a
-             <code>.toggle-group</code> of small segments that wraps, labelled in the lock's orientation, the crop's size under
-             them in <code>--font-nav</code> at <code>--font-size-xs</code>. Under the body sit the save status, in
-             <code>--theme-neutral-3</code> (<code>--error-color</code> when a save failed), with Revert to original, and the
-             key legend, the Detail panel's <code>.panel-keys</code>. Docked top or bottom the status joins the header, the
-             Histogram moves to the left of the tabs, the section's controls flow into columns and the keys are left out. The
-             specimen is the markup with nothing bound, but for its Histogram: the real include over a sample drawn by the
-             real paths, which a click presses.</p>
+             <code>includes/edit_panel.css</code>) is Asset detail's other docked panel, on
+             <code>--theme-neutral-2</code>, its header and its commit row parted from the body by hairlines in
+             <code>--panel-border-color</code>. The header's tools (<code>.edit-tool</code>: Undo, Redo, Before/after,
+             Reset all) are an icon alone in <code>--theme-neutral-3</code>, tinted on hover,
+             <code>--theme-accent</code> while pressed and dimmed while disabled, as the toolbar's toggles are. The
+             Histogram of the edited image (<code>includes/histogram</code>, <code>.histogram</code>,
+             <code>--histogram-height</code> tall, its rules in <code>includes/histogram.css</code>) is Curation's
+             strip, on a button over <code>--theme-neutral-2</code> of the dark side, dark in either theme: the red,
+             green and blue channels as light in the channel colors, the luminance a line, and the crushed and blown
+             fractions in its top corners in <code>--theme-neutral-4</code> at <code>--font-size-small</code>
+             (<code>--font-size-base</code> in the Edit panel), each with a triangle that points to its end of the
+             range; while the Clipping blink is on it wears the success edge and line, and the fractions
+             <code>--info-color</code> and <code>--error-color</code>. The sections' tabs wear <code>tabs.css</code>'s
+             look at <code>--font-size-medium</code>, a section with changes marked by an accent dot
+             (<code>.edit-dot</code>); a section's heading, at <code>--font-size-medium</code>, carries its Reset, a
+             link in <code>--theme-primary-text</code>, and a subhead (<code>.edit-subhead</code>) is small caps in
+             <code>--theme-neutral-3</code>, <code>--font-size-base</code>, semibold, tracked
+             <code>--letter-spacing-wide</code>. The aspect chips (<code>.edit-aspects</code>) are a
+             <code>.toggle-group</code> of small segments that wraps, labelled in the lock's orientation, the crop's
+             size under them in <code>--font-nav</code>; the section's text, its buttons included, is at
+             <code>--font-size-base</code>. Under the body sit the save status, at <code>--font-size-base</code> in
+             <code>--theme-neutral-3</code> (<code>--error-color</code> when a save failed), or, while changes are held,
+             a <code>.notice</code> in its place (<code>.edit-held</code>, the Triage summary's
+             <code>fa-info-circle</code> in <code>--info-color</code> beside its words, at
+             <code>--font-size-small</code>), with Revert to original, and the key legend, the Detail panel's
+             <code>.panel-keys</code>. Docked top or bottom the status joins the header, the Histogram moves to the left of the tabs, the
+             section's controls flow into columns and the keys are left out. The specimen is the markup with nothing
+             bound, but for its Histogram: the real include over a sample drawn by the real paths, which a click
+             presses.</p>
           <div class="sg-edit-panel">
             <aside id="editPanel" aria-label="Edit panel specimen">
               <header class="edit-header">
@@ -572,7 +579,6 @@
               </footer>
               <footer class="panel-keys" aria-label="Keys specimen">
                 <p><span><kbd>E</kbd> Close</span><span><kbd>C</kbd> Crop</span><span><kbd>\</kbd> Original (hold)</span><span><kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo</span></p>
-                <p><span>Double-click a slider to reset it</span></p>
               </footer>
             </aside>
           </div>
@@ -724,8 +730,8 @@
             </div>
           </div>
           <p>A slider of the Edit panel is an <code>.edit-slider</code>: a row of its label, in <code>--theme-neutral-3</code>
-             at <code>--font-size-small</code>, and the value's number field at its end, quiet until hovered or focused,
-             <code>--edit-slider-field-width</code> wide in <code>--font-nav</code> at <code>--font-size-xs</code> (Enter sets
+             at <code>--font-size-base</code>, and the value's number field at its end, quiet until hovered or focused,
+             <code>--edit-slider-field-width</code> wide in <code>--font-nav</code> at <code>--font-size-base</code> (Enter sets
              it), over a thin native range: a <code>--space-2</code> track filled in <code>--theme-primary</code> from its left
              end to the thumb (<code>--edit-slider-fill</code>, which the component writes on the element), and a round thumb in
              <code>--theme-neutral-4</code> edged in <code>--theme-neutral-2</code>. A slider whose ends change the picture

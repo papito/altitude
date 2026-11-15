@@ -130,7 +130,7 @@
     padding: var(--space-3) var(--panel-padding);
     border-top: var(--border-hairline) var(--panel-border-color);
     color: var(--theme-neutral-3);
-    font-size: var(--font-size-small);
+    font-size: var(--font-size-base);
 }
 
 .panel-keys p {
@@ -154,7 +154,7 @@
     border: var(--border-hairline) currentColor;
     border-radius: var(--radius-small);
     font-family: inherit;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-small);
 }
 
 /* A selected row's actions (htmx/detail_panel_people), under the row at the panel's full width: Search, Change and Remove,

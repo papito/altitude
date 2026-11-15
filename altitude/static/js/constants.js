@@ -87,12 +87,13 @@ export const Const = {
         showOriginalHeld: "SHOW_ORIGINAL_HELD_EVENT",
         // `e` in Asset detail: opens or closes the Edit panel (js/edit/edit-panel.js)
         toggleEditPanel: "TOGGLE_EDIT_PANEL_EVENT",
-        // `c` with the Edit panel open: opens the Crop tool, or in it, Done (js/edit/edit-panel.js)
+        // `c` with the Edit panel open: opens or closes the Crop tool (js/edit/edit-panel.js)
         toggleCropTool: "TOGGLE_CROP_TOOL_EVENT",
-        // In the Crop tool: `o` cycles the guide, `x` swaps the aspect's orientation, Enter is Done
+        // In the Crop tool: `o` cycles the guide, `x` swaps the aspect's orientation
         cycleCropGuide: "CYCLE_CROP_GUIDE_EVENT",
         swapCropAspect: "SWAP_CROP_ASPECT_EVENT",
-        cropDone: "CROP_DONE_EVENT",
+        // Enter with the Edit panel's changes held: Done
+        editDone: "EDIT_DONE_EVENT",
         // Ctrl/Cmd+Z, and Ctrl/Cmd+Shift+Z or Ctrl+Y, with the Edit panel open: Undo and Redo of the panel's session
         undoEdit: "UNDO_EDIT_EVENT",
         redoEdit: "REDO_EDIT_EVENT",
@@ -214,13 +215,14 @@ export const Const = {
         editCanvasBehind: "data-app-edit-canvas-behind",
         editPanelOpen: "data-app-edit-panel-open",
         cropToolOpen: "data-app-crop-tool-open",
-        // The Crop tool's floating bar (includes/edit_stage_tools): the guide's button and the name it shows, the crop's
-        // size, Cancel and Done
+        // The stage's bar of the Edit panel's held changes (includes/edit_stage_tools): the Crop tool's guide button, the
+        // name it shows and the crop's size, Cancel, the count of the changes held and Done
         cropGuide: "data-app-crop-guide",
         cropGuideName: "data-app-crop-guide-name",
         cropSize: "data-app-crop-size",
-        cropCancel: "data-app-crop-cancel",
-        cropDone: "data-app-crop-done",
+        editCancel: "data-app-edit-cancel",
+        editDone: "data-app-edit-done",
+        editHeldCount: "data-app-edit-held-count",
         // The Edit panel's warning of changes not saved (includes/edit_panel, js/edit/leave-dialog.js): a choice's button,
         // its value the choice (`save`, `discard`, `stay`), and the message
         editLeave: "data-app-edit-leave",

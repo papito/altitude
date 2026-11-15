@@ -375,17 +375,19 @@ _Avoid_: Bounding box, Face box, Tag in user-facing text.
 One of Asset detail's two docked panels, in which a user with Edit images
 changes a still image's Edit: its sections Crop & rotate, Light, Color and
 Effects, with Undo and Redo. It sits on the side opposite the Detail panel.
-Closing it, closing Asset detail or stepping to another asset while a change
-is not saved yet asks whether to save it, discard it or keep editing.
+Every change is held until Done saves them as one change of the Edit, and
+Cancel drops them. Closing it, closing Asset detail or stepping to another
+asset while a change is not saved yet asks whether to save it, discard it or
+keep editing.
 
 **Edit**:
 A still image's adjustments, made in the Edit panel. The server keeps one Edit
-per asset, the one last saved; each change saves it. Undo and Redo go through
-the Edits made while the Edit panel is open on the asset, and are forgotten
+per asset, the one last saved; the Edit panel's Done saves it. Undo and Redo go
+through the Edits made while the Edit panel is open on the asset, and are forgotten
 when the panel closes, Asset detail closes or steps to another asset, or a save
 finds the Edit changed elsewhere or fails. Revert to original
-saves an Edit that changes nothing, which Undo takes back while the panel
-stays open. The original file is never written. An asset is edited when its
+is a change to an Edit that changes nothing, which Undo takes back while the
+panel stays open. The original file is never written. An asset is edited when its
 Edit changes a pixel. It is not the Edit button beside a Filtered search's
 chips, which opens the Advanced search.
 _Avoid_: Recipe, Develop settings, Adjustment layer in user-facing text.
@@ -396,13 +398,17 @@ The Edit panel's section of Sharpen, Clarity, Vignette and Grain.
 **Crop tool**:
 The Edit panel's tool that shows the whole image on Asset detail's stage under
 a crop rectangle to move and resize; a drag outside the rectangle rotates the
-image. Done saves all it changed as one change of the Edit, and Cancel drops
-it.
+image. Opening and closing it saves nothing: what it changes is held with the
+panel's other changes until Done or Cancel.
 
 **Level tool**:
-A tool of the Crop tool: a line drawn along something level or plumb sets
-Straighten so that the line becomes horizontal or vertical, whichever is
-nearer.
+The Edit panel's Level (draw line): a line drawn along something level or plumb
+sets Straighten so that the line becomes horizontal or vertical, whichever is
+nearer. It works over the edited image, or in the Crop tool when that is open.
+
+**Auto-level**:
+The Edit panel's button that sets Straighten from the image's own straight
+lines, or leaves it as it is when no lines agree.
 
 **Display image**:
 The image Asset detail shows of an edited asset in place of its original: its

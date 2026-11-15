@@ -39,8 +39,6 @@ object EditRecipe:
 
   private val SLIDERS: Map[String, Slider] = List(
     Slider("straighten", -45, 45, stepsPerUnit = 10),
-    Slider("perspectiveV", -100, 100),
-    Slider("perspectiveH", -100, 100),
     Slider("exposure", -5, 5, stepsPerUnit = 20),
     Slider("contrast", -100, 100),
     Slider("highlights", -100, 100),
@@ -110,8 +108,6 @@ object EditRecipe:
       flipH = bool(obj, "flipH"),
       flipV = bool(obj, "flipV"),
       straighten = slider("straighten"),
-      perspectiveV = whole("perspectiveV"),
-      perspectiveH = whole("perspectiveH"),
       crop = cropOf(obj("crop")),
       aspect = aspect,
       portrait = portrait,
@@ -187,8 +183,6 @@ final case class EditRecipe(
     flipH: Boolean = false,
     flipV: Boolean = false,
     straighten: Double = 0,
-    perspectiveV: Int = 0,
-    perspectiveH: Int = 0,
     crop: Option[EditCrop] = None,
     aspect: String = "original",
     portrait: Option[Boolean] = None,
@@ -212,9 +206,9 @@ final case class EditRecipe(
     grain: Int = 0):
 
   /**
-   * Whether the Edit changes no pixel: no turn, flip, Straighten, perspective or crop, every slider at 0 and the curve the
-   * diagonal. The Crop tool's settings (the aspect, its orientation, keeping the crop inside and whether it was fitted) do not
-   * count. An asset is edited when its Edit is not the identity.
+   * Whether the Edit changes no pixel: no turn, flip, Straighten or crop, every slider at 0 and the curve the diagonal. The Crop
+   * tool's settings (the aspect, its orientation, keeping the crop inside and whether it was fitted) do not count. An asset is
+   * edited when its Edit is not the identity.
    */
   def isIdentity: Boolean =
     copy(aspect = "original", portrait = None, keepInside = true, cropFitted = true) == EditRecipe.Identity
@@ -237,8 +231,6 @@ final case class EditRecipe(
     "flipH" -> flipH,
     "flipV" -> flipV,
     "straighten" -> straighten,
-    "perspectiveV" -> perspectiveV,
-    "perspectiveH" -> perspectiveH,
     "crop" -> crop.fold(ujson.Null: ujson.Value)(c => ujson.Obj("x" -> c.x, "y" -> c.y, "w" -> c.w, "h" -> c.h)),
     "aspect" -> aspect,
     "portrait" -> portrait.fold(ujson.Null: ujson.Value)(ujson.Bool(_)),

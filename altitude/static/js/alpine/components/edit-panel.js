@@ -28,7 +28,8 @@ import { curveLut } from "../../edit/tone.js"
  * the stage live in the coordinator (`edit/edit-panel.js`), which this component connects to as it starts: the
  * coordinator syncs a snapshot into it (`sync`), and the component asks it for every change, worked out from the Edit
  * shown (`edit/adjust.js`). The component's state is what its bindings read: a copy of the Edit shown, the save status,
- * whether there is anything to undo or redo, the Histogram's paths and the tools' states.
+ * whether changes are held for Done or Cancel (the stage's bar, the coordinator's), whether there is anything to undo or
+ * redo, the Histogram's paths and the tools' states.
  *
  * A slider counts as one change on release, or on Enter in its number field (a value left unentered goes back as the
  * field loses focus or on Escape); a double-click on its label or its track resets it. A curve point counts as one
@@ -91,6 +92,7 @@ export function editPanel() {
         status: "idle",
         canUndo: false,
         canRedo: false,
+        held: false,
         cropToolOpen: false,
         levelOn: false,
         splitOn: false,
@@ -147,6 +149,7 @@ export function editPanel() {
                 "status",
                 "canUndo",
                 "canRedo",
+                "held",
                 "cropToolOpen",
                 "levelOn",
                 "splitOn",
@@ -256,10 +259,6 @@ export function editPanel() {
             return this.recipe[key] !== 0
         },
 
-        hasAuto(key) {
-            return key === "straighten"
-        },
-
         /** A changed slider's class, which bolds its label */
         sliderClass(key) {
             return this.isChanged(key) ? "changed" : ""
@@ -279,8 +278,8 @@ export function editPanel() {
         },
 
         /**
-         * A slider dragged: shown at once, saved on release; the coordinator works the change out (`adjust.withSlider`),
-         * keeping the crop true to Straighten and the perspective
+         * A slider dragged: shown at once, one change on release; the coordinator works the change out
+         * (`adjust.withSlider`), keeping the crop true to Straighten
          */
         slide(key, event) {
             if (!panel?.recipe()) {
@@ -695,7 +694,7 @@ export function editPanel() {
             )
         },
 
-        /** The release saves the curve as one step, without the point dragged off the box */
+        /** The release makes the curve one change, without the point dragged off the box */
         curveUp() {
             const recipe = panel?.recipe()
             if (!curveDrag || !recipe) {

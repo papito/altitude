@@ -5,8 +5,10 @@
    #editSplit is Before/after: it lies over the media box as the canvas does, with "Before" and "After" in its top corners
    and its divider, a separator dragged with the pointer or stepped with the arrows. #cropLayer is the Crop tool: it covers
    the stage, so a drag outside the crop turns the image (Straighten); #cropFrame is the whole warped frame the canvas draws
-   while the tool is open, #cropRect the crop in it (focusable: the arrows nudge it), with its guide and eight handles, the
-   Level tool's line, and the floating bar with the guide, the crop's size, Cancel and Done. *@
+   while the tool is open, #cropRect the crop in it (focusable: the arrows nudge it), with its guide and eight handles, and
+   the Level tool's line, which the layer also draws with the tool closed (`data-level-only`, no frame). #editBar is the
+   floating bar of the Edit panel's held changes, shown while changes are held or the Crop tool is open: the Crop tool's
+   guide and crop size while it is open (`data-crop`), Cancel, how many edits are pending and Done. *@
 
 <div id="editSplit" hidden>
     <span class="edit-split-label before">Before</span>
@@ -28,10 +30,11 @@
         </div>
     </div>
     <svg id="levelLine" aria-hidden="true" hidden><line></line></svg>
-    <div id="cropBar" role="toolbar" aria-label="Crop tool">
-        <button type="button" class="action-button small" data-app-crop-guide title="Cycle the guide (O)">Guide: <span data-app-crop-guide-name>Thirds</span></button>
-        <span class="crop-size" data-app-crop-size></span>
-        <button type="button" class="action-button small" data-app-crop-cancel>Cancel <kbd>Esc</kbd></button>
-        <button type="button" class="action-button small primary" data-app-crop-done>Done <kbd>Enter</kbd></button>
-    </div>
+</div>
+<div id="editBar" role="toolbar" aria-label="Edit changes" hidden>
+    <button type="button" class="action-button small crop-only" data-app-crop-guide title="Cycle the guide (O)">Guide: <span data-app-crop-guide-name>Thirds</span></button>
+    <span class="crop-size crop-only" data-app-crop-size></span>
+    <button type="button" class="action-button small" data-app-edit-cancel>Cancel <kbd>Esc</kbd></button>
+    <span class="edit-held-count" data-app-edit-held-count role="status" hidden></span>
+    <button type="button" class="action-button small primary" data-app-edit-done>Done <kbd>Enter</kbd></button>
 </div>

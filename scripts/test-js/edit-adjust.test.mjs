@@ -142,12 +142,10 @@ test("Swapping the lock's orientation turns its ratio portrait, and Free swaps a
     )
 })
 
-test("A quarter turn carries the crop and the perspective into the turned frame, and four come back", () => {
+test("A quarter turn carries the crop into the turned frame, and four come back", () => {
     let edit = adjust.withCrop(
         {
             ...defaults(),
-            perspectiveH: 20,
-            perspectiveV: -10,
             keepInside: false,
         },
         { x: 0.1, y: 0.2, w: 0.3, h: 0.4 },
@@ -156,8 +154,6 @@ test("A quarter turn carries the crop and the perspective into the turned frame,
     const right = adjust.rotated(edit, 1, UPRIGHT)
     assert.equal(right.rotate, 90)
     assert.deepEqual(right.crop, { x: 0.4, y: 0.1, w: 0.4, h: 0.3 })
-    assert.equal(right.perspectiveH, 10)
-    assert.equal(right.perspectiveV, 20)
     assert.deepEqual(adjust.rotated(right, -1, UPRIGHT), edit)
 
     for (let i = 0; i < 4; i++) {
@@ -175,13 +171,11 @@ test("With one flip on, a turn to the right steps the stored turn back, as the m
     assert.equal(adjust.rotated(both, 1, UPRIGHT).rotate, 90)
 })
 
-test("A flip mirrors the crop and changes the sign of Straighten and that axis's keystone", () => {
+test("A flip mirrors the crop and changes the sign of Straighten", () => {
     const edit = adjust.withCrop(
         {
             ...defaults(),
             straighten: 2,
-            perspectiveH: 30,
-            perspectiveV: 15,
             keepInside: false,
         },
         { x: 0.1, y: 0.2, w: 0.3, h: 0.4 },
@@ -190,11 +184,9 @@ test("A flip mirrors the crop and changes the sign of Straighten and that axis's
     const h = adjust.flipped(edit, "h", UPRIGHT)
     assert.deepEqual(h.crop, { x: 0.6, y: 0.2, w: 0.3, h: 0.4 })
     assert.equal(h.straighten, -2)
-    assert.equal(h.perspectiveH, -30)
-    assert.equal(h.perspectiveV, 15)
     const v = adjust.flipped(edit, "v", UPRIGHT)
     assert.deepEqual(v.crop, { x: 0.1, y: 0.4, w: 0.3, h: 0.4 })
-    assert.equal(v.perspectiveV, -15)
+    assert.equal(v.straighten, -2)
 })
 
 test("A section's reset leaves the other sections and keeping the crop inside as they are", () => {

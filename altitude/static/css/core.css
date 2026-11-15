@@ -1073,7 +1073,7 @@ footer {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    font-size: var(--font-size-small);
+    font-size: var(--font-size-base);
 }
 
 .edit-slider-head label {
@@ -1094,7 +1094,7 @@ footer {
     background-color: transparent;
     color: var(--theme-neutral-3);
     font-family: var(--font-nav);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-base);
     text-align: right;
     appearance: textfield;
 

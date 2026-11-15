@@ -3,17 +3,22 @@
  * Undo and Redo of the panel's session, and a serial queue of writes, so each save carries as its `base` the version
  * the write before it answered (`EditController`: `PUT …/asset/:id {base, recipe}`).
  *
- * - **Optimistic:** a change (`commit`) is the Edit shown at once, and saved behind the write on its way. Saves waiting
- *   behind it are one: the server keeps only the latest Edit, so only the latest change waiting is sent.
+ * - **Held:** a change (`commit`) is the Edit shown at once, and saved by nothing until Done (`done`), which saves the
+ *   Edit shown as one change; Cancel (`cancel`) shows the saved Edit again. The session's changes are pending
+ *   (`pending`) while the Edit shown is not the one saved.
+ * - **Optimistic:** Done's save goes behind the write on its way, and the Edit stays on screen meanwhile. Saves waiting
+ *   behind it are one: the server keeps only the latest Edit, so only the latest Done waiting is sent.
  * - **Undo and Redo** are the browser's: the Edits before and after the one shown, kept while the session lasts (the
- *   caller clears them, `clearUndo`, as the panel closes or Asset detail steps away). An Undo or a Redo shows that Edit
- *   and saves it as any change.
+ *   caller clears them, `clearUndo`, as the panel closes or Asset detail steps away). An Undo or a Redo shows that Edit,
+ *   held as any change. Done folds the changes it saves into one step, so the next Undo takes the whole Done back, and
+ *   Cancel puts Undo back where it was at the last Done.
  * - **The answer of the last write** is adopted whole: the version and the Edit (the server's normalization, which is
  *   the client's).
- * - **A conflict** (a 409: the Edit was saved elsewhere, another tab or another account) drops the save waiting, adopts
- *   the state the 409 carries, clears Undo and Redo, whose Edits were this session's, and is reported (`onConflict`).
- * - **A failure** drops the save waiting too, clears Undo and Redo, reads the state again so what is shown is what the
- *   server holds, and is reported (`onFailure`).
+ * - **A conflict** (a 409: the Edit was saved elsewhere, another tab or another account) drops the save waiting and any
+ *   change held, adopts the state the 409 carries, clears Undo and Redo, whose Edits were this session's, and is
+ *   reported (`onConflict`).
+ * - **A failed save** drops the save waiting and any change held too, clears Undo and Redo, reads the state again so
+ *   what is shown is what the server holds, and is reported (`onFailure`). A failed read changes nothing shown.
  * - **Every state adopted** (a save's answer, a read's, a conflict's, the read after a failure) is handed over
  *   (`onAdopted`), so the caller shows the Edit the server holds everywhere else and follows the render the server queues
  *   (`render-status.js`).
@@ -53,9 +58,7 @@ export const SaveStatus = Object.freeze({
  *
  * `api`, each a promise of the Edit's state (`EditController.stateJson`):
  * - `load()`: the state;
- * - `save({ base, recipe })`: the Edit saved, built on the version `base`;
- * - `saveOnHide({ base, recipe })`: the same save, sent so that it outlives the page (`fetch`'s `keepalive`); its answer is
- *   not waited for, so a session the page shows again reads the Edit again (`load`).
+ * - `save({ base, recipe })`: the Edit saved, built on the version `base`.
  * A save refused because its base is stale rejects with an error carrying the current state as `conflictState`.
  *
  * `onConflict()` and `onFailure(error, kind)` report, `kind` the failed write's (`load` or `save`); `onAdopted(state)` runs
@@ -77,9 +80,13 @@ export function createEditSession({
     }
     // The Edit shown: the last change committed, or the server's
     let recipe = server.recipe
+    // The Edit saved: the last Done's, or the server's; the changes are pending while the Edit shown is not this one
+    let saved = server.recipe
     // Undo and Redo: the Edits shown before the one shown, the latest last, and those undone, the latest undone last
     let past = []
     let future = []
+    // Undo's Edits as they were when the Edit saved was saved or read, which Cancel puts back
+    let savedPast = []
     let status = SaveStatus.idle
     // The writes waiting: at most a read and a save, in the order they came; a later change replaces the save's Edit
     const queue = []
@@ -103,10 +110,28 @@ export function createEditSession({
         )
     }
 
+    /** Whether the Edit shown is not the one saved: changes held for Done or Cancel */
+    function pending() {
+        return !sameRecipe(recipe, saved)
+    }
+
+    /**
+     * How many changes are held: the steps of Undo between the Edit shown and the last Done, an Undo past it counting as
+     * one; none when nothing is pending
+     */
+    function heldCount() {
+        return pending()
+            ? Math.max(1, Math.abs(past.length - savedPast.length))
+            : 0
+    }
+
     function snapshot() {
         return {
             assetId,
             recipe,
+            saved,
+            pending: pending(),
+            heldCount: heldCount(),
             editVersion: server.editVersion,
             state: server,
             status,
@@ -190,14 +215,18 @@ export function createEditSession({
     }
 
     /**
-     * Takes the server's state, and hands it over (`onAdopted`); `whole` (no save waiting) also makes its Edit the one shown,
-     * while a later change still waiting keeps its own on screen
+     * Takes the server's state, and hands it over (`onAdopted`); `whole` (no save waiting) also makes its Edit the one saved
+     * and, unless changes are held over it, the one shown, while a later Done still waiting keeps its own. `drop` shows it
+     * over any change held, which goes, as Undo and Redo do (a conflict, a failure)
      */
-    function adopt(state, { whole }) {
+    function adopt(state, { whole, drop = false }) {
         server = { ...state, recipe: normalize(state.recipe) }
         loaded = true
         if (whole) {
-            recipe = server.recipe
+            if (drop || !pending()) {
+                recipe = server.recipe
+            }
+            saved = server.recipe
         }
         notify()
         onAdopted(server)
@@ -212,7 +241,7 @@ export function createEditSession({
         clearUndo()
         if (error?.conflictState) {
             status = SaveStatus.conflict
-            adopt(error.conflictState, { whole: true })
+            adopt(error.conflictState, { whole: true, drop: true })
             onConflict()
             return
         }
@@ -224,15 +253,16 @@ export function createEditSession({
         }
         onFailure(error, kind)
         if (kind === "load") {
-            recipe = server.recipe
+            // Nothing was saved or lost: the Edit shown, held changes and all, stays
             notify()
             return
         }
         try {
-            adopt(await api.load(), { whole: !hasUnsaved() })
+            adopt(await api.load(), { whole: !hasUnsaved(), drop: true })
         } catch {
             // The server could not be read either: the last state it answered is shown
             recipe = server.recipe
+            saved = server.recipe
             notify()
         }
     }
@@ -243,15 +273,15 @@ export function createEditSession({
         drain()
     }
 
-    /** Shows `edit` and saves it, after the Edit shown went onto `onto` (Undo's or Redo's stack) */
+    /** Shows `edit`, held, after the Edit shown went onto `onto` (Undo's or Redo's stack) */
     function show(edit, onto) {
         onto.push(recipe)
         recipe = edit
-        enqueueSave(edit)
+        notify()
     }
 
     /**
-     * The Edit changed by a control: shown at once and saved; the Edit shown before it is Undo's, and Redo's Edits go.
+     * The Edit changed by a control: shown at once and held; the Edit shown before it is Undo's, and Redo's Edits go.
      * The Edit shown again is nothing (false).
      */
     function commit(next) {
@@ -264,7 +294,7 @@ export function createEditSession({
         return true
     }
 
-    /** The Edit before the one shown, shown and saved; false with nothing to undo */
+    /** The Edit before the one shown, shown and held; false with nothing to undo */
     function undo() {
         if (past.length === 0) {
             return false
@@ -273,7 +303,7 @@ export function createEditSession({
         return true
     }
 
-    /** The Edit last undone, shown and saved; false with nothing to redo */
+    /** The Edit last undone, shown and held; false with nothing to redo */
     function redo() {
         if (future.length === 0) {
             return false
@@ -282,18 +312,49 @@ export function createEditSession({
         return true
     }
 
+    /**
+     * Done: the Edit shown saved as one change, the changes held since the last Done folded into one step of Undo, back to
+     * the Edit saved before; false with nothing held
+     */
+    function done() {
+        if (!pending()) {
+            return false
+        }
+        past = [...savedPast, saved]
+        future = []
+        // A copy, which the changes pushed onto Undo's stack from here on leave as it is
+        savedPast = [...past]
+        saved = recipe
+        enqueueSave(recipe)
+        return true
+    }
+
+    /** Cancel: the Edit saved shown again, and Undo and Redo as they were when it was saved; false with nothing held */
+    function cancel() {
+        if (!pending()) {
+            return false
+        }
+        recipe = saved
+        past = [...savedPast]
+        future = []
+        notify()
+        return true
+    }
+
     /** Undo and Redo forget their Edits: the panel closed, or Asset detail stepped away */
     function clearUndo() {
-        if (past.length > 0 || future.length > 0) {
+        if (past.length > 0 || future.length > 0 || savedPast.length > 0) {
             past = []
             future = []
+            savedPast = []
             notify()
         }
     }
 
     /**
-     * The changes not confirmed are dropped: the save waiting is not sent, and a save on its way is followed by one of
-     * the Edit the server last confirmed, so the server ends where it was. The Edit shown is that one again.
+     * The changes not confirmed are dropped: those held, the save waiting, which is not sent, and a save on its way, which is
+     * followed by one of the Edit the server last confirmed, so the server ends where it was. The Edit shown is that one
+     * again.
      */
     function discard() {
         const confirmed = server.recipe
@@ -305,6 +366,7 @@ export function createEditSession({
             queue.push({ kind: "save", recipe: confirmed })
         }
         recipe = confirmed
+        saved = confirmed
         clearUndo()
         if (!busy() && status === SaveStatus.saving) {
             status = SaveStatus.idle
@@ -319,32 +381,6 @@ export function createEditSession({
             : Promise.resolve()
     }
 
-    /**
-     * The page is going away (`pagehide`): the Edit not saved yet, `next` (a change waiting out its delay) or else the save
-     * waiting behind the one on its way, is sent so that it outlives the page. It is built on the edit version the server last
-     * answered, or, behind a save on its way, on the one that save is about to answer: should that save fail, the server
-     * refuses this one as a conflict, which changes nothing. Nothing is sent while the session recovers from a failure, or for
-     * the Edit the server holds. Answers whether it was sent; a page shown again from the browser's cache reads the Edit again
-     * (`load`), as the session's edit version is then behind the server's.
-     */
-    function saveOnHide(next = null) {
-        const waiting = queue.find((op) => op.kind === "save")
-        const edit = next ? normalize(next) : waiting?.recipe
-        const recovering = running && current === null
-        if (!edit || recovering) {
-            return false
-        }
-        const behindSave = current?.kind === "save"
-        if (!behindSave && sameRecipe(edit, server.recipe)) {
-            return false
-        }
-        api.saveOnHide({
-            base: server.editVersion + (behindSave ? 1 : 0),
-            recipe: edit,
-        })
-        return true
-    }
-
     return {
         assetId,
         subscribe,
@@ -353,10 +389,12 @@ export function createEditSession({
         commit,
         undo,
         redo,
+        done,
+        cancel,
+        pending,
         clearUndo,
         discard,
         settled,
-        saveOnHide,
         /** Whether a write is waiting or on its way */
         isBusy: busy,
         hasUnsaved,

@@ -23,14 +23,12 @@ export function drawLevelLine(from, to) {
     lineEl.setAttribute("y1", from.y - box.top)
     lineEl.setAttribute("x2", to.x - box.left)
     lineEl.setAttribute("y2", to.y - box.top)
-    svgEl.hidden = false
+    // An <svg> has no `hidden` property (it is HTMLElement's), so the attribute is set itself
+    svgEl.removeAttribute("hidden")
 }
 
 export function hideLevelLine() {
-    const svgEl = document.getElementById(LINE_ID)
-    if (svgEl) {
-        svgEl.hidden = true
-    }
+    document.getElementById(LINE_ID)?.setAttribute("hidden", "")
 }
 
 /**

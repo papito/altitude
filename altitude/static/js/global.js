@@ -24,15 +24,16 @@
  * are announced, the key's repeats swallowed, and a release is announced wherever focus has gone.
  *
  * The Edit panel's keys (`listeners/edit.js`), in Asset detail and never in a text field: `e` opens
- * or closes the panel, `c` opens its Crop tool or, in it, is Done; in the Crop tool `o` cycles the
- * guide, `x` swaps the aspect's orientation and Enter is Done (on a control, Enter presses it);
- * Ctrl/Cmd+Z is Undo and Ctrl/Cmd+Shift+Z or Ctrl+Y Redo. Escape closes the Edit panel's warning of
- * changes not saved (Keep editing), then leaves the Crop tool (Cancel, or the warning when its
- * session changed the Edit), ahead of the selected People row and the dialog, whose close the
- * warning may hold; while the warning is open, Asset detail's keys are left to it. The arrows and Space are
- * left to focus in the Edit panel, on its divider and in the Crop tool, as in the Detail panel. The warning's and the Crop
- * tool's part is read through `common/edit-keys.js`, which the Edit panel registers on the page that holds Asset detail, so
- * this module, on every page, imports no edit module.
+ * or closes the panel, `c` opens or closes its Crop tool; in the Crop tool `o` cycles the guide and
+ * `x` swaps the aspect's orientation; while the panel's changes are held Enter is Done (on a
+ * control, Enter presses it); Ctrl/Cmd+Z is Undo and Ctrl/Cmd+Shift+Z or Ctrl+Y Redo. Escape closes
+ * the Edit panel's warning of changes not saved (Keep editing), then the panel's own (the Level tool
+ * off, the changes held cancelled or the warning about them, the Crop tool closed), ahead of the
+ * selected People row and the dialog, whose close the warning may hold; while the warning is open,
+ * Asset detail's keys are left to it. The arrows and Space are left to focus in the Edit panel, on
+ * its divider, in the Crop tool and on the stage's bar, as in the Detail panel. The warning's and the
+ * Edit panel's part is read through `common/edit-keys.js`, which the Edit panel registers on the page
+ * that holds Asset detail, so this module, on every page, imports no edit module.
  */
 import { closeOpenContextMenu } from "./alpine/components/context-menu.js"
 import {
@@ -41,7 +42,8 @@ import {
 } from "./alpine/components/face-combobox.js"
 import {
     closeLeaveDialog,
-    escapeOpenCropTool,
+    escapeEdit,
+    hasHeldEdit,
     isCropToolOpen,
     isLeaveDialogOpen,
 } from "./common/edit-keys.js"
@@ -81,14 +83,14 @@ document.addEventListener("keydown", (event) => {
         // leaves Asset detail open; the advanced search panel closes the same way, the browser
         // returning focus to its filter button; so does a selected Face's row in its People section,
         // and a closing modal or popover dialog restores focus itself
-        // In Asset detail, the Edit panel's warning closes alone (Keep editing), then the Crop tool is
-        // left (Cancel, or the warning), before the selected Face and the dialog
+        // In Asset detail, the Edit panel's warning closes alone (Keep editing), then the panel's own
+        // Escape (the Level tool, the changes held, the Crop tool), before the selected Face and the dialog
         if (
             closeOpenContextMenu({ reason: "Escape", returnFocus: true }) ||
             closeOpenSearchPanel() ||
             (getActiveModalHost() === ModalHost.assetDetail &&
                 (closeLeaveDialog() ||
-                    escapeOpenCropTool() ||
+                    escapeEdit() ||
                     clearSelectedFaceRow())) ||
             closeModal() ||
             closeMapPanel()
@@ -173,28 +175,23 @@ document.addEventListener("keydown", (event) => {
     ) {
         event.preventDefault()
         announce(Const.events.redoEdit)
-    } else if (isCropToolOpen()) {
-        handleCropToolKey(event)
-    }
-})
-
-/** The Crop tool's own keys: `o` the guide, `x` the aspect's orientation, Enter Done unless a control takes it */
-function handleCropToolKey(event) {
-    if (isPlainKey(event, "o")) {
+    } else if (isCropToolOpen() && isPlainKey(event, "o")) {
         event.preventDefault()
         announce(Const.events.cycleCropGuide)
-    } else if (isPlainKey(event, "x")) {
+    } else if (isCropToolOpen() && isPlainKey(event, "x")) {
         event.preventDefault()
         announce(Const.events.swapCropAspect)
     } else if (
+        hasHeldEdit() &&
         event.key === "Enter" &&
         !event.repeat &&
         !event.target?.closest?.("button, a, summary, [role='button']")
     ) {
+        // Done, unless a control takes the key
         event.preventDefault()
-        announce(Const.events.cropDone)
+        announce(Const.events.editDone)
     }
-}
+})
 
 function announce(eventName) {
     document.body.dispatchEvent(new CustomEvent(eventName))
@@ -292,7 +289,7 @@ function isDetailDivider(target) {
 function isInEditTools(target) {
     return Boolean(
         target?.closest?.(
-            "#editPanel, #editPanelDivider, #editSplitHandle, #cropLayer",
+            "#editPanel, #editPanelDivider, #editSplitHandle, #cropLayer, #editBar",
         ),
     )
 }

@@ -22,7 +22,7 @@ stores, what the client sends and what `EditRecipe.toJson` writes, `version` fir
 {
   "version": 1,
   "rotate": 0, "flipH": false, "flipV": false,
-  "straighten": 0, "perspectiveV": 0, "perspectiveH": 0,
+  "straighten": 0,
   "crop": null, "aspect": "original", "portrait": null, "keepInside": true, "cropFitted": true,
   "exposure": 0, "contrast": 0, "highlights": 0, "shadows": 0, "whites": 0, "blacks": 0, "gamma": 0,
   "curve": [[0, 0], [1, 1]],
@@ -36,7 +36,6 @@ stores, what the client sends and what `EditRecipe.toJson` writes, `version` fir
 | `rotate` | 0, 90, 180, 270 | Clockwise quarter turns. |
 | `flipH`, `flipV` | boolean | Mirrored after the turn, in the turned frame. |
 | `straighten` | −45 to 45, 0.1 | Degrees, positive clockwise. |
-| `perspectiveV`, `perspectiveH` | −100 to 100, 1 | Keystone. |
 | `crop` | `null`, or `{x, y, w, h}` in [0, 1] | A fraction of the frame (below); `null` is the whole frame. |
 | `aspect` | `original`, `free`, `1:1`, `5:4`, `7:5`, `3:2`, `16:9` | The Crop tool's lock, a ratio written landscape. |
 | `portrait` | `null`, `true`, `false` | The lock's orientation; `null` follows the frame's. |
@@ -50,10 +49,10 @@ stores, what the client sends and what `EditRecipe.toJson` writes, `version` fir
 | `grain` | 0 to 100, 1 | |
 
 The Edit panel's sections (`SECTIONS` in `recipe.js`) group the keys: Crop & rotate (the turn, the flips,
-Straighten, the perspective, the crop and the four Crop tool settings), Light (Exposure to Gamma, and the curve), Color
+Straighten, the crop and the four Crop tool settings), Light (Exposure to Gamma, and the curve), Color
 (Temperature, Tint, Vibrance, Saturation) and Effects (Sharpen, Clarity, Vignette, Grain).
 
-**The identity** is an Edit that changes no pixel: `rotate` 0, no flip, Straighten and the perspective 0, no crop, every
+**The identity** is an Edit that changes no pixel: `rotate` 0, no flip, Straighten 0, no crop, every
 slider 0 and the curve `[[0, 0], [1, 1]]`. `aspect`, `portrait`, `keepInside` and `cropFitted` do not count. An asset is
 edited when its Edit is not the identity (`isIdentity`, on both sides).
 
@@ -82,19 +81,17 @@ draws nothing live from a bitmap a quarter turn from the server's size: its geom
 1. **Turn and mirror** (`turn`). The point (x, y) of the upright original turns clockwise by `rotate`: to (H₀ − y, x) at
    90, (W₀ − x, H₀ − y) at 180, (y, W₀ − x) at 270. That is the **frame**, W × H, W₀ × H₀ swapped for a quarter turn
    (`frameSize`). Then `flipH` mirrors x to W − x and `flipV` y to H − y, in the turned frame.
-2. **Warp** (`Warp` on the server, `createWarp` on the client), in normalized coordinates around the frame's center:
-   c = (W/2, H/2), s = max(W, H)/2, u = (p − c)/s. With the keystones a = 0.55 · `perspectiveH`/100 and
-   b = 0.55 · `perspectiveV`/100, u goes to u/(1 + a·uₓ + b·u_y), which is turned by θ = `straighten`° and scaled back:
-   p′ = R(θ)·u′·s + c, R(θ) = [[cos θ, −sin θ], [sin θ, cos θ]]. The warped image keeps the frame's size. Sampling reads
-   the inverse (`inverse`, `unwarp`): q = (p − c)/s, u = R(−θ)·q, w = 1 − a·uₓ − b·u_y, and the source is u/w · s + c;
-   there is none where w ≤ 0.001 (`MIN_DENOMINATOR`), beyond the horizon of the perspective's plane. With Straighten and
-   both perspectives at 0 the warp moves nothing (`moves`).
+2. **Warp** (`Warp` on the server, `createWarp` on the client): Straighten's turn about the frame's center, in
+   normalized coordinates around it: c = (W/2, H/2), s = max(W, H)/2, u = (p − c)/s, and p′ = R(θ)·u·s + c with
+   θ = `straighten`°, R(θ) = [[cos θ, −sin θ], [sin θ, cos θ]]. The warped image keeps the frame's size. Sampling reads
+   the inverse (`inverse`, `unwarp`): q = (p − c)/s and the source is R(−θ)·q · s + c. With Straighten at 0 the warp
+   moves nothing (`moves`).
 3. **Crop.** `crop` is a fraction of W × H. The **edited size** is round(w · W) × round(h · H), each at least 1
    (`editedSize`), the whole frame with no crop.
 
 **The image's outline** in the frame (`outline`) is the frame's four corners, top left, top right, bottom right, bottom
-left, pushed through the warp, as fractions of W and H: a convex quadrilateral, which "keep the crop inside the image"
-holds the crop's four corners in.
+left, pushed through the warp, as fractions of W and H: the frame turned by Straighten (a convex quadrilateral in
+fractions), which "keep the crop inside the image" holds the crop's four corners in.
 
 **The output** is the cropped region rendered at `outputSize(editedWidth, editedHeight, longEdge)`: the edited size, or,
 when `longEdge` is shorter than its long edge, that long edge and the short side in step, round(short · longEdge / long),
@@ -106,16 +103,13 @@ it shows.
 (crop.x · W + (i + 0.5) · crop.w · W / outW, crop.y · H + (j + 0.5) · crop.h · H / outH), whose source the inverse warp
 gives, turned back into the upright original. Its color is the image sampled bilinearly there, the edge pixels repeated
 beyond the last pixel centers (OpenCV's `BORDER_REPLICATE`, a texture's `CLAMP_TO_EDGE`), so no color is ever mixed with
-a transparent border. The pixel is **covered** when the inverse exists (w > 0.001) and its source lies within the frame,
-edges included (`Warp.covers`; every pixel when the warp moves nothing): a covered pixel keeps the image's alpha, and any
-other is fully transparent, a hard edge with no partial coverage. Beyond the horizon (w ≤ 0.001, a negative w included)
-both renderers still divide by w, OpenCV's `warpPerspective` by any w but 0 and the shader by w held at least 10⁻⁶ from
-0, and sample the projected point, on the far side of the frame's center, its edges repeated; the pixel is uncovered, so
-that color never shows.
+a transparent border. The pixel is **covered** when its source lies within the frame, edges included (`Warp.covers`;
+every pixel when the warp moves nothing): a covered pixel keeps the image's alpha, and any other is fully transparent, a
+hard edge with no partial coverage.
 
 **A box through the Edit** (`mapBox`, the Face highlights): the four corners and the center of a box of the upright
 original are turned, warped and taken into the crop as fractions of the edited image; the box drawn is the corners'
-bounding box cut to the edited image, and none when the center falls outside the crop or beyond the horizon.
+bounding box cut to the edited image, and none when the center falls outside the crop.
 
 ## Per-pixel math
 
@@ -205,9 +199,9 @@ shows the renderers' colors.
 - **Shrink.** When the output scale is below a half, the frame is first brought down to twice the scale with
   `INTER_AREA` (an 8-bit image in 16 bits, so the averages keep their fractions), so the warp never shrinks by more than
   half.
-- **Warp and crop.** One `Imgproc.warpPerspective` of the composed homography (OpenCV's pixel-center offset, the output
-  scale, the crop offset, the frame's center and half long side, Straighten, the keystones, back, and the source's
-  reduction) into the output size, `INTER_LINEAR`, `BORDER_REPLICATE`, in the source's own depth.
+- **Warp and crop.** One `Imgproc.warpAffine` of the composed transform (OpenCV's pixel-center offset, the output
+  scale, the crop offset, Straighten's turn about the frame's center, and the source's reduction) into the output size,
+  `INTER_LINEAR`, `BORDER_REPLICATE`, in the source's own depth.
 - **Tone.** The result as 32-bit float BGRA over 255 or 65535, steps 1 to 7 per pixel through the tables, the coverage
   applied to alpha, and L kept as a float image.
 - **Finish.** `Imgproc.GaussianBlur` of L for Clarity and Sharpen, then steps 8 to 11 per pixel into 8-bit BGRA.
@@ -258,7 +252,7 @@ These are the client's (`geometry.js`, `adjust.js`); the server stores whatever 
   product along every edge, edges included).
 - **A gesture** (`limitTransition`) goes from a valid crop toward the one it proposes as far as stays valid, found by
   halving, so a move or a resize stops at the outline.
-- **A fitted crop** (`cropFitted`) re-fits, as Straighten, a perspective or the aspect change, to the largest crop of the
+- **A fitted crop** (`cropFitted`) re-fits, as Straighten or the aspect change, to the largest crop of the
   lock's ratio centered on the frame and shrunk to stay valid (`fitMaxCentered`); **a crop the user set** shrinks around
   its center only as much as it must (`shrinkToValid`, around the frame's center when its own lies outside the image),
   and a new ratio reshapes it around its own center with its own area (`rectWithRatioAround`).
@@ -267,8 +261,8 @@ These are the client's (`geometry.js`, `adjust.js`); the server stores whatever 
 - **Stored** (`storedCrop`): rounded as the server rounds it, moved in by 0.0001 of the frame on each side when the
   rounding takes a corner past the outline, and `null` when it is the whole frame, so an Edit whose crop covers the frame
   is the identity again.
-- **A quarter turn and a flip** turn or mirror the edited image as shown: the crop, the perspective and Straighten are
-  carried into the new frame, and with one flip on, a turn steps `rotate` the other way, since the mirror reverses
+- **A quarter turn and a flip** turn or mirror the edited image as shown: the crop and Straighten are carried into the
+  new frame, and with one flip on, a turn steps `rotate` the other way, since the mirror reverses
   the turn's sense as shown.
 - **The Level tool** sets Straighten so the line drawn becomes level or plumb, whichever is nearer; a line under 12 px is a
   click. **A drag around the crop** turns Straighten by the change of the pointer's angle around the crop's center, from
@@ -279,7 +273,7 @@ These are the client's (`geometry.js`, `adjust.js`); the server stores whatever 
 `EditRenderer.autoStraightenAngle(original, recipe)`: the Straighten that levels the image's lines, in tenths of a
 degree, or nothing when no lines agree on one.
 
-- **The frame:** the original turned and mirrored as the Edit's step 1 makes it (no Straighten, no perspective), a JPEG
+- **The frame:** the original turned and mirrored as the Edit's step 1 makes it (no Straighten), a JPEG
   decoded reduced as far as keeps its long edge at 1280 px or more, then resized to a 1280 px long edge (`INTER_AREA` to
   shrink), in gray (16 bits brought to 8).
 - **The lines:** a 3 × 3 Gaussian blur, `Canny` (50, 150), and `HoughLinesP` (ρ 1 px, θ 0.25°, threshold 60, the least

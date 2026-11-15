@@ -1,9 +1,11 @@
 /**
- * The Edit panel's server sync (`altitude/static/js/edit/edit-session.js`) over a fake server: the saves go one at a
- * time, each on the version the one before answered, and a save waiting behind another is replaced by a later change;
- * Undo and Redo are the browser's, each an ordinary save; a 409 adopts the state it carries, drops the stale save and
- * forgets Undo and Redo; a failure reads the state again; a discard puts the server back where it was confirmed; the
- * caller hears of every state adopted, a save's, a read's, a conflict's. Run by `make test-js`.
+ * The Edit panel's server sync (`altitude/static/js/edit/edit-session.js`) over a fake server: a change is held until
+ * Done, which saves the Edit shown as one change, and Cancel shows the saved Edit again; the saves go one at a time, each
+ * on the version the one before answered, and a save waiting behind another is replaced by a later Done; Undo and Redo
+ * are the browser's, held as any change, and Done folds what it saves into one step of Undo; a 409 adopts the state it
+ * carries, drops the stale save and forgets Undo and Redo; a failure reads the state again; a discard puts the server
+ * back where it was confirmed; the caller hears of every state adopted, a save's, a read's, a conflict's. Run by
+ * `make test-js`.
  */
 import { test } from "node:test"
 import assert from "node:assert/strict"
@@ -24,7 +26,6 @@ function fakeServer() {
     let recipe = defaults()
     const sent = []
     const pending = []
-    const kept = []
 
     function state() {
         return { editVersion: version, recipe, edited: recipe.exposure !== 0 }
@@ -48,7 +49,6 @@ function fakeServer() {
 
     return {
         sent,
-        kept,
         get editVersion() {
             return version
         },
@@ -75,7 +75,6 @@ function fakeServer() {
                     version += 1
                     recipe = edit
                 }),
-            saveOnHide: (request) => kept.push(request),
         },
     }
 }
@@ -87,7 +86,78 @@ const sentSaves = (server) =>
         .filter((r) => r.kind === "save")
         .map((r) => [r.base, r.recipe.exposure])
 
-test("Changes are shown at once and saved one at a time, each on the version the last answered", async () => {
+/** A change made and saved at once: the change, then Done */
+function commitAndDone(session, edit) {
+    session.commit(edit)
+    session.done()
+}
+
+test("A change is held, shown at once and saved by nothing until Done, which saves it once", async () => {
+    const server = fakeServer()
+    const session = createEditSession({ assetId: "a", api: server.api })
+    session.load()
+    await server.release()
+
+    assert.equal(session.commit(exposure(0.5)), true)
+    assert.equal(session.commit(exposure(0.5)), false)
+    assert.equal(session.commit(exposure(1)), true)
+    assert.equal(session.snapshot().recipe.exposure, 1)
+    assert.equal(session.snapshot().pending, true)
+    assert.equal(session.snapshot().unsaved, false)
+    assert.equal(server.inFlight, 0)
+    assert.deepEqual(sentSaves(server), [])
+
+    assert.equal(session.done(), true)
+    assert.equal(session.snapshot().pending, false)
+    assert.equal(session.snapshot().unsaved, true)
+    await server.release()
+    assert.deepEqual(sentSaves(server), [[0, 1]])
+    assert.equal(session.snapshot().status, SaveStatus.saved)
+    // Nothing held: Done saves nothing
+    assert.equal(session.done(), false)
+    assert.equal(server.inFlight, 0)
+})
+
+test("The changes held are counted as steps of Undo since the last Done", async () => {
+    const server = fakeServer()
+    const session = createEditSession({ assetId: "a", api: server.api })
+    assert.equal(session.snapshot().heldCount, 0)
+    session.commit(exposure(0.5))
+    session.commit(exposure(1))
+    session.commit(exposure(1.5))
+    assert.equal(session.snapshot().heldCount, 3)
+    session.undo()
+    assert.equal(session.snapshot().heldCount, 2)
+    session.redo()
+    assert.equal(session.snapshot().heldCount, 3)
+
+    session.done()
+    await server.release()
+    assert.equal(session.snapshot().heldCount, 0)
+    // Undo past the last Done is one change held, taking the Done back
+    session.undo()
+    assert.equal(session.snapshot().heldCount, 1)
+    session.cancel()
+    assert.equal(session.snapshot().heldCount, 0)
+
+    // Changes that come back to the Edit saved are nothing held
+    session.commit(exposure(2))
+    session.commit(exposure(1.5))
+    assert.equal(session.snapshot().pending, false)
+    assert.equal(session.snapshot().heldCount, 0)
+})
+
+test("A change held back to the Edit saved is nothing pending", () => {
+    const server = fakeServer()
+    const session = createEditSession({ assetId: "a", api: server.api })
+    session.commit(exposure(0.5))
+    session.commit(exposure(0))
+    assert.equal(session.snapshot().pending, false)
+    assert.equal(session.done(), false)
+    assert.equal(server.inFlight, 0)
+})
+
+test("Saves go one at a time, each on the version the last answered, and Dones waiting are one save", async () => {
     const server = fakeServer()
     const adopted = []
     const session = createEditSession({
@@ -99,9 +169,9 @@ test("Changes are shown at once and saved one at a time, each on the version the
     await server.release()
     assert.equal(session.snapshot().loaded, true)
 
-    session.commit(exposure(0.5))
-    session.commit(exposure(1))
-    session.commit(exposure(1.5))
+    commitAndDone(session, exposure(0.5))
+    commitAndDone(session, exposure(1))
+    commitAndDone(session, exposure(1.5))
     assert.equal(session.snapshot().recipe.exposure, 1.5)
     assert.equal(session.snapshot().status, SaveStatus.saving)
     assert.equal(session.snapshot().unsaved, true)
@@ -112,7 +182,7 @@ test("Changes are shown at once and saved one at a time, each on the version the
     assert.equal(session.snapshot().recipe.exposure, 1.5)
     await server.release()
 
-    // The changes waiting behind the first save are one save, of the latest
+    // The Dones waiting behind the first save are one save, of the latest
     assert.deepEqual(sentSaves(server), [
         [0, 0.5],
         [1, 1.5],
@@ -124,45 +194,30 @@ test("Changes are shown at once and saved one at a time, each on the version the
     assert.deepEqual(adopted, [0, 1, 2])
 })
 
-test("The same Edit twice is one save", async () => {
-    const server = fakeServer()
-    const session = createEditSession({ assetId: "a", api: server.api })
-    assert.equal(session.commit(exposure(0.5)), true)
-    assert.equal(session.commit(exposure(0.5)), false)
-    await server.release()
-    assert.equal(server.sent.length, 1)
-})
-
-test("Undo and Redo show the Edits before and after the one shown, each saved as a change", async () => {
+test("Undo and Redo step through the changes held, and Done folds them into one step", async () => {
     const server = fakeServer()
     const session = createEditSession({ assetId: "a", api: server.api })
     assert.equal(session.snapshot().canUndo, false)
     session.commit(exposure(0.5))
-    await server.release()
     session.commit(exposure(1))
-    await server.release()
 
     assert.equal(session.undo(), true)
     assert.equal(session.snapshot().recipe.exposure, 0.5)
     assert.equal(session.snapshot().canRedo, true)
+    assert.equal(session.redo(), true)
+    assert.equal(session.snapshot().recipe.exposure, 1)
+    assert.deepEqual(sentSaves(server), [])
+
+    session.done()
     await server.release()
+    assert.deepEqual(sentSaves(server), [[0, 1]])
+    assert.equal(session.snapshot().canRedo, false)
+    // One Undo takes the whole Done back, held until the next Done
     assert.equal(session.undo(), true)
     assert.equal(session.snapshot().recipe.exposure, 0)
+    assert.equal(session.snapshot().pending, true)
     assert.equal(session.snapshot().canUndo, false)
-    assert.equal(session.undo(), false)
-    await server.release()
-
-    assert.equal(session.redo(), true)
-    await server.release()
-    assert.equal(session.snapshot().recipe.exposure, 0.5)
-    assert.equal(server.recipe.exposure, 0.5)
-    assert.deepEqual(sentSaves(server), [
-        [0, 0.5],
-        [1, 1],
-        [2, 0.5],
-        [3, 0],
-        [4, 0.5],
-    ])
+    assert.equal(server.inFlight, 0)
 
     // A change after an Undo drops what Redo had
     session.commit(exposure(2))
@@ -170,15 +225,59 @@ test("Undo and Redo show the Edits before and after the one shown, each saved as
     assert.equal(session.snapshot().canUndo, true)
 })
 
-test("An Undo behind a save still on its way is saved after it, and shown at once", async () => {
+test("Undo past the last Done is held, and its Done saves it as a change Undo takes back", async () => {
     const server = fakeServer()
     const session = createEditSession({ assetId: "a", api: server.api })
-    session.commit(exposure(0.5))
+    commitAndDone(session, exposure(0.5))
+    await server.release()
+
+    session.undo()
+    assert.equal(session.snapshot().recipe.exposure, 0)
+    session.done()
+    await server.release()
+    assert.deepEqual(sentSaves(server), [
+        [0, 0.5],
+        [1, 0],
+    ])
+    session.undo()
+    assert.equal(session.snapshot().recipe.exposure, 0.5)
+    assert.equal(session.snapshot().pending, true)
+})
+
+test("Cancel shows the Edit saved again, with Undo as it was at the last Done", async () => {
+    const server = fakeServer()
+    const session = createEditSession({ assetId: "a", api: server.api })
+    commitAndDone(session, exposure(0.5))
+    await server.release()
+
+    session.commit(exposure(1))
+    session.commit(exposure(2))
+    session.undo()
+    assert.equal(session.cancel(), true)
+    assert.equal(session.snapshot().recipe.exposure, 0.5)
+    assert.equal(session.snapshot().pending, false)
+    assert.equal(session.snapshot().canRedo, false)
+    assert.equal(session.snapshot().canUndo, true)
+    assert.equal(server.inFlight, 0)
+    // Undo is the Done's, back to the Edit before it
+    session.undo()
+    assert.equal(session.snapshot().recipe.exposure, 0)
+    // Nothing held after a Cancel of the Undo: nothing to cancel
+    session.cancel()
+    assert.equal(session.cancel(), false)
+})
+
+test("An Undo behind a save still on its way is held and shown at once, and saved after it on Done", async () => {
+    const server = fakeServer()
+    const session = createEditSession({ assetId: "a", api: server.api })
+    commitAndDone(session, exposure(0.5))
     session.undo()
     assert.equal(session.snapshot().recipe.exposure, 0)
     await server.release()
-    // The answer to the change does not put it back on screen: the Undo is waiting
+    // The answer to the Done does not put it back on screen: the Undo is held
     assert.equal(session.snapshot().recipe.exposure, 0)
+    assert.equal(session.snapshot().pending, true)
+    session.done()
     await server.release()
 
     assert.deepEqual(sentSaves(server), [
@@ -186,10 +285,9 @@ test("An Undo behind a save still on its way is saved after it, and shown at onc
         [1, 0],
     ])
     assert.equal(server.editVersion, 2)
-    assert.equal(session.snapshot().canRedo, true)
 })
 
-test("A conflict adopts the state it carries, drops the stale save, forgets Undo and Redo and is reported", async () => {
+test("A conflict adopts the state it carries, drops the stale save and the changes held, forgets Undo and Redo and is reported", async () => {
     const server = fakeServer()
     let conflicts = 0
     const session = createEditSession({
@@ -203,14 +301,16 @@ test("A conflict adopts the state it carries, drops the stale save, forgets Undo
     // Another tab saves meanwhile
     server.savedElsewhere(exposure(2))
 
-    session.commit(exposure(0.5))
-    session.commit(exposure(1))
+    commitAndDone(session, exposure(0.5))
+    commitAndDone(session, exposure(1))
+    session.commit(exposure(1.5))
     await server.release()
 
     assert.equal(conflicts, 1)
     assert.equal(server.inFlight, 0)
     assert.equal(session.snapshot().editVersion, 1)
     assert.equal(session.snapshot().recipe.exposure, 2)
+    assert.equal(session.snapshot().pending, false)
     assert.equal(session.snapshot().canUndo, false)
     // Nothing of this tab's was saved: the footer says the Edit shown is the one saved elsewhere
     assert.equal(session.snapshot().status, SaveStatus.conflict)
@@ -232,7 +332,7 @@ test("A failure reads the state again, forgets Undo and Redo, and is reported", 
         api,
         onFailure: () => failures++,
     })
-    session.commit(exposure(0.5))
+    commitAndDone(session, exposure(0.5))
     await new Promise((resolve) => setImmediate(resolve))
     // The state is read again
     assert.equal(server.sent.at(-1).kind, "load")
@@ -241,10 +341,11 @@ test("A failure reads the state again, forgets Undo and Redo, and is reported", 
     assert.equal(failures, 1)
     assert.equal(session.snapshot().status, SaveStatus.failed)
     assert.equal(session.snapshot().recipe.exposure, 0)
+    assert.equal(session.snapshot().pending, false)
     assert.equal(session.snapshot().canUndo, false)
 
     fail = false
-    session.commit(exposure(0.5))
+    commitAndDone(session, exposure(0.5))
     await server.release()
     assert.equal(session.snapshot().status, SaveStatus.saved)
 })
@@ -269,14 +370,14 @@ test("A conflict's state and the state read again after a failure are handed ove
 
     // Another tab saves: the save built on version 0 is a conflict, whose state is handed over
     server.savedElsewhere(exposure(2))
-    session.commit(exposure(0.5))
+    commitAndDone(session, exposure(0.5))
     await server.release()
     assert.deepEqual(adopted, [[1, 2]])
 
     // Another tab saves again, and this tab's next save fails: the state read again is handed over, the other tab's
     server.savedElsewhere(exposure(3))
     fail = true
-    session.commit(exposure(1))
+    commitAndDone(session, exposure(1))
     await new Promise((resolve) => setImmediate(resolve))
     await server.release()
     assert.deepEqual(adopted, [
@@ -290,6 +391,19 @@ test("A conflict's state and the state read again after a failure are handed ove
     session.load()
     await server.release()
     assert.deepEqual(adopted.at(-1), [3, 4])
+})
+
+test("A read keeps the changes held on screen, over the Edit it makes the one saved", async () => {
+    const server = fakeServer()
+    const session = createEditSession({ assetId: "a", api: server.api })
+    session.commit(exposure(0.5))
+    server.savedElsewhere(exposure(2))
+    session.load()
+    await server.release()
+    assert.equal(session.snapshot().recipe.exposure, 0.5)
+    assert.equal(session.snapshot().pending, true)
+    session.cancel()
+    assert.equal(session.snapshot().recipe.exposure, 2)
 })
 
 test("One Edit state is newer than another by its edit version, or by its render at the same one", () => {
@@ -321,16 +435,18 @@ test("Clearing Undo forgets the Edits of Undo and Redo and keeps the Edit shown"
     assert.equal(session.snapshot().recipe.exposure, 0.5)
 })
 
-test("A discard drops the save waiting, and saves the confirmed Edit again behind a save on its way", async () => {
+test("A discard drops the changes held and the save waiting, and saves the confirmed Edit again behind a save on its way", async () => {
     const server = fakeServer()
     const session = createEditSession({ assetId: "a", api: server.api })
-    session.commit(exposure(0.5))
+    commitAndDone(session, exposure(0.5))
     await server.release()
 
-    session.commit(exposure(1))
-    session.commit(exposure(1.5))
+    commitAndDone(session, exposure(1))
+    commitAndDone(session, exposure(1.5))
+    session.commit(exposure(2))
     session.discard()
     assert.equal(session.snapshot().recipe.exposure, 0.5)
+    assert.equal(session.snapshot().pending, false)
     assert.equal(session.snapshot().canUndo, false)
     await server.release()
     await server.release()
@@ -349,47 +465,12 @@ test("Settled resolves once no write is waiting or on its way", async () => {
     const server = fakeServer()
     const session = createEditSession({ assetId: "a", api: server.api })
     let settled = false
-    session.commit(exposure(0.5))
+    commitAndDone(session, exposure(0.5))
     session.settled().then(() => (settled = true))
     await new Promise((resolve) => setImmediate(resolve))
     assert.equal(settled, false)
     await server.release()
     assert.equal(settled, true)
-})
-
-test("A change left as the page goes is sent to outlive it, behind a save on its way on the version that save will answer", async () => {
-    const server = fakeServer()
-    const session = createEditSession({ assetId: "a", api: server.api })
-    session.commit(exposure(0.5))
-    // Behind the save on its way, which will answer edit version 1
-    assert.equal(session.saveOnHide(exposure(1)), true)
-    assert.deepEqual(
-        [server.kept[0].base, server.kept[0].recipe.exposure],
-        [1, 1],
-    )
-    await server.release()
-
-    // Nothing on its way: built on the edit version answered, and the Edit the server holds is not sent again
-    assert.equal(session.saveOnHide(exposure(0.5)), false)
-    assert.equal(session.saveOnHide(exposure(1.5)), true)
-    assert.deepEqual(
-        [server.kept[1].base, server.kept[1].recipe.exposure],
-        [1, 1.5],
-    )
-    // With no change waiting, nothing is left to send
-    assert.equal(session.saveOnHide(), false)
-})
-
-test("The save waiting behind the one on its way is what the page sends as it goes", async () => {
-    const server = fakeServer()
-    const session = createEditSession({ assetId: "a", api: server.api })
-    session.commit(exposure(0.5))
-    session.commit(exposure(1))
-    assert.equal(session.saveOnHide(), true)
-    assert.deepEqual(
-        [server.kept[0].base, server.kept[0].recipe.exposure],
-        [1, 1],
-    )
 })
 
 test("A failed read is reported as a read, and says nothing failed to save", async () => {

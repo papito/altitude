@@ -166,17 +166,12 @@ import altitude.core.util.ImageUtil
     /**
      * Setup:
      *
-     * A 4 × 2 upright original, and a 4 × 4 frame with Straighten 90 or a perspective.
+     * A 4 × 2 upright original, and a 4 × 4 frame with Straighten 90 or 7.5.
      *
      * Assertions:
      *
      * A quarter turn clockwise makes a 2 × 4 frame and takes (1, 0.5) to (1.5, 1); a flip mirrors in the turned frame. Straighten
-     * 90 takes a point right of the center to below it. A full horizontal perspective takes the middle of the right edge in to 1
-     * / 1.55 of the half width, and the inverse warp takes every warped point back.
-     *
-     * Edge cases:
-     *
-     * The inverse has no source where 1 − a·uₓ − b·u_y is 0.001 or less.
+     * 90 takes a point right of the center to below it, and the inverse warp takes every warped point back.
      */
     val quarter = identity.copy(rotate = 90)
     EditRenderer.frameSize(4, 2, quarter) shouldBe (2, 4)
@@ -188,17 +183,13 @@ import altitude.core.util.ImageUtil
     x should near(2, 1e-12)
     y should near(3, 1e-12)
 
-    val keystone = identity.copy(perspectiveH = 100, perspectiveV = -40, straighten = 7.5)
-    EditRenderer.warp(4, 2, 4, 4, identity.copy(perspectiveH = 100))._1 should near(2 + 2 / 1.55, 1e-12)
+    val turned = identity.copy(straighten = 7.5)
     for (px <- List(0.5, 1.7, 3.2); py <- List(0.3, 2.0, 3.9)) {
-      val (wx, wy) = EditRenderer.warp(px, py, 4, 4, keystone)
-      val (bx, by) = EditRenderer.unwarp(wx, wy, 4, 4, keystone).get
+      val (wx, wy) = EditRenderer.warp(px, py, 4, 4, turned)
+      val (bx, by) = EditRenderer.unwarp(wx, wy, 4, 4, turned)
       bx should near(px, 1e-9)
       by should near(py, 1e-9)
     }
-
-    // Far to the right, past where the perspective's plane meets the horizon
-    EditRenderer.unwarp(4 + 2 / 0.55, 2, 4, 4, identity.copy(perspectiveH = 100)) shouldBe None
   }
 
   test("The renderer meets the shared vectors, which agree with the spec where it is checked by hand") {
@@ -216,11 +207,11 @@ import altitude.core.util.ImageUtil
      * geometry recipe with whether each warped point shows the image, and the hash, grain, vignette and output sizes. The vectors
      * agree with the spec by hand: the identity's table entry i is i / 4095, a quarter turn takes (x, y) to (H₀ − y, x), the
      * outline of an unwarped frame is its corners, an unwarped point warped again is the point, a point shows the image exactly
-     * where its source exists and lies within the frame, and the hash of (0, 0) is 0.
+     * where its source lies within the frame, and the hash of (0, 0) is 0.
      *
      * Edge cases:
      *
-     * A point beyond the perspective's horizon has no source (null), and the narrowest crop of a small image is 1 × 1.
+     * The narrowest crop of a small image is 1 × 1.
      */
     val vectors = ujson.read(getClass.getResourceAsStream("/edit/vectors.json").readAllBytes())
     val tolerance = vectors("tolerance")
@@ -278,38 +269,28 @@ import altitude.core.util.ImageUtil
           val warp = EditRenderer.Warp(w, h, recipe)
           vector("unwarped").arr.foreach {
             p =>
-              val got = EditRenderer.unwarp(p("in")(0).num, p("in")(1).num, w, h, recipe)
-              p("out") match
-                case ujson.Null => got shouldBe None
-                case out => closePair("geometry")(got.get, out)
+              val (x, y) = EditRenderer.unwarp(p("in")(0).num, p("in")(1).num, w, h, recipe)
+              closePair("geometry")((x, y), p("out"))
               warp.covers(p("in")(0).num, p("in")(1).num) shouldBe p("covered").bool
-              // By hand: covered exactly where the source exists and lies within the frame
-              p("covered").bool shouldBe got.exists((x, y) => x >= 0 && x <= w && y >= 0 && y <= h)
+              // By hand: covered exactly where the source lies within the frame
+              p("covered").bool shouldBe (x >= 0 && x <= w && y >= 0 && y <= h)
           }
 
           // By hand
           if (recipe.rotate == 90 && !recipe.flipH && !recipe.flipV)
             vector("turned").arr.foreach(p => closePair("geometry")((h0 - p("in")(1).num, p("in")(0).num), p("out")))
-          if (recipe.straighten == 0 && recipe.perspectiveH == 0 && recipe.perspectiveV == 0)
+          if (recipe.straighten == 0)
             vector("outline").arr.map(c => (c(0).num, c(1).num)).toList shouldBe List(
               (0.0, 0.0),
               (1.0, 0.0),
               (1.0, 1.0),
               (0.0, 1.0))
           vector("warped").arr.foreach {
-            p =>
-              EditRenderer
-                .unwarp(p("out")(0).num, p("out")(1).num, w, h, recipe)
-                .foreach(back => closePair("geometry")(back, p("in")))
+            p => closePair("geometry")(EditRenderer.unwarp(p("out")(0).num, p("out")(1).num, w, h, recipe), p("in"))
           }
         }
     }
     vectors("geometry").arr.find(_("name").str.startsWith("narrowest")).get("edited") shouldBe ujson.Arr(1, 1)
-    vectors("geometry").arr
-      .find(_("name").str.startsWith("full keystone"))
-      .get("unwarped")
-      .arr
-      .exists(_("out").isNull) shouldBe true
 
     val effects = vectors("effects")
     effects("hash").arr.foreach(v => close("effects")(EditRenderer.hash(v("x").num.toInt, v("y").num.toInt), v("h")))
@@ -363,32 +344,26 @@ import altitude.core.util.ImageUtil
     List(source, output, croppedOutput).foreach(_.release())
   }
 
-  test("The composed warp samples the frame where the inverse warp says, and is transparent where it has no source") {
+  test("The composed warp samples the frame where the inverse warp says, and is transparent where that is outside it") {
 
     /**
      * Setup:
      *
-     * A 29 × 19 image of smooth gradients, with Straighten 7.3, horizontal perspective +60, vertical −60 and a crop, rendered at
-     * a long edge of 18 (a scale above a half, so nothing is shrunk before the warp).
+     * A 29 × 19 image of smooth gradients, with Straighten 17.3 and a crop, rendered at a long edge of 18 (a scale above a half,
+     * so nothing is shrunk before the warp).
      *
      * Assertions:
      *
      * Each output pixel's frame point, through the inverse warp, is the source: where that lies inside the frame, the pixel is
      * opaque and its color is the frame sampled bilinearly there, the edge pixels repeated beyond the last pixel centers, within
-     * 1/255; where it lies outside, or has no source, the pixel is transparent. The edge is hard: alpha is 0 or 255.
+     * 1/255; where it lies outside, the pixel is transparent. The edge is hard: alpha is 0 or 255.
      */
     val (width, height) = (29, 19)
     def color(x: Int, y: Int): (Int, Int, Int) = (10 + x * 7, 10 + y * 9, 40 + (x + y) * 4)
     val source = image(width, height)(color)
     val crop = EditCrop(0.05, 0.1, 0.8, 0.85)
     val recipe =
-      identity.copy(
-        straighten = 7.3,
-        perspectiveH = 60,
-        perspectiveV = -60,
-        crop = Some(crop),
-        aspect = "free",
-        cropFitted = false)
+      identity.copy(straighten = 17.3, crop = Some(crop), aspect = "free", cropFitted = false)
     val output = rendered(source, recipe, Some(18))
     (output.width, output.height) shouldBe (18, 13)
 
@@ -410,16 +385,14 @@ import altitude.core.util.ImageUtil
     for (j <- 0 until 13; i <- 0 until 18) withClue(s"[$i, $j]: ") {
       val (fx, fy) = (crop.x * width + (i + 0.5) / scaleX, crop.y * height + (j + 0.5) / scaleY)
       val got = pixel(output, i, j)
-      EditRenderer
-        .unwarp(fx, fy, width, height, recipe)
-        .filter((px, py) => px >= 0 && px <= width && py >= 0 && py <= height) match
-        case Some((px, py)) =>
-          inside += 1
-          got(3) shouldBe 255
-          got.take(3).zip(sample(px, py)).foreach((g, want) => g.toDouble should near(want, 1.0))
-        case None =>
-          outside += 1
-          got(3) shouldBe 0
+      val (px, py) = EditRenderer.unwarp(fx, fy, width, height, recipe)
+      if px >= 0 && px <= width && py >= 0 && py <= height then
+        inside += 1
+        got(3) shouldBe 255
+        got.take(3).zip(sample(px, py)).foreach((g, want) => g.toDouble should near(want, 1.0))
+      else
+        outside += 1
+        got(3) shouldBe 0
     }
     inside should be > 100
     outside should be > 5

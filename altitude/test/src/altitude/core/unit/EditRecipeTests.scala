@@ -16,7 +16,7 @@ import altitude.core.models.EditRecipe
     .read("""{
       "version": 1,
       "rotate": 0, "flipH": false, "flipV": false,
-      "straighten": 0, "perspectiveV": 0, "perspectiveH": 0,
+      "straighten": 0,
       "crop": null, "aspect": "original", "portrait": null, "keepInside": true, "cropFitted": true,
       "exposure": 0, "contrast": 0, "highlights": 0, "shadows": 0, "whites": 0, "blacks": 0, "gamma": 0,
       "curve": [[0, 0], [1, 1]],
@@ -80,8 +80,9 @@ import altitude.core.models.EditRecipe
      * Assertions:
      *
      * Each is refused with a `ValidationException` saying why: no key may be left out (defaults are not filled in), no key may be
-     * added, the version must be 1, and each value must have its type: a number for a slider, a boolean for a flip, one of the
-     * aspects for `aspect`, a boolean or null for `portrait`, an object or null for `crop`, an array for `curve`.
+     * added (`perspectiveV` and `perspectiveH` among them), the version must be 1, and each value must have its type: a number
+     * for a slider, a boolean for a flip, one of the aspects for `aspect`, a boolean or null for `portrait`, an object or null
+     * for `crop`, an array for `curve`.
      *
      * Edge cases:
      *
@@ -92,6 +93,8 @@ import altitude.core.models.EditRecipe
     refused(missing).message should include("exposure")
 
     refused(jsonWith("dehaze" -> 10)).message should include("dehaze")
+    refused(jsonWith("perspectiveV" -> 0)).message should include("perspectiveV")
+    refused(jsonWith("perspectiveH" -> 0)).message should include("perspectiveH")
     refused(jsonWith("version" -> 2)).message should include("version")
     refused(jsonWith("exposure" -> "0.5")).message should include("exposure")
     refused(jsonWith("flipH" -> 1)).message should include("flipH")
@@ -158,8 +161,8 @@ import altitude.core.models.EditRecipe
      *
      * Assertions:
      *
-     * The first two are the identity. Each of the others is not: a quarter turn, a flip, Straighten, perspective, a crop, a
-     * slider, a curve that is not the diagonal, and an Effects slider.
+     * The first two are the identity. Each of the others is not: a quarter turn, a flip, Straighten, a crop, a slider, a curve
+     * that is not the diagonal, and an Effects slider.
      */
     EditRecipe.Identity.isIdentity shouldBe true
     EditRecipe.Identity
@@ -170,7 +173,6 @@ import altitude.core.models.EditRecipe
       EditRecipe.Identity.copy(rotate = 90),
       EditRecipe.Identity.copy(flipV = true),
       EditRecipe.Identity.copy(straighten = 0.1),
-      EditRecipe.Identity.copy(perspectiveH = -3),
       EditRecipe.Identity.copy(crop = Some(EditCrop(0, 0, 1, 1))),
       EditRecipe.Identity.copy(exposure = 0.05),
       EditRecipe.Identity.copy(curve = List((0.0, 0.1), (1.0, 1.0))),

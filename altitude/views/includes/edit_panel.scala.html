@@ -3,10 +3,11 @@
 @* The Edit panel (CONTEXT.md), in Asset detail's fragment for a holder of Edit images (htmx/view_image_detail_modal): an
    `aside#editPanel` docked opposite the Detail panel, whose state is the `editPanel` Alpine component
    (js/alpine/components/edit-panel.js) over the coordinator js/edit/edit-panel.js, which keeps the Edit, its session and
-   the stage. The header holds Undo, Redo (the panel's session's), Before/after and Reset all; the body the Histogram of
+   the stage. Every change is held until Done or Cancel, on the stage's bar (includes/edit_stage_tools). The header holds
+   Undo, Redo (the panel's session's), Before/after and Reset all; the body the Histogram of
    the edited image (includes/histogram), a button switching the Clipping blink with the crushed and blown fractions in its
    corners, the four tabs (a dot on a section with changes) and the shown section, its heading with a reset; the footers
-   the save status with Revert to original, and the keys. A slider is the `.edit-slider` of core.css, rendered from the sliders of
+   the save status (while changes are held, a notice of how to save or cancel them) with Revert to original, and the keys. A slider is the `.edit-slider` of core.css, rendered from the sliders of
    js/edit/recipe.js. Docked top or bottom (includes/edit_panel.css), the section flows into columns, the Histogram sits
    at the left, the status row joins the header and the keys are left out.
 
@@ -14,14 +15,13 @@
    dialog over Asset detail: its message, and Keep editing, Discard and Save, which has the initial focus. *@
 
 @* A section's sliders, by the keys of its specs in js/edit/recipe.js (the component's `slidersOf`), each a label row (the
-   label, Straighten's Auto, the value's field, which Enter sets) over its range, which counts as one change on release;
-   a double-click on the label or the track resets it *@
+   label, the value's field, which Enter sets) over its range, which counts as one change on release; a double-click on
+   the label or the track resets it *@
 @sliders(keys: String) = {
 <template x-for="spec in slidersOf('@keys')" x-bind:key="spec.key">
     <div class="edit-slider" x-bind:class="sliderClass(spec.key)" x-bind:style="sliderStyle(spec.key)">
         <div class="edit-slider-head">
             <label x-bind:for="'editSlider-' + spec.key" x-on:dblclick="resetSlider(spec.key)" x-text="spec.label" title="Double-click to reset"></label>
-            <button type="button" class="edit-auto" x-show="hasAuto(spec.key)" x-on:click="autoStraighten()" x-bind:disabled="autoBusy" title="Level the image by its straight lines">Auto</button>
             <input type="number"
                    x-bind:min="spec.min"
                    x-bind:max="spec.max"
@@ -60,7 +60,7 @@
         <h2>Edit</h2>
         <button type="button" class="edit-tool" x-on:click="undo()" x-bind:disabled="!canUndo" aria-label="Undo" title="Undo (Ctrl+Z)"><i class="fas fa-undo" aria-hidden="true"></i></button>
         <button type="button" class="edit-tool" x-on:click="redo()" x-bind:disabled="!canRedo" aria-label="Redo" title="Redo (Ctrl+Shift+Z)"><i class="fas fa-redo" aria-hidden="true"></i></button>
-        <button type="button" class="edit-tool" x-on:click="toggleSplit()" x-bind:aria-pressed="splitOn" x-bind:disabled="!ready || cropToolOpen" aria-label="Before/after" title="Before/after"><i class="fas fa-columns" aria-hidden="true"></i></button>
+        <button type="button" class="edit-tool" x-on:click="toggleSplit()" x-bind:aria-pressed="splitOn" x-bind:disabled="!ready || cropToolOpen || levelOn" aria-label="Before/after" title="Before/after"><i class="fas fa-columns" aria-hidden="true"></i></button>
         <button type="button" class="edit-tool" x-on:click="resetAll()" x-bind:disabled="!ready || !anyChanged()" aria-label="Reset all" title="Reset all"><i class="fas fa-eraser" aria-hidden="true"></i></button>
     </header>
 
@@ -87,7 +87,8 @@
                 @sectionHead("cropRotate", "Crop & rotate")
                 <div class="edit-tools">
                     <button type="button" class="action-button small" x-on:click="toggleCropTool()" x-bind:aria-pressed="cropToolOpen" title="Crop (C)"><i class="fas fa-crop-alt" aria-hidden="true"></i><span>Crop</span></button>
-                    <button type="button" class="action-button small" x-on:click="toggleLevel()" x-bind:aria-pressed="levelOn" title="Draw a line along something level or plumb"><i class="fas fa-ruler-horizontal" aria-hidden="true"></i><span>Level</span></button>
+                    <button type="button" class="action-button small" x-on:click="toggleLevel()" x-bind:aria-pressed="levelOn" title="Draw a line along something level or plumb"><i class="fas fa-ruler-horizontal" aria-hidden="true"></i><span>Level (draw line)</span></button>
+                    <button type="button" class="action-button small" x-on:click="autoStraighten()" x-bind:disabled="autoBusy" title="Level the image by its straight lines"><i class="fas fa-magic" aria-hidden="true"></i><span>Auto-level</span></button>
                     <span class="edit-spacer"></span>
                     <button type="button" class="edit-tool" x-on:click="rotate(-1)" aria-label="Rotate left" title="Rotate left"><i class="fas fa-undo-alt" aria-hidden="true"></i></button>
                     <button type="button" class="edit-tool" x-on:click="rotate(1)" aria-label="Rotate right" title="Rotate right"><i class="fas fa-redo-alt" aria-hidden="true"></i></button>
@@ -105,8 +106,6 @@
                 </div>
                 <p class="edit-crop-size" x-text="cropSizeText()"></p>
                 @sliders("straighten")
-                <div class="edit-subhead"><span>Perspective</span></div>
-                @sliders("perspectiveV perspectiveH")
                 <label class="edit-check"><input type="checkbox" x-bind:checked="recipe.keepInside" x-on:change="setKeepInside($event.target.checked)"> Keep the crop inside the image</label>
             </section>
 
@@ -147,12 +146,12 @@
     </div>
 
     <footer class="edit-commit">
-        <span class="edit-status" x-bind:data-status="status" x-text="statusText()" role="status"></span>
+        <span class="edit-status" x-bind:hidden="held" x-bind:data-status="status" x-text="statusText()" role="status"></span>
+        <p class="notice edit-held" x-bind:hidden="!held" role="status"><i class="fas fa-info-circle" aria-hidden="true"></i><span>Not saved · Enter or Done saves, Esc cancels</span></p>
         <button type="button" class="action-button small" x-on:click="revert()" x-bind:disabled="!ready || !edited()">Revert to original</button>
     </footer>
     <footer class="panel-keys" aria-label="Keys">
         <p><span><kbd>E</kbd> Close</span><span><kbd>C</kbd> Crop</span><span><kbd>\</kbd> Original (hold)</span><span><kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo</span></p>
-        <p><span>Double-click a slider to reset it</span></p>
     </footer>
 </aside>
 <dialog id="editLeaveDialog" aria-labelledby="editLeaveTitle" aria-describedby="editLeaveMessage">

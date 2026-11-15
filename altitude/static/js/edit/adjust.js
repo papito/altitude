@@ -1,7 +1,7 @@
 /**
  * The Edit panel's changes to an Edit (`CONTEXT.md`), as pure functions of the Edit and the upright original's size:
- * what a control of Crop & rotate does to the crop (a quarter turn, a flip, an aspect lock, Straighten and the
- * perspective re-fitting or shrinking it, a section's reset), what the Level tool and a drag around the crop set
+ * what a control of Crop & rotate does to the crop (a quarter turn, a flip, an aspect lock, Straighten re-fitting or
+ * shrinking it, a section's reset), what the Level tool and a drag around the crop set
  * Straighten to, and the curve editor's rules on its points. DOM-free, so the tests run it under Node
  * (`scripts/test-js/edit-adjust.test.mjs`); `edit-panel.js` and the Crop tool (`crop-tool.js`) call it.
  *
@@ -14,8 +14,8 @@
  * geometry changes (`fitMaxCentered`); a crop the user set shrinks around its center only as much as it must
  * (`shrinkToValid`).
  *
- * **A quarter turn and a flip** turn or mirror the edited image as it is shown: the crop, the perspective and
- * Straighten are carried into the new frame, so nothing else of the picture moves. A mirror applied after the turn
+ * **A quarter turn and a flip** turn or mirror the edited image as it is shown: the crop and Straighten are carried
+ * into the new frame, so nothing else of the picture moves. A mirror applied after the turn
  * reverses the turn's sense, so with one flip on, a turn to the right steps `rotate` back by 90.
  */
 import {
@@ -112,14 +112,11 @@ export function refit(recipe, upright) {
 }
 
 /**
- * A slider set to `value`: Straighten and the perspective move the image's outline, so the crop is kept true to it
- * (`refit`)
+ * A slider set to `value`: Straighten moves the image's outline, so the crop is kept true to it (`refit`)
  */
 export function withSlider(recipe, key, value, upright) {
     const edit = normalize({ ...normalize(recipe), [key]: value })
-    return ["straighten", "perspectiveV", "perspectiveH"].includes(key)
-        ? refit(edit, upright)
-        : edit
+    return key === "straighten" ? refit(edit, upright) : edit
 }
 
 /**
@@ -192,7 +189,7 @@ export function swappedOrientation(recipe, upright) {
 
 /**
  * A quarter turn of the edited image as it is shown, right (`direction` 1, clockwise) or left (−1): the crop turns with
- * the frame, the perspective trades axes, Straighten stays, and a set lock orientation flips. One flip on reverses the
+ * the frame, Straighten stays, and a set lock orientation flips. One flip on reverses the
  * turn's sense in the frame (a mirror after a turn), so `rotate` steps the other way.
  */
 export function rotated(recipe, direction, upright) {
@@ -206,21 +203,9 @@ export function rotated(recipe, direction, upright) {
             : direction > 0
               ? { x: 1 - c.y - c.h, y: c.x, w: c.h, h: c.w }
               : { x: c.y, y: 1 - c.x - c.w, w: c.h, h: c.w }
-    // The keystone in the turned frame: a clockwise turn sends the vertical's to the horizontal's, reversed
-    const perspective =
-        direction > 0
-            ? {
-                  perspectiveH: -edit.perspectiveV,
-                  perspectiveV: edit.perspectiveH,
-              }
-            : {
-                  perspectiveH: edit.perspectiveV,
-                  perspectiveV: -edit.perspectiveH,
-              }
     return refit(
         {
             ...edit,
-            ...perspective,
             rotate: (edit.rotate + step) % 360,
             crop,
             portrait: edit.portrait === null ? null : !edit.portrait,
@@ -231,7 +216,7 @@ export function rotated(recipe, direction, upright) {
 
 /**
  * The edited image mirrored as it is shown, left to right (`axis` "h") or top to bottom ("v"): the crop mirrors with it,
- * and Straighten and that axis's keystone change sign
+ * and Straighten changes sign
  */
 export function flipped(recipe, axis, upright) {
     const edit = normalize(recipe)
@@ -240,12 +225,10 @@ export function flipped(recipe, axis, upright) {
         axis === "h"
             ? {
                   flipH: !edit.flipH,
-                  perspectiveH: -edit.perspectiveH,
                   crop: c && { ...c, x: 1 - c.x - c.w },
               }
             : {
                   flipV: !edit.flipV,
-                  perspectiveV: -edit.perspectiveV,
                   crop: c && { ...c, y: 1 - c.y - c.h },
               }
     return refit({ ...edit, ...changes, straighten: -edit.straighten }, upright)
@@ -268,7 +251,7 @@ export function withCrop(recipe, rect, upright) {
 
 /**
  * A section back to its defaults: its sliders at 0, Light's curve the diagonal, and for Crop & rotate no turn, flip,
- * Straighten, perspective or crop, the lock back to Original and fitted; whether the crop is kept inside stays, being
+ * Straighten or crop, the lock back to Original and fitted; whether the crop is kept inside stays, being
  * a preference rather than a change of the picture
  */
 export function resetSection(recipe, sectionId, upright) {

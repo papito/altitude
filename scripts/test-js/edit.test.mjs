@@ -176,16 +176,7 @@ for (const entry of vectors.geometry) {
                 frame.height,
                 recipe,
             )
-            if (point.out === null) {
-                assert.equal(source, null, `unwarp ${point.in}`)
-            } else {
-                near(
-                    source,
-                    point.out,
-                    tolerance.geometry,
-                    `unwarp ${point.in}`,
-                )
-            }
+            near(source, point.out, tolerance.geometry, `unwarp ${point.in}`)
             assert.equal(
                 warp.covers(...point.in),
                 point.covered,

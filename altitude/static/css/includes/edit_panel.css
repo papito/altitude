@@ -104,7 +104,12 @@
 #editPanel .edit-refusal {
     margin: 0;
     color: var(--theme-neutral-3);
-    font-size: var(--font-size-small);
+    font-size: var(--font-size-base);
+}
+
+/* The Histogram's crushed and blown fractions at the panel's size; Curation's strips keep includes/histogram.css's */
+#editPanel .histogram :is(.crushed, .blown) {
+    font-size: var(--font-size-base);
 }
 
 #editPanel .edit-sections {
@@ -123,7 +128,7 @@
     border-right: none;
     background: none;
     font: inherit;
-    font-size: var(--font-size-small);
+    font-size: var(--font-size-medium);
     letter-spacing: normal;
     text-transform: none;
     padding: var(--space-3) var(--space-4);
@@ -153,32 +158,27 @@
 
 #editPanel h3 {
     margin: 0;
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-medium);
 }
 
 #editPanel .edit-subhead {
     color: var(--theme-neutral-3);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-base);
     font-weight: var(--font-weight-semibold);
     text-transform: uppercase;
     letter-spacing: var(--letter-spacing-wide);
 }
 
-/* A section's or the curve's reset, and Straighten's Auto: links in the primary text color */
-#editPanel :is(.edit-reset, .edit-auto) {
+/* A section's or the curve's reset: a link in the primary text color */
+#editPanel .edit-reset {
     padding: 0;
     border: none;
     background: none;
     color: var(--theme-primary-text);
-    font-size: var(--font-size-small);
+    font-size: var(--font-size-base);
     text-transform: none;
     letter-spacing: normal;
     cursor: pointer;
-
-    &:disabled {
-        color: var(--theme-neutral-3);
-        cursor: default;
-    }
 }
 
 #editPanel .edit-tools {
@@ -186,6 +186,12 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2);
+}
+
+/* The panel's small buttons (Crop, Level, Auto-level, Revert to original) at the panel's size, larger than a small action
+   button elsewhere */
+#editPanel .action-button.small {
+    font-size: var(--font-size-base);
 }
 
 #editPanel .edit-tools .action-button[aria-pressed="true"] {
@@ -203,21 +209,21 @@
 
 #editPanel .edit-aspects button {
     padding: var(--space-2) var(--space-4);
-    font-size: var(--font-size-small);
+    font-size: var(--font-size-base);
 }
 
 #editPanel .edit-crop-size {
     margin: 0;
     color: var(--theme-neutral-3);
     font-family: var(--font-nav);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-base);
 }
 
 #editPanel .edit-check {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    font-size: var(--font-size-small);
+    font-size: var(--font-size-base);
     cursor: pointer;
 }
 
@@ -241,7 +247,7 @@
 #editPanel .edit-hint {
     margin: 0;
     color: var(--theme-neutral-3);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-base);
     text-align: center;
 }
 
@@ -254,13 +260,33 @@
     border-top: var(--border-hairline) var(--panel-border-color);
 }
 
-#editPanel .edit-status {
+#editPanel :is(.edit-status, .edit-held) {
     margin-right: auto;
+}
+
+#editPanel .edit-status {
     color: var(--theme-neutral-3);
-    font-size: var(--font-size-small);
+    font-size: var(--font-size-base);
 
     &[data-status="failed"] {
         color: var(--error-color);
+    }
+}
+
+/* While changes are held: a notice, its info icon in the info color beside its words, as the Triage summary's. It and the
+   status swap by `hidden` rather than `x-show`, whose hide waits for a frame, which the redraw after Cancel holds up */
+#editPanel .edit-held {
+    display: flex;
+    align-items: baseline;
+    column-gap: var(--space-3);
+    font-size: var(--font-size-small);
+
+    &[hidden] {
+        display: none;
+    }
+
+    .fa-info-circle {
+        color: var(--info-color);
     }
 }
 
