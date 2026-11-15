@@ -224,13 +224,7 @@ final class ModelDownloader(
 
     try missing.foreach(download(_))
     catch {
-      case e @ (_: IOException | _: ModelFilesException) =>
-        // An I/O error's message alone may be empty (a refused connection), so it is named with its class
-        val reason = e match {
-          case _: ModelFilesException => e.getMessage
-          case _ => e.toString
-        }
-        throw ModelFilesException(failure(reason, missing.filterNot(inPlace)))
+      case e: ModelFilesException => throw ModelFilesException(failure(e.getMessage, missing.filterNot(inPlace)), e.cause)
     }
 
   private def inPlace(spec: ModelFileSpec): Boolean =
@@ -254,13 +248,18 @@ final class ModelDownloader(
     val files = missing.map(spec => s"  ${spec.name} (${spec.size} bytes, SHA-256 ${spec.sha256}): ${spec.url}")
     (s"The model files could not be put in place: $reason. Download them by hand into $directory:" +: files).mkString("\n")
 
-  /** One file, tried once and then again after each of the retry delays, each try resuming what the one before it wrote */
+  /**
+   * One file, tried once and then again after each of the retry delays, each try resuming what the one before it wrote. An I/O
+   * error still failing it after the last retry is a `ModelFilesException`, with the I/O error as its cause.
+   */
   private def download(spec: ModelFileSpec, attempt: Int = 0): Unit =
     try transfer(spec)
     catch {
-      case e: IOException if attempt < retryDelays.size =>
+      case e: IOException =>
+        val reason = s"${ModelDownloader.describe(e)}, downloading ${spec.name} from ${spec.url.getHost}"
+        if attempt == retryDelays.size then throw ModelFilesException(reason, Some(e))
         val delay = retryDelays(attempt)
-        logger.warn(s"Downloading ${spec.name} failed ($e): retry ${attempt + 1} of ${retryDelays.size} in ${delay.toSeconds} s")
+        logger.warn(s"$reason: retry ${attempt + 1} of ${retryDelays.size} in ${delay.toSeconds} s")
         sleep(delay)
         download(spec, attempt + 1)
     }
@@ -355,8 +354,8 @@ final class ModelDownloader(
           progress.add(read)
           read = body.read(chunk)
     catch {
-      // The read failed because the watchdog closed the stream: the stall is the cause, not the closed stream
-      case e: IOException if watchdog.fired => throw IOException(s"No byte of ${spec.name} came for $stallTimeout", e)
+      // The read failed because the watchdog closed the stream: the stall is the cause, not the closed stream, which is left out
+      case _: IOException if watchdog.fired => throw IOException(s"No byte of ${spec.name} came for $stallTimeout")
     } finally
       watchdog.cancel()
       out.close()
@@ -401,6 +400,17 @@ object ModelDownloader:
 
   /** How long a request waits for the answer's headers; the body, which may take minutes, has a watchdog instead (`Watchdog`) */
   private val HEADERS_TIMEOUT: Duration = Duration.ofMinutes(1)
+
+  /**
+   * An error as a reason: itself and the root of its cause chain, each by its class and its message. The JDK's client reports a
+   * refused connection or a name that does not resolve as a `ConnectException` of no message, what went wrong only in the root it
+   * wraps (a `ClosedChannelException`, an `UnresolvedAddressException`), so the error alone would say nothing.
+   */
+  private def describe(e: Throwable): String =
+    def named(t: Throwable) =
+      Option(t.getMessage).filter(_.nonEmpty).fold(t.getClass.getSimpleName)(m => s"${t.getClass.getSimpleName}: $m")
+    val root = Iterator.iterate(e)(_.getCause).takeWhile(_ != null).toSeq.last
+    if root eq e then named(e) else s"${named(e)} (${named(root)})"
 
   /**
    * The one thread every download's watchdog runs its checks on. A daemon, so it never keeps the process up, and a check that is

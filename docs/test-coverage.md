@@ -682,6 +682,7 @@ Sources: [ModelFiles](../altitude/src/altitude/core/util/ModelFiles.scala) (`Mod
 - ✅ Retries: a connection dropped mid-file is retried after 2 seconds and resumes where it stopped; a 503 is retried 2, 4 and 8 seconds apart and then served; a file still failing after the third retry fails the ensure with the last error.
 - ✅ The stall watchdog: a body that stops arriving with its connection held open is closed after the stall timeout, retried and resumed, and the watchdog's thread is a daemon, one for every download.
 - ✅ The failure message: a 404, unretried, fails the ensure with the files missing (names, URLs, sizes, SHA-256) and the directory to put them in, the files already in place left out.
+- ✅ A refused connection, after its retries, fails with the I/O error and the root of its cause chain by class, and the host asked, the I/O error kept as the exception's cause.
 - ✅ Two threads of one JVM ensuring the same files at once download each file once, the one that waited finding them in place.
 - ✅ Too little free space for the bytes missing, a `.part`'s bytes not counted again, fails naming the space needed and free before any request; exactly enough downloads.
 - ✅ The directory: an absolute `models.dir` as it is, a relative one under the application's root path, an empty one `$XDG_CACHE_HOME/altitude/models` (an empty or relative `XDG_CACHE_HOME` ignored), else `~/.cache/altitude/models`; the set's files are in the directory named by its tag, `v1`.

@@ -594,6 +594,38 @@ import altitude.core.util.Sha256
     Files.exists(fileOf(spec)) shouldBe false
   }
 
+  test("A refused connection names its root cause and the host, and keeps it as the cause") {
+
+    /**
+     * Setup:
+     *
+     * A file whose URL is a port on 127.0.0.1 with nothing listening on it.
+     *
+     * Assertions:
+     *
+     * After its three retries the ensure fails with a message that names the I/O error, the root of its cause chain and the host
+     * asked, and the exception carries the I/O error as its cause.
+     *
+     * Edge cases:
+     *
+     * The JDK's client reports a refused connection as a `ConnectException` with no message of its own, what went wrong only in
+     * the exception at the root of its chain, so the error alone would say nothing.
+     */
+    val port =
+      val socket = java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))
+      try socket.getLocalPort
+      finally socket.close()
+    val spec = ModelFileSpec("model.onnx", URI.create(s"http://127.0.0.1:$port/model.onnx"), 1000, "ab" * 32)
+
+    val error = intercept[ModelFilesException](ensure(spec))
+
+    error.getCause shouldBe a[java.net.ConnectException]
+    val root = Iterator.iterate(error.getCause)(_.getCause).takeWhile(_ != null).toSeq.last
+    root should not be theSameInstanceAs(error.getCause)
+    error.getMessage should include(s"ConnectException (${root.getClass.getSimpleName}), downloading model.onnx from 127.0.0.1")
+    slept.asScala.toList shouldEqual List(2.seconds, 4.seconds, 8.seconds)
+  }
+
   test("Two threads ensuring the same files at once download each file once") {
 
     /**
