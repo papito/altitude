@@ -38,6 +38,11 @@
     gap: var(--space-7);
 }
 
+/* The "Search in" row, the form's first: the toggle group across the form, its three segments of equal width */
+.search-panel .search-in button {
+    flex: 1;
+}
+
 /* Two equal halves while both ranges fit them. A range wider than its half, one across two years, takes the room it
    needs from the other field, and when the two do not fit one row the second goes under the first */
 .search-panel .dates {

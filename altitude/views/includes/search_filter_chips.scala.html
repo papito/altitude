@@ -3,7 +3,7 @@
 @import altitude.core.util.DateRange
 @import altitude.core.util.PeopleMatch
 
-@(filters: SearchFilters, foundNothing: Boolean = false)
+@(filters: SearchFilters, foundNothing: Boolean = false, inTriage: Boolean = false)
 
 @* The filters of a filtered search under its results title (includes/search_results, views/AGENTS.md **Results title**), a
    chip each (includes/search_chip) in the order of the advanced search panel's fields: the description (`Describe: “woman in
@@ -20,7 +20,8 @@
 
    `foundNothing` is whether the search has no result. A search with a description then says so after Edit, the way to another
    description or to fewer filters: that nothing within these filters looks like it when another filter has a chip
-   (`SearchFilters.narrowsDescription`), and that nothing in this Library does when the description stands alone. *@
+   (`SearchFilters.narrowsDescription`), and that nothing in this Library does when the description stands alone, or
+   nothing in Triage when the search is the Triage view's (`inTriage`). *@
 
 @literal(param: String) = @{ "data-app-filter-" + param.replaceAll("([A-Z])", "-$1").toLowerCase }
 
@@ -66,6 +67,6 @@
     </ul>
     <button type="button" class="action-button small" aria-label="Edit filters" title="Edit the filters in the advanced search panel" data-app-edit-filters><i class="fas fa-sliders-h" aria-hidden="true"></i><span>Edit</span></button>
     @if(foundNothing && filters.description.isDefined) {
-    <span class="empty">@if(filters.narrowsDescription) {Nothing within these filters looks like that.} else {Nothing in this Library looks like that.}</span>
+    <span class="empty">@if(filters.narrowsDescription) {Nothing within these filters looks like that.} else if (inTriage) {Nothing in Triage looks like that.} else {Nothing in this Library looks like that.}</span>
     }
 </div>

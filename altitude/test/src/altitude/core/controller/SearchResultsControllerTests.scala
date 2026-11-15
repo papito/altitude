@@ -1436,7 +1436,8 @@ import altitude.core.util.Util
      *
      * Edge cases:
      *
-     * The root folder is the whole repository and renders no title block.
+     * The root folder is the whole repository and renders no title block. In the Triage view the Search text's title says "in
+     * Triage", the assets it searches there.
      */
     testContext.persistRepository()
     val repoId = testContext.repository.persistedId
@@ -1484,6 +1485,11 @@ import altitude.core.util.Util
         textPage should include("fa-search")
         textPage should include("""<span class="query">beach</span>""")
         textPage should include("""<div class="subtitle">in this library</div>""")
+
+        val triageText = Map(Api.Field.Search.VIEW -> Const.Search.View.TRIAGE, Api.Field.Search.QUERY_TEXT -> "beach")
+        val triageTextPage = htmlSearch(host, repoId, triageText).text()
+        triageTextPage should include("""<span class="query">beach</span>""")
+        triageTextPage should include("""<div class="subtitle">in Triage</div>""")
     }
   }
 
@@ -2077,6 +2083,7 @@ import altitude.core.util.Util
   /** What an empty described search says beside Edit: within other filters, and alone */
   private val nothingWithinFilters = "Nothing within these filters looks like that."
   private val nothingInLibrary = "Nothing in this Library looks like that."
+  private val nothingInTriage = "Nothing in Triage looks like that."
 
   /** The title of a filtered search, which opens its block */
   private val filteredTitle = "Search results"
@@ -2418,6 +2425,101 @@ import altitude.core.util.Util
         cellIds(withTriaged.text()) shouldBe
           (nearest.head :: inTriage :: nearest.tail).map(_.persistedId)
         withTriaged.headers("hx-replace-url").head should include("triaged=true")
+    }
+  }
+
+  test("A description in the Triage view shows the triaged images most like it, and says when Triage has none") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with three triaged assets whose Scene embeddings are at cosines of 0.8, 0.4 and 0.2 to the
+     * embedding of "a cactus", the middle one named beach.jpg; a triaged one at 0.01, under the default Describe match threshold;
+     * a sorted one at 0.9; and a triaged one at 0.95 that is recycled. The description is searched in the Triage view: alone, one
+     * to a page and beside the Search text "beach"; and, before the three are there, alone and beside "beach".
+     *
+     * Assertions:
+     *
+     * Alone, the results are the three triaged assets in the order of their cosines, with the total of 3, titled "Search results"
+     * over the description's chip with Edit, in the Triage view, and the replaced URL carries the view and the description and no
+     * sort. The toolbar offers what the search takes: the Sort menu is disabled and holds "Similarity", the Group menu is
+     * disabled, and the layout toggle has no Map segment. One to a page, the first page's cursor continues to the second asset.
+     * Beside "beach" the one triaged asset of that name is shown, under the chips of both.
+     *
+     * Edge cases:
+     *
+     * The sorted asset, though nearer than any triaged one, the one under the threshold and the recycled one are in no page.
+     * While no triaged image looks like the description, the title says that nothing in Triage does when the description stands
+     * alone, and that nothing within these filters does beside the Search text.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val description = "a cactus"
+        val triage = Map(Api.Field.Search.VIEW -> Const.Search.View.TRIAGE)
+        lookingLike(description, 0.01, seed = 4, isTriaged = true)
+        lookingLike(description, 0.9, seed = 5)
+        val recycled = lookingLike(description, 0.95, seed = 6, isTriaged = true)
+        testApp.service.library.recycleAssets(Set(recycled.persistedId))
+
+        val nothing = htmlSearch(host, repoId, triage + ("describe" -> description)).text()
+        nothing should include("""data-results-total="0"""")
+        cellIds(nothing) shouldBe empty
+        ordered(nothing, editFilters, nothingInTriage)
+        (nothing should not).include(nothingInLibrary)
+        (nothing should not).include(nothingWithinFilters)
+
+        val nothingWithin =
+          htmlSearch(host, repoId, triage ++ Map("describe" -> description, Api.Field.Search.QUERY_TEXT -> "beach")).text()
+        ordered(nothingWithin, editFilters, nothingWithinFilters)
+        (nothingWithin should not).include(nothingInTriage)
+
+        val nearest = lookingLike(description, 0.8, seed = 1, isTriaged = true)
+        val beach = testContext.insertAsset(
+          testContext
+            .makeAsset(filename = "beach.jpg", isTriaged = true)
+            .copy(sceneEmbeddings = SceneEmbeddings(siglip2 = Some(TestContext.atCosine(embeddingOf(description), 0.4, 2)))))
+        val farthest = lookingLike(description, 0.2, seed = 3, isTriaged = true)
+
+        val described = htmlSearch(host, repoId, triage + ("describe" -> description))
+        described.statusCode shouldBe 200
+        val page = described.text()
+        cellIds(page) shouldBe List(nearest, beach, farthest).map(_.persistedId)
+        page should include("""data-results-total="3"""")
+        page should include(s"""data-results-view="${Const.Search.View.TRIAGE}"""")
+        page should include(filteredTitle)
+        page should include(editFilters)
+        filterChipsIn(page) shouldBe List(describeChip(description))
+        (page should not).include("looks like that")
+        menuHost(page, "sortMenuHost") should include(menuDisabled)
+        page should include(similarityOption)
+        menuHost(page, "groupMenuHost") should include(menuDisabled)
+        (page should not).include(mapSegment)
+        val url = described.headers("hx-replace-url").head
+        url should include(s"view=${Const.Search.View.TRIAGE}")
+        url should include("describe=a+cactus")
+        (url should not).include("sort=")
+
+        val firstPage = htmlSearch(host, repoId, triage ++ Map("describe" -> description, "rpp" -> "1")).text()
+        cellIds(firstPage) shouldBe List(nearest.persistedId)
+        val continued = htmlSearch(
+          host,
+          repoId,
+          triage ++ Map(
+            "describe" -> description,
+            "rpp" -> "1",
+            Api.Field.Search.AFTER -> cursorOf(firstPage).head,
+            Api.Field.Search.IS_CONTINUOUS_SCROLL -> "true")
+        )
+        cellIds(continued.text()) shouldBe List(beach.persistedId)
+
+        val beside = triage ++ Map("describe" -> description, Api.Field.Search.QUERY_TEXT -> "beach")
+        val narrowed = htmlSearch(host, repoId, beside).text()
+        cellIds(narrowed) shouldBe List(beach.persistedId)
+        filterChipsIn(narrowed) shouldBe List(describeChip(description), FilterChip(Map("q" -> "beach"), "beach"))
     }
   }
 
@@ -2783,8 +2885,8 @@ import altitude.core.util.Util
      *
      * A logged-in user's repository with the folder Trips, and requests with a description that is empty, blank and of 301
      * characters; a description beside an album, a Triage subset, a map area, a sort, a grouping, a group direction and the map
-     * layout; a description in the trash and in the Triage view; and a description beside a filter that is refused on its own:
-     * eleven people, a date that is no day, an unknown people match.
+     * layout; a description in the trash; and a description beside a filter that is refused on its own: eleven people, a date
+     * that is no day, an unknown people match.
      *
      * Assertions:
      *
@@ -2821,7 +2923,6 @@ import altitude.core.util.Util
           Map("layout" -> Const.Search.Layout.MAP) -> s"$takesNo layout=map",
           Map("folderId" -> folder.persistedId, "albumId" -> "best", "sort" -> "filename0") -> s"$takesNo albumId, sort",
           Map("view" -> Const.Search.View.TRASHBIN) -> "A description does not search the trash",
-          Map("view" -> Const.Search.View.TRIAGE) -> "A description does not search the triage view",
           Map("personId" -> elevenPeople) -> "A search names at most 10 people",
           Map("takenFrom" -> "june") -> "takenFrom must be a date, as 2024-06-01",
           Map("personId" -> "alice,bob", "peopleMatch" -> "some") -> "Unknown peopleMatch value",

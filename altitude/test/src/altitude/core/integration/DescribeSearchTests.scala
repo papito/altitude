@@ -45,11 +45,13 @@ object DescribeSearchTests {
   private val CACTUS = "images/cactus.jpg"
 
   /**
-   * The filters a description is searched within, in the repository view: outside the trash and, unless `triaged`, outside
-   * triage. With none set, the description is searched alone.
+   * The filters a description is searched within: in the repository view, outside the trash and, unless `triaged`, outside
+   * triage; or, with `triageView`, in the Triage view, among the triaged assets alone. With none set, the description is searched
+   * alone.
    */
   private case class Filters(
       triaged: Boolean = false,
+      triageView: Boolean = false,
       text: Option[String] = None,
       folderIds: Set[String] = Set(),
       personIds: Set[String] = Set(),
@@ -67,8 +69,11 @@ object DescribeSearchTests {
         pageSize: Int = 50,
         exactLimit: Int = Const.Search.DESCRIBE_EXACT_LIMIT): SearchQuery =
       new SearchQuery(
-        params = Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false) ++
-          Option.unless(triaged)(FieldConst.Asset.IS_TRIAGED -> false),
+        params =
+          if (triageView) SearchQuery.TRIAGE_VIEW
+          else
+            Map[String, Any](FieldConst.Asset.IS_RECYCLED -> false) ++ Option.unless(triaged)(
+              FieldConst.Asset.IS_TRIAGED -> false),
         text = text,
         folderIds = folderIds,
         personIds = personIds,
@@ -322,6 +327,54 @@ object DescribeSearchTests {
       withTriage.total shouldBe Some(2)
 
       ids(describe("a cactus", Filters(triaged = true))).toSet shouldBe Set(kept.persistedId, inTriage.persistedId)
+    }
+  }
+
+  test("A Describe search of the Triage view ranks the triaged assets alone, within its filters and page by page") {
+
+    /**
+     * Setup:
+     *
+     * A repository with four triaged assets placed at cosines of 0.8, 0.6, 0.4 and 0.2 to "a cactus", the second and the fourth
+     * named beach; a triaged asset with no Scene embedding; a sorted asset at 0.9, named beach too; and a triaged one at 0.95
+     * that is recycled. The Describe match threshold is one every image clears.
+     *
+     * Assertions:
+     *
+     * In the Triage view "a cactus" finds the four triaged assets, nearest first, with the total of 4. Within the Search text
+     * "beach" it finds the two triaged assets of that name, in the same order. Two to a page, the pages concatenate to the whole
+     * list. Ranked through PostgreSQL's vector index, under an exact limit of 1, the list and the total are the same.
+     *
+     * Edge cases:
+     *
+     * The sorted asset, though nearest of all and matched by the Search text, the recycled one and the one with no embedding are
+     * never found. The repository view finds the sorted asset alone, and with the triaged assets asked for, the five.
+     */
+    val description = "a cactus"
+    val inTriage = List(0.8 -> None, 0.6 -> Some("beach one.jpg"), 0.4 -> None, 0.2 -> Some("beach two.jpg")).zipWithIndex.map {
+      case ((cosine, filename), seed) => placed(description, cosine, seed, filename = filename, isTriaged = true)
+    }
+    testContext.insertAsset(testContext.makeAsset(isTriaged = true))
+    val sortedPhoto = placed(description, 0.9, seed = 10, filename = Some("beach three.jpg"))
+    val recycled = placed(description, 0.95, seed = 11, isTriaged = true)
+    testApp.service.library.recycleAssets(Set(recycled.id))
+    val triageView = Filters(triageView = true)
+
+    withSetting(Settings.SEARCH_DESCRIBE_MIN_PROBABILITY, EVERY_IMAGE) {
+      val found = describe(description, triageView)
+      ids(found) shouldBe inTriage.map(_.id)
+      found.total shouldBe Some(4)
+
+      ids(describe(description, triageView.copy(text = Some("beach")))) shouldBe List(inTriage(1).id, inTriage(3).id)
+
+      pages(description, pageSize = 2, triageView).flatMap(ids) shouldBe inTriage.map(_.id)
+
+      val byIndex = describe(description, triageView, exactLimit = 1)
+      ids(byIndex) shouldBe inTriage.map(_.id)
+      byIndex.total shouldBe Some(4)
+
+      ids(describe(description)) shouldBe List(sortedPhoto.id)
+      ids(describe(description, Filters(triaged = true))) shouldBe sortedPhoto.id :: inTriage.map(_.id)
     }
   }
 

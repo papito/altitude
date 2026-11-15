@@ -21,7 +21,8 @@
    then the folder; empty for the root), `album`, `location` (with its category's name) and `subset` (a Triage subset)
    are the scope the results title names (includes/results_title); `text` is its title when none of them is set. `filters` are
    a filtered search's, which the title names in their place, a chip each (includes/search_filter_chips), the description's
-   first. A search with a description is a filtered one, and its filters say so (`isDescribed`): `sort` is then the similarity
+   first. `view` is the view searched: in the Triage view the Search text's title and a description's empty line name Triage, the
+   assets searched there. A search with a description is a filtered one, and its filters say so (`isDescribed`): `sort` is then the similarity
    sort, its one order on the flat grid, so the toolbar offers nothing the server refuses beside a description: the Sort menu
    is disabled and shows "Similarity", the Group menu is disabled, and the layout toggle has no Map segment. An empty result of
    a description is said in the title, after Edit. *@
@@ -57,7 +58,7 @@
    path's breadcrumb, each ancestor a search trigger for that folder. A filtered search, which the advanced search panel
    combines, is "Search results" over its filters, under the panel's sliders icon. *@
 @if(filters.isDefined) {
-@includes.html.results_title("fa-sliders-h", filters = Some(includes.html.search_filter_chips(filters.get, foundNothing = total == 0))) {
+@includes.html.results_title("fa-sliders-h", filters = Some(includes.html.search_filter_chips(filters.get, foundNothing = total == 0, inTriage = view == Const.Search.View.TRIAGE))) {
 <span class="name">Search results</span>
 }
 } else if (person != null) {
@@ -84,7 +85,7 @@
 <span class="name">No Location</span>
 }
 } else if (text.isDefined) {
-@includes.html.results_title("fa-search", subtitle = Some("in this library")) {
+@includes.html.results_title("fa-search", subtitle = Some(if (view == Const.Search.View.TRIAGE) "in Triage" else "in this library")) {
 <span class="query">@{text.get}</span>
 }
 }

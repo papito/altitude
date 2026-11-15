@@ -113,21 +113,13 @@ test("the filter is the repository view's: Triage and the Trash are seeded none 
     }
 })
 
-test("a search that leaves Triage for Browse is sent without the filter, which Browse then seeds", () => {
+test("a search that leaves the Trash for Browse is sent without the filter, which Browse then seeds", () => {
     remembered.set(KEY, "false")
 
-    const leaving = applySearchParamChanges(seedMember("?view=triage"), {
+    const leaving = applySearchParamChanges(seedMember("?view=trashbin"), {
         q: "beach",
     })
     assert.equal(serializeSearchParams(leaving), "view=repository&q=beach")
-
-    const fromPanel = applySearchFilters(seedMember("?view=triage"), {
-        describe: "a cactus",
-    })
-    assert.equal(
-        serializeSearchParams(fromPanel),
-        "view=repository&describe=a+cactus",
-    )
 
     assert.equal(
         seedMember(`?${serializeSearchParams(leaving)}`).triaged,
@@ -135,13 +127,22 @@ test("a search that leaves Triage for Browse is sent without the filter, which B
     )
 })
 
-test("a URL that a description brings back to Browse gets the remembered choice", () => {
+test("a search typed or described in Triage stays there, and holds no filter", () => {
     remembered.set(KEY, "false")
 
-    const params = seedMember("?view=triage&describe=a+cactus")
+    const typed = applySearchParamChanges(seedMember("?view=triage"), {
+        q: "beach",
+    })
+    assert.equal(serializeSearchParams(typed), "view=triage&q=beach")
 
-    assert.equal(params.view, "repository")
-    assert.equal(params.triaged, "false")
+    const described = applySearchFilters(seedMember("?view=triage"), {
+        describe: "a cactus",
+    })
+    assert.equal(
+        serializeSearchParams(described),
+        "view=triage&describe=a+cactus",
+    )
+    assert.equal(seedMember("?view=triage&describe=a+cactus").triaged, null)
 })
 
 test("flipping the switch is remembered, and the next page load opens with it", () => {
@@ -162,13 +163,15 @@ test("flipping the switch is remembered, and the next page load opens with it", 
 test("a search that does not flip the switch remembers nothing", () => {
     const store = memberStore("?triaged=false")
 
-    store.merge({ folderId: "trips" })
-    store.merge({ q: "beach" })
     store.merge({ sort: "filename0", layout: "map" })
     store.replaceFilters({ personId: "ann,bob", takenFrom: "2024-06-01" })
     store.replaceId("personId", "ann", "cid")
-
     assert.equal(store.triaged, "false")
+
+    store.merge({ folderId: "trips" })
+    store.merge({ q: "beach" })
+    store.replaceFilters({ q: "beach", view: "repository", triaged: "false" })
+
     assert.equal(remembered.has(KEY), false)
 })
 

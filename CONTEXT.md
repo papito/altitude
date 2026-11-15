@@ -200,9 +200,11 @@ _Avoid_: Header, Banner, Scope bar.
 **Search text**:
 What the user types into the nav's quick search input, or the Advanced search's
 field for it, which holds the same text: Search terms, optionally joined by
-`OR`, excluded with a leading `-`, or quoted into a phrase. It searches the
-whole Library outside the trash, or as much of it as the other Search filters
-of an Advanced search leave. The Advanced search labels its field Keywords, and
+`OR`, excluded with a leading `-`, or quoted into a phrase. Typed into the
+quick search it searches the view it is typed in: Browse, with the triaged
+assets while they are shown, or Triage, the triaged assets alone; never the
+trash. In an Advanced search it searches what Search in picks, as much of it
+as the other Search filters leave. The Advanced search labels its field Keywords, and
 the Search text's chip in a Filtered search's Results title names its remove
 control with that word; it is a label of those two and no term: the term is
 Search text.
@@ -210,11 +212,24 @@ _Avoid_: Query, Search string in user-facing text.
 
 **Advanced search**:
 The panel under the nav's quick search that combines Search filters into one
-search, and the search it runs. Its first field is Describe, which takes a
-Description; the Search text's field and the other Search filters follow. It
-searches the whole Library outside the trash, narrowed by every filter at
-once. A folder's Search here opens it with that folder chosen.
+search, and the search it runs. It opens with Search in, the assets it covers.
+Its first field is Describe, which takes a Description; the Search text's
+field and the other Search filters follow. It searches those assets, never the
+trash, narrowed by every filter at once. A folder's Search here opens it with
+that folder chosen.
 _Avoid_: Filter panel, Search builder, Query builder in user-facing text.
+
+**Search in**:
+The first row of the Advanced search, which picks the assets the search
+covers: Library, the sorted assets; Triage, the triaged ones; or All, both. It
+opens on what the view shows: in Browse on All while triaged items are shown
+and on Library while they are not, in Triage on Triage. A pick lasts for the
+search it is made for and is not remembered. The results of Triage are shown
+in Triage, and the others in Browse. While Triage is picked the panel has no
+folder filter, since a folder holds no triaged asset. A Guest, who sees no
+triaged asset, has no such row. Library is a label of this row alone: the
+term Library stays the whole of it, Triage and Trash included.
+_Avoid_: Scope, Search scope, Mode.
 
 **Search filter**:
 One thing an Advanced search narrows by: a Description, the Search text, one
@@ -244,9 +259,9 @@ alike first, among the assets its other Search filters match. The filters
 decide which assets are in it and nothing of their order, the Search text
 included. It ends at the Describe match threshold and the Describe result
 limit, both Settings, so a narrow filter can leave few results or none. It is
-laid out on the grid in that one order, with no sort, grouping or map, and
-searches neither the trash nor Triage. Videos and animated images are never in
-it.
+laid out on the grid in that one order, with no sort, grouping or map, in
+Browse or in Triage, and never searches the trash. Videos and animated images
+are never in it.
 _Avoid_: Semantic search, AI search, Visual search, Smart search in user-facing text.
 
 **Search term**:
@@ -398,7 +413,8 @@ _Avoid_: Browse mode, Repository view in user-facing text.
 The view of imported assets not yet sorted into a folder. The explorer there
 manages folders, Locations and People, and searches People and Locations
 among the triaged assets alone; a folder holds no triaged asset, so it is
-only described.
+only described. The quick search typed there, and an Advanced search opened
+there, search the triaged assets alone.
 _Avoid_: Triage mode, Inbox, Unsorted.
 
 **Triage summary**:

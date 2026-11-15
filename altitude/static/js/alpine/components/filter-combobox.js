@@ -9,8 +9,10 @@
  * layer and anchored under the field's box by CSS (`htmx/search_panel.css`).
  *
  * The component root is the field (`.field` with `x-data="filterCombobox"`). The three fields differ
- * only in what their markup says: the options route (`data-options-url`), whether several can be
- * chosen (`data-multiple`), the most that can (`data-max-chosen`, with the line that says so,
+ * only in what their markup says: the options route (`data-options-url`), the inputs of the form
+ * whose values a request for the options carries (`data-options-params`: the People field's, the
+ * view and the triage filter its numbers count by), whether several can be chosen
+ * (`data-multiple`), the most that can (`data-max-chosen`, with the line that says so,
  * `data-max-chosen-message`) and the chip's markup (the field's `<template>`).
  *
  * The server matches and renders the options, and the component only places them: typing asks the
@@ -200,6 +202,24 @@ export function filterCombobox() {
             return this.$root.getAttribute(Const.attributes.optionsUrl)
         },
 
+        /**
+         * What a request for the options carries beside the typed text: the values, as they stand,
+         * of the inputs of the field's form that the field names (`data-options-params`), for
+         * options that depend on the rest of the form. An empty one is left out.
+         */
+        optionsParams() {
+            const names =
+                this.$root.getAttribute(Const.attributes.optionsParams) ?? ""
+            const formEl = this.$root.closest("form")
+
+            return Object.fromEntries(
+                names
+                    .split(" ")
+                    .map((name) => [name, formEl?.elements[name]?.value])
+                    .filter(([, value]) => value),
+            )
+        },
+
         /** The field takes several names; otherwise a pick replaces the one chosen */
         get multiple() {
             return this.$root.hasAttribute(Const.attributes.multiple)
@@ -272,7 +292,7 @@ export function filterCombobox() {
             const load = async () => {
                 try {
                     const response = await http.get(this.optionsUrl, {
-                        params: { q: this.query() },
+                        params: { ...this.optionsParams(), q: this.query() },
                     })
                     if (token === loadToken) {
                         isLoading = false

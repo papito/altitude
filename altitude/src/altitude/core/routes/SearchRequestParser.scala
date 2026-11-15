@@ -48,9 +48,10 @@ import altitude.core.util.TriageSubset
  * [[altitude.core.Const.Search.MAX_DESCRIPTION_LENGTH]] characters once the white space around it is dropped, and not blank. A
  * search with one finds the still images that look most like it, most alike first, on the grid, among the assets its other
  * filters match: the Search text, a folder, people with their match, Locations and the two date ranges, each read and refused as
- * it is without a description, in the repository view, with the triaged assets when `triaged=true`. Its one order is likeness, so
- * it takes no sort, no grouping and no map layout, and no album, Triage subset or map area either. The results route and the
- * advanced search panel's form read a description; the other routes that parse a scope never hand one in.
+ * it is without a description, in the repository view, with the triaged assets when `triaged=true`, or in the Triage view, among
+ * the triaged assets alone. Its one order is likeness, so it takes no sort, no grouping and no map layout, and no album, Triage
+ * subset or map area either, and it does not search the trash. The results route and the advanced search panel's form read a
+ * description; the other routes that parse a scope never hand one in.
  */
 object SearchRequestParser:
 
@@ -209,10 +210,11 @@ object SearchRequestParser:
   /**
    * The description of a search as its scope holds it, as written but for the white space around it, or the message of a 400: a
    * description is not blank, has at most `Const.Search.MAX_DESCRIPTION_LENGTH` characters, as a form counts them, and searches
-   * the repository view alone. Beside it a search takes its filters (the Search text, a folder, people and their match,
-   * Locations, the four dates and the triage filter) and the grid layout; any other parameter is refused, whatever its value, and
-   * named by the message: an album, a Triage subset, a map area, a sort, a grouping or the map layout. What is taken is what is
-   * left out of the request below, so a parameter `Params` gains is refused beside a description until it is left out too.
+   * the repository view or the Triage view, never the trash. Beside it a search takes its filters (the Search text, a folder,
+   * people and their match, Locations, the four dates and the triage filter) and the grid layout; any other parameter is refused,
+   * whatever its value, and named by the message: an album, a Triage subset, a map area, a sort, a grouping or the map layout.
+   * What is taken is what is left out of the request below, so a parameter `Params` gains is refused beside a description until
+   * it is left out too.
    */
   private def descriptionOf(request: Params, written: String): Either[String, String] =
     val description = written.strip
@@ -220,10 +222,7 @@ object SearchRequestParser:
     if description.length > Const.Search.MAX_DESCRIPTION_LENGTH then
       return Left(s"A description has at most ${Const.Search.MAX_DESCRIPTION_LENGTH} characters")
 
-    request.view match
-      case Const.Search.View.TRASHBIN => return Left("A description does not search the trash")
-      case Const.Search.View.TRIAGE => return Left(s"A description does not search the ${Const.Search.View.TRIAGE} view")
-      case _ =>
+    if request.view == Const.Search.View.TRASHBIN then return Left("A description does not search the trash")
 
     // Every parameter is a field of `Params` under the name the request spells it with. The layout is always handed in, and
     // only the map is refused

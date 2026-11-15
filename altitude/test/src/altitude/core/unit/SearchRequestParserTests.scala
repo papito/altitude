@@ -14,6 +14,7 @@ import altitude.core.routes.SearchRequestParser
 import altitude.core.routes.SearchRequestParser.Scope
 import altitude.core.util.DateRange
 import altitude.core.util.PeopleMatch
+import altitude.core.util.SearchQuery
 
 /** The parameters of an advanced search as `SearchRequestParser.parse` reads them into a scope */
 @DoNotDiscover class SearchRequestParserTests extends funsuite.AnyFunSuite {
@@ -437,20 +438,20 @@ import altitude.core.util.PeopleMatch
     (browse(fields.DESCRIBE -> (" " + "a" * 300 + " ")).value.description.value should have).length(300)
   }
 
-  test("A description takes no album, subset, map area, sort, grouping or map layout, and searches the repository view alone") {
+  test("A description takes no album, subset, map area, sort, grouping or map layout, and does not search the trash") {
 
     /**
      * Setup:
      *
      * Requests of the repository view with a description beside each parameter a Describe search does not take, in turn: an
      * album, a Triage subset, a map area, a sort, a grouping, a group direction and the map layout; a request with a sort and an
-     * album beside the description and a folder; and requests with a description in the trash and in the Triage view.
+     * album beside the description and a folder; and requests with a description in the trash.
      *
      * Assertions:
      *
      * Each is refused, and the message names the parameter a description takes none of; the request with two of them names both,
      * in the order the parameters are declared, and not the folder, which a description takes. A description is refused in the
-     * trash and in the Triage view, each named by the message.
+     * trash, which the message names.
      *
      * Edge cases:
      *
@@ -485,12 +486,61 @@ import altitude.core.util.PeopleMatch
       "A description takes no sort"
 
     parse(Const.Search.View.TRASHBIN, fields.DESCRIBE -> "a cactus").left.value shouldBe "A description does not search the trash"
-    parse(Const.Search.View.TRIAGE, fields.DESCRIBE -> "a cactus").left.value shouldBe
-      "A description does not search the triage view"
-    parse(Const.Search.View.TRIAGE, fields.DESCRIBE -> "a cactus", fields.TRIAGED -> "true").left.value shouldBe
-      "A description does not search the triage view"
     parse(Const.Search.View.TRASHBIN, fields.DESCRIBE -> "a cactus", fields.QUERY_TEXT -> "beach").left.value shouldBe
       "A description does not search the trash"
+  }
+
+  test("A description searches the Triage view, among the triaged assets and beside the filters that view takes") {
+
+    /**
+     * Setup:
+     *
+     * Requests of the Triage view with a description: alone, with `triaged=true`, and beside the Search text, two people matching
+     * any, two Locations and both date ranges at once.
+     *
+     * Assertions:
+     *
+     * Each scope is the one the same request has without the description, with the description added: it holds the triaged assets
+     * out of the trash alone, and the query it builds carries the filters.
+     *
+     * Edge cases:
+     *
+     * What a description takes in no view is refused in the Triage view too, named by the message: a Triage subset, a sort, the
+     * Sequence grouping and the map layout. `triaged=false` is refused with the Triage view, with a description as without one.
+     */
+    val triage = Const.Search.View.TRIAGE
+    val described = parse(triage, fields.DESCRIBE -> "a cactus").value
+    described shouldBe parse(triage).value.copy(description = Some("a cactus"))
+    described.params shouldBe SearchQuery.TRIAGE_VIEW
+    parse(triage, fields.DESCRIBE -> "a cactus", fields.TRIAGED -> "true").value shouldBe described
+
+    val filters = List(
+      fields.QUERY_TEXT -> "beach",
+      fields.PERSON_ID -> "bob,alice",
+      fields.PEOPLE_MATCH -> "any",
+      fields.LOCATION_ID -> "sintra,lisbon",
+      fields.TAKEN_FROM -> "2024-06-01",
+      fields.IMPORTED_TO -> "2025-01-09"
+    )
+    val narrowed = parse(triage, (fields.DESCRIBE -> "a cactus") +: filters*).value
+    narrowed shouldBe parse(triage, filters*).value.copy(description = Some("a cactus"))
+    narrowed.params shouldBe SearchQuery.TRIAGE_VIEW
+    narrowed.query().text shouldBe Some("beach")
+    narrowed.query().personIds shouldBe Set("alice", "bob")
+    narrowed.query().locationIds shouldBe Set("lisbon", "sintra")
+
+    val refused = List(
+      fields.SUBSET -> "unknownPeople",
+      fields.SORT -> "created_at1",
+      fields.GROUP_BY -> "sequence"
+    )
+    for (param <- refused) withClue(s"$param: ") {
+      parse(triage, fields.DESCRIBE -> "a cactus", param).left.value shouldBe s"A description takes no ${param._1}"
+    }
+    parse(triage, fields.DESCRIBE -> "a cactus", fields.LAYOUT -> Const.Search.Layout.MAP).left.value shouldBe
+      "A description takes no layout=map"
+    parse(triage, fields.DESCRIBE -> "a cactus", fields.TRIAGED -> "false").left.value shouldBe
+      "The triage view holds only triaged assets"
   }
 
   test("A filter beside a description is refused as it is without one") {

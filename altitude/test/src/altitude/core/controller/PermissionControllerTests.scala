@@ -91,11 +91,12 @@ import altitude.core.models.Permissions
      * The Guest's request for the Triage view or the Trash view of the main page, the search results and the map's cells and
      * bounds, or for the triaged assets Browse adds with `triaged=true` (the search, the People list of Triage's explorer, and
      * the advanced search panel's form and People options, which count them), is a 403, in JSON from the map; the same requests
-     * for Browse answer 200.
+     * for Browse answer 200. The panel's form and People options asked for with the Triage view are a 403 too.
      *
      * Edge cases:
      *
-     * The User holding no Permission is a member, and gets every view.
+     * The User holding no Permission is a member, and gets every view. The Guest's panel has no "Search in" row, holds neither a
+     * view nor a triage filter, and its People options carry none: its searches are the repository view's.
      */
     val guestLibrary = loginAs(AccountType.Guest, Permissions.none)
     val guestCookies = testContext.cookies
@@ -135,7 +136,16 @@ import altitude.core.models.Permissions
         for (route <- List("options/people", "panel")) withClue(s"the advanced search panel's $route with triaged assets: ") {
           val url = s"$host/htmx/search/r/$guestLibrary/$route"
           get(url, Map("triaged" -> "true"), guestCookies).statusCode shouldBe 403
+          get(url, Map(view -> altitude.core.Const.Search.View.TRIAGE), guestCookies).statusCode shouldBe 403
           get(url, Map.empty, guestCookies).statusCode shouldBe 200
+        }
+        withClue("the Guest's advanced search panel: ") {
+          val panel = get(s"$host/htmx/search/r/$guestLibrary/panel", Map.empty, guestCookies).text()
+          panel should include("<form")
+          (panel should not).include("Search in")
+          (panel should not).include(s"""name="$view"""")
+          (panel should not).include("""name="triaged"""")
+          (panel should not).include("data-options-params")
         }
 
         for ((url, query) <- viewRequests(host, guestLibrary, Map.empty)) withClue(s"[$url]: ") {

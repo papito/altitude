@@ -614,8 +614,9 @@
              a disabled one does neither). A disabled button of any variant is dimmed whole, at half opacity under the
              default cursor, as a chip whose input is disabled is: the Sort and Group menus of a search with a
              description, Group on the map. Keyboard focus is the ring of <code>:focus-visible</code>, not
-             <code>:focus</code>, so a button a dialog returns focus to is not left ringed after a mouse click. A choice
-             between ways of showing the same thing is a <code>.toggle-group</code>: its buttons joined on one track, the
+             <code>:focus</code>, so a button a dialog returns focus to is not left ringed after a mouse click. A pick
+             of one among a few that all stay in view (the grid or the map, where an upload lands, the assets a search
+             covers) is a <code>.toggle-group</code>: its buttons joined on one track, the
              current one <code>aria-pressed="true"</code>, raised on the page surface. The theme switch above the contents
              is a live one. The buttons that open Curation share <code>.curate</code>: a border in the fill's own color, regular weight,
              always at the small size. A selection's Curate is a veil of <code>--theme-primary</code> at 0.32, its text
@@ -899,7 +900,10 @@
              corners <code>--radius-xl</code>, <code>--space-5</code> of padding and <code>--space-7</code> between
              fields. Each label sits above its field in <code>--font-size-small</code> and
              <code>--theme-neutral-3</code>; a field's box wears the field style in place of the input inside it, the
-             accent edge and <code>--field-focus-shadow</code> with focus anywhere in it. Describe comes first, under
+             accent edge and <code>--field-focus-shadow</code> with focus anywhere in it. The form opens with the
+             Search in row, a <code>.toggle-group</code> across the form in three equal segments, Library, Triage and
+             All, the assets the search covers; while Triage is picked the Folder field is hidden, since a folder
+             holds no triaged asset. Describe is the first field, under
              <code>fa-magic</code>: a textarea in the box, one line tall while it is empty and as tall as its text
              after, in <code>--line-height-text</code>, with no resize handle; it takes 300 characters, Enter searches
              from it and Shift+Enter breaks the line. The Search text's field follows, labelled Keywords, a label of

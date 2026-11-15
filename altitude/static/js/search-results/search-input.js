@@ -11,6 +11,9 @@ import { runSearch } from "./search.js"
  * load and a folder, person, album or Location, which clear `q` (see `stores/search-params.js`),
  * empty it.
  *
+ * The text searches the view it is typed in, in place: Browse, or Triage, among the triaged assets
+ * alone. Text does not search the Trash, so typed there it opens Browse with the search.
+ *
  * The form is in every page's nav. A page without this module (import, settings) submits it
  * natively: a GET of Browse with the text as `q`, which the main page seeds its search from.
  */
@@ -62,7 +65,7 @@ export function bindSearchInput() {
 }
 
 function searchText(q) {
-    if (Alpine.store(Const.state.currentView).isDefaultViewView()) {
+    if (!Alpine.store(Const.state.currentView).isTrashBinView()) {
         runSearch({ params: { q } })
         return
     }

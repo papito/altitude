@@ -7,6 +7,13 @@ package altitude.core.models
 case class ListedPerson(person: Person, visibleCount: Int)
 
 /**
+ * The assets out of the trash that a listed Person's number counts: the sorted ones, as the repository view shows them while
+ * triaged items are hidden; the triaged ones, as the Triage view does; or both, the repository view with the triaged items shown.
+ */
+enum CountedAssets:
+  case Sorted, Triaged, All
+
+/**
  * A pane of the People tab: the people it lists, and whether its buckets hold people none of whom is listed, every one of them
  * having only triaged assets while triaged items are hidden, so that its empty line can say so.
  */

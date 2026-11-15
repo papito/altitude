@@ -6,7 +6,7 @@
 @import altitude.core.util.DateRange
 @import altitude.core.util.PeopleMatch
 
-@(text: String, names: SearchFilterNames, peopleMatch: PeopleMatch, takenRange: Option[DateRange], importedRange: Option[DateRange], showTriaged: Boolean = false, idPrefix: String = "searchPanel", description: String = "")
+@(text: String, names: SearchFilterNames, peopleMatch: PeopleMatch, takenRange: Option[DateRange], importedRange: Option[DateRange], showTriaged: Boolean = false, idPrefix: String = "searchPanel", description: String = "", view: String = Const.Search.View.DEFAULT)
 
 @* The form of the advanced search panel (GET /htmx/search/r/:repoId/panel), filled in from the parameters of a search:
    a description, the Search text, one folder, people, Locations, and the Date Taken and Date Imported ranges. The nav's
@@ -18,6 +18,14 @@
    `idPrefix` opens every ID of the form, `searchPanel` in the nav's panel; the style guide's specimen passes its own, so
    the two can be on one page.
 
+   The form's first row says which assets the search covers: a toggle group named "Search in" of three segments,
+   Library (the sorted assets), Triage (the triaged ones) and All (both). It adds no parameter: a pick is the search's
+   `view` and its triage filter, `triaged`, held in the row's two hidden inputs, the repository view with `triaged` false
+   for Library and true for All, and the Triage view with no `triaged` for Triage. The form opens on the pick `view` and
+   `showTriaged` name, the search's own. A Guest sees no triaged asset (`RequestContext.isMember`), so its form has no
+   row and neither input, and its searches are the repository view's. While Triage is picked the Folder field is hidden
+   (`searchesTriage`), since a folder holds no triaged asset, and is left out of the search.
+
    The Describe field comes first and takes the focus as the panel opens, the caret after its text: a textarea, as tall as
    its text, holding at most as many characters as a search takes (`Const.Search.MAX_DESCRIPTION_LENGTH`). Enter searches from
    it as from a one-line field, and Shift+Enter breaks the line (`searchOnEnter`). The Search text's field is labelled
@@ -28,8 +36,8 @@
    A chip (includes/search_chip) carries what an option carries (`data-option-id`, `data-option-label`), shows its
    label, a person's led by their cover Face, and ends with its remove button. The server names the chips: an ID of the
    search that names nothing in the Library has neither a chip nor a place in its input (SearchService.filterNames). The
-   People field asks for its options with the search's triage filter (`showTriaged`, `triaged=true`), so an option's
-   number of assets is what the search will find.
+   People field asks for its options with the form's `view` and `triaged` as they stand (`data-options-params`), so an
+   option's number of assets is what the search will find.
 
    The people match is the switch after the People label, on for `all`, with its value in the hidden input beside it;
    it shows once two people are chosen. A date range field is the `dateRange` component
@@ -37,6 +45,19 @@
    `8 Jun – 21 Jun 2024`, which opens the calendar, a dialog the component names after the field. *@
 
 @repoId = @{ RequestContext.getRepository.persistedId }
+
+@isMember = @{ RequestContext.isMember }
+
+@* The triage filter of the pick the form opens on, as its hidden input holds it: none in the Triage view *@
+@triaged = @{ if (view == Const.Search.View.TRIAGE) "" else showTriaged.toString }
+
+@* A segment of the "Search in" row: the view and the triage filter of its pick, pressed when they are the form's *@
+@searchIn(label: String, pickView: String, pickTriaged: String) = {
+<button type="button"
+        aria-pressed="@{view == pickView && triaged == pickTriaged}"
+        :aria-pressed="searchesIn('@pickView', '@pickTriaged')"
+        x-on:click="searchIn('@pickView', '@pickTriaged')">@label</button>
+}
 
 @* A chip of what is chosen: `kind` is the chip's (`folder`, `person`, `location`), `id` and `label` the ID and the label of
    the choice *@
@@ -46,8 +67,8 @@
 
 @* A combobox field of the form (includes/filter_combobox): `options` is its options route under the panel's, with its
    query string *@
-@combobox(key: String, label: String, param: String, options: String, kind: String, placeholder: String, ids: List[String], fullMessage: Option[String] = None, afterLabel: Option[Html] = None)(chips: Html) = {
-@includes.html.filter_combobox(idPrefix + key, label, param, s"/htmx/search/r/$repoId/options/$options", kind, placeholder, ids, fullMessage, afterLabel)(chips)
+@combobox(key: String, label: String, param: String, options: String, kind: String, placeholder: String, ids: List[String], fullMessage: Option[String] = None, afterLabel: Option[Html] = None, optionsParams: Seq[String] = Nil, shownBy: Option[String] = None, hidden: Boolean = false)(chips: Html) = {
+@includes.html.filter_combobox(idPrefix + key, label, param, s"/htmx/search/r/$repoId/options/$options", kind, placeholder, ids, fullMessage, afterLabel, optionsParams, shownBy, hidden)(chips)
 }
 
 @* The people match: a switch that is on for all of the people and off for any of them, the form's own state
@@ -100,6 +121,16 @@
 
 <form id="@{idPrefix}Form" role="search" x-data="searchPanel" x-on:submit.prevent="search()" x-on:input="countFilters()" x-on:change="countFilters()">
     <div class="fields">
+        @if(isMember) {
+        <div class="toggle-group search-in" role="group" aria-label="Search in">
+            <input type="hidden" name="@{Api.Field.Search.VIEW}" value="@view">
+            <input type="hidden" name="@{Api.Field.Search.TRIAGED}" value="@triaged">
+            @searchIn("Library", Const.Search.View.DEFAULT, "false")
+            @searchIn("Triage", Const.Search.View.TRIAGE, "")
+            @searchIn("All", Const.Search.View.DEFAULT, "true")
+        </div>
+        }
+
         <div class="field">
             <label for="@{idPrefix}Describe">Describe</label>
             <div class="box">
@@ -126,11 +157,11 @@
             </div>
         </div>
 
-        @combobox("Folder", "Folder", Api.Field.Search.FOLDER_ID, "folders", "folder", "any folder", names.folder.map(_.id).toList) {
+        @combobox("Folder", "Folder", Api.Field.Search.FOLDER_ID, "folders", "folder", "any folder", names.folder.map(_.id).toList, shownBy = Option.when(isMember)("!searchesTriage"), hidden = view == Const.Search.View.TRIAGE) {
             @for(folder <- names.folder) {@chosen("folder", folder.id, folder.label)}
         }
 
-        @combobox("People", "People", Api.Field.Search.PERSON_ID, if (showTriaged) s"people?${Api.Field.Search.TRIAGED}=true" else "people", "person", "anyone", names.people.map(_.persistedId), fullMessage = Some(s"At most ${SearchRequestParser.MAX_IDS} people in one search"), afterLabel = Some(peopleMatchSwitch)) {
+        @combobox("People", "People", Api.Field.Search.PERSON_ID, "people", "person", "anyone", names.people.map(_.persistedId), fullMessage = Some(s"At most ${SearchRequestParser.MAX_IDS} people in one search"), afterLabel = Some(peopleMatchSwitch), optionsParams = if (isMember) Seq(Api.Field.Search.VIEW, Api.Field.Search.TRIAGED) else Nil) {
             @for(person <- names.people) {@chosen("person", person.persistedId, person.name.getOrElse(""), lead = Some(includes.html.search_person_cover(person)))}
         }
 

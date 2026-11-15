@@ -2791,16 +2791,17 @@ import altitude.core.util.*
      * With nothing typed the folder options are every folder by its path, a folder directly before the folders below it, the
      * Location options every Location by its own name with its Category before it, and the people options the named, visible,
      * live people a search finds something for, by name, each with their cover and the number of assets the search finds: Alan
-     * and Alice with one each while triaged items are hidden, and Alan with two, Alice with one and Alma with one once they are
-     * shown. Typed text offers the names with a word starting with it: "lis" the two Lisbon folders, the Location Lisbon and Alan
-     * Lisle.
+     * and Alice with one each counting the sorted assets, Alan with two, Alice with one and Alma with one counting every asset,
+     * and Alan and Alma with one each counting the triaged assets alone. Typed text offers the names with a word starting with
+     * it: "lis" the two Lisbon folders, the Location Lisbon and Alan Lisle.
      *
      * Edge cases:
      *
      * The root folder and a Category are no option, and text naming a Category or an ancestor folder offers nothing below it. The
      * hidden person, the bad match, the person merged away and the person with no name are never offered, nor is the person with
-     * no Face, whose search finds nothing either way: the people offered with triaged items shown are the ones a Search text
-     * resolves names against (`SearchDao.searchNames`), less that one.
+     * no Face, whose search finds nothing either way: the people offered counting every asset are the ones a Search text resolves
+     * names against (`SearchDao.searchNames`), less that one. Alice, with no triaged asset, is no option among the triaged
+     * assets.
      */
     val trips = testApp.service.folder.add("Trips")
     val year = testApp.service.folder.add("2024", parentId = trips.id)
@@ -2848,23 +2849,26 @@ import altitude.core.util.*
     options.locationOptions("lis").map(_.id) shouldBe List(lisbon.persistedId)
     options.locationOptions("portugal") shouldBe empty
 
-    def people(typed: String, showTriaged: Boolean = false): List[(String, Int)] =
-      options.peopleOptions(typed, showTriaged).map(listed => listed.person.persistedId -> listed.visibleCount)
+    def people(typed: String, counted: CountedAssets = CountedAssets.Sorted): List[(String, Int)] =
+      options.peopleOptions(typed, counted).map(listed => listed.person.persistedId -> listed.visibleCount)
 
     people("") shouldBe List(alan.persistedId -> 1, alice.persistedId -> 1)
-    people("", showTriaged = true) shouldBe List(alan.persistedId -> 2, alice.persistedId -> 1, alma.persistedId -> 1)
-    options.peopleOptions("liddell", showTriaged = false).map(_.person.coverFaceId) shouldBe List(Some(face.persistedId))
+    people("", CountedAssets.All) shouldBe List(alan.persistedId -> 2, alice.persistedId -> 1, alma.persistedId -> 1)
+    people("", CountedAssets.Triaged) shouldBe List(alan.persistedId -> 1, alma.persistedId -> 1)
+    options.peopleOptions("liddell", CountedAssets.Sorted).map(_.person.coverFaceId) shouldBe List(Some(face.persistedId))
     people("lis").map(_._1) shouldBe List(alan.persistedId)
     people("al").map(_._1) shouldBe List(alan.persistedId, alice.persistedId)
-    people("al", showTriaged = true).map(_._1) shouldBe List(alan.persistedId, alice.persistedId, alma.persistedId)
+    people("al", CountedAssets.All).map(_._1) shouldBe List(alan.persistedId, alice.persistedId, alma.persistedId)
+    people("al", CountedAssets.Triaged).map(_._1) shouldBe List(alan.persistedId, alma.persistedId)
     people("liddell").map(_._1) shouldBe List(alice.persistedId)
-    people("alto", showTriaged = true) shouldBe empty
-    people(PersonService.UNKNOWN_NAME_PREFIX, showTriaged = true) shouldBe empty
+    people("liddell", CountedAssets.Triaged) shouldBe empty
+    people("alto", CountedAssets.All) shouldBe empty
+    people(PersonService.UNKNOWN_NAME_PREFIX, CountedAssets.All) shouldBe empty
 
     // The people offered are the ones a Search text resolves names against, less the one a search finds nothing for
     val searchable =
       testApp.txManager.asReadOnly(testApp.DAO.search.searchNames(Set(SearchSource.Person)))(SearchSource.Person).map(_.id).toSet
-    people("", showTriaged = true).map(_._1).toSet shouldBe searchable - alto.persistedId
+    people("", CountedAssets.All).map(_._1).toSet shouldBe searchable - alto.persistedId
   }
 
   test("Advanced search options and filter names read the names they use, and a Search text every name source") {
@@ -2894,7 +2898,7 @@ import altitude.core.util.*
       sources(SearchSource.Folder)
     candidatesReadDuring(options.locationOptions("lis").map(_.id) shouldBe List(lisbon.persistedId)) shouldBe
       sources(SearchSource.Location, SearchSource.Category)
-    candidatesReadDuring(options.peopleOptions("ali", showTriaged = false).size shouldBe 1) shouldBe Nil
+    candidatesReadDuring(options.peopleOptions("ali", CountedAssets.Sorted).size shouldBe 1) shouldBe Nil
     candidatesReadDuring {
       val names = options.filterNames(Some(folder.persistedId), List(alice.persistedId), List(lisbon.persistedId))
       names.folder.map(_.path) shouldBe Some(List("Trips"))

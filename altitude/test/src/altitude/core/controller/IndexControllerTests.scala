@@ -176,7 +176,9 @@ import altitude.core.models.Permissions
      *
      * Assertions:
      *
-     * The Search form is in the main page's nav and the import page's, and a nav reload carries it too.
+     * The Search form is in the main page's nav and the import page's, and a nav reload carries it too. Its input says "quick
+     * search" on Browse, on the Trash and on the import page, and "search triage" in Triage, the assets a search typed there
+     * covers; a nav reload says what the entry it is asked for says.
      */
     val repoId = testContext.persistRepository().persistedId
     login()
@@ -193,6 +195,17 @@ import altitude.core.models.Permissions
         get(s"r/$repoId") should include(searchForm)
         get(s"pipeline/r/$repoId") should include(searchForm)
         get(s"htmx/nav/r/$repoId") should include(searchForm)
+
+        /** The placeholder of the quick search input */
+        def placeholder(page: String): String =
+          """<input type="search" name="q"[^>]*\bplaceholder="([^"]*)"""".r.findFirstMatchIn(page).get.group(1)
+
+        placeholder(get(s"r/$repoId")) shouldBe "quick search"
+        placeholder(get(s"r/$repoId?view=trashbin")) shouldBe "quick search"
+        placeholder(get(s"pipeline/r/$repoId")) shouldBe "quick search"
+        placeholder(get(s"r/$repoId?view=triage")) shouldBe "search triage"
+        placeholder(get(s"htmx/nav/r/$repoId?current=triage")) shouldBe "search triage"
+        placeholder(get(s"htmx/nav/r/$repoId")) shouldBe "quick search"
     }
   }
 

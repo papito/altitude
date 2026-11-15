@@ -103,7 +103,11 @@ its styles are `static/css/htmx/search_panel.css`.
   inputs for `folderId`, `personId` and `locationId` (IDs separated by commas), `peopleMatch` (`all` or `any`) and
   `takenFrom`, `takenTo`, `importedFrom` and `importedTo` (ISO dates). `.fields` holds one `.field` per filter, each
   label above its `.box`, the two date ranges side by side in `.dates`, and `.actions` holds Clear and Search, the
-  form's submit (`.action-button.primary`).
+  form's submit (`.action-button.primary`). A member's form opens `.fields` with the "Search in" row,
+  `.toggle-group.search-in` (`role="group"`, `aria-label="Search in"`): the hidden inputs `view` and `triaged`, which
+  hold the pick, and three segments, Library, Triage and All, the one of the route's `view` and `triaged` pressed
+  (`aria-pressed`, bound to `searchesIn(view, triaged)`; a click is `searchIn(view, triaged)`). A Guest's form has
+  neither the row nor the inputs.
 - A combobox field (`.field` with `x-data="filterCombobox"`; its markup is `includes/filter_combobox`, which the Import
   page's destination folders are too, the upload sections' and the Watch folder dialog's, **Import page**) follows the ARIA combobox pattern of the Change
   combobox: a label, then `.box` with the field's icon, the hidden input of its IDs, the chips of what is chosen
@@ -112,9 +116,10 @@ its styles are `static/css/htmx/search_panel.css`.
   `<template>` a new chip is cloned from, the empty `role="listbox"` (`popover="manual"`) its options go into and a
   visually hidden `role="status"`. `data-options-url` is the field's options route; `data-multiple` marks the two
   fields that take several, with `data-max-chosen`, the most one search takes (`SearchRequestParser.MAX_IDS`), and
-  `data-max-chosen-message`, the line the listbox shows once the field holds them. The People field's route ends
-  `?triaged=true` when the panel was asked for with the search's triage filter on, so its options count what the search
-  will find. A chip is `includes/search_chip.scala.html`, the one chip of the panel and of a filtered search's title:
+  `data-max-chosen-message`, the line the listbox shows once the field holds them. `data-options-params` names the
+  inputs of the field's form whose values a request for its options carries: a member's People field names `view` and
+  `triaged`, so its options count what the search will find under the pick as it stands. The Folder field of a member's
+  form is shown by `x-show="!searchesTriage"`, and rendered hidden when the form opens on Triage. A chip is `includes/search_chip.scala.html`, the one chip of the panel and of a filtered search's title:
   `li.chip` with its kind as a class (`folder`, `person`, `location`; the title's also `describe`, `search-text` and
   `dates`),
   carrying `data-option-id` and `data-option-label`, its label in `.name` (`data-option-name`: a folder's path, a
@@ -1533,7 +1538,7 @@ does not show through it while it sticks). The scopes:
   "No Location" under `fa-map-marker-alt slashed`, the marker struck through: `.results-title .kind-icon.slashed` is
   `position: relative`, and its `::after` lays Font Awesome's own slash glyph (`fa-slash`, `\f715`, made to be laid over
   another icon) centered over it, since the free set has no slashed marker; no subtitle
-- the **Search text** (`.query`, in curly quotes drawn by CSS) with "in this library" as the subtitle
+- the **Search text** (`.query`, in curly quotes drawn by CSS) with "in this library" as the subtitle, or "in Triage" in the Triage view
 - a **filtered search** (the glossary's: a description, whatever else the search holds, a date range, two people or
   more, two Locations or more, or more than one of the Search text, a folder, a person and a Location; the root folder
   counts as no folder) as "Search results" under the
@@ -1557,18 +1562,20 @@ does not show through it while it sticks). The scopes:
   named "Remove" and the chip's label, but the Search text's, "Remove Keywords beach", as the panel labels the field.
   Its × (`data-chip-remove`) takes the chip off the page at once and
   searches again by what the chips left on the page name, the search's people match kept
-  (`js/search-results/filtered-title.js`, through the panel's `searchByFilters`, so `replaceFilters` and `runSearch` in
-  Browse, and Browse with the search as its query string anywhere else), so a second × before the first search has
+  (`js/search-results/filtered-title.js`, through the panel's `searchByFilters` with no pick, so `replaceFilters` and
+  `runSearch` in the view the search is in, Browse or Triage, with its triage filter), so a second × before the first search has
   answered searches without both: an ID with no chip goes with the first removal, as with a search from the panel, and
   the last chip of a kind left alone turns the search into one of a single scope, titled as that scope. The
   description's × leaves the search of the other filters, with the sort, the grouping and the layout the store kept
-  for it (**Search parameters**), or Browse when it was the only chip; while the description stays, the search stays a
+  for it (**Search parameters**), or the whole view, Browse or Triage, when it was the only chip, where the triage
+  filter is the remembered choice again; while the description stays, the search stays a
   filtered one, down to its chip alone. Edit
   (`.action-button.small` with the sliders icon, `data-app-edit-filters`) opens the panel on the search in force, its
   description included (`openSearchPanel()`). A search with a description that found nothing says so after Edit, in
   the row (`.filters .empty`, the subtitle's `--font-size-small` and `--theme-neutral-3`): "Nothing within these
   filters looks like that." when another filter has a chip (`SearchFilters.narrowsDescription`), and "Nothing in this
-  Library looks like that." when the description's is the only one. `includes/search_results` hands the chips whether
+  Library looks like that." when the description's is the only one, or "Nothing in Triage looks like that." in the
+  Triage view (`inTriage`). `includes/search_results` hands the chips whether
   the total is 0 (`foundNothing`); a search with no description says nothing of an empty result. A filtered search has no `#person` block, so the person title's reloads (`reloadPersonTitle`)
   find nothing to read again in it: a chip shows a person's name and cover as the search found them, so when a Person
   with a chip is renamed the search runs again (`searchAgainForPersonChip`: at once on `personNameEdited`, the rename
@@ -2978,10 +2985,13 @@ in the code, its comments, the guides and the server's messages is Search text (
 - **Load on open.** Each opening (`beforetoggle`, which fires for every one) empties the panel and reads its form from
   the host's `data-panel-url` (`GET /htmx/search/r/:repoId/panel`) with the filters of the search in force
   (`searchParams.filters()`; none on a page with no search of its own), so the server names the chips, and with the
-  triage filter (`triaged`) of the search the panel will run, which the form's People options count by
-  (`triagedOfPanelSearch`): in Browse the one in force, which a search from the panel keeps, and anywhere else, where
-  the search opens Browse and the store holds no filter or there is no store, the choice remembered in the browser
-  (`rememberedTriaged`), for a member alone (`context.seesTriaged()`), since a Guest is refused the filter. The
+  view and the triage filter (`view`, `triaged`) of the search the panel will run, which the form's "Search in" row
+  opens on and its People options count by (`pickOfPanelSearch`): in Triage the Triage view; in Browse the repository
+  view with the triage filter in force, the "Show triaged items" choice or the pick of the search in force; and
+  anywhere else, where the search opens Browse and the store holds no filter or there is no store, the repository view
+  with the choice remembered in the browser (`rememberedTriaged`), for a member alone (`context.seesTriaged()`), since
+  a Guest is refused the filter. A folder's Search here is Browse's from Triage too, since a folder holds no triaged
+  asset. The
   read goes
   through the axios client and only the latest opening's answer is put in the panel; a failure is an error snackbar and
   the panel closes. The panel is invisible while empty (`.search-panel:empty`), takes focus in its first field, Describe
@@ -2994,6 +3004,18 @@ in the code, its comments, the guides and the server's messages is Search text (
   hands focus back to what had it as the panel opened: the filter button, or Edit. An entry of a menu is gone by then,
   the panel's opening having closed its menu, so `openSearchPanel` called with focus inside another popover moves the
   focus to the filter button first, and Search here returns there.
+- **Search in.** The form's first row, a member's alone: a toggle group across the form (`.search-in`, its three
+  segments of equal width) that picks the assets the search covers. A pick adds no parameter. It is the search's view
+  and its triage filter, in the row's hidden inputs: **Library**, the repository view with `triaged=false`, the sorted
+  assets; **All**, the repository view with `triaged=true`; **Triage**, the Triage view, which holds no filter. Library
+  is this row's label for the sorted assets alone; the glossary's Library is the whole of it (`CONTEXT.md`). The row
+  opens on the search the panel will run (**Load on open**): in Browse on All while triaged items are shown and on
+  Library while they are not, in Triage on Triage. The form's component mirrors the two inputs (`view`, `triaged`;
+  `searchIn`, `searchesIn`). While Triage is picked the Folder field is hidden (`searchesTriage`) and its folder is in
+  neither the search nor the filter button's count (`searchOfForm`), and comes back with another pick. The People
+  field asks for its options with the two inputs as they stand (`data-options-params`). The filter button's badge does
+  not count the pick, and Clear leaves it. A pick lasts for the search it is submitted with and is not remembered
+  (**Search parameters**).
 - **Describe.** The first field, a `textarea` in the field's `.box` under the Describe icon (`fa-magic`), labelled
   "Describe", its placeholder "What's in the photo? e.g. woman in a park". It is as tall as its text
   (`field-sizing: content`, no resize handle), one line while it is empty, and takes at most 300 characters
@@ -3009,14 +3031,17 @@ in the code, its comments, the guides and the server's messages is Search text (
   input.
 - **Search and Clear** are the form's (`x-data="searchPanel"`, `js/alpine/components/search-panel.js`). Search, the
   submit, so Enter in the Search text's field, and in the Describe field through `searchOnEnter`, reads the form's entries
-  (`FormData`: every filter is a field under its parameter's name) and hands them to `searchByFilters`: the text
+  (`searchOfForm`, over `FormData`: every filter is a field under its parameter's name, and the pick is `view` and
+  `triaged`) and hands them to `searchByFilters`: the text
   trimmed, the description as typed, which the store keeps without the white space around it, and `peopleMatch` only
-  as `any` with two people or more. In Browse the store takes them (`searchParams.replaceFilters`, see **Search parameters**), the panel
-  closes and `runSearch()` reads the results again; on any other page, and in Triage and the Trash, whose pages are
-  laid out for their view, the window goes to Browse, the quick search form's `action`, with the search as its query
-  string, as the quick search does. Clear empties every field and searches nothing: the description, the text, the
+  as `any` with two people or more. Where the page shows the view the search is of, Browse or Triage, the store takes
+  them (`searchParams.replaceFilters`, see **Search parameters**), the panel
+  closes and `runSearch()` reads the results again; otherwise (Triage picked in Browse, Library or All picked in
+  Triage, whose pages are laid out for their view, and any other page or the Trash) the window goes to that view, the
+  quick search form's `action` with the search as its query string. Clear empties every field and searches nothing:
+  the description, the text, the
   people match back to all, and each field through a `search-panel-clear` event dispatched on its component's root,
-  and leaves the caret in the Describe field. Escape and a click
+  and leaves the pick as it is and the caret in the Describe field. Escape and a click
   outside close the panel without searching; what was changed in it is dropped, and the next opening shows the search
   in force.
 - **Combobox** (`x-data="filterCombobox"`, `js/alpine/components/filter-combobox.js`), one component for the folder,
@@ -3119,7 +3144,7 @@ count as a `.count` pill inside the label, `--theme-secondary` on the chip token
 color, `currentColor`, while the entry is hovered, so an empty one does not react). Between Browse and Triage sits the
 `.search` cell, as wide as an entry, holding the quick search form (**Search input**) centred in it at
 `--nav-search-width`: the form is `--font-nav` at `--font-size-base` in
-`--theme-neutral-4`, centred text, with no border or fill, a `fa-search` mark and the placeholder "quick search" at 0.6 alpha, a
+`--theme-neutral-4`, centred text, with no border or fill, a `fa-search` mark and the placeholder ("quick search", or "search triage" in Triage) at 0.6 alpha, a
 `.clear` (`fa-times`) control shown while there is text, and the filter button (`.filters`, `fa-sliders-h` in a circle
 of the accent at 0.2), which opens the advanced search panel and carries the number of filters in force, or of those in the open panel, as a badge on
 its corner, a pill of the accent in `--font-size-xs`, shown from one up (**Advanced search panel**). The form's rules
@@ -3779,15 +3804,16 @@ view from any place, and an empty value is never sent. Only the Triage summary o
 one in every view. The store
 holds no position: a search starts at its first page, and a later page is one request's `after` cursor. The map area (`bbox`, the crowded-pin panel's scope) belongs to the search it was
 drawn on, so a view, a place or a new `q` clears it too. Search text
-(`q`) is one more place to look, the whole repository outside the trash: a change of `q` clears the
-five places and returns `view` to the repository view, and each of the five,
+(`q`) is one more place to look, the whole of the view it is typed in, Browse or Triage: a change of `q` clears the
+five places and keeps `view`, but for the trash, which text does not search and so leaves for the repository view
+(`withoutRefusedCombinations`), and each of the five,
 and a view, clears `q`. The whole `CLEARS` table:
 
 | Changed | Cleared (back to its default) |
 |---|---|
 | `view` | `folderId`, `personId`, `albumId`, `locationId`, `subset`, the panel's six, `bbox`, `q`, `triaged` |
 | `folderId`, `personId`, `albumId`, `locationId` or `subset` | the other four, the panel's six, `bbox`, `q` |
-| `q` | `view`, `folderId`, `personId`, `albumId`, `locationId`, `subset`, the panel's six, `bbox` |
+| `q` | `folderId`, `personId`, `albumId`, `locationId`, `subset`, the panel's six, `bbox` |
 
 The **advanced search panel** is the one widget that combines them (**Advanced search panel**). `personId` and
 `locationId` then hold several IDs, separated by commas (`idsOf`; `ID_LISTS`), each once and at most
@@ -3799,10 +3825,21 @@ people combine; only `any` is ever stored, with two
 people or more, since all is the server's rule with none given) and the two date ranges, `takenFrom` and `takenTo`,
 `importedFrom` and `importedTo` (ISO days). A search from the panel goes around the table, through the store's
 `replaceFilters(filters)` (`applySearchFilters`): it sets `q`, `folderId`, `personId`, `locationId` and the panel's
-six as given, one left out being no filter, and returns `view`, `albumId`, `subset` and `bbox` to their defaults, so
-the search is the repository view's by the panel's filters alone; the layout, the grouping, the sort, `rpp` and the
-triage filter survive, under the rules below. A filtered search's results title removes one filter through the same
-funnel, with the filters its other chips name (**Results title**). `names(param, id)` says whether the search names a
+six as given, one left out being no filter, and returns `albumId`, `subset` and `bbox` to their defaults, so
+the search is its view's by the panel's filters alone; the layout, the grouping, the sort and `rpp`
+survive, under the rules below. Filters that name a `view` carry the panel's pick of the assets to search, its
+"Search in" row's (**Advanced search panel**): `view` and `triaged` are set together, the repository view with
+`triaged` false (Library) or true (All), or the Triage view, which holds no filter. Filters that name none, a Guest's
+panel and a chip's ×, keep the view and the triage filter, but for the trash, which a search from the panel never
+searches. A filtered search's results title removes one filter through the same
+funnel, with the filters its other chips name (**Results title**).
+
+**A pick lasts one search.** `replaceFilters` writes nothing to `localStorage`, so a pick of Library or All is the
+search's and not the remembered choice. It ends with the search: a change that looks somewhere else (a place, a view
+or new `q`, the names of `CLEARS`) and the removal of a filtered search's last filter put the remembered choice back
+(`withRememberedTriaged`), while the sort, the grouping, the layout, `rpp` and paging keep it. A `triaged` named by
+the URL is its search's in the same way. The "Show triaged items" switch reads the store, so it shows the search's
+value while the search is in force, and turning it changes the search and is remembered, as any turn of it is. `names(param, id)` says whether the search names a
 Person or a Location (`personId`, `locationId`), alone or among several, and `replaceId(param, fromId, toId)` puts
 `toId` in its place, or drops it for a null `toId`, keeping the view and every other filter and clearing the map area:
 a merge or a deletion of a searched Person, and a deletion of a searched Location, go through it (**Event flow**,
@@ -3826,20 +3863,22 @@ the server's rule is unchanged, a search with no `triaged` leaves the triaged as
 holds `true` or `false` in the repository view, never null, and every request and the bookmarkable URL say which.
 Seeding (`seedSearchParams(search, { seesTriaged })`) takes it from the URL first, when the URL names one of the two
 values, and otherwise from `localStorage` (`Const.localStore.showTriaged`, `rememberedTriaged()`), where nothing kept,
-or anything but the two values, is `true`; the store's `merge` writes a changed `triaged` there, which only the
-switch's flip is, so a URL that names the filter wins for its page and is not remembered. `seesTriaged` is
+or anything but the two values, is `true`; the store's `merge` writes a `triaged` there when the change names it,
+which only the switch's flip does, so a URL that names the filter, and a pick of the advanced search panel, win for
+their search and are not remembered. `seesTriaged` is
 `context.seesTriaged()`, which `index.scala.html` passes: a Guest sees no triaged item and is refused `triaged=true`
 (a 403), so its store is seeded none and reads nothing remembered, and a `triaged=false` in its URL is kept as written.
-A search that leaves Triage or the Trash for Browse (the quick search, the advanced search panel) is sent without the
-filter, which Browse then seeds. The People tab reads it too, on every load of a pane, and reloads its panes when it changes, so each
+A search that leaves the Trash for Browse (the quick search, the advanced search panel from a Guest's or with no
+pick) is sent without the filter, which Browse then seeds; one that the panel sends to Browse from Triage carries its
+pick's. The People tab reads it too, on every load of a pane, and reloads its panes when it changes, so each
 Person's number follows the switch (see **People tab**), and the advanced search panel sends it with the request for
 its form, so the People options count what the search will find (**Advanced search panel**). The combinations the server refuses
 are settled by the store itself (`withoutRefusedCombinations`, on seeding from the URL and after every
 change): `q` with the trash view becomes the repository view, as a date range and several people or Locations do,
 a date range whose first day is after its last is dropped, `peopleMatch` goes with the second person, what only the
 panel combines (a description, a date range, several people or Locations, or more than one of `q`, a folder, a person
-and a Location: `combinesFilters`, the server's rule) drops an album and a subset, a description becomes the
-repository view from the Triage view as from the trash and drops the map area, `sort=relevance`
+and a Location: `combinesFilters`, the server's rule) drops an album and a subset, a description leaves the trash
+for the repository view as they do, stays in the Triage view, and drops the map area, `sort=relevance`
 (`Const.search.sortRelevance`) without `q` drops the sort, so Relevance is the one sort that ends with
 the text it ranked, and `triaged` in any view but the repository view is dropped, the remembered choice included (the triage view
 refuses it). The server also refuses a page size outside 1 to 500; the store keeps only whole numbers
@@ -3855,7 +3894,7 @@ its default is left out of the request, so a default is never spelled out on bot
 `view`, which is always sent, and whose values match `Const.Search.View.*` server-side verbatim.
 
 The Search input is `#searchForm` in `includes/nav` (`role="search"`: an `<input type="search" name="q">`
-labelled "quick search" by its placeholder, a `.clear` button and the `.filters` button; no submit button), rendered in every page's nav
+labelled by its placeholder, "search triage" in Triage, the triaged assets a search typed there covers, and "quick search" anywhere else, a `.clear` button and the `.filters` button; no submit button), rendered in every page's nav
 (see **Nav refresh**) and bound once by `bindSearchInput()` (`js/search-results/search-input.js`) from
 `FrontendApp.start()` on the pages that run it (the main page and the style guide); on the others (import, settings)
 the form's own `action`, a GET of `/r/:repoId`, opens Browse with the text as `q`, which seeds the search there.
@@ -3865,8 +3904,10 @@ clear control (which empties the input and submits), the input's native clear (E
 empty value; the stylesheet hides the native button) and an empty submit clear `q` the same way, and an
 empty submit with no `q` in the store does nothing, so it never leaves the folder or view being looked
 at. The input holds no state: an Alpine effect writes `searchParams.q` into it, so a URL with `q` fills
-it on load and choosing a place or a view empties it. The page is laid out for
-the view it was loaded with, so from Triage or Trash a text search is not a swap: the store is merged
+it on load and choosing a place or a view empties it. The text searches the view it is typed in, in place: Browse,
+or Triage, among the triaged assets alone, under the Search text's title, which says "in Triage" there. Text does
+not search the Trash, and the page is laid out for
+the view it was loaded with, so from the Trash a text search is not a swap: the store is merged
 and the browser navigates to `/r/<repoId>?<the store's query string>`, a full load of Browse that
 seeds the store from that URL, layout and grouping included.
 
@@ -3889,7 +3930,8 @@ store, a continuation's included (infinite scroll adds its cursor to the same pa
 filters (`PANEL_FILTERS`, `FILTERS`): a search from the panel sets it with the others, a chip's × in a filtered
 search's title sets what the other chips name, and a place, a view or new quick search text clears it. What the
 server refuses beside a description is settled in two ways. What no later search wants back is dropped from the
-store (`withoutRefusedCombinations`): an album, a Triage subset, the map area and any view but the repository view.
+store (`withoutRefusedCombinations`): an album, a Triage subset, the map area and the trash. A description searches
+Browse or Triage, whichever view the search is of.
 What the user chose for every search, the sort, the grouping and the layout (`DESCRIBED_UNSENT`), stays in the store
 and is left out of the request instead (`serializeSearchParams`, whatever the store and the request's overrides hold
 of them), as the server's URL for a described search leaves them out: they are in force again as soon as the

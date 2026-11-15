@@ -40,9 +40,10 @@ const DEFAULTS = {
  * map area (`bbox`, the crowded-pin panel's scope) belongs to the search it was drawn on, so looking
  * somewhere else clears it too.
  *
- * Search text (`q`) is one more place to look: the whole repository outside the trash. So text
- * clears the five and returns to the repository view (a cleared parameter is back at its default),
- * and each of the five, and a view, clears the text.
+ * Search text (`q`) is one more place to look: the whole of the view it is typed in, Browse or
+ * Triage. So text clears the five and keeps the view, but for the trash, which text does not search
+ * and so leaves for the repository view (`withoutRefusedCombinations`), and each of the five, and a
+ * view, clears the text.
  *
  * A place set to nothing still clears the others, so a trigger with one empty literal (the Results
  * title's ×, `data-app-search-person-id=""`) goes back to the whole
@@ -65,10 +66,17 @@ const DEFAULTS = {
  * parameters (`PANEL_FILTERS`) are what looking somewhere else clears as well: a place, a view or
  * new text drops them, and with a place's single ID the several the panel chose.
  *
+ * The panel also says which assets its search covers, in its "Search in" row: Library, Triage or
+ * All. A pick is no parameter of its own but two the search has, the view and the triage filter:
+ * the repository view without the triaged assets, the Triage view, or the repository view with
+ * them. It lasts for the search it was made for and is not remembered: once that search is
+ * replaced, by looking somewhere else or by the removal of its last filter, the triage filter is
+ * the remembered choice again (`withRememberedTriaged`).
+ *
  * A description (`describe`, the words of a Describe search) ranks what the other filters match on
- * the grid, in its one order. A search that holds one drops what the server refuses beside it and
- * no later search wants back, an album, a Triage subset, the map area and any view but the
- * repository view (`withoutRefusedCombinations`), and is sent without the sort, the grouping and
+ * the grid, in its one order, in Browse or in Triage. A search that holds one drops what the server
+ * refuses beside it and no later search wants back, an album, a Triage subset, the map area and
+ * the trash (`withoutRefusedCombinations`), and is sent without the sort, the grouping and
  * the layout (`DESCRIBED_UNSENT`), which the store keeps: they are the choices of the search after
  * it, and go out again once the description is gone.
  */
@@ -87,8 +95,8 @@ const PANEL_FILTERS = [
 /** Every filter of the advanced search panel, which a search from it sets together (`applySearchFilters`) */
 const FILTERS = ["q", "folderId", "personId", "locationId", ...PANEL_FILTERS]
 
-/** What a search from the panel returns to its default: it searches the repository view by its filters alone */
-const FILTER_RESETS = ["view", "albumId", "subset", "bbox"]
+/** What a search from the panel returns to its default: it searches its view by its filters alone */
+const FILTER_RESETS = ["albumId", "subset", "bbox"]
 
 /**
  * What a search with a description is sent without, though the store holds it: the server refuses a
@@ -112,7 +120,7 @@ const CLEARS = {
     albumId: elsewhere("albumId"),
     locationId: elsewhere("locationId"),
     subset: elsewhere("subset"),
-    q: ["view", ...PLACES, ...PANEL_FILTERS, "bbox"],
+    q: [...PLACES, ...PANEL_FILTERS, "bbox"],
 }
 
 /** The numbers the server reads, each held to the whole values it accepts: a page size up to its bound */
@@ -169,7 +177,9 @@ const PARAM_NAMES = Object.keys(DEFAULTS)
  * requests always say which. A Guest sees no triaged item and is refused the filter by the server,
  * so its search is seeded none; without `seesTriaged` nothing is read from `localStorage`.
  *
- * A URL that names either wins for its page, and is not remembered: only a change is (`merge`).
+ * A URL that names either wins and is not remembered: only a change is (`merge`). The layout it
+ * names is the page's; the triage filter it names is its search's, the remembered choice's again
+ * once that search is replaced (`withRememberedTriaged`).
  */
 export function seedSearchParams(search, { seesTriaged = false } = {}) {
     const urlParams = new URLSearchParams(search || "")
@@ -190,7 +200,7 @@ export function seedSearchParams(search, { seesTriaged = false } = {}) {
 
 /**
  * The combinations the server refuses, settled the way the scope rules would have: text, a date
- * range and several people or Locations search the repository view, not the trash; a date range
+ * range and several people or Locations search no trash, and leave it for the repository view; a date range
  * whose first day is after its last is no range; the Relevance sort goes with the text: a change
  * that clears the text drops it, so the server's default applies, while any other sort stays; and
  * the triage filter is the repository view's, so another view drops it (the server refuses it with
@@ -199,8 +209,8 @@ export function seedSearchParams(search, { seesTriaged = false } = {}) {
  * A people match says nothing of fewer than two people, so it goes with the second of them. What
  * only the advanced search panel combines searches by the panel's filters alone, so it drops an
  * album and a Triage subset (`combinesFilters`), which the server refuses beside it. A description
- * is one of those filters, and searches the repository view alone, on the grid: it leaves the
- * Triage view as it leaves the trash, and drops the map area. The sort, the grouping and the
+ * is one of those filters, and searches the repository view or the Triage view, on the grid: it
+ * leaves the trash as the others do, and drops the map area. The sort, the grouping and the
  * layout it takes none of stay in the store and are left out of its requests instead
  * (`serializeSearchParams`), so they are in force again once it is gone.
  */
@@ -230,7 +240,6 @@ function withoutRefusedCombinations(params) {
     }
 
     if (params.describe !== null) {
-        params.view = DEFAULTS.view
         params.bbox = DEFAULTS.bbox
     }
 
@@ -245,7 +254,7 @@ function withoutRefusedCombinations(params) {
     return params
 }
 
-/** Text, a description, a date range, or several people or Locations: what the server searches the repository view for, never the trash */
+/** Text, a description, a date range, or several people or Locations: what the server searches Browse or Triage for, never the trash */
 function searchesOutsideTrash(params) {
     return params.q !== null || hasPanelFilter(params)
 }
@@ -306,8 +315,23 @@ export function rememberedTriaged() {
 }
 
 /**
+ * `params` with the triage filter remembered in this browser in place of the one a search brought:
+ * the panel's pick of Library or All, or a URL's `triaged`, which last for their search alone. A
+ * search that holds no triage filter, a Guest's or another view's, gets none.
+ */
+function withRememberedTriaged(params) {
+    return params.triaged === null
+        ? params
+        : { ...params, triaged: rememberedTriaged() }
+}
+
+/**
  * `current` with `changes` applied under the scope rules above. The store holds no position: a
  * search starts at its first page, and a later page is one request's `after` cursor.
+ *
+ * A change that looks somewhere else (a place, a view or new text, the parameters of `CLEARS`)
+ * replaces the search, and with it the triage filter that search brought (`withRememberedTriaged`),
+ * unless the change names the filter itself.
  */
 export function applySearchParamChanges(current, changes) {
     const changed = Object.keys(changes).filter((name) =>
@@ -327,20 +351,33 @@ export function applySearchParamChanges(current, changes) {
         })
     })
 
-    return withoutRefusedCombinations(next)
+    const settled = withoutRefusedCombinations(next)
+    const looksElsewhere =
+        !changed.includes("triaged") && changed.some((name) => name in CLEARS)
+
+    return looksElsewhere ? withRememberedTriaged(settled) : settled
 }
 
 /**
  * `current` as a search from the advanced search panel leaves it: every filter of the panel
- * (`FILTERS`) is set as `filters` gives it, one left out being no filter, and the view, the album,
- * the Triage subset and the map area return to their defaults, so the search is the repository
- * view's by the panel's filters alone. The layout, the grouping, the sort, the page size and the
- * triage filter stay, under the rules every change is held to (`withoutRefusedCombinations`: a
- * search that leaves another view holds no triage filter, and Browse seeds its own); a
- * search with a description keeps the first three and sends none of them (`DESCRIBED_UNSENT`).
+ * (`FILTERS`) is set as `filters` gives it, one left out being no filter, and the album, the Triage
+ * subset and the map area return to their defaults, so the search is its view's by the panel's
+ * filters alone.
+ *
+ * `filters` that name a `view` carry the panel's pick of the assets to search, the view and the
+ * triage filter together: the repository view without the triaged assets or with them, or the
+ * Triage view, which holds no filter. Without one (a Guest's panel, a chip removed from a filtered
+ * search's title) the view and the triage filter stay, but for the trash, which a search from the
+ * panel never searches; and when no filter is left the search is over, and the triage filter it
+ * brought goes with it (`withRememberedTriaged`).
+ *
+ * The layout, the grouping, the sort and the page size stay, under the rules every change is held
+ * to (`withoutRefusedCombinations`); a search with a description keeps the first three and sends
+ * none of them (`DESCRIBED_UNSENT`).
  */
 export function applySearchFilters(current, filters) {
     const next = { ...current }
+    const picks = "view" in filters
 
     FILTERS.forEach((name) => {
         next[name] = normalize(name, filters[name])
@@ -349,7 +386,18 @@ export function applySearchFilters(current, filters) {
         next[name] = DEFAULTS[name]
     })
 
-    return withoutRefusedCombinations(next)
+    if (picks) {
+        next.view = normalize("view", filters.view)
+        next.triaged = normalize("triaged", filters.triaged)
+    } else if (next.view === Const.views.trashbin) {
+        next.view = DEFAULTS.view
+    }
+
+    const settled = withoutRefusedCombinations(next)
+
+    return !picks && countSearchFilters(settled) === 0
+        ? withRememberedTriaged(settled)
+        : settled
 }
 
 /** The advanced search panel's filters among `params`, each as the store holds it (null for none) */
@@ -437,8 +485,9 @@ export function createSearchParamsStore() {
 
         /**
          * A change of the layout or of the triage filter is a choice, remembered for the page
-         * loads to come. The triage filter is remembered as one of its two values alone: the none
-         * a change of view leaves is no choice.
+         * loads to come. The triage filter is remembered when the change names it, the "Show
+         * triaged items" switch's, as one of its two values alone: the none a change of view
+         * leaves is no choice, and neither is the remembered one a change of place puts back.
          */
         merge(changes) {
             const next = applySearchParamChanges(this.snapshot(), changes)
@@ -450,7 +499,11 @@ export function createSearchParamsStore() {
                 )
             }
 
-            if (next.triaged !== this.triaged && next.triaged !== null) {
+            if (
+                "triaged" in changes &&
+                next.triaged !== this.triaged &&
+                next.triaged !== null
+            ) {
                 localStorage.setItem(Const.localStore.showTriaged, next.triaged)
             }
 
@@ -458,9 +511,10 @@ export function createSearchParamsStore() {
         },
 
         /**
-         * A search from the advanced search panel: its filters replace the ones in force and the
-         * scope returns to the repository view (`applySearchFilters`). A filtered search's results
-         * title removes one filter the same way, with the filters its other chips name.
+         * A search from the advanced search panel: its filters replace the ones in force, and its
+         * pick of the assets to search, when it carries one, the view and the triage filter
+         * (`applySearchFilters`), which is not remembered. A filtered search's results title
+         * removes one filter the same way, with the filters its other chips name and no pick.
          */
         replaceFilters(filters) {
             Object.assign(this, applySearchFilters(this.snapshot(), filters))

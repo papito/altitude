@@ -10,6 +10,8 @@ import {
     seedSearchParams,
     serializeSearchParams,
 } from "../stores/search-params.js"
+
+const { repository, triage } = Const.views
 import { runSearch } from "./search.js"
 
 /**
@@ -24,15 +26,16 @@ import { runSearch } from "./search.js"
  * `date-range.js`).
  *
  * The panel and the quick search form are `hx-preserve`, so they are bound once and outlive a nav
- * reload. The nav is on every page: on the main page the panel shows the search in force and
- * searches in place; on a page with no search of its own (Import, Settings, Users, the style
- * guide), and in Triage and the Trash, whose pages are laid out for their view, it opens Browse
- * with the search as the query string, as the quick search does.
+ * reload. The nav is on every page: in Browse and in Triage the panel shows the search in force and
+ * searches in place when its search is that view's, and opens the other of the two, whose page is
+ * laid out for its view, when its "Search in" row picks it; on a page with no search of its own
+ * (Import, Settings, Users, the style guide), and in the Trash, it opens the view its search is of
+ * with the search as the query string.
  *
  * Opening loads the form (`GET /htmx/search/r/:repoId/panel`, the host's `data-panel-url`) filled
  * in from the search parameters in force, its description included, so the server names the chips,
- * with the triage filter of the search it will run (`triagedOfPanelSearch`), which the form's People
- * options count by. The text is the quick
+ * with the view and the triage filter of the search it will run (`pickOfPanelSearch`), which the
+ * form's "Search in" row opens on and its People options count by. The text is the quick
  * search input's, typed or not yet searched, so the form's field for it and the input hold one
  * value: the input's is copied to the panel as it opens, and the panel's to the input as it
  * searches. The form is read through the axios client and put in the panel here, not by htmx, so
@@ -87,6 +90,22 @@ function filterCountInForce() {
 }
 
 /**
+ * The search `formEl` holds, each entry under its search parameter's name: its filters and, in a
+ * member's form, its pick of the assets to search, the view and the triage filter. A folder holds
+ * no triaged asset, so a form that searches Triage hides its Folder field and holds no folder,
+ * whatever the field kept from another pick.
+ */
+export function searchOfForm(formEl) {
+    const search = Object.fromEntries(new FormData(formEl))
+
+    if (search.view === triage) {
+        delete search.folderId
+    }
+
+    return search
+}
+
+/**
  * Counts on the filter button the fields `formEl` fills, as the store counts those of a search
  * (`countSearchFilters`): the panel's form calls it as it loads and whenever a field's value
  * changes. A form outside the nav's panel (the style guide's specimen) counts nothing.
@@ -97,7 +116,7 @@ export function showFormFilterCount(formEl) {
     }
 
     const filled = Object.fromEntries(
-        [...new FormData(formEl)].map(([name, value]) => [
+        Object.entries(searchOfForm(formEl)).map(([name, value]) => [
             name,
             value.trim() === "" ? null : value,
         ]),
@@ -145,15 +164,23 @@ export function closeOpenSearchPanel() {
 
 /**
  * Runs the search of the panel's `filters`, each under its search parameter's name, which replace
- * the ones in force (`applySearchFilters`). In Browse the store takes them and the results are read
- * again in place, the panel closed and the quick search input showing the text searched; from
- * anywhere else the window goes to Browse with the search as its query string, which seeds the
- * store there.
+ * the ones in force (`applySearchFilters`), with the panel's pick of the assets to search, a `view`
+ * and a `triaged`, when they carry one; a chip removed from a filtered search's title carries none,
+ * and keeps the view. Where the page shows the view the search is of, Browse or Triage, the store
+ * takes the filters and the results are read again in place, the panel closed and the quick search
+ * input showing the text searched; from anywhere else the window goes to that view with the search
+ * as its query string, which seeds the store there.
  */
 export function searchByFilters(filters) {
     const searchParams = Alpine.store(Const.state.searchParams)
+    const params = applySearchFilters(
+        searchParams
+            ? searchParams.snapshot()
+            : seedSearchParams("", { seesTriaged: context.seesTriaged() }),
+        filters,
+    )
 
-    if (Alpine.store(Const.state.currentView)?.isDefaultViewView()) {
+    if (params.view === pageView()) {
         searchParams.replaceFilters(filters)
         // The store writes its text into the input only when the text changes, and the input may
         // hold text that was typed and never searched
@@ -163,28 +190,43 @@ export function searchByFilters(filters) {
         return
     }
 
-    const params = applySearchFilters(
-        searchParams ? searchParams.snapshot() : seedSearchParams(""),
-        filters,
-    )
-
     window.location.assign(
         `${quickSearchFormEl().getAttribute("action")}?${serializeSearchParams(params)}`,
     )
 }
 
+/** The view the page is laid out for: none on a page with no search of its own, which has no view */
+function pageView() {
+    return Alpine.store(Const.state.currentView)?.view ?? null
+}
+
 /**
- * The triage filter of the search the panel runs. In Browse it is the one in force, which a search
- * from the panel keeps. Anywhere else the search opens Browse, which holds no filter yet (the store
- * drops it outside the repository view, and a page with no search has no store) and will be seeded
- * the choice remembered in this browser, so that choice is the one: for an account that sees
- * triaged items alone, since a Guest is refused the filter.
+ * The view and the triage filter of the search the panel will run, which its "Search in" row opens
+ * on. In Triage it is the Triage view, which holds no filter. In Browse it is the repository view
+ * with the triage filter in force: the "Show triaged items" choice, or the pick of the search in
+ * force. Anywhere else the search opens Browse, which holds no filter yet (a page with no search
+ * has no store, and the Trash's holds none) and will be seeded the choice remembered in this
+ * browser, so that choice is the one: for an account that sees triaged items alone, since a Guest
+ * is refused the filter. A search of a folder (a folder's Search here) is Browse's from Triage
+ * too, since a folder holds no triaged asset.
  */
-function triagedOfPanelSearch() {
-    return (
-        Alpine.store(Const.state.searchParams)?.triaged ??
-        (context.seesTriaged() ? rememberedTriaged() : null)
-    )
+function pickOfPanelSearch(filters) {
+    const view = pageView()
+
+    if (view === triage && !filters.folderId) {
+        return { view: triage, triaged: null }
+    }
+
+    const inForce =
+        view === repository
+            ? Alpine.store(Const.state.searchParams).triaged
+            : null
+
+    return {
+        view: repository,
+        triaged:
+            inForce ?? (context.seesTriaged() ? rememberedTriaged() : null),
+    }
 }
 
 function quickSearchFormEl() {
@@ -197,8 +239,9 @@ function filterButtonEl() {
 
 /**
  * Loads the panel's form for the search in force, with the quick search input's text as its text
- * and the filters of `openSearchPanel` over both, and with the triage filter of the search the
- * panel will run. The panel shows nothing meanwhile; a failure closes it.
+ * and the filters of `openSearchPanel` over both, and with the view and the triage filter of the
+ * search the panel will run (`pickOfPanelSearch`). The panel shows nothing meanwhile; a failure
+ * closes it.
  */
 async function loadForm(panelEl) {
     const token = ++loadToken
@@ -207,8 +250,8 @@ async function loadForm(panelEl) {
         ...searchParams?.filters(),
         q: quickSearchFormEl().elements.q.value.trim(),
         ...openingFilters,
-        triaged: triagedOfPanelSearch(),
     }
+    Object.assign(filters, pickOfPanelSearch(filters))
     openingFilters = null
     panelEl.replaceChildren()
 

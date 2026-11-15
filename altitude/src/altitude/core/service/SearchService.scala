@@ -12,6 +12,7 @@ import altitude.core.IllegalOperationException
 import altitude.core.RequestContext
 import altitude.core.dao.SearchDao
 import altitude.core.models.Asset
+import altitude.core.models.CountedAssets
 import altitude.core.models.ListedPerson
 import altitude.core.models.MapBounds
 import altitude.core.models.MapCells
@@ -181,13 +182,13 @@ class SearchService(val app: Altitude):
   /**
    * The people the advanced search panel offers for the text typed so far ([[offered]]), by name: the people a Search text
    * resolves names against, named and neither hidden, merged away nor a bad match, each with their cover and the number of assets
-   * a search of them finds, which counts their triaged assets only when the search shows triaged items. A Person the search would
-   * find nothing for is no option, as the People tab lists none (`PersonService.getListedSearchable`).
+   * a search of them finds among the `counted` assets, the ones the search covers: the sorted assets, the triaged ones, or both.
+   * A Person the search would find nothing for is no option, as the People tab lists none (`PersonService.getListedSearchable`).
    */
-  def peopleOptions(typed: String, showTriaged: Boolean): List[ListedPerson] =
+  def peopleOptions(typed: String, counted: CountedAssets): List[ListedPerson] =
     txManager.asReadOnly {
       val listed =
-        app.service.person.getListedSearchable(showTriaged).map(listed => listed.person.persistedId -> listed).toMap
+        app.service.person.getListedSearchable(counted).map(listed => listed.person.persistedId -> listed).toMap
       // A searchable Person is named
       val names = listed.values.toSeq.map(listed => SearchName(listed.person.persistedId, listed.person.name.get))
       offered(names, typed)(person => List(person.name)).map(person => listed(person.id))

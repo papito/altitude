@@ -14,6 +14,7 @@ import altitude.core.Validators
 import altitude.core.dao.FaceDao
 import altitude.core.dao.PersonDao
 import altitude.core.models.Asset
+import altitude.core.models.CountedAssets
 import altitude.core.models.Face
 import altitude.core.models.ListedPeople
 import altitude.core.models.ListedPerson
@@ -788,33 +789,42 @@ class PersonService(val app: Altitude) extends BaseService[Person]:
   def getListedInBuckets(buckets: Set[String], showTriaged: Boolean): ListedPeople =
     txManager.asReadOnly {
       val people = dao.getInBuckets(buckets)
-      val listed = listedOf(people, showTriaged)
+      val listed = listedOf(people, if showTriaged then CountedAssets.All else CountedAssets.Sorted)
       ListedPeople(listed, leftOffByTriage = people.nonEmpty && listed.isEmpty)
     }
 
   /**
    * The people a Search text finds by name (`SearchQueries.searchablePeople`: named, and neither hidden, merged away nor a bad
-   * match), in no order, each with the count the People tab shows for them ([[getListedInBuckets]]), read in one snapshot. A
-   * Person with nothing left to find is left off, as the tab leaves them off: the advanced search panel offers these.
+   * match), in no order, each with the number of the `counted` assets a search of them finds, read in one snapshot. A Person with
+   * nothing to find among them is left off, as the People tab leaves them off: the advanced search panel offers these.
    */
-  def getListedSearchable(showTriaged: Boolean): List[ListedPerson] =
+  def getListedSearchable(counted: CountedAssets): List[ListedPerson] =
     txManager.asReadOnly {
       val searchable = new Query().add(
         FieldConst.Person.IS_NAMED -> true,
         FieldConst.Person.IS_HIDDEN -> false,
         FieldConst.Person.IS_DELETED -> false,
         FieldConst.Person.IS_BAD_MATCH -> false)
-      listedOf(dao.query(searchable).records, showTriaged)
+      listedOf(dao.query(searchable).records, counted)
     }
 
   /**
-   * The people, in their order, each with the number of assets opening them from the repository view finds: `numOfFaces`, less
-   * the Person's triaged assets when triaged items are hidden. Those with nothing to find are left off.
+   * The people, in their order, each with the number of the `counted` assets opening them finds: `numOfFaces`, which counts every
+   * asset out of the trash; less the Person's triaged assets for the sorted ones; or the triaged assets alone. Those with nothing
+   * to find are left off.
    */
-  private def listedOf(people: List[Person], showTriaged: Boolean): List[ListedPerson] =
-    val triagedCounts = if showTriaged then Map.empty[String, Int] else dao.getTriagedAssetCounts
+  private def listedOf(people: List[Person], counted: CountedAssets): List[ListedPerson] =
+    val triagedCounts = if counted == CountedAssets.All then Map.empty[String, Int] else dao.getTriagedAssetCounts
+    def triagedOf(person: Person): Int = triagedCounts.getOrElse(person.persistedId, 0)
     people
-      .map(person => ListedPerson(person, person.numOfFaces - triagedCounts.getOrElse(person.persistedId, 0)))
+      .map {
+        person =>
+          val count = counted match
+            case CountedAssets.All => person.numOfFaces
+            case CountedAssets.Sorted => person.numOfFaces - triagedOf(person)
+            case CountedAssets.Triaged => triagedOf(person)
+          ListedPerson(person, count)
+      }
       .filter(_.visibleCount > 0)
 
   /**

@@ -108,13 +108,15 @@ test("the sort, the grouping and the layout come back when the description goes"
     )
 })
 
-test("a description searches the repository view by its filters alone: no trash, no Triage, no album, subset or map area", () => {
-    for (const view of ["trashbin", "triage"]) {
-        assert.equal(
-            seedSearchParams(`?view=${view}&describe=a+cactus`).view,
-            "repository",
-        )
-    }
+test("a description searches Browse or Triage by its filters alone: no trash, no album, subset or map area", () => {
+    assert.equal(
+        seedSearchParams("?view=trashbin&describe=a+cactus").view,
+        "repository",
+    )
+    assert.equal(
+        seedSearchParams("?view=triage&describe=a+cactus").view,
+        "triage",
+    )
 
     const params = seedSearchParams(
         "?describe=a+cactus&albumId=best&subset=noLocation&bbox=1,2,3,4&folderId=trips",
@@ -181,7 +183,7 @@ test("a sort, a grouping or a layout chosen meanwhile leaves the description in 
 })
 
 test("a search from the panel sets the description with the other filters, and one left out is none", () => {
-    const browsing = seedSearchParams("?view=triage&albumId=best&sort=filename0")
+    const browsing = seedSearchParams("?albumId=best&sort=filename0")
     const described = applySearchFilters(browsing, {
         describe: "  woman in a park ",
         q: "beach",

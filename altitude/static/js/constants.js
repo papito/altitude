@@ -256,6 +256,7 @@ export const Const = {
         // A combobox field of the panel's form (htmx/search_panel): the route of its options, whether it takes several
         // names, the most it takes and the line that says so once it holds them
         optionsUrl: "data-options-url",
+        optionsParams: "data-options-params",
         multiple: "data-multiple",
         maxChosen: "data-max-chosen",
         maxChosenMessage: "data-max-chosen-message",
