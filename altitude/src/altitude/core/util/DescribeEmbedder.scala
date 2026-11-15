@@ -145,9 +145,10 @@ object OnnxDescribeEmbedder:
  * product.
  *
  * Nothing is loaded when this is built. The first description opens the text tower (`TextTower`) and the tokenizer loads its
- * vocabulary, which takes about a second, and both stay loaded until `close`. A server that is never asked for a description
- * never pays for either, and neither does an import, which embeds images alone. A missing model file therefore fails the first
- * search with a description, and each one after it, rather than the start.
+ * vocabulary, which takes about a second. The tower stays loaded until `close`; the vocabulary is the tokenizer object's
+ * (`Siglip2Tokenizer`, a `lazy val`) and stays for the life of the JVM. A server that is never asked for a description never pays
+ * for either, and neither does an import, which embeds images alone. A missing model file therefore fails the first search with a
+ * description, and each one after it, rather than the start.
  *
  * Measured on the machine of [[ImportParallelism]]'s figures, in a JVM with the two Scene models open: the first description adds
  * about 570 MB resident, of which the session is about 430 MB once opened (343 MB of weights, which the runtime pre-packs and
