@@ -2411,6 +2411,68 @@ import altitude.core.util.Util
     }
   }
 
+  test("A description with markup, quotes, an ampersand and a line break is escaped wherever it is shown") {
+
+    /**
+     * Setup:
+     *
+     * A logged-in user's repository with a sorted asset whose Scene embedding is at a cosine of 0.9 to the embedding of a
+     * description of two lines, the first of them markup around a quoted word and an ampersand: `<b>"a" & b</b>`.
+     *
+     * Assertions:
+     *
+     * The results find the asset, and nowhere hold the description's markup as markup. Its chip carries the description as an
+     * attribute, shows it after "Describe:" and names its remove control by it, each with the angle brackets, the quotes and the
+     * ampersand as character references and the line break as it is. The replaced URL carries the description percent-encoded,
+     * the line break included, so no header holds one.
+     *
+     * Edge cases:
+     *
+     * The advanced search panel opened on the search holds the description in its Describe field, a textarea, escaped the same
+     * way, with its line break.
+     */
+    testContext.persistRepository()
+    val repoId = testContext.repository.persistedId
+    login()
+
+    withServer(App) {
+      host =>
+        val description = "<b>\"a\" & b</b>\nsecond line"
+        val escaped = "&lt;b&gt;&quot;a&quot; &amp; b&lt;/b&gt;\nsecond line"
+        val found = lookingLike(description, 0.9, seed = 1)
+
+        val results = htmlSearch(host, repoId, Map("describe" -> description))
+        results.statusCode shouldBe 200
+        val page = results.text()
+        cellIds(page) shouldBe List(found.persistedId)
+        (page should not).include("<b>\"a\"")
+        (page should not).include("b</b>")
+
+        // The chip's text, read with the line break as a space, as every run of whitespace between its tags is
+        filterChipsIn(page) shouldBe
+          List(FilterChip(Map("describe" -> escaped), s"Describe: “${escaped.replace('\n', ' ')}”"))
+        page should include(s"""data-app-filter-describe="$escaped"""")
+        page should include(s"""<span class="name" data-option-name>Describe: “$escaped”</span>""")
+        page should include(s"""aria-label="Remove Describe: “$escaped”"""")
+
+        val url = results.headers("hx-replace-url").head
+        url should include("describe=%3Cb%3E%22a%22+%26+b%3C%2Fb%3E%0Asecond+line")
+        (url should not).include("\n")
+
+        val panel = requests.get(
+          s"$host/htmx/search/r/$repoId/panel",
+          params = Map("describe" -> description),
+          headers = Map("Accept-Encoding" -> "identity"),
+          cookies = testContext.cookies,
+          check = false
+        )
+        panel.statusCode shouldBe 200
+        val field = """(?s)<textarea\b[^>]*\bname="describe"[^>]*>(.*?)</textarea>""".r.findFirstMatchIn(panel.text()).get
+        field.group(1) shouldBe escaped
+        (panel.text() should not).include("<b>\"a\"")
+    }
+  }
+
   test("A description's pages continue by cursor to the last, each the grid alone") {
 
     /**
