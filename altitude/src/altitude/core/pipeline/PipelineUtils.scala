@@ -16,6 +16,7 @@ import altitude.core.ImporterUnavailableException
 import altitude.core.QueueRefusedException
 import altitude.core.RequestContext
 import altitude.core.SamePersonDetectedTwiceException
+import altitude.core.SceneEmbedderClosedException
 import altitude.core.StorageException
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.VideoException
@@ -26,6 +27,7 @@ import altitude.core.pipeline.PipelineTypes.InvalidAsset
 import altitude.core.pipeline.PipelineTypes.PipelineContext
 import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalid
 import altitude.core.pipeline.PipelineTypes.TDataAssetOrInvalidWithContext
+import altitude.core.service.ImportService
 
 object PipelineUtils:
   final protected val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -45,7 +47,8 @@ object PipelineUtils:
   /** A drop cause the user is told and the log records in one line, without a stack trace */
   def isExpectedDrop(cause: Throwable): Boolean = cause match
     case _: UnsupportedMediaTypeException | _: ImageException | _: VideoException | _: DuplicateException |
-        _: SamePersonDetectedTwiceException | _: ImporterUnavailableException | _: ImportDestinationException =>
+        _: SamePersonDetectedTwiceException | _: ImporterUnavailableException | _: ImportDestinationException |
+        _: SceneEmbedderClosedException =>
       true
     case _ => false
 
@@ -62,6 +65,8 @@ object PipelineUtils:
     // A fixed text (Const.Msg.Err.DESTINATION_IN_TRASH), or DESTINATION_FOLDER_NAME around the folder rule's, which names a
     // length at most
     case Some(destination: ImportDestinationException) => destination.getMessage
+    // The server stopped under the file: it reads as the files the stop left pending do after the next start
+    case Some(_: SceneEmbedderClosedException) => ImportService.INTERRUPTED
     case other => other.fold("Unknown error")(_.getClass.getSimpleName)
 
   /** Runs a stage for one asset in its pipeline context; whatever it throws drops the asset with that cause */

@@ -447,7 +447,8 @@ class Altitude(
     service.purgePipeline.shutdown()
     // A render cut off, or not yet queued, is queued again at the next startup
     service.editRender.shutdown()
-    // After the import has stopped: its threads run the Scene models
+    // After the import's drain, whose threads run the Scene models. Where the drain ran out they are still embedding: the close
+    // waits for the images under way, and the next is refused, so its file fails instead of being stored with no embedding
     sceneEmbedder.close()
     // Waits for a description being embedded; one that arrives later is refused
     describeEmbedder.close()

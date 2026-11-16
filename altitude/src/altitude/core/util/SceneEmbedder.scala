@@ -7,7 +7,7 @@ import ai.onnxruntime.OrtSession
 import java.nio.FloatBuffer
 import java.nio.file.Path
 import java.util.Collections
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import org.opencv.core.Mat
 import org.opencv.core.Rect
 import org.opencv.core.Size
@@ -19,15 +19,22 @@ import scala.collection.mutable
 import scala.util.control.NonFatal
 
 import altitude.core.ImageException
+import altitude.core.SceneEmbedderClosedException
 import altitude.core.models.SceneEmbedding
 import altitude.core.models.SceneEmbeddings
 import altitude.core.models.SceneFit
 import altitude.core.models.SceneModel
 
-/** Embeds a still image with every [[altitude.core.models.SceneModel]]; a model that cannot embed it gives none */
+/**
+ * Embeds a still image with every [[altitude.core.models.SceneModel]]; a model that cannot embed it gives none. Closing it
+ * releases the models.
+ */
 trait SceneEmbedder extends AutoCloseable:
 
-  /** `image` as `ImageUtil.matFromBytes` decodes it, upright; `name` is for the log */
+  /**
+   * `image` as `ImageUtil.matFromBytes` decodes it, upright; `name` is for the log. A closed embedder throws
+   * `SceneEmbedderClosedException`, which is no failed pass: the image is not one the models could not embed.
+   */
   def embed(image: Mat, name: String): SceneEmbeddings
 
 /**
@@ -242,7 +249,16 @@ class OnnxSceneEmbedder(models: ModelFiles) extends SceneEmbedder:
 
   private val inputs: Map[SceneModel, ModelInput] = SceneModel.values.map(model => model -> ModelInput(model)).toMap
 
-  private val closed = AtomicBoolean(false)
+  /**
+   * Guards the sessions' life: an image's passes hold the read lock, so images embed together, and closing holds the write lock,
+   * so no session is closed under a pass. `OrtSession.close` releases the native session at once, with no lock of its own, and a
+   * pass still running on it then reads freed memory: the JVM dies of a SIGSEGV in ONNX Runtime's library. The import's threads
+   * are still embedding when a stop's drain runs out and `Altitude.cleanup` closes the embedder.
+   */
+  private val lifecycle = ReentrantReadWriteLock()
+
+  // Written under the write lock, read under the read lock
+  private var closed = false
 
   /** When a later session fails to open, the ones open already are closed first */
   private def openSessions(): Map[SceneModel, OrtSession] =
@@ -265,9 +281,17 @@ class OnnxSceneEmbedder(models: ModelFiles) extends SceneEmbedder:
     logger.info(s"Opened the ONNX session of Scene model ${model.name} from $path")
     session
 
-  /** A model that cannot prepare the image or whose pass fails gives no embedding (WARN), and the other model's stands */
+  /**
+   * A model that cannot prepare the image or whose pass fails gives no embedding (WARN), and the other model's stands. A closed
+   * embedder refuses instead: it embeds an image with both models or with neither.
+   */
   override def embed(image: Mat, name: String): SceneEmbeddings =
-    SceneEmbeddings(dinov2 = embed(image, SceneModel.Dinov2, name), siglip2 = embed(image, SceneModel.Siglip2, name))
+    val reading = lifecycle.readLock()
+    reading.lock()
+    try
+      if closed then throw SceneEmbedderClosedException()
+      SceneEmbeddings(dinov2 = embed(image, SceneModel.Dinov2, name), siglip2 = embed(image, SceneModel.Siglip2, name))
+    finally reading.unlock()
 
   private def embed(image: Mat, model: SceneModel, name: String): Option[SceneEmbedding] =
     try Some(run(prepare(image, model), model))
@@ -297,5 +321,15 @@ class OnnxSceneEmbedder(models: ModelFiles) extends SceneEmbedder:
       channel += 1
     values
 
-  /** Once, since ONNX Runtime warns on a second close of a session; the environment is the process's and stays */
-  override def close(): Unit = if closed.compareAndSet(false, true) then sessions.values.foreach(_.close())
+  /**
+   * Closes the sessions once the images being embedded have their embeddings; every image after it is refused. Once, since ONNX
+   * Runtime warns on a second close of a session; the environment is the process's and stays.
+   */
+  override def close(): Unit =
+    val writing = lifecycle.writeLock()
+    writing.lock()
+    try
+      if !closed then
+        closed = true
+        sessions.values.foreach(_.close())
+    finally writing.unlock()

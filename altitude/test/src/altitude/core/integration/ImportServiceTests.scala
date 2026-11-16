@@ -30,6 +30,7 @@ import altitude.core.ImageException
 import altitude.core.ImporterUnavailableException
 import altitude.core.NotFoundException
 import altitude.core.RequestContext
+import altitude.core.SceneEmbedderClosedException
 import altitude.core.StorageException
 import altitude.core.UnsupportedMediaTypeException
 import altitude.core.ValidationException
@@ -254,12 +255,13 @@ import altitude.core.util.Query
      *
      * An asset in Triage, and an Import's files each dropped for one cause: a duplicate of that asset, a duplicate of an asset
      * not there, an unsupported type, an undecodable image and Video, a storage error, a gone importer, an unexpected exception
-     * whose message names a path, and no cause.
+     * whose message names a path, a Scene embedder closed by a stop, and no cause.
      *
      * Assertions:
      *
      * The duplicate points at the asset with "Triage" as reason. The duplicate of nothing is failed, its copy not in the Library.
-     * The unsupported type is unsupported, and every other cause failed with its named reason.
+     * The unsupported type is unsupported, and every other cause failed with its named reason. The closed embedder's file reads
+     * as the files a stop leaves pending do after the next start: interrupted by a restart.
      *
      * Edge cases:
      *
@@ -281,6 +283,7 @@ import altitude.core.util.Query
         Some(ImporterUnavailableException(Const.Msg.Err.IMPORTER_GONE)),
         (ImportOutcome.Failed, Some(Const.Msg.Err.IMPORTER_GONE), None)),
       (other, Some(new IllegalStateException("/secret/path")), (ImportOutcome.Failed, Some("IllegalStateException"), None)),
+      (other, Some(SceneEmbedderClosedException()), (ImportOutcome.Failed, Some("Interrupted by a restart"), None)),
       (other, None, (ImportOutcome.Failed, Some("Unknown error"), None))
     )
     val (opened, files) = importOf(causes.indices.map(index => s"$index.jpg")*)
@@ -288,7 +291,7 @@ import altitude.core.util.Query
     for ((file, (asset, cause, _)) <- files.zip(causes)) imports.settleDropped(file.persistedId, asset, cause)
 
     files.map(stored).map(file => (file.outcome, file.reason, file.assetId)) shouldBe causes.map(_._3)
-    counters(opened) shouldBe (0, 0, 1, 1, 7)
+    counters(opened) shouldBe (0, 0, 1, 1, 8)
   }
 
   test("An Import closes once it is marked complete and none of its files is pending") {
@@ -1097,6 +1100,38 @@ import altitude.core.util.Query
     vows.fileName shouldBe "vows.jpg"
     testApp.service.folder.getPath(vows.folderId).map(_.name) shouldBe List("Clients", "Ceremony")
     testApp.service.asset.getById(stored(topFile).assetId.get).folderId shouldBe clients.persistedId
+  }
+
+  test("An uploaded image measured once the Scene embedder is closed fails as interrupted, and nothing of it is kept") {
+
+    /**
+     * Setup:
+     *
+     * An upload of one staged image, imported by the queue while the Scene embedder refuses every image as a closed one does: a
+     * stop whose import drain ran out closes the embedder under the files still in the pipeline.
+     *
+     * Assertions:
+     *
+     * The file is failed, "Interrupted by a restart", and points at no asset: the import did not go on to store the image as one
+     * the models could not embed, which no later import would put right. The Library holds no asset of it, so the same image
+     * uploads again and is imported.
+     */
+    val image = IntegrationTestUtil.generateRandomImagBytesBgr(dimensions = 150)
+    def uploaded(): (Import, ImportFile) = {
+      val opened = imports.openUpload(name = None, destFolderId = None)
+      val file = imports.upload(opened.persistedId, "late.jpg", testApp.service.staging.stage(image))
+      imports.close(opened.persistedId)
+      eventually(stored(opened).closedAt should not be empty)
+      (opened, stored(file))
+    }
+
+    val (cutOff, failed) = withSceneEmbedderClosed(uploaded())
+    (failed.outcome, failed.reason, failed.assetId) shouldBe (ImportOutcome.Failed, Some("Interrupted by a restart"), None)
+    counters(cutOff) shouldBe (0, 0, 0, 0, 1)
+
+    val (again, imported) = uploaded()
+    imported.outcome shouldBe ImportOutcome.Imported
+    counters(again) shouldBe (0, 1, 0, 0, 0)
   }
 
   test("An uploaded file the import queue refuses is recorded failed") {

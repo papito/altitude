@@ -13,6 +13,7 @@ import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
 import altitude.core.ImageException
 import altitude.core.NotFoundException
+import altitude.core.SceneEmbedderClosedException
 import altitude.core.dao.AssetDao
 import altitude.core.models.Asset
 import altitude.core.models.AssetWithData
@@ -99,6 +100,9 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
    * asset comes back as is. The metrics are derived and NULL is a state every reader handles, so a failed measurement is logged
    * and the asset imports unmeasured rather than being dropped. The embedder fails a model at a time the same way, so an image
    * can carry one embedding and not the other. Touches no database.
+   *
+   * A closed Scene embedder is no failed measurement: the server is stopping, and the image would be stored for good as one the
+   * models could not embed. Its `SceneEmbedderClosedException` is thrown on, so the stage drops the asset and its file fails.
    */
   def measureImage(dataAsset: AssetWithData): AssetWithData =
     val asset = dataAsset.asset
@@ -125,6 +129,7 @@ class AssetService(val app: Altitude) extends BaseService[Asset]:
         detectedFaces = dataAsset.detectedFaces.map(_ => DetectedFaces(measurement.faces.zip(detected.map(_._2))))
       )
     catch
+      case closed: SceneEmbedderClosedException => throw closed
       case NonFatal(e) =>
         logger.warn(s"Could not measure ${asset.fileName}, importing it unmeasured", e)
         dataAsset
