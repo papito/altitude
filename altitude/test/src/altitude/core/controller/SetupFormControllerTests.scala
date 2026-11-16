@@ -1,5 +1,6 @@
 package altitude.core.controller
 
+import altitude.test.LoggedLine
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.not
 import org.scalatest.matchers.should.Matchers.{ be, include, should, shouldBe }
@@ -7,6 +8,7 @@ import org.scalatest.matchers.should.Matchers.{ be, include, should, shouldBe }
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.routes.web.SessionController
 
 @DoNotDiscover class SetupFormControllerTests extends ControllerTestCore {
 
@@ -124,6 +126,41 @@ import altitude.core.Const
           data = Map("login" -> "chief.admin", "password" -> "password123"))
         login.statusCode shouldBe 302
         login.headers("location") shouldBe Seq(s"/r/${testApp.service.repository.getAll.head.persistedId}")
+    }
+  }
+
+  test("The Setup request's log lines carry the new Admin's ID once the Admin exists") {
+
+    /**
+     * Setup:
+     *
+     * A new installation, and a valid setup form sent with no session.
+     *
+     * Assertions:
+     *
+     * Setup signs the new Admin in, and the request's last line carries the Admin's ID as its user, with the request ID its first
+     * line carries. No line carries any other user.
+     *
+     * Edge cases:
+     *
+     * The request's first line, logged before the Admin exists, carries no user.
+     */
+    onNewInstallation {
+      host =>
+        var response: Option[requests.Response] = None
+        val lines = LoggedLine.during { response = Some(postSetup(host, "My Library")) }.filter(_.onRequestThread)
+
+        response.get.headers.get("hx-redirect") should not be None
+        val token = response.get.cookies(SessionController.AUTH_COOKIE_NAME).getValue
+        val admin = App.altitude.service.paseto.readToken(token).get.account.persistedId
+
+        lines.head.message should include("Request START")
+        lines.head.user shouldBe None
+        lines.last.message should include("Request END [200]")
+        lines.last.user shouldBe Some(admin)
+        lines.flatMap(_.user).distinct shouldBe Seq(admin)
+        lines.map(_.requestId).distinct shouldBe Seq(lines.head.requestId)
+        lines.head.requestId should not be None
     }
   }
 }

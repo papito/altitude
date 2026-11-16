@@ -32,7 +32,8 @@ object PipelineUtils:
 
   /**
    * Runs the work under the context's repository, account and Permissions, scoped to the work alone so a pooled thread never
-   * works under the request that last ran on it
+   * works under the request that last ran on it. The log context (the MDC's request ID and user) is the request thread's and is
+   * not bound here: a line the work logs carries neither.
    */
   def withContext[A](ctx: PipelineContext)(work: => A): A =
     RequestContext.repository.withValue(Some(ctx.repository)) {

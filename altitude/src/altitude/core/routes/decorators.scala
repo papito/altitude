@@ -456,19 +456,28 @@ object decorators:
         case v: Raw => v
       }
 
+  /**
+   * Logs a request's START and END lines at DEBUG, and owns the request's log context (`Const.LogContext`, the MDC). Every
+   * request starts with the context cleared: request threads are pooled, so a line would otherwise carry the request ID and the
+   * user of the last request on its thread. A request then gets a request ID of its own, and its account's ID as the user once it
+   * has an account (`UserService.switchContextToUser`).
+   *
+   * The context is the request thread's alone. What a request hands to another thread (the import pipeline, a render, a Watch
+   * folder scan, an actor, an open WebSocket's messages) logs with neither, and nothing propagates it there.
+   */
   class requestResponseLogger extends cask.RawDecorator:
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      MDC.clear()
 
       val path = req.exchange.getRequestPath
       if path.startsWith("/static/") || path.startsWith("/assets/") || path.startsWith("/content") then
-        // skip logging for static file requests
+        // No START or END line for a file request, and so no request ID; its lines still carry its user
         return delegate(req, Map())
 
       val startTime = currentTimeMillis
       val requestId = Util.randomStr(size = 6)
 
-      // this is used by logback pattern layout
-      MDC.put("REQUEST_ID", requestId)
+      MDC.put(Const.LogContext.REQUEST_ID, requestId)
 
       val pathInfo = s"${req.exchange.getRequestPath}, ${req.exchange.getRequestMethod}?${req.exchange.getQueryParameters}"
 

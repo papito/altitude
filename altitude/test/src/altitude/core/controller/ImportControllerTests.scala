@@ -1,6 +1,7 @@
 package altitude.core.controller
 
 import altitude.test.IntegrationTestUtil
+import altitude.test.LoggedLine
 import java.net.HttpCookie
 import java.net.URI
 import java.net.http.HttpClient
@@ -166,6 +167,70 @@ object ImportControllerTests {
     val path = statusPath(loginAs(AccountType.Guest, Permissions.none))
 
     withServer(App)(host => importStatusHandshake(host, testContext.cookies, path) shouldBe Left(403))
+  }
+
+  test("An import status handshake's log lines carry its account's ID, and the socket's own lines no request's") {
+
+    /**
+     * Setup:
+     *
+     * A Guest logged in to a Library and a User logged in with Import in another, served on one request thread. In a row: the
+     * Guest's handshake, which is refused; a handshake with no cookie; then the User's, which opens the socket, and the socket is
+     * closed.
+     *
+     * Assertions:
+     *
+     * The refusal of the Guest's handshake carries the Guest's ID as its user and the handshake's request ID. The anonymous
+     * handshake that follows on the same thread carries a request ID of its own and no user.
+     *
+     * Edge cases:
+     *
+     * The line the socket logs when it closes is written off the request thread, after the handshake's request has ended: it
+     * carries neither a request ID nor a user, not even the User's whose socket it is.
+     */
+    val guestPath = statusPath(loginAs(AccountType.Guest, Permissions.none))
+    val guest = testContext.user
+    val guestCookies = testContext.cookies
+    val user = testContext.persistUser()
+    val library = testContext.persistRepository()
+    testContext.grant(user, library, Permissions.of(Permission.Import))
+    val userPath = statusPath(library.persistedId)
+
+    withServer(App, requestThreads = Some(1)) {
+      host =>
+        val userCookies = cookiesOf(host, user)
+
+        val ofGuest = LoggedLine.during(importStatusHandshake(host, guestCookies, guestPath) shouldBe Left(403))
+        val refusal = ofGuest.filter(_.message.contains("Refused an import status handshake of Guest"))
+        refusal should have size 1
+        refusal.head.user shouldBe Some(guest.persistedId)
+        refusal.head.requestId should not be None
+        ofGuest.filter(_.onRequestThread).flatMap(_.user).distinct shouldBe Seq(guest.persistedId)
+
+        val ofNobody =
+          LoggedLine.during(importStatusHandshake(host, Map.empty, guestPath) shouldBe Left(401)).filter(_.onRequestThread)
+        ofNobody should not be empty
+        ofNobody.flatMap(_.user) shouldBe empty
+        ofNobody.map(_.requestId).distinct should (((have size 1).and(not) contain None).and(not) contain refusal.head.requestId)
+        ofNobody.map(_.thread).distinct shouldBe ofGuest.filter(_.onRequestThread).map(_.thread).distinct
+
+        LoggedLine.capturing {
+          lines =>
+            importStatusHandshake(host, userCookies, userPath) shouldBe Right(CONNECTED)
+            // The handshake helper drops the socket once it has its first message, and the socket's actor logs that
+            val closed = eventually {
+              val found = lines().filter(_.message == "Connection closed.")
+              found should not be empty
+              found
+            }
+            closed.foreach {
+              line =>
+                line.onRequestThread shouldBe false
+                line.requestId shouldBe None
+                line.user shouldBe None
+            }
+        }
+    }
   }
 
   test("A Library's import status WebSocket refuses an account that does not hold Import there") {

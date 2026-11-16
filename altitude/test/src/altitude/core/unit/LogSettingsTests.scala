@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters.*
 
+import altitude.core.Const
 import altitude.core.LogSettings
 
 /**
@@ -72,8 +73,18 @@ import altitude.core.LogSettings
     String(appender.getEncoder.encode(event), StandardCharsets.UTF_8)
   }
 
-  /** An event of a request's thread: a message pattern with arguments, the MDC's request ID, and optionally a failure */
-  private def eventOf(context: LoggerContext, failure: Option[Throwable] = None): LoggingEvent = {
+  /** An account's ID, as the MDC holds a request's user */
+  private val ACCOUNT_ID = "3f2b8c1e-7a4d-4e9b-9c55-0d6e1f2a3b4c"
+
+  /**
+   * An event of a signed-in request's thread: a message pattern with arguments, the MDC's request ID and user, and optionally a
+   * failure
+   */
+  private def eventOf(
+      context: LoggerContext,
+      failure: Option[Throwable] = None,
+      mdc: Map[String, String] = Map(Const.LogContext.REQUEST_ID -> "ab12cd", Const.LogContext.USER -> ACCOUNT_ID))
+      : LoggingEvent = {
     val event = LoggingEvent(
       classOf[Logger].getName,
       context.getLogger("altitude.core.service.Example"),
@@ -82,7 +93,7 @@ import altitude.core.LogSettings
       failure.orNull,
       Array[AnyRef]("3", "7", "an import")
     )
-    event.setMDCPropertyMap(java.util.Map.of("REQUEST_ID", "ab12cd"))
+    event.setMDCPropertyMap(mdc.asJava)
     event
   }
 
@@ -226,19 +237,20 @@ import altitude.core.LogSettings
     /**
      * Setup:
      *
-     * `logback.xml` read with the format text and the level INFO, and an event of a request's thread: a message pattern with
-     * three arguments and a line break, the MDC's request ID, and an exception with a cause.
+     * `logback.xml` read with the format text and the level INFO, and an event of a signed-in request's thread: a message pattern
+     * with three arguments and a line break, the MDC's request ID and user, and an exception with a cause.
      *
      * Assertions:
      *
      * logback reports no warning or error, so a start prints no status. The root logs at INFO to the `text` appender alone, which
-     * writes the date and time in ISO 8601 with the zone's offset, the level, the request ID, the logger and the formatted
-     * message, then the stack trace with its cause.
+     * writes the date and time in ISO 8601 with the zone's offset, the level, the request ID, the user beside it, the logger and
+     * the formatted message, then the stack trace with its cause.
      *
      * Edge cases:
      *
      * The line holds no ANSI escape, and no method name or line number of the caller. No logger is set apart to log request
-     * lines: the request logger's level is the root's.
+     * lines: the request logger's level is the root's. A line of no request, and one of a request nobody is signed in to, show
+     * the request ID or the user as empty brackets.
      */
     configured(PROD_FILE, format = "text", level = "INFO") {
       context =>
@@ -249,16 +261,20 @@ import altitude.core.LogSettings
 
         val line = written(context, eventOf(context))
         (line should fullyMatch).regex(
-          """\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(Z|[+-]\d{2}:\d{2}) INFO  \[ab12cd\] altitude\.core\.service\.Example - """ +
-            """Stored 3 of 7 files\nfor "an import"\n""")
+          """\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(Z|[+-]\d{2}:\d{2}) INFO  \[ab12cd\] \[""" + ACCOUNT_ID +
+            """\] altitude\.core\.service\.Example - Stored 3 of 7 files\nfor "an import"\n""")
         (line should not).include("\u001b")
 
         val failed = written(context, eventOf(context, Some(IllegalStateException("No space", RuntimeException("Disk full")))))
-        failed should include(" ERROR [ab12cd] altitude.core.service.Example - Stored 3 of 7 files")
+        failed should include(s" ERROR [ab12cd] [$ACCOUNT_ID] altitude.core.service.Example - Stored 3 of 7 files")
         failed should include("java.lang.IllegalStateException: No space")
         failed should include("\tat ")
         failed should include("Caused by: java.lang.RuntimeException: Disk full")
         (failed should not).include("\u001b")
+
+        written(context, eventOf(context, mdc = Map.empty)) should include(" INFO  [] [] altitude.core.service.Example - ")
+        written(context, eventOf(context, mdc = Map(Const.LogContext.REQUEST_ID -> "ab12cd"))) should
+          include(" INFO  [ab12cd] [] altitude.core.service.Example - ")
     }
   }
 
@@ -273,8 +289,8 @@ import altitude.core.LogSettings
      * Assertions:
      *
      * logback reports no warning or error. The root logs to the `json` appender alone, and each event is one line that parses as
-     * a JSON object holding the time, the level, the thread, the logger, the MDC with the request ID, and the formatted message.
-     * The failure's object holds the exception's class, message and stack frames, and its cause the same.
+     * a JSON object holding the time, the level, the thread, the logger, the MDC with the request ID and the user, and the
+     * formatted message. The failure's object holds the exception's class, message and stack frames, and its cause the same.
      *
      * Edge cases:
      *
@@ -296,7 +312,7 @@ import altitude.core.LogSettings
         json("loggerName").str shouldBe "altitude.core.service.Example"
         json("threadName").str shouldBe Thread.currentThread.getName
         json("timestamp").num should be > 0d
-        json("mdc").obj.toMap shouldBe Map("REQUEST_ID" -> ujson.Str("ab12cd"))
+        json("mdc").obj.toMap shouldBe Map("REQUEST_ID" -> ujson.Str("ab12cd"), "USER" -> ujson.Str(ACCOUNT_ID))
         json("throwable").isNull shouldBe true
         json.keySet should contain noneOf ("message", "arguments")
 
@@ -373,7 +389,8 @@ import altitude.core.LogSettings
      * Assertions:
      *
      * The variables change nothing: the root logs at DEBUG to the coloured console appender, the application at INFO, and the
-     * request logger at DEBUG, which is what writes the request lines. logback reports no warning or error.
+     * request logger at DEBUG, which is what writes the request lines. A line shows the MDC's request ID and user. logback
+     * reports no warning or error.
      */
     configured(DEV_FILE, format = "json", level = "ERROR") {
       context =>
@@ -383,7 +400,10 @@ import altitude.core.LogSettings
         context.getLogger("altitude.core").getLevel shouldBe Level.INFO
         context.getLogger("altitude.core.routes.decorators$").getLevel shouldBe Level.DEBUG
 
-        written(context, eventOf(context)) should include("\u001b[")
+        val line = written(context, eventOf(context))
+        line should include("\u001b[")
+        line should include(ACCOUNT_ID)
+        line should include("ab12cd")
     }
   }
 

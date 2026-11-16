@@ -19,6 +19,7 @@ import altitude.core.controller.IndexControllerTests
 import altitude.core.controller.LibraryActionControllerTests
 import altitude.core.controller.LocationActionControllerTests
 import altitude.core.controller.LocationControllerTests
+import altitude.core.controller.LogContextControllerTests
 import altitude.core.controller.LoginControllerTests
 import altitude.core.controller.MapControllerTests
 import altitude.core.controller.PeopleActionControllerTests
@@ -44,6 +45,7 @@ abstract class AllControllerTestSuites
     new AssetActionControllerTests(),
     new EditControllerTests(),
     new LoginControllerTests(),
+    new LogContextControllerTests(),
     new ImportControllerTests(),
     new ContentViewControllerTests(),
     new FolderActionControllerTests(),

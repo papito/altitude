@@ -126,11 +126,16 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
       lastActiveRepoIdOf(user) shouldBe Some(repo.persistedId)
     }
 
-  def withServer[T](app: cask.main.Main)(f: String => T): T = {
-    val server = Undertow.builder
+  /**
+   * Runs `f` against `app` served at the address it is given. With `requestThreads`, the server answers on that many threads:
+   * with one, every request runs on the thread the request before it ran on.
+   */
+  def withServer[T](app: cask.main.Main, requestThreads: Option[Int] = None)(f: String => T): T = {
+    val builder = Undertow.builder
       .addHttpListener(8081, "localhost")
       .setHandler(app.defaultHandler)
-      .build
+    requestThreads.foreach(builder.setWorkerThreads)
+    val server = builder.build
 
     server.start()
 
