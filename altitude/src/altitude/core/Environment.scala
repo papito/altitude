@@ -109,7 +109,8 @@ object Environment:
 
   /**
    * A classpath resource as an absolute filesystem path, extracted to a temp directory when inside a JAR: SQLite loads its vector
-   * extension only from a path.
+   * extension only from a path. Not called when the `altitude.native.dir` property names the folder that holds the extension
+   * (`TransactionManager.vectorExtensionPath`), as in the Docker image, where nothing is extracted.
    */
   def resolveResourcePath(classpathPath: String): String =
     val resourceUrl = getClass.getResource(classpathPath)

@@ -3,6 +3,8 @@ package altitude.core.transactions
 import com.typesafe.config.Config
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.sql.Connection
 import java.sql.Statement
 import org.slf4j.Logger
@@ -36,6 +38,38 @@ object TransactionManager:
    * of them. At 8 (512 MB) the read statement timeout ends such a scan long before its memory does.
    */
   private val HNSW_SCAN_MEM_MULTIPLIER = 8
+
+  /**
+   * The system property naming a folder that holds this platform's sqlite-vector build. The Docker image sets it: its native
+   * libraries are put in a folder when the image is built, so a start unpacks nothing.
+   */
+  val NATIVE_DIR_PROPERTY = "altitude.native.dir"
+
+  /**
+   * The sqlite-vector build for this platform, as a file SQLite can load: the one in `nativeDir` (the value of
+   * [[NATIVE_DIR_PROPERTY]]; an empty one counts as unset), which must hold it, since nothing is then taken from the classpath;
+   * without a folder, the build on the classpath, extracted to a temp folder when it is inside a jar.
+   */
+  def vectorExtensionPath(nativeDir: Option[String]): String =
+    val os = sys.props.getOrElse("os.name", "").toLowerCase
+    val arch = sys.props.getOrElse("os.arch", "").toLowerCase
+
+    // The one Mac build is Apple Silicon's: an Intel Mac runs the Docker image, so nothing loads a build of its own
+    val (platformDir, extName) =
+      if os.contains("mac") || os.contains("darwin") then ("macos-arm64", "vector.dylib")
+      else if os.contains("win") then ("windows-x86", "vector.dll")
+      else
+        // Linux / other Unix
+        val dir = if arch.contains("aarch64") || arch.contains("arm") then "linux-arm64" else "linux-x86"
+        (dir, "vector.so")
+
+    nativeDir.filter(_.nonEmpty) match
+      case Some(dir) =>
+        val file = Paths.get(dir).toAbsolutePath.resolve(extName)
+        if !Files.isRegularFile(file) then
+          throw IllegalStateException(s"$NATIVE_DIR_PROPERTY names $dir, but the sqlite-vector extension is not there: $file")
+        file.toString
+      case None => Environment.resolveResourcePath(s"/sqlite-vector/$platformDir/$extName")
 
 /**
  * Connections and transactions. A transaction runs on a connection borrowed from a HikariCP pool and carried by
@@ -337,21 +371,8 @@ class TransactionManager(val config: Config, explainer: Option[SqlExplainer], se
     try tables.next()
     finally tables.close()
 
-  /** The sqlite-vector build for this platform */
+  /** The sqlite-vector build this process loads into each SQLite connection */
   private lazy val vectorExtensionPath: String =
-    val os = sys.props.getOrElse("os.name", "").toLowerCase
-    val arch = sys.props.getOrElse("os.arch", "").toLowerCase
-
-    val (platformDir, extName) =
-      if os.contains("mac") || os.contains("darwin") then
-        val dir = if arch.contains("aarch64") || arch.contains("arm") then "macos-arm64" else "macos-x86"
-        (dir, "vector.dylib")
-      else if os.contains("win") then ("windows-x86", "vector.dll")
-      else
-        // Linux / other Unix
-        val dir = if arch.contains("aarch64") || arch.contains("arm") then "linux-arm64" else "linux-x86"
-        (dir, "vector.so")
-
-    val path = Environment.resolveResourcePath(s"/sqlite-vector/$platformDir/$extName")
+    val path = TransactionManager.vectorExtensionPath(sys.props.get(TransactionManager.NATIVE_DIR_PROPERTY))
     logger.debug(s"The sqlite-vector extension is at: $path")
     path
