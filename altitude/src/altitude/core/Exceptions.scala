@@ -14,9 +14,6 @@ case class ValidationException(message: String = "") extends Exception:
   def trigger(): Unit =
     if nonEmpty then throw this
 
-// All-purpose event to get out of loops and sticky situations
-case class AllDone(success: Boolean) extends Exception
-
 case class DuplicateException(message: Option[String] = None) extends Exception
 
 case class ConstraintException(msg: String) extends Exception(msg)
