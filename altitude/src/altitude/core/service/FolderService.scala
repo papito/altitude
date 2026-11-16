@@ -2,7 +2,6 @@ package altitude.core.service
 
 import altitude.core.Altitude
 import altitude.core.Api
-import altitude.core.DuplicateException
 import altitude.core.FieldConst
 import altitude.core.IllegalOperationException
 import altitude.core.NotFoundException
@@ -163,7 +162,7 @@ class FolderService(val app: Altitude) extends BaseService[Folder]:
 
     txManager.withTransaction {
       if getAncestors(destFolderId).map(_.persistedId).contains(folderBeingMovedId) then
-        throw DuplicateException(Some("Cannot move parent folder into a child node"))
+        throw IllegalOperationException("Cannot move a folder into its own descendant")
 
       var destFolder: Option[Folder] = None
       try destFolder = Some(getById(destFolderId))

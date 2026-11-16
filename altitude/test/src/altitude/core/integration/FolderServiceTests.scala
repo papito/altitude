@@ -301,8 +301,8 @@ import altitude.core.models.Repository
      *
      * Assertions:
      *
-     * Moving a folder into itself is an illegal operation; moving it into its own descendant, or into a parent that already has a
-     * child of the same name, is a duplicate.
+     * Moving a folder into itself or into its own descendant is an illegal operation; moving it into a parent that already has a
+     * child of the same name is a duplicate.
      *
      * Edge cases:
      *
@@ -316,7 +316,7 @@ import altitude.core.models.Repository
       testApp.service.folder.move(f.folder1.persistedId, f.folder1.persistedId)
     }
 
-    intercept[DuplicateException] {
+    intercept[IllegalOperationException] {
       testApp.service.folder.move(f.folder1.persistedId, f.folder1_1_1.persistedId)
     }
 
