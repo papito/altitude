@@ -412,12 +412,14 @@ import altitude.core.LogSettings
     /**
      * Setup:
      *
-     * The logger context of the test run itself, which the build starts with no configuration file named.
+     * The logger context of the test run itself. The build names its configuration file: the test module's `forkArgs` pass
+     * `-Dlogback.configurationFile=logback-test.xml`.
      *
      * Assertions:
      *
-     * logback configured it from `logback-test.xml`, which it looks for before `logback.xml`: neither the prod configuration nor
-     * the dev one a dev run names reaches a test run.
+     * logback configured it from the file the build names, `logback-test.xml`, and its root logger is off: neither the prod
+     * configuration nor the dev one a dev run names reaches a test run. The order logback looks files up in by itself is not
+     * under test, since a named file comes before it.
      */
     val context = LoggerFactory.getILoggerFactory.asInstanceOf[LoggerContext]
 
