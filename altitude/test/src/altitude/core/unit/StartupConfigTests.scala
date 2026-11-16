@@ -458,6 +458,52 @@ import altitude.core.util.ImportParallelism
     }
   }
 
+  test("An empty host or Data directory fails the start, naming its variable") {
+
+    /**
+     * Setup:
+     *
+     * The config of starts whose `ALTITUDE_HOST` or `ALTITUDE_DATA_DIR` is set but empty, or blank, as a compose file passes a
+     * variable whose own substitution names nothing, and of starts whose config file sets the key to an empty value.
+     *
+     * Assertions:
+     *
+     * Each throws, naming the config key and the variable to set. An empty value does not pass for a setting: an empty host would
+     * be the loopback address to the JDK, so a container would answer its own health check and nobody else, and an empty Data
+     * directory would be the jar's own folder.
+     *
+     * Edge cases:
+     *
+     * With neither variable set, the defaults pass: `localhost`, and `data` under the jar's folder.
+     */
+    withRoot {
+      root =>
+        def configOf(variables: (String, String)*) = Altitude.loadConfig(PROD, variables.toMap, root.toString)
+
+        Altitude.serverHostOf(configOf()) shouldBe "localhost"
+        Altitude.serverHostOf(configOf("ALTITUDE_HOST" -> "0.0.0.0")) shouldBe "0.0.0.0"
+        Altitude.dataPathOf(configOf(), root.toString) shouldBe root.resolve("data").toString
+
+        Seq("", "  ").foreach {
+          value =>
+            withClue(s"[$value]: ") {
+              val noHost = the[IllegalStateException] thrownBy Altitude.serverHostOf(configOf("ALTITUDE_HOST" -> value))
+              noHost.getMessage should include(Const.Conf.SERVER_HOST)
+              noHost.getMessage should include("ALTITUDE_HOST")
+
+              val noData = the[IllegalStateException] thrownBy
+                Altitude.dataPathOf(configOf("ALTITUDE_DATA_DIR" -> value), root.toString)
+              noData.getMessage should include(Const.Conf.FS_DATA_DIR)
+              noData.getMessage should include("ALTITUDE_DATA_DIR")
+            }
+        }
+
+        write(root.resolve("application.conf"), s"""${Const.Conf.SERVER_HOST}=""\n${Const.Conf.FS_DATA_DIR}=""\n""")
+        an[IllegalStateException] should be thrownBy Altitude.serverHostOf(configOf())
+        an[IllegalStateException] should be thrownBy Altitude.dataPathOf(configOf(), root.toString)
+    }
+  }
+
   test("SQLite on a network share, a host folder shared into a container or a FUSE mount is warned about") {
 
     /**

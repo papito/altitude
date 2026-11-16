@@ -32,6 +32,8 @@ import altitude.core.Environment
         environment => {
           environment.put(Environment.Variable.ENV, Environment.Name.PROD)
           environment.put("ALTITUDE_DATA_DIR", data.toString)
+          // A port nothing listens on, so a start that should have failed and did not never takes the default port
+          environment.put("ALTITUDE_PORT", Using.resource(new ServerSocket(0))(_.getLocalPort).toString)
           variables.foreach((name, value) => environment.put(name, value))
         },
         // The prod logging configuration, in place of the test run's, which silences the application
@@ -103,6 +105,38 @@ import altitude.core.Environment
               filesIn(data) shouldBe empty
           }
         }
+    }
+  }
+
+  test("A start with an empty host or an empty Data directory ends the process, naming the variable") {
+
+    /**
+     * Setup:
+     *
+     * A second JVM started as the server with `ALTITUDE_HOST` set but empty, over an empty scratch Data directory, and another
+     * with `ALTITUDE_DATA_DIR` set but empty.
+     *
+     * Assertions:
+     *
+     * Each process ends with status 1 and an ERROR line that says Altitude could not start and names the variable. The first
+     * never binds the loopback address, which is what an empty host is to the JDK, and its Data directory is still empty; the
+     * second never takes the jar's own folder for its Data directory.
+     */
+    startOf("ALTITUDE_HOST" -> "") {
+      (exitCode, output, data) =>
+        exitCode shouldBe 1
+        output should include("Altitude could not start: ")
+        output should include("ALTITUDE_HOST")
+        (output should not).include("Altitude is listening")
+        filesIn(data) shouldBe empty
+    }
+
+    startOf("ALTITUDE_DATA_DIR" -> "") {
+      (exitCode, output, _) =>
+        exitCode shouldBe 1
+        output should include("Altitude could not start: ")
+        output should include("ALTITUDE_DATA_DIR")
+        (output should not).include("Altitude is listening")
     }
   }
 

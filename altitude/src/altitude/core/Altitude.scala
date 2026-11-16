@@ -125,8 +125,8 @@ class Altitude(
   // Before anything connects: an empty password is a start that was never given one, not one to try the database with
   Altitude.requirePostgresPassword(config)
 
-  /** The address the HTTP server binds: `server.host` and `server.port`, the port checked here, before anything is opened */
-  final val serverHost: String = config.getString(Const.Conf.SERVER_HOST)
+  /** The address the HTTP server binds: `server.host` and `server.port`, both checked here, before anything is opened */
+  final val serverHost: String = Altitude.serverHostOf(config)
   final val serverPort: Int = Altitude.serverPortOf(config)
 
   /** Whether the session cookie is `Secure` (`server.secure_cookies`); off only for plain HTTP on a LAN or VPN address */
@@ -499,7 +499,9 @@ object Altitude:
    *
    * The variables are a parameter, the process's own by default, so the loader reads no other environment: a substitution in the
    * config file resolves against the config's keys and these variables, never the rest of the process environment. A variable set
-   * to an empty value sets an empty value, as in any HOCON file. `clearDb` passes none: it clears what the dev config file names.
+   * to an empty value sets an empty value, as in any HOCON file, and where that would pass for a setting the start refuses it by
+   * name ([[serverHostOf]], [[serverPortOf]], [[dataPathOf]], [[requirePostgresPassword]]). `clearDb` passes no variables: it
+   * clears what the dev config file names.
    */
   def loadConfig(
       environment: String = Environment.CURRENT,
@@ -533,9 +535,18 @@ object Altitude:
     val resolved = layered.withFallback(variablesConfig).resolve(ofVariablesAlone)
     variables.keys.foldLeft(resolved)((config, name) => config.withoutPath(ConfigUtil.joinPath(name)))
 
-  /** The Data directory: an absolute `fs.data.dir` as it is, a relative one under the root path (the jar's folder in prod) */
+  /**
+   * The Data directory: an absolute `fs.data.dir` as it is, a relative one under the root path (the jar's folder in prod). An
+   * empty or blank one is refused, naming its variable: it would make the root path itself the Data directory, the image's `/app`
+   * or the folder `clearDb` empties.
+   */
   def dataPathOf(config: Config, rootPath: String = Environment.ROOT_PATH): String =
-    FilenameUtils.concat(rootPath, config.getString(Const.Conf.FS_DATA_DIR))
+    val dir = config.getString(Const.Conf.FS_DATA_DIR)
+    if dir.isBlank then
+      throw IllegalStateException(
+        s"${Const.Conf.FS_DATA_DIR} is empty: set the ALTITUDE_DATA_DIR environment variable, or ${Const.Conf.FS_DATA_DIR} in " +
+          "the config file, to the folder that holds the data, or leave it unset for the default")
+    FilenameUtils.concat(rootPath, dir)
 
   /**
    * Fails the start on PostgreSQL with an empty password, naming the variable to set: a container whose `.env` sets none is
@@ -553,6 +564,19 @@ object Altitude:
    * Read as the instance is built, so such a start fails before a database is opened, a model downloaded or the actor system
    * built, and not when the HTTP server is, last of all.
    */
+  /**
+   * `server.host`, refused when it is empty or blank, naming its variable. To the JDK an empty host is the loopback address
+   * (`InetAddress.getByName`), so a container given `ALTITUDE_HOST=""` (a compose substitution that names nothing) would answer
+   * its own health check and no request from outside it.
+   */
+  def serverHostOf(config: Config): String =
+    val host = config.getString(Const.Conf.SERVER_HOST)
+    if host.isBlank then
+      throw IllegalStateException(
+        s"${Const.Conf.SERVER_HOST} is empty: set the ALTITUDE_HOST environment variable, or ${Const.Conf.SERVER_HOST} in the " +
+          "config file, to the address to listen on (0.0.0.0 for every network interface), or leave it unset for localhost")
+    host
+
   def serverPortOf(config: Config): Int =
     // As text, so a fraction is refused, where `getInt` would drop what follows the point
     val value = config.getString(Const.Conf.SERVER_PORT)
