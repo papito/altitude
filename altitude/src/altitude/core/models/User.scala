@@ -104,6 +104,3 @@ case class User(
 
   override def toString: String = s"<user> ${id.getOrElse("NO ID")}, @$username, accountType: $accountType"
   lazy val toJson: ujson.Obj = JsonCodec.writeJs(this).asInstanceOf[ujson.Obj]
-
-  def forgetMe(): Unit =
-    println("User: this is where you'd invalidate the saved token in you User model")
