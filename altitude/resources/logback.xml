@@ -1,22 +1,54 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<!--
+    The prod configuration: what a start logs by when nothing names another file, so the image and a plain `java -jar` need
+    no flag. A dev run names logback-dev.xml (`forkArgs` in build.mill), and a test run finds logback-test.xml first.
+-->
 <configuration>
-    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <!--
+        ALTITUDE_LOG_FORMAT (text or json, default text) and ALTITUDE_LOG_LEVEL (TRACE, DEBUG, INFO, WARN, ERROR or OFF,
+        default INFO), as LogSettings resolves them: trimmed, in either case, an empty one unset. An unknown value is
+        answered here as the default, and the start then fails naming the variable (LogSettings.requireValid).
+    -->
+    <define name="LOG_FORMAT" class="altitude.core.LogFormatDefiner" />
+    <define name="LOG_LEVEL" class="altitude.core.LogLevelDefiner" />
+
+    <!-- The date and time in ISO 8601 with the zone's offset; no colours, and no caller data, which costs a stack walk a line -->
+    <appender name="text" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%boldWhite(%d{HH:mm:ss.SSS}) %gray(%X{USER}) %highlight(%-5level) [%cyan(%X{REQUEST_ID})]  %logger{36}:%M:%L - %highlight(%msg) %n</pattern>
+            <charset>UTF-8</charset>
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%X{REQUEST_ID}] %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <root level="DEBUG">
-        <appender-ref ref="STDOUT" />
+    <!--
+        One JSON object a line: timestamp (epoch milliseconds), level, threadName, loggerName, mdc (the request ID),
+        formattedMessage and throwable (the stack trace, null when there is none). The message is written as formatted, not
+        as its pattern and arguments. Left out as noise: the sequence number, the nanoseconds and the logger context.
+    -->
+    <appender name="json" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.JsonEncoder">
+            <withSequenceNumber>false</withSequenceNumber>
+            <withNanoseconds>false</withNanoseconds>
+            <withContext>false</withContext>
+            <withMessage>false</withMessage>
+            <withArguments>false</withArguments>
+            <withFormattedMessage>true</withFormattedMessage>
+        </encoder>
+    </appender>
+
+    <!-- No logger below has a level of its own, so ALTITUDE_LOG_LEVEL is every logger's; the request lines are at DEBUG -->
+    <root level="${LOG_LEVEL}">
+        <appender-ref ref="${LOG_FORMAT}" />
     </root>
 
-    <logger name="altitude.core" level="INFO" />
-    <!-- Request START/END lines; the trailing $ names the Scala object -->
-    <logger name="altitude.core.routes.decorators$" level="DEBUG" />
-    <logger name="org.xnio" level="WARN" />
-    <logger name="com.zaxxer.hikari" level="WARN" />
-    <logger name="io.undertow" level="INFO" />
-    <logger name="org.apache.tika.config.TikaConfig" level="ERROR" />
+    <!--
+        Nothing logs to this logger. It refers to both appenders because logback warns of an appender no logger refers to,
+        and one warning makes it print its whole configuration status at every start, ahead of the first line.
+    -->
+    <logger name="altitude.core.LogSettings.unselected" level="OFF" additivity="false">
+        <appender-ref ref="text" />
+        <appender-ref ref="json" />
+    </logger>
 
 </configuration>

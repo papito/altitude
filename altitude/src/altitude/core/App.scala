@@ -49,6 +49,11 @@ import altitude.core.routes.web.partial.ViewSettingsActionController
 import altitude.core.routes.web.partial.WatchFolderController
 
 object App extends cask.Main:
+  given logger: Logger = LoggerFactory.getLogger(getClass)
+
+  // Before anything is built: logback is logging by the default in place of a logging variable it could not take
+  requireLogSettings()
+
   /**
    * The code uses the org.opencv API, but its native library is loaded through org.bytedeco: the usual
    * `System.loadLibrary(Core.NATIVE_LIBRARY_NAME)` does not link it. https://stackoverflow.com/a/58064096/53687
@@ -68,8 +73,6 @@ object App extends cask.Main:
   altitude.service.library.reconcileStats()
   // After the interrupted Imports are failed, so no Watch folder scan's Import is taken for one of them
   altitude.service.watchFolder.start()
-
-  given logger: Logger = LoggerFactory.getLogger(getClass)
 
   /** The address the server binds: `server.host` and `server.port` */
   override def host: String = altitude.config.getString(Const.Conf.SERVER_HOST)
@@ -111,6 +114,18 @@ object App extends cask.Main:
 
     undertow.start()
     logStart()
+
+  /**
+   * Fails the start when `ALTITUDE_LOG_FORMAT` or `ALTITUDE_LOG_LEVEL` has an unknown value, in any environment. The refusal
+   * names the variable and its accepted values. It is logged as well as thrown: thrown from this object's initializer, it reaches
+   * the console as the cause of an `ExceptionInInitializerError`, on stderr alone.
+   */
+  private def requireLogSettings(): Unit =
+    try LogSettings.requireValid(sys.props.toMap, sys.env)
+    catch
+      case refusal: IllegalArgumentException =>
+        logger.error(refusal.getMessage)
+        throw refusal
 
   /** What a person starting the server needs to see: where it listens, where its files are, and what is unsafe about it */
   private def logStart(): Unit =

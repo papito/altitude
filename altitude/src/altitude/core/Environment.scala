@@ -20,7 +20,10 @@ object Environment:
   /** The system property that names the environment. It wins over `ALTITUDE_ENV`, so what a launcher passes is not overridden. */
   val PROPERTY = "altitude.env"
 
-  /** The environment variables read in code; those that set a config key are read by `environment.conf` */
+  /**
+   * The environment variables read here. Those that set a config key are read by `environment.conf`, and the two logging
+   * variables by `LogSettings`.
+   */
   object Variable:
     val PREFIX = "ALTITUDE_"
     val ENV = "ALTITUDE_ENV"
