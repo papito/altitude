@@ -23,20 +23,25 @@ object ChildJvm {
    *
    * @param directory
    *   the second JVM's working directory; this JVM's when none
+   * @param jvmOptions
+   *   options of the second JVM itself. It finds `logback-test.xml` on the classpath it shares with this one, which silences the
+   *   application: `-Dlogback.configurationFile=logback.xml` makes it log as a server does.
    */
   def run(
       mainClass: String,
       arguments: Seq[String],
       environment: java.util.Map[String, String] => Unit = _ => (),
       timeout: FiniteDuration = 120.seconds,
-      directory: Option[Path] = None): (Int, String) = {
+      directory: Option[Path] = None,
+      jvmOptions: Seq[String] = Seq.empty): (Int, String) = {
     val classpath = getClass.getClassLoader match {
       // The test runner loads the tests through a class loader of its own
       case loader: URLClassLoader => loader.getURLs.map(url => Paths.get(url.toURI).toString).mkString(File.pathSeparator)
       case _ => System.getProperty("java.class.path")
     }
     val java = Paths.get(System.getProperty("java.home"), "bin", "java").toString
-    val command = Seq(java, "-XX:+ErrorFileToStderr", "-XX:-CreateCoredumpOnCrash", "-cp", classpath, mainClass) ++ arguments
+    val command = Seq(java, "-XX:+ErrorFileToStderr", "-XX:-CreateCoredumpOnCrash") ++ jvmOptions ++
+      Seq("-cp", classpath, mainClass) ++ arguments
 
     // The output goes to a file, not a pipe: reading a pipe to its end returns only when the JVM exits, so one that hangs would
     // never reach the timeout

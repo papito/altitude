@@ -69,9 +69,10 @@ private[core] object OnnxEnvironment:
    * The API offers no way to take a reference, nor to drop its hook. So this calls `OrtEnvironment`'s private native
    * `createHandle`, its `CreateEnv`, by reflection, with the API handle in the package-private `OnnxRuntime.ortApiHandle`, and
    * checks that the handle it is answered is the environment's own. An ONNX Runtime upgrade that renames one of those members, or
-   * answers another environment, fails the start here, naming the version: the other choice is a server that crashes at its next
-   * stop under load. One that stops counting references is caught by the test alone. The guard is `OnnxEnvironmentTests`'
-   * shutdown hook test, which releases the environment as the hook does and then runs a session's first pass.
+   * answers another environment, fails the start here, naming the version (the actor system exists by then, and `App.main` ends
+   * the process): the other choice is a server that crashes at its next stop under load. One that stops counting references is
+   * caught by the test alone. The guard is `OnnxEnvironmentTests`' shutdown hook test, which releases the environment as the hook
+   * does and then runs a session's first pass.
    */
   private def retain(environment: OrtEnvironment): Unit =
     def broken(why: String, cause: Throwable | Null): IllegalStateException =

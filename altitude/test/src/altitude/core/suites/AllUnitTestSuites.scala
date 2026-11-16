@@ -3,6 +3,7 @@ package altitude.core.suites
 import org.scalatest.Suites
 
 import altitude.core.unit.ApiValidatorTests
+import altitude.core.unit.AppStartTests
 import altitude.core.unit.BaseControllerTests
 import altitude.core.unit.CaptureDateResolverTests
 import altitude.core.unit.ClearDbTests
@@ -85,6 +86,7 @@ abstract class AllUnitTestSuites
     new EnvironmentTests,
     new StartupConfigTests,
     new ClearDbTests,
+    new AppStartTests,
     new LogSettingsTests,
     new Sha256Tests,
     new ModelDownloaderTests,

@@ -419,6 +419,45 @@ import altitude.core.util.ImportParallelism
     }
   }
 
+  test("A server port that is no port number fails the start, naming ALTITUDE_PORT") {
+
+    /**
+     * Setup:
+     *
+     * The config of a start whose `ALTITUDE_PORT` is a port number, and of starts where it is a word, an empty value, a fraction
+     * and a number outside the range of ports.
+     *
+     * Assertions:
+     *
+     * A number from 1 to 65535 is the port, the variable's text read as a number. Every other value throws, naming the config
+     * key, the value as it was given and the variable to set.
+     *
+     * Edge cases:
+     *
+     * The ends of the range pass. 0, which would have the server pick a port nobody knows, is refused, as is 65536.
+     */
+    withRoot {
+      root =>
+        def portOf(value: String): Int =
+          Altitude.serverPortOf(Altitude.loadConfig(PROD, Map("ALTITUDE_PORT" -> value), root.toString))
+
+        portOf("9090") shouldBe 9090
+        portOf("1") shouldBe 1
+        portOf("65535") shouldBe 65535
+        Altitude.serverPortOf(Altitude.loadConfig(PROD, noVariables, root.toString)) shouldBe 8080
+
+        Seq("eighty-eighty", "", "80.5", "0", "-1", "65536").foreach {
+          value =>
+            withClue(s"[$value]: ") {
+              val failure = the[IllegalStateException] thrownBy portOf(value)
+              failure.getMessage should include(Const.Conf.SERVER_PORT)
+              failure.getMessage should include(s"\"$value\"")
+              failure.getMessage should include("ALTITUDE_PORT")
+            }
+        }
+    }
+  }
+
   test("SQLite on a network share, a host folder shared into a container or a FUSE mount is warned about") {
 
     /**

@@ -125,6 +125,10 @@ class Altitude(
   // Before anything connects: an empty password is a start that was never given one, not one to try the database with
   Altitude.requirePostgresPassword(config)
 
+  /** The address the HTTP server binds: `server.host` and `server.port`, the port checked here, before anything is opened */
+  final val serverHost: String = config.getString(Const.Conf.SERVER_HOST)
+  final val serverPort: Int = Altitude.serverPortOf(config)
+
   /** Whether the session cookie is `Secure` (`server.secure_cookies`); off only for plain HTTP on a LAN or VPN address */
   final val secureCookies: Boolean = config.getBoolean(Const.Conf.SERVER_SECURE_COOKIES)
 
@@ -543,6 +547,21 @@ object Altitude:
       throw IllegalStateException(
         s"${Const.Conf.DB_ENGINE} is ${Const.DbEngineName.POSTGRES} and the database password is empty: set the " +
           s"ALTITUDE_DB_POSTGRES_PASSWORD environment variable, or ${Const.Conf.POSTGRES_PASSWORD} in the config file")
+
+  /**
+   * `server.port`, refused when it is no port number (a word, an empty value, a number outside 1 to 65535), naming its variable.
+   * Read as the instance is built, so such a start fails before a database is opened, a model downloaded or the actor system
+   * built, and not when the HTTP server is, last of all.
+   */
+  def serverPortOf(config: Config): Int =
+    // As text, so a fraction is refused, where `getInt` would drop what follows the point
+    val value = config.getString(Const.Conf.SERVER_PORT)
+    value.toIntOption.filter(port => port >= 1 && port <= 65535).getOrElse {
+      throw IllegalStateException(
+        s"""${Const.Conf.SERVER_PORT} is "$value", which is no port number: set """ +
+          s"the ALTITUDE_PORT environment variable, or ${Const.Conf.SERVER_PORT} in the config file, to a whole number from 1 " +
+          "to 65535")
+    }
 
   // The file store types that are not a local disk's own, as `java.nio.file.FileStore.type` names them: network shares, and a
   // host folder shared into a container's virtual machine. `fakeowner` is what Docker Desktop for Mac is known to mount a host

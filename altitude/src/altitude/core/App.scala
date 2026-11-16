@@ -9,6 +9,8 @@ import org.bytedeco.opencv.opencv_java
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import scala.util.control.NonFatal
+
 import altitude.core.routes.api.AlbumController
 import altitude.core.routes.api.AssetController
 import altitude.core.routes.api.CurationController
@@ -52,27 +54,40 @@ object App extends cask.Main:
   given logger: Logger = LoggerFactory.getLogger(getClass)
 
   /**
-   * The instance, built and started by the first to ask for it: `main`, or a test's server.
+   * The start's outcome: the instance, built and started by the first to ask for it (`main`, or a test's server), or what the
+   * start failed with. A start that failed stays failed: asking again answers the same failure, and never starts a second time
+   * over what the first left running.
    *
    * Not in this object's initializer. While a class initializes, every other thread that calls into it waits for the initializer
    * to end, and the stop's cleanup, which runs on a shutdown thread, is a function of this object: a SIGTERM during the startup
    * tasks would drain nothing until they had ended.
    */
-  lazy val altitude: Altitude = start()
+  private lazy val started: Either[Throwable, Altitude] =
+    try Right(start())
+    catch case failure: Throwable => Left(failure)
+
+  /** The instance. Where the start failed, this throws what it failed with, each time it is asked. */
+  lazy val altitude: Altitude = started.fold(failure => throw failure, identity)
+
+  /** The instance the start built, whether or not the start then finished: its stop may have begun meanwhile */
+  @volatile private var built: Option[Altitude] = None
 
   /** The HTTP server, once [[main]] has built it: the stop's last task stops it after the cleanup */
   @volatile private var server: Option[Undertow] = None
 
   /** Builds the instance, registers its cleanup for the stop, and runs the startup tasks */
   private def start(): Altitude =
-    // Before anything is built: logback is logging by the default in place of a logging variable it could not take
-    requireLogSettings()
+    // Before anything is built: logback is logging by the default in place of a logging variable it could not take. An unknown
+    // `ALTITUDE_LOG_FORMAT` or `ALTITUDE_LOG_LEVEL` fails the start in any environment, naming the variable and its accepted
+    // values, and `main` logs the refusal as it logs any failed start.
+    LogSettings.requireValid(sys.props.toMap, sys.env)
 
     // The code uses the org.opencv API, but its native library is loaded through org.bytedeco: the usual
     // `System.loadLibrary(Core.NATIVE_LIBRARY_NAME)` does not link it. https://stackoverflow.com/a/58064096/53687
     Loader.load(classOf[opencv_java])
 
     val instance = new Altitude()
+    built = Some(instance)
 
     // From the moment there is an instance to clean up, and not from `main`, which comes after the startup tasks: those can
     // take long (a large Library's stats, requeued purges and renders, a Watch folder's first scan), and a SIGTERM during them
@@ -95,19 +110,46 @@ object App extends cask.Main:
     instance
 
   /** The address the server binds: `server.host` and `server.port` */
-  override def host: String = altitude.config.getString(Const.Conf.SERVER_HOST)
+  override def host: String = altitude.serverHost
 
-  override def port: Int = altitude.config.getInt(Const.Conf.SERVER_PORT)
+  override def port: Int = altitude.serverPort
 
   /** In debug mode cask answers an error with its stack trace, which holds SQL and paths: dev alone */
   override def debugMode: Boolean = Environment.isDev
+
+  /**
+   * Starts the server, and ends the process when the start fails, with status 1 and the reason in an ERROR line.
+   *
+   * A failed start cannot be left to end by itself. Once the instance's actor system exists, its threads, which are no daemon
+   * threads, keep the JVM up with no HTTP server: a container then sits `starting` until its health check's start period is over,
+   * and no restart policy ever fires. That holds for whatever fails from there on: a Scene model that does not open, a startup
+   * task, an address that cannot be bound. The exit runs the shutdown hooks, so an instance that was built is cleaned up by the
+   * stop's task.
+   */
+  override def main(args: Array[String]): Unit =
+    try serve()
+    catch
+      // A start that fails because the stop is cleaning its instance up is no failed start: the process is ending already
+      case failure: Throwable if built.exists(instance => ServerShutdown.hasBegun(instance.actorSystem)) =>
+        logger.info(s"The start ended with the stop that began during it (${reasonOf(failure)})")
+      case failure: Throwable =>
+        logger.error(s"Altitude could not start: ${reasonOf(failure)}", failure)
+        System.exit(1)
+
+  /** What a start failed with, in a line: the message of the refusal itself, where an initializer's error wraps it */
+  private def reasonOf(failure: Throwable): String =
+    val refusal = failure match
+      // What an object throws as it initializes (`Environment`, of a value that names no environment) arrives as the cause
+      case wrapped: ExceptionInInitializerError if wrapped.getCause != null => wrapped.getCause
+      case other => other
+    Option(refusal.getMessage).getOrElse(refusal.toString)
 
   /**
    * Builds and starts the HTTP server itself rather than through cask's `main`, which registers a shutdown hook that stops the
    * server at once. The stop is `ServerShutdown`'s instead: new requests refused, those under way given time, the instance
    * cleaned up, and only then the server stopped.
    */
-  override def main(args: Array[String]): Unit =
+  private def serve(): Unit =
     if !verbose then cask.main.Main.silenceJboss()
 
     // The whole start, before there is a server: no request arrives before the startup tasks are done
@@ -126,7 +168,12 @@ object App extends cask.Main:
     // A stop that began during the start has cleaned the instance up, or is doing so: nothing is served on it
     if ServerShutdown.hasBegun(system) then logger.info("The stop began during the start: the HTTP server is not started")
     else
-      undertow.start()
+      // Undertow's own failure names neither the address nor, in its message, more than the cause's class
+      try undertow.start()
+      catch
+        case NonFatal(e) =>
+          val cause = Iterator.iterate(e)(_.getCause).takeWhile(_ != null).toSeq.last
+          throw IllegalStateException(s"The HTTP server cannot listen on $host, port $port: ${cause.getMessage}", e)
       logStart()
 
   /** Stops the HTTP server, if [[main]] has built one, and cask's execution context; whether there was a server to stop */
@@ -136,18 +183,6 @@ object App extends cask.Main:
     // cask's own, which runs the WebSocket actors
     executionContext.shutdown()
     built.isDefined
-
-  /**
-   * Fails the start when `ALTITUDE_LOG_FORMAT` or `ALTITUDE_LOG_LEVEL` has an unknown value, in any environment. The refusal
-   * names the variable and its accepted values. It is logged as well as thrown: thrown from the start, it reaches the console as
-   * an uncaught exception's stack trace, on stderr alone.
-   */
-  private def requireLogSettings(): Unit =
-    try LogSettings.requireValid(sys.props.toMap, sys.env)
-    catch
-      case refusal: IllegalArgumentException =>
-        logger.error(refusal.getMessage)
-        throw refusal
 
   /** What a person starting the server needs to see: where it listens, where its files are, and what is unsafe about it */
   private def logStart(): Unit =
