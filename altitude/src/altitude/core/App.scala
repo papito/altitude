@@ -82,9 +82,6 @@ object App extends cask.Main:
   /** In debug mode cask answers an error with its stack trace, which holds SQL and paths: dev alone */
   override def debugMode: Boolean = Environment.isDev
 
-  /** The server [[main]] built and the handler in front of its routes, held for the stop: `ServerShutdown`'s tasks use both */
-  private var server: Option[(GracefulShutdownHandler, Undertow)] = None
-
   /**
    * Builds and starts the HTTP server itself rather than through cask's `main`, which registers a shutdown hook that stops the
    * server at once. The stop is `ServerShutdown`'s instead: new requests refused, those under way given time, the instance
@@ -100,7 +97,6 @@ object App extends cask.Main:
       .setServerOption[Integer](UndertowOptions.SHUTDOWN_TIMEOUT, ServerShutdown.SERVER_STOP_TIMEOUT.toMillis.toInt)
       .setHandler(requests)
       .build
-    server = Some((requests, undertow))
 
     ServerShutdown.register(
       altitude.actorSystem,
