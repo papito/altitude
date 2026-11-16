@@ -12,13 +12,22 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.Collections
 import java.util.concurrent.TimeUnit
+import org.apache.commons.io.FileUtils
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.scalatest.DoNotDiscover
+import org.scalatest.OptionValues.*
+import org.scalatest.exceptions.TestFailedException
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers.*
 
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters.*
+import scala.util.Using
 
 import altitude.core.models.SceneModel
 import altitude.core.util.ModelFile
@@ -37,12 +46,14 @@ import altitude.core.util.OnnxEnvironment
    * Runs a probe object's `main` in a second JVM with this one's classpath and environment, the environment changed by
    * `environment`, and answers its exit code and its output, stdout and stderr together. A probe that crashes its JVM fails one
    * test here, where a crash of this JVM would take every suite of the bundle with it; the crash's report goes to the output, and
-   * no core dump is written.
+   * no core dump is written. A probe still running at `timeout` is killed and fails the test too: a hang of a native library is
+   * what these probes exist to catch.
    */
   private def runProbe(
       probe: AnyRef,
       arguments: Seq[String],
-      environment: java.util.Map[String, String] => Unit = _ => ()): (Int, String) = {
+      environment: java.util.Map[String, String] => Unit = _ => (),
+      timeout: FiniteDuration = 120.seconds): (Int, String) = {
     val classpath = getClass.getClassLoader match {
       // The test runner loads the tests through a class loader of its own
       case loader: URLClassLoader => loader.getURLs.map(url => Paths.get(url.toURI).toString).mkString(File.pathSeparator)
@@ -51,15 +62,28 @@ import altitude.core.util.OnnxEnvironment
     val java = Paths.get(System.getProperty("java.home"), "bin", "java").toString
     val command = Seq(java, "-XX:+ErrorFileToStderr", "-XX:-CreateCoredumpOnCrash", "-cp", classpath) ++
       Seq(probe.getClass.getName.stripSuffix("$")) ++ arguments
-    val builder = new ProcessBuilder(command*).redirectErrorStream(true)
-    environment(builder.environment())
+    // The output goes to a file, not a pipe: reading a pipe to its end returns only when the probe exits, so a probe that hangs
+    // would never reach the timeout
+    val log = Files.createTempFile("onnx-probe", ".log")
+    try {
+      val builder = new ProcessBuilder(command*).redirectErrorStream(true).redirectOutput(log.toFile)
+      environment(builder.environment())
 
-    val process = builder.start()
-    val output = new String(process.getInputStream.readAllBytes())
-    withClue(output) {
-      process.waitFor(120, TimeUnit.SECONDS) shouldBe true
-    }
-    (process.exitValue(), output)
+      val process = builder.start()
+      val exited = process.waitFor(timeout.toMillis, TimeUnit.MILLISECONDS)
+      if (!exited) {
+        process.destroyForcibly()
+        // The kill is asynchronous: what the probe wrote is read once it is gone
+        process.waitFor(10, TimeUnit.SECONDS)
+      }
+      val output = new String(Files.readAllBytes(log))
+      withClue(s"The probe exited within $timeout: ") {
+        withClue(output) {
+          exited shouldBe true
+        }
+      }
+      (process.exitValue(), output)
+    } finally Files.deleteIfExists(log): Unit
   }
 
   private def model(file: ModelFile): Path = TestModelFiles.models.path(file)
@@ -110,22 +134,24 @@ import altitude.core.util.OnnxEnvironment
     sys.env.get(variable) shouldBe Some(off)
 
     val home = Files.createTempDirectory("onnx-home")
-    val (exitCode, output) = runProbe(
-      OnnxEnvironmentProbe,
-      Seq(model(ModelFile.YuNet).toString),
-      environment => {
-        environment.put("HOME", home.toString)
-        // Where the cache is looked for first
-        environment.remove("XDG_CACHE_HOME")
+    try {
+      val (exitCode, output) = runProbe(
+        OnnxEnvironmentProbe,
+        Seq(model(ModelFile.YuNet).toString),
+        environment => {
+          environment.put("HOME", home.toString)
+          // Where the cache is looked for first
+          environment.remove("XDG_CACHE_HOME")
+        }
+      )
+      withClue(output) {
+        exitCode shouldBe 0
+        output should include(OnnxEnvironmentProbe.OPENED)
       }
-    )
-    withClue(output) {
-      exitCode shouldBe 0
-      output should include(OnnxEnvironmentProbe.OPENED)
-    }
 
-    val written = Files.walk(home).iterator().asScala.filter(_ != home).toList
-    written shouldBe empty
+      val written = Using.resource(Files.walk(home))(_.iterator().asScala.filter(_ != home).toList)
+      written shouldBe empty
+    } finally FileUtils.deleteDirectory(home.toFile)
   }
 
   test("A session's first pass succeeds after ONNX Runtime's shutdown hook has released the environment") {
@@ -156,6 +182,34 @@ import altitude.core.util.OnnxEnvironment
       output should include(s"${OnnxEnvironmentReleaseProbe.PASSED}: ${scene.dimensions} values")
       exitCode shouldBe 0
     }
+  }
+
+  test("A probe JVM that hangs is killed at the timeout and fails its test") {
+
+    /**
+     * Setup:
+     *
+     * A second JVM that prints its process ID and then never exits, as a probe caught in a deadlock of a native library would,
+     * run with a timeout of two seconds.
+     *
+     * Assertions:
+     *
+     * The run gives up at its timeout instead of waiting for the probe's output to end: it fails the test, with what the probe
+     * printed in the failure's message, and the second JVM is no longer alive.
+     *
+     * Edge cases:
+     *
+     * A run that waits for ever would take the whole bundle with it, so the test bounds its own wait and then kills what this JVM
+     * started.
+     */
+    val run = Future(runProbe(OnnxEnvironmentHangProbe, Seq.empty, timeout = 2.seconds))(ExecutionContext.global)
+    val failure =
+      try intercept[TestFailedException](Await.result(run, 60.seconds))
+      finally ProcessHandle.current().children().forEach(child => child.destroyForcibly(): Unit)
+
+    failure.getMessage should include(OnnxEnvironmentHangProbe.STARTED)
+    val pid = s"${OnnxEnvironmentHangProbe.STARTED}: (\\d+)".r.findFirstMatchIn(failure.getMessage).value.group(1).toLong
+    ProcessHandle.of(pid).filter(_.isAlive).isPresent shouldBe false
   }
 }
 
@@ -201,5 +255,15 @@ object OnnxEnvironmentReleaseProbe {
     val close = classOf[OrtEnvironment].getDeclaredMethod("close", java.lang.Long.TYPE, java.lang.Long.TYPE)
     close.setAccessible(true)
     close.invoke(null, api.get(null), handle.get(environment))
+  }
+}
+
+/** What the second JVM of the timeout test runs: its process ID, and then nothing, for ever */
+object OnnxEnvironmentHangProbe {
+  val STARTED = "Hanging as process"
+
+  def main(args: Array[String]): Unit = {
+    println(s"$STARTED: ${ProcessHandle.current().pid()}")
+    Thread.sleep(Long.MaxValue)
   }
 }
