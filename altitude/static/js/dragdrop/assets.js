@@ -154,13 +154,6 @@ function onDragEnd(event) {
 
     imgElement.style.opacity = "1"
 
-    const placeholder = target.parentNode.querySelector(
-        ".drag-grid-placeholder",
-    )
-    if (placeholder) {
-        placeholder.remove()
-    }
-
     const countBadge = target.querySelector(".drag-count-badge")
     if (countBadge) {
         countBadge.remove()
