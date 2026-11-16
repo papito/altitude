@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
 # Smoke-tests the Docker image (make smoke-docker, after make docker): starts it as the caller's user on a read-only
-# root filesystem, runs Setup, imports photos with faces and a video, restarts it, stops it in the middle of a second
-# import, starts it a third time, and checks what the image promises: a stop drains what was accepted, nothing is
-# unpacked at runtime, and the native libraries are the image's own architecture's.
+# root filesystem, with no capability and no new privileges, as compose.yaml does, runs Setup, imports photos with
+# faces and a video, restarts it, stops it in the middle of a second import, starts it a third time, and checks what
+# the image promises: a stop drains what was accepted, nothing is unpacked at runtime, the native libraries are the
+# image's own architecture's, and the application's files are root's.
 #
 # On the host it needs docker (Engine 25 or later), curl, ffmpeg and bash with the usual tools (sed, grep, find, mktemp).
 # The container is one of its own, with volumes of its own and a port Docker picks on 127.0.0.1; all of it is removed
@@ -261,6 +262,17 @@ if grep -v "^7f454c46$machine " "$work/natives" >"$work/foreign"; then
 fi
 say "   $natives files in /app/native, all ELF for $architecture"
 
+# The application's own files are root's, so the user the server runs as cannot replace or add one, even here, where
+# the root filesystem is writable. A file it could write would be run at the next start.
+# shellcheck disable=SC2016  # the script is the container's shell's to expand
+writable="$(docker run --rm --user "$user" --entrypoint sh "$IMAGE" -c '
+    find /app ! -user 0
+    find /app \( -type d -o -type f \) -writable
+    for dir in /app /app/lib /app/native; do touch "$dir/written" 2>/dev/null && echo "$dir/written was made"; done
+    true' | head -n 10)"
+[ -z "$writable" ] || fail "the application's files are root's" "not root's, or writable by $user:" "$writable"
+say "   /app is root's, and $user can write nothing in it"
+
 # ---------------------------------------------------------------------------------------------------------------------
 say "2. the first start, on a read-only root filesystem"
 
@@ -273,8 +285,9 @@ if [ "$user" != "1000:1000" ]; then
     docker run --rm --user 0:0 --entrypoint chown -v "$data_volume:/data" "$IMAGE" -R "$user" /data
 fi
 
+# As compose.yaml runs it: a read-only root filesystem, no capability and no new privileges.
 # DEBUG, for the line each Import file's outcome is logged in
-docker run --detach --name "$name" --user "$user" --read-only \
+docker run --detach --name "$name" --user "$user" --read-only --cap-drop ALL --security-opt no-new-privileges:true \
     --volume "$data_volume:/data" --volume "$tmp_volume:/tmp" --volume "$MODELS_DIR:/models" \
     --publish 127.0.0.1::8080 --env ALTITUDE_LOG_LEVEL=DEBUG --stop-timeout "$STOP_GRACE" "$IMAGE" >/dev/null
 
@@ -433,6 +446,8 @@ say "9. nothing was unpacked or written outside the volumes"
 
 read_only="$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$name")"
 [ "$read_only" = true ] || fail "the read-only root filesystem" "the container is not read-only"
+dropped="$(docker inspect --format '{{.HostConfig.CapDrop}} {{.HostConfig.SecurityOpt}}' "$name")"
+[ "$dropped" = "[ALL] [no-new-privileges:true]" ] || fail "the container's privileges" "CapDrop and SecurityOpt are $dropped"
 changed="$(docker diff "$name")"
 [ -z "$changed" ] || fail "the read-only root filesystem" "the container's filesystem changed:" "$changed"
 if docker exec "$name" sh -c 'touch /app/written 2>/dev/null'; then

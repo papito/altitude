@@ -1,5 +1,6 @@
-# The Altitude image: thin jars and one architecture's native libraries in /app, run by a JRE as UID 1000 with the
-# Data directory at /data and the Models directory at /models. `make docker` builds it; compose.yaml runs it.
+# The Altitude image: thin jars and one architecture's native libraries in /app, root's and read-only to the user
+# that runs them, run by a JRE as UID 1000 with the Data directory at /data and the Models directory at /models.
+# `make docker` builds it; compose.yaml runs it.
 #
 # The two build stages run on the build machine's own architecture, whatever the image's: Mill only resolves, compiles
 # and repacks, so nothing of the build runs under emulation. They share Mill's out/ as a cache mount, which one stage
@@ -72,10 +73,14 @@ COPY --from=volumes --chown=1000:1000 /volumes/ /
 
 # The dependency jars are a layer of their own, as are the native libraries: a build that changes the application alone
 # replaces altitude.jar's layer, the last and the smallest.
-COPY --from=lib --chown=1000:1000 /dist/lib /app/lib
-COPY --from=native --chown=1000:1000 /dist/native /app/native
-COPY --from=native --chown=1000:1000 /dist/jvm-options /app/jvm-options
-COPY --from=lib --chown=1000:1000 /dist/altitude.jar /app/altitude.jar
+#
+# No --chown: /app and all it holds are root's, which UID 1000 (or compose's `user:`) can read and cannot write. Code
+# run through a media decoder then cannot replace a jar or a library, nor add one to lib/*, for the next start to run,
+# whether or not the root filesystem is read-only (it is under compose.yaml, not under a plain `docker run`).
+COPY --from=lib /dist/lib /app/lib
+COPY --from=native /dist/native /app/native
+COPY --from=native /dist/jvm-options /app/jvm-options
+COPY --from=lib /dist/altitude.jar /app/altitude.jar
 
 USER 1000:1000
 

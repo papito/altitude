@@ -41,6 +41,12 @@ services:
       - /tmp
     # The image unpacks nothing at a start, so its own filesystem stays as built
     read_only: true
+    # The server runs as an ordinary user on a port above 1024 and needs no capability, nor ever more privileges than it
+    # starts with: code run through a media decoder gets none either
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     # A stop lets the import, purge and render queues finish what they accepted, 30 seconds each by default (the
     # Pipeline shutdown timeout Setting), and 30 more for the requests, the models and the database. Raise both together.
     stop_grace_period: 120s
