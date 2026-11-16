@@ -1045,7 +1045,7 @@ make smoke-docker         # starts altitude:local, imports into it, stops it mid
 make vendor-tokentweak    # refresh vendored tokentweak in static/js/lib (TOKENTWEAK=<version|tarball|checkout>)
 ```
 
-Mill is run as `./mill` (`mill.bat` on Windows), its own bootstrap script, which downloads the version `build.mill`'s header names; the `Makefile` calls it, never an installed `mill`. Every target that starts the server or the tests sets `ALTITUDE_ENV` (**Config & Environments**): a `./mill altitude.run` by hand runs as prod without it.
+Mill is run as `./mill` (`mill.bat` on Windows), its own bootstrap script, which downloads the version `build.mill`'s header names; the `Makefile` calls it, never an installed `mill`. `.gitattributes` pins `mill` and every `*.sh` to LF and `mill.bat` to CRLF, whatever the clone's `core.autocrlf`: the `Dockerfile` copies `mill` into a Linux build stage as it is checked out, where a CRLF shebang line fails the build. A new script run inside an image, or by `sh` or `bash`, that is no `*.sh` gets a line there. Every target that starts the server or the tests sets `ALTITUDE_ENV` (**Config & Environments**): a `./mill altitude.run` by hand runs as prod without it.
 
 > **Run `make test` only when the `altitude-core-postgres-test` container is up.** Otherwise use `make test-local` or one bundle.
 > **Do not run tests if only the frontend was changed** (Twirl templates, CSS, JS, HTML); verify it in the browser. The one exception is a module that `scripts/test-js/` imports (the DOM-free modules of `static/js/edit/`, `common/content-urls.js`, `common/histogram.js`, `stores/search-params.js` with `constants.js`): run `make test-js`, which takes seconds.

@@ -1,0 +1,13 @@
+# Line endings that must not follow the machine's Git settings. Git for Windows checks text out with CRLF by default
+# (core.autocrlf=true), and the Dockerfile copies these files into a Linux build stage as they are checked out.
+
+# Mill's bootstrap script and the shell scripts: with a CR after `#!/usr/bin/env sh`, the kernel looks for `sh\r` and
+# `./mill` fails in the image's build (`env: 'sh\r': No such file or directory`).
+mill text eol=lf
+*.sh text eol=lf
+
+# cmd.exe reads a batch file's labels reliably with CRLF alone
+mill.bat text eol=crlf
+
+# The sqlite-vector builds: never converted, never diffed as text
+altitude/resources/sqlite-vector/** binary
