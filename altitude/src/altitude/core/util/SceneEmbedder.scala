@@ -29,6 +29,38 @@ trait SceneEmbedder extends AutoCloseable:
   /** `image` as `ImageUtil.matFromBytes` decodes it, upright; `name` is for the log */
   def embed(image: Mat, name: String): SceneEmbeddings
 
+/**
+ * The process's one ONNX Runtime environment, which every session and tensor of the embedders is made in.
+ *
+ * ONNX Runtime's official builds send usage telemetry to Microsoft unless told not to (`Privacy.md` in its jar). Altitude runs
+ * with it off. The one switch that turns all of it off is the `ORT_DISABLE_TELEMETRY=1` environment variable, which the native
+ * library reads as it initializes: with it, no device ID and no event store are written under the home folder's cache
+ * (`Microsoft/DeveloperTools/.onnxruntime`), and the process makes no connection to the collector. `forkEnv` in `build.mill` sets
+ * it for every JVM Mill forks; a jar started any other way needs it in its environment.
+ *
+ * The Java API's switch is called here too, but it comes too late to stand in for the variable: by the time an environment
+ * exists, its creation has written the device ID, stored an event describing the machine and started the uploader, which goes on
+ * trying to reach the collector. What the call still stops is, by `Privacy.md`, the events that are not essential. So a start
+ * without the variable is logged at WARN.
+ */
+private[core] object OnnxEnvironment:
+  private val logger: Logger = LoggerFactory.getLogger(getClass)
+
+  /** The variable ONNX Runtime's native library reads as it initializes, and the value that switches its telemetry off */
+  val TELEMETRY_OFF: (String, String) = "ORT_DISABLE_TELEMETRY" -> "1"
+
+  lazy val get: OrtEnvironment = withoutTelemetry(OrtEnvironment.getEnvironment, sys.env.get(TELEMETRY_OFF._1))
+
+  /** `environment` with the API's telemetry switch off, after a WARN when `variable`, the process's own, left the rest on */
+  def withoutTelemetry(environment: OrtEnvironment, variable: Option[String]): OrtEnvironment =
+    if !variable.contains(TELEMETRY_OFF._2) then
+      logger.warn(
+        s"ONNX Runtime's telemetry is on: ${TELEMETRY_OFF._1} is not ${TELEMETRY_OFF._2} in this process's environment, so it " +
+          "keeps a device ID under the home folder's cache and sends usage events to Microsoft. " +
+          s"Set ${TELEMETRY_OFF._1}=${TELEMETRY_OFF._2} before the start to switch it off")
+    environment.setTelemetry(false)
+    environment
+
 private[util] object OnnxSessions:
 
   /**
@@ -155,7 +187,7 @@ class OnnxSceneEmbedder(models: ModelFiles) extends SceneEmbedder:
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  private val environment: OrtEnvironment = OrtEnvironment.getEnvironment
+  private val environment: OrtEnvironment = OnnxEnvironment.get
 
   private val sessions: Map[SceneModel, OrtSession] = openSessions()
 

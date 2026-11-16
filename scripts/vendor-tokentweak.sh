@@ -72,4 +72,4 @@ if grep -q "^| \`tokentweak.js\` .*| $version " "$readme"; then
 else
   echo "Now record $version in the tokentweak rows of $readme"
 fi
-echo "A running dev server serves the new files after \`mill altitude.resources\` (make watch does it)"
+echo "A running dev server serves the new files after \`./mill altitude.resources\` (make watch does it)"

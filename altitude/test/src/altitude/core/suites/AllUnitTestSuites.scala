@@ -28,6 +28,7 @@ import altitude.core.unit.ModelDownloaderTests
 import altitude.core.unit.NameKeyTests
 import altitude.core.unit.NaturalOrderTests
 import altitude.core.unit.NetPoolTests
+import altitude.core.unit.OnnxEnvironmentTests
 import altitude.core.unit.PermissionsTests
 import altitude.core.unit.PersonModelTests
 import altitude.core.unit.PipelineUtilsTests
@@ -92,6 +93,7 @@ abstract class AllUnitTestSuites
     new VideoServiceTests,
     new ImageUtilTests,
     new ImageMeasurementTests,
+    new OnnxEnvironmentTests,
     new SceneEmbedderTests,
     new Siglip2TokenizerTests,
     new DescribeEmbedderTests,

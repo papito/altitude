@@ -45,9 +45,34 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
 
   def javacOptions: Task.Simple[Seq[String]] = Seq("--release", "21")
 
-  // What Mill starts (run, runBackground, runMain) is a dev run and logs by logback-dev.xml. A jar started without the
-  // flag logs by logback.xml, the prod configuration.
-  def forkArgs: T[Seq[String]] = Task { super.forkArgs() ++ Seq("-Dlogback.configurationFile=logback-dev.xml") }
+  // What Mill starts (run, runBackground, runMain) is a dev run and logs by logback-dev.xml. Nothing packaged carries the
+  // flag, so a jar logs by logback.xml, the prod configuration, however it is started.
+  private val devForkArgs = Seq("-Dlogback.configurationFile=logback-dev.xml")
+
+  def forkArgs: T[Seq[String]] = Task { super.forkArgs() ++ devForkArgs }
+
+  /**
+   * The script at the head of the assembly, which lets the jar be started as a program. Mill writes `forkArgs` into it, so
+   * this is Mill's own script without the dev run's arguments: `./out.jar` starts as `java -jar out.jar` does.
+   */
+  override def prependShellScript: T[String] = Task {
+    mill.util.Jvm.launcherUniversalScript(
+      mainClass = finalMainClass(),
+      shellClassPath = Seq("$0"),
+      cmdClassPath = Seq("%~dpnx0"),
+      jvmArgs = forkArgs().filterNot(devForkArgs.contains),
+      shebang = false,
+      shellJvmArgs = forkShellArgs(),
+      cmdJvmArgs = forkCmdArgs()
+    )
+  }
+
+  // ONNX Runtime's official builds send usage telemetry to Microsoft unless this variable is set before the native library
+  // initializes; nothing in the JVM can switch all of it off afterwards (OnnxEnvironment in SceneEmbedder.scala). Every JVM
+  // Mill forks gets it: run, runBackground and runMain here, and the test workers through the test module's forkEnv.
+  private val onnxRuntimeTelemetryOff = Map("ORT_DISABLE_TELEMETRY" -> "1")
+
+  def forkEnv: T[Map[String, String]] = Task { super.forkEnv() ++ onnxRuntimeTelemetryOff }
 
   def pomSettings: T[PomSettings] = PomSettings(
     description = "Altitude DAM",
@@ -505,7 +530,7 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
 
     // Tests run in a sandbox directory: the architecture tests find the application's sources through this
     def forkEnv: T[Map[String, String]] = Task {
-      super.forkEnv() ++ Map("ALTITUDE_SOURCE_DIR" -> (moduleDir / os.up / "src").toString)
+      super.forkEnv() ++ onnxRuntimeTelemetryOff ++ Map("ALTITUDE_SOURCE_DIR" -> (moduleDir / os.up / "src").toString)
     }
   }
 }
