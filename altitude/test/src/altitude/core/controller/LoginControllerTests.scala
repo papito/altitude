@@ -101,6 +101,77 @@ import altitude.core.util.Util
     }
   }
 
+  test("A login whose body is no form is a bare 400, and a form still logs in") {
+
+    /**
+     * Setup:
+     *
+     * An initialized instance with a User who can see a repository. The login route is posted a request with no body and no
+     * content type, a body with no content type, a JSON body, a multipart body with no boundary and a multipart body that is not
+     * multipart; then the User's login as a URL-encoded form and as a multipart form. The same posts go to the server as dev runs
+     * it, in cask's debug mode.
+     *
+     * Assertions:
+     *
+     * Each body that is no form is answered 400 with the status line alone as its body, as any request the server cannot bind is:
+     * no exception's name, no message, no stack frame. Both forms log the User in, with the redirect to the repository and the
+     * session cookie.
+     *
+     * Edge cases:
+     *
+     * Debug mode changes none of it: the bare 400 does not depend on the environment. A form that parses but lacks the login's
+     * fields is left to cask's own answer, bare outside dev.
+     */
+    testContext.persistRepository()
+    testContext.grant(testContext.user, testContext.repository)
+    val credentials = Map("login" -> testContext.user.email, "password" -> TestContext.USER_PASSWORD)
+
+    def notForms(host: String): Seq[(String, requests.Response)] = {
+      def post(data: String, contentType: Option[String]) =
+        requests.post(s"$host/login", data = data, headers = contentType.map("Content-Type" -> _).toMap, check = false)
+
+      Seq(
+        "no body and no content type" -> requests.post(s"$host/login", check = false),
+        "a body and no content type" -> post("login=someone&password=something", None),
+        "JSON" -> post(ujson.write(ujson.Obj.from(credentials.view.mapValues(ujson.Str(_)))), Some("application/json")),
+        "multipart with no boundary" -> post("login=someone", Some("multipart/form-data")),
+        "multipart that is not" -> post("not a part", Some("multipart/form-data; boundary=frontier"))
+      )
+    }
+
+    def assertLogsIn(response: requests.Response): Unit = {
+      response.statusCode shouldBe 302
+      response.headers("location").head shouldBe s"/r/${testContext.repository.persistedId}"
+      response.cookies.contains(SessionController.AUTH_COOKIE_NAME) shouldBe true
+    }
+
+    for (app <- Seq(App, DevApp))
+      withServer(app) {
+        host =>
+          for ((what, response) <- notForms(host))
+            withClue(s"[${app.getClass.getSimpleName} $what]: ") {
+              response.statusCode shouldBe 400
+              response.text() shouldBe "Error 400: Bad Request"
+            }
+
+          assertLogsIn(requests.post(s"$host/login", data = credentials, maxRedirects = 0, check = false))
+          assertLogsIn(
+            requests.post(
+              s"$host/login",
+              data = requests.MultiPart(credentials.toSeq.map((name, value) => requests.MultiItem(name, value))*),
+              maxRedirects = 0,
+              check = false))
+      }
+
+    DevApp.debugMode shouldBe true
+    withServer(App) {
+      host =>
+        val fieldless = requests.post(s"$host/login", data = Map("unknown" -> "field"), check = false)
+        fieldless.statusCode shouldBe 400
+        fieldless.text() shouldBe "Error 400: Bad Request"
+    }
+  }
+
   test("Invalid login") {
 
     /**

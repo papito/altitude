@@ -1,8 +1,11 @@
 package altitude.core.routes
 import cask.model.Cookie
+import cask.model.FormEntry
 import cask.model.Response
 import cask.model.Response.Raw
+import cask.model.Status
 import cask.router.Result
+import io.undertow.server.handlers.form.FormParserFactory
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.lang.System.currentTimeMillis
@@ -68,6 +71,35 @@ object decorators:
 
     private def isImage(response: Raw): Boolean =
       response.headers.exists((name, value) => name.equalsIgnoreCase("Content-Type") && value.startsWith("image/"))
+
+  /**
+   * cask's `postForm`, except for a body it cannot read as a form (no content type, a content type that is no form's, a multipart
+   * body with no boundary, a broken body). cask answers that 400 with the parser's exception and its stack trace, whatever the
+   * debug mode; this answers the bare 400 a request that cannot be bound gets outside dev, in every environment. A body that is a
+   * form goes to the route as cask's own endpoint passes it.
+   */
+  class formPost(path: String) extends cask.postForm(path):
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      formOf(req) match {
+        case Some(form) => delegate(req, form)
+        case None => Result.Success(Response(s"Error 400: ${Status.codesToStatus(400).reason}", statusCode = 400))
+      }
+
+    /** The form's fields as cask reads them, each name with its values; none when the body is no form */
+    private def formOf(req: cask.Request): Option[Map[String, Seq[FormEntry]]] =
+      try
+        // Undertow has a parser for a form's content types alone, and none for a multipart body that names no boundary
+        val parser = Option(FormParserFactory.builder().withDefaultCharset("utf-8").build().createParser(req.exchange))
+        if parser.isEmpty then logger.debug(s"A POST to ${req.exchange.getRequestPath} is no form: its content type is not one")
+        parser.map {
+          parser =>
+            val data = parser.parseBlocking()
+            data.iterator().asScala.map(name => name -> data.get(name).asScala.map(FormEntry.fromUndertow).toSeq).toMap
+        }
+      catch
+        case NonFatal(e) =>
+          logger.debug(s"A POST to ${req.exchange.getRequestPath} is no form: its body cannot be parsed", e)
+          None
 
   private val AUTH_HEADER_NAME = "Authorization"
   private val BEARER_PREFIX = "Bearer "

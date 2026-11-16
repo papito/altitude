@@ -8,6 +8,7 @@ import org.slf4j.Logger
 
 import altitude.core.App
 import altitude.core.routes.BaseController
+import altitude.core.routes.decorators.formPost
 import altitude.core.util.Util
 
 object SessionController:
@@ -45,8 +46,8 @@ class SessionController(using logger: Logger) extends cask.Routes:
     val payload = "<!doctype html>" + html.login(redirect)
     cask.Response(payload, 200, Seq(("Content-Type", "text/html")))
 
-  /** The login is a username or an email address */
-  @cask.postForm("/login")
+  /** The login is a username or an email address. A body that is no form is a bare 400 (`decorators.formPost`). */
+  @formPost("/login")
   def doLogin(login: String, password: String, redirect: Option[String] = None)(using request: Request): cask.Response[String] =
     logger.trace(s"Login attempt for [${Util.printable(login, 64)}]")
     val clientIp = BaseController.clientIpOf(request)
