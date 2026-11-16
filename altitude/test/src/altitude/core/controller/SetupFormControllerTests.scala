@@ -8,6 +8,7 @@ import org.scalatest.matchers.should.Matchers.{ be, include, should, shouldBe }
 import altitude.core.Api
 import altitude.core.App
 import altitude.core.Const
+import altitude.core.routes.decorators
 import altitude.core.routes.web.SessionController
 
 @DoNotDiscover class SetupFormControllerTests extends ControllerTestCore {
@@ -36,6 +37,53 @@ import altitude.core.routes.web.SessionController
     maxRedirects = 0,
     check = false
   )
+
+  test("A Setup submission larger than a form is refused, on a new installation and after") {
+
+    /**
+     * Setup:
+     *
+     * A new installation, then an initialized instance. Each is posted, by nobody signed in, a Setup submission that would set
+     * the instance up, with a field of padding that makes it three times the size a submission may have: once with its length
+     * declared and once chunked. Then a request that declares ten megabytes and sends none of them.
+     *
+     * Assertions:
+     *
+     * A body that declares its length is answered 413, the last one without its body. The chunked one is read up to the limit,
+     * then its connection is closed with no answer. The route is open to anyone, and reads no body whole into memory that is
+     * larger than a form: nothing is set up by any of them.
+     *
+     * Edge cases:
+     *
+     * On an initialized instance the refusal comes before the answer that it is already initialized, which is given only once the
+     * body is read.
+     */
+    val oversized = ujson
+      .write(
+        ujson.Obj(
+          Api.Field.Setup.REPOSITORY_NAME -> "Oversized",
+          Api.Field.Setup.ADMIN_NAME -> "Administrator",
+          Api.Field.Setup.ADMIN_USERNAME -> "admin",
+          Api.Field.Setup.ADMIN_EMAIL -> "admin@example.com",
+          Api.Field.Setup.PASSWORD -> "password123",
+          Api.Field.Setup.PASSWORD2 -> "password123",
+          "padding" -> "A" * Math.toIntExact(decorators.SMALL_BODY_BYTES * 3)
+        ))
+      .getBytes
+
+    def refusals(host: String): Unit = {
+      rawPostStatus(host, "/htmx/setup", "application/json", oversized, Some(oversized.length.toLong)) shouldBe Some(413)
+      rawPostStatus(host, "/htmx/setup", "application/json", oversized, declaredLength = None) shouldBe None
+      rawPostStatus(host, "/htmx/setup", "application/json", Array.emptyByteArray, Some(10000000L)) shouldBe Some(413)
+    }
+
+    onNewInstallation {
+      host =>
+        refusals(host)
+        testApp.service.system.readMetadata.isInitialized shouldBe false
+    }
+    withServer(App)(refusals)
+  }
 
   test("Setup refuses a Library name the Library name rule refuses, under the field") {
 

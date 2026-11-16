@@ -16,6 +16,7 @@ import altitude.core.models.AccountType
 import altitude.core.models.Repository
 import altitude.core.models.User
 import altitude.core.routes.BaseController
+import altitude.core.routes.decorators.smallBody
 import altitude.core.routes.web.SessionController
 
 class SetupFormController(using logger: Logger) extends BaseController:
@@ -55,6 +56,8 @@ class SetupFormController(using logger: Logger) extends BaseController:
     email = List(Api.Field.Setup.ADMIN_EMAIL)
   )
 
+  // Anyone can post here, before Setup and after, and the body is read whole before the instance's state is asked
+  @smallBody()
   @cask.route(f"/$prefix/setup", methods = Seq("post"))
   def htmxAdminSetup(using request: Request): Response[String] =
     val jsonData = unscrubbedJson

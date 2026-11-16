@@ -14,6 +14,7 @@ import altitude.core.Const as C
 import altitude.core.models.Permission
 import altitude.core.models.Permissions
 import altitude.core.models.User
+import altitude.core.routes.decorators
 import altitude.core.routes.web.SessionController
 import altitude.core.util.Util
 
@@ -169,6 +170,66 @@ import altitude.core.util.Util
         val fieldless = requests.post(s"$host/login", data = Map("unknown" -> "field"), check = false)
         fieldless.statusCode shouldBe 400
         fieldless.text() shouldBe "Error 400: Bad Request"
+    }
+  }
+
+  test("A login whose body is larger than a form's is refused, unread when it declares its length and cut off when chunked") {
+
+    /**
+     * Setup:
+     *
+     * An initialized instance with a User who can see a repository. The login route is posted, by nobody signed in, the User's
+     * own login with a field of padding that makes the body three times the size a form may have: as a URL-encoded form and as a
+     * multipart form, each with its length declared and each chunked. Then a request that declares ten megabytes and sends no
+     * byte of them, and the User's login with a redirect of some thousand characters.
+     *
+     * Assertions:
+     *
+     * A body that declares its length is answered 413, and the one that only declares it is answered without its body: the
+     * refusal reads none of it. A chunked body has no length to judge, so the server reads it up to the limit and then closes the
+     * connection with no answer. None of them logs the User in, as each would if the server read it whole: a body is never read
+     * into memory beyond the limit, so nobody who can reach the port can exhaust the heap with one. The long login is within the
+     * limit and logs the User in.
+     */
+    testContext.persistRepository()
+    testContext.grant(testContext.user, testContext.repository)
+
+    val padding = "A" * Math.toIntExact(decorators.SMALL_BODY_BYTES * 3)
+    val fields = Seq("login" -> testContext.user.email, "password" -> TestContext.USER_PASSWORD, "padding" -> padding)
+    val urlEncoded = fields.map((name, value) => s"$name=${java.net.URLEncoder.encode(value, "UTF-8")}").mkString("&").getBytes
+    val boundary = "frontier"
+    val multipart = (fields
+      .map((name, value) => s"--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n")
+      .mkString + s"--$boundary--\r\n").getBytes
+
+    withServer(App) {
+      host =>
+        val forms = Seq(
+          "URL-encoded" -> ("application/x-www-form-urlencoded", urlEncoded),
+          "multipart" -> (s"multipart/form-data; boundary=$boundary", multipart))
+        for ((form, (contentType, body)) <- forms) {
+          withClue(s"[$form, its length declared]: ") {
+            rawPostStatus(host, "/login", contentType, body, Some(body.length.toLong)) shouldBe Some(413)
+          }
+          withClue(s"[$form, chunked]: ") {
+            rawPostStatus(host, "/login", contentType, body, declaredLength = None) shouldBe None
+          }
+        }
+
+        val unsent = rawPostStatus(host, "/login", "application/x-www-form-urlencoded", Array.emptyByteArray, Some(10000000L))
+        unsent shouldBe Some(413)
+
+        val long = requests.post(
+          s"$host/login",
+          data = Map(
+            "login" -> testContext.user.email,
+            "password" -> TestContext.USER_PASSWORD,
+            "redirect" -> s"/r/${testContext.repository.persistedId}?text=${"a" * 4000}"),
+          maxRedirects = 0,
+          check = false
+        )
+        long.statusCode shouldBe 302
+        long.cookies.contains(SessionController.AUTH_COOKIE_NAME) shouldBe true
     }
   }
 

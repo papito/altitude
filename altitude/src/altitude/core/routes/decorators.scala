@@ -5,6 +5,7 @@ import cask.model.Response
 import cask.model.Response.Raw
 import cask.model.Status
 import cask.router.Result
+import io.undertow.server.RequestTooBigException
 import io.undertow.server.handlers.form.FormParserFactory
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
@@ -73,17 +74,66 @@ object decorators:
       response.headers.exists((name, value) => name.equalsIgnoreCase("Content-Type") && value.startsWith("image/"))
 
   /**
+   * The most bytes of a body that a route anyone can call reads whole into memory: the login's form and the Setup submission.
+   * Their fields come to a few hundred bytes, and a login's `redirect` back to a long search to a few thousand.
+   */
+  val SMALL_BODY_BYTES: Long = 64 * 1024
+
+  /**
+   * Limits the request's body to `maxBytes`, before anything has read it, and answers whether its declared length is within them.
+   * From here on Undertow reads no further than the limit, so a route that reads its body whole into memory never holds more than
+   * the limit, whatever is sent:
+   *
+   *   - A body whose declared length is over the limit is answered 413 by the caller, with none of it read.
+   *   - A chunked body has no length to judge. Reading it throws `RequestTooBigException` once it has grown past the limit, and
+   *     Undertow closes the connection as it throws (`ChunkedStreamSourceConduit`), so that client gets no answer at all: the 413
+   *     the caller then returns has nowhere to go. A browser never sends a form chunked.
+   *
+   * The server itself sets no limit (`MAX_ENTITY_SIZE`), since an upload is large by design and is streamed to a file.
+   */
+  private def bounded(req: cask.Request, maxBytes: Long): Boolean =
+    req.exchange.setMaxEntitySize(maxBytes)
+    req.exchange.getRequestContentLength <= maxBytes
+
+  /** The status line alone, as every refusal of a request that cannot be bound is answered outside dev */
+  private def bare(status: Int): Result[Raw] =
+    Result.Success(Response(s"Error $status: ${Status.codesToStatus(status).reason}", statusCode = status))
+
+  /**
+   * Refuses a body over `maxBytes`: with a 413 by its declared length, before any of it is read, or, when it is chunked, by the
+   * closed connection of [[bounded]] as it grows past the limit. For a route that reads its body whole into memory and that
+   * anyone can call: without it, one request with a body of gigabytes exhausts the heap, and the image's JVM exits on an
+   * `OutOfMemoryError`.
+   */
+  class smallBody(maxBytes: Long = SMALL_BODY_BYTES) extends cask.RawDecorator:
+    override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
+      if !bounded(req, maxBytes) then bare(413)
+      // As the innermost decorator, this fills the endpoint's extra parameter list
+      else
+        delegate(req, Map("request" -> req)) match {
+          case Result.Error.Exception(_: RequestTooBigException) => bare(413)
+          case answer => answer
+        }
+
+  /**
    * cask's `postForm`, except for a body it cannot read as a form (no content type, a content type that is no form's, a multipart
    * body with no boundary, a broken body). cask answers that 400 with the parser's exception and its stack trace, whatever the
    * debug mode; this answers the bare 400 a request that cannot be bound gets outside dev, in every environment. A body that is a
    * form goes to the route as cask's own endpoint passes it.
+   *
+   * Undertow's form parsers hold a field's value in memory, so the body is limited to `maxBytes`, and a longer one is refused as
+   * [[smallBody]] refuses it.
    */
-  class formPost(path: String) extends cask.postForm(path):
+  class formPost(path: String, maxBytes: Long = SMALL_BODY_BYTES) extends cask.postForm(path):
     override def wrapFunction(req: cask.Request, delegate: Delegate): Result[Raw] =
-      formOf(req) match {
-        case Some(form) => delegate(req, form)
-        case None => Result.Success(Response(s"Error 400: ${Status.codesToStatus(400).reason}", statusCode = 400))
-      }
+      if !bounded(req, maxBytes) then bare(413)
+      else
+        try
+          formOf(req) match {
+            case Some(form) => delegate(req, form)
+            case None => bare(400)
+          }
+        catch case _: RequestTooBigException => bare(413)
 
     /** The form's fields as cask reads them, each name with its values; none when the body is no form */
     private def formOf(req: cask.Request): Option[Map[String, Seq[FormEntry]]] =
@@ -97,6 +147,7 @@ object decorators:
             data.iterator().asScala.map(name => name -> data.get(name).asScala.map(FormEntry.fromUndertow).toSeq).toMap
         }
       catch
+        case tooBig: RequestTooBigException => throw tooBig
         case NonFatal(e) =>
           logger.debug(s"A POST to ${req.exchange.getRequestPath} is no form: its body cannot be parsed", e)
           None

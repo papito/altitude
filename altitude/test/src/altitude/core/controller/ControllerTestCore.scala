@@ -2,9 +2,22 @@ package altitude.core.controller
 
 import altitude.test.{ TestContext, TestFocus }
 import io.undertow.Undertow
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.IOException
 import java.net.HttpCookie
+import java.net.Socket
+import java.net.URI
+import java.nio.charset.StandardCharsets
 import org.scalatest.{ funsuite, BeforeAndAfterAll, BeforeAndAfterEach }
 import org.scalatest.matchers.should.Matchers.shouldBe
+
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
+import scala.util.Try
+import scala.util.Using
 
 import altitude.core.{ Altitude, App, RequestContext }
 import altitude.core.Const as C
@@ -130,6 +143,54 @@ class ControllerTestCore extends funsuite.AnyFunSuite with BeforeAndAfterAll wit
    * Runs `f` against `app` served at the address it is given. With `requestThreads`, the server answers on that many threads:
    * with one, every request runs on the thread the request before it ran on.
    */
+  /**
+   * Posts over a socket of the test's own and answers the status the server sends, if it sends one, read while the body is still
+   * going out. A server that refuses a body it has not read answers and closes before the client is done, which an HTTP client
+   * reports as a broken connection, not as the answer.
+   *
+   * @param declaredLength
+   *   the `Content-Length` the request states, which need not be what is sent; none sends the body chunked
+   * @param body
+   *   what is sent of the body, in pieces of 8 KB, a chunk each when the body is chunked
+   */
+  def rawPostStatus(
+      host: String,
+      path: String,
+      contentType: String,
+      body: Array[Byte],
+      declaredLength: Option[Long]): Option[Int] = {
+    val address = URI.create(host)
+    Using.resource(new Socket(address.getHost, address.getPort)) {
+      socket =>
+        socket.setSoTimeout(30000)
+        val status = Future {
+          val line = new BufferedReader(new InputStreamReader(socket.getInputStream, StandardCharsets.US_ASCII)).readLine()
+          Option(line).flatMap(_.split(" ").lift(1)).flatMap(_.toIntOption)
+        }(using ExecutionContext.global)
+
+        def ascii(text: String): Array[Byte] = text.getBytes(StandardCharsets.US_ASCII)
+        val framing = declaredLength.fold("Transfer-Encoding: chunked")(length => s"Content-Length: $length")
+        val out = socket.getOutputStream
+        try {
+          out.write(
+            ascii(s"POST $path HTTP/1.1\r\nHost: ${address.getAuthority}\r\nContent-Type: $contentType\r\n$framing\r\n\r\n"))
+          body.grouped(8192).foreach {
+            piece =>
+              if (declaredLength.isEmpty) out.write(ascii(s"${piece.length.toHexString}\r\n"))
+              out.write(piece)
+              if (declaredLength.isEmpty) out.write(ascii("\r\n"))
+              out.flush()
+          }
+          if (declaredLength.isEmpty) out.write(ascii("0\r\n\r\n"))
+          out.flush()
+        } catch {
+          // The server has closed its side, having answered
+          case _: IOException => ()
+        }
+        Try(Await.result(status, 30.seconds)).toOption.flatten
+    }
+  }
+
   def withServer[T](app: cask.main.Main, requestThreads: Option[Int] = None)(f: String => T): T = {
     val builder = Undertow.builder
       .addHttpListener(8081, "localhost")
