@@ -17,8 +17,9 @@
 #   START_TIMEOUT  the seconds a start may take, the model download included (1200)
 #   KEEP           set to 1 to leave the container and its volumes in place after the run, for a look at a failure
 #
-# The checks read the server's log for lines of ServerShutdown, QueuedPipeline, ImportService and App by their text:
-# a reworded line fails its check here.
+# The checks read the server's log for lines of ServerShutdown, QueuedPipeline, ImportService, SceneEmbedder and App by
+# their text: a reworded line fails its check here. That holds for a line that must not be there too: its check first
+# finds the text in the sources, since a text no source logs any more is absent from every log.
 
 set -euo pipefail
 
@@ -216,6 +217,23 @@ forbid_line() {
     fi
 }
 
+# forbid_line for a line of the server's own. Once that line is reworded in the sources, no log holds the old text and
+# the check would pass whatever the server did: so the text must still be in a string of the sources, or this fails.
+forbid_own_line() {
+    grep -r -F -h -e "$2" "$repo_root/altitude/src" | grep -q '"' || fail "the script's own check of \"$3\"" \
+        "no string in altitude/src says \"$2\": the line was reworded, and this check would pass whatever the log held"
+    forbid_line "$@"
+}
+
+# Makes $1 photos in the new folder $2 and adds them to the list $3: frames of the moving lavfi test pattern $4, each a
+# picture of its own, so none is a duplicate of another
+make_photos() {
+    mkdir "$2"
+    ffmpeg -nostdin -loglevel error -y -f lavfi -i "$4=size=640x480:rate=25" -frames:v "$1" -q:v 3 "$2/frame-%03d.jpg" ||
+        fail "making photos" "ffmpeg -f lavfi -i $4 failed"
+    find "$2" -type f | sort >>"$3"
+}
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Before anything is made
 
@@ -391,26 +409,48 @@ say "6. a stop in the middle of an import, right after a start"
 # Right after a start, on purpose: the Scene models' sessions have not run yet. ONNX Runtime releases its environment in
 # a JVM shutdown hook of its own, which runs at once, beside the drain; freed under a session's first pass, it would take
 # the JVM down. The server holds a second reference to it (OnnxEnvironment), and this stop is what shows that it does.
-find "$other_photos" -type f | sort >"$work/second"
-second_count="$(grep -c . "$work/second")"
-second_import="$(import_files "$work/second" "$url" "$token")"
-# At once: the files are accepted and their Scene embeddings are under way or still to come
-stop_server "the stop in the middle of an import"
+#
+# The stop must find files still in the pipeline, which is a race against the machine: the photos are few and a fast one
+# imports them while the last is still being uploaded. So the import holds three more photos a core than the test's
+# own (by the core, as the import's threads are, so the drain takes about as long on any machine and stays within the
+# Pipeline shutdown timeout), and when it has all settled before the stop began all the same, the step is run once more
+# with other photos before it fails.
+cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
+extra_photos=$((cores * 3))
+attempt=1
+while :; do
+    if [ "$attempt" = 1 ]; then
+        find "$other_photos" -type f | sort >"$work/second"
+        make_photos "$extra_photos" "$work/frames-1" "$work/second" testsrc2
+    else
+        : >"$work/second"
+        make_photos "$((extra_photos * 2))" "$work/frames-2" "$work/second" testsrc
+    fi
+    second_count="$(grep -c . "$work/second")"
+    second_import="$(import_files "$work/second" "$url" "$token")"
+    # At once: the files are accepted and their Scene embeddings are under way or still to come
+    stop_server "the stop in the middle of an import"
 
-stopping_at="$(grep -n -F 'Stopping: new requests are answered 503' "$work/log" | tail -n 1 | cut -d: -f1)"
-[ -n "$stopping_at" ] || fail "the stop in the middle of an import" "no line of the log says the shutdown began"
-tail -n "+$stopping_at" "$work/log" >"$work/log-stop"
-head -n "$stopping_at" "$work/log" >"$work/log-before-stop"
+    stopping_at="$(grep -n -F 'Stopping: new requests are answered 503' "$work/log" | tail -n 1 | cut -d: -f1)"
+    [ -n "$stopping_at" ] || fail "the stop in the middle of an import" "no line of the log says the shutdown began"
+    tail -n "+$stopping_at" "$work/log" >"$work/log-stop"
+    head -n "$stopping_at" "$work/log" >"$work/log-before-stop"
 
-settled="$(lines_with "of Import [$second_import] is " "$work/log")"
-settled_before="$(lines_with "of Import [$second_import] is " "$work/log-before-stop")"
-[ "$settled_before" -lt "$second_count" ] || fail "the stop's timing" \
-    "all $second_count files were settled before the stop began, so it drained nothing"
+    settled="$(lines_with "of Import [$second_import] is " "$work/log")"
+    settled_before="$(lines_with "of Import [$second_import] is " "$work/log-before-stop")"
+    [ "$settled_before" -ge "$second_count" ] || break
+    [ "$attempt" = 1 ] || fail "the stop's timing" \
+        "twice, all the files of an import ($second_count the second time) were settled before the stop began, so it drained nothing"
+    say "   all $second_count files were settled before the stop began: once more, with other photos"
+    attempt=2
+    start_server "the start before the second try"
+    sign_in
+done
 [ "$settled" = "$second_count" ] || fail "the stop drained the import" \
     "$settled of $second_count files of the second import were settled when the server stopped"
 require_line "$work/log-stop" 'Draining the import queue' "the stop drained the import"
 require_line "$work/log-stop" 'The import queue has finished' "the stop drained the import"
-forbid_line "$work/log-stop" 'did not finish within' "the stop drained the queues"
+forbid_own_line "$work/log-stop" 'did not finish within' "the stop drained the queues"
 require_line "$work/log-stop" 'Cleaned up' "the stop closed the database"
 require_line "$work/log-stop" 'The HTTP server has stopped' "the stop ended in order"
 say "   stopped in ${stop_took}s with exit code 143: the drain settled $((second_count - settled_before)) of $second_count files"
@@ -438,7 +478,7 @@ say "8. the log of the three runs"
 
 server_log >"$work/log"
 # A start closes each Import still in progress and fails its pending files, with this WARN
-forbid_line "$work/log" 'a restart interrupted' "no Import left in progress"
+forbid_own_line "$work/log" 'a restart interrupted' "no Import left in progress"
 # A JVM crash's report goes to stderr in the image, so to this log
 forbid_line "$work/log" 'A fatal error has been detected by the Java Runtime Environment' "no crash report"
 forbid_line "$work/log" 'SIGSEGV' "no crash report"
@@ -447,9 +487,9 @@ forbid_line "$work/log" 'terminate called' "no crash report"
 forbid_line "$work/log" 'java.lang.OutOfMemoryError' "no OutOfMemoryError"
 # The image sets ORT_DISABLE_TELEMETRY: the start warns when it is not in force, and ONNX Runtime complains on a
 # read-only filesystem when its telemetry is on
-forbid_line "$work/log" "ONNX Runtime's telemetry is on" "ONNX Runtime's telemetry is off"
+forbid_own_line "$work/log" "ONNX Runtime's telemetry is on" "ONNX Runtime's telemetry is off"
 forbid_line "$work/log" 'Failed to persist telemetry device ID' "ONNX Runtime's telemetry is off"
-forbid_line "$work/log" 'could not embed' "every image was embedded"
+forbid_own_line "$work/log" ' could not embed ' "every image was embedded"
 forbid_line "$work/log" ' ERROR ' "no error logged"
 say "   no interrupted Import, no crash report, no error, no telemetry"
 

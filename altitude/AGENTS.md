@@ -391,7 +391,7 @@ Around those tasks, in `App`:
 - `cleanup()` does not terminate the actor system, which the queues run on: the coordinated shutdown does, in a later phase.
 - Whatever stops the process must allow three times the Pipeline shutdown timeout Setting plus 30 seconds. The Setting's help text says so, and `compose.yaml`'s `stop_grace_period` (120 seconds) is that sum at the default of 30: change the three together, with the README's **Stopping**.
 - ONNX Runtime registers a shutdown hook too, which releases its environment while the drain still embeds: `OnnxEnvironment` holds it alive (**Scene embedding** under **Sequences and Image quality**).
-- Tests: `ServerShutdownTests` (both engines; a second instance behind a real server, stopped as a SIGTERM stops it). `scripts/smoke-docker.sh` stops the image mid-import and reads the log lines of `ServerShutdown`, `QueuedPipeline`, `ImportService` and `App` by their text, so rewording one of them breaks it.
+- Tests: `ServerShutdownTests` (both engines; a second instance behind a real server, stopped as a SIGTERM stops it). `scripts/smoke-docker.sh` stops the image mid-import and reads the log lines of `ServerShutdown`, `QueuedPipeline`, `ImportService`, `SceneEmbedder` and `App` by their text, so rewording one of them breaks it. That holds for the lines it must not find too (`forbid_own_line`): each is first looked up in a string of `altitude/src`, since a text no source logs is absent from every log. Its stop mid-import is a race against the machine, so that import grows with the cores and the step is tried a second time, with other photos, before it fails for its timing.
 
 ## Video
 
