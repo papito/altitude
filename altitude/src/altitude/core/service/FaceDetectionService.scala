@@ -107,25 +107,6 @@ object FaceDetectionService:
 
     new Rect(x, y, Math.max(0, w), Math.max(0, h))
 
-  /** Clamps the origin at 0 only, with no image bounds */
-  def faceDetectToRect(detectedFace: Mat): Rect =
-    faceDetectToRect(detectedFace, Int.MaxValue, Int.MaxValue)
-
-  def faceDetectToMat(image: Mat, detectedFace: Mat): Mat =
-    val faceRect = faceDetectToRect(detectedFace, image.cols(), image.rows())
-    image.submat(faceRect)
-
-  def writeDebugOpenCvMat(mat: Mat, fileName: String): Unit =
-    val outputDir = System.getenv().get("OUTPUT")
-
-    if outputDir == null then
-      println("OUTPUT environment variable not set for debug image writing")
-      return
-
-    val outputPath = FilenameUtils.concat(outputDir, fileName)
-    println(String.format("Writing %s", outputPath))
-    Imgcodecs.imwrite(outputPath, mat)
-
   /**
    * Writes face detection debug images into the existing `debugDir`: `{baseName}-annotated.jpg`, the image with every detection's
    * box, landmarks, quality and score, and per face `{baseName}-{N}-q{quality}-aligned.png`, the exact ArcFace input, so a
