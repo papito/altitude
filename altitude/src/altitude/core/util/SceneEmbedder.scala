@@ -2,6 +2,7 @@ package altitude.core.util
 
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtLoggingLevel
 import ai.onnxruntime.OrtSession
 import java.nio.FloatBuffer
 import java.nio.file.Path
@@ -49,7 +50,54 @@ private[core] object OnnxEnvironment:
   /** The variable ONNX Runtime's native library reads as it initializes, and the value that switches its telemetry off */
   val TELEMETRY_OFF: (String, String) = "ORT_DISABLE_TELEMETRY" -> "1"
 
-  lazy val get: OrtEnvironment = withoutTelemetry(OrtEnvironment.getEnvironment, sys.env.get(TELEMETRY_OFF._1))
+  lazy val get: OrtEnvironment =
+    val environment = withoutTelemetry(OrtEnvironment.getEnvironment, sys.env.get(TELEMETRY_OFF._1))
+    retain(environment)
+    environment
+
+  /**
+   * Takes a second reference to the native environment, which is never given back.
+   *
+   * ONNX Runtime's Java API registers a JVM shutdown hook of its own (`OrtEnvironment.OrtEnvCloser`) that releases the
+   * environment. The JVM starts every hook at once, so on a SIGTERM this one runs beside Pekko's coordinated shutdown, whose
+   * `Altitude.cleanup()` is still embedding what the import queue accepted. A pass on a released environment fails: a session's
+   * first pass reaches for ONNX Runtime's default logger, which is gone, and with several threads embedding the JVM dies of a
+   * SIGSEGV in ONNX Runtime's library, the Import's files left pending. The native environment is one per process and counts its
+   * references (the C API's `CreateEnv` takes one, `ReleaseEnv` gives one back), so with a second reference the hook's release
+   * leaves the environment alive under every session opened in it, and the end of the process frees it.
+   *
+   * The API offers no way to take a reference, nor to drop its hook. So this calls `OrtEnvironment`'s private native
+   * `createHandle`, its `CreateEnv`, by reflection, with the API handle in the package-private `OnnxRuntime.ortApiHandle`, and
+   * checks that the handle it is answered is the environment's own. An ONNX Runtime upgrade that renames one of those members, or
+   * answers another environment, fails the start here, naming the version: the other choice is a server that crashes at its next
+   * stop under load. One that stops counting references is caught by the test alone. The guard is `OnnxEnvironmentTests`'
+   * shutdown hook test, which releases the environment as the hook does and then runs a session's first pass.
+   */
+  private def retain(environment: OrtEnvironment): Unit =
+    def broken(why: String, cause: Throwable | Null): IllegalStateException =
+      IllegalStateException(
+        s"ONNX Runtime ${environment.getVersion} gives no second reference to its environment ($why), so its shutdown hook " +
+          "would release the environment under the sessions a stop is still draining. OnnxEnvironment.retain needs adapting " +
+          "to this version",
+        cause
+      )
+
+    val handle =
+      try
+        val api = Class.forName("ai.onnxruntime.OnnxRuntime").getDeclaredField("ortApiHandle")
+        api.setAccessible(true)
+        val own = classOf[OrtEnvironment].getDeclaredField("nativeHandle")
+        own.setAccessible(true)
+        val createHandle =
+          classOf[OrtEnvironment].getDeclaredMethod("createHandle", java.lang.Long.TYPE, Integer.TYPE, classOf[String])
+        createHandle.setAccessible(true)
+        // An environment that exists keeps its own level and name; these are the Java API's defaults
+        val level = Integer.valueOf(OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING.getValue)
+        createHandle.invoke(null, api.get(null), level, OrtEnvironment.DEFAULT_NAME) -> own.get(environment)
+      catch case e: ReflectiveOperationException => throw broken(e.toString, e)
+
+    if handle._1 != handle._2 then throw broken(s"createHandle answered environment ${handle._1}, not ${handle._2}", null)
+    logger.debug("Holding a second reference to ONNX Runtime's environment, which its shutdown hook's release leaves alive")
 
   /** `environment` with the API's telemetry switch off, after a WARN when `variable`, the process's own, left the rest on */
   def withoutTelemetry(environment: OrtEnvironment, variable: Option[String]): OrtEnvironment =

@@ -1,0 +1,79 @@
+# Altitude under Docker: `docker compose up -d` builds the image on its first run and starts the server on port 8080,
+# on SQLite, with no .env file needed. What a person may set goes in .env beside this file: .env.example lists it.
+#
+# The dev and test databases of a server run from the sources are not here: compose.dev.yaml and compose.test.yaml.
+
+# The project's name, which the volumes' names start with (altitude-app_data, altitude-app_models). Named here, and not
+# left to the folder's name, so a renamed or moved folder still finds its volumes, and so this project is never the
+# `altitude` one that the dev files' containers belong to.
+name: altitude-app
+
+services:
+  altitude:
+    build: .
+    image: altitude:local
+    ports:
+      # On every interface of the host. The container's own port stays 8080: ALTITUDE_PORT is the server's and is not
+      # passed, so the published port has a variable of its own.
+      - "${ALTITUDE_PUBLISH_PORT:-8080}:8080"
+    environment:
+      # Date Imported's day is a day in the server's time zone: set it before the first Import
+      TZ: ${TZ:-UTC}
+      # false only to sign in over plain HTTP on a LAN or VPN address, where a browser keeps no Secure cookie
+      ALTITUDE_SECURE_COOKIES: ${ALTITUDE_SECURE_COOKIES:-true}
+      # Each of these has a default: a variable passed empty is an empty value to Altitude, not an unset one
+      ALTITUDE_DB_ENGINE: ${ALTITUDE_DB_ENGINE:-sqlite}
+      ALTITUDE_DB_POSTGRES_URL: ${ALTITUDE_DB_POSTGRES_URL:-jdbc:postgresql://postgres/altitude}
+      ALTITUDE_DB_POSTGRES_USER: ${ALTITUDE_DB_POSTGRES_USER:-altitude}
+      # The one passed empty on purpose: on PostgreSQL with no password, the start fails naming this variable
+      ALTITUDE_DB_POSTGRES_PASSWORD: ${ALTITUDE_DB_POSTGRES_PASSWORD:-}
+      # With no value, a variable is passed only when .env (or the shell) sets it, never empty
+      ALTITUDE_LOG_FORMAT:
+      ALTITUDE_LOG_LEVEL:
+      ALTITUDE_IMPORT_PARALLELISM_MAX:
+    volumes:
+      # The Data directory: the database, every Library's files, the uploads not yet imported. What a backup covers.
+      - data:/data
+      # The Models directory: about 1.6 GB the first start downloads. Never part of a backup.
+      - models:/models
+      # An anonymous volume, the one place besides the two above that the server can write. On disk, not in memory
+      # (a tmpfs): Tika and ImageIO spool large files there.
+      - /tmp
+    # The image unpacks nothing at a start, so its own filesystem stays as built
+    read_only: true
+    # A stop lets the import, purge and render queues finish what they accepted, 30 seconds each by default (the
+    # Pipeline shutdown timeout Setting), and 30 more for the requests, the models and the database. Raise both together.
+    stop_grace_period: 120s
+    # Also after an OutOfMemoryError, on which the JVM exits
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+        # Without the postgres profile there is no such service to wait for
+        required: false
+
+  # PostgreSQL in place of SQLite, started only under the postgres profile: in .env, COMPOSE_PROFILES=postgres with
+  # ALTITUDE_DB_ENGINE=postgres and a password. It publishes no port: Altitude reaches it on the project's network.
+  postgres:
+    profiles: [postgres]
+    image: pgvector/pgvector:0.8.2-pg18-trixie
+    environment:
+      POSTGRES_DB: altitude
+      POSTGRES_USER: ${ALTITUDE_DB_POSTGRES_USER:-altitude}
+      # No default and not required: compose reads this line whatever the profile, so a required variable would stop a
+      # plain `docker compose up`. Empty, PostgreSQL refuses to create its database and says so.
+      POSTGRES_PASSWORD: ${ALTITUDE_DB_POSTGRES_PASSWORD:-}
+    volumes:
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      # Over TCP: while PostgreSQL creates its database it answers on its socket alone, and is not ready for Altitude
+      test: ["CMD-SHELL", "pg_isready -h localhost -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  data:
+  models:
+  postgres:

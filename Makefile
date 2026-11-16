@@ -78,5 +78,19 @@ test-controllers:
 test-js:
 	node --test 'scripts/test-js/*.test.mjs'
 
+# The dev and test databases of a server run from the sources; compose.yaml is Altitude itself under Docker
 db:
-	docker compose -f docker-compose.yml -f docker-compose.test.yml up
+	docker compose -f compose.dev.yaml -f compose.test.yaml up
+
+.PHONY: docker smoke-docker
+
+# Builds the image and loads it as altitude:local, for this machine's architecture. DOCKER_PLATFORM=linux/arm64 (or
+# linux/amd64) builds the other one's, which needs QEMU for the image's one RUN:
+# docker run --privileged --rm tonistiigi/binfmt --install arm64. The Dockerfile's cache mounts need BuildKit, so the
+# docker-buildx package.
+docker:
+	docker buildx build --load $(if $(DOCKER_PLATFORM),--platform $(DOCKER_PLATFORM)) --tag altitude:local .
+
+# Starts altitude:local, imports into it and stops it mid-import, checking what the image promises; see the script
+smoke-docker:
+	bash scripts/smoke-docker.sh

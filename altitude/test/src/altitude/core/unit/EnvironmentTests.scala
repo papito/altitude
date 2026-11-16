@@ -28,7 +28,8 @@ import altitude.core.service.UserService
      *
      * Edge cases:
      *
-     * An empty property or variable counts as unset, so the next source is read.
+     * An empty property or variable counts as unset, so the next source is read, and an empty variable beside a property is no
+     * misspelled one.
      */
     val asTest = Map(Environment.Variable.ENV -> "test")
 
@@ -40,6 +41,7 @@ import altitude.core.service.UserService
     Environment.resolve(Some(""), asTest) shouldBe Environment.Name.TEST
     Environment.resolve(Some(""), Map(Environment.Variable.ENV -> "")) shouldBe Environment.Name.PROD
     Environment.resolve(None, Map(Environment.Variable.ENV -> "")) shouldBe Environment.Name.PROD
+    Environment.resolve(Some("dev"), Map(Environment.Variable.ENV -> "")) shouldBe Environment.Name.DEV
   }
 
   test("ALTITUDE_ENV and the property name an environment in each of its accepted spellings") {
@@ -92,6 +94,8 @@ import altitude.core.service.UserService
      * Edge cases:
      *
      * A misspelled property fails even when the variable names an environment: the next source is not a fallback for a bad value.
+     * A misspelled variable fails even when the property names an environment and so wins: the image passes the property, and a
+     * typo in its `ALTITUDE_ENV` must not start a server its owner believes is in another environment.
      */
     Seq("dve", "Dev", "staging", " ", "prod ").foreach {
       value =>
@@ -106,6 +110,10 @@ import altitude.core.service.UserService
             Environment.resolve(Some(value), Map(Environment.Variable.ENV -> "test"))
           ofProperty.getMessage should include(Environment.PROPERTY)
           Environment.ACCEPTED.foreach(spelling => ofProperty.getMessage should include(spelling))
+
+          val besideProperty = the[IllegalArgumentException] thrownBy
+            Environment.resolve(Some("prod"), Map(Environment.Variable.ENV -> value))
+          besideProperty.getMessage shouldBe ofVariable.getMessage
         }
     }
   }

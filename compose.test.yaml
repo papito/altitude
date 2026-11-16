@@ -1,4 +1,9 @@
-version: '3'
+# The test database, which the PostgreSQL suites reach on port 5433 (make test-psql). `make db` starts it with
+# compose.dev.yaml's.
+
+# The same project as compose.dev.yaml: see the comment there.
+name: altitude
+
 services:
   altitude_core_postgres_test_db:
     image: pgvector/pgvector:0.8.2-pg18-trixie

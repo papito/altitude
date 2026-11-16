@@ -17,7 +17,10 @@ object Environment:
     val PROD = "prod"
     val DEV = "dev"
 
-  /** The system property that names the environment. It wins over `ALTITUDE_ENV`, so what a launcher passes is not overridden. */
+  /**
+   * The system property that names the environment. It wins over an `ALTITUDE_ENV` that names another, so what a launcher passes
+   * is not overridden.
+   */
   val PROPERTY = "altitude.env"
 
   /**
@@ -52,7 +55,9 @@ object Environment:
   /**
    * The environment a start runs in: the `altitude.env` property, then the `ALTITUDE_ENV` variable, then prod. An empty value
    * counts as unset. A value that names no environment throws, naming the accepted ones, so a misspelled one never runs as
-   * another environment. `ENV` is not read: it is a POSIX shell's own variable, the file an interactive `sh` reads at startup.
+   * another environment. That holds for the variable even when the property wins: the Docker image passes the property, and a
+   * typo in its `ALTITUDE_ENV` stops the start instead of running as prod unnoticed. `ENV` is not read: it is a POSIX shell's own
+   * variable, the file an interactive `sh` reads at startup.
    */
   def resolve(property: Option[String], variables: Map[String, String]): String =
     def named(value: String, source: String): String =
@@ -61,11 +66,10 @@ object Environment:
           s"""$source is "$value", which names no environment. Accepted values: ${ACCEPTED.mkString(", ")}""")
       }
 
-    property
-      .filter(_.nonEmpty)
-      .map(named(_, s"The $PROPERTY system property"))
-      .orElse(variables.get(Variable.ENV).filter(_.nonEmpty).map(named(_, s"The ${Variable.ENV} environment variable")))
-      .getOrElse(Name.PROD)
+    // Both are read, the property first, so each one's misspelling is refused whichever of them wins
+    val ofProperty = property.filter(_.nonEmpty).map(named(_, s"The $PROPERTY system property"))
+    val ofVariable = variables.get(Variable.ENV).filter(_.nonEmpty).map(named(_, s"The ${Variable.ENV} environment variable"))
+    ofProperty.orElse(ofVariable).getOrElse(Name.PROD)
 
   var CURRENT: String = resolve(Option(System.getProperty(PROPERTY)), variables)
 
