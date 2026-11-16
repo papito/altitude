@@ -2306,8 +2306,8 @@ Colors derived in a rule:
 - The filter chip and a chosen name's chip in the advanced search panel share `--chip-fill`, declared by one rule.
 - The Edit panel's slider tracks are `:root` gradient tokens (`--edit-track-*`): each end shows what it does to the
   picture, `--theme-neutral-3` at 0; the component sets `--edit-slider-track` on a slider to one.
-- Literals stay only in the SVG data URIs of `includes/search_results.css` and `htmx/view_image_detail_modal.css`,
-  since a data URI cannot read a token.
+- Literals stay only in the SVG data URI of `htmx/view_image_detail_modal.css`, since a data URI cannot read a token;
+  the check of `includes/search_results.css` is a mask, colored by its element's background.
 
 Keyboard focus is the `:focus-visible` ring of `core.css`, inset (`outline-offset: -2px`) where a panel clips its rows.
 The browser withholds it after a pointer, including the focus a closing dialog returns, so no rule removes an outline
