@@ -12,8 +12,8 @@ import { runSearch } from "./search.js"
  * PAGE WINDOW
  *
  * The grid keeps a window of loaded pages around the viewport, so what it holds is bounded by the
- * viewport, not by how far the session scrolled. `#assets` holds one spacer per folded page, then the
- * loaded pages, contiguous.
+ * viewport, not by how far the session scrolled. `#assets` holds one spacer per folded page above the
+ * loaded pages; a spacer reloaded out of order, after a jump of the scroll, sits among them.
  *
  * Once an appended page takes the loaded cells past MAX_LOADED_CELLS, the topmost page folds into a
  * `.page-spacer` of its height carrying its cursor, unless it is within a viewport of the screen or
@@ -140,10 +140,16 @@ function recordPage(grid, event) {
     if (reloaded) {
         reloaded.nodes = nodes
 
-        // The server renders the page's last cell with its cursor; the page it leads to is loaded already
+        // The server renders the page's last cell with its cursor. The page it leads to is there
+        // already, loaded or folded, unless it was dropped while this one was folded: then nothing
+        // follows, and the cursor stays for the scroll to load it again
         const lastCellEl = nodes.filter(isCell).at(-1)
         if (lastCellEl) {
-            delete lastCellEl.dataset.appSearchAfter
+            if (nodes.at(-1).nextElementSibling) {
+                delete lastCellEl.dataset.appSearchAfter
+            } else {
+                observeContinuationCell(lastCellEl)
+            }
         }
 
         reloaded.keptHeader?.remove()
@@ -249,8 +255,8 @@ function dropPage(grid, page) {
     page.nodes.forEach((node) => node.remove())
     forget(grid, page)
 
-    // The last cell continues to the dropped page, unless a spacer follows it, whose reload brings
-    // the dropped page's cursor on its own last cell
+    // The last cell continues to the dropped page, unless a spacer follows it: the spacer's reload
+    // keeps the cursor its last cell is rendered with, since nothing follows it then
     const lastEl = Array.from(grid.assetsElement.children).findLast(
         (el) => isCell(el) || isSpacer(el),
     )
