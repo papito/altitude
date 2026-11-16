@@ -184,7 +184,7 @@ As built, a Library has no owner: an Admin reaches every Library by its account 
 - ✅ A full disk during import drops the asset and cleans up: a `StorageException` from [FileSystemStoreService] (`addAsset`, `putBinaryData`).
 - [ ] Previews and face images are not written to a temp file and renamed, and nothing checks free space before accepting work (see [Malicious files](#malicious-files)). An edited asset's edited images are: a temp file in the same directory, written and flushed to the disk before the render's transaction, then `ATOMIC_MOVE` over the image before under the asset's lock ([FileSystemStoreService] `stageEditedImage`, `publishEditedImage`); the directory is not flushed after the rename. [MEDIUM]
   - Fix: temp file plus `ATOMIC_MOVE` for the other derived files.
-- ✅ `ClearDb` refuses to run outside dev.
+- ✅ `ClearDb` (`make clear-db`) refuses to run outside dev, and takes what it clears from `application-dev.conf` alone: an `ALTITUDE_` variable left in the shell, another instance's database URL or Data directory, steers nothing ([ClearDbTests]).
 
 Accepted uploads lost on restart are under [Running and upgrading](#running-and-upgrading).
 
@@ -448,6 +448,7 @@ Entries leave this list when their items close.
 [LogSettings]: ../altitude/src/altitude/core/LogSettings.scala
 [EnvironmentTests]: ../altitude/test/src/altitude/core/unit/EnvironmentTests.scala
 [StartupConfigTests]: ../altitude/test/src/altitude/core/unit/StartupConfigTests.scala
+[ClearDbTests]: ../altitude/test/src/altitude/core/unit/ClearDbTests.scala
 [LogSettingsTests]: ../altitude/test/src/altitude/core/unit/LogSettingsTests.scala
 [OnnxEnvironmentTests]: ../altitude/test/src/altitude/core/unit/OnnxEnvironmentTests.scala
 [SessionControllerTests]: ../altitude/test/src/altitude/core/unit/SessionControllerTests.scala

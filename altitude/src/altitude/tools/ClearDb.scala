@@ -17,8 +17,10 @@ import altitude.core.Environment
     )
     sys.exit(1)
 
-  // The config and the Data directory of the dev server, as it reads them itself
-  val config = Altitude.loadConfig()
+  // `application-dev.conf` over the defaults, and no `ALTITUDE_` variable: what is dropped here is never steered by a shell
+  // left pointing at another instance (its database URL, its Data directory). A dev server started with such variables keeps
+  // its data elsewhere, and this does not clear it.
+  val config = Altitude.loadConfig(variables = Map.empty)
   val dataDir = Altitude.dataPathOf(config)
   val dbEngine = config.getString(Const.Conf.DB_ENGINE)
 

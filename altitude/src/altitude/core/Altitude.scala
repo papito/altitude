@@ -495,7 +495,7 @@ object Altitude:
    *
    * The variables are a parameter, the process's own by default, so the loader reads no other environment: a substitution in the
    * config file resolves against the config's keys and these variables, never the rest of the process environment. A variable set
-   * to an empty value sets an empty value, as in any HOCON file.
+   * to an empty value sets an empty value, as in any HOCON file. `clearDb` passes none: it clears what the dev config file names.
    */
   def loadConfig(
       environment: String = Environment.CURRENT,

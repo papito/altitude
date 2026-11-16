@@ -2,6 +2,7 @@ package altitude.core.unit
 
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
+import altitude.test.ChildJvm
 import altitude.test.TestFocus
 import altitude.test.TestModelFiles
 import java.io.File
@@ -42,49 +43,13 @@ import altitude.core.util.OnnxEnvironment
 
   private val (variable, off) = OnnxEnvironment.TELEMETRY_OFF
 
-  /**
-   * Runs a probe object's `main` in a second JVM with this one's classpath and environment, the environment changed by
-   * `environment`, and answers its exit code and its output, stdout and stderr together. A probe that crashes its JVM fails one
-   * test here, where a crash of this JVM would take every suite of the bundle with it; the crash's report goes to the output, and
-   * no core dump is written. A probe still running at `timeout` is killed and fails the test too: a hang of a native library is
-   * what these probes exist to catch.
-   */
+  /** Runs a probe object's `main` in a second JVM (`ChildJvm.run`): its exit code and its output */
   private def runProbe(
       probe: AnyRef,
       arguments: Seq[String],
       environment: java.util.Map[String, String] => Unit = _ => (),
-      timeout: FiniteDuration = 120.seconds): (Int, String) = {
-    val classpath = getClass.getClassLoader match {
-      // The test runner loads the tests through a class loader of its own
-      case loader: URLClassLoader => loader.getURLs.map(url => Paths.get(url.toURI).toString).mkString(File.pathSeparator)
-      case _ => System.getProperty("java.class.path")
-    }
-    val java = Paths.get(System.getProperty("java.home"), "bin", "java").toString
-    val command = Seq(java, "-XX:+ErrorFileToStderr", "-XX:-CreateCoredumpOnCrash", "-cp", classpath) ++
-      Seq(probe.getClass.getName.stripSuffix("$")) ++ arguments
-    // The output goes to a file, not a pipe: reading a pipe to its end returns only when the probe exits, so a probe that hangs
-    // would never reach the timeout
-    val log = Files.createTempFile("onnx-probe", ".log")
-    try {
-      val builder = new ProcessBuilder(command*).redirectErrorStream(true).redirectOutput(log.toFile)
-      environment(builder.environment())
-
-      val process = builder.start()
-      val exited = process.waitFor(timeout.toMillis, TimeUnit.MILLISECONDS)
-      if (!exited) {
-        process.destroyForcibly()
-        // The kill is asynchronous: what the probe wrote is read once it is gone
-        process.waitFor(10, TimeUnit.SECONDS)
-      }
-      val output = new String(Files.readAllBytes(log))
-      withClue(s"The probe exited within $timeout: ") {
-        withClue(output) {
-          exited shouldBe true
-        }
-      }
-      (process.exitValue(), output)
-    } finally Files.deleteIfExists(log): Unit
-  }
+      timeout: FiniteDuration = 120.seconds): (Int, String) =
+    ChildJvm.run(probe.getClass.getName.stripSuffix("$"), arguments, environment, timeout)
 
   private def model(file: ModelFile): Path = TestModelFiles.models.path(file)
 
