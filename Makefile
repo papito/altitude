@@ -1,10 +1,10 @@
 SHELL=/bin/sh
 
 run:
-	ENV=dev mill altitude.run
+	ALTITUDE_ENV=dev mill altitude.run
 
 watch:
-	ENV=dev mill -w altitude.runBackground
+	ALTITUDE_ENV=dev mill -w altitude.runBackground
 
 compile:
 	mill altitude.compile
@@ -14,7 +14,7 @@ clean:
 	mill clean
 
 clear-db:
-	ENV=dev mill altitude.runMain altitude.tools.clearDb
+	ALTITUDE_ENV=dev mill altitude.runMain altitude.tools.clearDb
 
 # Restores a backed-up dev DB after reproducing a bug, to avoid re-importing
 restore-db:
@@ -39,40 +39,40 @@ lint:
 SKIP_SLOW = -l org.scalatest.tags.Slow
 
 test:
-	ENV=test mill -j4 altitude.test.testOnly '*SuiteBundle' -- $(SKIP_SLOW)
+	ALTITUDE_ENV=test mill -j4 altitude.test.testOnly '*SuiteBundle' -- $(SKIP_SLOW)
 
 test-with-slow:
-	ENV=test mill -j4 altitude.test.testOnly '*SuiteBundle'
+	ALTITUDE_ENV=test mill -j4 altitude.test.testOnly '*SuiteBundle'
 
 test-local: test-js
-	ENV=test mill -j3 altitude.test.testOnly '*UnitSuiteBundle' '*SqliteSuiteBundle' '*ControllerSuiteBundle' -- $(SKIP_SLOW)
+	ALTITUDE_ENV=test mill -j3 altitude.test.testOnly '*UnitSuiteBundle' '*SqliteSuiteBundle' '*ControllerSuiteBundle' -- $(SKIP_SLOW)
 
 test-focused:
-	ENV=test mill -j4 altitude.test.testOnly '*SuiteBundle' -- -n focused -oD
+	ALTITUDE_ENV=test mill -j4 altitude.test.testOnly '*SuiteBundle' -- -n focused -oD
 
 test-focused-psql:
-	ENV=test mill -j1 altitude.test.testOnly *PostgresSuiteBundle -- -n focused -oD
+	ALTITUDE_ENV=test mill -j1 altitude.test.testOnly *PostgresSuiteBundle -- -n focused -oD
 
 test-focused-sqlite:
-	ENV=test mill -j1 altitude.test.testOnly *SqliteSuiteBundle -- -n focused -oD
+	ALTITUDE_ENV=test mill -j1 altitude.test.testOnly *SqliteSuiteBundle -- -n focused -oD
 
 test-focused-unit:
-	ENV=test mill -j1 altitude.test.testOnly *UnitSuiteBundle -- -n focused -oD
+	ALTITUDE_ENV=test mill -j1 altitude.test.testOnly *UnitSuiteBundle -- -n focused -oD
 
 test-focused-controllers:
-	ENV=test mill -j1 altitude.test.testOnly *ControllerSuiteBundle -- -n focused -oD
+	ALTITUDE_ENV=test mill -j1 altitude.test.testOnly *ControllerSuiteBundle -- -n focused -oD
 
 test-psql:
-	ENV=test mill -j1 altitude.test.testOnly *PostgresSuiteBundle --show-output -- $(SKIP_SLOW)
+	ALTITUDE_ENV=test mill -j1 altitude.test.testOnly *PostgresSuiteBundle --show-output -- $(SKIP_SLOW)
 
 test-sqlite:
-	ENV=test mill -j1 altitude.test.testOnly *SqliteSuiteBundle --show-output -- $(SKIP_SLOW)
+	ALTITUDE_ENV=test mill -j1 altitude.test.testOnly *SqliteSuiteBundle --show-output -- $(SKIP_SLOW)
 
 test-unit:
-	ENV=test mill altitude.test.testOnly *UnitSuiteBundle --show-output -- $(SKIP_SLOW)
+	ALTITUDE_ENV=test mill altitude.test.testOnly *UnitSuiteBundle --show-output -- $(SKIP_SLOW)
 
 test-controllers:
-	ENV=test mill altitude.test.testOnly *ControllerSuiteBundle --show-output -- $(SKIP_SLOW)
+	ALTITUDE_ENV=test mill altitude.test.testOnly *ControllerSuiteBundle --show-output -- $(SKIP_SLOW)
 
 # The client modules' tests, under Node's built-in runner with no dependencies
 test-js:

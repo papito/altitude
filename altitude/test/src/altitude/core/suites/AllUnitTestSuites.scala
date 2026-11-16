@@ -45,6 +45,7 @@ import altitude.core.unit.Siglip2TokenizerTests
 import altitude.core.unit.SqlDialectTests
 import altitude.core.unit.SqlExplainerTests
 import altitude.core.unit.SqliteOverridesTests
+import altitude.core.unit.StartupConfigTests
 import altitude.core.unit.StyleGuideScanTests
 import altitude.core.unit.TransactionBoundaryTests
 import altitude.core.unit.UrlServiceTests
@@ -79,6 +80,7 @@ abstract class AllUnitTestSuites
     new PermissionsTests,
     new PipelineUtilsTests,
     new EnvironmentTests,
+    new StartupConfigTests,
     new Sha256Tests,
     new ModelDownloaderTests,
     new NetPoolTests,

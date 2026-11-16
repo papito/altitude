@@ -13,15 +13,19 @@ import altitude.core.util.Util
 object SessionController:
   val AUTH_COOKIE_NAME = "auth_token"
 
-  /** The session cookie of `token`, kept until `expiresAt`; every session cookie is built here so all share its attributes */
-  def authCookie(token: String, expiresAt: Instant): Cookie =
+  /**
+   * The session cookie of `token`, kept until `expiresAt`; every session cookie is built here so all share its attributes.
+   * `Secure` follows `server.secure_cookies`, as does the cookie that clears it: over plain HTTP a browser keeps a `Secure`
+   * cookie on localhost alone, and takes none that would replace or clear it.
+   */
+  def authCookie(token: String, expiresAt: Instant, secure: Boolean = App.altitude.secureCookies): Cookie =
     Cookie(
       name = AUTH_COOKIE_NAME,
       value = token,
       path = "/",
       maxAge = math.max(0L, Duration.between(Instant.now, expiresAt).getSeconds).toInt,
       httpOnly = true,
-      secure = true,
+      secure = secure,
       sameSite = "Strict"
     )
 

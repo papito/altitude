@@ -468,9 +468,11 @@ object Settings:
       PIPELINE_SHUTDOWN_TIMEOUT,
       Operations,
       "Pipeline shutdown timeout (seconds)",
-      "At shutdown, the import and the purge queues are each given this long to finish what they have already accepted, " +
-        "before the database closes. Whatever the limit cuts off is handled at the next startup: an unfinished import is " +
-        "discarded (its upload is lost), and a purge is queued again.",
+      "At shutdown, the import queue, the purge queue and the Edit renders are each given this long to finish what they " +
+        "have already accepted, before the database closes. Whatever stops the server (a container's stop grace period, a " +
+        "service manager's stop timeout) must allow three times this value plus 30 seconds, or the stop is cut short. " +
+        "Whatever the limit cuts off is handled at the next startup: an unfinished import is discarded (its upload is " +
+        "lost), and a purge or a render is queued again.",
       Integer(1)
     ),
     SettingDef(

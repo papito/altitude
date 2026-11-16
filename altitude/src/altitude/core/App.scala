@@ -1,5 +1,9 @@
 package altitude.core
 import cask.router.Decorator
+import io.undertow.Undertow
+import io.undertow.UndertowOptions
+import io.undertow.server.handlers.GracefulShutdownHandler
+import java.time.ZoneId
 import org.bytedeco.javacpp.Loader
 import org.bytedeco.opencv.opencv_java
 import org.slf4j.Logger
@@ -66,6 +70,67 @@ object App extends cask.Main:
   altitude.service.watchFolder.start()
 
   given logger: Logger = LoggerFactory.getLogger(getClass)
+
+  /** The address the server binds: `server.host` and `server.port` */
+  override def host: String = altitude.config.getString(Const.Conf.SERVER_HOST)
+
+  override def port: Int = altitude.config.getInt(Const.Conf.SERVER_PORT)
+
+  /** In debug mode cask answers an error with its stack trace, which holds SQL and paths: dev alone */
+  override def debugMode: Boolean = Environment.isDev
+
+  /** The server [[main]] built and the handler in front of its routes, held for the stop: `ServerShutdown`'s tasks use both */
+  private var server: Option[(GracefulShutdownHandler, Undertow)] = None
+
+  /**
+   * Builds and starts the HTTP server itself rather than through cask's `main`, which registers a shutdown hook that stops the
+   * server at once. The stop is `ServerShutdown`'s instead: new requests refused, those under way given time, the instance
+   * cleaned up, and only then the server stopped.
+   */
+  override def main(args: Array[String]): Unit =
+    if !verbose then cask.main.Main.silenceJboss()
+
+    val requests = GracefulShutdownHandler(defaultHandler)
+    val undertow = Undertow.builder
+      .addHttpListener(port, host)
+      // Without it the stop waits without limit for a request still held
+      .setServerOption[Integer](UndertowOptions.SHUTDOWN_TIMEOUT, ServerShutdown.SERVER_STOP_TIMEOUT.toMillis.toInt)
+      .setHandler(requests)
+      .build
+    server = Some((requests, undertow))
+
+    ServerShutdown.register(
+      altitude.actorSystem,
+      requests,
+      cleanup = () => altitude.cleanup(),
+      stopServer = () =>
+        undertow.stop()
+        // cask's own, which runs the WebSocket actors
+        executionContext.shutdown()
+    )
+
+    undertow.start()
+    logStart()
+
+  /** What a person starting the server needs to see: where it listens, where its files are, and what is unsafe about it */
+  private def logStart(): Unit =
+    // An IPv6 literal is bracketed in a URL
+    val address = s"http://${if host.contains(":") then s"[$host]" else host}:$port"
+    logger.info(s"Altitude is listening on $address (environment: ${Environment.CURRENT})")
+    logger.info(s"Data directory: ${altitude.dataPath}")
+    logger.info(s"Models directory: ${altitude.models.root}")
+    // Date Imported's day is a day in this zone
+    logger.info(s"Time zone: ${ZoneId.systemDefault}")
+
+    if !altitude.secureCookies then
+      logger.warn(
+        s"${Const.Conf.SERVER_SECURE_COOKIES} is false: the session cookie is sent over plain HTTP, where the network can read " +
+          "it. This is for a LAN or VPN address alone; anywhere else, serve HTTPS and set it back to true.")
+
+    if !altitude.isInitialized then
+      logger.warn(
+        s"Altitude is not set up yet and no Admin exists: the first visitor to $address runs Setup and becomes the Admin. " +
+          "Run Setup now, before anyone else can reach this address.")
 
   override def mainDecorators: Seq[Decorator[?, ?, ?, ?]] =
     Seq(decorators.compress(), decorators.requestResponseLogger(), decorators.repoContext())

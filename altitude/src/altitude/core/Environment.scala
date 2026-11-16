@@ -17,13 +17,59 @@ object Environment:
     val PROD = "prod"
     val DEV = "dev"
 
-  var CURRENT: String = System.getenv().getOrDefault("ENV", Name.PROD) match {
-    case "test" | "TEST" => Name.TEST
-    case "prod" | "production" | "PROD" | "PRODUCTION" => Name.PROD
-    case "dev" | "development" | "DEV" | "DEVELOPMENT" => Name.DEV
-    case _ => Name.DEV
-  }
+  /** The system property that names the environment. It wins over `ALTITUDE_ENV`, so what a launcher passes is not overridden. */
+  val PROPERTY = "altitude.env"
 
+  /** The environment variables read in code; those that set a config key are read by `environment.conf` */
+  object Variable:
+    val PREFIX = "ALTITUDE_"
+    val ENV = "ALTITUDE_ENV"
+    val CONFIG = "ALTITUDE_CONFIG"
+
+  // Every accepted spelling of each environment, in the order a refusal lists them
+  private val SPELLINGS: Seq[(String, String)] = Seq(
+    "dev" -> Name.DEV,
+    "development" -> Name.DEV,
+    "DEV" -> Name.DEV,
+    "DEVELOPMENT" -> Name.DEV,
+    "test" -> Name.TEST,
+    "TEST" -> Name.TEST,
+    "prod" -> Name.PROD,
+    "production" -> Name.PROD,
+    "PROD" -> Name.PROD,
+    "PRODUCTION" -> Name.PROD
+  )
+
+  /** The values that name an environment */
+  val ACCEPTED: Seq[String] = SPELLINGS.map(_._1)
+
+  /** The process's `ALTITUDE_` variables: all of the process environment that the application reads */
+  def variables: Map[String, String] = sys.env.filter((name, _) => name.startsWith(Variable.PREFIX))
+
+  /**
+   * The environment a start runs in: the `altitude.env` property, then the `ALTITUDE_ENV` variable, then prod. An empty value
+   * counts as unset. A value that names no environment throws, naming the accepted ones, so a misspelled one never runs as
+   * another environment. `ENV` is not read: it is a POSIX shell's own variable, the file an interactive `sh` reads at startup.
+   */
+  def resolve(property: Option[String], variables: Map[String, String]): String =
+    def named(value: String, source: String): String =
+      SPELLINGS.collectFirst { case (spelling, name) if spelling == value => name }.getOrElse {
+        throw IllegalArgumentException(
+          s"""$source is "$value", which names no environment. Accepted values: ${ACCEPTED.mkString(", ")}""")
+      }
+
+    property
+      .filter(_.nonEmpty)
+      .map(named(_, s"The $PROPERTY system property"))
+      .orElse(variables.get(Variable.ENV).filter(_.nonEmpty).map(named(_, s"The ${Variable.ENV} environment variable")))
+      .getOrElse(Name.PROD)
+
+  var CURRENT: String = resolve(Option(System.getProperty(PROPERTY)), variables)
+
+  /**
+   * The folder a relative path of the config is under, and where the config file is looked for: the jar's folder in prod, so a
+   * start reads the same config and data wherever it is run from; the working directory in dev and test.
+   */
   val ROOT_PATH: String = CURRENT match {
     case Name.PROD =>
       val url = Environment.getClass.getProtectionDomain.getCodeSource.getLocation

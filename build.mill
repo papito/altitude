@@ -36,8 +36,12 @@ object altitude extends ScalaModule with ScalafixModule with PublishModule with 
     "-unchecked",
     "-rewrite",
     "-source", "3.4-migration",
-    "-Wconf:msg=.*E198.*&src=.*/out/altitude/compileTwirl.dest/.*:s"
+    "-Wconf:msg=.*E198.*&src=.*/out/altitude/compileTwirl.dest/.*:s",
+    // Java 21 is the floor the jar runs on: the compiler refuses an API newer than it, whatever JDK builds
+    "-release", "21"
   )
+
+  def javacOptions: Task.Simple[Seq[String]] = Seq("--release", "21")
 
   def pomSettings: T[PomSettings] = PomSettings(
     description = "Altitude DAM",

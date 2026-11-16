@@ -10,6 +10,7 @@ import altitude.core.controller.ContentViewControllerTests
 import altitude.core.controller.CurationActionControllerTests
 import altitude.core.controller.CurationControllerTests
 import altitude.core.controller.EditControllerTests
+import altitude.core.controller.ErrorAnswerControllerTests
 import altitude.core.controller.FolderActionControllerTests
 import altitude.core.controller.FolderControllerTests
 import altitude.core.controller.HealthControllerTests
@@ -36,6 +37,7 @@ import altitude.core.controller.WatchFolderControllerTests
 abstract class AllControllerTestSuites
   extends Suites(
     new HealthControllerTests(),
+    new ErrorAnswerControllerTests(),
     new IndexControllerTests(),
     new LibraryActionControllerTests(),
     new AssetControllerTests(),

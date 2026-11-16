@@ -326,7 +326,8 @@ import altitude.core.service.UserService.TokenCheck
     val claims = TokenClaims(longest, grants, version = Long.MaxValue, expiresAt = Instant.now.plusSeconds(60 * 60 * 24 * 7))
 
     val token = testApp.service.paseto.createToken(claims)
-    val cookie = SessionController.authCookie(token, claims.expiresAt)
+    // With `Secure`, the default and the longer form of the cookie
+    val cookie = SessionController.authCookie(token, claims.expiresAt, secure = true)
     // The attributes as Undertow writes them, an Expires date included
     val attributes =
       s"; Path=${cookie.path}; Max-Age=${cookie.maxAge}; Expires=Thu, 01-Jan-1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Strict"

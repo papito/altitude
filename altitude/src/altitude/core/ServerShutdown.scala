@@ -1,0 +1,108 @@
+package altitude.core
+
+import io.undertow.server.handlers.GracefulShutdownHandler
+import org.apache.pekko.Done
+import org.apache.pekko.actor.CoordinatedShutdown
+import org.apache.pekko.actor.typed.ActorSystem
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
+import scala.util.Try
+import scala.util.control.NonFatal
+
+/**
+ * The server's stop, as Pekko coordinated-shutdown tasks. Pekko runs its coordinated shutdown from a JVM shutdown hook, so a
+ * SIGTERM, a Ctrl-C and a logoff all stop the server this way:
+ *
+ *   - `service-unbind`: new requests are answered 503.
+ *   - `service-requests-done`: the requests under way get [[REQUESTS_GRACE]] to finish.
+ *   - `service-stop`: `Altitude.cleanup()` drains the queues and closes the database, then the HTTP server stops.
+ *
+ * The actor system, which the queues run on, terminates in a later phase. `App.main` builds the HTTP server itself rather than
+ * through cask's `main`, whose own shutdown hook would stop the server at once, beside these tasks and not after them.
+ */
+object ServerShutdown:
+  private val logger: Logger = LoggerFactory.getLogger(getClass)
+
+  /** How long the requests under way at the stop get to finish */
+  val REQUESTS_GRACE: FiniteDuration = 10.seconds
+
+  /** The `service-requests-done` phase's timeout: the grace and a margin. Pekko's default of 5 seconds would cut the grace. */
+  val REQUESTS_PHASE_TIMEOUT: FiniteDuration = 15.seconds
+
+  /**
+   * The `service-stop` phase's timeout, a backstop alone: `Altitude.cleanup()` bounds itself by the Pipeline shutdown timeout
+   * Setting, and past this timeout Pekko would terminate the actor system under the queues still draining.
+   */
+  val STOP_PHASE_TIMEOUT: FiniteDuration = 10.minutes
+
+  /**
+   * Undertow's `SHUTDOWN_TIMEOUT`: how long its stop waits for a request still held before interrupting it, so none hangs the
+   * stop
+   */
+  val SERVER_STOP_TIMEOUT: FiniteDuration = 5.seconds
+
+  /**
+   * Adds the three tasks to the actor system's coordinated shutdown.
+   *
+   * @param requests
+   *   the handler in front of every route, which refuses new requests and knows of those under way
+   * @param cleanup
+   *   `Altitude.cleanup()`
+   * @param stopServer
+   *   stops the HTTP server; run after `cleanup`, and also when `cleanup` fails
+   */
+  def register(
+      system: ActorSystem[?],
+      requests: GracefulShutdownHandler,
+      cleanup: () => Unit,
+      stopServer: () => Unit,
+      requestsGrace: FiniteDuration = REQUESTS_GRACE): Unit =
+    val shutdown = CoordinatedShutdown(system)
+
+    shutdown.addTask(CoordinatedShutdown.PhaseServiceUnbind, "refuse-new-requests") {
+      () =>
+        logger.info("Stopping: new requests are answered 503")
+        requests.shutdown()
+        Future.successful(Done)
+    }
+
+    shutdown.addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "await-requests-under-way") {
+      () =>
+        onOwnThread("altitude-stop-requests") {
+          if requests.awaitShutdown(requestsGrace.toMillis) then logger.info("The requests under way have finished")
+          else logger.warn(s"Requests are still under way after $requestsGrace: stopping without waiting for them")
+        }
+    }
+
+    shutdown.addTask(CoordinatedShutdown.PhaseServiceStop, "cleanup-then-stop-server") {
+      () =>
+        onOwnThread("altitude-stop") {
+          logger.info("Draining the queues and closing the database")
+          // A failed cleanup must still stop the server; Pekko logs a failed task and goes on to the next phase
+          try cleanup()
+          catch case NonFatal(e) => logger.error("The cleanup failed; the HTTP server is stopped all the same", e)
+          stopServer()
+          logger.info("The HTTP server has stopped")
+        }
+    }
+
+  /**
+   * Runs blocking work on a thread of its own and completes when it ends: a task's function runs on Pekko's internal dispatcher,
+   * which a drain of minutes must not hold a thread of. A daemon thread, so a stop that hangs can never keep the JVM up.
+   */
+  private def onOwnThread(name: String)(work: => Unit): Future[Done] =
+    val done = Promise[Done]()
+    val run: Runnable = () =>
+      done.complete(Try {
+        work
+        Done
+      }): Unit
+    val thread = Thread(run, name)
+    thread.setDaemon(true)
+    thread.start()
+    done.future

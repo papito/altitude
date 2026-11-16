@@ -1,9 +1,15 @@
 package altitude.core.unit
 
 import altitude.test.TestFocus
+import java.nio.file.Files
+import java.time.Instant
+import org.apache.commons.io.FileUtils
 import org.scalatest.{ funsuite, DoNotDiscover }
 import org.scalatest.matchers.should.Matchers.{ shouldBe, shouldEqual }
 
+import altitude.core.Altitude
+import altitude.core.Const
+import altitude.core.Environment
 import altitude.core.routes.web.SessionController
 import altitude.core.util.Util
 
@@ -100,6 +106,51 @@ import altitude.core.util.Util
      */
     SessionController.isValidRedirectUrl("evil.com") shouldBe false
     SessionController.isValidRedirectUrl("path/to/page") shouldBe false
+  }
+
+  test("The session cookie is Secure unless server.secure_cookies is false") {
+
+    /**
+     * Setup:
+     *
+     * The config of a start with no variable set, and of one with `ALTITUDE_SECURE_COOKIES=false`; a session cookie and the
+     * cookie that clears it, each built as that config says.
+     *
+     * Assertions:
+     *
+     * By default both cookies are `Secure`. With the variable false neither is, so a browser on a plain HTTP address keeps the
+     * session and takes its clearing too.
+     *
+     * Edge cases:
+     *
+     * `HttpOnly`, `SameSite=Strict` and the path are the same either way.
+     */
+    val root = Files.createTempDirectory("altitude-cookie-test")
+    val (byDefault, overHttp) =
+      try {
+        def secureCookies(variables: Map[String, String]): Boolean =
+          Altitude.loadConfig(Environment.Name.PROD, variables, root.toString).getBoolean(Const.Conf.SERVER_SECURE_COOKIES)
+
+        (secureCookies(Map.empty), secureCookies(Map("ALTITUDE_SECURE_COOKIES" -> "false")))
+      } finally FileUtils.deleteDirectory(root.toFile)
+
+    byDefault shouldBe true
+    overHttp shouldBe false
+
+    val expiresAt = Instant.now.plusSeconds(3600)
+    for (secure <- Seq(byDefault, overHttp)) {
+      val session = SessionController.authCookie("token", expiresAt, secure)
+      val cleared = SessionController.authCookie("", Instant.EPOCH, secure)
+
+      for (cookie <- Seq(session, cleared)) {
+        cookie.secure shouldBe secure
+        cookie.httpOnly shouldBe true
+        cookie.sameSite shouldBe "Strict"
+        cookie.path shouldBe "/"
+        cookie.name shouldBe SessionController.AUTH_COOKIE_NAME
+      }
+      cleared.maxAge shouldBe 0
+    }
   }
 
   test("A login is logged and audited printable: control characters escaped, cut to a length") {

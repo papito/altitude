@@ -134,10 +134,10 @@ object ModelFile:
     ModelFileSpec(name, URI.create(s"https://huggingface.co/maze/faceX/resolve/$FACEX_REVISION/$name"), size, sha256)
 
 /**
- * The pinned set's files sit under the root in a directory named by its tag, so two sets never mix and an older set's directory
- * is left alone. The lock file is the root's, shared by every set.
+ * The pinned set's files sit under the root, the Models directory, in a directory named by its tag, so two sets never mix and an
+ * older set's directory is left alone. The lock file is the root's, shared by every set.
  */
-final class ModelFiles(root: Path):
+final class ModelFiles(val root: Path):
   val directory: Path = root.resolve(ModelFile.TAG)
   val lockFile: Path = root.resolve(".lock")
 

@@ -5,7 +5,7 @@ import java.net.HttpCookie
 import org.scalatest.DoNotDiscover
 import org.scalatest.matchers.must.Matchers.include
 import org.scalatest.matchers.must.Matchers.not
-import org.scalatest.matchers.should.Matchers.{ be, should, shouldBe }
+import org.scalatest.matchers.should.Matchers.{ be, contain, should, shouldBe }
 
 import scala.jdk.CollectionConverters.*
 
@@ -55,6 +55,49 @@ import altitude.core.util.Util
 
         indexResponse.statusCode shouldBe 200
         indexResponse.text() should include(s"<title>\u2068${testContext.repository.name}\u2069 · Altitude</title>")
+    }
+  }
+
+  test("A login's session cookie is Secure, as the server's config says by default") {
+
+    /**
+     * Setup:
+     *
+     * The test server, whose config leaves `server.secure_cookies` at its default, and a User with a repository to land in.
+     *
+     * Assertions:
+     *
+     * The server's instance reads the flag as true, and the `Set-Cookie` header of a login carries `Secure` beside `HttpOnly` and
+     * `SameSite=Strict`.
+     *
+     * Edge cases:
+     *
+     * The cookie a logout clears the session with is `Secure` too.
+     */
+    testContext.persistRepository()
+    testContext.grant(testContext.user, testContext.repository)
+
+    App.altitude.secureCookies shouldBe true
+
+    withServer(App) {
+      host =>
+        def sessionCookieOf(response: requests.Response): String =
+          response.headers("set-cookie").find(_.startsWith(s"${SessionController.AUTH_COOKIE_NAME}=")).get
+
+        val login = requests.post(
+          s"$host/login",
+          maxRedirects = 0,
+          check = false,
+          data = Map("login" -> testContext.user.email, "password" -> TestContext.USER_PASSWORD))
+        login.statusCode shouldBe 302
+
+        val attributes = sessionCookieOf(login).split("; ").toSet
+        attributes should contain("Secure")
+        attributes should contain("HttpOnly")
+        attributes should contain("SameSite=Strict")
+
+        val logout = requests.post(s"$host/logout", maxRedirects = 0, check = false, cookies = login.cookies)
+        sessionCookieOf(logout).split("; ").toSet should contain("Secure")
     }
   }
 

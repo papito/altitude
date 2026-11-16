@@ -5,6 +5,10 @@ object Const:
   /** CONFIGURATION */
   object Conf:
     val TEST_DIR = "test.dir"
+    // The address the server binds, and whether the session cookie is `Secure`
+    val SERVER_HOST = "server.host"
+    val SERVER_PORT = "server.port"
+    val SERVER_SECURE_COOKIES = "server.secure_cookies"
     val FS_DATA_DIR = "fs.data.dir"
     val DEFAULT_STORAGE_ENGINE = "storage.engine.default"
     val DB_ENGINE = "db.engine"
