@@ -11,8 +11,6 @@ import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
-import scala.util.Try
-import scala.util.control.NonFatal
 
 /**
  * The server's stop, as Pekko coordinated-shutdown tasks. Pekko runs its coordinated shutdown from a JVM shutdown hook, so a
@@ -83,25 +81,31 @@ object ServerShutdown:
       () =>
         onOwnThread("altitude-stop") {
           logger.info("Draining the queues and closing the database")
-          // A failed cleanup must still stop the server; Pekko logs a failed task and goes on to the next phase
+          // A failed cleanup must still stop the server, whatever it failed with: an error (a `LinkageError`, a
+          // `StackOverflowError`) as much as an exception. Hence `Throwable`, and the `finally` for a log call that fails too.
           try cleanup()
-          catch case NonFatal(e) => logger.error("The cleanup failed; the HTTP server is stopped all the same", e)
-          stopServer()
-          logger.info("The HTTP server has stopped")
+          catch case e: Throwable => logger.error("The cleanup failed; the HTTP server is stopped all the same", e)
+          finally
+            stopServer()
+            logger.info("The HTTP server has stopped")
         }
     }
 
   /**
    * Runs blocking work on a thread of its own and completes when it ends: a task's function runs on Pekko's internal dispatcher,
    * which a drain of minutes must not hold a thread of. A daemon thread, so a stop that hangs can never keep the JVM up.
+   *
+   * The future completes whatever the work ends with, an error included: left incomplete, the task's phase would wait out its
+   * whole timeout (ten minutes for the cleanup) for a thread that is gone. Pekko logs a failed task and goes on to the next
+   * phase.
    */
   private def onOwnThread(name: String)(work: => Unit): Future[Done] =
     val done = Promise[Done]()
     val run: Runnable = () =>
-      done.complete(Try {
+      try
         work
-        Done
-      }): Unit
+        done.success(Done): Unit
+      catch case e: Throwable => done.failure(e): Unit
     val thread = Thread(run, name)
     thread.setDaemon(true)
     thread.start()

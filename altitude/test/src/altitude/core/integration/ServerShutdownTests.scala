@@ -2,6 +2,7 @@ package altitude.core.integration
 
 import altitude.test.TestAltitudeApp
 import altitude.test.TestFocus
+import com.typesafe.config.ConfigFactory
 import io.undertow.Undertow
 import io.undertow.UndertowOptions
 import io.undertow.server.HttpHandler
@@ -13,6 +14,8 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.apache.pekko.Done
 import org.apache.pekko.actor.CoordinatedShutdown
+import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.scalatest.DoNotDiscover
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers.*
@@ -202,6 +205,53 @@ import altitude.core.ServerShutdown
         Try(Await.result(held, 30.seconds)).toOption should not be Some(200)
         Await.ready(stoppable.instance.actorSystem.whenTerminated, 30.seconds)
     }
+  }
+
+  test("A cleanup that dies of an error still stops the server, and the stop does not wait its phase out") {
+
+    /**
+     * Setup:
+     *
+     * An actor system of the test's own, its cleanup phase given 30 seconds, with the stop's three tasks registered over a
+     * handler that serves nothing. The cleanup throws a `LinkageError`, which is no ordinary exception: `NonFatal` does not match
+     * it, and `Try` lets it through. Then the coordinated shutdown.
+     *
+     * Assertions:
+     *
+     * The server's stop runs after the failed cleanup, and the stop as a whole completes at once, the actor system terminated,
+     * instead of waiting the cleanup phase's 30 seconds for a task whose thread is gone.
+     *
+     * Edge cases:
+     *
+     * A server's stop that dies of an error itself ends its task too: the stop completes as promptly.
+     */
+    def stopOf(cleanup: () => Unit, stopServer: () => Unit): FiniteDuration = {
+      val phases = ConfigFactory.parseString("pekko.coordinated-shutdown.phases.service-stop.timeout = 30 s")
+      val system = ActorSystem(Behaviors.empty[Nothing], "server-shutdown-tests", phases.withFallback(ConfigFactory.load()))
+      try {
+        ServerShutdown.register(system, GracefulShutdownHandler(_ => ()), cleanup, stopServer, requestsGrace = 1.second)
+        val started = System.nanoTime
+        Await.ready(CoordinatedShutdown(system).run(CoordinatedShutdown.UnknownReason), 2.minutes)
+        FiniteDuration(System.nanoTime - started, TimeUnit.NANOSECONDS)
+      } finally {
+        system.terminate()
+        Await.ready(system.whenTerminated, 1.minute)
+      }
+    }
+
+    val events = ConcurrentLinkedQueue[String]()
+    val afterFailedCleanup = stopOf(
+      cleanup = () => {
+        events.add("cleanup")
+        throw new LinkageError("The cleanup dies of an error")
+      },
+      stopServer = () => events.add("server stop"): Unit
+    )
+    events.asScala.toList shouldBe List("cleanup", "server stop")
+    afterFailedCleanup should be < 15.seconds
+
+    val afterFailedServerStop = stopOf(cleanup = () => (), stopServer = () => throw new LinkageError("The server's stop dies"))
+    afterFailedServerStop should be < 15.seconds
   }
 
   test("The stop's phases are given the time their tasks need") {
