@@ -155,19 +155,17 @@ class UserMetadataService(val app: Altitude):
 
     txManager.withTransaction {
       val currentMetadata = getMetadata(assetId)
+      val fieldId = fieldHolding(currentMetadata, valueId)
 
-      // Drop the value from whichever field holds it
-      val newData = currentMetadata.data.map {
-        item =>
-          val oldValues = item._2
-          item._1 -> oldValues.filterNot(_.id.contains(valueId))
-      }
-
-      // FIXME: NotFound
-      require(newData.nonEmpty)
-
+      val newData = currentMetadata.data.updated(fieldId, currentMetadata.data(fieldId).filterNot(_.id.contains(valueId)))
       updateMetadata(assetId, UserMetadata(newData))
     }
+
+  /** The field of `metadata` that holds the value `valueId`; `NotFoundException` when none does */
+  private def fieldHolding(metadata: UserMetadata, valueId: String): String =
+    metadata.data
+      .collectFirst { case (fieldId, values) if values.exists(_.id.contains(valueId)) => fieldId }
+      .getOrElse(throw NotFoundException(s"No metadata value [$valueId] on the asset"))
 
   def updateFieldValue(assetId: String, valueId: String, newValue: String): Unit =
 
@@ -177,13 +175,8 @@ class UserMetadataService(val app: Altitude):
       val currentMetadata = getMetadata(assetId)
 
       val newMdVal = UserMetadataValue(id = Some(valueId), value = newValue)
-      // find the field that has the value by ID
-      val search = currentMetadata.data.filter(_._2 /* values */ .exists(_.id.contains(valueId)))
-
-      // FIXME: NotFound
-      require(search.size == 1)
-
-      val (fieldId, currentMdVals) = search.head
+      val fieldId = fieldHolding(currentMetadata, valueId)
+      val currentMdVals = currentMetadata.data(fieldId)
 
       val metadata = UserMetadata(Map(fieldId -> Set(UserMetadataValue(value = newValue))))
       val cleanMetadata = cleanAndValidate(metadata)

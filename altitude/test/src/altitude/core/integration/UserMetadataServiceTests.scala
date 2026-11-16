@@ -513,6 +513,34 @@ import altitude.core.util.Util
     storedMetadata.get(field.persistedId).value.size shouldBe 1
   }
 
+  test("A value ID that no field of the asset holds is not found") {
+
+    /**
+     * Setup:
+     *
+     * A KEYWORD field, an asset with one value of it, and an asset with no metadata.
+     *
+     * Assertions:
+     *
+     * Deleting or updating a value by an unknown ID fails as not found, and the asset keeps its value.
+     *
+     * Edge cases:
+     *
+     * An asset with no metadata at all answers the same.
+     */
+    val field = testApp.service.metadata.addField(UserMetadataField(name = Util.randomStr(), fieldType = FieldType.KEYWORD))
+    val asset: Asset = testContext.persistAsset(metadata = UserMetadata(Map(field.persistedId -> Set("1"))))
+    val bareAsset: Asset = testContext.persistAsset()
+    val unknownId = BaseDao.genId
+
+    intercept[NotFoundException](testApp.service.metadata.deleteMetadataValue(asset.persistedId, unknownId))
+    intercept[NotFoundException](testApp.service.metadata.updateMetadataValue(asset.persistedId, unknownId, "2"))
+    intercept[NotFoundException](testApp.service.metadata.deleteMetadataValue(bareAsset.persistedId, unknownId))
+    intercept[NotFoundException](testApp.service.metadata.updateMetadataValue(bareAsset.persistedId, unknownId, "2"))
+
+    testApp.service.metadata.getMetadata(asset.persistedId).get(field.persistedId).value.map(_.value) shouldBe Set("1")
+  }
+
   test("Metadata IDs should be created and not overwritten") {
 
     /**
