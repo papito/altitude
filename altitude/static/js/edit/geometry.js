@@ -175,17 +175,14 @@ export function outline(width, height, recipe) {
 
 /**
  * Whether the point lies inside the convex quadrilateral `quad`, edges included: the cross product
- * has the same sign along every edge. `width` and `height` scale the fractions first; every caller
- * leaves them at 1.
+ * has the same sign along every edge.
  */
-export function insideQuad(quad, x, y, width = 1, height = 1) {
+export function insideQuad(quad, x, y) {
     let sign = 0
     for (let i = 0; i < 4; i++) {
         const [x1, y1] = quad[i]
         const [x2, y2] = quad[(i + 1) % 4]
-        const cross =
-            (x2 - x1) * width * ((y - y1) * height) -
-            (y2 - y1) * height * ((x - x1) * width)
+        const cross = (x2 - x1) * (y - y1) - (y2 - y1) * (x - x1)
         if (Math.abs(cross) < 1e-9) {
             continue
         }
