@@ -964,7 +964,7 @@ The config files hold only what shapes the process at startup: `server.*`, `fs.d
 | `ALTITUDE_LOG_FORMAT`, `ALTITUDE_LOG_LEVEL` | No config key: **Logging**, below. |
 
 - Not the server's: `ALTITUDE_PLATFORM` is the build's (**Packaging** under **Build & Test Commands**), `ALTITUDE_SOURCE_DIR` the test module's (**Transaction boundaries**), and `ALTITUDE_PUBLISH_PORT` `compose.yaml`'s own, the host port, which never reaches the container. `ORT_DISABLE_TELEMETRY` is ONNX Runtime's (**Scene embedding**), and `TZ` sets the JVM's zone, in which Date Imported's day falls.
-- On SQLite the start logs a WARN when the database folder's file store is a network share or a host folder shared into a container (`Altitude.sqliteDiskWarning`: `nfs`, `nfs4`, `cifs`, `smb3`, `9p`, `virtiofs` and any `fuse` type), since WAL needs a local disk. The check only warns.
+- On SQLite the start logs a WARN when the database folder's file store is not a local disk's own: a network share, a host folder shared into a container or a mount through FUSE (`Altitude.sqliteDiskWarning`: `nfs`, `nfs4`, `cifs`, `smb3`, `9p`, `virtiofs`, `fakeowner` and any `fuse` type, so `fuseblk`, a local NTFS or exFAT disk through FUSE, too), since WAL needs a local disk's own file system. `fakeowner` is the type of a host folder under Docker Desktop for Mac with VirtioFS, listed without having been seen on a Mac. The check only warns.
 - Tests: `EnvironmentTests`, `StartupConfigTests` (unit).
 
 **Logging.** There are three logback files, and which one a JVM logs by is decided outside the application.

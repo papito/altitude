@@ -544,21 +544,27 @@ object Altitude:
         s"${Const.Conf.DB_ENGINE} is ${Const.DbEngineName.POSTGRES} and the database password is empty: set the " +
           s"ALTITUDE_DB_POSTGRES_PASSWORD environment variable, or ${Const.Conf.POSTGRES_PASSWORD} in the config file")
 
-  // The file store types of a network share, as `java.nio.file.FileStore.type` names them; a `fuse` type is matched by prefix
-  private val NETWORK_FILE_STORES = Set("nfs", "nfs4", "cifs", "smb3", "9p", "virtiofs")
+  // The file store types that are not a local disk's own, as `java.nio.file.FileStore.type` names them: network shares, and a
+  // host folder shared into a container's virtual machine. `fakeowner` is what Docker Desktop for Mac is known to mount a host
+  // folder as over VirtioFS; it is listed without having been seen on a Mac, since a false warning costs a line and a missed
+  // one risks the database. A `fuse` type is matched by prefix.
+  private val NON_LOCAL_FILE_STORES = Set("nfs", "nfs4", "cifs", "smb3", "9p", "virtiofs", "fakeowner")
 
   /**
    * What to warn of when the SQLite database's folder is on a file store of this type, if anything. SQLite runs in WAL mode,
-   * whose shared-memory file and locks need a local disk: on a network share (NFS, SMB, 9p) or a host folder shared into a
-   * container's virtual machine (virtiofs, FUSE) the database can be corrupted or fail to open.
+   * whose shared-memory file and locks need a local disk's own file system: on a network share (NFS, SMB, 9p), a host folder
+   * shared into a container's virtual machine (virtiofs, `fakeowner`, FUSE) or any other mount through FUSE (`fuseblk`, a local
+   * NTFS or exFAT disk through ntfs-3g, included) the database can be corrupted or fail to open. The warning names all three, so
+   * it is true of every type it is given for.
    */
   def sqliteDiskWarning(dir: Path, fileStoreType: String): Option[String] =
     // The root locale: under a Turkish one, CIFS would not lowercase to cifs
     val kind = fileStoreType.toLowerCase(Locale.ROOT)
-    Option.when(NETWORK_FILE_STORES.contains(kind) || kind.startsWith("fuse")) {
-      s"The SQLite database folder $dir is on a file system of type $fileStoreType, a network share or a host folder shared " +
-        "into a container: SQLite's write-ahead log needs a local disk, and the database can be corrupted there. Keep the " +
-        "folder on a local disk or in a named volume, or use PostgreSQL."
+    Option.when(NON_LOCAL_FILE_STORES.contains(kind) || kind.startsWith("fuse")) {
+      s"The SQLite database folder $dir is on a file system of type $fileStoreType, which is not a local disk's own: a " +
+        "network share, a host folder shared into a container, or a mount through FUSE. SQLite's write-ahead log needs a " +
+        "local disk's own file system, and the database can be corrupted there. Keep the folder on a local disk or in a " +
+        "named volume, or use PostgreSQL."
     }
 
   /** The test config before the SQLite URL is added; a test that needs config without an instance reads it here. */

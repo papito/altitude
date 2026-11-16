@@ -419,26 +419,43 @@ import altitude.core.util.ImportParallelism
     }
   }
 
-  test("SQLite on a network share or a Docker Desktop host folder is warned about") {
+  test("SQLite on a network share, a host folder shared into a container or a FUSE mount is warned about") {
 
     /**
      * Setup:
      *
-     * The file store types of NFS, SMB, 9p, virtiofs and FUSE mounts, and those of local disks, each as the type of the SQLite
-     * database's folder.
+     * The file store types of NFS, SMB, 9p, virtiofs and FUSE mounts, the `fakeowner` type of a host folder under Docker Desktop
+     * for Mac, and those of local disks, each as the type of the SQLite database's folder.
      *
      * Assertions:
      *
-     * Each network or host-folder type has a warning that names the folder and the type; a local disk has none.
+     * Each of the former has a warning that names the folder and the type; a local disk has none. The warning says the same of
+     * every type, and what it says holds for each: the type is not a local disk's own, be it a network share, a host folder
+     * shared into a container or a mount through FUSE.
      *
      * Edge cases:
      *
-     * Every `fuse` type warns, whatever follows the prefix, and a type is recognised in any case. A type that merely contains one
-     * of the names does not warn.
+     * Every `fuse` type warns, whatever follows the prefix: `fuseblk`, a local NTFS or exFAT disk mounted through FUSE, is no
+     * network share, and the warning does not call it one. A type is recognised in any case. A type that merely contains one of
+     * the names does not warn.
      */
     val dir = Path.of(File.separator + "data", "db")
 
-    Seq("nfs", "nfs4", "cifs", "smb3", "9p", "virtiofs", "fuse", "fuse.sshfs", "fuse.grpcfuse", "fuseblk", "NFS4", "Fuse.osxfs")
+    Seq(
+      "nfs",
+      "nfs4",
+      "cifs",
+      "smb3",
+      "9p",
+      "virtiofs",
+      "fakeowner",
+      "fuse",
+      "fuse.sshfs",
+      "fuse.grpcfuse",
+      "fuseblk",
+      "NFS4",
+      "Fuse.osxfs",
+      "FakeOwner")
       .foreach {
         fileStoreType =>
           withClue(s"[$fileStoreType]: ") {
@@ -446,10 +463,12 @@ import altitude.core.util.ImportParallelism
             warning should not be empty
             warning.get should include(dir.toString)
             warning.get should include(fileStoreType)
+            warning.get should include(
+              "which is not a local disk's own: a network share, a host folder shared into a container, or a mount through FUSE")
           }
       }
 
-    Seq("ext4", "xfs", "btrfs", "zfs", "overlay", "tmpfs", "apfs", "NTFS", "nfsd", "ext4-nfs", "").foreach {
+    Seq("ext4", "xfs", "btrfs", "zfs", "overlay", "tmpfs", "apfs", "NTFS", "nfsd", "ext4-nfs", "fakeowners", "").foreach {
       fileStoreType =>
         withClue(s"[$fileStoreType]: ") {
           Altitude.sqliteDiskWarning(dir, fileStoreType) shouldBe None
