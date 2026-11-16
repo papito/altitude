@@ -42,6 +42,17 @@ import altitude.core.models.SettingType
   }
 
   test("The seeds load: every Setting has a row whose value is its default, and the snapshot carries the seeds") {
+
+    /**
+     * Setup:
+     *
+     * The test database's `setting` table, every row at its seed.
+     *
+     * Assertions:
+     *
+     * There is one row for each Setting of the registry and no other. Each row's value is its default, and each default is the
+     * seed of `all.sql`. The snapshot carries the same defaults, and its typed accessors read the seeded values.
+     */
     val rows = testApp.txManager.asReadOnly {
       query("SELECT name, value, default_value FROM setting")
     }
@@ -166,6 +177,22 @@ import altitude.core.models.SettingType
   }
 
   test("A save replaces the snapshot and the rows, and a value not submitted keeps its current value") {
+
+    /**
+     * Setup:
+     *
+     * The seeded Settings, and a save of three of them: the smallest face size, the geocoder switch and an empty tile
+     * attribution.
+     *
+     * Assertions:
+     *
+     * The snapshot and the rows both hold the three saved values, and a reload reads them back. A Setting not submitted keeps its
+     * value in both.
+     *
+     * Edge cases:
+     *
+     * An empty text is a value of its own: the attribution is saved empty, not refused.
+     */
     testApp.settings.save(
       Map(
         Settings.FACE_DETECTION_MIN_FACE_SIZE -> "60",
@@ -191,6 +218,18 @@ import altitude.core.models.SettingType
   }
 
   test("An invalid set writes nothing and names every failing field") {
+
+    /**
+     * Setup:
+     *
+     * The seeded Settings, and a save of values that each break their Setting's rule (a bound, a whole number, a number, a flag,
+     * a tile URL's placeholders, an http URL), along with a name the registry does not know.
+     *
+     * Assertions:
+     *
+     * The save is refused with an error for every submitted field, the same errors that validation alone gives. No row changes,
+     * and the snapshot keeps its values.
+     */
     val before = storedValues
     val values = Map(
       Settings.FACE_YUNET_CONFIDENCE_THRESHOLD -> "1.5", // above 1
@@ -230,6 +269,16 @@ import altitude.core.models.SettingType
   }
 
   test("The bounding box is at least the smallest face") {
+
+    /**
+     * Setup:
+     *
+     * A bounding box size under the smallest face size, then one equal to it.
+     *
+     * Assertions:
+     *
+     * The smaller box is refused, on the bounding box alone. A box equal to the smallest face is valid.
+     */
     val errors = testApp.settings.validate(
       Map(Settings.FACE_DETECTION_BOUNDING_BOX_SIZE -> "100", Settings.FACE_DETECTION_MIN_FACE_SIZE -> "200"))
     errors.keySet shouldBe Set(Settings.FACE_DETECTION_BOUNDING_BOX_SIZE)
@@ -239,6 +288,17 @@ import altitude.core.models.SettingType
   }
 
   test("The hash distance is capped at the bits of a hash, and an uncapped whole number takes any large value") {
+
+    /**
+     * Setup:
+     *
+     * Hash distances at and past the 64 bits of a hash, and a Sequence time gap of an hour.
+     *
+     * Assertions:
+     *
+     * A distance of 64 is valid and 65 is refused, saying why. The time gap, a whole number with a minimum but no maximum, takes
+     * the hour.
+     */
     testApp.settings.validate(Map(Settings.SEQUENCE_MAX_HASH_DISTANCE -> "64")) shouldBe empty
     testApp.settings.validate(Map(Settings.SEQUENCE_MAX_HASH_DISTANCE -> "65")) shouldBe
       Map(Settings.SEQUENCE_MAX_HASH_DISTANCE -> "Must be at most 64")
@@ -248,6 +308,17 @@ import altitude.core.models.SettingType
   }
 
   test("The Sequence Settings open the Triage section, Live on both engines, in the order of the screen") {
+
+    /**
+     * Setup:
+     *
+     * The registry's entries of the four Sequence Settings: the time gap, the two similarity thresholds and the hash distance.
+     *
+     * Assertions:
+     *
+     * Each is a Live setting of the Triage section on both engines, so each applies to this engine. They are the first Settings
+     * of the Triage section, in that order.
+     */
     val sequence = List(
       Settings.SEQUENCE_MAX_GAP_MS,
       Settings.SEQUENCE_DINOV2_MIN_SIMILARITY,
@@ -265,6 +336,20 @@ import altitude.core.models.SettingType
   }
 
   test("A similarity threshold is a cosine, inclusive of -1 and 1") {
+
+    /**
+     * Setup:
+     *
+     * Values validated for the DINOv2 and the SigLIP 2 similarity thresholds.
+     *
+     * Assertions:
+     *
+     * Each threshold takes -1, 0 and 1.
+     *
+     * Edge cases:
+     *
+     * A value just past either bound is refused, saying which bound, and a word is refused as no number.
+     */
     List(Settings.SEQUENCE_DINOV2_MIN_SIMILARITY, Settings.SEQUENCE_SIGLIP2_MIN_SIMILARITY).foreach {
       name =>
         withClue(name) {
@@ -279,6 +364,17 @@ import altitude.core.models.SettingType
   }
 
   test("Saved Sequence thresholds reach their accessors at once, with no restart waiting") {
+
+    /**
+     * Setup:
+     *
+     * Both similarity thresholds and the time gap saved with values other than their seeds.
+     *
+     * Assertions:
+     *
+     * The snapshot's accessors, the per-model similarity among them, return the saved values at once, with no restart waiting. A
+     * reload reads them back.
+     */
     testApp.settings.save(
       Map(
         Settings.SEQUENCE_DINOV2_MIN_SIMILARITY -> "0.7",
@@ -300,6 +396,22 @@ import altitude.core.models.SettingType
   }
 
   test("The Curation thresholds are Live settings of the Triage section, and the fractions are inclusive of 0 and 1") {
+
+    /**
+     * Setup:
+     *
+     * The registry's entries of the seven Curation thresholds, and values validated for them.
+     *
+     * Assertions:
+     *
+     * Each is a Live setting of the Triage section on both engines. Each of the six fractions takes 0 and 1 and refuses a value
+     * just outside either.
+     *
+     * Edge cases:
+     *
+     * The Face quality gap, a difference of embedding norms rather than a fraction, has no upper bound: it takes 30 and refuses
+     * only a value under 0.
+     */
     val curation = List(
       Settings.CURATION_BLUR_RATIO,
       Settings.CURATION_FACE_QUALITY_GAP,
@@ -333,6 +445,16 @@ import altitude.core.models.SettingType
   }
 
   test("A saved Curation threshold reaches its accessor at once, with no restart waiting") {
+
+    /**
+     * Setup:
+     *
+     * The seven Curation thresholds saved with values other than their seeds.
+     *
+     * Assertions:
+     *
+     * Each accessor of the snapshot returns its saved value at once, with no restart waiting.
+     */
     testApp.settings.save(
       Map(
         Settings.CURATION_BLUR_RATIO -> "0.4",
@@ -513,6 +635,16 @@ import altitude.core.models.SettingType
   }
 
   test("The enroll threshold is at least the keep threshold") {
+
+    /**
+     * Setup:
+     *
+     * An enroll threshold just under the keep threshold, then one equal to it.
+     *
+     * Assertions:
+     *
+     * The lower enroll threshold is refused, on the enroll threshold alone. An equal one is valid.
+     */
     val errors = testApp.settings.validate(
       Map(Settings.FACE_QUALITY_ENROLL_THRESHOLD -> "14.9", Settings.FACE_QUALITY_KEEP_THRESHOLD -> "15.0"))
     errors.keySet shouldBe Set(Settings.FACE_QUALITY_ENROLL_THRESHOLD)
@@ -522,6 +654,16 @@ import altitude.core.models.SettingType
   }
 
   test("A Video is sampled for at least as many frames as a cluster needs") {
+
+    /**
+     * Setup:
+     *
+     * A sampled frame limit under the frames a cluster needs, then one equal to it.
+     *
+     * Assertions:
+     *
+     * The lower limit is refused, on the sampled frame limit alone. An equal one is valid.
+     */
     val errors = testApp.settings.validate(
       Map(Settings.VIDEO_FACES_MAX_SAMPLED_FRAMES -> "1", Settings.VIDEO_FACES_MIN_CLUSTER_FRAMES -> "2"))
     errors.keySet shouldBe Set(Settings.VIDEO_FACES_MAX_SAMPLED_FRAMES)
@@ -531,12 +673,34 @@ import altitude.core.models.SettingType
   }
 
   test("A cross-field rule is not judged on a field that failed on its own") {
+
+    /**
+     * Setup:
+     *
+     * An enroll threshold that is not a number, beside a valid keep threshold.
+     *
+     * Assertions:
+     *
+     * Validation returns rather than failing on the rule between the two, and names the enroll threshold alone, for its own rule.
+     */
     val errors = testApp.settings.validate(
       Map(Settings.FACE_QUALITY_ENROLL_THRESHOLD -> "x", Settings.FACE_QUALITY_KEEP_THRESHOLD -> "15.0"))
     errors.keySet shouldBe Set(Settings.FACE_QUALITY_ENROLL_THRESHOLD)
   }
 
   test("A saved Restart setting reports its saved and running values until the next start; a Live setting never does") {
+
+    /**
+     * Setup:
+     *
+     * No restart waiting, then a save of the import parallelism, a Restart setting, and the smallest face size, a Live one.
+     *
+     * Assertions:
+     *
+     * Only the import parallelism waits for a restart, with its saved value and the running one loaded at startup. The startup
+     * snapshot keeps the running value while the current one has the saved value. Saved back to the running value, nothing waits
+     * for a restart.
+     */
     testApp.settings.pendingRestart shouldBe empty
 
     testApp.settings.save(Map(Settings.IMPORT_PARALLELISM -> "3", Settings.FACE_DETECTION_MIN_FACE_SIZE -> "60"))
@@ -556,12 +720,35 @@ import altitude.core.models.SettingType
   }
 
   test("The PostgreSQL-only Settings are the two the plan names") {
+
+    /**
+     * Setup:
+     *
+     * The registry of Settings.
+     *
+     * Assertions:
+     *
+     * Only the face search width of the vector index and the read statement timeout belong to one engine, and that engine is
+     * PostgreSQL.
+     */
     Settings.all.filter(_.engine.isDefined).map(_.name).toSet shouldBe
       Set(Settings.FACE_RECOGNITION_HNSW_EF_SEARCH, Settings.DB_POSTGRES_READ_STATEMENT_TIMEOUT)
     Settings.all.filter(_.engine.isDefined).foreach(_.engine shouldBe Some(Const.DbEngineName.POSTGRES))
   }
 
   test("A submitted value is trimmed, and a number spelled differently is not a change") {
+
+    /**
+     * Setup:
+     *
+     * The seeded Settings, and a save of the confidence threshold spelled with a trailing zero, the import parallelism padded
+     * with spaces, and a new smallest face size after a space.
+     *
+     * Assertions:
+     *
+     * The two that equal their current values as numbers are no change: their rows keep the seed's spelling and no restart waits.
+     * The changed value is stored trimmed and reaches the snapshot.
+     */
     val before = storedValues
     testApp.settings.save(
       Map(
@@ -580,6 +767,16 @@ import altitude.core.models.SettingType
   }
 
   test("A save that changes nothing writes nothing") {
+
+    /**
+     * Setup:
+     *
+     * The smallest face size's row changed in the database behind the snapshot's back, which still holds the seed.
+     *
+     * Assertions:
+     *
+     * A save of the snapshot's own value writes nothing, so the row keeps the value changed behind it.
+     */
     // The row is changed behind the snapshot's back, so a write would show
     testApp.txManager.withTransaction {
       update("UPDATE setting SET value = ? WHERE name = ?", "60", Settings.FACE_DETECTION_MIN_FACE_SIZE)
@@ -589,6 +786,18 @@ import altitude.core.models.SettingType
   }
 
   test("A load fails on an invalid stored value and warns about a row the registry does not know") {
+
+    /**
+     * Setup:
+     *
+     * The smallest face size's row set to a text that is not a number, then restored, and a row added for a name the registry
+     * does not know.
+     *
+     * Assertions:
+     *
+     * The load of the invalid value fails, and the snapshot stays the one before it. With the unknown row the load succeeds,
+     * ignoring the row.
+     */
     testApp.txManager.withTransaction {
       update("UPDATE setting SET value = ? WHERE name = ?", "abc", Settings.FACE_DETECTION_MIN_FACE_SIZE)
     }
@@ -610,12 +819,32 @@ import altitude.core.models.SettingType
   }
 
   test("The upper bound of a threshold is inclusive, and a URL needs a host") {
+
+    /**
+     * Setup:
+     *
+     * A confidence threshold at its upper bound, and two geocoder URLs with an http scheme but no host.
+     *
+     * Assertions:
+     *
+     * The threshold at its bound is valid. Each URL with no host is refused, on the geocoder URL.
+     */
     testApp.settings.validate(Map(Settings.FACE_YUNET_CONFIDENCE_THRESHOLD -> "1")) shouldBe empty
     testApp.settings.validate(Map(Settings.MAP_GEOCODER_URL -> "http://")).keySet shouldBe Set(Settings.MAP_GEOCODER_URL)
     testApp.settings.validate(Map(Settings.MAP_GEOCODER_URL -> "https:foo")).keySet shouldBe Set(Settings.MAP_GEOCODER_URL)
   }
 
   test("The DAO refuses to update a Setting that has no row") {
+
+    /**
+     * Setup:
+     *
+     * A transaction updating the value of a name that has no `setting` row.
+     *
+     * Assertions:
+     *
+     * The DAO fails with a not-found error rather than updating nothing.
+     */
     intercept[NotFoundException] {
       testApp.txManager.withTransaction {
         testApp.DAO.setting.updateValues(Map("no.such.setting" -> "1"))

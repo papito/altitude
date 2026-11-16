@@ -101,6 +101,18 @@ import altitude.core.util.Sha256
   }
 
   test("A new instance against a migrated database keeps the schema version and starts with the Settings loaded") {
+
+    /**
+     * Setup:
+     *
+     * The test database at the current schema version, with the import parallelism at its seed of 0, and a second instance
+     * started against it.
+     *
+     * Assertions:
+     *
+     * The new instance finds the same schema version. Its startup Settings are loaded with the import parallelism at 0, so the
+     * machine's resources size its import dispatcher, at no fewer than two threads.
+     */
     val versionBefore = testApp.service.system.readMetadata.version
 
     withFreshInstance {
@@ -135,6 +147,18 @@ import altitude.core.util.Sha256
   }
 
   test("A new instance against a fresh database creates the schema and seeds the Settings") {
+
+    /**
+     * Setup:
+     *
+     * The test database emptied of every table, then a second instance started against it. The database is reset afterwards for
+     * the rest of the suite.
+     *
+     * Assertions:
+     *
+     * The new instance creates the schema at the running instance's version and seeds the Settings, the import parallelism at its
+     * default of 0.
+     */
     val version = testApp.service.system.readMetadata.version
     TestDatabase.wipe(testApp)
 
@@ -150,6 +174,18 @@ import altitude.core.util.Sha256
   }
 
   test("A saved import.parallelism sizes the import dispatcher of the next instance, not the running one") {
+
+    /**
+     * Setup:
+     *
+     * The running instance's import thread count, then the import parallelism saved as 3 and a second instance started after the
+     * save.
+     *
+     * Assertions:
+     *
+     * The running instance keeps its thread count. The new instance sizes its import dispatcher at 3 from its startup Settings,
+     * and gives the Setting as the reason.
+     */
     val running = testApp.importParallelism
 
     testApp.settings.save(Map(Settings.IMPORT_PARALLELISM -> "3"))
@@ -165,6 +201,18 @@ import altitude.core.util.Sha256
   }
 
   test("A failure to read the schema version other than a missing table stops the migration") {
+
+    /**
+     * Setup:
+     *
+     * On PostgreSQL alone: a read statement timeout of one second, and another connection holding the `system` table under an
+     * exclusive lock.
+     *
+     * Assertions:
+     *
+     * The migration's read of the schema version is cancelled at the time limit, and the migration fails with that cancellation
+     * rather than taking the database for a fresh one and running the whole schema script over it.
+     */
     // Only PostgreSQL cancels a read at its time limit; SQLite has no comparable failure to stage
     assume(testApp.dataSourceType == Const.DbEngineName.POSTGRES)
 
