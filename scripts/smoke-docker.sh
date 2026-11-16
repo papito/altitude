@@ -368,10 +368,22 @@ say "   a Describe search finds $described images"
 # ---------------------------------------------------------------------------------------------------------------------
 say "5. a stop with nothing under way, and a second start"
 
+# What a run that is killed leaves in the server's temp folder, which the next start must empty: /tmp is a volume that
+# outlives the run. The JVM's own files are in /tmp itself, where a start removes nothing.
+docker exec "$name" sh -c 'echo spooled >/tmp/altitude/undertow-leftover && mkdir /tmp/altitude/apache-tika-leftover &&
+    echo kept >/tmp/beside-the-temp-folder' || fail "the temp folder" "/tmp/altitude is not there to write to"
 stop_server "a stop with nothing under way"
 say "   stopped in ${stop_took}s with exit code 143"
 start_server "the second start"
 sign_in
+# shellcheck disable=SC2016  # the script is the container's shell's to expand
+temp_state="$(docker exec "$name" sh -c '
+    ls -A /tmp/altitude | grep leftover
+    [ -f /tmp/beside-the-temp-folder ] || echo "/tmp/beside-the-temp-folder is gone"
+    ls /tmp/hsperfdata_*/1 >/dev/null 2>&1 || [ ! -d /tmp/hsperfdata_* ] || echo "the running JVM lost its hsperfdata file"
+    true' 2>&1)"
+[ -z "$temp_state" ] || fail "the start empties its temp folder, and that alone" "$temp_state"
+say "   the second start emptied /tmp/altitude and left the rest of /tmp alone"
 
 # ---------------------------------------------------------------------------------------------------------------------
 say "6. a stop in the middle of an import, right after a start"

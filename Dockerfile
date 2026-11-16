@@ -109,6 +109,10 @@ HEALTHCHECK --start-period=15m --start-interval=5s \
 # that names none still stops the start.
 # -XX:+ExitOnOutOfMemoryError ends the process on an OutOfMemoryError for the restart policy to start it again;
 # -XX:+ErrorFileToStderr sends a JVM crash's report to `docker logs`, the root filesystem being read-only.
+# -Djava.io.tmpdir and -Daltitude.tmpdir.own: the server's temp files (spooled bodies, Tika's and ImageIO's) go to a
+# folder of its own under /tmp, which every start makes and empties, so what a killed run left there does not pile up in
+# /tmp's volume. Not /tmp itself: the JVM keeps files of its own there, whatever its temp folder is.
 ENTRYPOINT ["java", "@/app/jvm-options", "-Daltitude.env=prod", \
     "-XX:+ExitOnOutOfMemoryError", "-XX:+ErrorFileToStderr", \
+    "-Djava.io.tmpdir=/tmp/altitude", "-Daltitude.tmpdir.own=true", \
     "-cp", "/app/altitude.jar:/app/lib/*", "altitude.core.App"]

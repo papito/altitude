@@ -15,6 +15,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
 import altitude.core.Environment
+import altitude.core.TempFolder
 
 /**
  * A start that fails, as a process: `altitude.core.App` run in a second JVM as prod, on SQLite in a scratch Data directory, with
@@ -23,7 +24,10 @@ import altitude.core.Environment
 @DoNotDiscover class AppStartTests extends AnyFunSuite with TestFocus {
 
   /** `App`'s exit code and output, started with `variables` over a scratch Data directory that `f` then looks into */
-  private def startOf[T](variables: (String, String)*)(f: (Int, String, Path) => T): T = {
+  private def startOf[T](variables: (String, String)*)(f: (Int, String, Path) => T): T = startWith(Seq.empty, variables*)(f)
+
+  /** [[startOf]], the second JVM given `jvmOptions` of its own too */
+  private def startWith[T](jvmOptions: Seq[String], variables: (String, String)*)(f: (Int, String, Path) => T): T = {
     val data = Files.createTempDirectory("app-start")
     try {
       val (exitCode, output) = ChildJvm.run(
@@ -37,7 +41,7 @@ import altitude.core.Environment
           variables.foreach((name, value) => environment.put(name, value))
         },
         // The prod logging configuration, in place of the test run's, which silences the application
-        jvmOptions = Seq("-Dlogback.configurationFile=logback.xml")
+        jvmOptions = "-Dlogback.configurationFile=logback.xml" +: jvmOptions
       )
       withClue(output) {
         f(exitCode, output, data)
@@ -138,6 +142,38 @@ import altitude.core.Environment
         output should include("ALTITUDE_DATA_DIR")
         (output should not).include("Altitude is listening")
     }
+  }
+
+  test("A start empties the temp folder that is the server's own, and no other") {
+
+    /**
+     * Setup:
+     *
+     * Two scratch folders, each holding a file a killed run left, each named as the temp folder of a second JVM started as the
+     * server: the first with the property that says the folder is the server's own, as the Docker image passes it, the second
+     * without. Each start then ends on a port that is no port number.
+     *
+     * Assertions:
+     *
+     * The first start removed the leftover and kept the folder; the second, whose temp folder may be the system's shared one,
+     * removed nothing.
+     */
+    def leftoverAfterStart(own: Boolean): Boolean = {
+      val tmp = Files.createTempDirectory("app-start-tmp")
+      try {
+        val leftover = Files.writeString(tmp.resolve("undertow123upload"), "a spooled upload")
+        val options = Seq(s"-Djava.io.tmpdir=$tmp") ++ Option.when(own)(s"-D${TempFolder.OWN}=true")
+        startWith(options, "ALTITUDE_PORT" -> "no-port") {
+          (exitCode, _, _) =>
+            exitCode shouldBe 1
+            Files.isDirectory(tmp) shouldBe true
+            Files.exists(leftover)
+        }
+      } finally FileUtils.deleteDirectory(tmp.toFile)
+    }
+
+    leftoverAfterStart(own = true) shouldBe false
+    leftoverAfterStart(own = false) shouldBe true
   }
 
   test("A start refused for its environment ends the process with the refusal in a log line") {

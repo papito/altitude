@@ -137,7 +137,8 @@ whole.
 
 `docker compose down` removes the container and keeps both volumes. `docker compose down -v` deletes them, **your
 Libraries included**. A plain `down` also leaves behind the unnamed volume that was the container's `/tmp`;
-`docker volume prune` removes such leftovers.
+`docker volume prune` removes such leftovers. While the container exists that volume holds the server's temporary
+files, which every start clears, so it does not grow from one run to the next.
 
 ### A folder of the host as the Data directory
 

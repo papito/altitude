@@ -37,7 +37,8 @@ services:
       # The Models directory: about 1.6 GB the first start downloads. Never part of a backup.
       - models:/models
       # An anonymous volume, the one place besides the two above that the server can write. On disk, not in memory
-      # (a tmpfs): Tika and ImageIO spool large files there.
+      # (a tmpfs): Tika and ImageIO spool large files there, in /tmp/altitude, which every start empties: compose keeps
+      # this volume when it recreates the container, and a run that was killed leaves its files behind.
       - /tmp
     # The image unpacks nothing at a start, so its own filesystem stays as built
     read_only: true

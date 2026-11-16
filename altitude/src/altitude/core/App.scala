@@ -77,6 +77,9 @@ object App extends cask.Main:
 
   /** Builds the instance, registers its cleanup for the stop, and runs the startup tasks */
   private def start(): Altitude =
+    // First of all, before anything can spool to it: what an earlier run left in a temp folder that is the server's own
+    TempFolder.prepare()
+
     // Before anything is built: logback is logging by the default in place of a logging variable it could not take. An unknown
     // `ALTITUDE_LOG_FORMAT` or `ALTITUDE_LOG_LEVEL` fails the start in any environment, naming the variable and its accepted
     // values, and `main` logs the refusal as it logs any failed start.

@@ -51,6 +51,7 @@ import altitude.core.unit.SqlExplainerTests
 import altitude.core.unit.SqliteOverridesTests
 import altitude.core.unit.StartupConfigTests
 import altitude.core.unit.StyleGuideScanTests
+import altitude.core.unit.TempFolderTests
 import altitude.core.unit.TransactionBoundaryTests
 import altitude.core.unit.UrlServiceTests
 import altitude.core.unit.UtilTests
@@ -86,6 +87,7 @@ abstract class AllUnitTestSuites
     new EnvironmentTests,
     new StartupConfigTests,
     new ClearDbTests,
+    new TempFolderTests,
     new AppStartTests,
     new LogSettingsTests,
     new Sha256Tests,
