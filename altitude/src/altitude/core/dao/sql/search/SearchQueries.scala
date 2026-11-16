@@ -1142,8 +1142,6 @@ object SearchQueries:
 
   private def towards(direction: SortDirection): SqlStr = SqlStr.raw(direction.toString)
 
-  private val flatColumns: SqlStr = SqlStr.raw("(id, sort_value, second_sort_value)")
-
   /** The flat and day candidates' columns. Naming them on the CTE leaves the projection free to alias its own columns. */
   private val narrowColumnList: SqlStr = SqlStr.raw("id, day, sort_value, second_sort_value")
   private val narrowColumns: SqlStr = sql"($narrowColumnList)"
